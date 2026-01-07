@@ -10,6 +10,7 @@ import { StatusViewerUI } from './status/StatusViewerUI';
 import MainNavigation from './MainNavigation';
 import SACCOHub from './SACCOHub';
 import SHAREHub from './SHAREHub';
+import CMMSModule from './CMSSModule';
 import { 
   Shield, 
   Globe, 
@@ -3455,6 +3456,13 @@ const ICANCapitalEngine = () => {
     recordings: [],
     analytics: [],
     backups: []
+  });
+  const [cmmsData, setCmmsData] = useState({
+    companyProfile: null,
+    users: [],
+    inventory: [],
+    workOrders: [],
+    serviceProviders: []
   });
   const [showProfilePage, setShowProfilePage] = useState(false);
   const [showStatusPage, setShowStatusPage] = useState(false);
@@ -8806,6 +8814,13 @@ Data Freshness: ${reportData.metadata.dataFreshness}
           netWorth={netWorth}
           currentJourneyStage={currentJourneyStage}
           journeyStages={journeyStages}
+        />
+
+        {/* CMMS (Computerized Maintenance Management System) */}
+        <CMMSModule
+          onDataUpdate={(data) => setCmmsData(prev => ({ ...prev, ...data }))}
+          netWorth={netWorth}
+          currentJourneyStage={currentJourneyStage}
         />
 
         {/* AI Financial Intelligence Dashboard */}
