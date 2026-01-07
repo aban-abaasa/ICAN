@@ -1,0 +1,297 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase/client';
+
+const AuthContext = createContext({});
+
+export const useAuth = () => useContext(AuthContext);
+
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Load user profile from database
+  const loadProfile = async (userId) => {
+    if (!userId) {
+      setProfile(null);
+      return null;
+    }
+
+    try {
+      // First try ICAN profiles table
+      let { data, error } = await supabase
+        .from('ican_user_profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      // If not found, try shared profiles table
+      if (error && error.code === 'PGRST116') {
+        const { data: sharedProfile, error: sharedError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
+        
+        if (!sharedError) {
+          data = sharedProfile;
+        }
+      }
+
+      if (data) {
+        setProfile(data);
+        return data;
+      }
+
+      // If no profile exists, create one from auth user metadata
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser) {
+        const newProfile = {
+          id: authUser.id,
+          email: authUser.email,
+          full_name: authUser.user_metadata?.full_name || authUser.user_metadata?.name || '',
+          avatar_url: authUser.user_metadata?.avatar_url || authUser.user_metadata?.picture || null,
+        };
+
+        // Try to insert into ICAN profiles
+        const { data: createdProfile, error: createError } = await supabase
+          .from('ican_user_profiles')
+          .upsert(newProfile)
+          .select()
+          .single();
+
+        if (!createError && createdProfile) {
+          setProfile(createdProfile);
+          return createdProfile;
+        }
+
+        // Fall back to using auth metadata as profile
+        setProfile(newProfile);
+        return newProfile;
+      }
+
+      return null;
+    } catch (err) {
+      console.warn('Error loading profile:', err);
+      // Use auth user metadata as fallback
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser) {
+        const fallbackProfile = {
+          id: authUser.id,
+          email: authUser.email,
+          full_name: authUser.user_metadata?.full_name || authUser.user_metadata?.name || '',
+          avatar_url: authUser.user_metadata?.avatar_url || authUser.user_metadata?.picture || null,
+        };
+        setProfile(fallbackProfile);
+        return fallbackProfile;
+      }
+      return null;
+    }
+  };
+
+  // Update user profile
+  const updateProfile = async (updates) => {
+    if (!user) throw new Error('Not authenticated');
+
+    const { data, error } = await supabase
+      .from('ican_user_profiles')
+      .upsert({
+        id: user.id,
+        email: user.email, // Include email since it's NOT NULL
+        ...updates,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'id' // Ensure upsert on id, not email
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Profile update error:', error);
+      throw error;
+    }
+    setProfile(data);
+    return data;
+  };
+
+  // Upload avatar
+  const uploadAvatar = async (file) => {
+    if (!user) throw new Error('Not authenticated');
+
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+    const filePath = `avatars/${fileName}`;
+
+    // Upload to Supabase Storage
+    const { error: uploadError } = await supabase.storage
+      .from('user-content')
+      .upload(filePath, file, { upsert: true });
+
+    if (uploadError) throw uploadError;
+
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('user-content')
+      .getPublicUrl(filePath);
+
+    // Update profile with new avatar URL
+    await updateProfile({ avatar_url: publicUrl });
+
+    return publicUrl;
+  };
+
+  // Get initials for avatar fallback
+  const getInitials = (name) => {
+    if (!name) return '?';
+    const parts = name.trim().split(' ').filter(Boolean);
+    if (parts.length === 0) return '?';
+    if (parts.length === 1) return parts[0][0].toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
+
+  // Get display name
+  const getDisplayName = () => {
+    if (profile?.full_name) return profile.full_name;
+    if (user?.user_metadata?.full_name) return user.user_metadata.full_name;
+    if (user?.user_metadata?.name) return user.user_metadata.name;
+    if (user?.email) return user.email.split('@')[0];
+    return 'User';
+  };
+
+  // Get avatar URL
+  const getAvatarUrl = () => {
+    return profile?.avatar_url || 
+           user?.user_metadata?.avatar_url || 
+           user?.user_metadata?.picture || 
+           null;
+  };
+
+  useEffect(() => {
+    // Get initial session - Supabase will automatically process OAuth tokens from URL
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        loadProfile(session.user.id);
+      }
+      setLoading(false);
+      
+      // Clear hash after Supabase has processed it
+      if (window.location.hash) {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+    }).catch(() => {
+      setLoading(false);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          loadProfile(session.user.id);
+        } else {
+          setProfile(null);
+        }
+        setLoading(false);
+      }
+    );
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Sign up - exactly like FARM-AGENT
+  const signUp = async (email, password, fullName) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName,
+        }
+      }
+    });
+
+    if (error) throw error;
+
+    // Check if user already exists
+    if (data.user && data.user.identities && data.user.identities.length === 0) {
+      throw new Error('An account with this email already exists. Please sign in instead.');
+    }
+
+    return { ...data, needsEmailConfirmation: data.user && !data.session };
+  };
+
+  // Sign in - exactly like FARM-AGENT
+  const signIn = async (email, password) => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) throw error;
+    return data;
+  };
+
+  // Sign out
+  const signOut = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+  };
+
+  // Reset password
+  const resetPassword = async (email) => {
+    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+
+    if (error) throw error;
+    return data;
+  };
+
+  // Sign in with Google - exactly like FARM-AGENT
+  const signInWithGoogle = async () => {
+    // Redirect to root - Supabase will handle the token from URL hash
+    const redirectTo = window.location.hostname === 'localhost' 
+      ? `http://localhost:${window.location.port}`
+      : window.location.origin;
+    
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent'
+        }
+      }
+    });
+    
+    if (error) throw error;
+    return data;
+  };
+
+  const value = {
+    user,
+    profile,
+    loading,
+    signUp,
+    signIn,
+    signOut,
+    resetPassword,
+    signInWithGoogle,
+    loadProfile,
+    updateProfile,
+    uploadAvatar,
+    getInitials,
+    getDisplayName,
+    getAvatarUrl,
+  };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export default AuthContext;
