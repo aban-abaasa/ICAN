@@ -18,24 +18,21 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
-      // First try ICAN profiles table
+      // Try profiles table (standard Supabase table)
       let { data, error } = await supabase
-        .from('ican_user_profiles')
+        .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
 
-      // If not found, try shared profiles table
+      // If not found in profiles, fallback silently
       if (error && error.code === 'PGRST116') {
-        const { data: sharedProfile, error: sharedError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .single();
-        
-        if (!sharedError) {
-          data = sharedProfile;
-        }
+        setProfile(null);
+        return null;
+      } else if (error) {
+        console.error('Error fetching profile:', error);
+        setProfile(null);
+        return null;
       }
 
       if (data) {
@@ -53,9 +50,9 @@ export const AuthProvider = ({ children }) => {
           avatar_url: authUser.user_metadata?.avatar_url || authUser.user_metadata?.picture || null,
         };
 
-        // Try to insert into ICAN profiles
+        // Try to insert into profiles table
         const { data: createdProfile, error: createError } = await supabase
-          .from('ican_user_profiles')
+          .from('profiles')
           .upsert(newProfile)
           .select()
           .single();
@@ -94,14 +91,14 @@ export const AuthProvider = ({ children }) => {
     if (!user) throw new Error('Not authenticated');
 
     const { data, error } = await supabase
-      .from('ican_user_profiles')
+      .from('profiles')
       .upsert({
         id: user.id,
-        email: user.email, // Include email since it's NOT NULL
+        email: user.email,
         ...updates,
         updated_at: new Date().toISOString()
       }, {
-        onConflict: 'id' // Ensure upsert on id, not email
+        onConflict: 'id'
       })
       .select()
       .single();

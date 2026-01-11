@@ -65,9 +65,10 @@ export async function signIn(email, password) {
     // Update last login
     if (data.user?.id) {
       await supabase
-        .from('ican_user_profiles')
+        .from('profiles')
         .update({ last_login_at: new Date().toISOString() })
-        .eq('id', data.user.id);
+        .eq('id', data.user.id)
+        .catch(err => console.warn('Could not update last_login_at:', err));
       
       // Check if user has connected wallets
       const wallets = await getUserWallets(data.user.id);
@@ -159,7 +160,7 @@ export async function updatePassword(newPassword) {
 export async function getUserProfile(userId) {
   try {
     const { data, error } = await supabase
-      .from('ican_user_profiles')
+      .from('profiles')
       .select('*')
       .eq('id', userId)
       .single();
@@ -181,7 +182,7 @@ export async function getUserProfile(userId) {
 export async function updateUserProfile(userId, updates) {
   try {
     const { data, error } = await supabase
-      .from('ican_user_profiles')
+      .from('profiles')
       .update({
         ...updates,
         updated_at: new Date().toISOString()

@@ -90,7 +90,7 @@ export const uploadAvatarToStorage = async (userId, file) => {
 export const updateProfileAvatar = async (userId, avatarUrl) => {
   try {
     const { data, error } = await supabase
-      .from('ican_user_profiles')
+      .from('profiles')
       .update({ 
         avatar_url: avatarUrl,
         updated_at: new Date().toISOString()
