@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ThumbsUp, MessageCircle, Share2, Clock, Users, FileText, Zap, AlertCircle, Building2, Loader, Plus, Trash2, Lock, Unlock, X, Send, Copy, Check } from 'lucide-react';
+import { ThumbsUp, MessageCircle, Share2, Clock, Users, FileText, Zap, AlertCircle, Building2, Loader, Plus, Trash2, Lock, Unlock, X, Send, Copy, Check, Play, Home, BookMarked, Heart } from 'lucide-react';
 import PitchVideoRecorder from './PitchVideoRecorder';
 import SmartContractGenerator from './SmartContractGenerator';
 import BusinessProfileForm from './BusinessProfileForm';
@@ -592,29 +592,54 @@ const Pitchin = () => {
             </div>
             <button
               onClick={handleCreatePitchClick}
-              className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-2 rounded-full font-semibold hover:shadow-lg hover:shadow-purple-500/50 transition"
+              className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-2 rounded-full font-semibold hover:shadow-lg hover:shadow-purple-500/50 transition flex items-center gap-2"
             >
-              Create Pitch
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Create Pitch</span>
+              <span className="sm:hidden">Create</span>
             </button>
           </div>
 
-          {/* Navigation Tabs */}
-          <div className="flex gap-4 mt-4 border-b border-slate-700">
-            {['feed', 'myPitches', 'interested'].map(tab => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`pb-2 px-4 font-medium transition ${
-                  activeTab === tab
-                    ? 'border-b-2 border-purple-500 text-purple-400'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                {tab === 'feed' && 'Pitch Feed'}
-                {tab === 'myPitches' && 'My Pitches'}
-                {tab === 'interested' && 'Interested'}
-              </button>
-            ))}
+          {/* Navigation Tabs - Converted to Icon Buttons */}
+          <div className="flex gap-2 mt-4">
+            {/* Feed Icon Button */}
+            <button
+              onClick={() => setActiveTab('feed')}
+              title="Pitch Feed"
+              className={`p-2.5 rounded-lg transition ${
+                activeTab === 'feed'
+                  ? 'bg-purple-500/50 text-purple-300'
+                  : 'bg-slate-700/30 text-slate-400 hover:bg-slate-700/50 hover:text-slate-200'
+              }`}
+            >
+              <Home className="w-5 h-5" />
+            </button>
+            
+            {/* My Pitches Icon Button */}
+            <button
+              onClick={() => setActiveTab('myPitches')}
+              title="My Pitches"
+              className={`p-2.5 rounded-lg transition ${
+                activeTab === 'myPitches'
+                  ? 'bg-purple-500/50 text-purple-300'
+                  : 'bg-slate-700/30 text-slate-400 hover:bg-slate-700/50 hover:text-slate-200'
+              }`}
+            >
+              <Zap className="w-5 h-5" />
+            </button>
+            
+            {/* Interested Icon Button */}
+            <button
+              onClick={() => setActiveTab('interested')}
+              title="Interested"
+              className={`p-2.5 rounded-lg transition ${
+                activeTab === 'interested'
+                  ? 'bg-purple-500/50 text-purple-300'
+                  : 'bg-slate-700/30 text-slate-400 hover:bg-slate-700/50 hover:text-slate-200'
+              }`}
+            >
+              <Heart className="w-5 h-5" />
+            </button>
           </div>
         </div>
       </div>
@@ -754,8 +779,60 @@ const Pitchin = () => {
                           onCanPlay={() => console.log(`✅ Video can play: ${pitch.id}`)}
                         />
                       )}
+                      {/* Pitch Type Badge */}
                       <div className="absolute top-4 right-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-3 py-1 rounded-full text-sm font-semibold">
                         {pitch.pitch_type || 'Equity'}
+                      </div>
+                      
+                      {/* Tab Icons Overlay - Top Left */}
+                      <div className="absolute top-4 left-4 flex gap-2">
+                        {/* Create Pitch Icon */}
+                        <button
+                          onClick={handleCreatePitchClick}
+                          title="Create Pitch"
+                          className="p-2 bg-white/10 hover:bg-white/20 backdrop-blur-md text-white rounded-lg transition opacity-70 hover:opacity-100"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                        
+                        {/* Feed Icon */}
+                        <button
+                          onClick={() => setActiveTab('feed')}
+                          title="Feed"
+                          className={`p-2 rounded-lg transition backdrop-blur-md ${
+                            activeTab === 'feed'
+                              ? 'bg-purple-500/50 text-white'
+                              : 'bg-white/10 text-white/70 hover:bg-white/20 opacity-70 hover:opacity-100'
+                          }`}
+                        >
+                          <Home className="w-4 h-4" />
+                        </button>
+                        
+                        {/* My Pitches Icon */}
+                        <button
+                          onClick={() => setActiveTab('myPitches')}
+                          title="My Pitches"
+                          className={`p-2 rounded-lg transition backdrop-blur-md ${
+                            activeTab === 'myPitches'
+                              ? 'bg-purple-500/50 text-white'
+                              : 'bg-white/10 text-white/70 hover:bg-white/20 opacity-70 hover:opacity-100'
+                          }`}
+                        >
+                          <Zap className="w-4 h-4" />
+                        </button>
+                        
+                        {/* Interested Icon */}
+                        <button
+                          onClick={() => setActiveTab('interested')}
+                          title="Interested"
+                          className={`p-2 rounded-lg transition backdrop-blur-md ${
+                            activeTab === 'interested'
+                              ? 'bg-purple-500/50 text-white'
+                              : 'bg-white/10 text-white/70 hover:bg-white/20 opacity-70 hover:opacity-100'
+                          }`}
+                        >
+                          <Heart className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
 
