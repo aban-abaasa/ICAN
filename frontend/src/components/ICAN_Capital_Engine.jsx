@@ -1293,18 +1293,21 @@ const AIMultimediaManager = ({ transactions, netWorth, currentJourneyStage, onDa
   };
 
   return (
-    <div className="glass-card p-4">
-      <div className="flex items-center gap-2 mb-4">
-        <Brain className="w-5 h-5 text-purple-400" />
-        <span className="text-white font-medium">AI Multimedia Manager</span>
-        <div className="ml-auto flex items-center gap-1">
+    <div className="glass-card p-3 md:p-4">
+      {/* Header - Mobile optimized */}
+      <div className="flex items-center justify-between gap-2 mb-4">
+        <div className="flex items-center gap-2 min-w-0">
+          <Brain className="w-4 md:w-5 h-4 md:h-5 text-purple-400 flex-shrink-0" />
+          <span className="text-white font-medium text-sm md:text-base truncate">AI Multimedia</span>
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
           <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
           <span className="text-xs text-green-400">Active</span>
         </div>
       </div>
 
-      {/* Tab Navigation */}
-      <div className="flex gap-2 mb-4">
+      {/* Tab Navigation - Mobile scrollable */}
+      <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
         {[
           { id: 'voice', label: 'Voice', icon: Headphones },
           { id: 'video', label: 'Video', icon: Video },
@@ -1313,148 +1316,168 @@ const AIMultimediaManager = ({ transactions, netWorth, currentJourneyStage, onDa
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-colors ${
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs md:text-sm transition-colors whitespace-nowrap flex-shrink-0 ${
               activeTab === tab.id 
                 ? 'bg-blue-500 text-white' 
                 : 'bg-white bg-opacity-10 text-gray-300 hover:text-white'
             }`}
           >
-            <tab.icon className="w-3 h-3" />
+            <tab.icon className="w-3 h-3 md:w-4 md:h-4" />
             {tab.label}
           </button>
         ))}
       </div>
 
-      {/* Voice Tab */}
+      {/* Voice Tab - Mobile optimized */}
       {activeTab === 'voice' && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-3 p-3 bg-white bg-opacity-5 rounded-lg">
+        <div className="space-y-2 md:space-y-3">
+          {/* Record Button */}
+          <div className="flex items-center gap-3 p-3 md:p-4 bg-white bg-opacity-5 rounded-lg">
             <button
               onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
-              className={`p-2 rounded-full transition-all ${
+              className={`p-2 md:p-3 rounded-full transition-all flex-shrink-0 ${
                 isRecording 
                   ? 'bg-red-500 animate-pulse' 
                   : 'bg-blue-500 hover:bg-blue-600'
               }`}
             >
-              {isRecording ? <MicOff className="w-4 h-4 text-white" /> : <Mic className="w-4 h-4 text-white" />}
+              {isRecording ? <MicOff className="w-4 h-4 md:w-5 md:h-5 text-white" /> : <Mic className="w-4 h-4 md:w-5 md:h-5 text-white" />}
             </button>
-            <div className="flex-1">
-              <div className="text-white text-sm font-medium">
-                {isRecording ? '🎙️ Recording voice insights...' : '🎤 Record financial thoughts'}
+            <div className="flex-1 min-w-0">
+              <div className="text-white text-xs md:text-sm font-medium truncate">
+                {isRecording ? '🎙️ Recording...' : '🎤 Record thoughts'}
               </div>
-              <div className="text-gray-400 text-xs">
-                {isRecording ? 'Share your heart about your finances' : 'Click to start voice journaling'}
+              <div className="text-gray-400 text-xs truncate">
+                {isRecording ? 'Share your finances' : 'Start journaling'}
               </div>
             </div>
           </div>
 
-          {/* Voice Recordings */}
-          {recordings.filter(r => r.type === 'voice').map((recording) => (
-            <div key={recording.id} className="p-3 bg-white bg-opacity-5 rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <Volume2 className="w-4 h-4 text-blue-400" />
-                <span className="text-white text-sm">{recording.timestamp.toLocaleString()}</span>
-                {recording.analyzed && <Star className="w-3 h-3 text-yellow-400" />}
+          {/* Voice Recordings - Mobile scrollable */}
+          <div className="max-h-64 md:max-h-96 overflow-y-auto space-y-2 md:space-y-3">
+            {recordings.filter(r => r.type === 'voice').length === 0 ? (
+              <div className="text-center py-6 text-gray-400 text-xs md:text-sm">
+                No recordings yet. Start recording to begin! 🎤
               </div>
-              
-              <audio controls className="w-full mb-2" src={recording.url}></audio>
-              
-              {recording.insights && (
-                <div className="mt-2 p-2 bg-green-500 bg-opacity-20 rounded">
-                  <div className="text-green-300 text-xs font-medium mb-1">🤖 AI Insights:</div>
-                  <div className="text-gray-300 text-xs">Mood: {recording.insights.mood}</div>
-                  <div className="text-gray-300 text-xs">{recording.insights.confidence}</div>
+            ) : (
+              recordings.filter(r => r.type === 'voice').map((recording) => (
+                <div key={recording.id} className="p-2 md:p-3 bg-white bg-opacity-5 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Volume2 className="w-3 h-3 md:w-4 md:h-4 text-blue-400 flex-shrink-0" />
+                    <span className="text-white text-xs md:text-sm truncate flex-1">{recording.timestamp.toLocaleString()}</span>
+                    {recording.analyzed && <Star className="w-3 h-3 text-yellow-400 flex-shrink-0" />}
+                  </div>
+                  
+                  <audio controls className="w-full mb-2 text-xs md:text-sm" src={recording.url}></audio>
+                  
+                  {recording.insights && (
+                    <div className="mt-2 p-2 bg-green-500 bg-opacity-20 rounded">
+                      <div className="text-green-300 text-xs font-medium mb-1">🤖 Insights:</div>
+                      <div className="text-gray-300 text-xs">Mood: {recording.insights.mood}</div>
+                      <div className="text-gray-300 text-xs truncate">{recording.insights.confidence}</div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          ))}
+              ))
+            )}
+          </div>
         </div>
       )}
 
-      {/* Video Tab */}
+      {/* Video Tab - Mobile optimized */}
       {activeTab === 'video' && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-3 p-3 bg-white bg-opacity-5 rounded-lg">
+        <div className="space-y-2 md:space-y-3">
+          {/* Record Button */}
+          <div className="flex items-center gap-3 p-3 md:p-4 bg-white bg-opacity-5 rounded-lg">
             <button
               onClick={isVideoRecording ? stopVideoRecording : startVideoRecording}
-              className={`p-2 rounded-full transition-all ${
+              className={`p-2 md:p-3 rounded-full transition-all flex-shrink-0 ${
                 isVideoRecording 
                   ? 'bg-red-500 animate-pulse' 
                   : 'bg-purple-500 hover:bg-purple-600'
               }`}
             >
-              {isVideoRecording ? <VideoOff className="w-4 h-4 text-white" /> : <Video className="w-4 h-4 text-white" />}
+              {isVideoRecording ? <VideoOff className="w-4 h-4 md:w-5 md:h-5 text-white" /> : <Video className="w-4 h-4 md:w-5 md:h-5 text-white" />}
             </button>
-            <div className="flex-1">
-              <div className="text-white text-sm font-medium">
-                {isVideoRecording ? '🎬 Recording video testimony...' : '📹 Record progress video'}
+            <div className="flex-1 min-w-0">
+              <div className="text-white text-xs md:text-sm font-medium truncate">
+                {isVideoRecording ? '🎬 Recording...' : '📹 Record video'}
               </div>
-              <div className="text-gray-400 text-xs">
-                {isVideoRecording ? 'Share your financial journey visually' : 'Document your progress and goals'}
+              <div className="text-gray-400 text-xs truncate">
+                {isVideoRecording ? 'Share your journey' : 'Document progress'}
               </div>
             </div>
           </div>
 
-          {/* Video Recordings */}
-          {recordings.filter(r => r.type === 'video').map((recording) => (
-            <div key={recording.id} className="p-3 bg-white bg-opacity-5 rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <Film className="w-4 h-4 text-purple-400" />
-                <span className="text-white text-sm">{recording.timestamp.toLocaleString()}</span>
-                {recording.analyzed && <Star className="w-3 h-3 text-yellow-400" />}
+          {/* Video Recordings - Mobile responsive */}
+          <div className="max-h-64 md:max-h-96 overflow-y-auto space-y-2 md:space-y-3">
+            {recordings.filter(r => r.type === 'video').length === 0 ? (
+              <div className="text-center py-6 text-gray-400 text-xs md:text-sm">
+                No videos yet. Start recording to begin! 📹
               </div>
-              
-              <video controls className="w-full mb-2" src={recording.url}></video>
-              
-              {recording.insights && (
-                <div className="mt-2 p-2 bg-purple-500 bg-opacity-20 rounded">
-                  <div className="text-purple-300 text-xs font-medium mb-1">🎬 Video Analysis:</div>
-                  <div className="text-gray-300 text-xs">Engagement: {recording.insights.engagement}%</div>
-                  <div className="text-gray-300 text-xs">{recording.insights.blessing}</div>
+            ) : (
+              recordings.filter(r => r.type === 'video').map((recording) => (
+                <div key={recording.id} className="p-2 md:p-3 bg-white bg-opacity-5 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Film className="w-3 h-3 md:w-4 md:h-4 text-purple-400 flex-shrink-0" />
+                    <span className="text-white text-xs md:text-sm truncate flex-1">{recording.timestamp.toLocaleString()}</span>
+                    {recording.analyzed && <Star className="w-3 h-3 text-yellow-400 flex-shrink-0" />}
+                  </div>
+                  
+                  <video controls className="w-full mb-2 text-xs md:text-sm rounded" src={recording.url}></video>
+                  
+                  {recording.insights && (
+                    <div className="mt-2 p-2 bg-purple-500 bg-opacity-20 rounded">
+                      <div className="text-purple-300 text-xs font-medium mb-1">🎬 Analysis:</div>
+                      <div className="text-gray-300 text-xs">Engagement: {recording.insights.engagement}%</div>
+                      <div className="text-gray-300 text-xs truncate">{recording.insights.blessing}</div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          ))}
+              ))
+            )}
+          </div>
         </div>
       )}
 
-      {/* Analytics Tab */}
+      {/* Analytics Tab - Mobile optimized */}
       {activeTab === 'analytics' && (
-        <div className="space-y-3">
+        <div className="space-y-2 md:space-y-3">
           <button
             onClick={generateAdvancedAnalytics}
-            className="w-full py-2 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg text-sm font-medium hover:from-blue-600 hover:to-purple-600 transition-all"
+            className="w-full py-2 md:py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg text-xs md:text-sm font-medium hover:from-blue-600 hover:to-purple-600 transition-all"
             disabled={isProcessing}
           >
-            {isProcessing ? '🧠 AI Analyzing...' : '🚀 Generate AI Analytics'}
+            {isProcessing ? '🧠 Analyzing...' : '🚀 AI Analytics'}
           </button>
 
           {analysisResults.map((result, index) => (
-            <div key={index} className="space-y-3">
-              {/* Data Health */}
-              <div className="p-3 bg-white bg-opacity-5 rounded-lg">
-                <div className="text-white text-sm font-medium mb-2">📊 Data Health Score</div>
+            <div key={index} className="space-y-2 md:space-y-3">
+              {/* Data Health - Mobile card */}
+              <div className="p-2 md:p-3 bg-white bg-opacity-5 rounded-lg">
+                <div className="text-white text-xs md:text-sm font-medium mb-2">📊 Data Health</div>
                 <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="text-gray-300">Completeness: {result.dataHealth.completeness}%</div>
-                  <div className="text-gray-300">Accuracy: {result.dataHealth.accuracy}%</div>
+                  <div className="text-gray-300">Completeness: <span className="text-green-400">{result.dataHealth.completeness}%</span></div>
+                  <div className="text-gray-300">Accuracy: <span className="text-green-400">{result.dataHealth.accuracy}%</span></div>
                 </div>
-                <div className="text-green-300 text-xs mt-1">{result.dataHealth.godlyWisdom}</div>
+                <div className="text-green-300 text-xs mt-2 leading-relaxed break-words">{result.dataHealth.godlyWisdom}</div>
               </div>
 
-              {/* Predictions */}
-              <div className="p-3 bg-blue-500 bg-opacity-20 rounded-lg">
-                <div className="text-blue-300 text-sm font-medium mb-2">🔮 AI Predictions</div>
-                {result.predictiveInsights.map((insight, i) => (
-                  <div key={i} className="text-gray-300 text-xs mb-1">{insight}</div>
-                ))}
+              {/* Predictions - Mobile scrollable */}
+              <div className="p-2 md:p-3 bg-blue-500 bg-opacity-20 rounded-lg">
+                <div className="text-blue-300 text-xs md:text-sm font-medium mb-2">🔮 Predictions</div>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {result.predictiveInsights.map((insight, i) => (
+                    <div key={i} className="text-gray-300 text-xs leading-relaxed break-words">{insight}</div>
+                  ))}
+                </div>
               </div>
 
-              {/* Spiritual Alignment */}
-              <div className="p-3 bg-yellow-500 bg-opacity-20 rounded-lg">
-                <div className="text-yellow-300 text-sm font-medium mb-2">👑 Spiritual Alignment</div>
-                <div className="text-white text-xs mb-2">Score: {result.spiritualAlignment.score}%</div>
-                <div className="text-gray-300 text-xs">{result.spiritualAlignment.message}</div>
+              {/* Spiritual Alignment - Mobile optimized */}
+              <div className="p-2 md:p-3 bg-yellow-500 bg-opacity-20 rounded-lg">
+                <div className="text-yellow-300 text-xs md:text-sm font-medium mb-2">👑 Spiritual</div>
+                <div className="text-white text-xs mb-2">Score: <span className="text-yellow-300 font-semibold">{result.spiritualAlignment.score}%</span></div>
+                <div className="text-gray-300 text-xs leading-relaxed break-words">{result.spiritualAlignment.message}</div>
               </div>
             </div>
           ))}
@@ -1463,8 +1486,8 @@ const AIMultimediaManager = ({ transactions, netWorth, currentJourneyStage, onDa
 
       {isProcessing && (
         <div className="text-center py-4">
-          <div className="animate-spin w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full mx-auto mb-2"></div>
-          <div className="text-gray-400 text-xs">AI is analyzing your content with godly wisdom...</div>
+          <div className="animate-spin w-5 h-5 md:w-6 md:h-6 border-2 border-blue-400 border-t-transparent rounded-full mx-auto mb-2"></div>
+          <div className="text-gray-400 text-xs md:text-sm">AI analyzing...</div>
         </div>
       )}
     </div>
@@ -2438,30 +2461,33 @@ const TransactionInput = ({
   };
 
   return (
-    <div className="glass-card p-6 border border-green-500 border-opacity-30 bg-gradient-to-br from-green-500 from-opacity-5 to-blue-500 to-opacity-5 shadow-lg shadow-green-500/10">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-3 sm:gap-0">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-            <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-blue-500 bg-opacity-30 rounded-full flex items-center justify-center border border-green-400 border-opacity-40">
-              <DollarSign className="w-6 h-6 text-green-400" />
+    <div className="glass-card p-4 md:p-6 border border-green-500 border-opacity-30 bg-gradient-to-br from-green-500 from-opacity-5 to-blue-500 to-opacity-5 shadow-lg shadow-green-500/10">
+      {/* Header - Mobile optimized */}
+      <div className="flex flex-col gap-3 md:gap-0 mb-4 md:mb-6">
+        {/* Title and Status */}
+        <div className="flex items-start gap-2 md:gap-3">
+          <div className="relative flex-shrink-0">
+            <div className="absolute -top-1 -right-1 w-2 md:w-3 h-2 md:h-3 bg-green-400 rounded-full animate-pulse"></div>
+            <div className="w-8 md:w-10 h-8 md:h-10 bg-gradient-to-br from-green-500 to-blue-500 bg-opacity-30 rounded-full flex items-center justify-center border border-green-400 border-opacity-40">
+              <DollarSign className="w-4 md:w-6 h-4 md:h-6 text-green-400" />
             </div>
           </div>
-          <div>
-            <span className="text-white font-bold text-lg">Smart Transaction Entry</span>
-            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-              <span className="text-xs bg-gradient-to-r from-green-500 to-emerald-500 bg-opacity-40 text-green-300 px-2 py-0.5 rounded-full border border-green-400 border-opacity-40 font-medium flex items-center gap-1">
+          <div className="min-w-0 flex-1">
+            <span className="text-white font-bold text-base md:text-lg block truncate">Smart Transaction Entry</span>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              <span className="text-xs bg-gradient-to-r from-green-500 to-emerald-500 bg-opacity-40 text-green-300 px-2 py-0.5 rounded-full border border-green-400 border-opacity-40 font-medium flex items-center gap-1 whitespace-nowrap">
                 <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
                 ACTIVE
               </span>
-              <span className="text-xs text-gray-400 hidden sm:inline">AI-Powered • Real-time</span>
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+
+        {/* Action Buttons - Mobile responsive */}
+        <div className="flex items-center gap-2 self-start md:self-auto md:ml-auto">
           <button 
             onClick={() => setShowQuickActions(!showQuickActions)}
-            className="text-xs flex-1 sm:flex-none bg-gradient-to-r from-blue-500 to-purple-500 bg-opacity-30 text-blue-300 px-3 py-1.5 rounded-lg hover:bg-opacity-40 active:scale-95 transition-all border border-blue-400 border-opacity-30 font-medium"
+            className="text-xs md:text-sm bg-gradient-to-r from-blue-500 to-purple-500 bg-opacity-30 text-blue-300 px-3 py-1.5 md:px-4 md:py-2 rounded-lg hover:bg-opacity-40 active:scale-95 transition-all border border-blue-400 border-opacity-30 font-medium min-w-max"
           >
             ⚡ Quick
           </button>
@@ -3250,117 +3276,128 @@ ${nextStage.netWorthTarget >= 100000 ? '🏰' : nextStage.netWorthTarget >= 5000
   }, [transactions, multimediaData, netWorth]);
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6 mt-6">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-          <Database className="w-5 h-5 text-blue-600" />
-          Smart Data Manager
+    <div className="bg-white rounded-xl shadow-lg p-4 md:p-6 mt-6 max-w-full">
+      {/* Header - Mobile optimized */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
+        <h3 className="text-lg md:text-xl font-bold text-gray-800 flex items-center gap-2">
+          <Database className="w-5 h-5 text-blue-600 flex-shrink-0" />
+          <span className="truncate">Smart Data Manager</span>
         </h3>
         
-        <div className="flex gap-2">
+        {/* Action Buttons - Stacked on mobile */}
+        <div className="flex gap-2 w-full sm:w-auto flex-wrap">
           <button
             onClick={() => setCreativeMode(!creativeMode)}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            className={`flex-1 sm:flex-none px-3 md:px-4 py-2 rounded-lg font-medium transition-colors text-sm md:text-base min-w-max ${
               creativeMode 
                 ? 'bg-purple-100 text-purple-700 border border-purple-300'
                 : 'bg-gray-100 text-gray-700 border border-gray-300'
             }`}
           >
             <Sparkles className="w-4 h-4 inline mr-1" />
-            Creative Mode
+            Creative
           </button>
           
           <button
             onClick={createSmartBackup}
-            className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg border border-blue-300 font-medium hover:bg-blue-200 transition-colors"
+            className="flex-1 sm:flex-none px-3 md:px-4 py-2 bg-blue-100 text-blue-700 rounded-lg border border-blue-300 font-medium hover:bg-blue-200 transition-colors text-sm md:text-base min-w-max"
           >
             <Cloud className="w-4 h-4 inline mr-1" />
-            Backup Now
+            Backup
           </button>
         </div>
       </div>
 
-      {/* Data Status Dashboard */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+      {/* Data Status Dashboard - Mobile responsive cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 mb-6">
+        {/* Data Security Card */}
+        <div className="bg-green-50 border border-green-200 rounded-lg p-3 md:p-4 hover:shadow-md transition-shadow">
           <div className="flex items-center gap-2 mb-2">
-            <Shield className="w-4 h-4 text-green-600" />
-            <span className="font-medium text-green-800">Data Security</span>
+            <Shield className="w-4 h-4 text-green-600 flex-shrink-0" />
+            <span className="font-medium text-green-800 text-sm md:text-base">Security</span>
           </div>
-          <p className="text-sm text-green-700">
-            ✅ Local Backup: {dataBackup.local ? 'Protected' : 'Pending'}
-          </p>
-          <p className="text-sm text-green-700">
-            ☁️ Cloud Sync: {dataBackup.cloud ? 'Synced' : 'Offline'}
-          </p>
+          <div className="space-y-1">
+            <p className="text-xs md:text-sm text-green-700 truncate">
+              ✅ Local: {dataBackup.local ? 'Protected' : 'Pending'}
+            </p>
+            <p className="text-xs md:text-sm text-green-700 truncate">
+              ☁️ Cloud: {dataBackup.cloud ? 'Synced' : 'Offline'}
+            </p>
+          </div>
         </div>
 
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        {/* Data Stats Card */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 md:p-4 hover:shadow-md transition-shadow">
           <div className="flex items-center gap-2 mb-2">
-            <Database className="w-4 h-4 text-blue-600" />
-            <span className="font-medium text-blue-800">Data Stats</span>
+            <Database className="w-4 h-4 text-blue-600 flex-shrink-0" />
+            <span className="font-medium text-blue-800 text-sm md:text-base">Stats</span>
           </div>
-          <p className="text-sm text-blue-700">
-            📊 Transactions: {transactions.length}
-          </p>
-          <p className="text-sm text-blue-700">
-            🎥 Media Files: {multimediaData.recordings?.length || 0}
-          </p>
+          <div className="space-y-1">
+            <p className="text-xs md:text-sm text-blue-700">
+              📊 Transactions: <span className="font-semibold">{transactions.length}</span>
+            </p>
+            <p className="text-xs md:text-sm text-blue-700">
+              🎥 Media: <span className="font-semibold">{multimediaData.recordings?.length || 0}</span>
+            </p>
+          </div>
         </div>
 
-        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+        {/* Stewardship Card */}
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 md:p-4 hover:shadow-md transition-shadow sm:col-span-2 lg:col-span-1">
           <div className="flex items-center gap-2 mb-2">
-            <Heart className="w-4 h-4 text-purple-600" />
-            <span className="font-medium text-purple-800">Stewardship</span>
+            <Heart className="w-4 h-4 text-purple-600 flex-shrink-0" />
+            <span className="font-medium text-purple-800 text-sm md:text-base">Stewardship</span>
           </div>
-          <p className="text-sm text-purple-700">
-            ⭐ Score: {calculateStewardshipScore()}%
-          </p>
-          <p className="text-sm text-purple-700">
-            🙏 Stage: {journeyStages[currentJourneyStage]?.name || 'Growing'}
-          </p>
+          <div className="space-y-1">
+            <p className="text-xs md:text-sm text-purple-700">
+              ⭐ Score: <span className="font-semibold">{calculateStewardshipScore()}%</span>
+            </p>
+            <p className="text-xs md:text-sm text-purple-700 truncate">
+              🙏 {journeyStages[currentJourneyStage]?.name || 'Growing'}
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Creative AI Features */}
+      {/* Creative AI Features - Mobile optimized */}
       {creativeMode && (
-        <div className="space-y-6">
+        <div className="space-y-3 md:space-y-4">
           {/* Financial Journey Story */}
-          <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <FileText className="w-5 h-5 text-blue-600" />
-              <h4 className="font-bold text-blue-800">Your Financial Journey Story</h4>
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4 md:p-6 overflow-hidden">
+            <div className="flex items-center gap-2 mb-3 md:mb-4">
+              <FileText className="w-5 h-5 text-blue-600 flex-shrink-0" />
+              <h4 className="font-bold text-blue-800 text-sm md:text-base">Financial Journey</h4>
             </div>
-            <div className="whitespace-pre-line text-gray-700 leading-relaxed">
+            <div className="whitespace-pre-line text-gray-700 leading-relaxed text-xs md:text-sm max-h-48 md:max-h-none overflow-y-auto md:overflow-visible">
               {storyData.financialJourney}
             </div>
           </div>
 
           {/* Goal Visualization */}
-          <div className="bg-gradient-to-r from-green-50 to-yellow-50 border border-green-200 rounded-lg p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Target className="w-5 h-5 text-green-600" />
-              <h4 className="font-bold text-green-800">Goal Visualization</h4>
+          <div className="bg-gradient-to-r from-green-50 to-yellow-50 border border-green-200 rounded-lg p-4 md:p-6 overflow-hidden">
+            <div className="flex items-center gap-2 mb-3 md:mb-4">
+              <Target className="w-5 h-5 text-green-600 flex-shrink-0" />
+              <h4 className="font-bold text-green-800 text-sm md:text-base">Goal Visualization</h4>
             </div>
-            <div className="whitespace-pre-line text-gray-700 leading-relaxed">
+            <div className="whitespace-pre-line text-gray-700 leading-relaxed text-xs md:text-sm max-h-48 md:max-h-none overflow-y-auto md:overflow-visible">
               {storyData.goalVisualization}
             </div>
           </div>
 
-          {/* Celebrations */}
+          {/* Celebrations - Mobile scrollable */}
           {storyData.celebrations.length > 0 && (
-            <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-lg p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Star className="w-5 h-5 text-yellow-600" />
-                <h4 className="font-bold text-yellow-800">Celebration Corner</h4>
+            <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-lg p-4 md:p-6">
+              <div className="flex items-center gap-2 mb-3 md:mb-4">
+                <Star className="w-5 h-5 text-yellow-600 flex-shrink-0" />
+                <h4 className="font-bold text-yellow-800 text-sm md:text-base">Celebrations</h4>
               </div>
-              <div className="grid gap-3">
+              <div className="grid gap-2 md:gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-1">
                 {storyData.celebrations.map((celebration, index) => (
-                  <div key={index} className="flex items-start gap-3 bg-white bg-opacity-50 rounded-lg p-3">
-                    <span className="text-2xl">{celebration.icon}</span>
-                    <div>
-                      <h5 className="font-semibold text-gray-800">{celebration.title}</h5>
-                      <p className="text-gray-600 text-sm">{celebration.message}</p>
+                  <div key={index} className="flex items-start gap-3 bg-white bg-opacity-50 rounded-lg p-3 hover:bg-opacity-70 transition-all">
+                    <span className="text-xl md:text-2xl flex-shrink-0">{celebration.icon}</span>
+                    <div className="min-w-0">
+                      <h5 className="font-semibold text-gray-800 text-xs md:text-sm truncate">{celebration.title}</h5>
+                      <p className="text-gray-600 text-xs md:text-sm break-words">{celebration.message}</p>
                     </div>
                   </div>
                 ))}
@@ -3369,18 +3406,18 @@ ${nextStage.netWorthTarget >= 100000 ? '🏰' : nextStage.netWorthTarget >= 5000
           )}
 
           {/* Creative Insights */}
-          <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-lg p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <TrendingUp className="w-5 h-5 text-purple-600" />
-              <h4 className="font-bold text-purple-800">Creative AI Insights</h4>
+          <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-lg p-4 md:p-6">
+            <div className="flex items-center gap-2 mb-3 md:mb-4">
+              <TrendingUp className="w-5 h-5 text-purple-600 flex-shrink-0" />
+              <h4 className="font-bold text-purple-800 text-sm md:text-base">AI Insights</h4>
             </div>
-            <div className="grid gap-3">
+            <div className="grid gap-2 md:gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-1">
               {generateCreativeInsights().map((insight, index) => (
-                <div key={index} className="flex items-start gap-3 bg-white bg-opacity-50 rounded-lg p-3">
-                  <span className="text-xl">{insight.icon}</span>
-                  <div>
-                    <h5 className="font-semibold text-gray-800">{insight.title}</h5>
-                    <p className="text-gray-600 text-sm">{insight.message}</p>
+                <div key={index} className="flex items-start gap-3 bg-white bg-opacity-50 rounded-lg p-3 hover:bg-opacity-70 transition-all">
+                  <span className="text-lg md:text-xl flex-shrink-0">{insight.icon}</span>
+                  <div className="min-w-0">
+                    <h5 className="font-semibold text-gray-800 text-xs md:text-sm truncate">{insight.title}</h5>
+                    <p className="text-gray-600 text-xs md:text-sm break-words">{insight.message}</p>
                   </div>
                 </div>
               ))}
@@ -3388,14 +3425,14 @@ ${nextStage.netWorthTarget >= 100000 ? '🏰' : nextStage.netWorthTarget >= 5000
           </div>
 
           {/* Spiritual Encouragement */}
-          <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-lg p-6 text-center">
-            <Star className="w-8 h-8 text-indigo-600 mx-auto mb-3" />
-            <h4 className="font-bold text-indigo-800 mb-2">Today's Encouragement</h4>
-            <p className="text-indigo-700 italic">
+          <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-lg p-4 md:p-6 text-center">
+            <Star className="w-6 md:w-8 h-6 md:h-8 text-indigo-600 mx-auto mb-2 md:mb-3" />
+            <h4 className="font-bold text-indigo-800 mb-2 text-sm md:text-base">Today's Encouragement</h4>
+            <p className="text-indigo-700 italic text-xs md:text-sm mb-2">
               "And my God will meet all your needs according to the riches of his glory in Christ Jesus." - Philippians 4:19
             </p>
-            <p className="text-gray-600 text-sm mt-2">
-              Remember: You are not just managing money, you are stewarding God's blessings. He sees your heart and rewards faithfulness! 💝
+            <p className="text-gray-600 text-xs md:text-sm">
+              Remember: You are stewarding God's blessings. He sees your heart! 💝
             </p>
           </div>
         </div>
@@ -8458,50 +8495,52 @@ Data Freshness: ${reportData.metadata.dataFreshness}
     return (
       <div className="space-y-6">
         {/* Header with IOR */}
-        <div className="glass-card p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-2xl font-bold text-white">ICAN Opportunity Rating</h1>
-              <p className="text-gray-300">Your readiness for global opportunities</p>
+        <div className="glass-card p-4 md:p-6">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4 md:gap-0 mb-4">
+            <div className="text-center md:text-left flex-1">
+              <h1 className="text-xl md:text-2xl font-bold text-white">ICAN Opportunity Rating</h1>
+              <p className="text-sm md:text-base text-gray-300">Your readiness for global opportunities</p>
             </div>
-            <IORGauge score={iorScore} />
+            <div className="flex-shrink-0">
+              <IORGauge score={iorScore} size={140} />
+            </div>
           </div>
           
-          <div className="bg-red-500 bg-opacity-20 border border-red-500 border-opacity-30 rounded-lg p-4">
+          <div className="bg-red-500 bg-opacity-20 border border-red-500 border-opacity-30 rounded-lg p-3 md:p-4">
             <div className="flex items-center gap-2 mb-2">
-              <AlertTriangle className="w-5 h-5 text-red-400" />
-              <span className="text-red-400 font-medium">Gap Analysis</span>
+              <AlertTriangle className="w-5 h-5 flex-shrink-0 text-red-400" />
+              <span className="text-red-400 font-medium text-sm md:text-base">Gap Analysis</span>
             </div>
-            <p className="text-white">
+            <p className="text-white text-sm md:text-base">
               Your IOR is {iorScore}%. Your biggest obstacle: {lowestPillar.name} ({lowestPillar.score}%)
             </p>
           </div>
 
           {/* Vital Aggregates - Monthly Metrics */}
-          <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
-            <div className="bg-green-900 bg-opacity-30 border border-green-500 border-opacity-30 rounded-lg p-3">
-              <div className="text-gray-400 font-medium">Monthly Income</div>
-              <div className="text-lg font-bold text-green-300">{(monthlyIncome / 1000000).toFixed(1)}M</div>
+          <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-3 text-xs md:text-sm">
+            <div className="bg-green-900 bg-opacity-30 border border-green-500 border-opacity-30 rounded-lg p-2 md:p-3">
+              <div className="text-gray-400 font-medium truncate">Monthly Income</div>
+              <div className="text-lg md:text-xl font-bold text-green-300">{(monthlyIncome / 1000000).toFixed(1)}M</div>
             </div>
-            <div className="bg-red-900 bg-opacity-30 border border-red-500 border-opacity-30 rounded-lg p-3">
-              <div className="text-gray-400 font-medium">Monthly Expense</div>
-              <div className="text-lg font-bold text-red-300">{(monthlyExpense / 1000000).toFixed(1)}M</div>
+            <div className="bg-red-900 bg-opacity-30 border border-red-500 border-opacity-30 rounded-lg p-2 md:p-3">
+              <div className="text-gray-400 font-medium truncate">Monthly Expense</div>
+              <div className="text-lg md:text-xl font-bold text-red-300">{(monthlyExpense / 1000000).toFixed(1)}M</div>
             </div>
-            <div className={`rounded-lg p-3 border ${monthlyNet > 0 ? 'bg-blue-900 bg-opacity-30 border-blue-500 border-opacity-30' : 'bg-orange-900 bg-opacity-30 border-orange-500 border-opacity-30'}`}>
-              <div className="text-gray-400 font-medium">Monthly Net</div>
-              <div className={`text-lg font-bold ${monthlyNet > 0 ? 'text-blue-300' : 'text-orange-300'}`}>
+            <div className={`rounded-lg p-2 md:p-3 border ${monthlyNet > 0 ? 'bg-blue-900 bg-opacity-30 border-blue-500 border-opacity-30' : 'bg-orange-900 bg-opacity-30 border-orange-500 border-opacity-30'}`}>
+              <div className="text-gray-400 font-medium truncate">Monthly Net</div>
+              <div className={`text-lg md:text-xl font-bold ${monthlyNet > 0 ? 'text-blue-300' : 'text-orange-300'}`}>
                 {monthlyNet > 0 ? '+' : ''}{(monthlyNet / 1000000).toFixed(1)}M
               </div>
             </div>
-            <div className={`rounded-lg p-3 border ${savingsRate > 30 ? 'bg-emerald-900 bg-opacity-30 border-emerald-500 border-opacity-30' : savingsRate > 15 ? 'bg-yellow-900 bg-opacity-30 border-yellow-500 border-opacity-30' : 'bg-gray-700 bg-opacity-30 border-gray-500 border-opacity-30'}`}>
-              <div className="text-gray-400 font-medium">Savings Rate</div>
-              <div className={`text-lg font-bold ${savingsRate > 30 ? 'text-emerald-300' : savingsRate > 15 ? 'text-yellow-300' : 'text-gray-300'}`}>
+            <div className={`rounded-lg p-2 md:p-3 border ${savingsRate > 30 ? 'bg-emerald-900 bg-opacity-30 border-emerald-500 border-opacity-30' : savingsRate > 15 ? 'bg-yellow-900 bg-opacity-30 border-yellow-500 border-opacity-30' : 'bg-gray-700 bg-opacity-30 border-gray-500 border-opacity-30'}`}>
+              <div className="text-gray-400 font-medium truncate">Savings Rate</div>
+              <div className={`text-lg md:text-xl font-bold ${savingsRate > 30 ? 'text-emerald-300' : savingsRate > 15 ? 'text-yellow-300' : 'text-gray-300'}`}>
                 {savingsRate.toFixed(1)}%
               </div>
             </div>
-            <div className="bg-purple-900 bg-opacity-30 border border-purple-500 border-opacity-30 rounded-lg p-3">
-              <div className="text-gray-400 font-medium">Transactions</div>
-              <div className="text-lg font-bold text-purple-300">{monthlyTransactions.length}</div>
+            <div className="bg-purple-900 bg-opacity-30 border border-purple-500 border-opacity-30 rounded-lg p-2 md:p-3">
+              <div className="text-gray-400 font-medium truncate">Transactions</div>
+              <div className="text-lg md:text-xl font-bold text-purple-300">{monthlyTransactions.length}</div>
             </div>
           </div>
         </div>

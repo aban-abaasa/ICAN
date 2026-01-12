@@ -2088,12 +2088,13 @@ const CMMSModule = ({
                   }}
                 />
               )}
-              <button
+              {/* Commented out Show Details button */}
+              {/* <button
                 onClick={() => setExpandWelcome(!expandWelcome)}
                 className="px-4 py-2 bg-blue-500 bg-opacity-30 hover:bg-opacity-50 text-blue-300 rounded-lg transition-all font-semibold whitespace-nowrap"
               >
                 {expandWelcome ? '▼ Hide Details' : '▶ Show Details'}
-              </button>
+              </button> */}
             </div>
           </div>
 
