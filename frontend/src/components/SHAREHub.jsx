@@ -9,9 +9,7 @@ import {
   Flame,
   Zap,
   Users,
-  Award,
-  ChevronDown,
-  ChevronUp
+  Award
 } from 'lucide-react';
 import Pitchin from './Pitchin';
 
@@ -208,19 +206,15 @@ const SHAREHub = ({ onClose }) => {
           <div className="md:hidden">
             <button
               onClick={() => setHeaderExpanded(!headerExpanded)}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-all border border-white/10 mb-4"
+              className="flex items-center justify-center p-1.5 rounded-md bg-white/5 hover:bg-white/10 transition-all border border-white/10 mb-4 opacity-60 hover:opacity-100"
+              title="Toggle SHARE Hub details"
             >
-              <span className="text-lg font-semibold gradient-text">🚀 SHARE</span>
-              {headerExpanded ? (
-                <ChevronUp className="w-4 h-4 text-gray-400" />
-              ) : (
-                <ChevronDown className="w-4 h-4 text-gray-400" />
-              )}
+              <span className="text-lg">🚀</span>
             </button>
             
             {/* Expanded header content */}
             {headerExpanded && (
-              <div className="text-center pb-4 animate-in fade-in duration-200">
+              <div className="text-center pb-4 mb-4 animate-in fade-in duration-200">
                 <h1 className="text-2xl font-bold mb-2">
                   <span className="gradient-text">🚀 SHARE Hub</span>
                 </h1>
