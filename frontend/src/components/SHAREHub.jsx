@@ -190,20 +190,20 @@ const SHAREHub = ({ onClose }) => {
       </button>
 
       <div className="max-w-6xl mx-auto">
-        {/* Header - Collapsible on Mobile */}
-        <div className="mb-6 md:mb-12">
+        {/* Header - Collapsible on Mobile - HIDDEN */}
+        {/* <div className="mb-6 md:mb-12">
           {/* Desktop: Always visible */}
-          <div className="hidden md:block text-center mb-8 pt-4">
+          {/* <div className="hidden md:block text-center mb-8 pt-4">
             <h1 className="text-5xl font-bold mb-3">
               <span className="gradient-text">🚀 SHARE Hub</span>
             </h1>
             <p className="text-xl text-gray-300">
               Share your pitches, explore grants, and discover investment opportunities
             </p>
-          </div>
+          </div> */}
 
           {/* Mobile: Collapsible header */}
-          <div className="md:hidden">
+          {/* <div className="md:hidden">
             <button
               onClick={() => setHeaderExpanded(!headerExpanded)}
               className="flex items-center justify-center p-1.5 rounded-md bg-white/5 hover:bg-white/10 transition-all border border-white/10 mb-4 opacity-60 hover:opacity-100"
@@ -213,7 +213,7 @@ const SHAREHub = ({ onClose }) => {
             </button>
             
             {/* Expanded header content */}
-            {headerExpanded && (
+            {/* {headerExpanded && (
               <div className="text-center pb-4 mb-4 animate-in fade-in duration-200">
                 <h1 className="text-2xl font-bold mb-2">
                   <span className="gradient-text">🚀 SHARE Hub</span>
@@ -224,7 +224,7 @@ const SHAREHub = ({ onClose }) => {
               </div>
             )}
           </div>
-        </div>
+        </div> */}
 
         {/* Tabs - Responsive */}
         <div className="flex flex-wrap gap-2 md:gap-3 mb-8 md:mb-12 justify-center px-1">

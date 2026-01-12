@@ -590,20 +590,22 @@ const Pitchin = () => {
                 )}
               </div>
             </div>
-            <button
+            {/* Create Pitch button - Now in overlay only */}
+            {/* <button
               onClick={handleCreatePitchClick}
               className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-2 rounded-full font-semibold hover:shadow-lg hover:shadow-purple-500/50 transition flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Create Pitch</span>
               <span className="sm:hidden">Create</span>
-            </button>
+            </button> */}
           </div>
 
           {/* Navigation Tabs - Converted to Icon Buttons */}
-          <div className="flex gap-2 mt-4">
+          {/* Commented out - icons now only on video overlay */}
+          {/* <div className="flex gap-2 mt-4">
             {/* Feed Icon Button */}
-            <button
+            {/* <button
               onClick={() => setActiveTab('feed')}
               title="Pitch Feed"
               className={`p-2.5 rounded-lg transition ${
@@ -616,7 +618,7 @@ const Pitchin = () => {
             </button>
             
             {/* My Pitches Icon Button */}
-            <button
+            {/* <button
               onClick={() => setActiveTab('myPitches')}
               title="My Pitches"
               className={`p-2.5 rounded-lg transition ${
@@ -629,7 +631,7 @@ const Pitchin = () => {
             </button>
             
             {/* Interested Icon Button */}
-            <button
+            {/* <button
               onClick={() => setActiveTab('interested')}
               title="Interested"
               className={`p-2.5 rounded-lg transition ${
@@ -640,11 +642,13 @@ const Pitchin = () => {
             >
               <Heart className="w-5 h-5" />
             </button>
-          </div>
+          </div> */}
         </div>
       </div>
 
-      {/* Business Profile Section - Minimal Collapsed View */}
+      {/* Business Profile Section - Minimal Collapsed View - HIDDEN */}
+      {/* Now accessible via overlay icon in video feed */}
+      {/* 
       {currentUser && currentBusinessProfile && (
         <div className="border-t border-slate-700 bg-slate-900/50">
           <div className="max-w-7xl mx-auto px-4 py-3">
@@ -720,6 +724,7 @@ const Pitchin = () => {
           </div>
         </div>
       )}
+      */}
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-8">
@@ -784,7 +789,61 @@ const Pitchin = () => {
                         {pitch.pitch_type || 'Equity'}
                       </div>
                       
-                      {/* Tab Icons Overlay - Top Left */}
+                      {/* Info Icon Overlay - Bottom Right of Video */}
+                      <button
+                        className="absolute bottom-4 right-4 p-2 bg-white/10 hover:bg-white/20 backdrop-blur-md text-white rounded-lg transition opacity-70 hover:opacity-100 group z-10"
+                        title="Pitch Details"
+                      >
+                        <FileText className="w-4 h-4" />
+                        {/* Tooltip popup on hover */}
+                        <div className="absolute bottom-full right-0 mb-2 bg-slate-800/95 backdrop-blur-md border border-slate-600 rounded-lg p-3 w-56 text-left text-xs opacity-0 group-hover:opacity-100 transition pointer-events-none group-hover:pointer-events-auto shadow-lg z-20">
+                          <p className="text-slate-400 flex items-center gap-1 mb-2">
+                            <Clock className="w-3 h-3" />
+                            {formatDate(pitch.created_at)}
+                          </p>
+                          <h4 className="text-white font-bold mb-1">{pitch.title}</h4>
+                          <p className="text-slate-300 text-xs mb-2">{pitch.business_profiles?.business_name}</p>
+                          <p className="text-slate-400 text-xs mb-2">{pitch.description}</p>
+                          
+                          {/* Funding Info */}
+                          <div className="grid grid-cols-3 gap-1 bg-slate-700/30 p-2 rounded mb-2">
+                            <div>
+                              <p className="text-slate-500 text-xs">RAISED</p>
+                              <p className="text-white text-xs font-bold">{formatCurrency(pitch.raised_amount)}</p>
+                            </div>
+                            <div>
+                              <p className="text-slate-500 text-xs">GOAL</p>
+                              <p className="text-white text-xs font-bold">{formatCurrency(pitch.target_funding)}</p>
+                            </div>
+                            <div>
+                              <p className="text-slate-500 text-xs">EQUITY</p>
+                              <p className="text-white text-xs font-bold">{pitch.equity_offering || 0}%</p>
+                            </div>
+                          </div>
+
+                          {/* Co-owners */}
+                          {pitch.business_profiles?.business_co_owners && pitch.business_profiles.business_co_owners.length > 0 && (
+                            <div className="flex items-center gap-1">
+                              <Users className="w-3 h-3 text-slate-400" />
+                              <p className="text-slate-400 text-xs">
+                                {pitch.business_profiles.business_co_owners.length} team member{pitch.business_profiles.business_co_owners.length !== 1 ? 's' : ''}
+                              </p>
+                              <div className="flex ml-1">
+                                {pitch.business_profiles.business_co_owners.slice(0, 2).map((member, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="w-4 h-4 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-bold -ml-1 first:ml-0"
+                                    title={member.owner_name}
+                                  >
+                                    {member.owner_name[0]}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                      
                       <div className="absolute top-4 left-4 flex gap-2">
                         {/* Create Pitch Icon */}
                         <button
@@ -833,11 +892,22 @@ const Pitchin = () => {
                         >
                           <Heart className="w-4 h-4" />
                         </button>
+                        
+                        {/* Business Profile Icon */}
+                        {currentBusinessProfile && (
+                          <button
+                            onClick={() => setShowProfileDetails(!showProfileDetails)}
+                            title={currentBusinessProfile.name}
+                            className="p-2 bg-white/10 hover:bg-white/20 backdrop-blur-md text-blue-300 rounded-lg transition opacity-70 hover:opacity-100"
+                          >
+                            <Building2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
 
-                    {/* Pitch Info */}
-                    <div className="p-6">
+                    {/* Pitch Info - Hidden, now in overlay */}
+                    {/* <div className="p-6">
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex-1">
                           <p className="text-slate-400 text-sm flex items-center gap-1">
@@ -859,7 +929,7 @@ const Pitchin = () => {
                       <p className="text-slate-400 text-sm mb-4">{pitch.description}</p>
 
                       {/* Funding Info */}
-                      <div className="grid grid-cols-3 gap-3 mb-4 bg-slate-700/50 p-3 rounded-lg">
+                      {/* <div className="grid grid-cols-3 gap-3 mb-4 bg-slate-700/50 p-3 rounded-lg">
                         <div>
                           <p className="text-slate-400 text-xs font-semibold">RAISED</p>
                           <p className="text-white font-bold">{formatCurrency(pitch.raised_amount)}</p>
@@ -872,10 +942,10 @@ const Pitchin = () => {
                           <p className="text-slate-400 text-xs font-semibold">EQUITY</p>
                           <p className="text-white font-bold">{pitch.equity_offering || 0}%</p>
                         </div>
-                      </div>
+                      </div> */}
 
                       {/* Co-owners */}
-                      {pitch.business_profiles?.business_co_owners && pitch.business_profiles.business_co_owners.length > 0 && (
+                      {/* {pitch.business_profiles?.business_co_owners && pitch.business_profiles.business_co_owners.length > 0 && (
                         <div className="flex items-center gap-2 mb-4">
                           <Users className="w-4 h-4 text-slate-400" />
                           <p className="text-slate-400 text-sm">
@@ -893,10 +963,10 @@ const Pitchin = () => {
                             ))}
                           </div>
                         </div>
-                      )}
+                      )} */}
 
                       {/* Action Buttons */}
-                      <div className={`grid gap-2 ${pitch.business_profiles?.user_id === currentUser?.id ? 'grid-cols-5' : 'grid-cols-4'}`}>
+                      {/* <div className={`grid gap-2 ${pitch.business_profiles?.user_id === currentUser?.id ? 'grid-cols-5' : 'grid-cols-4'}`}>
                         <button
                           onClick={() => handleLike(pitch.id)}
                           className={`flex items-center justify-center gap-2 p-2 rounded-lg transition font-medium text-sm ${
@@ -941,7 +1011,7 @@ const Pitchin = () => {
                           Sign
                         </button>
                         {/* Delete button - only visible to pitch creator */}
-                        {pitch.business_profiles?.user_id === currentUser?.id && (
+                        {/* {pitch.business_profiles?.user_id === currentUser?.id && (
                           <button
                             onClick={() => handleDeletePitch(pitch)}
                             className="flex items-center justify-center gap-2 bg-slate-700/50 hover:bg-red-500/30 text-slate-300 hover:text-red-300 p-2 rounded-lg transition font-medium text-sm"
@@ -951,7 +1021,7 @@ const Pitchin = () => {
                           </button>
                         )}
                       </div>
-                    </div>
+                    </div> */}
                   </div>
                 ))
               )}
