@@ -16,9 +16,14 @@ const initializeSupabase = () => {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+  // Log for debugging (will show in browser console)
+  console.log('🔍 Checking Supabase environment variables...');
+  console.log('VITE_SUPABASE_URL:', supabaseUrl ? '✅ Set' : '❌ Missing');
+  console.log('VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? '✅ Set' : '❌ Missing');
+
   if (!supabaseUrl || !supabaseAnonKey) {
-    console.warn(
-      'Supabase URL or Anonymous Key is missing. Make sure to set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file.'
+    console.error(
+      '❌ Supabase initialization FAILED: Missing environment variables. Make sure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in Vercel dashboard or .env file.'
     );
     isInitializing = false;
     supabaseInstance = null;
@@ -40,6 +45,8 @@ const initializeSupabase = () => {
       },
     });
 
+    console.log('✅ Supabase client initialized successfully');
+
     // Add error handling for auth issues (non-blocking)
     supabaseInstance.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT') {
@@ -56,7 +63,7 @@ const initializeSupabase = () => {
       }
     });
   } catch (error) {
-    console.error('Failed to initialize Supabase:', error);
+    console.error('❌ Failed to initialize Supabase:', error);
     supabaseInstance = null;
   } finally {
     isInitializing = false;
