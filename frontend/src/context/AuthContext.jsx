@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase/client';
+import { getSupabaseClient } from '../lib/supabase/client';
 
 const AuthContext = createContext({});
 
@@ -10,9 +10,25 @@ export const AuthProvider = ({ children }) => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Get supabase client safely
+  const getSupabase = () => {
+    const client = getSupabaseClient();
+    if (!client) {
+      console.error('❌ Supabase client not initialized. Check your environment variables.');
+      return null;
+    }
+    return client;
+  };
+
   // Load user profile from database
   const loadProfile = async (userId) => {
     if (!userId) {
+      setProfile(null);
+      return null;
+    }
+
+    const supabase = getSupabase();
+    if (!supabase) {
       setProfile(null);
       return null;
     }
@@ -89,6 +105,9 @@ export const AuthProvider = ({ children }) => {
   // Update user profile
   const updateProfile = async (updates) => {
     if (!user) throw new Error('Not authenticated');
+    
+    const supabase = getSupabase();
+    if (!supabase) throw new Error('Supabase not initialized');
 
     const { data, error } = await supabase
       .from('profiles')
@@ -114,6 +133,9 @@ export const AuthProvider = ({ children }) => {
   // Upload avatar
   const uploadAvatar = async (file) => {
     if (!user) throw new Error('Not authenticated');
+    
+    const supabase = getSupabase();
+    if (!supabase) throw new Error('Supabase not initialized');
 
     const fileExt = file.name.split('.').pop();
     const fileName = `${user.id}-${Date.now()}.${fileExt}`;
@@ -164,6 +186,14 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
+    const supabase = getSupabase();
+    
+    if (!supabase) {
+      console.warn('⚠️ Supabase not initialized. Setting loading to false.');
+      setLoading(false);
+      return;
+    }
+
     // Get initial session - Supabase will automatically process OAuth tokens from URL
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
@@ -176,7 +206,8 @@ export const AuthProvider = ({ children }) => {
       if (window.location.hash) {
         window.history.replaceState(null, '', window.location.pathname);
       }
-    }).catch(() => {
+    }).catch((err) => {
+      console.error('Error getting session:', err);
       setLoading(false);
     });
 
@@ -198,6 +229,9 @@ export const AuthProvider = ({ children }) => {
 
   // Sign up - exactly like FARM-AGENT
   const signUp = async (email, password, fullName) => {
+    const supabase = getSupabase();
+    if (!supabase) throw new Error('Supabase not initialized');
+    
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -220,6 +254,9 @@ export const AuthProvider = ({ children }) => {
 
   // Sign in - exactly like FARM-AGENT
   const signIn = async (email, password) => {
+    const supabase = getSupabase();
+    if (!supabase) throw new Error('Supabase not initialized');
+    
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -231,12 +268,18 @@ export const AuthProvider = ({ children }) => {
 
   // Sign out
   const signOut = async () => {
+    const supabase = getSupabase();
+    if (!supabase) throw new Error('Supabase not initialized');
+    
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
   };
 
   // Reset password
   const resetPassword = async (email) => {
+    const supabase = getSupabase();
+    if (!supabase) throw new Error('Supabase not initialized');
+    
     const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
@@ -247,6 +290,9 @@ export const AuthProvider = ({ children }) => {
 
   // Sign in with Google - exactly like FARM-AGENT
   const signInWithGoogle = async () => {
+    const supabase = getSupabase();
+    if (!supabase) throw new Error('Supabase not initialized');
+    
     // Redirect to root - Supabase will handle the token from URL hash
     const redirectTo = window.location.hostname === 'localhost' 
       ? `http://localhost:${window.location.port}`

@@ -79,22 +79,22 @@ import {
 // ============================================
 // SUPABASE INITIALIZATION
 // ============================================
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://your-project.supabase.co';
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'your-anon-key';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 let supabase = null;
 
 // Initialize Supabase safely
-try {
-  if (SUPABASE_URL && SUPABASE_URL !== 'https://your-project.supabase.co' && SUPABASE_ANON_KEY && SUPABASE_ANON_KEY !== 'your-anon-key') {
+if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+  try {
     supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     console.log('✅ Supabase initialized successfully');
-  } else {
-    console.warn('⚠️ Supabase keys not configured in .env.local');
+  } catch (error) {
+    console.error('❌ Supabase initialization failed:', error);
+    supabase = null;
   }
-} catch (error) {
-  console.warn('⚠️ Supabase initialization failed:', error);
-  supabase = null;
+} else {
+  console.warn('⚠️ Missing Supabase environment variables: VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY');
 }
 
 // AI Spending Advice Modal
