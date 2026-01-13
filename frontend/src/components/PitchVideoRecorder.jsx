@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, Mic, Square, Play, Upload, X } from 'lucide-react';
+import { Camera, Mic, Square, Play, Upload, X, RotateCcw, Pin } from 'lucide-react';
 import { uploadVideo } from '../services/pitchingService';
 
 const PitchVideoRecorder = ({ onPitchCreated }) => {
@@ -15,6 +15,7 @@ const PitchVideoRecorder = ({ onPitchCreated }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState(null);
+  const [isFormExpanded, setIsFormExpanded] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -236,20 +237,20 @@ const PitchVideoRecorder = ({ onPitchCreated }) => {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
-      <div className="bg-slate-800 rounded-2xl p-8 border border-slate-700">
-        <h2 className="text-3xl font-bold text-white mb-6">
+    <div className="space-y-4 md:space-y-6 max-w-4xl mx-auto px-0 md:px-0">
+      <div className="bg-slate-800 rounded-none md:rounded-2xl p-4 md:p-8 border-0 md:border border-slate-700">
+        <h2 className="text-2xl md:text-3xl font-bold text-white mb-3 md:mb-6 px-4 md:px-0">
           Create Your Professional Pitch
         </h2>
-        <p className="text-slate-400 mb-8">
+        <p className="text-slate-400 mb-6 md:mb-8 text-sm md:text-base px-4 md:px-0">
           Record a 3-minute professional pitch video. Be clear, compelling, and creative!
         </p>
 
         {/* Video Preview/Recording */}
-        <div className="mb-8">
+        <div className="mb-6 md:mb-8 px-4 md:px-0">
           <div style={{
             backgroundColor: '#000',
-            borderRadius: '0.75rem',
+            borderRadius: '0.5rem',
             overflow: 'hidden',
             aspectRatio: '16 / 9',
             marginBottom: '1rem',
@@ -294,11 +295,12 @@ const PitchVideoRecorder = ({ onPitchCreated }) => {
                     justifyContent: 'center',
                     backgroundColor: 'rgba(0, 0, 0, 0.5)',
                     pointerEvents: 'none',
-                    zIndex: 10
+                    zIndex: 10,
+                    padding: '1rem'
                   }}>
-                    <Camera className="w-16 h-16 text-slate-300 mb-4" />
-                    <p style={{ color: '#e2e8f0', fontSize: '1.125rem', fontWeight: '600' }}>Click "Start Recording" to begin</p>
-                    <p style={{ color: '#94a3b8', fontSize: '0.875rem', marginTop: '0.5rem' }}>If video doesn't appear, check camera permissions</p>
+                    <Camera className="w-12 md:w-16 h-12 md:h-16 text-slate-300 mb-2 md:mb-4" />
+                    <p style={{ color: '#e2e8f0', fontSize: '0.95rem', fontWeight: '600', textAlign: 'center' }}>Click "Start Recording" to begin</p>
+                    <p style={{ color: '#94a3b8', fontSize: '0.75rem', marginTop: '0.25rem', textAlign: 'center' }}>If video doesn't appear, check camera permissions</p>
                   </div>
                 )}
               </>
@@ -322,263 +324,314 @@ const PitchVideoRecorder = ({ onPitchCreated }) => {
             )}
           </div>
 
-          {/* Controls */}
-          <div className="flex gap-4 mb-6">
+          {/* Controls - Compact Icon Buttons */}
+          <div className="flex gap-2 mb-6 px-4 md:px-0 justify-center md:justify-start">
             {!previewUrl ? (
               <>
-                <button
-                  onClick={startRecording}
-                  disabled={isRecording}
-                  className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-slate-600 text-white py-3 rounded-lg font-semibold flex items-center justify-center gap-2 transition"
-                >
-                  <Camera className="w-5 h-5" />
-                  {isRecording ? 'Recording...' : 'Start Recording'}
-                </button>
-                {isRecording && (
+                {/* Start Recording Button */}
+                <div className="relative group">
                   <button
-                    onClick={stopRecording}
-                    className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-lg font-semibold flex items-center justify-center gap-2 transition"
+                    onClick={startRecording}
+                    disabled={isRecording}
+                    className="relative w-10 h-10 md:w-11 md:h-11 rounded-full bg-red-600 hover:bg-red-700 disabled:bg-slate-600 text-white flex items-center justify-center transition group focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-slate-900"
                   >
-                    <Square className="w-5 h-5" />
-                    Stop Recording
+                    <Camera className="w-5 h-5 md:w-6 md:h-6" />
+                    {isRecording && (
+                      <span className="absolute inset-0 rounded-full border-2 border-red-400 animate-pulse" />
+                    )}
                   </button>
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                    <div className="bg-slate-900 text-white text-xs md:text-sm px-3 py-1 rounded whitespace-nowrap border border-slate-700">
+                      {isRecording ? 'Recording...' : 'Start Recording'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stop Recording Button */}
+                {isRecording && (
+                  <div className="relative group">
+                    <button
+                      onClick={stopRecording}
+                      className="w-10 h-10 md:w-11 md:h-11 rounded-full bg-slate-700 hover:bg-slate-600 text-white flex items-center justify-center transition focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 focus:ring-offset-slate-900"
+                    >
+                      <Square className="w-5 h-5 md:w-6 md:h-6" />
+                    </button>
+                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                      <div className="bg-slate-900 text-white text-xs md:text-sm px-3 py-1 rounded whitespace-nowrap border border-slate-700">
+                        Stop Recording
+                      </div>
+                    </div>
+                  </div>
                 )}
-                <label className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold flex items-center justify-center gap-2 transition cursor-pointer">
-                  <Upload className="w-5 h-5" />
-                  Upload Video
-                  <input
-                    type="file"
-                    accept="video/*"
-                    onChange={handleUploadVideo}
-                    className="hidden"
-                  />
-                </label>
+
+                {/* Upload Video Button */}
+                <div className="relative group">
+                  <label className="w-10 h-10 md:w-11 md:h-11 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition cursor-pointer focus-within:outline-none focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-2 focus-within:ring-offset-slate-900">
+                    <Upload className="w-5 h-5 md:w-6 md:h-6" />
+                    <input
+                      type="file"
+                      accept="video/*"
+                      onChange={handleUploadVideo}
+                      className="hidden"
+                    />
+                  </label>
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                    <div className="bg-slate-900 text-white text-xs md:text-sm px-3 py-1 rounded whitespace-nowrap border border-slate-700">
+                      Upload Video
+                    </div>
+                  </div>
+                </div>
               </>
             ) : (
-              <button
-                onClick={() => setPreviewUrl(null)}
-                className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-lg font-semibold flex items-center justify-center gap-2 transition"
-              >
-                <X className="w-5 h-5" />
-                Re-record
-              </button>
+              <div className="relative group">
+                <button
+                  onClick={() => setPreviewUrl(null)}
+                  className="w-10 h-10 md:w-11 md:h-11 rounded-full bg-slate-700 hover:bg-slate-600 text-white flex items-center justify-center transition focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 focus:ring-offset-slate-900"
+                >
+                  <RotateCcw className="w-5 h-5 md:w-6 md:h-6" />
+                </button>
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                  <div className="bg-slate-900 text-white text-xs md:text-sm px-3 py-1 rounded whitespace-nowrap border border-slate-700">
+                    Re-record
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </div>
 
-        {/* Form Fields */}
-        <div className="space-y-4">
-          {/* Title */}
-          <div>
-            <label className="block text-slate-300 font-semibold mb-2">
-              Pitch Title *
-            </label>
-            <input
-              type="text"
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              placeholder="e.g., AI-Powered Supply Chain Platform"
-              className="w-full bg-slate-700 text-white rounded-lg px-4 py-2 border border-slate-600 focus:border-purple-500 focus:outline-none"
-            />
-          </div>
-
-          {/* Creator Name */}
-          <div>
-            <label className="block text-slate-300 font-semibold mb-2">
-              Creator/Company Name *
-            </label>
-            <input
-              type="text"
-              value={formData.creator}
-              onChange={(e) => setFormData({ ...formData, creator: e.target.value })}
-              placeholder="Your name or company"
-              className="w-full bg-slate-700 text-white rounded-lg px-4 py-2 border border-slate-600 focus:border-purple-500 focus:outline-none"
-            />
-          </div>
-
-          {/* Description */}
-          <div>
-            <label className="block text-slate-300 font-semibold mb-2">
-              Pitch Description *
-            </label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Describe your idea, business model, and what you're seeking..."
-              rows={4}
-              className="w-full bg-slate-700 text-white rounded-lg px-4 py-2 border border-slate-600 focus:border-purple-500 focus:outline-none"
-            />
-          </div>
-
-          {/* Grid: Category, Pitch Type */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-slate-300 font-semibold mb-2">
-                Category
-              </label>
-              <select
-                value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                className="w-full bg-slate-700 text-white rounded-lg px-4 py-2 border border-slate-600 focus:border-purple-500 focus:outline-none"
-              >
-                <option>Technology</option>
-                <option>Healthcare</option>
-                <option>Finance</option>
-                <option>Agriculture</option>
-                <option>Education</option>
-                <option>Sustainability</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-slate-300 font-semibold mb-2">
-                Pitch Type
-              </label>
-              <select
-                value={formData.pitchType}
-                onChange={(e) => setFormData({ ...formData, pitchType: e.target.value })}
-                className="w-full bg-slate-700 text-white rounded-lg px-4 py-2 border border-slate-600 focus:border-purple-500 focus:outline-none"
-              >
-                <option>Equity</option>
-                <option>Partnership</option>
-                <option>Debt</option>
-                <option>Grant</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Grid: Funding Details */}
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-slate-300 font-semibold mb-2">
-                Target Goal
-              </label>
-              <input
-                type="text"
-                value={formData.goal}
-                onChange={(e) => setFormData({ ...formData, goal: e.target.value })}
-                placeholder="$500K"
-                className="w-full bg-slate-700 text-white rounded-lg px-4 py-2 border border-slate-600 focus:border-purple-500 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-slate-300 font-semibold mb-2">
-                Equity Offering
-              </label>
-              <input
-                type="text"
-                value={formData.equity}
-                onChange={(e) => setFormData({ ...formData, equity: e.target.value })}
-                placeholder="10%"
-                className="w-full bg-slate-700 text-white rounded-lg px-4 py-2 border border-slate-600 focus:border-purple-500 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-slate-300 font-semibold mb-2">
-                Currently Raised
-              </label>
-              <input
-                type="text"
-                value={formData.raised}
-                onChange={(e) => setFormData({ ...formData, raised: e.target.value })}
-                placeholder="$0"
-                className="w-full bg-slate-700 text-white rounded-lg px-4 py-2 border border-slate-600 focus:border-purple-500 focus:outline-none"
-              />
-            </div>
-          </div>
-
-          {/* IP Checkbox */}
-          <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              checked={formData.hasIP}
-              onChange={(e) => setFormData({ ...formData, hasIP: e.target.checked })}
-              className="w-5 h-5 rounded border-slate-600 cursor-pointer"
-            />
-            <label className="text-slate-300 font-semibold cursor-pointer">
-              This pitch includes Intellectual Property (IP)
-            </label>
-          </div>
-
-          {/* Team Members */}
-          <div>
-            <label className="block text-slate-300 font-semibold mb-2">
-              Team Members
-            </label>
-            <div className="flex gap-2 mb-2">
-              <input
-                type="text"
-                id="memberInput"
-                placeholder="Add team member name"
-                className="flex-1 bg-slate-700 text-white rounded-lg px-4 py-2 border border-slate-600 focus:border-purple-500 focus:outline-none"
-              />
-              <button
-                onClick={() => {
-                  const input = document.getElementById('memberInput');
-                  handleAddMember(input.value);
-                  input.value = '';
-                }}
-                className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-semibold transition"
-              >
-                Add
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {formData.members.map((member, idx) => (
-                <div
-                  key={idx}
-                  className="bg-purple-600/30 text-purple-300 px-3 py-1 rounded-full text-sm flex items-center gap-2 border border-purple-500/50"
-                >
-                  {member}
-                  <button
-                    onClick={() => handleRemoveMember(member)}
-                    className="hover:text-purple-100"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Error Message */}
-          {submitError && (
-            <div style={{
-              backgroundColor: '#dc2626',
-              color: 'white',
-              padding: '1rem',
-              borderRadius: '0.5rem',
-              marginBottom: '1rem'
-            }}>
-              {submitError}
-            </div>
-          )}
-
-          {/* Success Message */}
-          {submitSuccess && (
-            <div style={{
-              backgroundColor: '#10b981',
-              color: 'white',
-              padding: '1rem',
-              borderRadius: '0.5rem',
-              marginBottom: '1rem',
-              textAlign: 'center'
-            }}>
-              ✅ Pitch created successfully! Redirecting...
-            </div>
-          )}
-
-          {/* Submit */}
+        {/* Form Toggle - Pin Icon */}
+        <div className="flex justify-center md:justify-start mb-4 px-4 md:px-0">
           <button
-            onClick={handleSubmit}
-            disabled={isSubmitting}
-            className={`w-full py-3 rounded-lg font-bold text-lg transition shadow-lg ${
-              isSubmitting
-                ? 'bg-slate-600 cursor-not-allowed'
-                : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white hover:shadow-purple-500/50'
-            }`}
+            onClick={() => setIsFormExpanded(!isFormExpanded)}
+            className="relative group w-10 h-10 md:w-12 md:h-12 rounded-full bg-slate-700 hover:bg-slate-600 text-purple-400 hover:text-purple-300 flex items-center justify-center transition focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-slate-900"
           >
-            {isSubmitting ? 'Launching...' : 'Launch Your Pitch'}
+            <Pin className={`w-5 h-5 md:w-6 md:h-6 transition-transform ${isFormExpanded ? 'rotate-45' : ''}`} />
+            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+              <div className="bg-slate-900 text-white text-xs md:text-sm px-3 py-1 rounded whitespace-nowrap border border-slate-700">
+                {isFormExpanded ? 'Collapse form' : 'Expand form'}
+              </div>
+            </div>
           </button>
+        </div>
+
+        {/* Form Fields - Collapsible */}
+        <div className={`transition-all duration-300 overflow-hidden ${isFormExpanded ? 'max-h-[2000px] opacity-100' : 'hidden md:block max-h-[2000px] opacity-100'}`}>
+          <div className="space-y-3 md:space-y-4 px-4 md:px-0">
+            {/* Title */}
+            <div>
+              <label className="block text-slate-300 font-semibold mb-2 text-sm md:text-base">
+                Pitch Title *
+              </label>
+              <input
+                type="text"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="e.g., AI-Powered Supply Chain Platform"
+                className="w-full bg-slate-700 text-white rounded-lg px-3 md:px-4 py-2 md:py-2.5 border border-slate-600 focus:border-purple-500 focus:outline-none text-sm md:text-base"
+              />
+            </div>
+
+            {/* Creator Name */}
+            <div>
+              <label className="block text-slate-300 font-semibold mb-2 text-sm md:text-base">
+                Creator/Company Name *
+              </label>
+              <input
+                type="text"
+                value={formData.creator}
+                onChange={(e) => setFormData({ ...formData, creator: e.target.value })}
+                placeholder="Your name or company"
+                className="w-full bg-slate-700 text-white rounded-lg px-3 md:px-4 py-2 md:py-2.5 border border-slate-600 focus:border-purple-500 focus:outline-none text-sm md:text-base"
+              />
+            </div>
+
+            {/* Description */}
+            <div>
+              <label className="block text-slate-300 font-semibold mb-2 text-sm md:text-base">
+                Pitch Description *
+              </label>
+              <textarea
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="Describe your idea, business model, and what you're seeking..."
+                rows={3}
+                className="w-full bg-slate-700 text-white rounded-lg px-3 md:px-4 py-2 md:py-2.5 border border-slate-600 focus:border-purple-500 focus:outline-none text-sm md:text-base resize-none"
+              />
+            </div>
+
+            {/* Grid: Category, Pitch Type */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+              <div>
+                <label className="block text-slate-300 font-semibold mb-2 text-sm md:text-base">
+                  Category
+                </label>
+                <select
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  className="w-full bg-slate-700 text-white rounded-lg px-3 md:px-4 py-2 md:py-2.5 border border-slate-600 focus:border-purple-500 focus:outline-none text-sm md:text-base"
+                >
+                  <option>Technology</option>
+                  <option>Healthcare</option>
+                  <option>Finance</option>
+                  <option>Agriculture</option>
+                  <option>Education</option>
+                  <option>Sustainability</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-slate-300 font-semibold mb-2 text-sm md:text-base">
+                  Pitch Type
+                </label>
+                <select
+                  value={formData.pitchType}
+                  onChange={(e) => setFormData({ ...formData, pitchType: e.target.value })}
+                  className="w-full bg-slate-700 text-white rounded-lg px-3 md:px-4 py-2 md:py-2.5 border border-slate-600 focus:border-purple-500 focus:outline-none text-sm md:text-base"
+                >
+                  <option>Equity</option>
+                  <option>Partnership</option>
+                  <option>Debt</option>
+                  <option>Grant</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Grid: Funding Details */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+              <div>
+                <label className="block text-slate-300 font-semibold mb-2 text-sm md:text-base">
+                  Target Goal
+                </label>
+                <input
+                  type="text"
+                  value={formData.goal}
+                  onChange={(e) => setFormData({ ...formData, goal: e.target.value })}
+                  placeholder="$500K"
+                  className="w-full bg-slate-700 text-white rounded-lg px-3 md:px-4 py-2 md:py-2.5 border border-slate-600 focus:border-purple-500 focus:outline-none text-sm md:text-base"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-300 font-semibold mb-2 text-sm md:text-base">
+                  Equity Offering
+                </label>
+                <input
+                  type="text"
+                  value={formData.equity}
+                  onChange={(e) => setFormData({ ...formData, equity: e.target.value })}
+                  placeholder="10%"
+                  className="w-full bg-slate-700 text-white rounded-lg px-3 md:px-4 py-2 md:py-2.5 border border-slate-600 focus:border-purple-500 focus:outline-none text-sm md:text-base"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-300 font-semibold mb-2 text-sm md:text-base">
+                  Currently Raised
+                </label>
+                <input
+                  type="text"
+                  value={formData.raised}
+                  onChange={(e) => setFormData({ ...formData, raised: e.target.value })}
+                  placeholder="$0"
+                  className="w-full bg-slate-700 text-white rounded-lg px-3 md:px-4 py-2 md:py-2.5 border border-slate-600 focus:border-purple-500 focus:outline-none text-sm md:text-base"
+                />
+              </div>
+            </div>
+
+            {/* IP Checkbox */}
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={formData.hasIP}
+                onChange={(e) => setFormData({ ...formData, hasIP: e.target.checked })}
+                className="w-4 h-4 md:w-5 md:h-5 rounded border-slate-600 cursor-pointer"
+              />
+              <label className="text-slate-300 font-semibold cursor-pointer text-sm md:text-base">
+                This pitch includes Intellectual Property (IP)
+              </label>
+            </div>
+
+            {/* Team Members */}
+            <div>
+              <label className="block text-slate-300 font-semibold mb-2 text-sm md:text-base">
+                Team Members
+              </label>
+              <div className="flex flex-col md:flex-row gap-2 mb-2">
+                <input
+                  type="text"
+                  id="memberInput"
+                  placeholder="Add team member name"
+                  className="flex-1 bg-slate-700 text-white rounded-lg px-3 md:px-4 py-2 md:py-2.5 border border-slate-600 focus:border-purple-500 focus:outline-none text-sm md:text-base"
+                />
+                <button
+                  onClick={() => {
+                    const input = document.getElementById('memberInput');
+                    handleAddMember(input.value);
+                    input.value = '';
+                  }}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 md:px-6 py-2 md:py-2.5 rounded-lg font-semibold transition text-sm md:text-base"
+                >
+                  Add
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {formData.members.map((member, idx) => (
+                  <div
+                    key={idx}
+                    className="bg-purple-600/30 text-purple-300 px-3 py-1 rounded-full text-xs md:text-sm flex items-center gap-2 border border-purple-500/50"
+                  >
+                    {member}
+                    <button
+                      onClick={() => handleRemoveMember(member)}
+                      className="hover:text-purple-100"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Error Message */}
+            {submitError && (
+              <div style={{
+                backgroundColor: '#dc2626',
+                color: 'white',
+                padding: '0.75rem 1rem',
+                borderRadius: '0.5rem',
+                marginBottom: '1rem',
+                fontSize: '0.875rem'
+              }}>
+                {submitError}
+              </div>
+            )}
+
+            {/* Success Message */}
+            {submitSuccess && (
+              <div style={{
+                backgroundColor: '#10b981',
+                color: 'white',
+                padding: '0.75rem 1rem',
+                borderRadius: '0.5rem',
+                marginBottom: '1rem',
+                textAlign: 'center',
+                fontSize: '0.875rem'
+              }}>
+                ✅ Pitch created successfully! Redirecting...
+              </div>
+            )}
+
+            {/* Submit */}
+            <button
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className={`w-full py-3 md:py-4 rounded-lg font-bold text-base md:text-lg transition shadow-lg ${
+                isSubmitting
+                  ? 'bg-slate-600 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white hover:shadow-purple-500/50'
+              }`}
+            >
+              {isSubmitting ? 'Launching...' : 'Launch Your Pitch'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

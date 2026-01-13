@@ -54,6 +54,7 @@ const Pitchin = () => {
   const [newComment, setNewComment] = useState('');
   const [copiedPitchId, setCopiedPitchId] = useState(null);
   const [expandedPitchInfo, setExpandedPitchInfo] = useState(null); // pitch id for info tooltip
+  const [videoOrientations, setVideoOrientations] = useState({}); // track video orientations (portrait/landscape)
   const videoScrollRef = useRef(null);
 
   // Initialize and load data
@@ -451,6 +452,21 @@ const Pitchin = () => {
     });
   };
 
+  const handleVideoLoadedMetadata = (pitchId, event) => {
+    // Detect video orientation based on dimensions
+    const video = event.target;
+    const width = video.videoWidth;
+    const height = video.videoHeight;
+    const isPortrait = height > width;
+    
+    setVideoOrientations(prev => ({
+      ...prev,
+      [pitchId]: isPortrait ? 'portrait' : 'landscape'
+    }));
+    
+    console.log(`📹 Video loaded - ${pitchId}: ${width}x${height} (${isPortrait ? 'PORTRAIT' : 'LANDSCAPE'})`);
+  };
+
   const handleCreatePitchClick = () => {
     if (!currentUser) {
       alert('Please login to create a pitch');
@@ -764,8 +780,12 @@ const Pitchin = () => {
                     key={pitch.id}
                     className="group bg-slate-800 rounded-none md:rounded-xl lg:rounded-2xl overflow-hidden hover:shadow-2xl hover:shadow-purple-500/20 transition border-0 md:border border-slate-700 hover:border-purple-500/50 flex flex-col h-full w-full md:h-auto"
                   >
-                    {/* Video Container - Full screen on mobile */}
-                    <div className="relative bg-black aspect-video md:aspect-video flex items-center justify-center overflow-hidden w-full h-full flex-shrink-0">
+                    {/* Video Container - Responsive to portrait/landscape videos */}
+                    <div className={`relative bg-black flex items-center justify-center overflow-hidden w-full flex-shrink-0 ${
+                      videoOrientations[pitch.id] === 'portrait'
+                        ? 'aspect-[9/16] md:aspect-video'
+                        : 'aspect-video'
+                    }`}>
                       {!pitch.video_url || videoErrors[pitch.id] ? (
                         <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900 flex flex-col items-center justify-center gap-4">
                           <AlertCircle className="w-12 h-12 text-slate-500" />
@@ -777,12 +797,13 @@ const Pitchin = () => {
                       ) : (
                         <video
                           src={pitch.video_url}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-contain"
                           controls
                           crossOrigin="anonymous"
                           onError={(event) => handleVideoError(pitch.id, event)}
                           onLoadStart={() => console.log(`📹 Loading video: ${pitch.video_url}`)}
                           onCanPlay={() => console.log(`✅ Video can play: ${pitch.id}`)}
+                          onLoadedMetadata={(event) => handleVideoLoadedMetadata(pitch.id, event)}
                         />
                       )}
                       {/* Pitch Type Badge */}
