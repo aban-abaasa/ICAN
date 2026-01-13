@@ -568,12 +568,12 @@ const Pitchin = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-hidden">
       {/* Demo Mode Banner */}
       {!supabaseReady && (
-        <div className="bg-amber-500/20 border-b border-amber-500/50 text-amber-200 px-4 py-3">
-          <div className="max-w-7xl mx-auto flex items-center gap-2">
-            <AlertCircle className="w-5 h-5" />
+        <div className="bg-amber-500/20 border-b border-amber-500/50 text-amber-200 px-6 py-3">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
             <p className="text-sm">
               <strong>Demo Mode:</strong> Supabase not configured. Using sample data. 
               <a href="https://supabase.com" target="_blank" rel="noopener noreferrer" className="underline ml-2">
@@ -586,14 +586,14 @@ const Pitchin = () => {
 
       {/* Header - Hidden on mobile, visible on desktop */}
       <div className="hidden md:block sticky top-0 z-40 bg-slate-900/95 backdrop-blur border-b border-slate-700">
-        <div className="max-w-7xl mx-auto px-4 py-4">
+        <div className="px-8 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-                <Zap className="w-6 h-6 text-white" />
+              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center shadow-lg shadow-purple-500/30">
+                <Zap className="w-7 h-7 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
                   Pitchin
                 </h1>
                 {currentBusinessProfile && (
@@ -744,23 +744,25 @@ const Pitchin = () => {
       */}
 
       {/* Main Content - Full screen on mobile */}
-      <div className="w-full h-screen md:h-auto max-w-7xl md:mx-auto px-0 md:px-8 py-0 md:py-8 min-h-screen md:min-h-auto">
+      <div className="fixed inset-0 w-screen h-screen md:relative md:inset-auto md:w-full md:h-auto px-0 py-0 md:py-8 overflow-hidden md:overflow-visible bg-slate-900">
         {showRecorder ? (
-          <div className="mb-8 px-4 md:px-0">
+          <div className="mb-8 px-4 md:px-8">
             <button
               onClick={() => setShowRecorder(false)}
-              className="text-slate-400 hover:text-slate-200 mb-4 font-medium"
+              className="text-slate-400 hover:text-slate-200 mb-6 font-medium flex items-center gap-2 text-lg"
             >
-              ← Back
+              ← Back to Feed
             </button>
-            <PitchVideoRecorder onPitchCreated={handleCreatePitch} />
+            <div className="max-w-5xl">
+              <PitchVideoRecorder onPitchCreated={handleCreatePitch} onClose={() => setShowRecorder(false)} />
+            </div>
           </div>
         ) : (
           <>
-            {/* Feed Grid */}
+            {/* Feed Grid - Full viewport fill, no padding */}
             <div
               ref={videoScrollRef}
-              className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-2 gap-0 md:gap-8 h-screen md:h-auto w-full md:w-auto"
+              className="grid grid-cols-1 md:grid-cols-2 gap-0 md:gap-0 w-full h-full md:h-auto p-0 md:px-8"
             >
               {loading ? (
                 <div className="col-span-full flex items-center justify-center py-12">
@@ -778,7 +780,7 @@ const Pitchin = () => {
                 filteredPitches.map((pitch) => (
                   <div
                     key={pitch.id}
-                    className="group bg-slate-800 rounded-none md:rounded-xl lg:rounded-2xl overflow-hidden hover:shadow-2xl hover:shadow-purple-500/20 transition border-0 md:border border-slate-700 hover:border-purple-500/50 flex flex-col h-full w-full md:h-auto"
+                    className="group bg-slate-800 backdrop-blur border-0 md:border border-slate-700 rounded-none md:rounded-none overflow-hidden hover:shadow-2xl hover:shadow-purple-500/50 transition-all hover:border-purple-500/80 flex flex-col h-full w-full"
                   >
                     {/* Video Container - Responsive to portrait/landscape videos */}
                     <div className={`relative bg-black flex items-center justify-center overflow-hidden w-full flex-shrink-0 ${
