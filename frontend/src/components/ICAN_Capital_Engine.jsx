@@ -1632,7 +1632,8 @@ const TransactionInput = ({
   netWorth = 0,
   netWorthTrend = 'stable',
   intelligentRecommendations = [],
-  transactions = []
+  transactions = [],
+  analyzeOpportunity
 }) => {
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -1674,9 +1675,10 @@ const TransactionInput = ({
     let feedback = '';
     let confidence = 0;
     
-    if (analysis.amount > 0) confidence += 30;
-    if (analysis.type !== 'unknown') confidence += 30;
-    if (analysis.category !== 'other') confidence += 20;
+    // Confidence calculation
+    if (analysis.amount > 0) confidence += 30;  // Amount found
+    if (analysis.type !== 'unknown') confidence += 40;  // Type detected
+    if (analysis.category !== 'other') confidence += 30; // Category detected
     if (analysis.subCategory) confidence += 10;
     if (analysis.isLoan) confidence += 10;
     
@@ -1756,24 +1758,28 @@ const TransactionInput = ({
         let rawValue = match[1].replace(/[,\s]/g, '');
         let numericValue = parseFloat(rawValue);
         
-        // 🚀 HANDLE MASSIVE MULTIPLIERS
-        if (lowerText.includes('q') || lowerText.includes('quad')) {
+        // 🚀 HANDLE MASSIVE MULTIPLIERS - Check for multiplier keywords RIGHT AFTER the number
+        // Extract the portion of text after the matched number to look for multipliers
+        const matchIndex = text.indexOf(match[1]);
+        const textAfterNumber = text.substring(matchIndex + match[1].length).toLowerCase();
+        
+        if (textAfterNumber.match(/^\s*(?:q|quad|quadrillion)/)) {
           amount = numericValue * 1000000000000000; // Quadrillion
           detectedMultiplier = 'quadrillion';
-        } else if (lowerText.includes('t') || lowerText.includes('tril')) {
+        } else if (textAfterNumber.match(/^\s*(?:t|tril|trillion)/)) {
           amount = numericValue * 1000000000000; // Trillion
           detectedMultiplier = 'trillion';
-        } else if (lowerText.includes('b') || lowerText.includes('bil')) {
+        } else if (textAfterNumber.match(/^\s*(?:b|bil|billion)/)) {
           amount = numericValue * 1000000000; // Billion
           detectedMultiplier = 'billion';
-        } else if (lowerText.includes('m') || lowerText.includes('mil')) {
+        } else if (textAfterNumber.match(/^\s*(?:m|mil|million)/)) {
           amount = numericValue * 1000000; // Million
           detectedMultiplier = 'million';
-        } else if (lowerText.includes('k') || lowerText.includes('th')) {
+        } else if (textAfterNumber.match(/^\s*(?:k|th|thousand)/)) {
           amount = numericValue * 1000; // Thousand
           detectedMultiplier = 'thousand';
         } else {
-          amount = numericValue; // Raw amount
+          amount = numericValue; // Raw amount - no multiplier found after the number
           detectedMultiplier = 'units';
         }
         
@@ -2270,7 +2276,7 @@ const TransactionInput = ({
 
     // Return comprehensive analysis result
     return {
-      amount,
+      amount: amount,  // 🎯 Keep extracted amount if found, user can edit it
       type,
       isLoan,
       category,
@@ -8331,11 +8337,11 @@ Data Freshness: ${reportData.metadata.dataFreshness}
     
     // Get current financial metrics
     const monthlyIncome = transactions
-      .filter(t => t.type === 'income' && isThisMonth(new Date(t.createdAt)))
+      .filter(t => t.type === 'income' && isThisMonth(new Date(t.date || t.createdAt)))
       .reduce((sum, t) => sum + (t.amount || 0), 0);
     
     const monthlyExpense = transactions
-      .filter(t => t.type === 'expense' && isThisMonth(new Date(t.createdAt)))
+      .filter(t => t.type === 'expense' && isThisMonth(new Date(t.date || t.createdAt)))
       .reduce((sum, t) => sum + (t.amount || 0), 0);
     
     const monthlyNet = monthlyIncome - monthlyExpense;
@@ -8479,7 +8485,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
     // Calculate vital aggregates
     const thisMonth = new Date();
     const monthlyTransactions = transactions.filter(t => {
-      const tDate = new Date(t.createdAt);
+      const tDate = new Date(t.date || t.createdAt); // Try date first, fallback to createdAt
       return tDate.getMonth() === thisMonth.getMonth() && tDate.getFullYear() === thisMonth.getFullYear();
     });
 
@@ -8738,6 +8744,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
           netWorthTrend={netWorthTrend}
           intelligentRecommendations={intelligentRecommendations}
           transactions={transactions}
+          analyzeOpportunity={analyzeOpportunity}
         />
 
         {/* Net Worth Velocity & Tithing Status */}

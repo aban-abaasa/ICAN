@@ -14,15 +14,53 @@ import {
   History,
   CreditCard,
   Banknote,
-  ChevronDown
+  ChevronDown,
+  Zap
 } from 'lucide-react';
+import momoService from '../services/momoService';
+import airtelMoneyService from '../services/airtelMoneyService';
+import flutterwaveService from '../services/flutterwaveService';
+import { walletTransactionService } from '../services/walletTransactionService';
+import { cardTransactionService } from '../services/cardTransactionService';
+import paymentMethodDetector from '../services/paymentMethodDetector';
 
 const ICANWallet = () => {
   const [showBalance, setShowBalance] = useState(true);
   const [selectedCurrency, setSelectedCurrency] = useState('USD');
   const [activeTab, setActiveTab] = useState('overview');
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false);
+  const [activeModal, setActiveModal] = useState(null); // 'send', 'receive', 'topup'
+  const [sendForm, setSendForm] = useState({ recipient: '', amount: '', description: '' });
+  const [receiveForm, setReceiveForm] = useState({ amount: '', description: '' });
+  const [topupForm, setTopupForm] = useState({ amount: '', paymentInput: '', method: null, detectedMethod: null });
+  const [detectedPaymentMethod, setDetectedPaymentMethod] = useState(null);
+  const [transactionInProgress, setTransactionInProgress] = useState(false);
+  const [transactionResult, setTransactionResult] = useState(null);
+  const [showPaymentPicker, setShowPaymentPicker] = useState(false);
   const dropdownRef = useRef(null);
+
+  // 🎯 MAGIC PAYMENT DETECTOR - Auto-detect payment method
+  const handlePaymentInputChange = (e) => {
+    const input = e.target.value;
+    setTopupForm(prev => ({ ...prev, paymentInput: input }));
+
+    if (!input.trim()) {
+      setDetectedPaymentMethod(null);
+      return;
+    }
+
+    const detected = paymentMethodDetector.detectMethod(input);
+    setDetectedPaymentMethod(detected);
+    
+    if (detected) {
+      console.log(`✨ Detected: ${detected.name} ${detected.icon}`);
+      setTopupForm(prev => ({
+        ...prev,
+        method: detected.method,
+        detectedMethod: detected
+      }));
+    }
+  };
 
   // Mock wallet data with country information
   const walletData = {
@@ -102,6 +140,268 @@ const ICANWallet = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // 💳 SEND MONEY HANDLER
+  const handleSendMoney = async (e) => {
+    e.preventDefault();
+    if (!sendForm.recipient || !sendForm.amount) {
+      alert('Please fill in recipient and amount');
+      return;
+    }
+    
+    setTransactionInProgress(true);
+    
+    try {
+      // Process MOMO payment
+      const result = await momoService.processTransfer({
+        amount: sendForm.amount,
+        currency: selectedCurrency,
+        recipientPhone: sendForm.recipient,
+        description: sendForm.description || `Send to ${sendForm.recipient}`
+      });
+
+      if (result.success) {
+        // Save transaction to Supabase
+        await walletTransactionService.initialize();
+        await walletTransactionService.saveSend({
+          amount: sendForm.amount,
+          currency: selectedCurrency,
+          recipientPhone: sendForm.recipient,
+          paymentMethod: 'MOMO',
+          transactionId: result.transactionId,
+          memoKey: result.activeKey,
+          mode: result.mode,
+          description: sendForm.description
+        });
+
+        setTransactionResult({
+          type: 'send',
+          success: true,
+          message: `✅ Successfully sent ${sendForm.amount} ${selectedCurrency} to ${sendForm.recipient}`,
+          amount: sendForm.amount,
+          recipient: sendForm.recipient,
+          transactionId: result.transactionId
+        });
+      } else {
+        setTransactionResult({
+          type: 'send',
+          success: false,
+          message: result.message || 'Transfer failed. Please try again.',
+          error: result.error
+        });
+      }
+    } catch (error) {
+      console.error('❌ Send error:', error);
+      setTransactionResult({
+        type: 'send',
+        success: false,
+        message: 'An error occurred during transfer.',
+        error: error.message
+      });
+    }
+    
+    setSendForm({ recipient: '', amount: '', description: '' });
+    setTransactionInProgress(false);
+    
+    // Auto close after 3 seconds
+    setTimeout(() => {
+      setActiveModal(null);
+      setTransactionResult(null);
+    }, 3000);
+  };
+
+  // 📥 RECEIVE MONEY HANDLER
+  const handleReceiveMoney = async (e) => {
+    e.preventDefault();
+    if (!receiveForm.amount) {
+      alert('Please enter an amount');
+      return;
+    }
+    
+    setTransactionInProgress(true);
+    
+    try {
+      // Generate payment link/reference
+      const paymentRef = `PAY-${Date.now()}`;
+      const paymentLink = `pay.ican.io/${paymentRef}`;
+
+      // Initialize wallet service and save receive request
+      await walletTransactionService.initialize();
+      const saveResult = await walletTransactionService.saveReceive({
+        amount: receiveForm.amount,
+        currency: selectedCurrency,
+        senderPhone: 'pending', // Will be filled when actual payment comes in
+        paymentMethod: 'MOMO',
+        transactionId: paymentRef,
+        mode: 'LIVE',
+        description: receiveForm.description || 'Payment request'
+      });
+
+      setTransactionResult({
+        type: 'receive',
+        success: true,
+        message: `✅ Payment link ready! Share this with the sender: ${paymentLink}`,
+        amount: receiveForm.amount,
+        paymentLink: paymentLink,
+        paymentRef: paymentRef,
+        saved: saveResult.success
+      });
+    } catch (error) {
+      console.error('❌ Receive error:', error);
+      setTransactionResult({
+        type: 'receive',
+        success: false,
+        message: 'An error occurred. Please try again.',
+        error: error.message
+      });
+    }
+    
+    setReceiveForm({ amount: '', description: '' });
+    setTransactionInProgress(false);
+    
+    // Auto close after 3 seconds
+    setTimeout(() => {
+      setActiveModal(null);
+      setTransactionResult(null);
+    }, 3000);
+  };
+
+  // 💰 TOP UP HANDLER - MAGIC PAYMENT ROUTING
+  const handleTopUp = async (e) => {
+    e.preventDefault();
+    if (!topupForm.amount || !topupForm.paymentInput) {
+      alert('Please enter amount and payment details');
+      return;
+    }
+
+    // Validate detected method
+    if (!detectedPaymentMethod) {
+      alert('Could not recognize payment method. Please check your input.');
+      return;
+    }
+
+    setTransactionInProgress(true);
+
+    try {
+      let result;
+      const { method, name, type, provider } = detectedPaymentMethod;
+
+      console.log(`\n✨ MAGIC PAYMENT ROUTING ✨`);
+      console.log(`📌 Method: ${name} ${detectedPaymentMethod.icon}`);
+      console.log(`📌 Type: ${type}`);
+      console.log(`📌 Provider: ${provider || 'N/A'}`);
+
+      // Route to appropriate service based on detected method
+      if (method === 'mtn' || method === 'vodafone') {
+        // MTN/Vodafone → MOMO Service
+        result = await momoService.processTopUp({
+          amount: topupForm.amount,
+          currency: selectedCurrency,
+          phoneNumber: topupForm.paymentInput,
+          description: `ICAN Wallet Top-Up via ${name}`
+        });
+      } else if (method === 'airtel') {
+        // Airtel Money
+        result = await airtelMoneyService.sendMoney({
+          amount: topupForm.amount,
+          currency: selectedCurrency,
+          recipientPhone: topupForm.paymentInput,
+          description: `ICAN Wallet Top-Up via Airtel Money`
+        });
+      } else if (['visa', 'mastercard', 'verve'].includes(method)) {
+        // Credit/Debit Card → Flutterwave
+        console.log(`💳 Processing ${name} payment via Flutterwave`);
+        
+        // Initialize Flutterwave SDK if not already done
+        await flutterwaveService.constructor.initializeSDK();
+        
+        result = await flutterwaveService.processCardPayment({
+          amount: topupForm.amount,
+          currency: selectedCurrency,
+          customerEmail: 'user@ican.io', // Get from user context
+          customerName: 'ICAN Customer',
+          customerPhone: '',
+          description: `ICAN Wallet Top-Up via ${name}`
+        });
+      } else if (method === 'ussd' || method === 'bank') {
+        // USSD / Bank Transfer → Flutterwave
+        result = await flutterwaveService.processCardPayment({
+          amount: topupForm.amount,
+          currency: selectedCurrency,
+          customerEmail: 'user@ican.io',
+          customerName: 'ICAN Customer',
+          description: `ICAN Wallet Top-Up via ${name}`
+        });
+      }
+
+      if (result.success) {
+        // Save transaction to appropriate service
+        if (['visa', 'mastercard', 'verve'].includes(method)) {
+          // Card payment
+          await cardTransactionService.initialize();
+          await cardTransactionService.saveCardPayment({
+            amount: topupForm.amount,
+            currency: selectedCurrency,
+            paymentMethod: name,
+            customerEmail: 'user@ican.io',
+            customerName: 'ICAN Customer',
+            status: 'COMPLETED',
+            verificationStatus: 'VERIFIED'
+          });
+        } else {
+          // Mobile money payment
+          await walletTransactionService.initialize();
+          await walletTransactionService.saveTopUp({
+            amount: topupForm.amount,
+            currency: selectedCurrency,
+            phoneNumber: topupForm.paymentInput,
+            paymentMethod: name,
+            transactionId: result.transactionId,
+            memoKey: result.activeKey,
+            mode: result.mode
+          });
+        }
+
+        setTransactionResult({
+          type: 'topup',
+          success: true,
+          message: result.message,
+          amount: topupForm.amount,
+          method: name,
+          icon: detectedPaymentMethod.icon,
+          transactionId: result.transactionId,
+          status: result.status,
+          saved: true
+        });
+      } else {
+        setTransactionResult({
+          type: 'topup',
+          success: false,
+          message: result.message || `${name} payment failed. Please try again.`,
+          error: result.error,
+          method: name
+        });
+      }
+    } catch (error) {
+      console.error('❌ Top-Up error:', error);
+      setTransactionResult({
+        type: 'topup',
+        success: false,
+        message: 'An error occurred during payment. Please try again.',
+        error: error.message
+      });
+    }
+    
+    setTopupForm({ amount: '', paymentInput: '', method: null, detectedMethod: null });
+    setDetectedPaymentMethod(null);
+    setTransactionInProgress(false);
+    
+    // Auto close after 3 seconds
+    setTimeout(() => {
+      setActiveModal(null);
+      setTransactionResult(null);
+    }, 3000);
+  };
+
   return (
     <div className="w-full min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4 md:p-8">
       {/* Header */}
@@ -140,15 +440,24 @@ const ICANWallet = () => {
 
             {/* Action Buttons */}
             <div className="grid grid-cols-3 gap-3">
-              <button className="bg-white/20 hover:bg-white/30 rounded-lg py-3 px-4 flex flex-col items-center gap-2 transition">
+              <button 
+                onClick={() => setActiveModal('send')}
+                className="bg-white/20 hover:bg-white/30 rounded-lg py-3 px-4 flex flex-col items-center gap-2 transition"
+              >
                 <Send className="w-5 h-5" />
                 <span className="text-sm font-medium">Send</span>
               </button>
-              <button className="bg-white/20 hover:bg-white/30 rounded-lg py-3 px-4 flex flex-col items-center gap-2 transition">
+              <button 
+                onClick={() => setActiveModal('receive')}
+                className="bg-white/20 hover:bg-white/30 rounded-lg py-3 px-4 flex flex-col items-center gap-2 transition"
+              >
                 <ArrowDownLeft className="w-5 h-5" />
                 <span className="text-sm font-medium">Receive</span>
               </button>
-              <button className="bg-white/20 hover:bg-white/30 rounded-lg py-3 px-4 flex flex-col items-center gap-2 transition">
+              <button 
+                onClick={() => setActiveModal('topup')}
+                className="bg-white/20 hover:bg-white/30 rounded-lg py-3 px-4 flex flex-col items-center gap-2 transition"
+              >
                 <Plus className="w-5 h-5" />
                 <span className="text-sm font-medium">Top Up</span>
               </button>
@@ -393,6 +702,426 @@ const ICANWallet = () => {
           </div>
         </div>
       </div>
+
+      {/* 📤 SEND MONEY MODAL */}
+      {activeModal === 'send' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-8 max-w-md w-full shadow-2xl">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 rounded-lg bg-red-500/30 border border-red-400/50">
+                <Send className="w-6 h-6 text-red-400" />
+              </div>
+              <h2 className="text-2xl font-bold text-white">Send Money</h2>
+            </div>
+
+            {transactionResult && transactionResult.type === 'send' ? (
+              <div className="text-center py-6">
+                <div className="text-5xl mb-4">✅</div>
+                <p className="text-white font-bold text-lg mb-2">Success!</p>
+                <p className="text-slate-300 mb-4">{transactionResult.message}</p>
+                <button
+                  onClick={() => {
+                    setActiveModal(null);
+                    setTransactionResult(null);
+                  }}
+                  className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-medium transition"
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleSendMoney} className="space-y-4">
+                <div>
+                  <label className="block text-slate-400 text-sm font-medium mb-2">Recipient Address or Phone</label>
+                  <input
+                    type="text"
+                    value={sendForm.recipient}
+                    onChange={(e) => setSendForm({ ...sendForm, recipient: e.target.value })}
+                    placeholder="Enter recipient details"
+                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-green-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-400 text-sm font-medium mb-2">Amount ({selectedCurrency})</label>
+                  <input
+                    type="number"
+                    value={sendForm.amount}
+                    onChange={(e) => setSendForm({ ...sendForm, amount: e.target.value })}
+                    placeholder="0.00"
+                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-green-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-400 text-sm font-medium mb-2">Description (Optional)</label>
+                  <input
+                    type="text"
+                    value={sendForm.description}
+                    onChange={(e) => setSendForm({ ...sendForm, description: e.target.value })}
+                    placeholder="Payment for..."
+                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-green-500"
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setActiveModal(null)}
+                    className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={transactionInProgress}
+                    className="flex-1 px-4 py-2 bg-red-500 hover:bg-red-600 disabled:bg-red-600 disabled:opacity-50 text-white rounded-lg font-medium transition"
+                  >
+                    {transactionInProgress ? 'Sending...' : 'Send'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 📥 RECEIVE MONEY MODAL */}
+      {activeModal === 'receive' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-8 max-w-md w-full shadow-2xl">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 rounded-lg bg-green-500/30 border border-green-400/50">
+                <ArrowDownLeft className="w-6 h-6 text-green-400" />
+              </div>
+              <h2 className="text-2xl font-bold text-white">Receive Money</h2>
+            </div>
+
+            {transactionResult && transactionResult.type === 'receive' ? (
+              <div className="text-center py-6">
+                <div className="text-5xl mb-4">✅</div>
+                <p className="text-white font-bold text-lg mb-2">Payment Link Ready!</p>
+                <p className="text-slate-300 mb-4">{transactionResult.message}</p>
+                <div className="bg-slate-800 rounded-lg p-4 mb-4 break-all">
+                  <p className="text-xs text-slate-400 mb-1">Share this link:</p>
+                  <p className="text-green-400 font-mono text-sm">{transactionResult.paymentLink}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(transactionResult.paymentLink);
+                    alert('Payment link copied!');
+                  }}
+                  className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg font-medium transition mb-2"
+                >
+                  Copy Link
+                </button>
+                <button
+                  onClick={() => {
+                    setActiveModal(null);
+                    setTransactionResult(null);
+                  }}
+                  className="w-full bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg font-medium transition"
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleReceiveMoney} className="space-y-4">
+                <div>
+                  <label className="block text-slate-400 text-sm font-medium mb-2">Amount to Receive ({selectedCurrency})</label>
+                  <input
+                    type="number"
+                    value={receiveForm.amount}
+                    onChange={(e) => setReceiveForm({ ...receiveForm, amount: e.target.value })}
+                    placeholder="0.00"
+                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-green-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-400 text-sm font-medium mb-2">Description (Optional)</label>
+                  <input
+                    type="text"
+                    value={receiveForm.description}
+                    onChange={(e) => setReceiveForm({ ...receiveForm, description: e.target.value })}
+                    placeholder="Payment for..."
+                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-green-500"
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setActiveModal(null)}
+                    className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={transactionInProgress}
+                    className="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 disabled:bg-green-600 disabled:opacity-50 text-white rounded-lg font-medium transition"
+                  >
+                    {transactionInProgress ? 'Creating...' : 'Create Link'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 💰 TOP UP MODAL */}
+      {activeModal === 'topup' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-8 max-w-md w-full shadow-2xl">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 rounded-lg bg-blue-500/30 border border-blue-400/50">
+                <Plus className="w-6 h-6 text-blue-400" />
+              </div>
+              <h2 className="text-2xl font-bold text-white">Top Up Wallet</h2>
+            </div>
+
+            {transactionResult && transactionResult.type === 'topup' ? (
+              <div className="text-center py-6">
+                <div className={`text-5xl mb-4 ${transactionResult.success ? '✅' : '❌'}`}>
+                  {transactionResult.success ? '✅' : '❌'}
+                </div>
+                <p className={`text-white font-bold text-lg mb-2 ${transactionResult.success ? 'text-green-400' : 'text-red-400'}`}>
+                  {transactionResult.success ? 'Success!' : 'Failed'}
+                </p>
+                <p className="text-slate-300 mb-4">{transactionResult.message}</p>
+                {transactionResult.transactionId && (
+                  <div className="bg-slate-800 rounded-lg p-3 mb-4 text-xs space-y-2">
+                    <div>
+                      <p className="text-slate-400">Transaction ID:</p>
+                      <p className="text-green-400 font-mono break-all">{transactionResult.transactionId}</p>
+                    </div>
+                    {transactionResult.activeKey && (
+                      <div>
+                        <p className="text-slate-400">API Key Used:</p>
+                        <p className={`font-mono break-all ${transactionResult.activeKey.includes('SECONDARY') ? 'text-yellow-400' : 'text-green-400'}`}>
+                          {transactionResult.activeKey}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+                <button
+                  onClick={() => {
+                    setActiveModal(null);
+                    setTransactionResult(null);
+                  }}
+                  className={`w-full ${transactionResult.success ? 'bg-blue-500 hover:bg-blue-600' : 'bg-red-500 hover:bg-red-600'} text-white py-3 rounded-lg font-medium transition`}
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleTopUp} className="space-y-4">
+                <div>
+                  <label className="block text-slate-400 text-sm font-medium mb-2">Amount ({selectedCurrency})</label>
+                  <input
+                    type="text"
+                    value={topupForm.amount}
+                    onChange={(e) => setTopupForm({ ...topupForm, amount: e.target.value })}
+                    placeholder="Enter amount"
+                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-green-500"
+                  />
+                </div>
+
+                <div className="relative">
+                  {/* Collapsed Payment Method Section */}
+                  <div className="flex items-center gap-3 mb-4">
+                    <label className="block text-slate-400 text-sm font-medium">Payment:</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowPaymentPicker(!showPaymentPicker)}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:border-blue-500 text-white transition"
+                    >
+                      {detectedPaymentMethod ? (
+                        <>
+                          <span className="text-lg">{detectedPaymentMethod.icon}</span>
+                          <span className="text-sm font-medium">{detectedPaymentMethod.name}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-lg">💳</span>
+                          <span className="text-sm text-slate-400">Select</span>
+                        </>
+                      )}
+                      <span className="ml-2 text-slate-400 text-xs">{showPaymentPicker ? '▲' : '▼'}</span>
+                    </button>
+                  </div>
+
+                  {/* Expanded Payment Method Picker */}
+                  {showPaymentPicker && (
+                    <div className="absolute top-12 left-0 right-0 z-10 bg-slate-900 border border-slate-700 rounded-lg p-4 shadow-xl">
+                      <p className="text-xs text-slate-500 mb-3">✨ Magic Detection: Type card, phone, or USSD code</p>
+                      
+                      <input
+                        type="text"
+                        value={topupForm.paymentInput}
+                        onChange={handlePaymentInputChange}
+                        placeholder="💳 Card / 📱 Phone / ⚡ USSD"
+                        className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-green-500 mb-3"
+                        autoFocus
+                      />
+                      
+                      {/* Detection Feedback */}
+                      {detectedPaymentMethod && (
+                        <div className={`p-3 rounded-lg border-2 flex items-center gap-3 mb-3 ${
+                          detectedPaymentMethod.confidence === 'high' 
+                            ? 'bg-green-500/10 border-green-400/50' 
+                            : 'bg-yellow-500/10 border-yellow-400/50'
+                        }`}>
+                          <span className="text-2xl">{detectedPaymentMethod.icon}</span>
+                          <div className="flex-1">
+                            <p className={`font-semibold ${
+                              detectedPaymentMethod.confidence === 'high' 
+                                ? 'text-green-400' 
+                                : 'text-yellow-400'
+                            }`}>
+                              {detectedPaymentMethod.name}
+                            </p>
+                            <p className="text-xs text-slate-400">
+                              {detectedPaymentMethod.provider} • {detectedPaymentMethod.confidence} confidence
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* No Detection */}
+                      {topupForm.paymentInput && !detectedPaymentMethod && (
+                        <div className="p-3 rounded-lg border-2 bg-red-500/10 border-red-400/50 text-red-400 text-sm mb-3">
+                          ❌ Payment method not recognized. Check your input.
+                        </div>
+                      )}
+
+                      {/* Manual Method Selection */}
+                      {!topupForm.paymentInput && (
+                        <div className="mb-3">
+                          <p className="font-semibold text-slate-300 mb-2 text-xs">Or Select Manually:</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            {/* Visa */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const visa = { method: 'visa', name: 'Visa Card', type: 'card', icon: '💳', confidence: 'high', provider: 'Flutterwave' };
+                                setDetectedPaymentMethod(visa);
+                                setTopupForm(prev => ({ ...prev, paymentInput: '4111111111111111', detectedMethod: visa }));
+                              }}
+                              className="flex flex-col items-center gap-2 p-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-blue-400 transition text-white"
+                            >
+                              <span className="text-2xl">💳</span>
+                              <span className="text-xs font-medium">Visa Card</span>
+                            </button>
+
+                            {/* Mastercard */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const mc = { method: 'mastercard', name: 'Mastercard', type: 'card', icon: '💳', confidence: 'high', provider: 'Flutterwave' };
+                                setDetectedPaymentMethod(mc);
+                                setTopupForm(prev => ({ ...prev, paymentInput: '5555555555554444', detectedMethod: mc }));
+                              }}
+                              className="flex flex-col items-center gap-2 p-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-blue-400 transition text-white"
+                            >
+                              <span className="text-2xl">💳</span>
+                              <span className="text-xs font-medium">Mastercard</span>
+                            </button>
+
+                            {/* MTN */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const mtn = { method: 'mtn', name: 'MTN Mobile Money', type: 'mobile', icon: '📱', confidence: 'high', provider: 'MOMO' };
+                                setDetectedPaymentMethod(mtn);
+                                setTopupForm(prev => ({ ...prev, paymentInput: '+256701234567', detectedMethod: mtn }));
+                              }}
+                              className="flex flex-col items-center gap-2 p-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-green-400 transition text-white"
+                            >
+                              <span className="text-2xl">📱</span>
+                              <span className="text-xs font-medium">MTN</span>
+                            </button>
+
+                            {/* Airtel */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const airtel = { method: 'airtel', name: 'Airtel Money', type: 'mobile', icon: '📱', confidence: 'high', provider: 'Airtel' };
+                                setDetectedPaymentMethod(airtel);
+                                setTopupForm(prev => ({ ...prev, paymentInput: '+256700123456', detectedMethod: airtel }));
+                              }}
+                              className="flex flex-col items-center gap-2 p-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-green-400 transition text-white"
+                            >
+                              <span className="text-2xl">📱</span>
+                              <span className="text-xs font-medium">Airtel</span>
+                            </button>
+
+                            {/* USSD */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const ussd = { method: 'ussd', name: 'USSD Code', type: 'code', icon: '⚡', confidence: 'high', provider: 'Flutterwave' };
+                                setDetectedPaymentMethod(ussd);
+                                setTopupForm(prev => ({ ...prev, paymentInput: '*136#', detectedMethod: ussd }));
+                              }}
+                              className="flex flex-col items-center gap-2 p-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-yellow-400 transition text-white"
+                            >
+                              <span className="text-2xl">⚡</span>
+                              <span className="text-xs font-medium">USSD</span>
+                            </button>
+
+                            {/* Bank Transfer */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const bank = { method: 'bank', name: 'Bank Transfer', type: 'bank', icon: '🏦', confidence: 'high', provider: 'Flutterwave' };
+                                setDetectedPaymentMethod(bank);
+                                setTopupForm(prev => ({ ...prev, paymentInput: 'bank_transfer', detectedMethod: bank }));
+                              }}
+                              className="flex flex-col items-center gap-2 p-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-purple-400 transition text-white"
+                            >
+                              <span className="text-2xl">🏦</span>
+                              <span className="text-xs font-medium">Bank</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <button
+                        type="button"
+                        onClick={() => setShowPaymentPicker(false)}
+                        className="w-full mt-3 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-lg transition"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setActiveModal(null)}
+                    className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={transactionInProgress || !detectedPaymentMethod}
+                    className="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-600 disabled:opacity-50 text-white rounded-lg font-medium transition"
+                  >
+                    {transactionInProgress ? 'Processing...' : 'Top Up'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
