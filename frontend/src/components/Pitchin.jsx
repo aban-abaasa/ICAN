@@ -53,6 +53,7 @@ const Pitchin = () => {
   const [comments, setComments] = useState({});
   const [newComment, setNewComment] = useState('');
   const [copiedPitchId, setCopiedPitchId] = useState(null);
+  const [expandedPitchInfo, setExpandedPitchInfo] = useState(null); // pitch id for info tooltip
   const videoScrollRef = useRef(null);
 
   // Initialize and load data
@@ -727,7 +728,7 @@ const Pitchin = () => {
       */}
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-4 py-8 md:px-8 md:py-8 min-h-screen md:min-h-auto">
         {showRecorder ? (
           <div className="mb-8">
             <button
@@ -743,7 +744,7 @@ const Pitchin = () => {
             {/* Feed Grid */}
             <div
               ref={videoScrollRef}
-              className="grid grid-cols-1 lg:grid-cols-2 gap-8"
+              className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8"
             >
               {loading ? (
                 <div className="col-span-full flex items-center justify-center py-12">
@@ -761,10 +762,10 @@ const Pitchin = () => {
                 filteredPitches.map((pitch) => (
                   <div
                     key={pitch.id}
-                    className="group bg-slate-800 rounded-2xl overflow-hidden hover:shadow-2xl hover:shadow-purple-500/20 transition border border-slate-700 hover:border-purple-500/50"
+                    className="group bg-slate-800 rounded-xl md:rounded-2xl overflow-hidden hover:shadow-2xl hover:shadow-purple-500/20 transition border border-slate-700 hover:border-purple-500/50 flex flex-col h-full md:h-auto"
                   >
-                    {/* Video Container */}
-                    <div className="relative bg-black aspect-video flex items-center justify-center overflow-hidden">
+                    {/* Video Container - Full screen on mobile */}
+                    <div className="relative bg-black aspect-video md:aspect-video flex items-center justify-center overflow-hidden w-full flex-shrink-0">
                       {!pitch.video_url || videoErrors[pitch.id] ? (
                         <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900 flex flex-col items-center justify-center gap-4">
                           <AlertCircle className="w-12 h-12 text-slate-500" />
@@ -791,106 +792,109 @@ const Pitchin = () => {
                       
                       {/* Info Icon Overlay - Bottom Right of Video */}
                       <button
-                        className="absolute bottom-4 right-4 p-2 bg-white/10 hover:bg-white/20 backdrop-blur-md text-white rounded-lg transition opacity-70 hover:opacity-100 group z-10"
-                        title="Pitch Details"
+                        onClick={() => setExpandedPitchInfo(expandedPitchInfo === pitch.id ? null : pitch.id)}
+                        className="absolute bottom-3 md:bottom-4 right-3 md:right-4 p-1.5 md:p-2 bg-white/10 hover:bg-white/20 backdrop-blur-md text-white rounded-lg transition opacity-70 hover:opacity-100 z-10"
+                        title="Pitch Details - Click to expand"
                       >
-                        <FileText className="w-4 h-4" />
-                        {/* Tooltip popup on hover */}
-                        <div className="absolute bottom-full right-0 mb-2 bg-slate-800/95 backdrop-blur-md border border-slate-600 rounded-lg p-3 w-56 text-left text-xs opacity-0 group-hover:opacity-100 transition pointer-events-none group-hover:pointer-events-auto shadow-lg z-20">
-                          <p className="text-slate-400 flex items-center gap-1 mb-2">
-                            <Clock className="w-3 h-3" />
-                            {formatDate(pitch.created_at)}
-                          </p>
-                          <h4 className="text-white font-bold mb-1">{pitch.title}</h4>
-                          <p className="text-slate-300 text-xs mb-2">{pitch.business_profiles?.business_name}</p>
-                          <p className="text-slate-400 text-xs mb-2">{pitch.description}</p>
-                          
-                          {/* Funding Info */}
-                          <div className="grid grid-cols-3 gap-1 bg-slate-700/30 p-2 rounded mb-2">
-                            <div>
-                              <p className="text-slate-500 text-xs">RAISED</p>
-                              <p className="text-white text-xs font-bold">{formatCurrency(pitch.raised_amount)}</p>
-                            </div>
-                            <div>
-                              <p className="text-slate-500 text-xs">GOAL</p>
-                              <p className="text-white text-xs font-bold">{formatCurrency(pitch.target_funding)}</p>
-                            </div>
-                            <div>
-                              <p className="text-slate-500 text-xs">EQUITY</p>
-                              <p className="text-white text-xs font-bold">{pitch.equity_offering || 0}%</p>
-                            </div>
-                          </div>
-
-                          {/* Co-owners */}
-                          {pitch.business_profiles?.business_co_owners && pitch.business_profiles.business_co_owners.length > 0 && (
-                            <div className="flex items-center gap-1">
-                              <Users className="w-3 h-3 text-slate-400" />
-                              <p className="text-slate-400 text-xs">
-                                {pitch.business_profiles.business_co_owners.length} team member{pitch.business_profiles.business_co_owners.length !== 1 ? 's' : ''}
-                              </p>
-                              <div className="flex ml-1">
-                                {pitch.business_profiles.business_co_owners.slice(0, 2).map((member, idx) => (
-                                  <div
-                                    key={idx}
-                                    className="w-4 h-4 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-bold -ml-1 first:ml-0"
-                                    title={member.owner_name}
-                                  >
-                                    {member.owner_name[0]}
-                                  </div>
-                                ))}
+                        <FileText className="w-3 h-3 md:w-4 md:h-4" />
+                        {/* Tooltip popup on click - Mobile optimized */}
+                        {expandedPitchInfo === pitch.id && (
+                          <div className="absolute bottom-full right-0 mb-2 bg-slate-800/95 backdrop-blur-md border border-slate-600 rounded-lg p-2 md:p-3 w-48 md:w-56 text-left text-xs shadow-lg z-20">
+                            <p className="text-slate-400 flex items-center gap-1 mb-2">
+                              <Clock className="w-2 h-2 md:w-3 md:h-3" />
+                              {formatDate(pitch.created_at)}
+                            </p>
+                            <h4 className="text-white font-bold mb-1 text-xs md:text-sm">{pitch.title}</h4>
+                            <p className="text-slate-300 text-xs mb-2">{pitch.business_profiles?.business_name}</p>
+                            <p className="text-slate-400 text-xs mb-2 line-clamp-2">{pitch.description}</p>
+                            
+                            {/* Funding Info */}
+                            <div className="grid grid-cols-3 gap-1 bg-slate-700/30 p-1.5 md:p-2 rounded mb-2">
+                              <div>
+                                <p className="text-slate-500 text-xs">RAISED</p>
+                                <p className="text-white text-xs font-bold">{formatCurrency(pitch.raised_amount)}</p>
+                              </div>
+                              <div>
+                                <p className="text-slate-500 text-xs">GOAL</p>
+                                <p className="text-white text-xs font-bold">{formatCurrency(pitch.target_funding)}</p>
+                              </div>
+                              <div>
+                                <p className="text-slate-500 text-xs">EQUITY</p>
+                                <p className="text-white text-xs font-bold">{pitch.equity_offering || 0}%</p>
                               </div>
                             </div>
-                          )}
-                        </div>
+
+                            {/* Co-owners */}
+                            {pitch.business_profiles?.business_co_owners && pitch.business_profiles.business_co_owners.length > 0 && (
+                              <div className="flex items-center gap-1">
+                                <Users className="w-3 h-3 text-slate-400" />
+                                <p className="text-slate-400 text-xs">
+                                  {pitch.business_profiles.business_co_owners.length} team member{pitch.business_profiles.business_co_owners.length !== 1 ? 's' : ''}
+                                </p>
+                                <div className="flex ml-1">
+                                  {pitch.business_profiles.business_co_owners.slice(0, 2).map((member, idx) => (
+                                    <div
+                                      key={idx}
+                                      className="w-4 h-4 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-bold -ml-1 first:ml-0"
+                                      title={member.owner_name}
+                                    >
+                                      {member.owner_name[0]}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </button>
                       
-                      <div className="absolute top-4 left-4 flex gap-2">
+                      <div className="absolute top-3 md:top-4 left-3 md:left-4 flex gap-1.5 md:gap-2">
                         {/* Create Pitch Icon */}
                         <button
                           onClick={handleCreatePitchClick}
                           title="Create Pitch"
-                          className="p-2 bg-white/10 hover:bg-white/20 backdrop-blur-md text-white rounded-lg transition opacity-70 hover:opacity-100"
+                          className="p-1.5 md:p-2 bg-white/10 hover:bg-white/20 backdrop-blur-md text-white rounded-lg transition opacity-70 hover:opacity-100"
                         >
-                          <Plus className="w-4 h-4" />
+                          <Plus className="w-3 h-3 md:w-4 md:h-4" />
                         </button>
                         
                         {/* Feed Icon */}
                         <button
                           onClick={() => setActiveTab('feed')}
                           title="Feed"
-                          className={`p-2 rounded-lg transition backdrop-blur-md ${
+                          className={`p-1.5 md:p-2 rounded-lg transition backdrop-blur-md ${
                             activeTab === 'feed'
                               ? 'bg-purple-500/50 text-white'
                               : 'bg-white/10 text-white/70 hover:bg-white/20 opacity-70 hover:opacity-100'
                           }`}
                         >
-                          <Home className="w-4 h-4" />
+                          <Home className="w-3 h-3 md:w-4 md:h-4" />
                         </button>
                         
                         {/* My Pitches Icon */}
                         <button
                           onClick={() => setActiveTab('myPitches')}
                           title="My Pitches"
-                          className={`p-2 rounded-lg transition backdrop-blur-md ${
+                          className={`p-1.5 md:p-2 rounded-lg transition backdrop-blur-md ${
                             activeTab === 'myPitches'
                               ? 'bg-purple-500/50 text-white'
                               : 'bg-white/10 text-white/70 hover:bg-white/20 opacity-70 hover:opacity-100'
                           }`}
                         >
-                          <Zap className="w-4 h-4" />
+                          <Zap className="w-3 h-3 md:w-4 md:h-4" />
                         </button>
                         
                         {/* Interested Icon */}
                         <button
                           onClick={() => setActiveTab('interested')}
                           title="Interested"
-                          className={`p-2 rounded-lg transition backdrop-blur-md ${
+                          className={`p-1.5 md:p-2 rounded-lg transition backdrop-blur-md ${
                             activeTab === 'interested'
                               ? 'bg-purple-500/50 text-white'
                               : 'bg-white/10 text-white/70 hover:bg-white/20 opacity-70 hover:opacity-100'
                           }`}
                         >
-                          <Heart className="w-4 h-4" />
+                          <Heart className="w-3 h-3 md:w-4 md:h-4" />
                         </button>
                         
                         {/* Business Profile Icon */}
@@ -898,9 +902,9 @@ const Pitchin = () => {
                           <button
                             onClick={() => setShowProfileDetails(!showProfileDetails)}
                             title={currentBusinessProfile.name}
-                            className="p-2 bg-white/10 hover:bg-white/20 backdrop-blur-md text-blue-300 rounded-lg transition opacity-70 hover:opacity-100"
+                            className="p-1.5 md:p-2 bg-white/10 hover:bg-white/20 backdrop-blur-md text-blue-300 rounded-lg transition opacity-70 hover:opacity-100"
                           >
-                            <Building2 className="w-4 h-4" />
+                            <Building2 className="w-3 h-3 md:w-4 md:h-4" />
                           </button>
                         )}
                       </div>
