@@ -568,8 +568,8 @@ const Pitchin = () => {
         </div>
       )}
 
-      {/* Header */}
-      <div className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur border-b border-slate-700">
+      {/* Header - Hidden on mobile, visible on desktop */}
+      <div className="hidden md:block sticky top-0 z-40 bg-slate-900/95 backdrop-blur border-b border-slate-700">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -727,10 +727,10 @@ const Pitchin = () => {
       )}
       */}
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 py-8 md:px-8 md:py-8 min-h-screen md:min-h-auto">
+      {/* Main Content - Full screen on mobile */}
+      <div className="w-full h-screen md:h-auto max-w-7xl md:mx-auto px-0 md:px-8 py-0 md:py-8 min-h-screen md:min-h-auto">
         {showRecorder ? (
-          <div className="mb-8">
+          <div className="mb-8 px-4 md:px-0">
             <button
               onClick={() => setShowRecorder(false)}
               className="text-slate-400 hover:text-slate-200 mb-4 font-medium"
@@ -744,7 +744,7 @@ const Pitchin = () => {
             {/* Feed Grid */}
             <div
               ref={videoScrollRef}
-              className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8"
+              className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-2 gap-0 md:gap-8 h-screen md:h-auto w-full md:w-auto"
             >
               {loading ? (
                 <div className="col-span-full flex items-center justify-center py-12">
@@ -762,10 +762,10 @@ const Pitchin = () => {
                 filteredPitches.map((pitch) => (
                   <div
                     key={pitch.id}
-                    className="group bg-slate-800 rounded-xl md:rounded-2xl overflow-hidden hover:shadow-2xl hover:shadow-purple-500/20 transition border border-slate-700 hover:border-purple-500/50 flex flex-col h-full md:h-auto"
+                    className="group bg-slate-800 rounded-none md:rounded-xl lg:rounded-2xl overflow-hidden hover:shadow-2xl hover:shadow-purple-500/20 transition border-0 md:border border-slate-700 hover:border-purple-500/50 flex flex-col h-full w-full md:h-auto"
                   >
                     {/* Video Container - Full screen on mobile */}
-                    <div className="relative bg-black aspect-video md:aspect-video flex items-center justify-center overflow-hidden w-full flex-shrink-0">
+                    <div className="relative bg-black aspect-video md:aspect-video flex items-center justify-center overflow-hidden w-full h-full flex-shrink-0">
                       {!pitch.video_url || videoErrors[pitch.id] ? (
                         <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900 flex flex-col items-center justify-center gap-4">
                           <AlertCircle className="w-12 h-12 text-slate-500" />
@@ -793,7 +793,7 @@ const Pitchin = () => {
                       {/* Info Icon Overlay - Bottom Right of Video */}
                       <button
                         onClick={() => setExpandedPitchInfo(expandedPitchInfo === pitch.id ? null : pitch.id)}
-                        className="absolute bottom-3 md:bottom-4 right-3 md:right-4 p-1.5 md:p-2 bg-white/10 hover:bg-white/20 backdrop-blur-md text-white rounded-lg transition opacity-70 hover:opacity-100 z-10"
+                        className="absolute bottom-3 md:bottom-4 right-3 md:right-4 p-1.5 md:p-2 bg-white/5 hover:bg-white/15 backdrop-blur-md text-white rounded-lg transition opacity-50 hover:opacity-75 z-10"
                         title="Pitch Details - Click to expand"
                       >
                         <FileText className="w-3 h-3 md:w-4 md:h-4" />
@@ -853,7 +853,7 @@ const Pitchin = () => {
                         <button
                           onClick={handleCreatePitchClick}
                           title="Create Pitch"
-                          className="p-1.5 md:p-2 bg-white/10 hover:bg-white/20 backdrop-blur-md text-white rounded-lg transition opacity-70 hover:opacity-100"
+                          className="p-1.5 md:p-2 bg-white/5 hover:bg-white/15 backdrop-blur-md text-white rounded-lg transition opacity-50 hover:opacity-75"
                         >
                           <Plus className="w-3 h-3 md:w-4 md:h-4" />
                         </button>
@@ -865,7 +865,7 @@ const Pitchin = () => {
                           className={`p-1.5 md:p-2 rounded-lg transition backdrop-blur-md ${
                             activeTab === 'feed'
                               ? 'bg-purple-500/50 text-white'
-                              : 'bg-white/10 text-white/70 hover:bg-white/20 opacity-70 hover:opacity-100'
+                              : 'bg-white/5 text-white/70 hover:bg-white/15 opacity-50 hover:opacity-75'
                           }`}
                         >
                           <Home className="w-3 h-3 md:w-4 md:h-4" />
@@ -878,7 +878,7 @@ const Pitchin = () => {
                           className={`p-1.5 md:p-2 rounded-lg transition backdrop-blur-md ${
                             activeTab === 'myPitches'
                               ? 'bg-purple-500/50 text-white'
-                              : 'bg-white/10 text-white/70 hover:bg-white/20 opacity-70 hover:opacity-100'
+                              : 'bg-white/5 text-white/70 hover:bg-white/15 opacity-50 hover:opacity-75'
                           }`}
                         >
                           <Zap className="w-3 h-3 md:w-4 md:h-4" />
@@ -891,7 +891,7 @@ const Pitchin = () => {
                           className={`p-1.5 md:p-2 rounded-lg transition backdrop-blur-md ${
                             activeTab === 'interested'
                               ? 'bg-purple-500/50 text-white'
-                              : 'bg-white/10 text-white/70 hover:bg-white/20 opacity-70 hover:opacity-100'
+                              : 'bg-white/5 text-white/70 hover:bg-white/15 opacity-50 hover:opacity-75'
                           }`}
                         >
                           <Heart className="w-3 h-3 md:w-4 md:h-4" />
@@ -902,7 +902,7 @@ const Pitchin = () => {
                           <button
                             onClick={() => setShowProfileDetails(!showProfileDetails)}
                             title={currentBusinessProfile.name}
-                            className="p-1.5 md:p-2 bg-white/10 hover:bg-white/20 backdrop-blur-md text-blue-300 rounded-lg transition opacity-70 hover:opacity-100"
+                            className="p-1.5 md:p-2 bg-white/5 hover:bg-white/15 backdrop-blur-md text-blue-300 rounded-lg transition opacity-50 hover:opacity-75"
                           >
                             <Building2 className="w-3 h-3 md:w-4 md:h-4" />
                           </button>
