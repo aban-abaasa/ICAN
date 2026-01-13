@@ -237,17 +237,17 @@ const PitchVideoRecorder = ({ onPitchCreated }) => {
   };
 
   return (
-    <div className="space-y-4 md:space-y-6 max-w-4xl mx-auto px-0 md:px-0">
-      <div className="bg-slate-800 rounded-none md:rounded-2xl p-4 md:p-8 border-0 md:border border-slate-700">
-        <h2 className="text-2xl md:text-3xl font-bold text-white mb-3 md:mb-6 px-4 md:px-0">
+    <div className="space-y-4 md:space-y-6 w-full md:max-w-4xl md:mx-auto px-0">
+      <div className="bg-slate-800 rounded-none md:rounded-2xl p-3 md:p-8 border-0 md:border border-slate-700 h-screen md:h-auto flex flex-col overflow-y-auto">
+        <h2 className="text-2xl md:text-3xl font-bold text-white mb-2 md:mb-6 px-3 md:px-0">
           Create Your Professional Pitch
         </h2>
-        <p className="text-slate-400 mb-6 md:mb-8 text-sm md:text-base px-4 md:px-0">
+        <p className="text-slate-400 mb-4 md:mb-8 text-xs md:text-base px-3 md:px-0 line-clamp-2">
           Record a 3-minute professional pitch video. Be clear, compelling, and creative!
         </p>
 
         {/* Video Preview/Recording */}
-        <div className="mb-6 md:mb-8 px-4 md:px-0">
+        <div className="mb-3 md:mb-8 px-3 md:px-0 flex-shrink-0">
           <div style={{
             backgroundColor: '#000',
             borderRadius: '0.5rem',
@@ -325,7 +325,7 @@ const PitchVideoRecorder = ({ onPitchCreated }) => {
           </div>
 
           {/* Controls - Compact Icon Buttons */}
-          <div className="flex gap-2 mb-6 px-4 md:px-0 justify-center md:justify-start">
+          <div className="flex gap-2 mb-3 md:mb-6 px-3 md:px-0 justify-center md:justify-start">
             {!previewUrl ? (
               <>
                 {/* Start Recording Button */}
@@ -401,7 +401,7 @@ const PitchVideoRecorder = ({ onPitchCreated }) => {
         </div>
 
         {/* Form Toggle - Pin Icon */}
-        <div className="flex justify-center md:justify-start mb-4 px-4 md:px-0">
+        <div className="flex justify-center md:justify-start mb-2 md:mb-4 px-3 md:px-0 flex-shrink-0">
           <button
             onClick={() => setIsFormExpanded(!isFormExpanded)}
             className="relative group w-10 h-10 md:w-12 md:h-12 rounded-full bg-slate-700 hover:bg-slate-600 text-purple-400 hover:text-purple-300 flex items-center justify-center transition focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-slate-900"
@@ -416,8 +416,8 @@ const PitchVideoRecorder = ({ onPitchCreated }) => {
         </div>
 
         {/* Form Fields - Collapsible */}
-        <div className={`transition-all duration-300 overflow-hidden ${isFormExpanded ? 'max-h-[2000px] opacity-100' : 'hidden md:block max-h-[2000px] opacity-100'}`}>
-          <div className="space-y-3 md:space-y-4 px-4 md:px-0">
+        <div className={`transition-all duration-300 overflow-y-auto flex-1 ${isFormExpanded ? 'max-h-full opacity-100' : 'hidden md:flex md:flex-col'}`}>
+          <div className="space-y-2 md:space-y-4 px-3 md:px-0">
             {/* Title */}
             <div>
               <label className="block text-slate-300 font-semibold mb-2 text-sm md:text-base">
