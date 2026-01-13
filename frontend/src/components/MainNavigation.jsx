@@ -20,10 +20,11 @@ import {
   Heart,
   Database,
   Menu,
-  X
+  X,
+  Wallet
 } from 'lucide-react'
 
-export default function MainNavigation({ onTrustClick, onShareClick }) {
+export default function MainNavigation({ onTrustClick, onShareClick, onWalletClick }) {
   const [activeSection, setActiveSection] = useState('dashboard')
   const [expandedMenu, setExpandedMenu] = useState(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -98,6 +99,19 @@ export default function MainNavigation({ onTrustClick, onShareClick }) {
       ]
     },
     {
+      id: 'wallet',
+      label: 'Wallet',
+      icon: Wallet,
+      path: '/wallet',
+      submenu: [
+        { label: 'My Wallet', path: '/wallet', icon: Wallet },
+        { label: 'Send Money', path: '/wallet/send', icon: Banknote },
+        { label: 'Receive', path: '/wallet/receive', icon: TrendingUp },
+        { label: 'Transactions', path: '/wallet/transactions', icon: BarChart3 },
+        { label: 'Currency', path: '/wallet/currency', icon: Globe }
+      ]
+    },
+    {
       id: 'settings',
       label: 'Settings',
       icon: Settings,
@@ -124,9 +138,9 @@ export default function MainNavigation({ onTrustClick, onShareClick }) {
   return (
     <>
       {/* Top Bar - Mode/Region - Hide on mobile */}
-      <div className="hidden md:block bg-gradient-to-r from-purple-600 to-blue-600 backdrop-blur-sm border-b border-white/10 px-6 py-3">
+      {/* <div className="hidden md:block bg-gradient-to-r from-purple-600 to-blue-600 backdrop-blur-sm border-b border-white/10 px-6 py-3">
         <p className="text-white font-semibold text-lg">SE Mode | Uganda</p>
-      </div>
+      </div> */}
 
       {/* Main Navigation */}
       <nav className="bg-gradient-to-b from-slate-800 to-slate-900 border-b border-slate-700/50 backdrop-blur-md sticky top-0 z-50">
@@ -159,6 +173,8 @@ export default function MainNavigation({ onTrustClick, onShareClick }) {
                           if (onTrustClick) onTrustClick()
                         } else if (item.id === 'share') {
                           if (onShareClick) onShareClick()
+                        } else if (item.id === 'wallet') {
+                          if (onWalletClick) onWalletClick()
                         } else if (item.submenu) {
                           setExpandedMenu(expandedMenu === item.id ? null : item.id)
                         }
@@ -243,6 +259,9 @@ export default function MainNavigation({ onTrustClick, onShareClick }) {
                             setMobileMenuOpen(false)
                           } else if (item.id === 'share') {
                             if (onShareClick) onShareClick()
+                            setMobileMenuOpen(false)
+                          } else if (item.id === 'wallet') {
+                            if (onWalletClick) onWalletClick()
                             setMobileMenuOpen(false)
                           } else if (item.submenu) {
                             setExpandedMobileMenu(isExpanded ? null : item.id)

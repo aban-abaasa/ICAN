@@ -11,6 +11,7 @@ import MainNavigation from './MainNavigation';
 import SACCOHub from './SACCOHub';
 import SHAREHub from './SHAREHub';
 import CMMSModule from './CMSSModule';
+import ICANWallet from './ICANWallet';
 import { 
   Shield, 
   Globe, 
@@ -3507,6 +3508,7 @@ const ICANCapitalEngine = () => {
   const [statusRefresh, setStatusRefresh] = useState(0);
   const [showTRUST, setShowTRUST] = useState(false);
   const [showSHARE, setShowSHARE] = useState(false);
+  const [showWallet, setShowWallet] = useState(false);
   const [showJourneyDetails, setShowJourneyDetails] = useState(false);
   const [showAIInsights, setShowAIInsights] = useState(false);
   const [showFinancialAnalytics, setShowFinancialAnalytics] = useState(false);
@@ -9267,13 +9269,11 @@ Data Freshness: ${reportData.metadata.dataFreshness}
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900">
       {/* Main Navigation & Header */}
-      {/* <MainNavigation 
+      <MainNavigation 
         onTrustClick={() => setShowTRUST(true)} 
         onShareClick={() => setShowSHARE(true)}
-      /> */}
-
-      {/* Header consolidated into MainNavigation - removed duplicate */}
-      {/* <Header /> */}
+        onWalletClick={() => setShowWallet(true)}
+      />
 
       {/* TRUST Section - Show when TRUST is activated */}
       {showTRUST && (
@@ -9292,6 +9292,19 @@ Data Freshness: ${reportData.metadata.dataFreshness}
       {showSHARE && (
         <div className="fixed inset-0 z-[1000] overflow-y-auto">
           <SHAREHub onClose={() => setShowSHARE(false)} />
+        </div>
+      )}
+
+      {/* Wallet Section - Show when Wallet is activated */}
+      {showWallet && (
+        <div className="fixed inset-0 z-[1000] overflow-y-auto">
+          <button
+            onClick={() => setShowWallet(false)}
+            className="fixed top-4 right-4 z-[1001] px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg"
+          >
+            Close Wallet
+          </button>
+          <ICANWallet />
         </div>
       )}
 
@@ -9348,7 +9361,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex gap-2 mt-4 overflow-x-auto">
+        <div className="flex gap-2 mt-4 overflow-x-auto pb-2">
           {[
             { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
             { id: 'security', label: 'Security', icon: Shield },
@@ -9356,6 +9369,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
             { id: 'growth', label: 'Growth', icon: TrendingUp },
             { id: 'trust', label: 'Trust', icon: Heart },
             { id: 'share', label: 'Share', icon: Send },
+            { id: 'wallet', label: 'Wallet', icon: DollarSign },
             { id: 'settings', label: 'Settings', icon: Settings }
           ].map(tab => (
             <button
@@ -9363,16 +9377,17 @@ Data Freshness: ${reportData.metadata.dataFreshness}
               onClick={() => {
                 if (tab.id === 'trust') setShowTRUST(true);
                 else if (tab.id === 'share') setShowSHARE(true);
+                else if (tab.id === 'wallet') setShowWallet(true);
                 else setActiveTab(tab.id);
               }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors whitespace-nowrap ${
+              className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-lg transition-colors whitespace-nowrap text-sm md:text-base ${
                 activeTab === tab.id 
                   ? 'bg-blue-500 text-white' 
                   : 'bg-white bg-opacity-10 text-gray-300 hover:text-white'
               }`}
             >
-              <tab.icon className="w-4 h-4" />
-              {tab.label}
+              <tab.icon className="w-4 h-4 flex-shrink-0" />
+              <span className="hidden md:inline">{tab.label}</span>
             </button>
           ))}
         </div>
