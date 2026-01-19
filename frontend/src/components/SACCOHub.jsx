@@ -320,51 +320,96 @@ const SACCOHub = ({ onClose }) => {
 
   // ===== TAB: ADMIN PANEL (CREATED GROUPS) =====
   const renderAdminPanel = () => {
+    console.log('📊 Admin Panel Render:', {
+      createdGroups: myCreatedGroups.length,
+      selectedAdminGroup: selectedAdminGroup?.id,
+      adminStats: groupAdminStats
+    });
+
     return (
       <div className="space-y-4">
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 border border-emerald-500/50 rounded-lg p-6 mb-6">
+          <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+            <Shield className="w-6 h-6 text-emerald-400" />
+            Admin Dashboard
+          </h2>
+          <p className="text-gray-400 text-sm mt-2">Manage your groups and review member applications</p>
+        </div>
+
         {myCreatedGroups.length === 0 ? (
           <div className="text-center py-12 bg-slate-800/50 rounded-lg border border-slate-700">
             <Shield className="w-12 h-12 text-gray-500 mx-auto mb-3" />
-            <p className="text-gray-400">No groups created yet</p>
+            <p className="text-gray-400 mb-2">No groups created yet</p>
+            <p className="text-sm text-gray-500">Create a group to start managing applications</p>
           </div>
         ) : (
           <>
             {selectedAdminGroup ? (
-              <AdminApplicationPanel
-                groupId={selectedAdminGroup.id}
-                onClose={() => {
-                  setSelectedAdminGroup(null);
-                  loadAllData(false); // Background refresh, don't show loading spinner
-                }}
-              />
+              <div>
+                <button
+                  onClick={() => {
+                    setSelectedAdminGroup(null);
+                    loadAllData(false);
+                  }}
+                  className="mb-4 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg flex items-center gap-2 transition-all"
+                >
+                  ← Back to Groups
+                </button>
+                <AdminApplicationPanel
+                  groupId={selectedAdminGroup.id}
+                  onClose={() => {
+                    setSelectedAdminGroup(null);
+                    loadAllData(false);
+                  }}
+                />
+              </div>
             ) : (
-              myCreatedGroups.map(group => (
-                <div key={group.id} className="bg-gradient-to-r from-slate-800 to-slate-900 border border-emerald-500/30 rounded-lg p-5 hover:border-emerald-500/60 transition-all cursor-pointer" onClick={() => setSelectedAdminGroup(group)}>
-                  <div className="flex justify-between items-start mb-3">
-                    <div>
-                      <h3 className="text-lg font-bold text-white">{group.name}</h3>
-                      <p className="text-sm text-gray-400">👑 Creator • 👤 {group.member_count || 0} members</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {myCreatedGroups.map(group => (
+                  <div 
+                    key={group.id} 
+                    className="bg-gradient-to-r from-slate-800 to-slate-900 border border-emerald-500/30 rounded-lg p-5 hover:border-emerald-500/60 transition-all cursor-pointer group hover:shadow-lg hover:shadow-emerald-500/20"
+                    onClick={() => {
+                      console.log('Selecting admin group:', group.id);
+                      setSelectedAdminGroup(group);
+                    }}
+                  >
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex-1">
+                        <h3 className="text-lg font-bold text-white group-hover:text-emerald-400 transition-colors">{group.name}</h3>
+                        <p className="text-sm text-gray-400">👑 Creator • 👤 {group.member_count || 0} members</p>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-emerald-400 transition-colors" />
                     </div>
-                    <ChevronRight className="w-5 h-5 text-gray-400" />
+                    <p className="text-sm text-gray-300 mb-4 line-clamp-2">{group.description || 'No description'}</p>
+                    
+                    <div className="grid grid-cols-2 gap-2 mb-3">
+                      <div className={`rounded p-3 text-center transition-all ${
+                        (groupAdminStats[group.id]?.pending || 0) > 0 
+                          ? 'bg-yellow-500/30 border border-yellow-500/50' 
+                          : 'bg-yellow-500/10 border border-yellow-500/20'
+                      }`}>
+                        <div className="text-xs text-gray-400 font-semibold">⏳ Pending</div>
+                        <div className="text-2xl font-bold text-yellow-400">{groupAdminStats[group.id]?.pending || 0}</div>
+                      </div>
+                      <div className={`rounded p-3 text-center transition-all ${
+                        (groupAdminStats[group.id]?.voting || 0) > 0 
+                          ? 'bg-purple-500/30 border border-purple-500/50' 
+                          : 'bg-purple-500/10 border border-purple-500/20'
+                      }`}>
+                        <div className="text-xs text-gray-400 font-semibold">🗳️ Voting</div>
+                        <div className="text-2xl font-bold text-purple-400">{groupAdminStats[group.id]?.voting || 0}</div>
+                      </div>
+                    </div>
+
+                    {(groupAdminStats[group.id]?.pending > 0 || groupAdminStats[group.id]?.voting > 0) && (
+                      <div className="text-center text-xs font-semibold text-emerald-400 animate-pulse">
+                        ⚡ {(groupAdminStats[group.id]?.pending || 0) + (groupAdminStats[group.id]?.voting || 0)} pending action(s)
+                      </div>
+                    )}
                   </div>
-                  <p className="text-sm text-gray-300 mb-4">{group.description}</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-yellow-500/20 border border-yellow-500/30 rounded p-3 text-center hover:border-yellow-500/60 transition-all">
-                      <div className="text-xs text-gray-400 font-semibold">⏳ Pending Review</div>
-                      <div className="text-2xl font-bold text-yellow-400">{groupAdminStats[group.id]?.pending || 0}</div>
-                    </div>
-                    <div className="bg-purple-500/20 border border-purple-500/30 rounded p-3 text-center hover:border-purple-500/60 transition-all">
-                      <div className="text-xs text-gray-400 font-semibold">🗳️ Voting</div>
-                      <div className="text-2xl font-bold text-purple-400">{groupAdminStats[group.id]?.voting || 0}</div>
-                    </div>
-                  </div>
-                  {(groupAdminStats[group.id]?.pending > 0 || groupAdminStats[group.id]?.voting > 0) && (
-                    <div className="mt-3 text-center text-xs font-semibold text-emerald-400">
-                      ➜ Click to manage applications
-                    </div>
-                  )}
-                </div>
-              ))
+                ))}
+              </div>
             )}
           </>
         )}
