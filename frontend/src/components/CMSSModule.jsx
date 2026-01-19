@@ -178,6 +178,12 @@ const CMMSModule = ({
       // Check 1: User must exist (or have cached data)
       const cachedCompanyId = localStorage.getItem('cmms_company_id');
       const cachedRole = localStorage.getItem('cmms_user_role');
+      const cachedCmmsUserId = localStorage.getItem('cmms_user_id');
+      
+      // Restore CMMS user ID if cached
+      if (cachedCmmsUserId) {
+        setCmmsUserId(cachedCmmsUserId);
+      }
       
       if (!user && !cachedCompanyId) {
         setAccessDeniedReason('❌ No user logged in. Please sign in to access CMMS.');
@@ -204,9 +210,11 @@ const CMMSModule = ({
           console.log('✅ User found in CMMS database:', cmmsUser.email);
           console.log('✅ User company ID:', cmmsUser.cmms_company_id);
           
-          // Save company ID to localStorage and state
+          // Save company ID and user ID to localStorage and state
           localStorage.setItem('cmms_company_id', cmmsUser.cmms_company_id);
+          localStorage.setItem('cmms_user_id', cmmsUser.id);
           setUserCompanyId(cmmsUser.cmms_company_id);
+          setCmmsUserId(cmmsUser.id);
           setNotificationCompanyId(cmmsUser.cmms_company_id);  // For welcome page notifications
 
           // Step 2: Get user's roles separately (better reliability)
@@ -402,6 +410,7 @@ const CMMSModule = ({
   // ============================================
   const [userCompanyId, setUserCompanyId] = useState(null);  // Track user's company
   const [notificationCompanyId, setNotificationCompanyId] = useState(null);  // For welcome page notifications
+  const [cmmsUserId, setCmmsUserId] = useState(null);  // Track CMMS user ID for notifications
   
   const [cmmsData, setCmmsData] = useState({
     companyProfile: null,
@@ -487,9 +496,6 @@ const CMMSModule = ({
     { id: 'coordinator-approved', label: 'Coordinator Approved', color: 'blue', icon: '✓' },
     { id: 'pending-finance', label: 'Pending Finance Approval', color: 'yellow', icon: '💰' },
     { id: 'finance-rejected', label: 'Rejected by Finance', color: 'red', icon: '❌' },
-    { id: 'finance-approved', label: 'Finance Approved - Ready', color: 'green', icon: '💚' },
-    { id: 'in-progress', label: 'In Progress', color: 'blue', icon: '🔧' },
-    { id: 'completed', label: 'Completed', color: 'green', icon: '✅' }
     { id: 'finance-approved', label: 'Finance Approved - Ready', color: 'green', icon: '💚' },
     { id: 'in-progress', label: 'In Progress', color: 'blue', icon: '🔧' },
     { id: 'completed', label: 'Completed', color: 'green', icon: '✅' }
@@ -715,7 +721,7 @@ const CMMSModule = ({
   // ============================================
   // REPORTS & ANALYTICS MANAGER
   // ============================================
-  const ReportsManager = () => {
+  const CMSReportsManager = () => {
     const totalEquipment = equipment.length;
     const activeOrders = workOrders.filter(o => o.status === 'pending').length;
     const lowStockItems = sparePartsInventory.filter(p => p.quantity <= p.minStock).length;
@@ -2529,12 +2535,12 @@ const CMMSModule = ({
         if (adminError) throw adminError;
 
         console.log('✅ Admin user created:', adminUserData);
-
         // Step 3: Store auth state in localStorage (Supabase is source of truth for profile data)
         localStorage.setItem('cmms_user_profile', 'true');
         localStorage.setItem('cmms_user_role', 'admin');
         localStorage.setItem('cmms_company_id', companyData.id);
         localStorage.setItem('cmms_company_owner', adminUserData.id);
+        localStorage.setItem('cmms_user_id', adminUserData.id);
 
         // Step 4: Update component state with Supabase data
         setCmmsData(prev => ({
@@ -2544,6 +2550,7 @@ const CMMSModule = ({
         }));
         
         setUserCompanyId(companyData.id);
+        setCmmsUserId(adminUserData.id);
         setHasBusinessProfile(true);
         setUserRole('admin');
         setIsAuthorized(true);
@@ -2570,9 +2577,9 @@ const CMMSModule = ({
             </div>
             <div className="flex items-center gap-3">
               {/* Notifications Bell */}
-              {user?.id && notificationCompanyId && (
+              {cmmsUserId && notificationCompanyId && (
                 <NotificationsPanel 
-                  userId={user?.id} 
+                  userId={cmmsUserId} 
                   companyId={notificationCompanyId}
                   onActionClick={(tab) => {
                     console.log(`🔔 Notification action triggered, navigating to: ${tab}`);
@@ -2851,31 +2858,11 @@ const CMMSModule = ({
               </div>
               <div className="flex gap-3 mt-4">
                 <button
-                  onClick={() => {
-                    // Call the existing profile creation handler
-                    if (profileFormData.companyName && profileFormData.phone && profileFormData.email) {
-                      setCmmsData(prev => ({
-                        ...prev,
-                        companyProfile: {
-                          companyName: profileFormData.companyName,
-                          companyRegistration: profileFormData.companyRegistration,
-                          location: profileFormData.location,
-                          industry: profileFormData.industry,
-                          phone: profileFormData.phone,
-                          email: profileFormData.email,
-                          createdAt: new Date(),
-                          createdBy: user?.email || 'admin'
-                        }
-                      }));
-                      setShowCompanyForm(false);
-                      alert('✅ Company profile created successfully!');
-                    } else {
-                      alert('❌ Please fill in all required fields (Company Name, Phone, Email)');
-                    }
-                  }}
-                  className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-green-600 transition-all text-sm"
+                  onClick={handleCreateProfileAsGuest}
+                  disabled={isCreatingProfile}
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-green-600 transition-all text-sm disabled:opacity-50"
                 >
-                  ✓ Create Profile
+                  {isCreatingProfile ? '⏳ Creating...' : '✓ Create Profile'}
                 </button>
                 <button
                   onClick={() => setShowCompanyForm(false)}
@@ -2960,7 +2947,7 @@ const CMMSModule = ({
               {showEquipmentManager && <EquipmentManager />}
               {showWorkOrders && <WorkOrdersManager />}
               {showInventory && <SparePartsManager />}
-              {showReports && <ReportsManager />}
+              {showReports && <CMSReportsManager />}
               {showServiceProviders && <ServiceProvidersManager />}
               {showCostTracking && <CostTrackingManager />}
               {showComplianceLog && <ComplianceLogManager />}

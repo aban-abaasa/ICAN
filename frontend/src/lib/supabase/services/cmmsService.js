@@ -11,15 +11,46 @@ import { supabase } from '../client';
 // ============================================
 
 /**
- * Create a new CMMS company profile (UNIQUE - CMMS ONLY)
+ * Create or update a CMMS company profile (UNIQUE - CMMS ONLY)
  * @param {Object} companyData - Company information
- * @returns {Object} Created company data or error
+ * @returns {Object} Created/updated company data or error
  */
 export const createCompanyProfile = async (companyData) => {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('User not authenticated');
 
+    // First, check if profile with this email already exists
+    const { data: existingProfile, error: checkError } = await supabase
+      .from('cmms_company_profiles')
+      .select('id')
+      .eq('email', companyData.email)
+      .single();
+
+    // If profile exists, update it
+    if (existingProfile && !checkError) {
+      console.log('📝 Company profile already exists, updating it...');
+      const { data, error } = await supabase
+        .from('cmms_company_profiles')
+        .update({
+          company_name: companyData.companyName,
+          company_registration: companyData.companyRegistration,
+          location: companyData.location,
+          industry: companyData.industry || 'Manufacturing',
+          phone: companyData.phone,
+          website: companyData.website || '',
+          is_active: true
+        })
+        .eq('id', existingProfile.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      console.log('✅ CMMS Company profile updated:', data);
+      return { data, error: null };
+    }
+
+    // If no profile exists, create new one
     const { data, error } = await supabase
       .from('cmms_company_profiles')
       .insert({
