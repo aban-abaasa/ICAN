@@ -6,6 +6,62 @@
 import { getSupabase } from './pitchingService';
 
 // =============================================
+// DEBUG FUNCTION - Get all trust data for user
+// =============================================
+
+/**
+ * Debug function to fetch ALL trust data for debugging
+ */
+export const debugGetAllUserTrustData = async (userId) => {
+  try {
+    const sb = getSupabase();
+    if (!sb || !userId) return null;
+
+    console.log('=== DEBUG: Fetching all trust data for user:', userId);
+
+    // Get all trust groups (no filters)
+    const { data: allGroups, error: allGroupsError } = await sb
+      .from('trust_groups')
+      .select('*');
+
+    console.log('All trust_groups in database:', allGroups?.length, allGroups);
+
+    // Get all trust_group_members
+    const { data: allMembers, error: allMembersError } = await sb
+      .from('trust_group_members')
+      .select('*');
+
+    console.log('All trust_group_members in database:', allMembers?.length, allMembers);
+
+    // Get where creator_id = userId
+    const { data: createdByUser, error: createdError } = await sb
+      .from('trust_groups')
+      .select('*')
+      .eq('creator_id', userId);
+
+    console.log('Groups created by user:', createdByUser?.length, createdByUser);
+
+    // Get where user is member
+    const { data: userMemberships, error: memberError } = await sb
+      .from('trust_group_members')
+      .select('*')
+      .eq('user_id', userId);
+
+    console.log('User memberships:', userMemberships?.length, userMemberships);
+
+    return {
+      allGroups,
+      allMembers,
+      createdByUser,
+      userMemberships
+    };
+  } catch (error) {
+    console.error('Debug error:', error);
+    return null;
+  }
+};
+
+// =============================================
 // TRUST GROUPS SERVICE
 // =============================================
 
@@ -58,72 +114,96 @@ export const getPublicTrustGroups = async () => {
 };
 
 /**
- * Get user's TRUST groups (My Groups)
+ * Get user's TRUST groups (My Groups) - IMPROVED VERSION
  */
 export const getUserTrustGroups = async (userId) => {
   try {
     const sb = getSupabase();
-    if (!sb || !userId) return [];
+    if (!sb || !userId) {
+      console.log('Supabase or userId not available');
+      return [];
+    }
 
-    // Get groups where user is creator
+    console.log('===== getUserTrustGroups START =====');
+    console.log('userId:', userId);
+
+    // Step 1: Get groups where user is CREATOR (all statuses, no nested filters)
+    console.log('Step 1: Fetching groups where user is creator...');
     const { data: creatorGroups, error: creatorError } = await sb
       .from('trust_groups')
-      .select(`
-        id,
-        name,
-        description,
-        creator_id,
-        max_members,
-        monthly_contribution,
-        currency,
-        status,
-        created_at,
-        trust_group_members(count)
-      `)
-      .eq('creator_id', userId)
-      .eq('trust_group_members.is_active', true);
+      .select('*')
+      .eq('creator_id', userId);
 
-    if (creatorError) throw creatorError;
+    if (creatorError) {
+      console.error('Creator query error:', creatorError);
+      throw creatorError;
+    }
+    console.log('Creator groups found:', creatorGroups?.length || 0, creatorGroups);
 
-    // Get groups where user is a member
-    const { data: memberGroups, error: memberError } = await sb
+    // Step 2: Get groups where user is MEMBER (is_active = true)
+    console.log('Step 2: Fetching groups where user is member...');
+    const { data: membershipRecords, error: membershipError } = await sb
       .from('trust_group_members')
-      .select(`
-        group_id,
-        trust_groups(
-          id,
-          name,
-          description,
-          creator_id,
-          max_members,
-          monthly_contribution,
-          currency,
-          status,
-          created_at,
-          trust_group_members(count)
-        )
-      `)
+      .select('group_id, trust_groups!inner(*)')
       .eq('user_id', userId)
       .eq('is_active', true);
 
-    if (memberError) throw memberError;
+    if (membershipError) {
+      console.error('Membership query error:', membershipError);
+      throw membershipError;
+    }
+    console.log('Membership records found:', membershipRecords?.length || 0, membershipRecords);
 
-    // Combine and deduplicate groups
-    const allGroups = [
-      ...(creatorGroups || []),
-      ...(memberGroups || []).map(m => m.trust_groups)
-    ].filter(Boolean);
+    const memberGroups = membershipRecords?.map(m => m.trust_groups) || [];
+    console.log('Member groups extracted:', memberGroups.length, memberGroups);
 
-    const uniqueGroups = Array.from(
-      new Map(allGroups.map(g => [g.id, g])).values()
+    // Step 3: Combine and deduplicate
+    const allGroups = [...(creatorGroups || []), ...memberGroups];
+    console.log('Total combined groups:', allGroups.length);
+
+    const uniqueMap = new Map();
+    allGroups.forEach(group => {
+      if (group && group.id) {
+        uniqueMap.set(group.id, group);
+      }
+    });
+
+    const uniqueGroups = Array.from(uniqueMap.values());
+    console.log('Unique groups after dedup:', uniqueGroups.length);
+
+    // Step 4: Get member counts for each group
+    console.log('Step 4: Fetching member counts...');
+    const groupsWithCounts = await Promise.all(
+      uniqueGroups.map(async (group) => {
+        try {
+          const { count } = await sb
+            .from('trust_group_members')
+            .select('*', { count: 'exact', head: true })
+            .eq('group_id', group.id)
+            .eq('is_active', true);
+
+          return {
+            ...group,
+            member_count: count || 0
+          };
+        } catch (error) {
+          console.error(`Error getting count for group ${group.id}:`, error);
+          return {
+            ...group,
+            member_count: 0
+          };
+        }
+      })
     );
 
-    // Transform to add member_count
-    return uniqueGroups.map(group => ({
-      ...group,
-      member_count: group.trust_group_members?.length || 0,
-      trust_group_members: undefined
-    })).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    const sortedGroups = groupsWithCounts.sort((a, b) => 
+      new Date(b.created_at) - new Date(a.created_at)
+    );
+
+    console.log('Final result:', sortedGroups.length, sortedGroups);
+    console.log('===== getUserTrustGroups END =====');
+    return sortedGroups;
+
   } catch (error) {
     console.error('Error fetching user TRUST groups:', {
       userId,

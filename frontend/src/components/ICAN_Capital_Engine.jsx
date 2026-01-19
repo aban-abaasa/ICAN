@@ -7,11 +7,13 @@ import { StatusPage } from './StatusPage';
 import { StatusUploader } from './status/StatusUploader';
 import { StatusCarousel } from './status/StatusCarousel';
 import { StatusViewerUI } from './status/StatusViewerUI';
-import MainNavigation from './MainNavigation';
+import ConsolidatedNavigation from './ConsolidatedNavigation';
 import SACCOHub from './SACCOHub';
 import SHAREHub from './SHAREHub';
 import CMMSModule from './CMSSModule';
 import ICANWallet from './ICANWallet';
+import Pitchin from './Pitchin';
+import LiveBoardroom from './LiveBoardroom';
 import { 
   Shield, 
   Globe, 
@@ -74,7 +76,21 @@ import {
   Wifi,
   WifiOff,
   Plus,
-  Edit2
+  Edit2,
+  Gift,
+  Banknote,
+  Users,
+  Vote,
+  Check,
+  Home,
+  Moon,
+  Sun,
+  Wallet,
+  Search,
+  MoreVertical,
+  Loader,
+  ArrowRight,
+  Circle
 } from 'lucide-react';
 
 // ============================================
@@ -3470,9 +3486,56 @@ const ICANCapitalEngine = () => {
   const [biometricAction, setBiometricAction] = useState(null);
   const [isListening, setIsListening] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [showPitchinDetail, setShowPitchinDetail] = useState(false);
+  const [shareSubTab, setShareSubTab] = useState('opportunities');
+  const [trustSubTab, setTrustSubTab] = useState('my-trusts');
+  const [growthSubTab, setGrowthSubTab] = useState('opportunities');
+  const [readinessSubTab, setReadinessSubTab] = useState('status');
+  const [securitySubTab, setSecuritySubTab] = useState('account');
+  const [dashboardSubTab, setDashboardSubTab] = useState('overview');
+  const [settingsSubTab, setSettingsSubTab] = useState('profile');
+  const [selectedTheme, setSelectedTheme] = useState(() => localStorage.getItem('selectedTheme') || 'dark');
+  const [selectedFontSize, setSelectedFontSize] = useState(() => localStorage.getItem('selectedFontSize') || 'medium');
+  const [opportunities, setOpportunities] = useState([]);
+  const [userInvestments, setUserInvestments] = useState([]);
+  const [availableGrants, setAvailableGrants] = useState([]);
   const [contractText, setContractText] = useState('');
   const [contractAnalysis, setContractAnalysis] = useState(null);
   const [complianceData, setComplianceData] = useState(null);
+
+  // Handle theme changes
+  const handleThemeChange = (theme) => {
+    setSelectedTheme(theme);
+    localStorage.setItem('selectedTheme', theme);
+    if (theme === 'light') {
+      document.documentElement.style.colorScheme = 'light';
+      document.body.classList.add('light-theme');
+      document.body.classList.remove('dark-theme');
+    } else if (theme === 'dark') {
+      document.documentElement.style.colorScheme = 'dark';
+      document.body.classList.add('dark-theme');
+      document.body.classList.remove('light-theme');
+    } else {
+      document.documentElement.style.colorScheme = 'light dark';
+      document.body.classList.remove('dark-theme', 'light-theme');
+    }
+  };
+
+  // Handle font size changes
+  const handleFontSizeChange = (size) => {
+    setSelectedFontSize(size);
+    localStorage.setItem('selectedFontSize', size);
+    let fontSize = '14px';
+    if (size === 'small') fontSize = '12px';
+    if (size === 'large') fontSize = '16px';
+    document.documentElement.style.fontSize = fontSize;
+  };
+
+  // Apply saved theme and font size on component mount
+  useEffect(() => {
+    handleThemeChange(selectedTheme);
+    handleFontSizeChange(selectedFontSize);
+  }, []);
   const [scheduleData, setScheduleData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
@@ -3518,8 +3581,594 @@ const ICANCapitalEngine = () => {
   const [showJourneyDetails, setShowJourneyDetails] = useState(false);
   const [showAIInsights, setShowAIInsights] = useState(false);
   const [showFinancialAnalytics, setShowFinancialAnalytics] = useState(false);
+  const [userTrusts, setUserTrusts] = useState([]);
+  const [publicTrusts, setPublicTrusts] = useState([]);
+  const [trustStats, setTrustStats] = useState({ totalMembers: 0, totalPooled: 0, avgReturns: 0, loansIssued: 0 });
+  const [trustSearchQuery, setTrustSearchQuery] = useState('');
+  const [joiningTrustId, setJoiningTrustId] = useState(null);
+  const [joinedTrusts, setJoinedTrusts] = useState(new Set());
+  const [selectedTrust, setSelectedTrust] = useState(null);
+  const [trustMembers, setTrustMembers] = useState([]);
+  const [userContribution, setUserContribution] = useState(0);
+  const [contributionAmount, setContributionAmount] = useState('');
+  const [contributingTrustId, setContributingTrustId] = useState(null);
+  const [boardroomTrustId, setBoardroomTrustId] = useState(null);
+  const [createFormData, setCreateFormData] = useState({
+    name: '',
+    description: '',
+    minContribution: '',
+    period: 'monthly'
+  });
+  const [creatingTrust, setCreatingTrust] = useState(false);
+  const [dashboardActivity, setDashboardActivity] = useState([]);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
 
-  // Refs for voice/media handling
+  // Pitchin state variables
+  const [pitchinPitches, setPitchinPitches] = useState([]);
+  const [userPitches, setUserPitches] = useState([]);
+  const [selectedPitchForPlay, setSelectedPitchForPlay] = useState(null);
+  const [pitchinLoading, setPitchinLoading] = useState(false);
+  const [signedNDA, setSignedNDA] = useState(new Set()); // Track which pitches user has signed NDA for
+  const [currentUser, setCurrentUser] = useState(null);
+  const [expandedPitchInfo, setExpandedPitchInfo] = useState(null); // Track which pitch info dropdown is open
+  const [expandedBusinessProfile, setExpandedBusinessProfile] = useState(false); // Business profile expansion
+  const [showCameraRecorder, setShowCameraRecorder] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isVideoRecording, setIsVideoRecording] = useState(false);
+
+  // Feature Modal States
+  const [showEscrowModal, setShowEscrowModal] = useState(false);
+  const [showSPAModal, setShowSPAModal] = useState(false);
+  const [showKYCModal, setShowKYCModal] = useState(false);
+  const [showPoliciesModal, setShowPoliciesModal] = useState(false);
+  const [showSignModal, setShowSignModal] = useState(false);
+  const [showFirstReadModal, setShowFirstReadModal] = useState(false);
+  const [kycVerificationStatus, setKycVerificationStatus] = useState({});
+  const [policiesAccepted, setPoliciesAccepted] = useState({});
+
+  // Video Recording Management - Using local refs
+  const startVideoRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: true, 
+        audio: true 
+      });
+      
+      const mediaRecorderRef = { current: null };
+      const videoStreamRef = { current: stream };
+      
+      mediaRecorderRef.current = new MediaRecorder(stream);
+      const chunks = [];
+
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        chunks.push(event.data);
+      };
+
+      mediaRecorderRef.current.onstop = () => {
+        const blob = new Blob(chunks, { type: 'video/webm' });
+        const videoUrl = URL.createObjectURL(blob);
+        console.log('Video recording completed:', videoUrl);
+        // You can save or use this video URL here
+      };
+
+      mediaRecorderRef.current.start();
+      setIsVideoRecording(true);
+      
+      // Store refs in window for cleanup
+      window.currentVideoRecorder = { mediaRecorderRef, videoStreamRef };
+    } catch (error) {
+      console.error('Video recording failed:', error);
+      alert('Camera access denied or not available');
+    }
+  };
+
+  const stopVideoRecording = () => {
+    if (window.currentVideoRecorder && isVideoRecording) {
+      const { mediaRecorderRef, videoStreamRef } = window.currentVideoRecorder;
+      if (mediaRecorderRef.current) {
+        mediaRecorderRef.current.stop();
+      }
+      if (videoStreamRef.current) {
+        videoStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+      setIsVideoRecording(false);
+      window.currentVideoRecorder = null;
+    }
+  };
+
+  // Handle joining a trust group
+  const handleJoinTrust = async (trustId, trustName) => {
+    if (!user?.id || !supabase) {
+      alert('Please log in first');
+      return;
+    }
+
+    setJoiningTrustId(trustId);
+    try {
+      console.log('Attempting to join trust:', trustId);
+      console.log('Auth user object:', user);
+      
+      // Get the actual Supabase session to get the real UUID
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session) {
+        console.error('Session error:', sessionError);
+        alert('Session error. Please log in again.');
+        return;
+      }
+
+      const userUUID = session.user.id;
+      console.log('User UUID from session:', userUUID);
+      
+      // Check if user profile exists in profiles table
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, email, name')
+        .eq('id', userUUID)
+        .single();
+
+      if (profileError) {
+        console.error('Error fetching user profile:', profileError);
+        console.log('Profile lookup failed for UUID:', userUUID);
+        alert('Your profile was not found. Please complete your application first.');
+        return;
+      }
+
+      console.log('User profile found:', profileData);
+      
+      // Insert a new trust_group_members record using the real UUID
+      const { data, error } = await supabase
+        .from('trust_group_members')
+        .insert([
+          {
+            group_id: trustId,
+            user_id: userUUID,
+            role: 'member',
+            is_active: true,
+            joined_at: new Date().toISOString()
+          }
+        ])
+        .select();
+
+      if (error) {
+        console.error('Error joining trust:', error);
+        // Check if already a member
+        if (error.code === '23505') {
+          alert('You are already a member of this trust');
+        } else {
+          alert('Failed to join trust: ' + error.message);
+        }
+        return;
+      }
+
+      console.log('Successfully joined trust:', data);
+      // Add to joined set for UI update
+      setJoinedTrusts(prev => new Set([...prev, trustId]));
+      alert('Successfully joined: ' + trustName);
+      
+      // Refresh the user trusts list
+      const { getUserTrustGroups } = await import('../services/trustService');
+      const updatedTrusts = await getUserTrustGroups(userUUID);
+      setUserTrusts(updatedTrusts || []);
+    } catch (error) {
+      console.error('Unexpected error joining trust:', error);
+      alert('An error occurred while joining the trust');
+    } finally {
+      setJoiningTrustId(null);
+    }
+  };
+
+  // Handle viewing trust details
+  const handleViewTrustDetails = async (trust) => {
+    setSelectedTrust(trust);
+    
+    // Fetch trust members
+    try {
+      const { data: members, error } = await supabase
+        .from('trust_group_members')
+        .select('user_id, monthly_contribution, joined_at, profiles(name, email)')
+        .eq('group_id', trust.id)
+        .eq('is_active', true);
+
+      if (!error && members) {
+        setTrustMembers(members);
+        console.log('Trust members fetched:', members);
+      }
+    } catch (error) {
+      console.error('Error fetching members:', error);
+    }
+  };
+
+  // Handle making a contribution
+  const handleMakeContribution = async (trustId) => {
+    if (!contributionAmount || isNaN(contributionAmount)) {
+      alert('Please enter a valid amount');
+      return;
+    }
+
+    if (!user?.id || !supabase) {
+      alert('Please log in first');
+      return;
+    }
+
+    setContributingTrustId(trustId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userUUID = session?.user.id;
+
+      if (!userUUID) {
+        alert('User not found');
+        return;
+      }
+
+      // Insert contribution record
+      const { data, error } = await supabase
+        .from('member_contributions')
+        .insert([
+          {
+            group_id: trustId,
+            user_id: userUUID,
+            amount: parseFloat(contributionAmount),
+            contributed_at: new Date().toISOString()
+          }
+        ])
+        .select();
+
+      if (error) {
+        console.error('Error making contribution:', error);
+        alert('Failed to make contribution: ' + error.message);
+        return;
+      }
+
+      alert('Contribution of UGX ' + contributionAmount + ' recorded successfully!');
+      setContributionAmount('');
+      setUserContribution(prev => prev + parseFloat(contributionAmount));
+    } catch (error) {
+      console.error('Unexpected error:', error);
+      alert('An error occurred');
+    } finally {
+      setContributingTrustId(null);
+    }
+  };
+
+  // Create new trust/SACCO
+  const handleCreateTrust = async () => {
+    if (!createFormData.name.trim()) {
+      alert('Please enter a SACCO name');
+      return;
+    }
+    if (!createFormData.description.trim()) {
+      alert('Please enter a description');
+      return;
+    }
+    if (!createFormData.minContribution) {
+      alert('Please enter minimum contribution amount');
+      return;
+    }
+
+    setCreatingTrust(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userUUID = session?.user.id;
+
+      if (!userUUID) {
+        alert('User not found');
+        return;
+      }
+
+      // Create the trust group
+      const { data: trustData, error: trustError } = await supabase
+        .from('trust_groups')
+        .insert([
+          {
+            name: createFormData.name,
+            description: createFormData.description,
+            monthly_contribution: parseFloat(createFormData.minContribution),
+            contribution_period: createFormData.period,
+            status: 'active',
+            is_public: true,
+            created_by: userUUID,
+            created_at: new Date().toISOString()
+          }
+        ])
+        .select();
+
+      if (trustError) throw trustError;
+
+      const newTrustId = trustData[0].id;
+
+      // Add creator as first member
+      const { error: memberError } = await supabase
+        .from('trust_group_members')
+        .insert([
+          {
+            group_id: newTrustId,
+            user_id: userUUID,
+            joined_at: new Date().toISOString(),
+            status: 'active'
+          }
+        ]);
+
+      if (memberError) throw memberError;
+
+      alert(`SACCO "${createFormData.name}" created successfully!`);
+      
+      // Reset form
+      setCreateFormData({
+        name: '',
+        description: '',
+        minContribution: '',
+        period: 'monthly'
+      });
+
+      // Refresh trusts
+      fetchTrustData();
+      
+      // Switch to My Trusts tab
+      setTrustSubTab('my-trusts');
+    } catch (error) {
+      console.error('Error creating trust:', error);
+      alert('Failed to create SACCO: ' + error.message);
+    } finally {
+      setCreatingTrust(false);
+    }
+  };
+
+  // Fetch dashboard data
+  const fetchDashboardData = async () => {
+    if (!selectedTrust || !supabase) return;
+    
+    setDashboardLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userUUID = session?.user.id;
+
+      if (!userUUID) return;
+
+      // Get total members
+      const { data: members } = await supabase
+        .from('trust_group_members')
+        .select('*')
+        .eq('group_id', selectedTrust.id);
+
+      // Get total contributions
+      const { data: contributions } = await supabase
+        .from('member_contributions')
+        .select('amount')
+        .eq('group_id', selectedTrust.id);
+
+      const totalPooled = contributions?.reduce((sum, c) => sum + (c.amount || 0), 0) || 0;
+
+      // Update stats
+      setTrustStats({
+        totalMembers: members?.length || 0,
+        totalPooled: totalPooled,
+        avgReturns: 5.2, // Mock value
+        loansIssued: 0  // To be calculated from loans table
+      });
+
+      // Get recent activity (contributions, member joins)
+      const { data: recentContributions } = await supabase
+        .from('member_contributions')
+        .select(`
+          *,
+          profiles:user_id(name, email)
+        `)
+        .eq('group_id', selectedTrust.id)
+        .order('contributed_at', { ascending: false })
+        .limit(5);
+
+      // Get recent member joins
+      const { data: recentMembers } = await supabase
+        .from('trust_group_members')
+        .select(`
+          *,
+          profiles:user_id(name, email)
+        `)
+        .eq('group_id', selectedTrust.id)
+        .order('joined_at', { ascending: false })
+        .limit(3);
+
+      // Combine activities
+      const activities = [];
+
+      recentContributions?.forEach(contrib => {
+        activities.push({
+          id: `contrib-${contrib.id}`,
+          action: 'Made contribution',
+          amount: `UGX ${contrib.amount?.toLocaleString() || 0}`,
+          user: contrib.profiles?.name || 'Unknown',
+          time: new Date(contrib.contributed_at).toLocaleDateString(),
+          type: 'contribution'
+        });
+      });
+
+      recentMembers?.forEach(member => {
+        activities.push({
+          id: `member-${member.id}`,
+          action: 'Joined the group',
+          amount: member.profiles?.name || 'Unknown',
+          user: member.profiles?.email?.split('@')[0] || 'Member',
+          time: new Date(member.joined_at).toLocaleDateString(),
+          type: 'join'
+        });
+      });
+
+      // Sort by time (newest first)
+      activities.sort((a, b) => new Date(b.time) - new Date(a.time));
+      setDashboardActivity(activities.slice(0, 6));
+
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setDashboardLoading(false);
+    }
+  };
+
+  // Fetch Pitchin pitches data
+  const fetchPitchinPitches = async () => {
+    try {
+      setPitchinLoading(true);
+      const { getAllPitches, getUserPitches, getSupabase } = await import('../services/pitchingService');
+      
+      // Get current user
+      const sb = getSupabase();
+      if (sb) {
+        const { data: { user } } = await sb.auth.getUser();
+        setCurrentUser(user);
+      }
+
+      // Fetch all published pitches for Available tab
+      const allPitches = await getAllPitches();
+      setPitchinPitches(allPitches || []);
+
+      // If user is logged in, fetch their pitches for My Pitches tab
+      if (currentUser?.id) {
+        const myPitches = await getUserPitches(currentUser.id);
+        setUserPitches(myPitches || []);
+      }
+
+      console.log('✅ Pitchin data loaded:', { all: allPitches?.length, mine: userPitches?.length });
+    } catch (error) {
+      console.error('Error fetching Pitchin data:', error);
+    } finally {
+      setPitchinLoading(false);
+    }
+  };
+
+  // Load Pitchin data on mount and when activeTab changes to share
+  useEffect(() => {
+    if (activeTab === 'share') {
+      fetchPitchinPitches();
+    }
+  }, [activeTab, currentUser?.id]);
+
+  // Fetch Share Tab Data from Supabase
+  useEffect(() => {
+    const fetchShareData = async () => {
+      if (!supabase) return;
+      
+      try {
+        // Fetch Opportunities
+        const { data: opps, error: oppErr } = await supabase
+          .from('opportunities')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        if (!oppErr && opps) {
+          setOpportunities(opps);
+        }
+
+        // Fetch User Investments
+        const { data: invs, error: invErr } = await supabase
+          .from('investments')
+          .select('*')
+          .eq('user_id', user?.id)
+          .order('created_at', { ascending: false });
+        
+        if (!invErr && invs) {
+          setUserInvestments(invs);
+        }
+
+        // Fetch Available Grants
+        const { data: grants, error: grantErr } = await supabase
+          .from('grants')
+          .select('*')
+          .order('deadline', { ascending: true });
+        
+        if (!grantErr && grants) {
+          setAvailableGrants(grants);
+        }
+      } catch (error) {
+        console.error('Error fetching share data:', error);
+      }
+    };
+
+    fetchShareData();
+  }, [user?.id]);
+
+  // Fetch Trust Data from Supabase
+  useEffect(() => {
+    const fetchTrustData = async () => {
+      if (!user?.id || !supabase) {
+        console.log('No user ID or supabase available for trust data fetch');
+        return;
+      }
+
+      try {
+        console.log('Fetching trust data for user auth ID:', user.id);
+        
+        // Get the real Supabase UUID from session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError || !session) {
+          console.error('Session error:', sessionError);
+          setUserTrusts([]);
+          setPublicTrusts([]);
+          return;
+        }
+
+        const userUUID = session.user.id;
+        console.log('User UUID from session:', userUUID);
+        
+        // Import trustService functions
+        const { getUserTrustGroups, getPublicTrustGroups, debugGetAllUserTrustData } = await import('../services/trustService');
+        
+        // DEBUG: Run diagnostic to see what's in the database
+        console.log('Running debug diagnostic...');
+        await debugGetAllUserTrustData(userUUID);
+        
+        // Fetch user's trusts - this includes both created groups and joined groups
+        console.log('Calling getUserTrustGroups with UUID:', userUUID);
+        const userTrustsData = await getUserTrustGroups(userUUID);
+        console.log('User trusts data received:', userTrustsData);
+        setUserTrusts(userTrustsData || []);
+
+        // Fetch public trusts to explore
+        console.log('Calling getPublicTrustGroups...');
+        const publicTrustsData = await getPublicTrustGroups();
+        console.log('Public trusts data received:', publicTrustsData);
+        setPublicTrusts(publicTrustsData || []);
+
+        // Calculate trust statistics from user's data
+        if (userTrustsData && userTrustsData.length > 0) {
+          console.log('Calculating trust statistics...');
+          const totalMembers = userTrustsData.reduce((sum, trust) => sum + (trust.member_count || 0), 0);
+          const totalPooled = userTrustsData.reduce((sum, trust) => {
+            const amount = parseFloat(trust.monthly_contribution) || 0;
+            const months = (trust.member_count || 1) * 6; // Estimate based on member count
+            return sum + (amount * months);
+          }, 0);
+          
+          const stats = {
+            totalMembers,
+            totalPooled,
+            avgReturns: 12.2,
+            loansIssued: Math.floor(Math.random() * 20) + 5
+          };
+          console.log('Trust statistics calculated:', stats);
+          setTrustStats(stats);
+        } else {
+          console.log('No user trusts found, resetting statistics');
+          setTrustStats({ totalMembers: 0, totalPooled: 0, avgReturns: 0, loansIssued: 0 });
+        }
+      } catch (error) {
+        console.error('Error fetching trust data:', {
+          message: error?.message,
+          name: error?.name,
+          stack: error?.stack,
+          fullError: error
+        });
+        // Fallback to empty state
+        setUserTrusts([]);
+        setPublicTrusts([]);
+        setTrustStats({ totalMembers: 0, totalPooled: 0, avgReturns: 0, loansIssued: 0 });
+      }
+    };
+
+    fetchTrustData();
+  }, [user?.id, supabase]);
   const recognitionRef = useRef(null);
   const messagesEndRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -3605,6 +4254,13 @@ const ICANCapitalEngine = () => {
       analyzeFinancialIntelligence();
     }
   }, [transactions]);
+
+  // Fetch dashboard data when trust is selected
+  useEffect(() => {
+    if (selectedTrust) {
+      fetchDashboardData();
+    }
+  }, [selectedTrust]);
 
   // Calculate IOR score
   useEffect(() => {
@@ -8502,6 +9158,54 @@ Data Freshness: ${reportData.metadata.dataFreshness}
 
     return (
       <div className="space-y-6">
+        {/* Tab Navigation */}
+        <div className="glass-card p-4 md:p-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+            <div>
+              <h1 className="text-xl md:text-2xl font-bold text-white">Dashboard</h1>
+              <p className="text-sm md:text-base text-gray-300">Your financial overview & insights</p>
+            </div>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setDashboardSubTab('overview')}
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+                dashboardSubTab === 'overview'
+                  ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg shadow-blue-500/30'
+                  : 'bg-white/5 text-gray-300 hover:bg-white/10'
+              }`}
+            >
+              <Home className="w-4 h-4" />
+              Overview
+            </button>
+            <button
+              onClick={() => setDashboardSubTab('portfolio')}
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+                dashboardSubTab === 'portfolio'
+                  ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/30'
+                  : 'bg-white/5 text-gray-300 hover:bg-white/10'
+              }`}
+            >
+              <BarChart3 className="w-4 h-4" />
+              Portfolio
+            </button>
+            <button
+              onClick={() => setDashboardSubTab('analytics')}
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+                dashboardSubTab === 'analytics'
+                  ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg shadow-green-500/30'
+                  : 'bg-white/5 text-gray-300 hover:bg-white/10'
+              }`}
+            >
+              <TrendingUp className="w-4 h-4" />
+              Analytics
+            </button>
+          </div>
+        </div>
+
+        {/* Overview Tab */}
+        {dashboardSubTab === 'overview' && (
+        <div className="space-y-6">
         {/* Header with IOR */}
         <div className="glass-card p-4 md:p-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 md:gap-0 mb-4">
@@ -8952,334 +9656,3098 @@ Data Freshness: ${reportData.metadata.dataFreshness}
           />
         </div>
         */}
+        </div>
+        )}
+
+        {/* Portfolio Tab */}
+        {dashboardSubTab === 'portfolio' && (
+          <div className="space-y-6">
+            <div className="glass-card p-6 bg-gradient-to-br from-purple-900/30 to-pink-900/30 border border-purple-500/30">
+              <h3 className="text-lg font-semibold text-white mb-4">Investment Portfolio</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                  <p className="text-sm text-gray-400 mb-1">Total Investments</p>
+                  <p className="text-2xl font-bold text-purple-400">{(netWorth / 1000000).toFixed(1)}M</p>
+                </div>
+                <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                  <p className="text-sm text-gray-400 mb-1">Active Holdings</p>
+                  <p className="text-2xl font-bold text-pink-400">12</p>
+                </div>
+                <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                  <p className="text-sm text-gray-400 mb-1">Portfolio Growth</p>
+                  <p className="text-2xl font-bold text-green-400">+24%</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="glass-card p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">Holdings Overview</h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10">
+                  <div>
+                    <p className="text-white font-medium">Stocks</p>
+                    <p className="text-sm text-gray-400">42% allocation</p>
+                  </div>
+                  <div className="text-2xl font-bold text-blue-400">42%</div>
+                </div>
+                <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10">
+                  <div>
+                    <p className="text-white font-medium">Bonds</p>
+                    <p className="text-sm text-gray-400">28% allocation</p>
+                  </div>
+                  <div className="text-2xl font-bold text-yellow-400">28%</div>
+                </div>
+                <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10">
+                  <div>
+                    <p className="text-white font-medium">Real Estate</p>
+                    <p className="text-sm text-gray-400">20% allocation</p>
+                  </div>
+                  <div className="text-2xl font-bold text-emerald-400">20%</div>
+                </div>
+                <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10">
+                  <div>
+                    <p className="text-white font-medium">Cash & Equivalents</p>
+                    <p className="text-sm text-gray-400">10% allocation</p>
+                  </div>
+                  <div className="text-2xl font-bold text-gray-400">10%</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Analytics Tab */}
+        {dashboardSubTab === 'analytics' && (
+          <div className="space-y-6">
+            <div className="glass-card p-6 bg-gradient-to-br from-green-900/30 to-emerald-900/30 border border-green-500/30">
+              <h3 className="text-lg font-semibold text-white mb-4">Performance Analytics</h3>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                  <p className="text-sm text-gray-400 mb-1">YTD Return</p>
+                  <p className="text-2xl font-bold text-green-400">+18.5%</p>
+                </div>
+                <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                  <p className="text-sm text-gray-400 mb-1">Volatility</p>
+                  <p className="text-2xl font-bold text-yellow-400">12.3%</p>
+                </div>
+                <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                  <p className="text-sm text-gray-400 mb-1">Sharpe Ratio</p>
+                  <p className="text-2xl font-bold text-blue-400">1.58</p>
+                </div>
+                <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                  <p className="text-sm text-gray-400 mb-1">Avg. Daily Return</p>
+                  <p className="text-2xl font-bold text-purple-400">+0.08%</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="glass-card p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">Trend Analysis</h3>
+              <div className="space-y-4">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-white font-medium">Best Performer</p>
+                    <span className="text-green-400 text-sm font-semibold">+42.3%</span>
+                  </div>
+                  <div className="w-full bg-white/10 rounded-full h-2">
+                    <div className="bg-green-400 h-2 rounded-full" style={{ width: '100%' }} />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-white font-medium">Average Performance</p>
+                    <span className="text-yellow-400 text-sm font-semibold">+18.5%</span>
+                  </div>
+                  <div className="w-full bg-white/10 rounded-full h-2">
+                    <div className="bg-yellow-400 h-2 rounded-full" style={{ width: '65%' }} />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-white font-medium">Worst Performer</p>
+                    <span className="text-red-400 text-sm font-semibold">-5.2%</span>
+                  </div>
+                  <div className="w-full bg-white/10 rounded-full h-2">
+                    <div className="bg-red-400 h-2 rounded-full" style={{ width: '35%' }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="glass-card p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">Risk Assessment</h3>
+              <ul className="space-y-2 text-gray-300">
+                <li className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-400 rounded-full" />
+                  Portfolio is well-diversified across sectors
+                </li>
+                <li className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-400 rounded-full" />
+                  Risk exposure aligned with your profile
+                </li>
+                <li className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-yellow-400 rounded-full" />
+                  Monitor concentration in Technology sector
+                </li>
+                <li className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-400 rounded-full" />
+                  Emergency fund adequately maintained
+                </li>
+              </ul>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
 
   const renderSecurityMandate = () => (
     <div className="space-y-6">
+      {/* Header */}
       <div className="glass-card p-6">
         <div className="flex items-center gap-3 mb-4">
           <Shield className="w-6 h-6 text-blue-400" />
-          <h2 className="text-xl font-semibold text-white">Treasury Guardian</h2>
-        </div>
-        
-        <div className="space-y-4">
           <div>
-            <label className="block text-white font-medium mb-2">Contract Text</label>
-            <textarea
-              value={contractText}
-              onChange={(e) => setContractText(e.target.value)}
-              placeholder="Paste contract or terms & conditions here..."
-              className="w-full h-40 px-4 py-3 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-            />
+            <h2 className="text-xl font-semibold text-white">Treasury Guardian</h2>
+            <p className="text-sm text-gray-400">Account security & privacy controls</p>
           </div>
-          
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="flex gap-2 mt-4 flex-wrap">
           <button
-            onClick={() => handleSecureAction('Contract Analysis', analyzeContract)}
-            disabled={!contractText.trim() || isLoading}
-            className="w-full py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 text-white rounded-lg transition-colors font-medium"
+            onClick={() => setSecuritySubTab('account')}
+            className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+              securitySubTab === 'account'
+                ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg shadow-blue-500/30'
+                : 'bg-white/5 text-gray-300 hover:bg-white/10'
+            }`}
           >
-            {isLoading ? 'Analyzing Contract...' : 'Analyze Contract (Secure)'}
+            <Lock className="w-4 h-4" />
+            Account
+          </button>
+          <button
+            onClick={() => setSecuritySubTab('privacy')}
+            className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+              securitySubTab === 'privacy'
+                ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/30'
+                : 'bg-white/5 text-gray-300 hover:bg-white/10'
+            }`}
+          >
+            <Eye className="w-4 h-4" />
+            Privacy
+          </button>
+          <button
+            onClick={() => setSecuritySubTab('verify')}
+            className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+              securitySubTab === 'verify'
+                ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg shadow-green-500/30'
+                : 'bg-white/5 text-gray-300 hover:bg-white/10'
+            }`}
+          >
+            <CheckCircle className="w-4 h-4" />
+            Verification
           </button>
         </div>
+      </div>
 
-        {contractAnalysis && (
-          <div className="mt-6 space-y-4">
-            <div className="bg-green-500 bg-opacity-20 border border-green-500 border-opacity-30 rounded-lg p-4">
-              <h3 className="text-green-400 font-semibold mb-2">Financial Safety Score</h3>
-              <div className="text-2xl font-bold text-white">
-                {contractAnalysis.safetyScore.toFixed(1)}/10.0
+      {/* Account Security Tab */}
+      {securitySubTab === 'account' && (
+        <div className="space-y-6">
+          {/* Security Score */}
+          <div className="glass-card p-6 bg-gradient-to-br from-blue-900/30 to-cyan-900/30 border border-blue-500/30">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white">Security Score</h3>
+              <div className="text-right">
+                <div className="text-3xl font-bold text-blue-400">9.2</div>
+                <p className="text-sm text-gray-400">out of 10</p>
               </div>
             </div>
-
-            <div className="bg-yellow-500 bg-opacity-20 border border-yellow-500 border-opacity-30 rounded-lg p-4">
-              <h3 className="text-yellow-400 font-semibold mb-2">Critical Liability Flags</h3>
-              <ul className="space-y-1">
-                {contractAnalysis.liabilityFlags.map((flag, index) => (
-                  <li key={index} className="text-white flex items-start gap-2">
-                    <AlertTriangle className="w-4 h-4 text-yellow-400 mt-0.5 flex-shrink-0" />
-                    {flag}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="bg-blue-500 bg-opacity-20 border border-blue-500 border-opacity-30 rounded-lg p-4">
-              <h3 className="text-blue-400 font-semibold mb-2">Recommendation</h3>
-              <p className="text-white">{contractAnalysis.recommendation}</p>
+            <div className="w-full bg-white/10 rounded-full h-3 overflow-hidden">
+              <div className="bg-gradient-to-r from-blue-400 to-cyan-400 h-full rounded-full" style={{ width: '92%' }} />
             </div>
           </div>
-        )}
-      </div>
+
+          {/* Account Security Settings */}
+          <div className="glass-card p-6">
+            <h3 className="text-lg font-semibold text-white mb-4">Account Protection</h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-all">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 bg-green-400 rounded-full" />
+                  <div>
+                    <p className="text-white font-medium">Two-Factor Authentication</p>
+                    <p className="text-sm text-gray-400">SMS verification enabled</p>
+                  </div>
+                </div>
+                <CheckCircle className="w-5 h-5 text-green-400" />
+              </div>
+              <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-all">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 bg-green-400 rounded-full" />
+                  <div>
+                    <p className="text-white font-medium">Password Security</p>
+                    <p className="text-sm text-gray-400">Strong password configured</p>
+                  </div>
+                </div>
+                <CheckCircle className="w-5 h-5 text-green-400" />
+              </div>
+              <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-all">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 bg-yellow-400 rounded-full" />
+                  <div>
+                    <p className="text-white font-medium">Biometric Login</p>
+                    <p className="text-sm text-gray-400">Not configured</p>
+                  </div>
+                </div>
+                <button className="px-3 py-1 bg-yellow-500/20 text-yellow-300 rounded-lg text-sm hover:bg-yellow-500/30 transition-all">
+                  Enable
+                </button>
+              </div>
+              <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-all">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 bg-red-400 rounded-full" />
+                  <div>
+                    <p className="text-white font-medium">Backup Codes</p>
+                    <p className="text-sm text-gray-400">Not generated</p>
+                  </div>
+                </div>
+                <button className="px-3 py-1 bg-red-500/20 text-red-300 rounded-lg text-sm hover:bg-red-500/30 transition-all">
+                  Generate
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Recent Activity */}
+          <div className="glass-card p-6">
+            <h3 className="text-lg font-semibold text-white mb-4">Recent Activity</h3>
+            <div className="space-y-2">
+              <div className="text-sm text-gray-300">
+                <span className="text-gray-500">Today 2:34 PM</span> - Login from Chrome on MacBook
+              </div>
+              <div className="text-sm text-gray-300">
+                <span className="text-gray-500">Yesterday 10:15 AM</span> - Profile updated
+              </div>
+              <div className="text-sm text-gray-300">
+                <span className="text-gray-500">2 days ago 3:45 PM</span> - Password changed
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Privacy Tab */}
+      {securitySubTab === 'privacy' && (
+        <div className="space-y-6">
+          {/* Data Sharing */}
+          <div className="glass-card p-6">
+            <h3 className="text-lg font-semibold text-white mb-4">Data Sharing Preferences</h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10">
+                <div>
+                  <p className="text-white font-medium">Share financial insights with partners</p>
+                  <p className="text-sm text-gray-400">Allow selected partners to view analysis</p>
+                </div>
+                <input type="checkbox" defaultChecked className="w-5 h-5 rounded accent-blue-500" />
+              </div>
+              <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10">
+                <div>
+                  <p className="text-white font-medium">Analytics & improvement</p>
+                  <p className="text-sm text-gray-400">Help improve ICAN with usage data</p>
+                </div>
+                <input type="checkbox" defaultChecked className="w-5 h-5 rounded accent-blue-500" />
+              </div>
+              <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10">
+                <div>
+                  <p className="text-white font-medium">Marketing communications</p>
+                  <p className="text-sm text-gray-400">Receive offers and updates</p>
+                </div>
+                <input type="checkbox" className="w-5 h-5 rounded accent-blue-500" />
+              </div>
+            </div>
+          </div>
+
+          {/* Privacy Settings */}
+          <div className="glass-card p-6">
+            <h3 className="text-lg font-semibold text-white mb-4">Privacy Controls</h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10">
+                <div>
+                  <p className="text-white font-medium">Profile Visibility</p>
+                  <p className="text-sm text-gray-400">Who can see your profile</p>
+                </div>
+                <select className="px-3 py-1 bg-white/10 border border-white/20 rounded text-sm text-white">
+                  <option>Private</option>
+                  <option>Connections Only</option>
+                  <option>Public</option>
+                </select>
+              </div>
+              <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10">
+                <div>
+                  <p className="text-white font-medium">Activity Status</p>
+                  <p className="text-sm text-gray-400">Show when you're online</p>
+                </div>
+                <select className="px-3 py-1 bg-white/10 border border-white/20 rounded text-sm text-white">
+                  <option>Hidden</option>
+                  <option>Connections Only</option>
+                  <option>Public</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Data Management */}
+          <div className="glass-card p-6 bg-gradient-to-br from-purple-900/30 to-transparent border border-purple-500/30">
+            <h3 className="text-lg font-semibold text-white mb-4">Data Management</h3>
+            <div className="space-y-3">
+              <button className="w-full px-4 py-2 bg-purple-500/20 border border-purple-500/30 text-purple-300 rounded-lg hover:bg-purple-500/30 transition-all">
+                Download My Data
+              </button>
+              <button className="w-full px-4 py-2 bg-red-500/20 border border-red-500/30 text-red-300 rounded-lg hover:bg-red-500/30 transition-all">
+                Delete All Personal Data
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Verification Tab - Contract Analysis */}
+      {securitySubTab === 'verify' && (
+        <div className="space-y-6">
+          {/* Contract Analysis Tool */}
+          <div className="glass-card p-6">
+            <h3 className="text-lg font-semibold text-white mb-4">Contract Verification</h3>
+            <div>
+              <label className="block text-sm text-gray-300 font-medium mb-2">Contract Text or Terms & Conditions</label>
+              <textarea
+                value={contractText}
+                onChange={(e) => setContractText(e.target.value)}
+                placeholder="Paste contract or terms & conditions here..."
+                className="w-full h-40 px-4 py-3 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 resize-none transition-all"
+              />
+            </div>
+            <button
+              onClick={() => handleSecureAction('Contract Analysis', analyzeContract)}
+              disabled={!contractText.trim() || isLoading}
+              className="w-full mt-4 py-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 disabled:from-gray-600 disabled:to-gray-700 text-white rounded-lg transition-all font-medium flex items-center justify-center gap-2 shadow-lg shadow-green-500/30"
+            >
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Analyzing...
+                </>
+              ) : (
+                <>
+                  <Shield className="w-4 h-4" />
+                  Analyze Contract (Secure)
+                </>
+              )}
+            </button>
+          </div>
+
+          {contractAnalysis && (
+            <>
+              {/* Safety Score */}
+              <div className="glass-card p-6 bg-gradient-to-br from-green-900/30 to-transparent border border-green-500/30">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-white">Financial Safety Score</h3>
+                  <div className="text-right">
+                    <div className="text-3xl font-bold text-green-400">{contractAnalysis.safetyScore.toFixed(1)}</div>
+                    <p className="text-sm text-gray-400">out of 10</p>
+                  </div>
+                </div>
+                <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
+                  <div
+                    className="bg-gradient-to-r from-green-400 to-emerald-400 h-full rounded-full"
+                    style={{ width: `${Math.min(contractAnalysis.safetyScore * 10, 100)}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Critical Liability Flags */}
+              {contractAnalysis.liabilityFlags.length > 0 && (
+                <div className="glass-card p-6 bg-gradient-to-br from-yellow-900/30 to-transparent border border-yellow-500/30">
+                  <h3 className="text-lg font-semibold text-white mb-4">Critical Liability Flags</h3>
+                  <div className="space-y-2">
+                    {contractAnalysis.liabilityFlags.map((flag, index) => (
+                      <div key={index} className="flex items-start gap-3 text-yellow-300">
+                        <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                        <p>{flag}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Recommendation */}
+              <div className="glass-card p-6">
+                <h3 className="text-lg font-semibold text-white mb-3">Recommendation</h3>
+                <p className="text-gray-300 leading-relaxed">{contractAnalysis.recommendation}</p>
+              </div>
+
+              {/* Action Items */}
+              <div className="glass-card p-6 bg-gradient-to-br from-blue-900/30 to-transparent border border-blue-500/30">
+                <h3 className="text-lg font-semibold text-white mb-4">Suggested Actions</h3>
+                <ul className="space-y-2 text-gray-300">
+                  <li className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-blue-400 rounded-full" />
+                    Review all flagged clauses carefully
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-blue-400 rounded-full" />
+                    Consult with legal advisor for high-risk items
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-blue-400 rounded-full" />
+                    Negotiate unfavorable terms before signing
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-blue-400 rounded-full" />
+                    Keep signed copy for your records
+                  </li>
+                </ul>
+              </div>
+            </>
+          )}
+
+          {/* Verification Status */}
+          <div className="glass-card p-6">
+            <h3 className="text-lg font-semibold text-white mb-4">Verification Status</h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 bg-green-400 rounded-full" />
+                  <div>
+                    <p className="text-white font-medium">Email Verified</p>
+                    <p className="text-sm text-gray-400">Verified on Jan 15, 2026</p>
+                  </div>
+                </div>
+                <CheckCircle className="w-5 h-5 text-green-400" />
+              </div>
+              <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 bg-green-400 rounded-full" />
+                  <div>
+                    <p className="text-white font-medium">Phone Verified</p>
+                    <p className="text-sm text-gray-400">Verified on Jan 10, 2026</p>
+                  </div>
+                </div>
+                <CheckCircle className="w-5 h-5 text-green-400" />
+              </div>
+              <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 bg-yellow-400 rounded-full" />
+                  <div>
+                    <p className="text-white font-medium">Identity Verification</p>
+                    <p className="text-sm text-gray-400">Pending verification</p>
+                  </div>
+                </div>
+                <button className="px-3 py-1 bg-yellow-500/20 text-yellow-300 rounded-lg text-sm hover:bg-yellow-500/30 transition-all">
+                  Verify
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
   const renderReadinessMandate = () => (
     <div className="space-y-6">
+      {/* Header */}
       <div className="glass-card p-6">
         <div className="flex items-center gap-3 mb-4">
           <Globe className="w-6 h-6 text-green-400" />
-          <h2 className="text-xl font-semibold text-white">Global Navigator</h2>
+          <div>
+            <h2 className="text-xl font-semibold text-white">Global Navigator</h2>
+            <p className="text-sm text-gray-400">Regulatory compliance & readiness analysis</p>
+          </div>
         </div>
 
-        <div className="mb-4">
-          <div className="flex items-center gap-4 mb-4">
-            <div>
-              <label className="block text-white font-medium mb-2">Operating Mode</label>
-              <select
-                value={mode}
-                onChange={(e) => setMode(e.target.value)}
-                className="px-4 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="SE">SE - Salaried Employee</option>
-                <option value="BO">BO - Business Owner</option>
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-white font-medium mb-2">Country</label>
-              <select
-                value={operatingCountry}
-                onChange={(e) => setOperatingCountry(e.target.value)}
-                className="px-4 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="Uganda">Uganda</option>
-                <option value="Kenya">Kenya</option>
-                <option value="Tanzania">Tanzania</option>
-                <option value="Rwanda">Rwanda</option>
-              </select>
-            </div>
-          </div>
-
+        {/* Tab Navigation */}
+        <div className="flex gap-2 mt-4">
           <button
-            onClick={performComplianceCheck}
-            disabled={isLoading}
-            className="w-full py-3 bg-green-500 hover:bg-green-600 disabled:bg-gray-600 text-white rounded-lg transition-colors font-medium"
+            onClick={() => setReadinessSubTab('status')}
+            className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+              readinessSubTab === 'status'
+                ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg shadow-green-500/30'
+                : 'bg-white/5 text-gray-300 hover:bg-white/10'
+            }`}
           >
-            {isLoading ? 'Checking Compliance...' : 'Perform Regulatory Gap Analysis'}
+            <CheckCircle className="w-4 h-4" />
+            Status
+          </button>
+          <button
+            onClick={() => setReadinessSubTab('reports')}
+            className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+              readinessSubTab === 'reports'
+                ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg shadow-blue-500/30'
+                : 'bg-white/5 text-gray-300 hover:bg-white/10'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            Reports
           </button>
         </div>
+      </div>
 
-        {complianceData && (
-          <div className="space-y-4">
-            <div className="bg-green-500 bg-opacity-20 border border-green-500 border-opacity-30 rounded-lg p-4">
-              <h3 className="text-green-400 font-semibold mb-2">Compliance Status</h3>
-              <div className="text-2xl font-bold text-white">
-                {Math.round(complianceData.compliancePercentage)}% Complete
+      {/* Status Tab */}
+      {readinessSubTab === 'status' && (
+        <div className="space-y-6">
+          {/* Mode & Country Selection */}
+          <div className="glass-card p-6">
+            <h3 className="text-lg font-semibold text-white mb-4">Configuration</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-300 font-medium mb-2">Operating Mode</label>
+                <select
+                  value={mode}
+                  onChange={(e) => setMode(e.target.value)}
+                  className="w-full px-4 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500 transition-all"
+                >
+                  <option value="SE">SE - Salaried Employee</option>
+                  <option value="BO">BO - Business Owner</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-300 font-medium mb-2">Country</label>
+                <select
+                  value={operatingCountry}
+                  onChange={(e) => setOperatingCountry(e.target.value)}
+                  className="w-full px-4 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500 transition-all"
+                >
+                  <option value="Uganda">Uganda</option>
+                  <option value="Kenya">Kenya</option>
+                  <option value="Tanzania">Tanzania</option>
+                  <option value="Rwanda">Rwanda</option>
+                </select>
               </div>
             </div>
+            <button
+              onClick={performComplianceCheck}
+              disabled={isLoading}
+              className="w-full mt-4 py-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 disabled:from-gray-600 disabled:to-gray-700 text-white rounded-lg transition-all font-medium flex items-center justify-center gap-2 shadow-lg shadow-green-500/30"
+            >
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Analyzing...
+                </>
+              ) : (
+                <>
+                  <BarChart3 className="w-4 h-4" />
+                  Perform Regulatory Gap Analysis
+                </>
+              )}
+            </button>
+          </div>
 
-            <div className="space-y-3">
-              <h3 className="text-white font-semibold">Compliance Checklist</h3>
-              {complianceData.checklist.map((item, index) => (
-                <div key={index} className={`flex items-center gap-3 p-3 rounded-lg ${
-                  item.status === 'completed' ? 'bg-green-500 bg-opacity-20 border border-green-500 border-opacity-30' :
-                  item.status === 'pending' ? 'bg-yellow-500 bg-opacity-20 border border-yellow-500 border-opacity-30' :
-                  'bg-red-500 bg-opacity-20 border border-red-500 border-opacity-30'
-                }`}>
-                  {item.status === 'completed' ? 
-                    <CheckCircle className="w-5 h-5 text-green-400" /> :
-                    <AlertTriangle className="w-5 h-5 text-yellow-400" />
-                  }
-                  <div className="flex-1">
-                    <span className="text-white font-medium">{item.item}</span>
-                    {item.required && <span className="text-red-400 ml-2">*Required</span>}
+          {/* Compliance Status Card */}
+          {complianceData && (
+            <>
+              <div className="glass-card p-6 bg-gradient-to-br from-green-900/30 to-emerald-900/30 border border-green-500/30">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-white">Compliance Status</h3>
+                  <div className="text-right">
+                    <div className="text-3xl font-bold text-green-400">{Math.round(complianceData.compliancePercentage)}%</div>
+                    <p className="text-sm text-gray-400">Complete</p>
                   </div>
-                  <span className={`text-sm px-2 py-1 rounded ${
-                    item.status === 'completed' ? 'bg-green-600 text-white' :
-                    item.status === 'pending' ? 'bg-yellow-600 text-white' :
-                    'bg-red-600 text-white'
-                  }`}>
-                    {item.status.replace('-', ' ')}
-                  </span>
                 </div>
-              ))}
+                <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
+                  <div
+                    className="bg-gradient-to-r from-green-400 to-emerald-400 h-full rounded-full transition-all"
+                    style={{ width: `${complianceData.compliancePercentage}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Compliance Checklist */}
+              <div className="glass-card p-6">
+                <h3 className="text-lg font-semibold text-white mb-4">Compliance Checklist</h3>
+                <div className="space-y-3">
+                  {complianceData.checklist.map((item, index) => (
+                    <div
+                      key={index}
+                      className={`flex items-center gap-4 p-4 rounded-lg transition-all border ${
+                        item.status === 'completed'
+                          ? 'bg-green-500/10 border-green-500/30 hover:bg-green-500/15'
+                          : item.status === 'pending'
+                          ? 'bg-yellow-500/10 border-yellow-500/30 hover:bg-yellow-500/15'
+                          : 'bg-red-500/10 border-red-500/30 hover:bg-red-500/15'
+                      }`}
+                    >
+                      <div className="flex-shrink-0">
+                        {item.status === 'completed' ? (
+                          <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                            <Check className="w-4 h-4 text-white" />
+                          </div>
+                        ) : item.status === 'pending' ? (
+                          <AlertTriangle className="w-6 h-6 text-yellow-400" />
+                        ) : (
+                          <X className="w-6 h-6 text-red-400" />
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-white font-medium">{item.item}</p>
+                        {item.description && <p className="text-sm text-gray-400 mt-1">{item.description}</p>}
+                      </div>
+                      <div className="flex-shrink-0">
+                        <span className={`text-xs px-3 py-1 rounded-full font-medium ${
+                          item.status === 'completed'
+                            ? 'bg-green-600/40 text-green-300'
+                            : item.status === 'pending'
+                            ? 'bg-yellow-600/40 text-yellow-300'
+                            : 'bg-red-600/40 text-red-300'
+                        }`}>
+                          {item.status.replace('-', ' ')}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Reports Tab */}
+      {readinessSubTab === 'reports' && (
+        <div className="space-y-6">
+          {complianceData ? (
+            <>
+              {/* Gap Analysis Summary */}
+              <div className="glass-card p-6 bg-gradient-to-br from-blue-900/30 to-purple-900/30 border border-blue-500/30">
+                <div className="flex items-start gap-4">
+                  <AlertTriangle className="w-6 h-6 text-blue-400 flex-shrink-0 mt-1" />
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-white mb-2">Regulatory Gap Analysis</h3>
+                    <p className="text-gray-300">
+                      Your compliance readiness has been analyzed for {operatingCountry} under {mode === 'SE' ? 'Salaried Employee' : 'Business Owner'} regulations.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Key Findings */}
+              <div className="glass-card p-6">
+                <h3 className="text-lg font-semibold text-white mb-4">Key Findings</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-gradient-to-br from-green-900/30 to-transparent border border-green-500/30 rounded-lg p-4">
+                    <div className="text-sm text-gray-400 mb-2">Completed Items</div>
+                    <div className="text-2xl font-bold text-green-400">
+                      {complianceData.checklist.filter(c => c.status === 'completed').length}
+                    </div>
+                  </div>
+                  <div className="bg-gradient-to-br from-yellow-900/30 to-transparent border border-yellow-500/30 rounded-lg p-4">
+                    <div className="text-sm text-gray-400 mb-2">Pending Items</div>
+                    <div className="text-2xl font-bold text-yellow-400">
+                      {complianceData.checklist.filter(c => c.status === 'pending').length}
+                    </div>
+                  </div>
+                  <div className="bg-gradient-to-br from-red-900/30 to-transparent border border-red-500/30 rounded-lg p-4">
+                    <div className="text-sm text-gray-400 mb-2">Not Started</div>
+                    <div className="text-2xl font-bold text-red-400">
+                      {complianceData.checklist.filter(c => c.status === 'not-started').length}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Recommendations */}
+              <div className="glass-card p-6">
+                <h3 className="text-lg font-semibold text-white mb-4">Recommendations</h3>
+                <div className="space-y-3">
+                  {complianceData.checklist
+                    .filter(item => item.status !== 'completed')
+                    .map((item, index) => (
+                      <div key={index} className="flex items-start gap-3 p-4 bg-white/5 rounded-lg border border-white/10">
+                        <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-500/20 text-blue-300 font-semibold text-sm flex-shrink-0">
+                          {index + 1}
+                        </span>
+                        <div className="flex-1">
+                          <p className="text-white font-medium">{item.item}</p>
+                          <p className="text-sm text-gray-400 mt-1">
+                            {item.status === 'pending' 
+                              ? `This item is currently in progress. Please ensure completion as soon as possible.`
+                              : `This item has not been started. Prioritize this for regulatory compliance.`
+                            }
+                          </p>
+                          {item.required && <span className="inline-block mt-2 text-xs px-2 py-1 bg-red-600/40 text-red-300 rounded">Required</span>}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              {/* Action Items */}
+              <div className="glass-card p-6 bg-gradient-to-br from-purple-900/30 to-transparent border border-purple-500/30">
+                <h3 className="text-lg font-semibold text-white mb-4">Next Steps</h3>
+                <ul className="space-y-2 text-gray-300">
+                  <li className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-purple-400 rounded-full" />
+                    Review all pending compliance items and update status
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-purple-400 rounded-full" />
+                    Complete all required items marked with an asterisk (*)
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-purple-400 rounded-full" />
+                    Re-run analysis once updates are submitted
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-purple-400 rounded-full" />
+                    Contact support if you need assistance with any requirements
+                  </li>
+                </ul>
+              </div>
+            </>
+          ) : (
+            <div className="glass-card p-12 flex flex-col items-center justify-center">
+              <FileText className="w-12 h-12 text-gray-500 mb-4" />
+              <p className="text-gray-400 text-center">
+                Perform a regulatory gap analysis in the Status tab to generate reports
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+  const renderGrowthMandate = () => {
+    const growthTabs = [
+      { id: 'opportunities', label: 'Opportunities', icon: '🎯' },
+      { id: 'strategies', label: 'Strategies', icon: '📊' }
+    ];
+
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="glass-card p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <TrendingUp className="w-6 h-6 text-purple-400" />
+            <div>
+              <h2 className="text-xl font-semibold text-white">Growth & Prosperity Architect</h2>
+              <p className="text-sm text-gray-400">Discover opportunities and optimize your growth strategies</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="glass-card p-4">
+          <div className="flex gap-2 overflow-x-auto">
+            {growthTabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setGrowthSubTab(tab.id)}
+                className={`px-4 py-2 rounded-lg whitespace-nowrap transition-all font-medium flex items-center gap-2 ${
+                  growthSubTab === tab.id
+                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
+                    : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                }`}
+              >
+                <span>{tab.icon}</span>
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        <div className="space-y-6">
+          {/* Opportunities Tab */}
+          {growthSubTab === 'opportunities' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[
+                  {
+                    title: 'Market Expansion',
+                    description: 'Explore new market segments and business opportunities',
+                    icon: '🌍',
+                    metrics: { potential: 'High', timeline: '6-12 months', investment: 'UGX 50M' }
+                  },
+                  {
+                    title: 'Product Innovation',
+                    description: 'Develop new products and enhance existing offerings',
+                    icon: '💡',
+                    metrics: { potential: 'Very High', timeline: '3-6 months', investment: 'UGX 30M' }
+                  },
+                  {
+                    title: 'Partnerships & Collaborations',
+                    description: 'Strategic alliances to accelerate growth',
+                    icon: '🤝',
+                    metrics: { potential: 'Medium', timeline: '1-3 months', investment: 'UGX 10M' }
+                  },
+                  {
+                    title: 'Digital Transformation',
+                    description: 'Leverage technology for operational efficiency',
+                    icon: '💻',
+                    metrics: { potential: 'High', timeline: '6-9 months', investment: 'UGX 40M' }
+                  }
+                ].map((opportunity, idx) => (
+                  <div key={idx} className="glass-card p-5 border border-white/10 hover:border-purple-500/50 transition-all group cursor-pointer">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="text-3xl">{opportunity.icon}</div>
+                      <span className="px-2 py-1 rounded text-xs font-medium bg-purple-500/20 text-purple-300">
+                        New
+                      </span>
+                    </div>
+                    
+                    <h4 className="text-white font-semibold mb-2 group-hover:text-purple-300 transition-colors">
+                      {opportunity.title}
+                    </h4>
+                    <p className="text-gray-400 text-sm mb-4">{opportunity.description}</p>
+                    
+                    <div className="space-y-2 mb-4 text-sm border-t border-white/10 pt-4">
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Growth Potential:</span>
+                        <span className="text-emerald-400 font-medium">{opportunity.metrics.potential}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Timeline:</span>
+                        <span className="text-blue-300 font-medium">{opportunity.metrics.timeline}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Est. Investment:</span>
+                        <span className="text-purple-300 font-medium">{opportunity.metrics.investment}</span>
+                      </div>
+                    </div>
+                    
+                    <button className="w-full px-3 py-2 bg-purple-500/20 hover:bg-purple-500/40 text-purple-300 rounded transition-colors text-sm font-medium">
+                      Explore Opportunity
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Strategies Tab */}
+          {growthSubTab === 'strategies' && (
+            <div className="space-y-6">
+              <div className="glass-card p-6 border border-purple-500/30">
+                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-purple-400" />
+                  Your Personalized Growth Strategies
+                </h3>
+                
+                <div className="space-y-4">
+                  {[
+                    {
+                      name: 'Schedule Optimization',
+                      description: 'Maximize productivity and value creation',
+                      priority: 'High'
+                    },
+                    {
+                      name: 'Financial Acceleration',
+                      description: 'Accelerate wealth accumulation through smart investments',
+                      priority: 'High'
+                    },
+                    {
+                      name: 'Skill Enhancement',
+                      description: 'Develop new competencies for career advancement',
+                      priority: 'Medium'
+                    },
+                    {
+                      name: 'Network Expansion',
+                      description: 'Build strategic relationships for opportunities',
+                      priority: 'Medium'
+                    }
+                  ].map((strategy, idx) => (
+                    <div key={idx} className="p-4 rounded-lg bg-white/5 border border-white/10 hover:border-purple-500/30 transition-colors">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1">
+                          <h4 className="text-white font-semibold text-sm">{strategy.name}</h4>
+                          <p className="text-gray-400 text-xs mt-1">{strategy.description}</p>
+                        </div>
+                        <span className={`px-3 py-1 rounded text-xs font-medium whitespace-nowrap ml-2 ${
+                          strategy.priority === 'High' ? 'bg-red-500/20 text-red-300' : 'bg-yellow-500/20 text-yellow-300'
+                        }`}>
+                          {strategy.priority}
+                        </span>
+                      </div>
+                      <button className="w-full mt-3 px-3 py-2 bg-purple-500/20 hover:bg-purple-500/40 text-purple-300 rounded text-sm font-medium transition-colors">
+                        View Strategy
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Schedule Optimization Section */}
+              <div className="glass-card p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <Clock className="w-5 h-5 text-purple-400" />
+                  <h3 className="text-lg font-semibold text-white">Schedule Optimization</h3>
+                </div>
+
+                <p className="text-gray-300 mb-4">
+                  Optimize your daily schedule for maximum value creation while maintaining spiritual and physical alignment.
+                </p>
+                
+                <button
+                  onClick={optimizeSchedule}
+                  disabled={isLoading}
+                  className="w-full py-3 bg-purple-500 hover:bg-purple-600 disabled:bg-gray-600 text-white rounded-lg transition-colors font-medium mb-4"
+                >
+                  {isLoading ? 'Optimizing Schedule...' : 'Optimize Daily Schedule'}
+                </button>
+
+                {scheduleData && (
+                  <div className="space-y-4">
+                    <div className="bg-purple-500 bg-opacity-20 border border-purple-500 border-opacity-30 rounded-lg p-4">
+                      <h3 className="text-purple-400 font-semibold mb-2">Optimization Score</h3>
+                      <div className="text-2xl font-bold text-white">
+                        {Math.round(scheduleData.optimizationScore)}%
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <h3 className="text-white font-semibold">Schedule Recommendations</h3>
+                      {scheduleData.recommendations.map((rec, index) => (
+                        <div key={index} className="flex items-start gap-3 p-3 bg-white bg-opacity-5 rounded-lg">
+                          <Clock className="w-5 h-5 text-purple-400 mt-0.5" />
+                          <span className="text-white">{rec}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="space-y-3">
+                      <h3 className="text-white font-semibold">Next Actions</h3>
+                      {scheduleData.nextActions.map((action, index) => (
+                        <div key={index} className="flex items-center gap-3 p-3 bg-blue-500 bg-opacity-20 border border-blue-500 border-opacity-30 rounded-lg">
+                          <Target className="w-5 h-5 text-blue-400" />
+                          <span className="text-white">{action}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderTrust = () => {
+    const trustTabs = [
+      { id: 'my-trusts', label: 'My Trusts', icon: '👥' },
+      { id: 'explore', label: 'Explore', icon: '🔍' },
+      { id: 'create', label: 'Create', icon: '✨' },
+      { id: 'dashboard', label: 'Dashboard', icon: '📊' }
+    ];
+
+    return (
+      <>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="glass-card p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <Banknote className="w-6 h-6 text-blue-400" />
+            <div>
+              <h2 className="text-xl font-semibold text-white">Trust Management (SACCO)</h2>
+              <p className="text-sm text-gray-400">Collaborate, contribute, and grow wealth together</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="glass-card p-4">
+          <div className="flex gap-2 overflow-x-auto">
+            {trustTabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setTrustSubTab(tab.id)}
+                className={`px-4 py-2 rounded-lg whitespace-nowrap transition-all font-medium flex items-center gap-2 ${
+                  trustSubTab === tab.id
+                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white'
+                    : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                }`}
+              >
+                <span>{tab.icon}</span>
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        <div className="space-y-6">
+          {/* My Trusts Tab */}
+          {trustSubTab === 'my-trusts' && (
+            <div className="space-y-6">
+              {/* Search Bar */}
+              {userTrusts.length > 0 && (
+                <div className="glass-card p-4 border border-white/10">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Search your trusts by name..."
+                      value={trustSearchQuery}
+                      onChange={(e) => setTrustSearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none transition-colors"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* My Trusts Grid */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <Banknote className="w-5 h-5 text-yellow-400" />
+                  My SACCOs
+                </h3>
+                
+                {userTrusts.length === 0 ? (
+                  <div className="glass-card p-8 text-center border border-blue-500/20">
+                    <p className="text-gray-400 mb-3">No trusts joined yet</p>
+                    <p className="text-sm text-gray-500">Join or create a SACCO to get started</p>
+                  </div>
+                ) : (
+                  <>
+                    {userTrusts.filter(trust => 
+                      trust.name.toLowerCase().includes(trustSearchQuery.toLowerCase()) ||
+                      trust.description?.toLowerCase().includes(trustSearchQuery.toLowerCase()) ||
+                      trust.purpose?.toLowerCase().includes(trustSearchQuery.toLowerCase())
+                    ).length === 0 ? (
+                      <div className="glass-card p-8 text-center border border-blue-500/20">
+                        <Search className="w-12 h-12 text-gray-400 mx-auto mb-3 opacity-50" />
+                        <p className="text-gray-400">No trusts match "{trustSearchQuery}"</p>
+                        <p className="text-sm text-gray-500 mt-2">Try searching with different keywords</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {userTrusts.filter(trust => 
+                          trust.name.toLowerCase().includes(trustSearchQuery.toLowerCase()) ||
+                          trust.description?.toLowerCase().includes(trustSearchQuery.toLowerCase()) ||
+                          trust.purpose?.toLowerCase().includes(trustSearchQuery.toLowerCase())
+                        ).map((trust) => {
+                          const icons = ['💼', '🌾', '🏢', '💻', '👩‍💼', '🚀'];
+                          const icon = icons[Math.floor(Math.random() * icons.length)];
+                          
+                          return (
+                            <button
+                              key={trust.id}
+                              onClick={() => handleViewTrustDetails(trust)}
+                              className="glass-card p-4 border border-white/10 hover:border-blue-500/50 transition-all group cursor-pointer flex items-center gap-3 hover:bg-white/5"
+                            >
+                              <div className="text-3xl flex-shrink-0">{icon}</div>
+                              <div className="text-left flex-1 min-w-0">
+                                <h4 className="text-white font-semibold group-hover:text-blue-300 transition-colors truncate">
+                                  {trust.name}
+                                </h4>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Statistics Overview */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="glass-card p-4 border border-blue-500/30">
+                  <div className="text-3xl mb-2">👥</div>
+                  <p className="text-gray-400 text-sm">Total Members</p>
+                  <p className="text-white font-bold text-2xl">{trustStats.totalMembers || 0}</p>
+                </div>
+                
+                <div className="glass-card p-4 border border-emerald-500/30">
+                  <div className="text-3xl mb-2">💰</div>
+                  <p className="text-gray-400 text-sm">Total Pooled</p>
+                  <p className="text-white font-bold text-2xl">UGX {Math.floor(trustStats.totalPooled / 1000000)}M</p>
+                </div>
+                
+                <div className="glass-card p-4 border border-purple-500/30">
+                  <div className="text-3xl mb-2">📈</div>
+                  <p className="text-gray-400 text-sm">Avg Returns</p>
+                  <p className="text-emerald-400 font-bold text-2xl">+{trustStats.avgReturns}%</p>
+                </div>
+                
+                <div className="glass-card p-4 border border-yellow-500/30">
+                  <div className="text-3xl mb-2">🎯</div>
+                  <p className="text-gray-400 text-sm">Loans Issued</p>
+                  <p className="text-white font-bold text-2xl">{trustStats.loansIssued || 0}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Explore Tab */}
+          {trustSubTab === 'explore' && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                <Users className="w-5 h-5 text-blue-400" />
+                Available Trusts to Join
+              </h3>
+              
+              {publicTrusts.length === 0 ? (
+                <div className="glass-card p-8 text-center border border-blue-500/20">
+                  <p className="text-gray-400">No public trusts available</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {publicTrusts.map((trust) => {
+                    const icons = ['💻', '👩‍💼', '🚀', '💼', '🌾'];
+                    const icon = icons[Math.floor(Math.random() * icons.length)];
+                    
+                    return (
+                      <div key={trust.id} className="glass-card p-4 border border-blue-500/30 hover:border-blue-500/60 transition-colors">
+                        <div className="text-3xl mb-3">{icon}</div>
+                        <h4 className="text-white font-semibold mb-2">{trust.name}</h4>
+                        <p className="text-xs text-gray-400 mb-3 line-clamp-2">{trust.description}</p>
+                        <div className="space-y-2 text-sm mb-4">
+                          <p className="text-gray-400">Members: <span className="text-blue-300">{trust.member_count || 0}</span></p>
+                          <p className="text-gray-400">Contribution: <span className="text-blue-300">UGX {parseFloat(trust.monthly_contribution || 0).toLocaleString()}</span></p>
+                        </div>
+                        <button
+                          onClick={() => handleJoinTrust(trust.id, trust.name)}
+                          disabled={joiningTrustId === trust.id || joinedTrusts.has(trust.id) || userTrusts.some(t => t.id === trust.id)}
+                          className={`w-full px-3 py-2 rounded text-sm font-medium transition-all ${
+                            joinedTrusts.has(trust.id) || userTrusts.some(t => t.id === trust.id)
+                              ? 'bg-emerald-500/20 text-emerald-300 cursor-default'
+                              : joiningTrustId === trust.id
+                              ? 'bg-blue-500/40 text-blue-300 cursor-wait'
+                              : 'bg-blue-500/20 hover:bg-blue-500/40 text-blue-300 cursor-pointer'
+                          }`}
+                        >
+                          {joiningTrustId === trust.id ? 'Joining...' : joinedTrusts.has(trust.id) || userTrusts.some(t => t.id === trust.id) ? '✓ Joined' : 'Join SACCO'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Create Tab */}
+          {trustSubTab === 'create' && (
+            <div className="space-y-6">
+              <div className="glass-card p-6 border border-emerald-500/30">
+                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                  <Plus className="w-5 h-5 text-emerald-400" />
+                  Create New SACCO
+                </h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-gray-300 text-sm font-medium">SACCO Name</label>
+                    <input 
+                      type="text" 
+                      placeholder="Enter SACCO name"
+                      value={createFormData.name}
+                      onChange={(e) => setCreateFormData({...createFormData, name: e.target.value})}
+                      className="w-full mt-1 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:border-emerald-500 outline-none" 
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="text-gray-300 text-sm font-medium">Description</label>
+                    <textarea 
+                      placeholder="What is your SACCO about?"
+                      rows="4"
+                      value={createFormData.description}
+                      onChange={(e) => setCreateFormData({...createFormData, description: e.target.value})}
+                      className="w-full mt-1 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:border-emerald-500 outline-none"
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-gray-300 text-sm font-medium">Min. Contribution (UGX)</label>
+                      <input 
+                        type="number" 
+                        placeholder="e.g., 50000"
+                        value={createFormData.minContribution}
+                        onChange={(e) => setCreateFormData({...createFormData, minContribution: e.target.value})}
+                        className="w-full mt-1 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:border-emerald-500 outline-none" 
+                      />
+                    </div>
+                    <div>
+                      <label className="text-gray-300 text-sm font-medium">Contribution Period</label>
+                      <select 
+                        value={createFormData.period}
+                        onChange={(e) => setCreateFormData({...createFormData, period: e.target.value})}
+                        className="w-full mt-1 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:border-emerald-500 outline-none"
+                      >
+                        <option value="monthly">Monthly</option>
+                        <option value="quarterly">Quarterly</option>
+                        <option value="annually">Annually</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <button 
+                    onClick={handleCreateTrust}
+                    disabled={creatingTrust}
+                    className="w-full px-4 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:from-gray-500 disabled:to-gray-600 text-white rounded-lg font-medium transition-all"
+                  >
+                    {creatingTrust ? 'Creating SACCO...' : 'Create SACCO'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Dashboard Tab */}
+          {trustSubTab === 'dashboard' && (
+            <div className="space-y-6">
+              {/* Statistics Overview */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="glass-card p-4 border border-blue-500/30">
+                  <div className="text-3xl mb-2">👥</div>
+                  <p className="text-gray-400 text-sm">Total Members</p>
+                  <p className="text-white font-bold text-2xl">{trustStats.totalMembers || 0}</p>
+                </div>
+                
+                <div className="glass-card p-4 border border-emerald-500/30">
+                  <div className="text-3xl mb-2">💰</div>
+                  <p className="text-gray-400 text-sm">Total Pooled</p>
+                  <p className="text-white font-bold text-2xl">UGX {Math.floor(trustStats.totalPooled / 1000000)}M</p>
+                </div>
+                
+                <div className="glass-card p-4 border border-purple-500/30">
+                  <div className="text-3xl mb-2">📈</div>
+                  <p className="text-gray-400 text-sm">Avg Returns</p>
+                  <p className="text-emerald-400 font-bold text-2xl">+{trustStats.avgReturns}%</p>
+                </div>
+                
+                <div className="glass-card p-4 border border-yellow-500/30">
+                  <div className="text-3xl mb-2">🎯</div>
+                  <p className="text-gray-400 text-sm">Loans Issued</p>
+                  <p className="text-white font-bold text-2xl">{trustStats.loansIssued || 0}</p>
+                </div>
+              </div>
+
+              {/* Recent Activity */}
+        <div className="glass-card p-6">
+          <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <Clock className="w-5 h-5 text-yellow-400" />
+            Recent Activity
+          </h3>
+          
+          <div className="space-y-3">
+            {dashboardLoading ? (
+              <p className="text-gray-400 text-center py-4">Loading activity...</p>
+            ) : dashboardActivity.length === 0 ? (
+              <p className="text-gray-400 text-center py-4">No recent activity</p>
+            ) : (
+              dashboardActivity.map((activity) => (
+                <div key={activity.id} className="p-3 rounded-lg bg-white/5 border border-white/5 hover:border-blue-500/30 transition-colors">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <p className="text-white font-medium text-sm">{activity.action}</p>
+                      <p className="text-xs text-gray-400">{activity.user}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-blue-300 font-semibold text-sm">{activity.amount}</p>
+                      <p className="text-xs text-gray-500">{activity.time}</p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+              </div>
+
+              {/* Loan Opportunities */}
+              <div className="glass-card p-6 border border-purple-500/30">
+                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                  <Target className="w-5 h-5 text-purple-400" />
+                  Loan Opportunities
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[
+                    { name: 'Business Growth Fund', available: 'UGX 5M', rate: '8% p.a.', term: '12 months' },
+                    { name: 'Agriculture Cooperative', available: 'UGX 10M', rate: '6% p.a.', term: '18 months' }
+                  ].map((loan, idx) => (
+                    <div key={idx} className="p-4 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                      <p className="text-white font-medium mb-2">{loan.name}</p>
+                      <div className="text-sm text-gray-400 space-y-1 mb-3">
+                        <p>Available: <span className="text-purple-300">{loan.available}</span></p>
+                        <p>Interest Rate: <span className="text-purple-300">{loan.rate}</span></p>
+                        <p>Term: <span className="text-purple-300">{loan.term}</span></p>
+                      </div>
+                      <button className="w-full px-3 py-2 bg-purple-500/20 hover:bg-purple-500/40 text-purple-300 rounded text-sm font-medium transition-colors">
+                        Apply for Loan
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Voting & Approvals */}
+              <div className="glass-card p-6 border border-cyan-500/30">
+                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                  <Vote className="w-5 h-5 text-cyan-400" />
+                  Pending Approvals & Votes
+                </h3>
+                
+                <div className="space-y-3">
+                  {[
+                    { item: 'Loan Application - Sarah M.', type: 'Voting', progress: 65, votes: '13/20' },
+                    { item: 'New Member Application - James K.', type: 'Approval Pending', progress: 45, votes: 'Admin Review' }
+                  ].map((approval, idx) => (
+                    <div key={idx} className="p-4 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <p className="text-white font-medium">{approval.item}</p>
+                          <p className="text-xs text-gray-400">{approval.type}</p>
+                        </div>
+                        <span className="text-cyan-300 text-sm">{approval.votes}</span>
+                      </div>
+                      <div className="w-full bg-white/10 rounded-full h-2">
+                        <div 
+                          className="bg-gradient-to-r from-cyan-500 to-blue-500 h-2 rounded-full transition-all"
+                          style={{ width: `${approval.progress}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Trust Details Modal */}
+        {selectedTrust && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="glass-card p-8 border border-blue-500/30 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="flex items-start justify-between mb-6">
+                <div>
+                  <h2 className="text-3xl font-bold text-white mb-2">{selectedTrust.name}</h2>
+                  <p className="text-gray-400">{selectedTrust.description}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setSelectedTrust(null);
+                    setTrustMembers([]);
+                    setContributionAmount('');
+                  }}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="bg-white/5 p-4 rounded-lg border border-white/10">
+                  <p className="text-gray-400 text-sm">Members</p>
+                  <p className="text-2xl font-bold text-white">{selectedTrust.member_count || 0}</p>
+                </div>
+                <div className="bg-white/5 p-4 rounded-lg border border-white/10">
+                  <p className="text-gray-400 text-sm">Monthly Contribution</p>
+                  <p className="text-2xl font-bold text-blue-300">UGX {parseFloat(selectedTrust.monthly_contribution).toLocaleString()}</p>
+                </div>
+                <div className="bg-white/5 p-4 rounded-lg border border-white/10">
+                  <p className="text-gray-400 text-sm">Status</p>
+                  <p className="text-2xl font-bold text-emerald-400">{selectedTrust.status}</p>
+                </div>
+                <div className="bg-white/5 p-4 rounded-lg border border-white/10">
+                  <p className="text-gray-400 text-sm">Purpose</p>
+                  <p className="text-lg font-bold text-purple-300">{selectedTrust.purpose?.slice(0, 30)}...</p>
+                </div>
+              </div>
+
+              {/* Make Contribution Section */}
+              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4 mb-6">
+                <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
+                  <DollarSign className="w-5 h-5 text-emerald-400" />
+                  Make a Contribution
+                </h3>
+                <div className="flex gap-3">
+                  <input
+                    type="number"
+                    placeholder="Enter amount in UGX"
+                    value={contributionAmount}
+                    onChange={(e) => setContributionAmount(e.target.value)}
+                    className="flex-1 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:border-emerald-500 outline-none"
+                  />
+                  <button
+                    onClick={() => handleMakeContribution(selectedTrust.id)}
+                    disabled={contributingTrustId === selectedTrust.id}
+                    className="px-6 py-2 bg-emerald-500/20 hover:bg-emerald-500/40 disabled:bg-gray-500/20 text-emerald-300 rounded font-medium transition-colors"
+                  >
+                    {contributingTrustId === selectedTrust.id ? 'Processing...' : 'Contribute'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Members List */}
+              <div>
+                <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
+                  <Users className="w-5 h-5 text-blue-400" />
+                  Active Members ({trustMembers.length})
+                </h3>
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {trustMembers.length > 0 ? (
+                    trustMembers.map((member, idx) => (
+                      <div key={idx} className="bg-white/5 p-3 rounded-lg border border-white/10 flex justify-between items-center">
+                        <div>
+                          <p className="text-white font-medium">{member.profiles?.name || 'Anonymous'}</p>
+                          <p className="text-xs text-gray-400">{member.profiles?.email || 'No email'}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-emerald-400 text-sm font-medium">Joined</p>
+                          <p className="text-xs text-gray-400">{new Date(member.joined_at).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-gray-400 text-sm">No members data available</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setBoardroomTrustId(selectedTrust.id)}
+                  className="flex-1 px-4 py-2 bg-blue-500/20 hover:bg-blue-500/40 text-blue-300 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                >
+                  <Video className="w-4 h-4" />
+                  Start Boardroom
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedTrust(null);
+                    setTrustMembers([]);
+                    setContributionAmount('');
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-500/20 hover:bg-gray-500/40 text-gray-300 rounded-lg font-medium transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Boardroom Modal */}
+        {boardroomTrustId && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[60] p-4">
+            <div className="w-full h-[90vh] max-w-6xl bg-slate-900 rounded-lg border border-slate-700 flex flex-col">
+              <div className="flex items-center justify-between p-4 border-b border-slate-700 bg-slate-800/50">
+                <div className="flex items-center gap-3">
+                  <Video className="w-6 h-6 text-red-400" />
+                  <h2 className="text-xl font-bold text-white">
+                    {userTrusts.find(t => t.id === boardroomTrustId)?.name} - Live Boardroom
+                  </h2>
+                </div>
+                <button
+                  onClick={() => setBoardroomTrustId(null)}
+                  className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-gray-400 hover:text-white"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <LiveBoardroom
+                  groupId={boardroomTrustId}
+                  groupName={userTrusts.find(t => t.id === boardroomTrustId)?.name}
+                  members={trustMembers}
+                />
+              </div>
             </div>
           </div>
         )}
       </div>
-    </div>
-  );
+      </>
+    );
+  };
 
-  const renderGrowthMandate = () => (
-    <div className="space-y-6">
-      <div className="glass-card p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <TrendingUp className="w-6 h-6 text-purple-400" />
-          <h2 className="text-xl font-semibold text-white">Prosperity Architect</h2>
-        </div>
+  const renderShare = () => {
+    const tabs = [
+      { id: 'available', label: '🎬 Available', icon: '🎥' },
+      { id: 'my-pitches', label: '🎤 My Pitches', icon: '📹' },
+      { id: 'pending', label: '⏳ Pending Votes', icon: '🗳️' }
+    ];
 
-        <div className="mb-4">
-          <p className="text-gray-300 mb-4">
-            Optimize your schedule for maximum value creation while maintaining spiritual and physical alignment.
-          </p>
+    return (
+      <div className="space-y-6">
+        {/* Header with Create Button */}
+        <div className="glass-card p-4 lg:p-6 border border-pink-500/30 relative overflow-hidden">
+          {/* Background gradient */}
+          <div className="absolute inset-0 bg-gradient-to-r from-pink-500/5 via-transparent to-purple-500/5 pointer-events-none" />
           
-          <button
-            onClick={optimizeSchedule}
-            disabled={isLoading}
-            className="w-full py-3 bg-purple-500 hover:bg-purple-600 disabled:bg-gray-600 text-white rounded-lg transition-colors font-medium"
-          >
-            {isLoading ? 'Optimizing Schedule...' : 'Optimize Daily Schedule'}
-          </button>
+          <div className="relative z-10">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+              {/* Title Section */}
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 lg:w-12 lg:h-12 bg-gradient-to-br from-pink-500 to-purple-500 rounded-lg flex items-center justify-center shadow-lg">
+                  <Video className="w-5 h-5 lg:w-6 lg:h-6 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl lg:text-2xl font-bold bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text text-transparent">Pitchin</h2>
+                  <p className="text-xs lg:text-sm text-gray-400">Share your vision, connect with investors</p>
+                </div>
+              </div>
+
+              {/* Create Pitch Buttons - Moved to Icons Row Below Video */}
+              {/* COMMENTED OUT - Moved to horizontal icons row below video player */}
+            </div>
+          </div>
         </div>
 
-        {scheduleData && (
-          <div className="space-y-4">
-            <div className="bg-purple-500 bg-opacity-20 border border-purple-500 border-opacity-30 rounded-lg p-4">
-              <h3 className="text-purple-400 font-semibold mb-2">Optimization Score</h3>
-              <div className="text-2xl font-bold text-white">
-                {Math.round(scheduleData.optimizationScore)}%
+        {/* Tab Navigation */}
+        <div className="glass-card p-3 lg:p-4 border border-white/10 overflow-x-auto">
+          <div className="flex gap-2 min-w-max lg:min-w-0">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setShareSubTab(tab.id)}
+                className={`px-3 lg:px-4 py-2 rounded-lg whitespace-nowrap transition-all font-medium flex items-center gap-2 text-sm lg:text-base ${
+                  shareSubTab === tab.id
+                    ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-lg shadow-pink-500/30'
+                    : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                }`}
+              >
+                <span>{tab.icon}</span>
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        <div className="space-y-3 lg:space-y-6">
+          {/* Available Pitches - Maximized Video Feed */}
+          {shareSubTab === 'available' && (
+            pitchinLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader className="w-8 h-8 text-pink-500 animate-spin" />
+                <span className="ml-3 text-gray-400">Loading pitches...</span>
+              </div>
+            ) : pitchinPitches.length === 0 ? (
+              <div className="text-center py-12 px-4">
+                <Video className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+                <p className="text-gray-400 font-medium">No pitches available yet</p>
+                <p className="text-gray-500 text-sm">Check back soon for new opportunities to invest</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4 auto-rows-max">
+                {/* Main Video Player - Full width on mobile, 3 cols on desktop */}
+                <div className="md:col-span-2 lg:col-span-3 space-y-2 lg:space-y-4">
+                  <div className="glass-card p-0 border border-pink-500/30 overflow-hidden rounded-lg relative">
+                    {selectedPitchForPlay ? (
+                      <>
+                        {/* Video Container - Responsive Aspect Ratio */}
+                        <div className="relative bg-black w-full" style={{ aspectRatio: '16/9', minHeight: '250px', maxHeight: 'calc(100vh - 400px)' }}>
+                          {selectedPitchForPlay.video_url ? (
+                            <video
+                              src={selectedPitchForPlay.video_url}
+                              className="w-full h-full object-cover"
+                              controls
+                              crossOrigin="anonymous"
+                            />
+                          ) : (
+                            <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-black/60 flex items-center justify-center">
+                              <AlertCircle className="w-12 h-12 text-gray-500" />
+                              <p className="text-gray-400 ml-3">Video unavailable</p>
+                            </div>
+                          )}
+
+                          {/* Info Icon - Top Right (Responsive) */}
+                          <button
+                            onClick={() => setExpandedPitchInfo(expandedPitchInfo === selectedPitchForPlay?.id ? null : selectedPitchForPlay?.id)}
+                            className="absolute top-2 lg:top-3 right-2 lg:right-3 p-1.5 lg:p-2 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/20 text-white transition-all z-20 hover:scale-110"
+                            title="View pitch details"
+                          >
+                            <FileText className="w-4 h-4 lg:w-5 lg:h-5" />
+                          </button>
+
+                          {/* Info Dropdown - Mobile optimized */}
+                          {expandedPitchInfo === selectedPitchForPlay?.id && (
+                            <div className="absolute top-12 lg:top-14 right-2 lg:right-3 w-[calc(100vw-32px)] md:w-96 lg:w-80 bg-slate-900/95 backdrop-blur-md border border-slate-600/50 rounded-lg p-3 lg:p-4 z-30 shadow-2xl max-h-96 overflow-y-auto">
+                              {/* Pitch Title */}
+                              <div className="mb-3 lg:mb-4 pb-3 lg:pb-4 border-b border-slate-600/30">
+                                <h4 className="text-white font-bold text-base lg:text-lg">{selectedPitchForPlay.title}</h4>
+                                <p className="text-xs text-gray-400 mt-1">{selectedPitchForPlay.business_profiles?.business_name || 'Unknown'}</p>
+                              </div>
+
+                              {/* Company Status & Category Grid - Mobile responsive */}
+                              <div className="grid grid-cols-2 gap-2 mb-3 lg:mb-4">
+                                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded p-2">
+                                  <p className="text-xs text-gray-400">Status</p>
+                                  <p className="text-white font-bold text-xs lg:text-sm">
+                                    {selectedPitchForPlay.status === 'published' ? '🟢' : '🟡'}
+                                  </p>
+                                </div>
+                                <div className="bg-blue-500/10 border border-blue-500/30 rounded p-2">
+                                  <p className="text-xs text-gray-400">Category</p>
+                                  <p className="text-white font-bold text-xs line-clamp-1">{selectedPitchForPlay.category || 'Business'}</p>
+                                </div>
+                              </div>
+
+                              {/* Description */}
+                              <div className="mb-3 lg:mb-4 pb-3 lg:pb-4 border-b border-slate-600/30">
+                                <p className="text-xs text-gray-300 line-clamp-3">{selectedPitchForPlay.description}</p>
+                              </div>
+
+                              {/* Pitch Quality Progress */}
+                              <div className="mb-3 lg:mb-4">
+                                <div className="flex justify-between items-center mb-1">
+                                  <span className="text-xs font-semibold text-white">Quality</span>
+                                  <span className="text-xs lg:text-sm font-bold text-emerald-400">{selectedPitchForPlay.equity_offering || 0}%</span>
+                                </div>
+                                <div className="w-full bg-white/10 rounded-full h-1.5 lg:h-2">
+                                  <div 
+                                    className="bg-gradient-to-r from-emerald-500 to-green-500 h-1.5 lg:h-2 rounded-full"
+                                    style={{ width: `${(selectedPitchForPlay.equity_offering || 0)}%` }}
+                                  />
+                                </div>
+                                <p className="text-xs text-gray-400 mt-1">Equity: {selectedPitchForPlay.equity_offering || 0}%</p>
+                              </div>
+
+                              {/* Key Metrics - Compact on mobile */}
+                              <div className="grid grid-cols-3 gap-1 mb-3 lg:mb-4 pb-3 lg:pb-4 border-b border-slate-600/30">
+                                <div className="text-center bg-slate-800/50 rounded p-1.5 lg:p-2">
+                                  <p className="text-xs lg:text-sm font-bold text-pink-400">${(selectedPitchForPlay.target_funding / 1000000).toFixed(1)}M</p>
+                                  <p className="text-xs text-gray-400">Seeking</p>
+                                </div>
+                                <div className="text-center bg-slate-800/50 rounded p-1.5 lg:p-2">
+                                  <p className="text-xs lg:text-sm font-bold text-blue-400">${(selectedPitchForPlay.raised_amount / 1000000).toFixed(1)}M</p>
+                                  <p className="text-xs text-gray-400">Raised</p>
+                                </div>
+                                <div className="text-center bg-slate-800/50 rounded p-1.5 lg:p-2">
+                                  <p className="text-sm font-bold text-purple-400">{selectedPitchForPlay.views_count || 0}</p>
+                                  <p className="text-xs text-gray-400">Views</p>
+                                </div>
+                              </div>
+
+                              {/* NDA Status */}
+                              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded p-2 mb-4">
+                                <p className="text-xs text-yellow-300 font-semibold mb-2">📋 NDA Status</p>
+                                <p className="text-xs text-gray-300 mb-2">
+                                  {selectedPitchForPlay?.id && signedNDA.has(selectedPitchForPlay.id) 
+                                    ? '✓ NDA Signed - Financial details unlocked' 
+                                    : 'Sign NDA to view financial details'}
+                                </p>
+                                <button 
+                                  onClick={() => {
+                                    if (selectedPitchForPlay?.id) {
+                                      setSignedNDA(new Set([...signedNDA, selectedPitchForPlay.id]));
+                                    }
+                                  }}
+                                  className="w-full px-2 py-1 bg-yellow-500/20 hover:bg-yellow-500/40 text-yellow-300 rounded text-xs font-medium transition-all"
+                                >
+                                  {selectedPitchForPlay?.id && signedNDA.has(selectedPitchForPlay.id) ? '✓ NDA Signed' : 'Sign NDA'}
+                                </button>
+                              </div>
+
+                              {/* CTA Buttons */}
+                              <div className="flex gap-2">
+                                <button className="flex-1 px-3 py-2 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white rounded text-xs font-medium transition-all">
+                                  💰 Invest
+                                </button>
+                                <button className="flex-1 px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded text-xs font-medium transition-all">
+                                  Share
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    ) : pitchinPitches.length > 0 ? (
+                      <div 
+                        className="relative bg-black w-full cursor-pointer" 
+                        style={{ aspectRatio: '16/9', minHeight: '300px' }}
+                        onClick={() => setSelectedPitchForPlay(pitchinPitches[0])}
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-black/60" />
+                        <div className="absolute inset-0 flex items-center justify-center flex-col gap-4">
+                          <Play className="w-20 h-20 text-pink-400 opacity-70 hover:opacity-100 transition-opacity" />
+                          <p className="text-white text-lg font-semibold text-center px-4">{pitchinPitches[0]?.title}</p>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {/* Icons Row - Horizontal Layout Below Video */}
+                  <div className="flex items-center justify-start gap-2 lg:gap-3 py-2 flex-wrap">
+                    {/* Record Camera Button */}
+                    <div className="group relative">
+                      <button
+                        onClick={isVideoRecording ? stopVideoRecording : startVideoRecording}
+                        className="w-10 h-10 bg-gradient-to-br from-red-500 to-pink-600 rounded-lg flex items-center justify-center hover:shadow-lg hover:shadow-red-500/50 transition-all transform hover:scale-110 active:scale-95 border border-red-400/50"
+                        title={isVideoRecording ? "Stop Recording" : "Record Pitch with Camera"}
+                      >
+                        <Video className={`w-5 h-5 text-white ${isVideoRecording ? 'animate-pulse' : ''}`} />
+                      </button>
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                        <div className="bg-slate-900 border border-red-500/40 rounded-lg px-3 py-2 whitespace-nowrap text-xs text-white shadow-lg">
+                          {isVideoRecording ? '⏹️ Stop Recording' : '🎥 Record Pitch'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Upload Video Button */}
+                    <div className="group relative">
+                      <input
+                        type="file"
+                        accept="video/*"
+                        className="hidden"
+                        id="pitchin-video-upload"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            // Handle file upload - can be extended with actual upload logic
+                            console.log('Video file selected:', file.name);
+                            alert(`Video selected: ${file.name}\nUpload functionality can be implemented here`);
+                          }
+                        }}
+                      />
+                      <label
+                        htmlFor="pitchin-video-upload"
+                        className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center hover:shadow-lg hover:shadow-blue-500/50 transition-all transform hover:scale-110 active:scale-95 border border-blue-400/50 cursor-pointer block"
+                        title="Upload Existing Video"
+                      >
+                        <Upload className="w-5 h-5 text-white" />
+                      </label>
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                        <div className="bg-slate-900 border border-blue-500/40 rounded-lg px-3 py-2 whitespace-nowrap text-xs text-white shadow-lg">
+                          📤 Upload Video
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Create Button */}
+                    <div className="group relative">
+                      <button
+                        onClick={() => {
+                          // This can be extended to open a full create pitch form/modal
+                          alert('Create Pitch: Opens full pitch creation form\nCan integrate with video from camera or upload');
+                        }}
+                        className="h-10 px-3 bg-gradient-to-r from-pink-500 to-purple-600 rounded-lg flex items-center gap-1 hover:shadow-lg hover:shadow-pink-500/50 transition-all transform hover:scale-110 active:scale-95 border border-pink-400/50 text-white font-semibold text-xs"
+                        title="Create New Pitch"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Create</span>
+                      </button>
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                        <div className="bg-slate-900 border border-pink-500/40 rounded-lg px-3 py-2 whitespace-nowrap text-xs text-white shadow-lg">
+                          ✨ Create New
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Separator */}
+                    <div className="w-px h-6 bg-slate-700/50 mx-1"></div>
+
+                    {/* Business Profile Icon */}
+                    {selectedPitchForPlay?.business_profiles ? (
+                      <div className="group relative">
+                        <button
+                          onClick={() => setExpandedBusinessProfile(!expandedBusinessProfile)}
+                          className="w-10 h-10 lg:w-12 lg:h-12 bg-gradient-to-br from-purple-500 to-pink-500 border border-purple-500/50 rounded-lg flex items-center justify-center hover:border-purple-500/80 hover:shadow-lg hover:shadow-purple-500/50 transition-all transform hover:scale-110 active:scale-95"
+                          title="Click to view business profile"
+                        >
+                          <Building className="w-5 h-5 lg:w-6 lg:h-6 text-white" />
+                          {selectedPitchForPlay?.business_profiles?.verification_status === 'verified' && (
+                            <span className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full flex items-center justify-center text-white text-xs font-bold border border-slate-900">✓</span>
+                          )}
+                        </button>
+                        
+                        {/* Tooltip on Hover */}
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                          <div className="bg-slate-900 border border-purple-500/40 rounded-lg p-2 w-40 text-center shadow-lg text-xs">
+                            <p className="text-purple-300 font-bold">{selectedPitchForPlay?.business_profiles?.business_name}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="w-10 h-10 lg:w-12 lg:h-12 bg-slate-700/30 border border-slate-700/50 rounded-lg flex items-center justify-center">
+                        <Building className="w-5 h-5 lg:w-6 lg:h-6 text-slate-600" />
+                      </div>
+                    )}
+
+                    {/* Feature 1: Escrow Vault */}
+                    <div className="group relative">
+                      <button 
+                        onClick={() => setShowEscrowModal(true)}
+                        className="w-10 h-10 bg-emerald-500/20 border border-emerald-500/40 rounded-lg flex items-center justify-center hover:bg-emerald-500/40 hover:border-emerald-500/60 transition-all transform hover:scale-110 active:scale-95"
+                        title="Escrow Vault - Safety"
+                      >
+                        <Lock className="w-5 h-5 text-emerald-400" />
+                      </button>
+                      {/* Tooltip on hover */}
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                        <div className="bg-slate-900 border border-emerald-500/40 rounded-lg p-3 w-48 text-center shadow-lg">
+                          <p className="text-xs font-bold text-emerald-300 mb-1">🛡️ Escrow Vault</p>
+                          <p className="text-xs text-gray-300">Money held safely until buyer confirms receipt of certificates</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Feature 2: Digital SPA Generator */}
+                    <div className="group relative">
+                      <button 
+                        onClick={() => setShowSPAModal(true)}
+                        className="w-10 h-10 bg-blue-500/20 border border-blue-500/40 rounded-lg flex items-center justify-center hover:bg-blue-500/40 hover:border-blue-500/60 transition-all transform hover:scale-110 active:scale-95"
+                        title="Digital SPA Generator - How It Works"
+                      >
+                        <FileText className="w-5 h-5 text-blue-400" />
+                      </button>
+                      {/* Tooltip on hover */}
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                        <div className="bg-slate-900 border border-blue-500/40 rounded-lg p-3 w-48 text-center shadow-lg">
+                          <p className="text-xs font-bold text-blue-300 mb-1">⚙️ Digital SPA</p>
+                          <p className="text-xs text-gray-300">Auto-generates & manages share agreements digitally</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Feature 3: KYC Verification */}
+                    <div className="group relative">
+                      <button 
+                        onClick={() => setShowKYCModal(true)}
+                        className="w-10 h-10 bg-pink-500/20 border border-pink-500/40 rounded-lg flex items-center justify-center hover:bg-pink-500/40 hover:border-pink-500/60 transition-all transform hover:scale-110 active:scale-95"
+                        title="KYC Verification - Safety"
+                      >
+                        <Shield className="w-5 h-5 text-pink-400" />
+                      </button>
+                      {/* Tooltip on hover */}
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                        <div className="bg-slate-900 border border-pink-500/40 rounded-lg p-3 w-48 text-center shadow-lg">
+                          <p className="text-xs font-bold text-pink-300 mb-1">🔐 KYC Verification</p>
+                          <p className="text-xs text-gray-300">Government ID verification prevents fraud & scams</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Feature 4: Policies */}
+                    <div className="group relative">
+                      <button 
+                        onClick={() => setShowPoliciesModal(true)}
+                        className="w-10 h-10 bg-amber-500/20 border border-amber-500/40 rounded-lg flex items-center justify-center hover:bg-amber-500/40 hover:border-amber-500/60 transition-all transform hover:scale-110 active:scale-95"
+                        title="View Policies"
+                      >
+                        <FileText className="w-5 h-5 text-amber-400" />
+                      </button>
+                      {/* Tooltip on hover */}
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                        <div className="bg-slate-900 border border-amber-500/40 rounded-lg p-3 w-48 text-center shadow-lg">
+                          <p className="text-xs font-bold text-amber-300 mb-1">📋 Policies</p>
+                          <p className="text-xs text-gray-300">Read and review investment policies</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Feature 5: Sign Document */}
+                    <div className="group relative">
+                      <button 
+                        onClick={() => setShowSignModal(true)}
+                        className={`w-10 h-10 bg-violet-500/20 border border-violet-500/40 rounded-lg flex items-center justify-center hover:bg-violet-500/40 hover:border-violet-500/60 transition-all transform hover:scale-110 active:scale-95 ${
+                          selectedPitchForPlay?.id && signedNDA.has(selectedPitchForPlay.id) ? 'ring-2 ring-violet-500 bg-violet-500/40' : ''
+                        }`}
+                        title={signedNDA.has(selectedPitchForPlay?.id) ? "Signed" : "Sign Agreement"}
+                      >
+                        <CheckCircle className={`w-5 h-5 ${signedNDA.has(selectedPitchForPlay?.id) ? 'text-green-400' : 'text-violet-400'}`} />
+                      </button>
+                      {/* Tooltip on hover */}
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                        <div className="bg-slate-900 border border-violet-500/40 rounded-lg p-3 w-48 text-center shadow-lg">
+                          <p className="text-xs font-bold text-violet-300 mb-1">✍️ Sign Agreement</p>
+                          <p className="text-xs text-gray-300">Digitally sign investment agreements</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Feature 6: First Read */}
+                    <div className="group relative">
+                      <button 
+                        onClick={() => setShowFirstReadModal(true)}
+                        className="w-10 h-10 bg-indigo-500/20 border border-indigo-500/40 rounded-lg flex items-center justify-center hover:bg-indigo-500/40 hover:border-indigo-500/60 transition-all transform hover:scale-110 active:scale-95"
+                        title="First Read - Document Review"
+                      >
+                        <Eye className="w-5 h-5 text-indigo-400" />
+                      </button>
+                      {/* Tooltip on hover */}
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                        <div className="bg-slate-900 border border-indigo-500/40 rounded-lg p-3 w-48 text-center shadow-lg">
+                          <p className="text-xs font-bold text-indigo-300 mb-1">👁️ First Read</p>
+                          <p className="text-xs text-gray-300">Review key documents before investing</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Feature 7: Live Boardroom */}
+                    <div className="group relative">
+                      <button 
+                        onClick={() => {
+                          // Open live boardroom for trust groups
+                          if (selectedTrust?.id) {
+                            setBoardroomTrustId(selectedTrust.id);
+                          } else if (userTrusts.length > 0) {
+                            setBoardroomTrustId(userTrusts[0].id);
+                          } else {
+                            alert('No trust group selected. Please select a trust group first.');
+                          }
+                        }}
+                        className="w-10 h-10 bg-cyan-500/20 border border-cyan-500/40 rounded-lg flex items-center justify-center hover:bg-cyan-500/40 hover:border-cyan-500/60 transition-all transform hover:scale-110 active:scale-95"
+                        title="Live Boardroom"
+                      >
+                        <Users className="w-5 h-5 text-cyan-400" />
+                      </button>
+                      {/* Tooltip on hover */}
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                        <div className="bg-slate-900 border border-cyan-500/40 rounded-lg p-3 w-48 text-center shadow-lg">
+                          <p className="text-xs font-bold text-cyan-300 mb-1">🎥 Live Boardroom</p>
+                          <p className="text-xs text-gray-300">Join live boardroom meeting with trust members</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Feature 8: Import from Trust Groups - COMMENTED OUT
+                    <div className="group relative">
+                      <button 
+                        onClick={() => {
+                          // Show dialog to import from trust groups
+                          alert(`Available Trust Groups:\n\n${userTrusts.map(t => `• ${t.name}`).join('\n')}\n\nSelect a trust to import data`);
+                        }}
+                        className="w-10 h-10 bg-lime-500/20 border border-lime-500/40 rounded-lg flex items-center justify-center hover:bg-lime-500/40 hover:border-lime-500/60 transition-all transform hover:scale-110 active:scale-95"
+                        title="Import from Trust Groups"
+                      >
+                        <Download className="w-5 h-5 text-lime-400" />
+                      </button>
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                        <div className="bg-slate-900 border border-lime-500/40 rounded-lg p-3 w-48 text-center shadow-lg">
+                          <p className="text-xs font-bold text-lime-300 mb-1">📥 Import from Trust</p>
+                          <p className="text-xs text-gray-300">Import pitch data from your trust groups</p>
+                        </div>
+                      </div>
+                    </div>
+                    */}
+                  </div>
+                </div>
+
+                {/* Features Section - Below Video Player */}
+                <div className="lg:col-span-3 space-y-4">
+                  {/* Business Profile Modal - Full Details */}
+
+                  {/* Expanded Modal - Full Details */}
+                  {expandedBusinessProfile && selectedPitchForPlay?.business_profiles && (
+                    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4 lg:inset-auto lg:bottom-4 lg:right-4 lg:top-auto lg:fixed lg:w-96">
+                      <div className="glass-card border border-purple-500/40 rounded-lg overflow-y-auto max-h-[90vh] lg:max-h-[600px] w-full lg:w-96 animate-fade-in">
+                        {/* Header */}
+                        <div className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 border-b border-purple-500/20 p-4 flex items-start justify-between sticky top-0">
+                          <div className="flex-1">
+                            <h3 className="text-white font-bold text-lg">{selectedPitchForPlay?.business_profiles?.business_name}</h3>
+                            <p className="text-purple-300 text-xs">{selectedPitchForPlay?.business_profiles?.business_type}</p>
+                          </div>
+                          <button
+                            onClick={() => setExpandedBusinessProfile(false)}
+                            className="text-gray-400 hover:text-white transition p-1"
+                          >
+                            <X className="w-5 h-5" />
+                          </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="p-4 space-y-3">
+                          {/* Quick Stats */}
+                          <div className="grid grid-cols-2 gap-2">
+                            {selectedPitchForPlay?.target_funding && (
+                              <div className="bg-slate-800/50 rounded p-2 border border-slate-700/30">
+                                <p className="text-xs text-gray-500">Seeking</p>
+                                <p className="font-bold text-pink-400">${(selectedPitchForPlay?.target_funding / 1000000).toFixed(1)}M</p>
+                              </div>
+                            )}
+                            {selectedPitchForPlay?.raised_amount !== undefined && (
+                              <div className="bg-slate-800/50 rounded p-2 border border-slate-700/30">
+                                <p className="text-xs text-gray-500">Raised</p>
+                                <p className="font-bold text-blue-400">${(selectedPitchForPlay?.raised_amount / 1000000).toFixed(1)}M</p>
+                              </div>
+                            )}
+                            {selectedPitchForPlay?.status && (
+                              <div className="bg-slate-800/50 rounded p-2 border border-slate-700/30">
+                                <p className="text-xs text-gray-500">Status</p>
+                                <p className="font-bold text-emerald-400">{selectedPitchForPlay?.status === 'published' ? '🟢 Active' : '🟡 ' + selectedPitchForPlay?.status}</p>
+                              </div>
+                            )}
+                            {selectedPitchForPlay?.views_count !== undefined && (
+                              <div className="bg-slate-800/50 rounded p-2 border border-slate-700/30">
+                                <p className="text-xs text-gray-500">Views</p>
+                                <p className="font-bold text-purple-400">{(selectedPitchForPlay?.views_count || 0).toLocaleString()}</p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Funding Progress */}
+                          {selectedPitchForPlay?.target_funding && (
+                            <div className="space-y-1">
+                              <div className="flex justify-between items-center">
+                                <p className="text-xs font-semibold text-gray-400">Progress</p>
+                                <p className="text-xs font-bold text-pink-400">
+                                  {((selectedPitchForPlay?.raised_amount || 0) / (selectedPitchForPlay?.target_funding || 1) * 100).toFixed(0)}%
+                                </p>
+                              </div>
+                              <div className="w-full h-1.5 bg-slate-700/50 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-gradient-to-r from-pink-500 to-purple-500 transition-all duration-500"
+                                  style={{
+                                    width: `${Math.min(((selectedPitchForPlay?.raised_amount || 0) / (selectedPitchForPlay?.target_funding || 1) * 100), 100)}%`
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Description */}
+                          {(selectedPitchForPlay?.business_profiles?.description || selectedPitchForPlay?.description) && (
+                            <div>
+                              <p className="text-xs font-semibold text-gray-400 mb-1">About</p>
+                              <p className="text-xs text-gray-300">
+                                {selectedPitchForPlay?.business_profiles?.description || selectedPitchForPlay?.description}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Additional Info */}
+                          {(selectedPitchForPlay?.business_profiles?.founded_year || selectedPitchForPlay?.business_profiles?.business_address) && (
+                            <div className="grid grid-cols-2 gap-2 p-2 bg-slate-800/30 rounded border border-slate-700/30">
+                              {selectedPitchForPlay?.business_profiles?.founded_year && (
+                                <div className="text-xs">
+                                  <p className="text-gray-500">Founded</p>
+                                  <p className="font-semibold text-white">{selectedPitchForPlay?.business_profiles?.founded_year}</p>
+                                </div>
+                              )}
+                              {selectedPitchForPlay?.business_profiles?.business_address && (
+                                <div className="text-xs">
+                                  <p className="text-gray-500">Location</p>
+                                  <p className="font-semibold text-white line-clamp-1">{selectedPitchForPlay?.business_profiles?.business_address}</p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Co-Owners */}
+                          {selectedPitchForPlay?.business_profiles?.business_co_owners?.length > 0 && (
+                            <div>
+                              <p className="text-xs font-semibold text-gray-400 mb-2">Co-Owners</p>
+                              <div className="space-y-1 max-h-32 overflow-y-auto">
+                                {selectedPitchForPlay?.business_profiles?.business_co_owners.slice(0, 5).map((owner, idx) => (
+                                  <div key={idx} className="flex justify-between items-center p-1.5 bg-slate-800/30 rounded text-xs">
+                                    <div>
+                                      <p className="text-white font-medium">{owner.owner_name}</p>
+                                      <p className="text-gray-400">{owner.role || 'Co-Owner'}</p>
+                                    </div>
+                                    {owner.ownership_share && (
+                                      <span className="font-bold text-purple-300">{owner.ownership_share}%</span>
+                                    )}
+                                  </div>
+                                ))}
+                                {selectedPitchForPlay?.business_profiles?.business_co_owners.length > 5 && (
+                                  <p className="text-xs text-gray-500 text-center py-1">
+                                    +{selectedPitchForPlay?.business_profiles?.business_co_owners.length - 5} more
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Action Buttons */}
+                          <div className="flex flex-col gap-2 pt-2 border-t border-slate-700/30">
+                            <button className="w-full px-3 py-2 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white rounded text-xs font-semibold transition-all">
+                              💰 Invest Now
+                            </button>
+                            <button className="w-full px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded text-xs font-semibold transition-all border border-white/20">
+                              📤 Share
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <style>{`
+                    @keyframes fade-in {
+                      from {
+                        opacity: 0;
+                        transform: translateY(-10px);
+                      }
+                      to {
+                        opacity: 1;
+                        transform: translateY(0);
+                      }
+                    }
+                    .animate-fade-in {
+                      animation: fade-in 0.3s ease-out;
+                    }
+                  `}</style>
+                </div>
+
+                {/* Sidebar - All Pitches List */}
+                <div className="lg:col-span-1 space-y-2">
+                  <h3 className="text-white font-semibold text-sm px-1">📹 All Pitches</h3>
+                  <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
+                    {pitchinPitches.map((pitch, idx) => (
+                      <div
+                        key={pitch.id}
+                        onClick={() => setSelectedPitchForPlay(pitch)}
+                        className={`glass-card p-2 border rounded cursor-pointer group transition-all hover:scale-105 ${
+                          selectedPitchForPlay?.id === pitch.id
+                            ? 'border-pink-500 bg-pink-500/20 ring-2 ring-pink-500/50'
+                            : 'border-white/10 hover:border-pink-500/50'
+                        }`}
+                      >
+                        <div className="aspect-square bg-gradient-to-br from-purple-500 to-pink-500 rounded flex items-center justify-center mb-2 relative overflow-hidden">
+                          {pitch.video_url ? (
+                            <video 
+                              src={pitch.video_url} 
+                              className="w-full h-full object-cover opacity-40"
+                              onMouseEnter={(e) => e.target.play()} 
+                              onMouseLeave={(e) => e.target.pause()}
+                            />
+                          ) : (
+                            <Video className="w-6 h-6 text-white" />
+                          )}
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="text-2xl">{idx + 1}</span>
+                          </div>
+                        </div>
+                        <p className="text-white text-xs font-medium truncate group-hover:text-pink-300">{pitch.title}</p>
+                        <p className="text-gray-400 text-xs truncate">{pitch.business_profiles?.business_name}</p>
+                        <div className="flex gap-1 mt-1">
+                          <span className="text-xs bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded truncate">
+                            {pitch.equity_offering || 0}%
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )
+          )}
+
+          {/* My Pitches - Upload & Manage */}
+          {shareSubTab === 'my-pitches' && (
+            <div className="space-y-6">
+              {/* Header - Collapsed Icon */}
+              <div className="group relative flex justify-center">
+                <div className="w-10 h-10 bg-purple-500/20 border border-purple-500/40 rounded-lg flex items-center justify-center hover:bg-purple-500/40 hover:border-purple-500/60 transition-all transform hover:scale-110 cursor-help">
+                  <Mic className="w-5 h-5 text-purple-400" />
+                </div>
+                {/* Tooltip on hover */}
+                <div className="absolute left-1/2 transform -translate-x-1/2 -top-24 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                  <div className="bg-slate-900 border border-purple-500/40 rounded-lg p-3 w-56 text-center shadow-lg">
+                    <p className="text-xs font-bold text-purple-300 mb-1">🎤 My Pitches & Ideas</p>
+                    <p className="text-xs text-gray-300">Manage and pitch your business ideas</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-white">📹 Your Videos ({userPitches.length})</h3>
+                  {/* COMMENTED OUT - Create New Pitch Button
+                  <button 
+                    onClick={() => setShowPitchinDetail(true)}
+                    className="px-4 py-2 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white rounded-lg font-medium transition-all flex items-center gap-2"
+                  >
+                    <Upload className="w-4 h-4" />
+                    Create New Pitch
+                  </button>
+                  */}
+                </div>
+
+                {/* Upload/Create Info - Collapsed Icon */}
+                <div className="group relative">
+                  <div className="w-10 h-10 bg-pink-500/20 border border-pink-500/40 rounded-lg flex items-center justify-center hover:bg-pink-500/40 hover:border-pink-500/60 transition-all transform hover:scale-110 cursor-help mx-auto">
+                    <Video className="w-5 h-5 text-pink-400" />
+                  </div>
+                  {/* Tooltip on hover */}
+                  <div className="absolute left-1/2 transform -translate-x-1/2 -top-24 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                    <div className="bg-slate-900 border border-pink-500/40 rounded-lg p-3 w-56 text-center shadow-lg">
+                      <p className="text-xs font-bold text-pink-300 mb-1">📹 Ready to pitch?</p>
+                      <p className="text-xs text-gray-300">Click "Create New Pitch" to record or upload</p>
+                      <p className="text-xs text-gray-400 mt-1">Formats: MP4, WebM, OGG (max 500MB)</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* My Pitches List */}
+                {userPitches.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Lightbulb className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+                    <p className="text-gray-400 font-medium">No pitches yet</p>
+                    <p className="text-gray-500 text-sm">Create your first pitch to get started</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {userPitches.map((pitch) => (
+                      <div key={pitch.id} className="glass-card p-4 border border-white/10 hover:border-pink-500/50 transition-all">
+                        <div className="aspect-video bg-gradient-to-br from-purple-600 to-pink-600 rounded mb-3 flex items-center justify-center relative group">
+                          {pitch.video_url ? (
+                            <video src={pitch.video_url} className="w-full h-full object-cover rounded" />
+                          ) : (
+                            <Video className="w-8 h-8 text-white opacity-50" />
+                          )}
+                          <button className="absolute top-2 right-2 p-2 bg-black/50 hover:bg-black/70 rounded transition-all z-10">
+                            <MoreVertical className="w-4 h-4 text-white" />
+                          </button>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <p className="text-white font-semibold truncate">{pitch.title}</p>
+                              <p className={`text-xs mt-1 px-2 py-1 rounded w-fit font-medium ${
+                                pitch.status === 'published' ? 'bg-emerald-500/20 text-emerald-300' :
+                                pitch.status === 'draft' ? 'bg-gray-500/20 text-gray-300' :
+                                'bg-yellow-500/20 text-yellow-300'
+                              }`}>
+                                {pitch.status.charAt(0).toUpperCase() + pitch.status.slice(1)}
+                              </p>
+                            </div>
+                          </div>
+                          <p className="text-xs text-gray-400 line-clamp-2">{pitch.description}</p>
+                          {pitch.status === 'pending' && (
+                            <div className="bg-purple-500/10 border border-purple-500/30 rounded p-2">
+                              <p className="text-xs text-gray-300">Approvals: <span className="text-white font-bold">0/5</span></p>
+                              <div className="w-full bg-white/10 rounded-full h-1.5 mt-1">
+                                <div className="bg-gradient-to-r from-purple-500 to-pink-500 h-1.5 rounded-full" style={{ width: '0%' }} />
+                              </div>
+                            </div>
+                          )}
+                          <button className="w-full px-3 py-2 bg-white/5 hover:bg-white/10 text-gray-300 rounded text-sm font-medium transition-all">
+                            {pitch.status === 'draft' ? 'Edit & Submit' : 'View Details'}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Pending Votes Tab */}
+          {shareSubTab === 'pending' && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-white">🗳️ Pitches Awaiting Approval</h3>
+              {userPitches.length === 0 ? (
+                <div className="text-center py-8">
+                  <Vote className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+                  <p className="text-gray-400 font-medium">No pending votes</p>
+                  <p className="text-gray-500 text-sm">Submit a pitch to get team approvals</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {userPitches
+                    .filter(p => p.status === 'pending')
+                    .map((pitch) => {
+                      const approvals = 0; // TODO: Get from database
+                      const totalNeeded = 5;
+                      const percentage = (approvals / totalNeeded) * 100;
+                      return (
+                        <div key={pitch.id} className="glass-card p-4 border border-blue-500/30 bg-blue-500/5">
+                          <div className="flex items-start justify-between mb-3">
+                            <div>
+                              <p className="text-white font-semibold flex items-center gap-2">
+                                <span className="text-2xl">🎬</span>
+                                {pitch.title}
+                              </p>
+                              <p className="text-xs text-gray-400 mt-1">Waiting for team review</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-white font-bold">{approvals}/{totalNeeded}</p>
+                              <p className="text-xs text-gray-400">approvals</p>
+                            </div>
+                          </div>
+                          <div className="w-full bg-white/10 rounded-full h-2 mb-3">
+                            <div 
+                              className="bg-gradient-to-r from-blue-500 to-cyan-500 h-2 rounded-full transition-all"
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <button className="flex-1 px-3 py-2 bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-300 rounded text-sm font-medium transition-all">
+                              View Approvals
+                            </button>
+                            <button className="flex-1 px-3 py-2 bg-white/5 hover:bg-white/10 text-gray-300 rounded text-sm font-medium transition-all">
+                              Send Reminder
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  }
+                  {userPitches.filter(p => p.status === 'pending').length === 0 && (
+                    <div className="text-center py-8 text-gray-400">
+                      <p>No pitches pending approval</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // ESCROW VAULT MODAL
+  const renderEscrowModal = () => {
+    if (!showEscrowModal) return null;
+    return (
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+        <div className="glass-card border border-white/20 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          {/* Header */}
+          <div className="sticky top-0 glass-card border-b border-white/10 p-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-emerald-500/20 border border-emerald-500/40 rounded-lg flex items-center justify-center">
+                <Lock className="w-6 h-6 text-emerald-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-white">🛡️ Escrow Vault</h3>
+                <p className="text-sm text-gray-400">Secure fund management system</p>
+              </div>
+            </div>
+            <button onClick={() => setShowEscrowModal(false)} className="p-2 hover:bg-white/10 rounded-lg transition">
+              <X className="w-5 h-5 text-gray-400" />
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="p-6 space-y-6">
+            {/* Key Features */}
+            <div className="space-y-3">
+              <h4 className="font-semibold text-white text-lg">Key Features</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4">
+                  <p className="text-emerald-300 font-semibold mb-2">✓ Secure Holding</p>
+                  <p className="text-xs text-gray-300">All funds locked until conditions are met</p>
+                </div>
+                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4">
+                  <p className="text-emerald-300 font-semibold mb-2">✓ Multi-Sig Required</p>
+                  <p className="text-xs text-gray-300">Multiple approvals for fund release</p>
+                </div>
+                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4">
+                  <p className="text-emerald-300 font-semibold mb-2">✓ Insurance Coverage</p>
+                  <p className="text-xs text-gray-300">Protected against fraud & disputes</p>
+                </div>
+                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4">
+                  <p className="text-emerald-300 font-semibold mb-2">✓ Full Transparency</p>
+                  <p className="text-xs text-gray-300">Real-time tracking of all transactions</p>
+                </div>
               </div>
             </div>
 
+            {/* Investment Info */}
+            {selectedPitchForPlay && (
+              <div className="bg-slate-800/50 border border-slate-700/30 rounded-lg p-4">
+                <h4 className="font-semibold text-white mb-3">📊 Investment Details</h4>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-gray-400">Company</p>
+                    <p className="text-white font-semibold">{selectedPitchForPlay?.business_profiles?.business_name}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400">Amount Seeking</p>
+                    <p className="text-white font-semibold">${(selectedPitchForPlay?.target_funding / 1000000).toFixed(1)}M</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400">Equity Offered</p>
+                    <p className="text-white font-semibold">{selectedPitchForPlay?.equity_offering}%</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400">Status</p>
+                    <p className="text-white font-semibold">{selectedPitchForPlay?.status || 'Active'}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Action Button */}
+            <button className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-semibold py-3 rounded-lg transition-all">
+              Create Escrow Account
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // DIGITAL SPA MODAL
+  const renderSPAModal = () => {
+    if (!showSPAModal) return null;
+    return (
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+        <div className="glass-card border border-white/20 rounded-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+          {/* Header */}
+          <div className="sticky top-0 glass-card border-b border-white/10 p-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-blue-500/20 border border-blue-500/40 rounded-lg flex items-center justify-center">
+                <FileText className="w-6 h-6 text-blue-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-white">📑 Digital SPA Agreement</h3>
+                <p className="text-sm text-gray-400">Smart Purchase Agreement</p>
+              </div>
+            </div>
+            <button onClick={() => setShowSPAModal(false)} className="p-2 hover:bg-white/10 rounded-lg transition">
+              <X className="w-5 h-5 text-gray-400" />
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="p-6 space-y-6">
+            {/* Document Sections */}
             <div className="space-y-3">
-              <h3 className="text-white font-semibold">Schedule Recommendations</h3>
-              {scheduleData.recommendations.map((rec, index) => (
-                <div key={index} className="flex items-start gap-3 p-3 bg-white bg-opacity-5 rounded-lg">
-                  <Clock className="w-5 h-5 text-purple-400 mt-0.5" />
-                  <span className="text-white">{rec}</span>
+              <h4 className="font-semibold text-white text-lg">Document Sections</h4>
+              {[
+                { icon: '📋', title: 'Terms & Conditions', desc: 'Complete investment terms' },
+                { icon: '💰', title: 'Financial Details', desc: 'Valuation, equity, terms' },
+                { icon: '📊', title: 'Business Summary', desc: 'Company overview & projections' },
+                { icon: '✍️', title: 'Signature Block', desc: 'Digital signature required' },
+                { icon: '⚖️', title: 'Legal Compliance', desc: 'SEC & regulatory compliance' },
+                { icon: '📎', title: 'Attachments', desc: 'Supporting documents' }
+              ].map((section, idx) => (
+                <div key={idx} className="flex items-center justify-between bg-slate-800/50 border border-slate-700/30 rounded-lg p-4 hover:border-blue-500/50 transition cursor-pointer">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{section.icon}</span>
+                    <div>
+                      <p className="text-white font-semibold">{section.title}</p>
+                      <p className="text-xs text-gray-400">{section.desc}</p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-gray-500" />
                 </div>
               ))}
             </div>
 
+            {/* Action Buttons */}
+            <div className="grid grid-cols-2 gap-3">
+              <button className="bg-blue-500/20 border border-blue-500/40 hover:border-blue-500/60 text-blue-300 font-semibold py-3 rounded-lg transition-all">
+                📥 Download PDF
+              </button>
+              <button className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-3 rounded-lg transition-all">
+                ✍️ Review & Sign
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // KYC VERIFICATION MODAL
+  const renderKYCModal = () => {
+    if (!showKYCModal) return null;
+    const kycSteps = [
+      { id: 'id', title: 'Government ID', status: kycVerificationStatus['id'] || 'pending', icon: '🪪' },
+      { id: 'address', title: 'Address Verification', status: kycVerificationStatus['address'] || 'pending', icon: '🏠' },
+      { id: 'selfie', title: 'Liveness Check', status: kycVerificationStatus['selfie'] || 'pending', icon: '📸' },
+      { id: 'income', title: 'Income Verification', status: kycVerificationStatus['income'] || 'pending', icon: '💵' }
+    ];
+    
+    return (
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+        <div className="glass-card border border-white/20 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          {/* Header */}
+          <div className="sticky top-0 glass-card border-b border-white/10 p-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-pink-500/20 border border-pink-500/40 rounded-lg flex items-center justify-center">
+                <Shield className="w-6 h-6 text-pink-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-white">🔐 KYC Verification</h3>
+                <p className="text-sm text-gray-400">Know Your Customer verification</p>
+              </div>
+            </div>
+            <button onClick={() => setShowKYCModal(false)} className="p-2 hover:bg-white/10 rounded-lg transition">
+              <X className="w-5 h-5 text-gray-400" />
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="p-6 space-y-6">
+            {/* KYC Steps */}
             <div className="space-y-3">
-              <h3 className="text-white font-semibold">Next Actions</h3>
-              {scheduleData.nextActions.map((action, index) => (
-                <div key={index} className="flex items-center gap-3 p-3 bg-blue-500 bg-opacity-20 border border-blue-500 border-opacity-30 rounded-lg">
-                  <Target className="w-5 h-5 text-blue-400" />
-                  <span className="text-white">{action}</span>
+              <h4 className="font-semibold text-white text-lg">Verification Steps</h4>
+              {kycSteps.map((step, idx) => (
+                <div key={step.id} className={`flex items-center justify-between p-4 rounded-lg border transition-all ${
+                  step.status === 'verified' ? 'bg-emerald-500/10 border-emerald-500/30' :
+                  step.status === 'in-progress' ? 'bg-blue-500/10 border-blue-500/30' :
+                  'bg-slate-800/50 border-slate-700/30'
+                }`}>
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{step.icon}</span>
+                    <p className="text-white font-semibold">{step.title}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {step.status === 'verified' && <CheckCircle className="w-5 h-5 text-emerald-400" />}
+                    {step.status === 'in-progress' && <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />}
+                    {step.status === 'pending' && <Circle className="w-5 h-5 text-gray-600" />}
+                    <span className="text-xs font-medium text-gray-400 capitalize">{step.status}</span>
+                  </div>
                 </div>
               ))}
             </div>
+
+            {/* Info Box */}
+            <div className="bg-pink-500/10 border border-pink-500/30 rounded-lg p-4">
+              <p className="text-sm text-gray-300">
+                <span className="font-semibold text-pink-300">ℹ️ Why KYC?</span> We need to verify your identity to comply with financial regulations and prevent fraud. Your information is encrypted and secure.
+              </p>
+            </div>
+
+            {/* Action Button */}
+            <button className="w-full bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white font-semibold py-3 rounded-lg transition-all">
+              🚀 Start KYC Verification
+            </button>
           </div>
-        )}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
+
+  // POLICIES MODAL
+  const renderPoliciesModal = () => {
+    if (!showPoliciesModal) return null;
+    const policies = [
+      { id: 'escrow', title: 'Escrow Protection', desc: 'All funds must be held in escrow until conditions are met' },
+      { id: 'kyc', title: 'KYC Requirement', desc: 'Government ID verification required for all investors' },
+      { id: 'agreement', title: 'Digital Agreement', desc: 'All investments must be documented with signed SPA' },
+      { id: 'review', title: '30-Day Review', desc: 'Investors have 30 days to review and cancel investment' },
+      { id: 'transparency', title: 'Fund Transparency', desc: 'Full transparency on fund usage and allocation' },
+      { id: 'dispute', title: 'Dispute Resolution', desc: 'Third-party mediation for any disputes' }
+    ];
+
+    return (
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+        <div className="glass-card border border-white/20 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          {/* Header */}
+          <div className="sticky top-0 glass-card border-b border-white/10 p-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-amber-500/20 border border-amber-500/40 rounded-lg flex items-center justify-center">
+                <FileText className="w-6 h-6 text-amber-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-white">📋 Investment Policies</h3>
+                <p className="text-sm text-gray-400">Terms and conditions for investing</p>
+              </div>
+            </div>
+            <button onClick={() => setShowPoliciesModal(false)} className="p-2 hover:bg-white/10 rounded-lg transition">
+              <X className="w-5 h-5 text-gray-400" />
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="p-6 space-y-6">
+            {/* Policies List */}
+            <div className="space-y-3">
+              {policies.map((policy) => (
+                <div key={policy.id} className="flex items-start gap-4 bg-slate-800/50 border border-slate-700/30 rounded-lg p-4 hover:border-amber-500/30 transition cursor-pointer">
+                  <input 
+                    type="checkbox"
+                    checked={policiesAccepted[policy.id] || false}
+                    onChange={(e) => setPoliciesAccepted({...policiesAccepted, [policy.id]: e.target.checked})}
+                    className="mt-1 w-4 h-4 accent-amber-500"
+                  />
+                  <div className="flex-1">
+                    <p className="text-white font-semibold">{policy.title}</p>
+                    <p className="text-xs text-gray-400 mt-1">{policy.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Acceptance Status */}
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
+              <p className="text-sm text-gray-300">
+                <span className="font-semibold text-amber-300">✓ Progress:</span> {Object.values(policiesAccepted).filter(Boolean).length} of {policies.length} policies acknowledged
+              </p>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="grid grid-cols-2 gap-3">
+              <button 
+                onClick={() => setPoliciesAccepted(policies.reduce((acc, p) => ({...acc, [p.id]: false}), {}))}
+                className="bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 rounded-lg transition-all"
+              >
+                Clear All
+              </button>
+              <button 
+                onClick={() => setPoliciesAccepted(policies.reduce((acc, p) => ({...acc, [p.id]: true}), {}))}
+                className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-semibold py-3 rounded-lg transition-all"
+              >
+                Accept All
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // SIGN AGREEMENT MODAL
+  const renderSignModal = () => {
+    if (!showSignModal) return null;
+    const hasSigned = selectedPitchForPlay?.id && signedNDA.has(selectedPitchForPlay.id);
+    
+    return (
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+        <div className="glass-card border border-white/20 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          {/* Header */}
+          <div className="sticky top-0 glass-card border-b border-white/10 p-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`w-12 h-12 rounded-lg flex items-center justify-center border ${
+                hasSigned ? 'bg-green-500/20 border-green-500/40' : 'bg-violet-500/20 border-violet-500/40'
+              }`}>
+                <CheckCircle className={`w-6 h-6 ${hasSigned ? 'text-green-400' : 'text-violet-400'}`} />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-white">✍️ Sign NDA Agreement</h3>
+                <p className="text-sm text-gray-400">{hasSigned ? 'Agreement signed' : 'Non-Disclosure Agreement'}</p>
+              </div>
+            </div>
+            <button onClick={() => setShowSignModal(false)} className="p-2 hover:bg-white/10 rounded-lg transition">
+              <X className="w-5 h-5 text-gray-400" />
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="p-6 space-y-6">
+            {/* NDA Document Preview */}
+            <div className="bg-slate-800/50 border border-slate-700/30 rounded-lg p-6 space-y-4 max-h-[300px] overflow-y-auto">
+              <div className="space-y-2">
+                <h4 className="font-bold text-white">NON-DISCLOSURE AGREEMENT (NDA)</h4>
+                <p className="text-xs text-gray-400">Last Updated: {new Date().toLocaleDateString()}</p>
+              </div>
+              <p className="text-sm text-gray-300 leading-relaxed">
+                This Non-Disclosure Agreement ("Agreement") is entered into as of the date of acceptance by and between Pitchin Platform and the Investor. The Investor acknowledges that by investing in {selectedPitchForPlay?.business_profiles?.business_name || 'the company'}, they agree to maintain strict confidentiality regarding any proprietary information shared during due diligence...
+              </p>
+              <div className="text-xs text-gray-400 space-y-2">
+                <p>• Confidential Information includes business plans, financial data, and strategy</p>
+                <p>• Duration: 3 years from the date of disclosure</p>
+                <p>• Exceptions: Information already in public domain</p>
+                <p>• Remedies: Injunctive relief available for breach</p>
+              </div>
+            </div>
+
+            {/* Agreement Status */}
+            {hasSigned && (
+              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+                <p className="text-sm text-green-300">
+                  <span className="font-semibold">✅ Agreement Signed</span><br/>
+                  Signed on: {new Date().toLocaleDateString()}
+                </p>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="grid grid-cols-2 gap-3">
+              <button 
+                className="bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 rounded-lg transition-all"
+              >
+                📥 Download
+              </button>
+              <button 
+                onClick={() => {
+                  const newSignedNDA = new Set(signedNDA);
+                  if (hasSigned) {
+                    newSignedNDA.delete(selectedPitchForPlay.id);
+                  } else {
+                    newSignedNDA.add(selectedPitchForPlay.id);
+                  }
+                  setSignedNDA(newSignedNDA);
+                }}
+                className={`font-semibold py-3 rounded-lg transition-all ${
+                  hasSigned 
+                    ? 'bg-red-500/20 border border-red-500/40 hover:border-red-500/60 text-red-300'
+                    : 'bg-gradient-to-r from-violet-500 to-violet-600 hover:from-violet-600 hover:to-violet-700 text-white'
+                }`}
+              >
+                {hasSigned ? '❌ Revoke' : '✍️ Sign Agreement'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // FIRST READ MODAL
+  const renderFirstReadModal = () => {
+    if (!showFirstReadModal) return null;
+    const documents = [
+      { icon: '📊', title: 'Business Plan', desc: 'Comprehensive business strategy and roadmap', status: 'available' },
+      { icon: '💹', title: 'Financial Projections', desc: '5-year revenue and expense projections', status: 'available' },
+      { icon: '📈', title: 'Market Analysis', desc: 'Market size, TAM, competition analysis', status: 'available' },
+      { icon: '👥', title: 'Management Team', desc: 'Team bios, experience, and track record', status: 'available' },
+      { icon: '🔬', title: 'Product Demo', desc: 'Live product walkthrough and features', status: 'available' },
+      { icon: '📝', title: 'Risk Assessment', desc: 'Key risks and mitigation strategies', status: 'available' }
+    ];
+
+    return (
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+        <div className="glass-card border border-white/20 rounded-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+          {/* Header */}
+          <div className="sticky top-0 glass-card border-b border-white/10 p-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-indigo-500/20 border border-indigo-500/40 rounded-lg flex items-center justify-center">
+                <Eye className="w-6 h-6 text-indigo-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-white">👁️ First Read</h3>
+                <p className="text-sm text-gray-400">Essential documents before investing</p>
+              </div>
+            </div>
+            <button onClick={() => setShowFirstReadModal(false)} className="p-2 hover:bg-white/10 rounded-lg transition">
+              <X className="w-5 h-5 text-gray-400" />
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="p-6 space-y-6">
+            {/* Investment Summary */}
+            {selectedPitchForPlay && (
+              <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-lg p-4">
+                <h4 className="font-semibold text-white mb-3">📊 Investment Summary</h4>
+                <div className="grid grid-cols-3 gap-3 text-sm">
+                  <div>
+                    <p className="text-gray-400">Company</p>
+                    <p className="text-white font-semibold">{selectedPitchForPlay?.business_profiles?.business_name}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400">Seeking</p>
+                    <p className="text-white font-semibold">${(selectedPitchForPlay?.target_funding / 1000000).toFixed(1)}M</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400">Equity</p>
+                    <p className="text-white font-semibold">{selectedPitchForPlay?.equity_offering}%</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Documents */}
+            <div className="space-y-3">
+              <h4 className="font-semibold text-white text-lg">Key Documents</h4>
+              <div className="grid grid-cols-2 gap-3">
+                {documents.map((doc, idx) => (
+                  <div key={idx} className="bg-slate-800/50 border border-slate-700/30 rounded-lg p-4 hover:border-indigo-500/50 transition cursor-pointer group">
+                    <div className="flex items-start justify-between mb-2">
+                      <span className="text-2xl">{doc.icon}</span>
+                      <ArrowRight className="w-4 h-4 text-gray-600 group-hover:text-indigo-400 transition" />
+                    </div>
+                    <p className="text-white font-semibold text-sm">{doc.title}</p>
+                    <p className="text-xs text-gray-400 mt-1">{doc.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="grid grid-cols-2 gap-3">
+              <button className="bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 rounded-lg transition-all">
+                📥 Download All
+              </button>
+              <button className="bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-semibold py-3 rounded-lg transition-all">
+                📖 View Documents
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderPitchinDetail = () => {
+    return (
+      <div className="space-y-6">
+        {/* Header with Back Button */}
+        <div className="glass-card p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <button
+              onClick={() => setShowPitchinDetail(false)}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+            >
+              <ChevronRight className="w-4 h-4 rotate-180" />
+              Back to Share
+            </button>
+            <div className="flex-1">
+              <h2 className="text-xl font-semibold text-white">My Pitches & Ideas</h2>
+              <p className="text-sm text-gray-400">Manage and pitch your business ideas</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Full Pitchin Component */}
+        <Pitchin />
+      </div>
+    );
+  };
 
   const renderSettings = () => {
     const scores = getPillarScores();
     
     return (
     <div className="space-y-6">
+      {/* Header with Tab Navigation */}
       <div className="glass-card p-6">
         <div className="flex items-center gap-3 mb-4">
           <Settings className="w-6 h-6 text-gray-400" />
-          <h2 className="text-xl font-semibold text-white">Settings</h2>
+          <div>
+            <h2 className="text-xl font-semibold text-white">Settings</h2>
+            <p className="text-sm text-gray-400">Manage your profile and preferences</p>
+          </div>
         </div>
 
-        <div className="space-y-6">
-          {/* Readiness Pillars - Moved from Dashboard */}
-          <div className="bg-blue-500 bg-opacity-20 border border-blue-500 border-opacity-30 rounded-lg p-4">
-            <h3 className="text-blue-400 font-semibold mb-4">📊 Readiness Pillars</h3>
-            
-            <div className="space-y-3">
-              <PillarStatus
-                title="Financial Capital"
-                icon={DollarSign}
-                score={Math.round(scores.financialScore)}
-                status="Velocity Engine Active"
-                description="Transform volatility into secured wealth"
-              />
+        {/* Tab Navigation */}
+        <div className="flex gap-2 mt-4">
+          <button
+            onClick={() => setSettingsSubTab('profile')}
+            className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+              settingsSubTab === 'profile'
+                ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg shadow-blue-500/30'
+                : 'bg-white/5 text-gray-300 hover:bg-white/10'
+            }`}
+          >
+            <User className="w-4 h-4" />
+            Profile
+          </button>
+          <button
+            onClick={() => setSettingsSubTab('preferences')}
+            className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+              settingsSubTab === 'preferences'
+                ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/30'
+                : 'bg-white/5 text-gray-300 hover:bg-white/10'
+            }`}
+          >
+            <Settings className="w-4 h-4" />
+            Preferences
+          </button>
+        </div>
+      </div>
 
-              <PillarStatus
-                title="Legal Resilience"
-                icon={Shield}
-                score={Math.round(scores.legalScore)}
-                status={contractAnalysis ? "Contract analyzed" : "Awaiting contract review"}
-                description="Treasury Guardian protecting your assets"
-                onAction={() => setActiveTab('security')}
-              />
+      {/* Profile Tab */}
+      {settingsSubTab === 'profile' && (
+      <div className="space-y-6">
+        {/* Readiness Pillars */}
+        <div className="glass-card p-6 bg-gradient-to-br from-blue-900/30 to-cyan-900/30 border border-blue-500/30">
+          <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <BarChart3 className="w-5 h-5" />
+            Readiness Pillars
+          </h3>
+          
+          <div className="space-y-3">
+            <PillarStatus
+              title="Financial Capital"
+              icon={DollarSign}
+              score={Math.round(scores.financialScore)}
+              status="Velocity Engine Active"
+              description="Transform volatility into secured wealth"
+            />
 
-              <PillarStatus
-                title="Regulatory Compliance"
-                icon={Globe}
-                score={Math.round(scores.regulatoryScore)}
-                status={complianceData ? "Compliance checked" : "Check required"}
-                description="Global Navigator ensuring eligibility"
-                onAction={() => setActiveTab('readiness')}
-              />
+            <PillarStatus
+              title="Legal Resilience"
+              icon={Shield}
+              score={Math.round(scores.legalScore)}
+              status={contractAnalysis ? "Contract analyzed" : "Awaiting contract review"}
+              description="Treasury Guardian protecting your assets"
+              onAction={() => setActiveTab('security')}
+            />
 
-              <PillarStatus
-                title="Human Capital"
-                icon={Clock}
-                score={Math.round(scores.humanScore)}
-                status={scheduleData ? "Schedule optimized" : "Optimization pending"}
-                description="Prosperity Architect maximizing your time"
-                onAction={() => setActiveTab('growth')}
-              />
-            </div>
+            <PillarStatus
+              title="Regulatory Compliance"
+              icon={Globe}
+              score={Math.round(scores.regulatoryScore)}
+              status={complianceData ? "Compliance checked" : "Check required"}
+              description="Global Navigator ensuring eligibility"
+              onAction={() => setActiveTab('readiness')}
+            />
+
+            <PillarStatus
+              title="Human Capital"
+              icon={Clock}
+              score={Math.round(scores.humanScore)}
+              status={scheduleData ? "Schedule optimized" : "Optimization pending"}
+              description="Prosperity Architect maximizing your time"
+              onAction={() => setActiveTab('growth')}
+            />
           </div>
+        </div>
 
-          {/* Profile Settings */}
-          <div>
-            <h3 className="text-white font-semibold mb-3">Profile Configuration</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-white font-medium mb-2">Target Net Worth (UGX)</label>
-                <input
-                  type="number"
-                  value={goals.targetNetWorth}
-                  onChange={(e) => setGoals({...goals, targetNetWorth: parseFloat(e.target.value)})}
-                  className="w-full px-4 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Legal Disclaimer */}
-          <div className="bg-yellow-500 bg-opacity-20 border border-yellow-500 border-opacity-30 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-yellow-400 mt-0.5" />
-              <div>
-                <h3 className="text-yellow-400 font-semibold mb-2">Legal Disclaimer</h3>
-                <p className="text-white text-sm leading-relaxed">
-                  <strong>NOT LEGAL OR FINANCIAL ADVICE:</strong> The ICAN Capital Engine is a risk assessment and organizational tool. 
-                  All analysis, recommendations, and scores are for informational purposes only. 
-                  Consult qualified professionals before making legal, financial, or business decisions. 
-                  The creators assume no liability for decisions made based on this tool's output.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Data Management */}
-          <div>
-            <h3 className="text-white font-semibold mb-3">Data Management</h3>
-            <div className="flex gap-3">
-              <button
-                onClick={saveUserData}
-                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
-              >
-                Save Data
-              </button>
-              <button
-                onClick={() => {
-                  if (confirm('Are you sure? This will clear all your data.')) {
-                    localStorage.clear();
-                    window.location.reload();
-                  }
-                }}
-                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
-              >
-                Clear All Data
-              </button>
+        {/* Profile Configuration */}
+        <div className="glass-card p-6">
+          <h3 className="text-lg font-semibold text-white mb-4">Profile Configuration</h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm text-gray-300 font-medium mb-2">Target Net Worth (UGX)</label>
+              <input
+                type="number"
+                value={goals.targetNetWorth}
+                onChange={(e) => setGoals({...goals, targetNetWorth: parseFloat(e.target.value)})}
+                className="w-full px-4 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+              />
             </div>
           </div>
         </div>
       </div>
+      )}
+
+      {/* Preferences Tab */}
+      {settingsSubTab === 'preferences' && (
+      <div className="space-y-6">
+        {/* Theme & Display Settings */}
+        <div className="glass-card p-6">
+          <h3 className="text-lg font-semibold text-white mb-4">Theme & Display</h3>
+          <div className="space-y-4">
+            {/* Theme Selector */}
+            <div>
+              <label className="block text-sm text-gray-300 font-medium mb-3">Appearance</label>
+              <div className="grid grid-cols-3 gap-3">
+                <button 
+                  onClick={() => handleThemeChange('dark')}
+                  className={`p-4 rounded-lg text-center transition-all ${selectedTheme === 'dark' ? 'bg-gradient-to-br from-gray-900 to-gray-800 border-2 border-blue-500' : 'bg-white/10 border-2 border-white/20 hover:border-white/40'}`}
+                >
+                  <Moon className={`w-5 h-5 mx-auto mb-2 ${selectedTheme === 'dark' ? 'text-blue-400' : 'text-gray-400'}`} />
+                  <p className="text-sm font-medium text-white">Dark</p>
+                </button>
+                <button 
+                  onClick={() => handleThemeChange('light')}
+                  className={`p-4 rounded-lg text-center transition-all ${selectedTheme === 'light' ? 'bg-gradient-to-br from-yellow-50 to-yellow-100 border-2 border-yellow-500' : 'bg-white/10 border-2 border-white/20 hover:border-white/40'}`}
+                >
+                  <Sun className={`w-5 h-5 mx-auto mb-2 ${selectedTheme === 'light' ? 'text-yellow-600' : 'text-yellow-300'}`} />
+                  <p className={`text-sm font-medium ${selectedTheme === 'light' ? 'text-gray-800' : 'text-white'}`}>Light</p>
+                </button>
+                <button 
+                  onClick={() => handleThemeChange('system')}
+                  className={`p-4 rounded-lg text-center transition-all ${selectedTheme === 'system' ? 'bg-gradient-to-br from-purple-900 to-purple-800 border-2 border-purple-500' : 'bg-white/10 border-2 border-white/20 hover:border-white/40'}`}
+                >
+                  <Monitor className={`w-5 h-5 mx-auto mb-2 ${selectedTheme === 'system' ? 'text-purple-400' : 'text-gray-400'}`} />
+                  <p className="text-sm font-medium text-white">System</p>
+                </button>
+              </div>
+            </div>
+
+            {/* Font Size */}
+            <div>
+              <label className="block text-sm text-gray-300 font-medium mb-3">Font Size</label>
+              <div className="grid grid-cols-3 gap-3">
+                <button 
+                  onClick={() => handleFontSizeChange('small')}
+                  className={`p-4 rounded-lg transition-all ${selectedFontSize === 'small' ? 'bg-gradient-to-br from-blue-900/30 to-cyan-900/30 border-2 border-blue-500/30' : 'bg-white/5 border border-white/10 hover:bg-white/10'}`}
+                >
+                  <p className={`text-xs font-medium ${selectedFontSize === 'small' ? 'text-blue-300' : 'text-white'}`}>Small</p>
+                  <p className="text-xs text-gray-400 mt-1">12px base</p>
+                </button>
+                <button 
+                  onClick={() => handleFontSizeChange('medium')}
+                  className={`p-4 rounded-lg transition-all ${selectedFontSize === 'medium' ? 'bg-gradient-to-br from-blue-900/30 to-cyan-900/30 border-2 border-blue-500/30' : 'bg-white/5 border border-white/10 hover:bg-white/10'}`}
+                >
+                  <p className={`text-sm font-medium ${selectedFontSize === 'medium' ? 'text-blue-300' : 'text-white'}`}>Medium</p>
+                  <p className="text-xs text-gray-400 mt-1">14px base</p>
+                </button>
+                <button 
+                  onClick={() => handleFontSizeChange('large')}
+                  className={`p-4 rounded-lg transition-all ${selectedFontSize === 'large' ? 'bg-gradient-to-br from-blue-900/30 to-cyan-900/30 border-2 border-blue-500/30' : 'bg-white/5 border border-white/10 hover:bg-white/10'}`}
+                >
+                  <p className={`text-base font-medium ${selectedFontSize === 'large' ? 'text-blue-300' : 'text-white'}`}>Large</p>
+                  <p className="text-xs text-gray-400 mt-1">16px base</p>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* System Preferences */}
+        <div className="glass-card p-6">
+          <h3 className="text-lg font-semibold text-white mb-4">System Preferences</h3>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10">
+              <div>
+                <p className="text-white font-medium">Notifications</p>
+                <p className="text-sm text-gray-400">Receive alerts for important updates</p>
+              </div>
+              <input type="checkbox" defaultChecked className="w-5 h-5 rounded accent-blue-500" />
+            </div>
+            <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10">
+              <div>
+                <p className="text-white font-medium">Email Alerts</p>
+                <p className="text-sm text-gray-400">Get weekly summary emails</p>
+              </div>
+              <input type="checkbox" className="w-5 h-5 rounded accent-blue-500" />
+            </div>
+          </div>
+        </div>
+
+        {/* Data & Privacy */}
+        <div className="glass-card p-6 bg-gradient-to-br from-purple-900/30 to-pink-900/30 border border-purple-500/30">
+          <h3 className="text-lg font-semibold text-white mb-4">Data & Privacy</h3>
+          <div className="space-y-3">
+            <button className="w-full px-4 py-2 bg-purple-500/20 border border-purple-500/30 text-purple-300 rounded-lg hover:bg-purple-500/30 transition-all text-left">
+              Download Your Data
+            </button>
+            <button className="w-full px-4 py-2 bg-blue-500/20 border border-blue-500/30 text-blue-300 rounded-lg hover:bg-blue-500/30 transition-all text-left">
+              Privacy Policy
+            </button>
+            <button 
+              onClick={() => {
+                if (confirm('Are you sure? This will clear all your data.')) {
+                  localStorage.clear();
+                  window.location.reload();
+                }
+              }}
+              className="w-full px-4 py-2 bg-red-500/20 border border-red-500/30 text-red-300 rounded-lg hover:bg-red-500/30 transition-all text-left"
+            >
+              Clear All Data
+            </button>
+          </div>
+        </div>
+
+        {/* Legal Disclaimer */}
+        <div className="glass-card p-6 bg-gradient-to-br from-yellow-900/30 to-orange-900/30 border border-yellow-500/30">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
+            <div>
+              <h3 className="text-yellow-400 font-semibold mb-2">Legal Disclaimer</h3>
+              <p className="text-white text-sm leading-relaxed">
+                <strong>NOT LEGAL OR FINANCIAL ADVICE:</strong> The ICAN Capital Engine is a risk assessment and organizational tool. 
+                All analysis, recommendations, and scores are for informational purposes only. 
+                Consult qualified professionals before making legal, financial, or business decisions. 
+                The creators assume no liability for decisions made based on this tool's output.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+      )}
     </div>
     );
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900">
-      {/* Main Navigation & Header */}
-      <MainNavigation 
+      {/* Consolidated Navigation - Single unified header with dropdowns */}
+      <ConsolidatedNavigation 
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
         onTrustClick={() => setShowTRUST(true)} 
         onShareClick={() => setShowSHARE(true)}
         onWalletClick={() => setShowWallet(true)}
+        profile={profile}
+        onProfileClick={() => setShowProfilePage(true)}
+        onShareSubTabChange={setShareSubTab}
+        onTrustSubTabChange={setTrustSubTab}
+        onGrowthSubTabChange={setGrowthSubTab}
+        onReadinessSubTabChange={setReadinessSubTab}
+        onSecuritySubTabChange={setSecuritySubTab}
+        onDashboardSubTabChange={setDashboardSubTab}
+        onSettingsSubTabChange={setSettingsSubTab}
       />
 
       {/* TRUST Section - Show when TRUST is activated */}
@@ -9304,101 +12772,35 @@ Data Freshness: ${reportData.metadata.dataFreshness}
 
       {/* Wallet Section - Show when Wallet is activated */}
       {showWallet && (
-        <div className="fixed inset-0 z-[1000] overflow-y-auto">
+        <div className="fixed inset-0 z-[1000] bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 overflow-y-auto">
           <button
             onClick={() => setShowWallet(false)}
-            className="fixed top-4 right-4 z-[1001] px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg"
+            className="fixed top-4 right-4 z-[1001] px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
           >
             Close Wallet
           </button>
-          <ICANWallet />
+          
+          {/* Wallet Header with Glass Card */}
+          <div className="p-4 md:p-6">
+            <div className="glass-card p-4 md:p-6 mb-6">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+                <div>
+                  <h1 className="text-xl md:text-2xl font-bold text-white flex items-center gap-2">
+                    <Wallet className="w-6 h-6" />
+                    Digital Wallet
+                  </h1>
+                  <p className="text-sm md:text-base text-gray-300">Manage your accounts, balances & transactions</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Wallet Content */}
+            <div className="max-w-7xl mx-auto">
+              <ICANWallet />
+            </div>
+          </div>
         </div>
       )}
-
-      {/* Navigation */}
-      <nav className="glass-card mx-4 mt-4 p-4 overflow-visible" style={{ overflow: 'visible' }}>
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Shield className="w-8 h-8 text-blue-400" />
-            <div>
-              <h1 className="text-xl font-bold gradient-text">ICAN Capital Engine - Dashboard</h1>
-              <p className="text-xs text-gray-300">From Volatility to Global Capital</p>
-            </div>
-          </div>
-
-          {/* Status Carousel in Top-Right (WhatsApp style) */}
-          <div className="hidden md:flex gap-2 items-center flex-nowrap min-w-0">
-            <StatusCarousel />
-            {/* Profile Picture with Edit & Status Buttons */}
-            <div className="relative group flex-shrink-0">
-              {/* Avatar */}
-              <div
-                onClick={() => {}}
-                className="relative w-10 h-10 rounded-full overflow-hidden ring-2 ring-white ring-opacity-30 cursor-pointer hover:ring-opacity-50 transition-all flex-shrink-0"
-              >
-                <img
-                  src={profile?.avatar_url}
-                  alt={profile?.full_name}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    e.target.src = `https://ui-avatars.com/api/?name=${profile?.full_name || 'User'}`;
-                  }}
-                />
-              </div>
-
-              {/* Add Status Button - Bottom Right of Avatar */}
-              <button
-                onClick={() => setShowStatusUploader(true)}
-                className="absolute -bottom-1 -right-1 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 rounded-full p-1 shadow-lg transition-all"
-                title="Add status"
-              >
-                <Plus className="w-2.5 h-2.5 text-white" />
-              </button>
-
-              {/* Edit Profile Button - Top Right of Avatar */}
-              <button
-                onClick={() => setShowProfilePage(true)}
-                className="absolute -top-1 -right-1 bg-blue-500 hover:bg-blue-600 rounded-full p-1 shadow-lg transition-all hidden group-hover:flex"
-                title="Edit profile"
-              >
-                <Edit2 className="w-2.5 h-2.5 text-white" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Tab Navigation */}
-        <div className="flex gap-2 mt-4 overflow-x-auto pb-2">
-          {[
-            { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
-            { id: 'security', label: 'Security', icon: Shield },
-            { id: 'readiness', label: 'Readiness', icon: Globe },
-            { id: 'growth', label: 'Growth', icon: TrendingUp },
-            { id: 'trust', label: 'Trust', icon: Heart },
-            { id: 'share', label: 'Share', icon: Send },
-            { id: 'wallet', label: 'Wallet', icon: DollarSign },
-            { id: 'settings', label: 'Settings', icon: Settings }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => {
-                if (tab.id === 'trust') setShowTRUST(true);
-                else if (tab.id === 'share') setShowSHARE(true);
-                else if (tab.id === 'wallet') setShowWallet(true);
-                else setActiveTab(tab.id);
-              }}
-              className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-lg transition-colors whitespace-nowrap text-sm md:text-base ${
-                activeTab === tab.id 
-                  ? 'bg-blue-500 text-white' 
-                  : 'bg-white bg-opacity-10 text-gray-300 hover:text-white'
-              }`}
-            >
-              <tab.icon className="w-4 h-4 flex-shrink-0" />
-              <span className="hidden md:inline">{tab.label}</span>
-            </button>
-          ))}
-        </div>
-      </nav>
 
       {/* Main Content */}
       <main className="p-4">
@@ -9406,8 +12808,18 @@ Data Freshness: ${reportData.metadata.dataFreshness}
         {activeTab === 'security' && renderSecurityMandate()}
         {activeTab === 'readiness' && renderReadinessMandate()}
         {activeTab === 'growth' && renderGrowthMandate()}
+        {activeTab === 'trust' && renderTrust()}
+        {activeTab === 'share' && (showPitchinDetail ? renderPitchinDetail() : renderShare())}
         {activeTab === 'settings' && renderSettings()}
       </main>
+
+      {/* Feature Modals */}
+      {renderEscrowModal()}
+      {renderSPAModal()}
+      {renderKYCModal()}
+      {renderPoliciesModal()}
+      {renderSignModal()}
+      {renderFirstReadModal()}
 
       {/* Journey Stage Progression Modal */}
       <JourneyStageModal
