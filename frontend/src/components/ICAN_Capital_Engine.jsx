@@ -11237,12 +11237,17 @@ Data Freshness: ${reportData.metadata.dataFreshness}
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4 auto-rows-max">
                 {/* Main Video Player - Full width on mobile, 3 cols on desktop */}
-                <div className="md:col-span-2 lg:col-span-3 space-y-2 lg:space-y-4">
+                <div className="col-span-1 md:col-span-2 lg:col-span-3 space-y-2 lg:space-y-4">
                   <div className="glass-card p-0 border border-pink-500/30 overflow-hidden rounded-lg relative">
                     {selectedPitchForPlay ? (
                       <>
-                        {/* Video Container - Responsive Aspect Ratio */}
-                        <div className="relative bg-black w-full" style={{ aspectRatio: '16/9', minHeight: '250px', maxHeight: 'calc(100vh - 400px)' }}>
+                        {/* Video Container - Full screen on mobile */}
+                        <div className="relative bg-black w-full" style={{ 
+                          aspectRatio: '16/9', 
+                          minHeight: '250px',
+                          height: window.innerWidth < 768 ? 'calc(100vh - 120px)' : 'calc(100vh - 400px)',
+                          maxHeight: 'calc(100vh - 100px)'
+                        }}>
                           {selectedPitchForPlay.video_url ? (
                             <video
                               src={selectedPitchForPlay.video_url}
@@ -11264,6 +11269,24 @@ Data Freshness: ${reportData.metadata.dataFreshness}
                             title="View pitch details"
                           >
                             <FileText className="w-4 h-4 lg:w-5 lg:h-5" />
+                          </button>
+
+                          {/* Fullscreen Button - Mobile only */}
+                          <button
+                            onClick={(e) => {
+                              const videoElement = e.currentTarget.parentElement.querySelector('video');
+                              if (videoElement) {
+                                if (videoElement.requestFullscreen) {
+                                  videoElement.requestFullscreen();
+                                } else if (videoElement.webkitRequestFullscreen) {
+                                  videoElement.webkitRequestFullscreen();
+                                }
+                              }
+                            }}
+                            className="absolute bottom-2 lg:bottom-3 right-2 lg:right-3 p-1.5 lg:p-2 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/20 text-white transition-all z-20 hover:scale-110 md:hidden"
+                            title="Fullscreen"
+                          >
+                            <Monitor className="w-4 h-4 lg:w-5 lg:h-5" />
                           </button>
 
                           {/* Info Dropdown - Mobile optimized */}
