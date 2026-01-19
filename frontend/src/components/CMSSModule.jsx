@@ -435,6 +435,26 @@ const CMMSModule = ({
   const [showCompanyForm, setShowCompanyForm] = useState(false);
   const [showNewUsersList, setShowNewUsersList] = useState(false);
   const [showCompanyDetails, setShowCompanyDetails] = useState(false);
+  
+  // ============================================
+  // NEW CMMS FEATURES - ONLY SHOW AFTER PROFILE CREATED
+  // ============================================
+  const [showEquipmentManager, setShowEquipmentManager] = useState(false);
+  const [showWorkOrders, setShowWorkOrders] = useState(false);
+  const [showInventory, setShowInventory] = useState(false);
+  const [showReports, setShowReports] = useState(false);
+  const [showServiceProviders, setShowServiceProviders] = useState(false);
+  const [showCostTracking, setShowCostTracking] = useState(false);
+  const [showComplianceLog, setShowComplianceLog] = useState(false);
+  const [showMaintenanceCalendar, setShowMaintenanceCalendar] = useState(false);
+  
+  // Equipment data
+  const [equipment, setEquipment] = useState([]);
+  const [workOrders, setWorkOrders] = useState([]);
+  const [sparePartsInventory, setSparePartsInventory] = useState([]);
+  const [serviceProviders, setServiceProviders] = useState([]);
+  const [costRecords, setCostRecords] = useState([]);
+  const [complianceLog, setComplianceLog] = useState([]);
 
 
   // ============================================
@@ -470,7 +490,479 @@ const CMMSModule = ({
     { id: 'finance-approved', label: 'Finance Approved - Ready', color: 'green', icon: '💚' },
     { id: 'in-progress', label: 'In Progress', color: 'blue', icon: '🔧' },
     { id: 'completed', label: 'Completed', color: 'green', icon: '✅' }
+    { id: 'finance-approved', label: 'Finance Approved - Ready', color: 'green', icon: '💚' },
+    { id: 'in-progress', label: 'In Progress', color: 'blue', icon: '🔧' },
+    { id: 'completed', label: 'Completed', color: 'green', icon: '✅' }
   ];
+
+  // ============================================
+  // EQUIPMENT MANAGEMENT (ONLY AFTER PROFILE CREATED)
+  // ============================================
+  const EquipmentManager = () => {
+    const [newEquipment, setNewEquipment] = useState({
+      name: '',
+      type: '',
+      serialNumber: '',
+      location: '',
+      purchaseDate: '',
+      lastMaintenance: '',
+      status: 'operational'
+    });
+
+    const handleAddEquipment = () => {
+      if (!newEquipment.name || !newEquipment.type) {
+        alert('❌ Equipment name and type are required');
+        return;
+      }
+      setEquipment([...equipment, { ...newEquipment, id: Date.now() }]);
+      setNewEquipment({ name: '', type: '', serialNumber: '', location: '', purchaseDate: '', lastMaintenance: '', status: 'operational' });
+      alert('✅ Equipment added successfully');
+    };
+
+    const handleDeleteEquipment = (id) => {
+      setEquipment(equipment.filter(e => e.id !== id));
+      alert('✅ Equipment removed');
+    };
+
+    return (
+      <div className="glass-card p-6 mt-6 border border-orange-500 border-opacity-30">
+        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+          <Wrench className="w-6 h-6 text-orange-400" />
+          Equipment Management
+        </h3>
+        
+        <div className="grid md:grid-cols-3 gap-3 mb-6">
+          <input type="text" placeholder="Equipment Name *" value={newEquipment.name} onChange={(e) => setNewEquipment({...newEquipment, name: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm" />
+          <input type="text" placeholder="Type (e.g., Pump, Motor)" value={newEquipment.type} onChange={(e) => setNewEquipment({...newEquipment, type: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm" />
+          <input type="text" placeholder="Serial Number" value={newEquipment.serialNumber} onChange={(e) => setNewEquipment({...newEquipment, serialNumber: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm" />
+          <input type="text" placeholder="Location" value={newEquipment.location} onChange={(e) => setNewEquipment({...newEquipment, location: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm" />
+          <input type="date" value={newEquipment.purchaseDate} onChange={(e) => setNewEquipment({...newEquipment, purchaseDate: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm" />
+          <select value={newEquipment.status} onChange={(e) => setNewEquipment({...newEquipment, status: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm">
+            <option value="operational">Operational</option>
+            <option value="maintenance">Under Maintenance</option>
+            <option value="broken">Broken</option>
+            <option value="retired">Retired</option>
+          </select>
+        </div>
+        <button onClick={handleAddEquipment} className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded font-semibold mb-6">+ Add Equipment</button>
+
+        <div className="space-y-3">
+          {equipment.length === 0 ? (
+            <p className="text-gray-400 text-center py-4">No equipment registered yet</p>
+          ) : (
+            equipment.map(item => (
+              <div key={item.id} className="bg-orange-500 bg-opacity-10 p-4 rounded border border-orange-500 border-opacity-30">
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <h4 className="text-white font-bold">{item.name}</h4>
+                    <p className="text-sm text-gray-300">Type: {item.type} | Serial: {item.serialNumber}</p>
+                    <p className="text-xs text-gray-400">Location: {item.location} | Status: <span className="font-semibold text-orange-300">{item.status}</span></p>
+                  </div>
+                  <button onClick={() => handleDeleteEquipment(item.id)} className="text-red-400 hover:text-red-300">
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================
+  // WORK ORDERS MANAGER
+  // ============================================
+  const WorkOrdersManager = () => {
+    const [newOrder, setNewOrder] = useState({
+      title: '',
+      description: '',
+      equipmentId: '',
+      priority: 'medium',
+      assignedTo: '',
+      dueDate: ''
+    });
+
+    const handleCreateOrder = () => {
+      if (!newOrder.title) {
+        alert('❌ Work order title is required');
+        return;
+      }
+      setWorkOrders([...workOrders, { ...newOrder, id: Date.now(), status: 'pending', createdAt: new Date() }]);
+      setNewOrder({ title: '', description: '', equipmentId: '', priority: 'medium', assignedTo: '', dueDate: '' });
+      alert('✅ Work order created');
+    };
+
+    return (
+      <div className="glass-card p-6 mt-6 border border-red-500 border-opacity-30">
+        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+          <AlertTriangle className="w-6 h-6 text-red-400" />
+          Work Orders & Maintenance Tasks
+        </h3>
+
+        <div className="grid md:grid-cols-2 gap-3 mb-6">
+          <input type="text" placeholder="Work Order Title *" value={newOrder.title} onChange={(e) => setNewOrder({...newOrder, title: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm" />
+          <select value={newOrder.priority} onChange={(e) => setNewOrder({...newOrder, priority: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm">
+            <option value="low">Low Priority</option>
+            <option value="medium">Medium Priority</option>
+            <option value="high">High Priority</option>
+            <option value="critical">Critical</option>
+          </select>
+          <textarea placeholder="Description" value={newOrder.description} onChange={(e) => setNewOrder({...newOrder, description: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm col-span-2" rows="2" />
+          <input type="text" placeholder="Assign To" value={newOrder.assignedTo} onChange={(e) => setNewOrder({...newOrder, assignedTo: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm" />
+          <input type="date" value={newOrder.dueDate} onChange={(e) => setNewOrder({...newOrder, dueDate: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm" />
+        </div>
+        <button onClick={handleCreateOrder} className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded font-semibold mb-6">+ Create Work Order</button>
+
+        <div className="space-y-3 max-h-96 overflow-y-auto">
+          {workOrders.length === 0 ? (
+            <p className="text-gray-400 text-center py-4">No work orders yet</p>
+          ) : (
+            workOrders.map(order => (
+              <div key={order.id} className="bg-red-500 bg-opacity-10 p-4 rounded border border-red-500 border-opacity-30">
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <h4 className="text-white font-bold">{order.title}</h4>
+                    <p className="text-sm text-gray-300">{order.description}</p>
+                    <p className="text-xs text-gray-400 mt-1">Assigned: {order.assignedTo || 'Unassigned'} | Due: {order.dueDate || 'No date'} | Priority: <span className={`font-semibold ${order.priority === 'critical' ? 'text-red-400' : 'text-orange-300'}`}>{order.priority.toUpperCase()}</span></p>
+                  </div>
+                  <span className="bg-red-500 text-white px-2 py-1 rounded text-xs font-bold">{order.status}</span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================
+  // SPARE PARTS INVENTORY MANAGER
+  // ============================================
+  const SparePartsManager = () => {
+    const [newPart, setNewPart] = useState({
+      name: '',
+      partNumber: '',
+      quantity: 0,
+      minStock: 0,
+      location: '',
+      supplier: '',
+      cost: 0
+    });
+
+    const handleAddPart = () => {
+      if (!newPart.name || !newPart.partNumber) {
+        alert('❌ Part name and number are required');
+        return;
+      }
+      setSparePartsInventory([...sparePartsInventory, { ...newPart, id: Date.now() }]);
+      setNewPart({ name: '', partNumber: '', quantity: 0, minStock: 0, location: '', supplier: '', cost: 0 });
+      alert('✅ Spare part added to inventory');
+    };
+
+    return (
+      <div className="glass-card p-6 mt-6 border border-indigo-500 border-opacity-30">
+        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+          <Package className="w-6 h-6 text-indigo-400" />
+          Spare Parts Inventory
+        </h3>
+
+        <div className="grid md:grid-cols-3 gap-3 mb-6">
+          <input type="text" placeholder="Part Name *" value={newPart.name} onChange={(e) => setNewPart({...newPart, name: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm" />
+          <input type="text" placeholder="Part Number *" value={newPart.partNumber} onChange={(e) => setNewPart({...newPart, partNumber: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm" />
+          <input type="number" placeholder="Current Qty" value={newPart.quantity} onChange={(e) => setNewPart({...newPart, quantity: parseInt(e.target.value) || 0})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm" />
+          <input type="number" placeholder="Min Stock Level" value={newPart.minStock} onChange={(e) => setNewPart({...newPart, minStock: parseInt(e.target.value) || 0})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm" />
+          <input type="text" placeholder="Storage Location" value={newPart.location} onChange={(e) => setNewPart({...newPart, location: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm" />
+          <input type="number" placeholder="Unit Cost" value={newPart.cost} onChange={(e) => setNewPart({...newPart, cost: parseFloat(e.target.value) || 0})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm" />
+          <input type="text" placeholder="Supplier" value={newPart.supplier} onChange={(e) => setNewPart({...newPart, supplier: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm col-span-2" />
+        </div>
+        <button onClick={handleAddPart} className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded font-semibold mb-6">+ Add Spare Part</button>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-gray-300">
+            <thead className="border-b border-gray-600">
+              <tr>
+                <th className="text-left py-2 px-2">Part Name</th>
+                <th className="text-left py-2 px-2">Part #</th>
+                <th className="text-center py-2 px-2">Qty</th>
+                <th className="text-center py-2 px-2">Min</th>
+                <th className="text-left py-2 px-2">Location</th>
+                <th className="text-right py-2 px-2">Cost/Unit</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sparePartsInventory.length === 0 ? (
+                <tr><td colSpan="6" className="text-center py-4 text-gray-400">No spare parts in inventory</td></tr>
+              ) : (
+                sparePartsInventory.map(part => (
+                  <tr key={part.id} className="border-b border-gray-700 hover:bg-white hover:bg-opacity-5">
+                    <td className="py-2 px-2">{part.name}</td>
+                    <td className="py-2 px-2">{part.partNumber}</td>
+                    <td className="text-center py-2 px-2 font-bold">{part.quantity}</td>
+                    <td className="text-center py-2 px-2">{part.minStock}</td>
+                    <td className="py-2 px-2">{part.location}</td>
+                    <td className="text-right py-2 px-2">${part.cost.toFixed(2)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================
+  // REPORTS & ANALYTICS MANAGER
+  // ============================================
+  const ReportsManager = () => {
+    const totalEquipment = equipment.length;
+    const activeOrders = workOrders.filter(o => o.status === 'pending').length;
+    const lowStockItems = sparePartsInventory.filter(p => p.quantity <= p.minStock).length;
+    const totalInventoryCost = sparePartsInventory.reduce((sum, p) => sum + (p.quantity * p.cost), 0);
+
+    return (
+      <div className="glass-card p-6 mt-6 border border-cyan-500 border-opacity-30">
+        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+          <CheckCircle2 className="w-6 h-6 text-cyan-400" />
+          Reports & Analytics
+        </h3>
+
+        <div className="grid md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-cyan-500 bg-opacity-10 p-4 rounded border border-cyan-500 border-opacity-30">
+            <div className="text-cyan-300 text-sm font-semibold">Total Equipment</div>
+            <div className="text-3xl font-bold text-white mt-2">{totalEquipment}</div>
+          </div>
+          <div className="bg-red-500 bg-opacity-10 p-4 rounded border border-red-500 border-opacity-30">
+            <div className="text-red-300 text-sm font-semibold">Active Work Orders</div>
+            <div className="text-3xl font-bold text-white mt-2">{activeOrders}</div>
+          </div>
+          <div className="bg-yellow-500 bg-opacity-10 p-4 rounded border border-yellow-500 border-opacity-30">
+            <div className="text-yellow-300 text-sm font-semibold">Low Stock Items</div>
+            <div className="text-3xl font-bold text-white mt-2">{lowStockItems}</div>
+          </div>
+          <div className="bg-green-500 bg-opacity-10 p-4 rounded border border-green-500 border-opacity-30">
+            <div className="text-green-300 text-sm font-semibold">Inventory Value</div>
+            <div className="text-2xl font-bold text-white mt-2">${totalInventoryCost.toFixed(2)}</div>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="bg-white bg-opacity-5 p-4 rounded">
+            <h4 className="text-white font-bold mb-2">Equipment Status</h4>
+            <div className="text-gray-300 text-sm">
+              {equipment.length === 0 ? 'No equipment registered' : `${equipment.length} assets in tracking system`}
+            </div>
+          </div>
+          <div className="bg-white bg-opacity-5 p-4 rounded">
+            <h4 className="text-white font-bold mb-2">Maintenance Performance</h4>
+            <div className="text-gray-300 text-sm">
+              Work orders created: {workOrders.length} | Pending: {activeOrders}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================
+  // SERVICE PROVIDERS MANAGER
+  // ============================================
+  const ServiceProvidersManager = () => {
+    const [newProvider, setNewProvider] = useState({
+      name: '',
+      serviceType: '',
+      contact: '',
+      phone: '',
+      email: '',
+      specialization: ''
+    });
+
+    const handleAddProvider = () => {
+      if (!newProvider.name || !newProvider.serviceType) {
+        alert('❌ Provider name and service type are required');
+        return;
+      }
+      setServiceProviders([...serviceProviders, { ...newProvider, id: Date.now() }]);
+      setNewProvider({ name: '', serviceType: '', contact: '', phone: '', email: '', specialization: '' });
+      alert('✅ Service provider added');
+    };
+
+    return (
+      <div className="glass-card p-6 mt-6 border border-pink-500 border-opacity-30">
+        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+          <Users className="w-6 h-6 text-pink-400" />
+          Maintenance Service Providers & Vendors
+        </h3>
+
+        <div className="grid md:grid-cols-3 gap-3 mb-6">
+          <input type="text" placeholder="Provider Name *" value={newProvider.name} onChange={(e) => setNewProvider({...newProvider, name: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm" />
+          <input type="text" placeholder="Service Type *" value={newProvider.serviceType} onChange={(e) => setNewProvider({...newProvider, serviceType: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm" />
+          <input type="text" placeholder="Contact Person" value={newProvider.contact} onChange={(e) => setNewProvider({...newProvider, contact: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm" />
+          <input type="tel" placeholder="Phone" value={newProvider.phone} onChange={(e) => setNewProvider({...newProvider, phone: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm" />
+          <input type="email" placeholder="Email" value={newProvider.email} onChange={(e) => setNewProvider({...newProvider, email: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm" />
+          <input type="text" placeholder="Specialization" value={newProvider.specialization} onChange={(e) => setNewProvider({...newProvider, specialization: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm" />
+        </div>
+        <button onClick={handleAddProvider} className="px-4 py-2 bg-pink-500 hover:bg-pink-600 text-white rounded font-semibold mb-6">+ Add Service Provider</button>
+
+        <div className="space-y-3">
+          {serviceProviders.length === 0 ? (
+            <p className="text-gray-400 text-center py-4">No service providers registered yet</p>
+          ) : (
+            serviceProviders.map(provider => (
+              <div key={provider.id} className="bg-pink-500 bg-opacity-10 p-4 rounded border border-pink-500 border-opacity-30">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="text-white font-bold">{provider.name}</h4>
+                    <p className="text-sm text-gray-300">Service: {provider.serviceType} | Specialization: {provider.specialization}</p>
+                    <p className="text-xs text-gray-400">Contact: {provider.contact} | 📞 {provider.phone} | 📧 {provider.email}</p>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================
+  // COST TRACKING MANAGER
+  // ============================================
+  const CostTrackingManager = () => {
+    const [newCost, setNewCost] = useState({
+      description: '',
+      amount: 0,
+      category: 'maintenance',
+      date: new Date().toISOString().split('T')[0],
+      supplier: ''
+    });
+
+    const handleAddCost = () => {
+      if (!newCost.description || newCost.amount <= 0) {
+        alert('❌ Description and amount are required');
+        return;
+      }
+      setCostRecords([...costRecords, { ...newCost, id: Date.now() }]);
+      setNewCost({ description: '', amount: 0, category: 'maintenance', date: new Date().toISOString().split('T')[0], supplier: '' });
+      alert('✅ Cost record added');
+    };
+
+    const totalCosts = costRecords.reduce((sum, record) => sum + record.amount, 0);
+
+    return (
+      <div className="glass-card p-6 mt-6 border border-lime-500 border-opacity-30">
+        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+          <CheckCircle className="w-6 h-6 text-lime-400" />
+          Cost Tracking & Budget
+        </h3>
+
+        <div className="bg-lime-500 bg-opacity-10 p-4 rounded border border-lime-500 border-opacity-30 mb-6">
+          <div className="text-lime-300 text-sm font-semibold">Total Maintenance Costs</div>
+          <div className="text-3xl font-bold text-white mt-2">${totalCosts.toFixed(2)}</div>
+        </div>
+
+        <div className="grid md:grid-cols-3 gap-3 mb-6">
+          <input type="text" placeholder="Description *" value={newCost.description} onChange={(e) => setNewCost({...newCost, description: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm" />
+          <input type="number" placeholder="Amount (USD) *" value={newCost.amount} onChange={(e) => setNewCost({...newCost, amount: parseFloat(e.target.value) || 0})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm" />
+          <select value={newCost.category} onChange={(e) => setNewCost({...newCost, category: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm">
+            <option value="maintenance">Maintenance</option>
+            <option value="repair">Repair</option>
+            <option value="parts">Spare Parts</option>
+            <option value="labor">Labor</option>
+            <option value="other">Other</option>
+          </select>
+          <input type="date" value={newCost.date} onChange={(e) => setNewCost({...newCost, date: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm" />
+          <input type="text" placeholder="Supplier/Vendor" value={newCost.supplier} onChange={(e) => setNewCost({...newCost, supplier: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm col-span-2" />
+        </div>
+        <button onClick={handleAddCost} className="px-4 py-2 bg-lime-500 hover:bg-lime-600 text-white rounded font-semibold mb-6">+ Record Cost</button>
+
+        <div className="max-h-60 overflow-y-auto space-y-2">
+          {costRecords.length === 0 ? (
+            <p className="text-gray-400 text-center py-4">No cost records yet</p>
+          ) : (
+            costRecords.map(record => (
+              <div key={record.id} className="bg-white bg-opacity-5 p-3 rounded text-sm">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <span className="font-semibold text-white">{record.description}</span>
+                    <p className="text-xs text-gray-400">Category: {record.category} | {record.date} | {record.supplier}</p>
+                  </div>
+                  <span className="font-bold text-lime-300">${record.amount.toFixed(2)}</span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================
+  // COMPLIANCE LOG MANAGER
+  // ============================================
+  const ComplianceLogManager = () => {
+    const [newLog, setNewLog] = useState({
+      activity: '',
+      category: 'maintenance',
+      date: new Date().toISOString().split('T')[0],
+      performedBy: '',
+      notes: ''
+    });
+
+    const handleAddLog = () => {
+      if (!newLog.activity) {
+        alert('❌ Activity description is required');
+        return;
+      }
+      setComplianceLog([...complianceLog, { ...newLog, id: Date.now() }]);
+      setNewLog({ activity: '', category: 'maintenance', date: new Date().toISOString().split('T')[0], performedBy: '', notes: '' });
+      alert('✅ Compliance record added');
+    };
+
+    return (
+      <div className="glass-card p-6 mt-6 border border-yellow-500 border-opacity-30">
+        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+          <CheckCircle className="w-6 h-6 text-yellow-400" />
+          Compliance & Audit Trail
+        </h3>
+
+        <div className="grid md:grid-cols-2 gap-3 mb-6">
+          <input type="text" placeholder="Activity *" value={newLog.activity} onChange={(e) => setNewLog({...newLog, activity: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm" />
+          <select value={newLog.category} onChange={(e) => setNewLog({...newLog, category: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm">
+            <option value="maintenance">Maintenance</option>
+            <option value="inspection">Inspection</option>
+            <option value="safety">Safety Check</option>
+            <option value="training">Training</option>
+            <option value="audit">Audit</option>
+            <option value="other">Other</option>
+          </select>
+          <input type="date" value={newLog.date} onChange={(e) => setNewLog({...newLog, date: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm" />
+          <input type="text" placeholder="Performed By" value={newLog.performedBy} onChange={(e) => setNewLog({...newLog, performedBy: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm" />
+          <textarea placeholder="Notes & Details" value={newLog.notes} onChange={(e) => setNewLog({...newLog, notes: e.target.value})} className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm col-span-2" rows="2" />
+        </div>
+        <button onClick={handleAddLog} className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded font-semibold mb-6">+ Log Activity</button>
+
+        <div className="max-h-60 overflow-y-auto space-y-2">
+          {complianceLog.length === 0 ? (
+            <p className="text-gray-400 text-center py-4">No compliance records yet</p>
+          ) : (
+            complianceLog.map(log => (
+              <div key={log.id} className="bg-yellow-500 bg-opacity-10 p-3 rounded text-sm border-l-2 border-yellow-500">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <span className="font-semibold text-white">{log.activity}</span>
+                    <p className="text-xs text-gray-400 mt-1">Category: {log.category} | {log.date} | By: {log.performedBy}</p>
+                    {log.notes && <p className="text-xs text-gray-300 mt-1 italic">{log.notes}</p>}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  };
 
   // ============================================
   // REQUISITION MANAGER (TECHNICIAN & WORKFLOW)
@@ -2153,6 +2645,151 @@ const CMMSModule = ({
               </button>
               <span className="text-xs text-gray-400 mt-3">Manage Staff</span>
             </div>
+
+            {/* ADDITIONAL FEATURES - ONLY VISIBLE AFTER PROFILE CREATED */}
+            {hasBusinessProfile && (
+              <>
+                {/* Equipment Management Icon */}
+                <div className="flex flex-col items-center">
+                  <button 
+                    onClick={() => setShowEquipmentManager(!showEquipmentManager)}
+                    className={`
+                      flex flex-col items-center justify-center w-24 h-24 rounded-lg 
+                      transition-all transform hover:scale-110 shadow-lg
+                      ${showEquipmentManager 
+                        ? 'bg-gradient-to-br from-orange-600 to-orange-800 ring-2 ring-orange-400 scale-105' 
+                        : 'bg-gradient-to-br from-orange-500 to-orange-700 hover:from-orange-600 hover:to-orange-800'
+                      }
+                    `}
+                    title="Equipment Management"
+                  >
+                    <Wrench className="w-10 h-10 text-white mb-2" />
+                    <span className="text-xs text-white font-bold text-center">Equipment</span>
+                  </button>
+                  <span className="text-xs text-gray-400 mt-3">Asset Tracking</span>
+                </div>
+
+                {/* Work Orders Icon */}
+                <div className="flex flex-col items-center">
+                  <button 
+                    onClick={() => setShowWorkOrders(!showWorkOrders)}
+                    className={`
+                      flex flex-col items-center justify-center w-24 h-24 rounded-lg 
+                      transition-all transform hover:scale-110 shadow-lg
+                      ${showWorkOrders 
+                        ? 'bg-gradient-to-br from-red-600 to-red-800 ring-2 ring-red-400 scale-105' 
+                        : 'bg-gradient-to-br from-red-500 to-red-700 hover:from-red-600 hover:to-red-800'
+                      }
+                    `}
+                    title="Work Orders"
+                  >
+                    <AlertTriangle className="w-10 h-10 text-white mb-2" />
+                    <span className="text-xs text-white font-bold text-center">Work Orders</span>
+                  </button>
+                  <span className="text-xs text-gray-400 mt-3">Maintenance Tasks</span>
+                </div>
+
+                {/* Spare Parts Inventory Icon */}
+                <div className="flex flex-col items-center">
+                  <button 
+                    onClick={() => setShowInventory(!showInventory)}
+                    className={`
+                      flex flex-col items-center justify-center w-24 h-24 rounded-lg 
+                      transition-all transform hover:scale-110 shadow-lg
+                      ${showInventory 
+                        ? 'bg-gradient-to-br from-indigo-600 to-indigo-800 ring-2 ring-indigo-400 scale-105' 
+                        : 'bg-gradient-to-br from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800'
+                      }
+                    `}
+                    title="Spare Parts Inventory"
+                  >
+                    <Package className="w-10 h-10 text-white mb-2" />
+                    <span className="text-xs text-white font-bold text-center">Spare Parts</span>
+                  </button>
+                  <span className="text-xs text-gray-400 mt-3">Inventory</span>
+                </div>
+
+                {/* Reports & Analytics Icon */}
+                <div className="flex flex-col items-center">
+                  <button 
+                    onClick={() => setShowReports(!showReports)}
+                    className={`
+                      flex flex-col items-center justify-center w-24 h-24 rounded-lg 
+                      transition-all transform hover:scale-110 shadow-lg
+                      ${showReports 
+                        ? 'bg-gradient-to-br from-cyan-600 to-cyan-800 ring-2 ring-cyan-400 scale-105' 
+                        : 'bg-gradient-to-br from-cyan-500 to-cyan-700 hover:from-cyan-600 hover:to-cyan-800'
+                      }
+                    `}
+                    title="Reports & Analytics"
+                  >
+                    <CheckCircle2 className="w-10 h-10 text-white mb-2" />
+                    <span className="text-xs text-white font-bold text-center">Reports</span>
+                  </button>
+                  <span className="text-xs text-gray-400 mt-3">Analytics</span>
+                </div>
+
+                {/* Service Providers Icon */}
+                <div className="flex flex-col items-center">
+                  <button 
+                    onClick={() => setShowServiceProviders(!showServiceProviders)}
+                    className={`
+                      flex flex-col items-center justify-center w-24 h-24 rounded-lg 
+                      transition-all transform hover:scale-110 shadow-lg
+                      ${showServiceProviders 
+                        ? 'bg-gradient-to-br from-pink-600 to-pink-800 ring-2 ring-pink-400 scale-105' 
+                        : 'bg-gradient-to-br from-pink-500 to-pink-700 hover:from-pink-600 hover:to-pink-800'
+                      }
+                    `}
+                    title="Service Providers"
+                  >
+                    <Users className="w-10 h-10 text-white mb-2" />
+                    <span className="text-xs text-white font-bold text-center">Vendors</span>
+                  </button>
+                  <span className="text-xs text-gray-400 mt-3">Maintenance Partners</span>
+                </div>
+
+                {/* Cost Tracking Icon */}
+                <div className="flex flex-col items-center">
+                  <button 
+                    onClick={() => setShowCostTracking(!showCostTracking)}
+                    className={`
+                      flex flex-col items-center justify-center w-24 h-24 rounded-lg 
+                      transition-all transform hover:scale-110 shadow-lg
+                      ${showCostTracking 
+                        ? 'bg-gradient-to-br from-lime-600 to-lime-800 ring-2 ring-lime-400 scale-105' 
+                        : 'bg-gradient-to-br from-lime-500 to-lime-700 hover:from-lime-600 hover:to-lime-800'
+                      }
+                    `}
+                    title="Cost Tracking"
+                  >
+                    <CheckCircle className="w-10 h-10 text-white mb-2" />
+                    <span className="text-xs text-white font-bold text-center">Costs</span>
+                  </button>
+                  <span className="text-xs text-gray-400 mt-3">Budget Tracking</span>
+                </div>
+
+                {/* Compliance Log Icon */}
+                <div className="flex flex-col items-center">
+                  <button 
+                    onClick={() => setShowComplianceLog(!showComplianceLog)}
+                    className={`
+                      flex flex-col items-center justify-center w-24 h-24 rounded-lg 
+                      transition-all transform hover:scale-110 shadow-lg
+                      ${showComplianceLog 
+                        ? 'bg-gradient-to-br from-yellow-600 to-yellow-800 ring-2 ring-yellow-400 scale-105' 
+                        : 'bg-gradient-to-br from-yellow-500 to-yellow-700 hover:from-yellow-600 hover:to-yellow-800'
+                      }
+                    `}
+                    title="Compliance & Audit"
+                  >
+                    <CheckCircle className="w-10 h-10 text-white mb-2" />
+                    <span className="text-xs text-white font-bold text-center">Compliance</span>
+                  </button>
+                  <span className="text-xs text-gray-400 mt-3">Audit Trail</span>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Company Profile Form - Expandable */}
@@ -2315,6 +2952,19 @@ const CMMSModule = ({
                 Close
               </button>
             </div>
+          )}
+
+          {/* RENDER NEW FEATURE MANAGERS - ONLY SHOW IF PROFILE EXISTS */}
+          {hasBusinessProfile && (
+            <>
+              {showEquipmentManager && <EquipmentManager />}
+              {showWorkOrders && <WorkOrdersManager />}
+              {showInventory && <SparePartsManager />}
+              {showReports && <ReportsManager />}
+              {showServiceProviders && <ServiceProvidersManager />}
+              {showCostTracking && <CostTrackingManager />}
+              {showComplianceLog && <ComplianceLogManager />}
+            </>
           )}
         </div>
 

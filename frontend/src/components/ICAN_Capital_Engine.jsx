@@ -4060,25 +4060,38 @@ const ICANCapitalEngine = () => {
           setOpportunities(opps);
         }
 
-        // Fetch User Investments
-        const { data: invs, error: invErr } = await supabase
-          .from('investments')
-          .select('*')
-          .eq('user_id', user?.id)
-          .order('created_at', { ascending: false });
-        
-        if (!invErr && invs) {
-          setUserInvestments(invs);
+        // Fetch User Investments (only if user is authenticated)
+        if (user?.id) {
+          const { data: invs, error: invErr } = await supabase
+            .from('investments')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false });
+          
+          if (!invErr && invs) {
+            setUserInvestments(invs);
+          } else if (invErr) {
+            console.error('Error fetching investments:', invErr);
+          }
+        } else {
+          setUserInvestments([]);
         }
 
         // Fetch Available Grants
-        const { data: grants, error: grantErr } = await supabase
-          .from('grants')
-          .select('*')
-          .order('deadline', { ascending: true });
-        
-        if (!grantErr && grants) {
-          setAvailableGrants(grants);
+        try {
+          const { data: grants, error: grantErr } = await supabase
+            .from('grants')
+            .select('*')
+            .order('deadline', { ascending: true });
+          
+          if (!grantErr && grants) {
+            setAvailableGrants(grants);
+          } else if (grantErr) {
+            console.error('Error fetching grants:', grantErr);
+          }
+        } catch (err) {
+          console.error('Error fetching grants:', err);
+          setAvailableGrants([]);
         }
       } catch (error) {
         console.error('Error fetching share data:', error);
