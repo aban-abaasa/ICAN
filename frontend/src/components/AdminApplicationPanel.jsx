@@ -43,6 +43,12 @@ const AdminApplicationPanel = ({ groupId, onClose }) => {
   const [message, setMessage] = useState({ type: '', text: '' });
 
   useEffect(() => {
+    if (!groupId) {
+      setMessage({ type: 'error', text: 'Group ID is missing' });
+      return;
+    }
+    console.log('🔧 AdminApplicationPanel mounted for group:', groupId);
+    console.log('📋 Current user:', user?.id);
     loadData();
     // Poll for updates every 10 seconds
     const interval = setInterval(loadData, 10000);
@@ -51,6 +57,7 @@ const AdminApplicationPanel = ({ groupId, onClose }) => {
 
   const loadData = async () => {
     setLoading(true);
+    console.log('📥 Loading admin data for group:', groupId);
     try {
       const [pending, voting, groupStats] = await Promise.all([
         getPendingApplicationsForAdmin(groupId),
@@ -58,12 +65,18 @@ const AdminApplicationPanel = ({ groupId, onClose }) => {
         getGroupVotingStats(groupId)
       ]);
 
+      console.log('✅ Admin data loaded:', {
+        pendingCount: pending?.length,
+        votingCount: voting?.length,
+        stats: groupStats
+      });
+
       setPendingApps(pending || []);
       setVotingApps(voting || []);
       setStats(groupStats);
     } catch (error) {
-      console.error('Error loading data:', error);
-      setMessage({ type: 'error', text: 'Failed to load applications' });
+      console.error('❌ Error loading data:', error);
+      setMessage({ type: 'error', text: `Failed to load applications: ${error.message}` });
     } finally {
       setLoading(false);
     }
@@ -72,17 +85,21 @@ const AdminApplicationPanel = ({ groupId, onClose }) => {
   const handleApprove = async (applicationId) => {
     setProcessing(true);
     setMessage({ type: '', text: '' });
+    console.log('✅ Approving application:', { applicationId, groupId, adminId: user?.id });
     try {
       const result = await adminApproveApplication(applicationId, groupId, user?.id);
+
+      console.log('📤 Approve result:', result);
 
       if (result.success) {
         setMessage({ type: 'success', text: result.message || '✓ Application approved! Member voting has started.' });
         setTimeout(() => loadData(), 1500);
       } else {
         setMessage({ type: 'error', text: result.error || 'Failed to approve application' });
+        console.error('Approve failed:', result.error);
       }
     } catch (error) {
-      console.error('Error approving:', error);
+      console.error('❌ Error approving:', error);
       setMessage({ type: 'error', text: error.message || 'Error approving application' });
     } finally {
       setProcessing(false);
@@ -92,17 +109,21 @@ const AdminApplicationPanel = ({ groupId, onClose }) => {
   const handleReject = async (applicationId) => {
     setProcessing(true);
     setMessage({ type: '', text: '' });
+    console.log('❌ Rejecting application:', { applicationId, adminId: user?.id });
     try {
       const result = await adminRejectApplication(applicationId, user?.id);
+
+      console.log('📥 Reject result:', result);
 
       if (result.success) {
         setMessage({ type: 'success', text: result.message || '✓ Application rejected.' });
         setTimeout(() => loadData(), 1500);
       } else {
         setMessage({ type: 'error', text: result.error || 'Failed to reject application' });
+        console.error('Reject failed:', result.error);
       }
     } catch (error) {
-      console.error('Error rejecting:', error);
+      console.error('❌ Error rejecting:', error);
       setMessage({ type: 'error', text: error.message || 'Error rejecting application' });
     } finally {
       setProcessing(false);
