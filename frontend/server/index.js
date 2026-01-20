@@ -7,6 +7,8 @@ import contractVettingRouter from './routes/contractVetting.js';
 import globalNavigatorRouter from './routes/globalNavigator.js';
 import scheduleOptimizerRouter from './routes/scheduleOptimizer.js';
 import blockchainRouter from './routes/blockchain.js';
+import authRoutes from './routes/authRoutes.js';
+import momoRoutes from '../backend/routes/momoRoutes.js';
 import authMiddleware from './middleware/auth.js';
 import securityMiddleware from './middleware/security.js';
 import rateLimitMiddleware from './middleware/rateLimit.js';
@@ -52,6 +54,8 @@ app.get('/health', (req, res) => {
 });
 
 // API Routes with authentication
+app.use('/api/auth', authRoutes);
+app.use('/api/momo', momoRoutes);
 app.use('/api/ai/vet_contract', authMiddleware, contractVettingRouter);
 app.use('/api/ai/global_navigator', authMiddleware, globalNavigatorRouter);
 app.use('/api/ai/daily_schedule', authMiddleware, scheduleOptimizerRouter);

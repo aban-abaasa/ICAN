@@ -116,11 +116,11 @@ export const ConsolidatedNavigation = ({
       isAction: true,
       action: onWalletClick,
       submenu: [
-        { label: 'My Wallet', id: 'wallet', icon: Wallet },
-        { label: 'Send Money', id: 'wallet-send', icon: Banknote },
-        { label: 'Receive', id: 'wallet-receive', icon: TrendingUp },
-        { label: 'Transactions', id: 'wallet-transactions', icon: BarChart3 },
-        { label: 'Currency', id: 'wallet-currency', icon: Globe }
+        // { label: 'My Wallet', id: 'wallet', icon: Wallet },
+        // { label: 'Send Money', id: 'wallet-send', icon: Banknote },
+        // { label: 'Receive', id: 'wallet-receive', icon: TrendingUp },
+        // { label: 'Transactions', id: 'wallet-transactions', icon: BarChart3 },
+        // { label: 'Currency', id: 'wallet-currency', icon: Globe }
       ]
     },
     {

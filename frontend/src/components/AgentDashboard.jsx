@@ -1,0 +1,1019 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  DollarSign, 
+  Plus, 
+  Minus, 
+  RefreshCw, 
+  TrendingUp,
+  AlertCircle,
+  CheckCircle,
+  Clock,
+  LogOut,
+  BarChart3
+} from 'lucide-react';
+import agentService from '../services/agentService';
+
+/**
+ * 🏪 AGENT DASHBOARD
+ * Dual-Currency Terminal for Cash-In, Cash-Out, and Float Management
+ */
+const AgentDashboard = () => {
+  // ============================================
+  // STATE MANAGEMENT
+  // ============================================
+  
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [usdFloat, setUsdFloat] = useState(0);
+  const [ugxFloat, setUgxFloat] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [notification, setNotification] = useState(null);
+
+  // Cash-In Form
+  const [cashInForm, setCashInForm] = useState({
+    userAccountId: '',
+    amount: '',
+    currency: 'USD',
+    description: ''
+  });
+
+  // Cash-Out Form
+  const [cashOutForm, setCashOutForm] = useState({
+    userAccountId: '',
+    amount: '',
+    currency: 'USD'
+  });
+
+  // Float Top-Up Form
+  const [topUpForm, setTopUpForm] = useState({
+    amount: '',
+    currency: 'USD',
+    phoneNumber: ''
+  });
+
+  const [recentTransactions, setRecentTransactions] = useState([]);
+  const [settlementData, setSettlementData] = useState(null);
+  
+  // Confirmation Modal State
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [confirmationData, setConfirmationData] = useState(null);
+  const [confirmationAction, setConfirmationAction] = useState(null);
+
+  // Agent Profile Edit State
+  const [showAgentEdit, setShowAgentEdit] = useState(false);
+  const [agentData, setAgentData] = useState(null);
+  const [agentEditForm, setAgentEditForm] = useState({
+    agentName: '',
+    phoneNumber: '',
+    locationCity: '',
+    locationName: '',
+    pin: '',
+    enableFingerprint: false
+  });
+  const [agentEditLoading, setAgentEditLoading] = useState(false);
+  const [agentMessage, setAgentMessage] = useState(null);
+  const [showPinInput, setShowPinInput] = useState(false);
+  const [showFingerprintSetup, setShowFingerprintSetup] = useState(false);
+
+  // ============================================
+  // LIFECYCLE
+  // ============================================
+
+  useEffect(() => {
+    initializeAgent();
+  }, []);
+
+  const initializeAgent = async () => {
+    setLoading(true);
+    const initialized = await agentService.initialize();
+    if (initialized) {
+      await refreshFloatBalances();
+      await refreshRecentTransactions();
+      
+      // Get agent details for editing
+      if (agentService.agentId) {
+        const details = await agentService.getAgentDetails(agentService.agentId);
+        if (details) {
+          setAgentData(details);
+          setAgentEditForm({
+            agentName: details.agent_name || '',
+            phoneNumber: details.phone_number || '',
+            locationCity: details.location_city || '',
+            locationName: details.location_name || '',
+            pin: details.pin || '',
+            enableFingerprint: details.enable_fingerprint || false
+          });
+        }
+      }
+    }
+    setLoading(false);
+  };
+
+  const refreshFloatBalances = async () => {
+    const balances = await agentService.getFloatBalances();
+    if (balances) {
+      setUsdFloat(balances.USD?.current_balance || 0);
+      setUgxFloat(balances.UGX?.current_balance || 0);
+    }
+  };
+
+  const refreshRecentTransactions = async () => {
+    const transactions = await agentService.getRecentTransactions(20);
+    setRecentTransactions(transactions);
+  };
+
+  // ============================================
+  // CASH-IN HANDLER
+  // ============================================
+
+  const handleCashIn = async (e) => {
+    e.preventDefault();
+    
+    // Show confirmation modal instead of directly processing
+    if (!showConfirmation) {
+      setConfirmationData({
+        type: 'cashIn',
+        userAccountId: cashInForm.userAccountId,
+        amount: cashInForm.amount,
+        currency: cashInForm.currency,
+        description: cashInForm.description
+      });
+      setConfirmationAction('cashIn');
+      setShowConfirmation(true);
+      return;
+    }
+  };
+
+  // Process Cash-In after confirmation
+  const processCashInConfirmed = async () => {
+    setLoading(true);
+    setNotification(null);
+
+    const result = await agentService.processCashIn({
+      userAccountId: confirmationData.userAccountId,
+      amount: parseFloat(confirmationData.amount),
+      currency: confirmationData.currency,
+      description: confirmationData.description
+    });
+
+    setLoading(false);
+    setShowConfirmation(false);
+
+    if (result.success) {
+      setNotification({
+        type: 'success',
+        title: '✅ Cash-In Successful',
+        message: `${result.amount} ${result.currency} transferred to user. New balance: ${result.newAgentBalance}`
+      });
+      setCashInForm({ userAccountId: '', amount: '', currency: 'USD', description: '' });
+      await refreshFloatBalances();
+      await refreshRecentTransactions();
+    } else {
+      setNotification({
+        type: 'error',
+        title: '❌ Cash-In Failed',
+        message: result.error
+      });
+    }
+  };
+
+  // ============================================
+  // CASH-OUT HANDLER
+  // ============================================
+
+  const handleCashOut = async (e) => {
+    e.preventDefault();
+    
+    // Show confirmation modal instead of directly processing
+    if (!showConfirmation) {
+      setConfirmationData({
+        type: 'cashOut',
+        userAccountId: cashOutForm.userAccountId,
+        amount: cashOutForm.amount,
+        currency: cashOutForm.currency
+      });
+      setConfirmationAction('cashOut');
+      setShowConfirmation(true);
+      return;
+    }
+  };
+
+  // Process Cash-Out after confirmation
+  const processCashOutConfirmed = async () => {
+    setLoading(true);
+    setNotification(null);
+
+    const result = await agentService.processCashOut({
+      userAccountId: confirmationData.userAccountId,
+      amount: parseFloat(confirmationData.amount),
+      currency: confirmationData.currency
+    });
+
+    setLoading(false);
+    setShowConfirmation(false);
+
+    if (result.success) {
+      setNotification({
+        type: 'success',
+        title: '✅ Cash-Out Successful',
+        message: `${result.amount} ${result.currency} withdrawn. Commission earned: ${result.commissionEarned} ${result.currency}`
+      });
+      setCashOutForm({ userAccountId: '', amount: '', currency: 'USD' });
+      await refreshFloatBalances();
+      await refreshRecentTransactions();
+    } else {
+      setNotification({
+        type: 'error',
+        title: '❌ Cash-Out Failed',
+        message: result.error
+      });
+    }
+  };
+
+  // ============================================
+  // FLOAT TOP-UP HANDLER
+  // ============================================
+
+  const handleTopUp = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setNotification(null);
+
+    const result = await agentService.processFloatTopUp({
+      amount: parseFloat(topUpForm.amount),
+      currency: topUpForm.currency,
+      phoneNumber: topUpForm.phoneNumber
+    });
+
+    setLoading(false);
+
+    if (result.success) {
+      setNotification({
+        type: 'info',
+        title: '📱 MOMO Request Sent',
+        message: result.message
+      });
+      setTopUpForm({ amount: '', currency: 'USD', phoneNumber: '' });
+    } else {
+      setNotification({
+        type: 'error',
+        title: '❌ Top-Up Failed',
+        message: result.error
+      });
+    }
+  };
+
+  // ============================================
+  // SETTLEMENT HANDLER
+  // ============================================
+
+  const handleSubmitSettlement = async () => {
+    setLoading(true);
+    const result = await agentService.submitSettlement({
+      usdClosing: usdFloat,
+      ugxClosing: ugxFloat,
+      shiftNumber: 1,
+      notes: settlementData?.notes || ''
+    });
+    setLoading(false);
+
+    if (result.success) {
+      setNotification({
+        type: 'success',
+        title: '✅ Settlement Submitted',
+        message: 'Your shift settlement has been recorded.'
+      });
+    } else {
+      setNotification({
+        type: 'error',
+        title: '❌ Settlement Failed',
+        message: result.error
+      });
+    }
+  };
+
+  // ============================================
+  // RENDER HELPERS
+  // ============================================
+
+  const renderNotification = () => {
+    if (!notification) return null;
+
+    const bgColor = {
+      success: 'bg-green-900/30 border-green-500',
+      error: 'bg-red-900/30 border-red-500',
+      info: 'bg-blue-900/30 border-blue-500'
+    }[notification.type];
+
+    const icon = {
+      success: <CheckCircle className="w-5 h-5 text-green-400" />,
+      error: <AlertCircle className="w-5 h-5 text-red-400" />,
+      info: <Clock className="w-5 h-5 text-blue-400" />
+    }[notification.type];
+
+    return (
+      <div className={`border ${bgColor} rounded-lg p-4 flex gap-3 mb-4`}>
+        {icon}
+        <div>
+          <h3 className="font-semibold text-white">{notification.title}</h3>
+          <p className="text-gray-300 text-sm">{notification.message}</p>
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================
+  // CONFIRMATION MODAL
+  // ============================================
+  
+  const renderConfirmationModal = () => {
+    if (!showConfirmation || !confirmationData) return null;
+
+    const isCashIn = confirmationData.type === 'cashIn';
+    const title = isCashIn ? '💰 Confirm Cash-In' : '📤 Confirm Cash-Out';
+    const actionColor = isCashIn ? 'from-green-600 to-green-700' : 'from-orange-600 to-orange-700';
+    const actionButtonText = isCashIn ? '✅ Confirm Cash-In' : '✅ Confirm Cash-Out';
+
+    return (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-purple-500/30 rounded-lg p-8 max-w-md w-full">
+          {/* Header */}
+          <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+            {isCashIn ? '💰' : '📤'} {title}
+          </h2>
+
+          {/* Confirmation Details */}
+          <div className="space-y-4 mb-8">
+            <div className="bg-white/10 border border-white/20 rounded-lg p-4">
+              <p className="text-gray-400 text-sm mb-1">Transaction Type</p>
+              <p className="text-white font-semibold text-lg">
+                {isCashIn ? 'Cash-In (Transfer to User)' : 'Cash-Out (User Withdrawal)'}
+              </p>
+            </div>
+
+            <div className="bg-white/10 border border-white/20 rounded-lg p-4">
+              <p className="text-gray-400 text-sm mb-1">Amount</p>
+              <p className="text-white font-bold text-2xl">
+                {confirmationData.currency} {parseFloat(confirmationData.amount).toLocaleString()}
+              </p>
+            </div>
+
+            <div className="bg-white/10 border border-white/20 rounded-lg p-4">
+              <p className="text-gray-400 text-sm mb-1">User Account ID</p>
+              <p className="text-white font-mono text-sm break-all">
+                {confirmationData.userAccountId}
+              </p>
+            </div>
+
+            {confirmationData.description && (
+              <div className="bg-white/10 border border-white/20 rounded-lg p-4">
+                <p className="text-gray-400 text-sm mb-1">Description</p>
+                <p className="text-white text-sm">{confirmationData.description}</p>
+              </div>
+            )}
+
+            {!isCashIn && (
+              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+                <p className="text-yellow-300 text-sm">
+                  <strong>💡 Note:</strong> You will earn 2.5% commission on this transaction
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                setShowConfirmation(false);
+                setConfirmationData(null);
+                setConfirmationAction(null);
+              }}
+              disabled={loading}
+              className="flex-1 px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all font-medium disabled:opacity-50"
+            >
+              ❌ Cancel
+            </button>
+            <button
+              onClick={isCashIn ? processCashInConfirmed : processCashOutConfirmed}
+              disabled={loading}
+              className={`flex-1 px-4 py-3 bg-gradient-to-r ${actionColor} text-white rounded-lg font-medium hover:shadow-lg transition-all disabled:opacity-50`}
+            >
+              {loading ? '⏳ Processing...' : actionButtonText}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================
+  // AGENT PROFILE EDIT HANDLER
+  // ============================================
+
+  const handleEditAgentProfile = async (e) => {
+    e.preventDefault();
+    setAgentEditLoading(true);
+    setAgentMessage(null);
+
+    try {
+      if (!agentService.agentId) {
+        setAgentMessage({
+          type: 'error',
+          text: 'Agent ID not found'
+        });
+        setAgentEditLoading(false);
+        return;
+      }
+
+      const result = await agentService.updateAgentProfile(agentService.agentId, {
+        agentName: agentEditForm.agentName,
+        phoneNumber: agentEditForm.phoneNumber,
+        locationCity: agentEditForm.locationCity,
+        locationName: agentEditForm.locationName,
+        pin: agentEditForm.pin,
+        enableFingerprint: agentEditForm.enableFingerprint
+      });
+
+      if (!result.success) {
+        setAgentMessage({
+          type: 'error',
+          text: `Update failed: ${result.error}`
+        });
+        setAgentEditLoading(false);
+        return;
+      }
+
+      setAgentMessage({
+        type: 'success',
+        text: '✅ Profile updated successfully!'
+      });
+
+      setAgentData(result.agent);
+
+      setTimeout(() => {
+        setShowAgentEdit(false);
+      }, 1500);
+
+    } catch (error) {
+      console.error('❌ Edit failed:', error);
+      setAgentMessage({
+        type: 'error',
+        text: `Update failed: ${error.message}`
+      });
+    } finally {
+      setAgentEditLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4 md:p-8">
+      <div className="max-w-7xl mx-auto">
+
+        {/* ============================================ */}
+        {/* HEADER */}
+        {/* ============================================ */}
+
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-4xl font-bold text-white mb-2">🏪 Agent Terminal</h1>
+              <p className="text-gray-400">Dual-Currency Bureau de Change Operations</p>
+            </div>
+            <button
+              onClick={() => setShowAgentEdit(true)}
+              className="px-4 py-2 bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 rounded-lg text-sm font-medium transition-all border border-blue-500/30"
+            >
+              ✏️ Edit Profile
+            </button>
+          </div>
+        </div>
+
+        {/* ============================================ */}
+        {/* NOTIFICATIONS */}
+        {/* ============================================ */}
+
+        {renderNotification()}
+
+        {/* ============================================ */}
+        {/* AGENT EDIT MODAL */}
+        {/* ============================================ */}
+
+        {showAgentEdit && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="glass-card p-8 w-full max-w-md max-h-[90vh] overflow-y-auto">
+              <h2 className="text-3xl font-bold text-white mb-6 flex items-center gap-2">
+                ✏️ Edit Agent Profile
+              </h2>
+
+              {agentMessage && (
+                <div className={`mb-6 p-4 rounded-lg border ${
+                  agentMessage.type === 'success' 
+                    ? 'bg-green-500/20 border-green-500/50 text-green-400' 
+                    : 'bg-red-500/20 border-red-500/50 text-red-400'
+                }`}>
+                  {agentMessage.text}
+                </div>
+              )}
+
+              <form onSubmit={handleEditAgentProfile} className="space-y-4">
+                {/* Agent Name */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Agent Name</label>
+                  <input
+                    type="text"
+                    value={agentEditForm.agentName}
+                    onChange={(e) => setAgentEditForm({ ...agentEditForm, agentName: e.target.value })}
+                    placeholder="Enter agent name"
+                    className="w-full px-4 py-3 bg-slate-700/50 border border-blue-500/30 hover:border-blue-500/60 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none transition-all"
+                  />
+                </div>
+
+                {/* Phone Number */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Phone Number</label>
+                  <input
+                    type="tel"
+                    value={agentEditForm.phoneNumber}
+                    onChange={(e) => setAgentEditForm({ ...agentEditForm, phoneNumber: e.target.value })}
+                    placeholder="+256..."
+                    className="w-full px-4 py-3 bg-slate-700/50 border border-blue-500/30 hover:border-blue-500/60 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none transition-all"
+                  />
+                </div>
+
+                {/* Location City */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Location City</label>
+                  <input
+                    type="text"
+                    value={agentEditForm.locationCity}
+                    onChange={(e) => setAgentEditForm({ ...agentEditForm, locationCity: e.target.value })}
+                    placeholder="e.g., Kampala"
+                    className="w-full px-4 py-3 bg-slate-700/50 border border-blue-500/30 hover:border-blue-500/60 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none transition-all"
+                  />
+                </div>
+
+                {/* Location Name */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Location Name</label>
+                  <input
+                    type="text"
+                    value={agentEditForm.locationName}
+                    onChange={(e) => setAgentEditForm({ ...agentEditForm, locationName: e.target.value })}
+                    placeholder="e.g., Downtown Branch"
+                    className="w-full px-4 py-3 bg-slate-700/50 border border-blue-500/30 hover:border-blue-500/60 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none transition-all"
+                  />
+                </div>
+
+                {/* Security Settings Section */}
+                <div className="border-t border-blue-500/20 pt-4 mt-4">
+                  <h4 className="text-sm font-semibold text-blue-300 mb-3">🔐 Security Settings</h4>
+
+                  {/* PIN */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Transaction PIN (4-6 digits)</label>
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type={showPinInput ? "text" : "password"}
+                        value={agentEditForm.pin}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, '');
+                          if (value.length <= 6) {
+                            setAgentEditForm({ ...agentEditForm, pin: value });
+                          }
+                        }}
+                        placeholder="Enter 4-6 digit PIN"
+                        maxLength="6"
+                        className="flex-1 px-4 py-3 bg-slate-700/50 border border-blue-500/30 hover:border-blue-500/60 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPinInput(!showPinInput)}
+                        className="px-3 py-2 bg-slate-600/50 hover:bg-slate-600 text-gray-300 rounded-lg transition-all"
+                        title={showPinInput ? "Hide PIN" : "Show PIN"}
+                      >
+                        {showPinInput ? "👁️" : "👁️‍🗨️"}
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">Used to authorize transactions</p>
+                  </div>
+
+                  {/* Fingerprint Toggle */}
+                  <div className="mt-4">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={agentEditForm.enableFingerprint}
+                        onChange={(e) => {
+                          setAgentEditForm({ ...agentEditForm, enableFingerprint: e.target.checked });
+                          if (e.target.checked) {
+                            setShowFingerprintSetup(true);
+                          }
+                        }}
+                        className="w-5 h-5 rounded border-blue-500/50 bg-slate-700/50 checked:bg-blue-600 cursor-pointer"
+                      />
+                      <div>
+                        <p className="text-sm font-medium text-gray-300">Enable Fingerprint Sign-In</p>
+                        <p className="text-xs text-gray-500">Faster authentication on this device</p>
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* Fingerprint Setup Info */}
+                  {showFingerprintSetup && agentEditForm.enableFingerprint && (
+                    <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                      <p className="text-xs text-blue-300">
+                        ✓ Fingerprint authentication will be enabled on your next login
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowAgentEdit(false)}
+                    disabled={agentEditLoading}
+                    className="flex-1 px-4 py-3 bg-slate-600/50 hover:bg-slate-600 text-white rounded-lg font-semibold transition-all disabled:opacity-50"
+                  >
+                    ❌ Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={agentEditLoading}
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-lg font-semibold transition-all disabled:opacity-50"
+                  >
+                    {agentEditLoading ? '⏳ Saving...' : '💾 Save Changes'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================ */}
+        {/* CONFIRMATION MODAL */}
+        {/* ============================================ */}
+
+        {renderConfirmationModal()}
+
+        {/* ============================================ */}
+        {/* FLOAT BALANCES - MAIN CARDS */}
+        {/* ============================================ */}
+
+        <div className="grid md:grid-cols-2 gap-4 mb-8">
+          {/* USD Float */}
+          <div className="bg-gradient-to-br from-emerald-900/40 to-emerald-800/20 border border-emerald-500/30 rounded-xl p-6">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <p className="text-emerald-300 text-sm font-semibold mb-1">USD Float Balance</p>
+                <p className="text-4xl font-bold text-white">${usdFloat.toFixed(2)}</p>
+              </div>
+              <DollarSign className="w-10 h-10 text-emerald-400 opacity-50" />
+            </div>
+            <div className="space-y-2 text-sm text-gray-300">
+              <div className="flex justify-between">
+                <span>Available</span>
+                <span className="text-emerald-400 font-semibold">${usdFloat.toFixed(2)}</span>
+              </div>
+              <div className="h-1 bg-emerald-900/50 rounded-full overflow-hidden">
+                <div className="h-full w-3/4 bg-emerald-500"></div>
+              </div>
+            </div>
+          </div>
+
+          {/* UGX Float */}
+          <div className="bg-gradient-to-br from-amber-900/40 to-amber-800/20 border border-amber-500/30 rounded-xl p-6">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <p className="text-amber-300 text-sm font-semibold mb-1">UGX Float Balance</p>
+                <p className="text-4xl font-bold text-white">₦{(ugxFloat / 1000).toFixed(2)}K</p>
+              </div>
+              <TrendingUp className="w-10 h-10 text-amber-400 opacity-50" />
+            </div>
+            <div className="space-y-2 text-sm text-gray-300">
+              <div className="flex justify-between">
+                <span>Available</span>
+                <span className="text-amber-400 font-semibold">₦{ugxFloat.toLocaleString()}</span>
+              </div>
+              <div className="h-1 bg-amber-900/50 rounded-full overflow-hidden">
+                <div className="h-full w-4/5 bg-amber-500"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ============================================ */}
+        {/* TAB NAVIGATION */}
+        {/* ============================================ */}
+
+        <div className="flex gap-2 mb-8 flex-wrap">
+          {[
+            { id: 'dashboard', label: '📊 Dashboard', icon: BarChart3 },
+            { id: 'cash-in', label: '💰 Cash-In', icon: Plus },
+            { id: 'cash-out', label: '💸 Cash-Out', icon: Minus },
+            { id: 'topup', label: '⬆️ Top-Up', icon: RefreshCw },
+            { id: 'settlement', label: '✅ Settlement', icon: CheckCircle }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition ${
+                activeTab === tab.id
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-purple-900/30 text-purple-300 hover:bg-purple-900/50'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ============================================ */}
+        {/* TAB CONTENT */}
+        {/* ============================================ */}
+
+        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
+
+          {/* DASHBOARD TAB */}
+          {activeTab === 'dashboard' && (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-bold text-white">Recent Settlements</h2>
+              
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {recentTransactions.length === 0 ? (
+                  <p className="text-gray-400 text-center py-8">No transactions yet</p>
+                ) : (
+                  recentTransactions.map(tx => (
+                    <div key={tx.id} className="bg-slate-700/50 border border-slate-600/50 rounded-lg p-4 flex justify-between items-center">
+                      <div>
+                        <p className="text-white font-semibold capitalize">{tx.transaction_type}</p>
+                        <p className="text-gray-400 text-sm">{tx.reference_number}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className={`font-bold ${
+                          tx.transaction_type === 'cash_out' ? 'text-green-400' : 'text-red-400'
+                        }`}>
+                          {tx.transaction_type === 'cash_out' ? '+' : '-'}{tx.amount} {tx.currency}
+                        </p>
+                        <p className={`text-sm ${
+                          tx.status === 'completed' ? 'text-green-400' : 'text-yellow-400'
+                        }`}>
+                          {tx.status}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* CASH-IN TAB */}
+          {activeTab === 'cash-in' && (
+            <div className="max-w-2xl">
+              <h2 className="text-2xl font-bold text-white mb-6">💰 Process Cash-In</h2>
+              
+              <form onSubmit={handleCashIn} className="space-y-4">
+                <div>
+                  <label className="block text-gray-300 font-semibold mb-2">User Account ID</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., user-12345 or ACC-001"
+                    value={cashInForm.userAccountId}
+                    onChange={(e) => setCashInForm({...cashInForm, userAccountId: e.target.value})}
+                    className="w-full bg-slate-700/50 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                    required
+                  />
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-gray-300 font-semibold mb-2">Currency</label>
+                    <select
+                      value={cashInForm.currency}
+                      onChange={(e) => setCashInForm({...cashInForm, currency: e.target.value})}
+                      className="w-full bg-slate-700/50 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500"
+                    >
+                      <option value="USD">🇺🇸 USD</option>
+                      <option value="UGX">🇺🇬 UGX</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-300 font-semibold mb-2">Amount</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="Amount received"
+                      value={cashInForm.amount}
+                      onChange={(e) => setCashInForm({...cashInForm, amount: e.target.value})}
+                      className="w-full bg-slate-700/50 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-gray-300 font-semibold mb-2">Description</label>
+                  <textarea
+                    placeholder="Transaction note (optional)"
+                    value={cashInForm.description}
+                    onChange={(e) => setCashInForm({...cashInForm, description: e.target.value})}
+                    className="w-full bg-slate-700/50 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 h-20"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 disabled:opacity-50 text-white font-bold py-3 rounded-lg transition flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-5 h-5" />
+                  {loading ? 'Processing...' : 'Complete Cash-In'}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* CASH-OUT TAB */}
+          {activeTab === 'cash-out' && (
+            <div className="max-w-2xl">
+              <h2 className="text-2xl font-bold text-white mb-6">💸 Process Cash-Out</h2>
+              
+              <form onSubmit={handleCashOut} className="space-y-4">
+                <div>
+                  <label className="block text-gray-300 font-semibold mb-2">User Account ID</label>
+                  <input
+                    type="text"
+                    placeholder="Verify customer account"
+                    value={cashOutForm.userAccountId}
+                    onChange={(e) => setCashOutForm({...cashOutForm, userAccountId: e.target.value})}
+                    className="w-full bg-slate-700/50 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                    required
+                  />
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-gray-300 font-semibold mb-2">Currency</label>
+                    <select
+                      value={cashOutForm.currency}
+                      onChange={(e) => setCashOutForm({...cashOutForm, currency: e.target.value})}
+                      className="w-full bg-slate-700/50 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500"
+                    >
+                      <option value="USD">🇺🇸 USD</option>
+                      <option value="UGX">🇺🇬 UGX</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-300 font-semibold mb-2">Amount to Withdraw</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="Amount to give"
+                      value={cashOutForm.amount}
+                      onChange={(e) => setCashOutForm({...cashOutForm, amount: e.target.value})}
+                      className="w-full bg-slate-700/50 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-blue-900/30 border border-blue-500/30 rounded-lg p-4">
+                  <p className="text-blue-300 text-sm">
+                    <strong>Commission:</strong> 2.5% will be earned on this transaction
+                  </p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 disabled:opacity-50 text-white font-bold py-3 rounded-lg transition flex items-center justify-center gap-2"
+                >
+                  <Minus className="w-5 h-5" />
+                  {loading ? 'Processing...' : 'Complete Cash-Out'}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* TOP-UP TAB */}
+          {activeTab === 'topup' && (
+            <div className="max-w-2xl">
+              <h2 className="text-2xl font-bold text-white mb-6">⬆️ Refill Float</h2>
+              
+              <form onSubmit={handleTopUp} className="space-y-4">
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-gray-300 font-semibold mb-2">Currency</label>
+                    <select
+                      value={topUpForm.currency}
+                      onChange={(e) => setTopUpForm({...topUpForm, currency: e.target.value})}
+                      className="w-full bg-slate-700/50 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500"
+                    >
+                      <option value="USD">🇺🇸 USD</option>
+                      <option value="UGX">🇺🇬 UGX</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-300 font-semibold mb-2">Top-Up Amount</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="Amount needed"
+                      value={topUpForm.amount}
+                      onChange={(e) => setTopUpForm({...topUpForm, amount: e.target.value})}
+                      className="w-full bg-slate-700/50 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-gray-300 font-semibold mb-2">MOMO Phone Number</label>
+                  <input
+                    type="tel"
+                    placeholder="e.g., 256701234567"
+                    value={topUpForm.phoneNumber}
+                    onChange={(e) => setTopUpForm({...topUpForm, phoneNumber: e.target.value})}
+                    className="w-full bg-slate-700/50 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                    required
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 disabled:opacity-50 text-white font-bold py-3 rounded-lg transition flex items-center justify-center gap-2"
+                >
+                  <RefreshCw className="w-5 h-5" />
+                  {loading ? 'Sending MOMO...' : 'Send MOMO Request'}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* SETTLEMENT TAB */}
+          {activeTab === 'settlement' && (
+            <div>
+              <h2 className="text-2xl font-bold text-white mb-6">✅ End of Shift Settlement</h2>
+              
+              <div className="space-y-6">
+                <div className="grid md:grid-cols-2 gap-6">
+                  {/* USD Settlement */}
+                  <div className="bg-emerald-900/30 border border-emerald-500/30 rounded-lg p-4">
+                    <h3 className="text-emerald-300 font-semibold mb-4">USD Settlement</h3>
+                    <div className="space-y-3">
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Closing Balance</span>
+                        <span className="text-white font-semibold">${usdFloat.toFixed(2)}</span>
+                      </div>
+                      <div className="h-1 bg-emerald-900 rounded"></div>
+                      <button
+                        onClick={() => setSettlementData({...settlementData, usdConfirmed: true})}
+                        className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg font-semibold transition"
+                      >
+                        ✓ Confirm USD
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* UGX Settlement */}
+                  <div className="bg-amber-900/30 border border-amber-500/30 rounded-lg p-4">
+                    <h3 className="text-amber-300 font-semibold mb-4">UGX Settlement</h3>
+                    <div className="space-y-3">
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Closing Balance</span>
+                        <span className="text-white font-semibold">₦{ugxFloat.toLocaleString()}</span>
+                      </div>
+                      <div className="h-1 bg-amber-900 rounded"></div>
+                      <button
+                        onClick={() => setSettlementData({...settlementData, ugxConfirmed: true})}
+                        className="w-full bg-amber-600 hover:bg-amber-500 text-white py-2 rounded-lg font-semibold transition"
+                      >
+                        ✓ Confirm UGX
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleSubmitSettlement}
+                  disabled={loading}
+                  className="w-full bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 disabled:opacity-50 text-white font-bold py-3 rounded-lg transition"
+                >
+                  {loading ? 'Submitting...' : 'Submit Shift Settlement'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AgentDashboard;

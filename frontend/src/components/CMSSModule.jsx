@@ -194,6 +194,7 @@ const CMMSModule = ({
       // If user is logged in, check if they're in the cmms_users table
       if (user?.email) {
         console.log('🔍 Searching for user in CMMS database:', user.email);
+        console.log('📡 Checking Supabase for existing account data...');
         
         // Step 1: Find user in cmms_users table (case-insensitive search)
         const { data: cmmsUsers, error: userError } = await supabase
@@ -207,12 +208,15 @@ const CMMSModule = ({
 
         if (cmmsUsers && cmmsUsers.length > 0) {
           const cmmsUser = cmmsUsers[0];
+          console.log('✅✅✅ USER FOUND! Loading cloud data from another machine...');
           console.log('✅ User found in CMMS database:', cmmsUser.email);
           console.log('✅ User company ID:', cmmsUser.cmms_company_id);
+          console.log('✅ CMMS User ID:', cmmsUser.id);
           
           // Save company ID and user ID to localStorage and state
           localStorage.setItem('cmms_company_id', cmmsUser.cmms_company_id);
           localStorage.setItem('cmms_user_id', cmmsUser.id);
+          localStorage.setItem('cmms_user_email', cmmsUser.email);
           setUserCompanyId(cmmsUser.cmms_company_id);
           setCmmsUserId(cmmsUser.id);
           setNotificationCompanyId(cmmsUser.cmms_company_id);  // For welcome page notifications
@@ -239,6 +243,7 @@ const CMMSModule = ({
             console.log(`✅ User authorized with primary role: ${primaryRole}`);
             
             localStorage.setItem('cmms_user_role', primaryRole);
+            localStorage.setItem('cmms_user_profile', 'true');
             setUserRole(primaryRole);
             setHasBusinessProfile(true);  // ✅ SET THIS SO DASHBOARD LOADS
             setIsAuthorized(true);
@@ -247,6 +252,7 @@ const CMMSModule = ({
           } else {
             console.log('⚠️ User in CMMS but no active roles assigned - assigning viewer role');
             localStorage.setItem('cmms_user_role', 'viewer');
+            localStorage.setItem('cmms_user_profile', 'true');
             setUserRole('viewer');
             setHasBusinessProfile(true);  // ✅ SET THIS SO DASHBOARD LOADS
             setIsAuthorized(true);
@@ -257,7 +263,10 @@ const CMMSModule = ({
           // Load company data
           console.log('📂 Loading company data for company_id:', cmmsUser.cmms_company_id);
           await loadCompanyData(cmmsUser.cmms_company_id);  // Pass company ID directly
+          console.log('✅✅✅ CLOUD DATA LOADED SUCCESSFULLY!');
           return;
+        } else {
+          console.log('ℹ️ User not found in CMMS database - this is a new user on this machine');
         }
       }
 

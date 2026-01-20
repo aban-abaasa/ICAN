@@ -5,9 +5,9 @@
  * Security: ALWAYS verify on server, never trust frontend!
  */
 
-import express from 'express';
-import { createClient } from '@supabase/supabase-js';
-import axios from 'axios';
+const express = require('express');
+const { createClient } = require('@supabase/supabase-js');
+const axios = require('axios');
 
 const router = express.Router();
 
@@ -204,4 +204,4 @@ router.get('/status/:reference', async (req, res) => {
   }
 });
 
-export default router;
+module.exports = router;

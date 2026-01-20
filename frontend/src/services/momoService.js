@@ -1,74 +1,24 @@
 /**
  * 📱 Mobile Money (MOMO) API Service
  * Handles all mobile money transactions for wallet top-ups and transfers
+ * ✅ Routes ALL API calls through backend proxy for security & CORS compliance
  */
 
 class MOmoService {
   constructor() {
-    this.apiKey = import.meta.env.VITE_MOMO_API_KEY || '967f8537fec84cc6829b0ee5650dc355';
-    this.primaryKey = import.meta.env.VITE_MOMO_PRIMARY_KEY || '967f8537fec84cc6829b0ee5650dc355';
-    this.secondaryKey = import.meta.env.VITE_MOMO_SECONDARY_KEY || '51384ad5e0f6477385b26a15ca156737';
-    this.currentKey = this.primaryKey; // Active key tracker
-    this.apiUrl = import.meta.env.VITE_MOMO_API_URL || 'https://api.momo.provider.com';
+    // Backend proxy URL (not direct MOMO API)
+    this.backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api';
     this.useMockMode = import.meta.env.VITE_MOMO_USE_MOCK === 'true';
     this.timeout = import.meta.env.VITE_MOMO_TIMEOUT || 30000;
-    this.keyRotationAttempts = 0;
-    this.maxKeyRotations = 2;
     
     // Log initialization
     if (this.useMockMode) {
       console.log('🧪 MOMO Service initialized in MOCK MODE (Development)');
       console.log('   Transactions will be simulated without calling real API');
     } else {
-      console.log(`🚀 MOMO Service initialized (Production) - API: ${this.apiUrl}`);
+      console.log(`🚀 MOMO Service initialized (Production) - Using backend proxy: ${this.backendUrl}`);
+      console.log('   ✅ All MOMO API calls routed through backend for security');
     }
-    
-    this.updateBaseHeaders();
-  }
-
-  /**
-   * Update authorization headers with current key
-   */
-  updateBaseHeaders() {
-    this.baseHeaders = {
-      'X-Reference-Id': this.generateReferenceId(),
-      'X-Target-Environment': 'production',
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${this.currentKey}`
-    };
-  }
-
-  /**
-   * Rotate to secondary key for failover
-   */
-  rotateToSecondaryKey() {
-    if (this.currentKey !== this.secondaryKey && this.keyRotationAttempts < this.maxKeyRotations) {
-      console.log('🔄 Rotating to Secondary MOMO Key: 51384ad5e0f6477385b26a15ca156737');
-      this.currentKey = this.secondaryKey;
-      this.updateBaseHeaders();
-      this.keyRotationAttempts++;
-      return true;
-    }
-    return false;
-  }
-
-  /**
-   * Reset to primary key
-   */
-  resetToPrimaryKey() {
-    if (this.currentKey !== this.primaryKey) {
-      console.log('↩️ Resetting to Primary MOMO Key: 967f8537fec84cc6829b0ee5650dc355');
-      this.currentKey = this.primaryKey;
-      this.keyRotationAttempts = 0;
-      this.updateBaseHeaders();
-    }
-  }
-
-  /**
-   * Get current active key (for logging/debugging)
-   */
-  getCurrentKey() {
-    return this.currentKey === this.primaryKey ? 'PRIMARY' : 'SECONDARY';
   }
 
   /**
@@ -79,7 +29,7 @@ class MOmoService {
   }
 
   /**
-   * 💰 Process Top-Up Transaction
+   * 💰 Process Top-Up Transaction via Backend Proxy
    * @param {Object} params - Transaction parameters
    * @param {string} params.amount - Amount to top up
    * @param {string} params.currency - Currency code (UGX, KES, USD, etc.)
@@ -97,10 +47,10 @@ class MOmoService {
       }
 
       const mode = this.useMockMode ? 'MOCK' : 'LIVE';
-      console.log(`🚀 Processing MOMO Top-Up with ${this.getCurrentKey()} Key (${mode} Mode):`, { 
+      console.log(`🚀 Processing MOMO Top-Up (${mode} Mode):`, { 
         amount, 
         currency, 
-        phoneNumber: this.formatPhoneNumber(phoneNumber) 
+        phoneNumber
       });
 
       // Mock mode - skip real API call
@@ -108,7 +58,6 @@ class MOmoService {
         console.log('🧪 Mock Mode: Simulating successful transaction');
         await new Promise(resolve => setTimeout(resolve, 800));
         
-        this.resetToPrimaryKey();
         return {
           success: true,
           transactionId: this.generateReferenceId(),
@@ -116,88 +65,51 @@ class MOmoService {
           currency: currency,
           status: 'COMPLETED',
           timestamp: new Date().toISOString(),
-          activeKey: 'PRIMARY (Mock)',
           mode: 'MOCK',
           message: `✅ [MOCK MODE] Successfully added ${amount} ${currency} to your ICAN Wallet`
         };
       }
 
-      const payload = {
-        amount: amount.toString(),
-        currency: currency,
-        externalId: this.generateReferenceId(),
-        payer: {
-          partyIdType: 'MSISDN',
-          partyId: this.formatPhoneNumber(phoneNumber)
-        },
-        payerMessage: description || 'ICAN Wallet Top-Up',
-        payeeNote: 'Top-up successful',
-        apiKey: this.currentKey
-      };
+      // Call backend proxy endpoint
+      const response = await this.callBackendAPI('/momo/request-payment', {
+        amount,
+        currency,
+        phoneNumber,
+        description: description || 'ICAN Wallet Top-Up'
+      });
 
-      try {
-        const response = await this.makeRequest('/transfer', 'POST', payload);
-        
-        this.resetToPrimaryKey(); // Reset for next transaction
-        
-        return {
-          success: true,
-          transactionId: response.transactionId || this.generateReferenceId(),
-          amount: amount,
-          currency: currency,
-          status: 'COMPLETED',
-          timestamp: new Date().toISOString(),
-          activeKey: this.getCurrentKey(),
-          mode: 'LIVE',
-          message: `Successfully added ${amount} ${currency} to your ICAN Wallet via MOMO (${this.getCurrentKey()})`
-        };
-      } catch (error) {
-        // Attempt failover to secondary key
-        if (this.rotateToSecondaryKey()) {
-          console.log('⚠️ Primary key failed, retrying with Secondary Key...');
-          payload.apiKey = this.currentKey;
-          
-          try {
-            const response = await this.makeRequest('/transfer', 'POST', payload);
-            this.resetToPrimaryKey();
-
-            return {
-              success: true,
-              transactionId: response.transactionId || this.generateReferenceId(),
-              amount: amount,
-              currency: currency,
-              status: 'COMPLETED',
-              timestamp: new Date().toISOString(),
-              activeKey: 'SECONDARY (Failover)',
-              mode: 'LIVE',
-              message: `Successfully added ${amount} ${currency} to your ICAN Wallet via MOMO (Secondary Key - Failover)`
-            };
-          } catch (secondaryError) {
-            throw new Error(`Both PRIMARY and SECONDARY keys failed. Last error: ${secondaryError.message}`);
-          }
-        }
-        throw error;
+      if (!response.success) {
+        throw new Error(response.error || 'Transaction failed');
       }
+
+      return {
+        success: true,
+        transactionId: response.transactionId,
+        amount: amount,
+        currency: currency,
+        status: response.status || 'COMPLETED',
+        timestamp: new Date().toISOString(),
+        mode: 'LIVE',
+        message: `✅ Successfully added ${amount} ${currency} to your ICAN Wallet via MOMO`
+      };
     } catch (error) {
       console.error('❌ MOMO Top-Up failed:', error);
-      this.resetToPrimaryKey();
       return {
         success: false,
         error: error.message,
         status: 'FAILED',
-        activeKey: this.getCurrentKey(),
         mode: this.useMockMode ? 'MOCK' : 'LIVE',
-        message: error.message.includes('Both PRIMARY and SECONDARY') 
-          ? 'Both payment keys failed. Please check your internet connection or contact support.'
-          : error.message.includes('ERR_NAME_NOT_RESOLVED')
-          ? '⚠️ Cannot connect to MOMO API. Set VITE_MOMO_USE_MOCK=true in .env to use mock mode for development.'
+        message: error.message.includes('Network')
+          ? '⚠️ Network error. Check your internet connection and try again.'
+          : error.message.includes('401') || error.message.includes('403')
+          ? '⚠️ Authentication failed. Check API credentials.'
           : 'Failed to process mobile money top-up. Please try again.'
       };
     }
   }
 
   /**
-   * 📤 Process Money Transfer via MOMO
+   * 📤 Process Money Transfer via MOMO (Backend Proxy)
    * @param {Object} params - Transfer parameters
    * @param {string} params.amount - Amount to send
    * @param {string} params.currency - Currency code
@@ -209,14 +121,18 @@ class MOmoService {
     const { amount, currency, recipientPhone, description } = params;
 
     try {
-      console.log(`🚀 Processing MOMO Transfer with ${this.getCurrentKey()} Key:`, { amount, currency, recipientPhone });
+      // Validate inputs
+      if (!amount || !currency || !recipientPhone) {
+        throw new Error('Missing required fields: amount, currency, recipientPhone');
+      }
+
+      console.log('🚀 Processing MOMO Transfer:', { amount, currency, recipientPhone });
 
       // Mock mode - skip real API call
       if (this.useMockMode) {
         console.log('🧪 Mock Mode: Simulating successful transfer');
         await new Promise(resolve => setTimeout(resolve, 800));
         
-        this.resetToPrimaryKey();
         return {
           success: true,
           transactionId: this.generateReferenceId(),
@@ -225,95 +141,66 @@ class MOmoService {
           recipient: recipientPhone,
           status: 'COMPLETED',
           timestamp: new Date().toISOString(),
-          activeKey: 'PRIMARY (Mock)',
           mode: 'MOCK',
           message: `✅ [MOCK MODE] Successfully transferred ${amount} ${currency} to ${recipientPhone}`
         };
       }
 
-      const payload = {
-        amount: amount.toString(),
-        currency: currency,
-        externalId: this.generateReferenceId(),
-        payee: {
-          partyIdType: 'MSISDN',
-          partyId: this.formatPhoneNumber(recipientPhone)
-        },
-        payerMessage: description || 'Payment from ICAN',
-        payeeNote: 'Payment received',
-        apiKey: this.currentKey
-      };
+      // Call backend proxy endpoint
+      const response = await this.callBackendAPI('/momo/send-payment', {
+        amount,
+        currency,
+        recipientPhone,
+        description: description || 'Payment from ICAN'
+      });
 
-      try {
-        const response = await this.makeRequest('/transfer', 'POST', payload);
-        this.resetToPrimaryKey();
-
-        return {
-          success: true,
-          transactionId: response.transactionId || this.generateReferenceId(),
-          amount: amount,
-          currency: currency,
-          recipient: recipientPhone,
-          status: 'COMPLETED',
-          timestamp: new Date().toISOString(),
-          activeKey: this.getCurrentKey(),
-          mode: 'LIVE',
-          message: `Successfully transferred ${amount} ${currency} to ${recipientPhone}`
-        };
-      } catch (error) {
-        // Attempt failover to secondary key
-        if (this.rotateToSecondaryKey()) {
-          console.log('⚠️ Primary key failed, retrying Transfer with Secondary Key...');
-          payload.apiKey = this.currentKey;
-          
-          try {
-            const response = await this.makeRequest('/transfer', 'POST', payload);
-            this.resetToPrimaryKey();
-
-            return {
-              success: true,
-              transactionId: response.transactionId || this.generateReferenceId(),
-              amount: amount,
-              currency: currency,
-              recipient: recipientPhone,
-              status: 'COMPLETED',
-              timestamp: new Date().toISOString(),
-              activeKey: 'SECONDARY (Failover)',
-              mode: 'LIVE',
-              message: `Successfully transferred ${amount} ${currency} to ${recipientPhone} (Secondary Key)`
-            };
-          } catch (secondaryError) {
-            throw new Error(`Both PRIMARY and SECONDARY keys failed. Last error: ${secondaryError.message}`);
-          }
-        }
-        throw error;
+      if (!response.success) {
+        throw new Error(response.error || 'Transfer failed');
       }
+
+      return {
+        success: true,
+        transactionId: response.transactionId,
+        amount: amount,
+        currency: currency,
+        recipient: recipientPhone,
+        status: response.status || 'COMPLETED',
+        timestamp: new Date().toISOString(),
+        mode: 'LIVE',
+        message: `✅ Successfully transferred ${amount} ${currency} to ${recipientPhone}`
+      };
     } catch (error) {
       console.error('❌ MOMO Transfer failed:', error);
-      this.resetToPrimaryKey();
       return {
         success: false,
         error: error.message,
         status: 'FAILED',
-        activeKey: this.getCurrentKey(),
         mode: this.useMockMode ? 'MOCK' : 'LIVE',
-        message: error.message.includes('Both PRIMARY and SECONDARY')
-          ? 'Both payment keys failed. Please check your internet connection or contact support.'
-          : error.message.includes('ERR_NAME_NOT_RESOLVED')
-          ? '⚠️ Cannot connect to MOMO API. Set VITE_MOMO_USE_MOCK=true in .env to use mock mode for development.'
-          : 'Failed to process transfer. Please try again.'
+        message: 'Failed to process transfer. Please try again.'
       };
     }
   }
 
   /**
-   * 🔍 Check Transaction Status
+   * 🔍 Check Transaction Status via Backend
    * @param {string} transactionId - Transaction ID to check
    * @returns {Promise<Object>} Transaction status
    */
   async checkTransactionStatus(transactionId) {
     try {
-      const response = await this.makeRequest(`/transfer/${transactionId}`, 'GET');
+      // Mock mode
+      if (this.useMockMode) {
+        return {
+          transactionId: transactionId,
+          status: 'COMPLETED',
+          message: '[MOCK] Transaction completed successfully'
+        };
+      }
+
+      const response = await this.callBackendAPI('/momo/check-status', { 
+        transactionId 
+      });
+
       return {
         transactionId: transactionId,
         status: response.status || 'UNKNOWN',
@@ -333,17 +220,30 @@ class MOmoService {
   }
 
   /**
-   * 🔗 Get Account Balance
+   * 🔗 Get Account Balance via Backend
    * @param {string} accountId - Account identifier
    * @returns {Promise<Object>} Account balance
    */
   async getAccountBalance(accountId) {
     try {
-      const response = await this.makeRequest(`/account/${accountId}/balance`, 'GET');
+      // Mock mode
+      if (this.useMockMode) {
+        return {
+          accountId: accountId,
+          balance: 50000,
+          currency: 'UGX',
+          status: 'SUCCESS'
+        };
+      }
+
+      const response = await this.callBackendAPI('/momo/get-balance', { 
+        accountId 
+      });
+
       return {
         accountId: accountId,
-        balance: response.balance,
-        currency: response.currency,
+        balance: response.balance || 0,
+        currency: response.currency || 'UGX',
         status: 'SUCCESS'
       };
     } catch (error) {
@@ -357,7 +257,7 @@ class MOmoService {
   }
 
   /**
-   * 💾 Create Payment Link/QR Code
+   * 💾 Create Payment Link/QR Code via Backend
    * @param {Object} params - Payment link parameters
    * @returns {Promise<Object>} Payment link details
    */
@@ -365,23 +265,29 @@ class MOmoService {
     const { amount, currency, description } = params;
 
     try {
-      const referenceId = this.generateReferenceId();
-      const payload = {
-        amount: amount.toString(),
-        currency: currency,
-        externalId: referenceId,
-        description: description || 'ICAN Payment',
-        callbackUrl: `${window.location.origin}/api/momo/callback`
-      };
+      // Mock mode
+      if (this.useMockMode) {
+        return {
+          success: true,
+          linkId: this.generateReferenceId(),
+          paymentUrl: `${window.location.origin}/pay/${this.generateReferenceId()}`,
+          expiresIn: 3600,
+          message: '[MOCK] Payment link created successfully'
+        };
+      }
 
-      const response = await this.makeRequest('/payment-link', 'POST', payload);
+      const response = await this.callBackendAPI('/momo/create-payment-link', {
+        amount: amount.toString(),
+        currency,
+        description: description || 'ICAN Payment'
+      });
 
       return {
         success: true,
-        linkId: referenceId,
-        paymentUrl: response.paymentUrl || `https://momo.ican.app/pay/${referenceId}`,
+        linkId: response.linkId,
+        paymentUrl: response.paymentUrl,
         qrCode: response.qrCode,
-        expiresIn: 3600, // 1 hour
+        expiresIn: response.expiresIn || 3600,
         message: 'Payment link created successfully'
       };
     } catch (error) {
@@ -394,85 +300,80 @@ class MOmoService {
     }
   }
 
-  /**
-   * 🔐 Validate Phone Number Format
-   * @param {string} phoneNumber - Phone number to validate
-   * @returns {string} Formatted phone number
-   */
-  formatPhoneNumber(phoneNumber) {
-    // Remove any non-digit characters
-    const cleaned = phoneNumber.replace(/\D/g, '');
-    
-    // Add country code if missing (assuming Uganda +256 as default)
-    if (cleaned.length === 10 && cleaned.startsWith('7')) {
-      return `256${cleaned}`;
-    }
-    if (cleaned.length === 9) {
-      return `256${cleaned}`;
-    }
-    
-    return cleaned;
-  }
-
-  /**
-   * 🌐 Make HTTP Request to MOMO API
-   * @param {string} endpoint - API endpoint
-   * @param {string} method - HTTP method
+/**
+   * 🔗 Call Backend API via Proxy
+   * All MOMO API calls route through this backend endpoint for security and CORS compliance
+   * @param {string} endpoint - The backend endpoint (e.g., '/momo/request-payment')
    * @param {Object} data - Request payload
    * @returns {Promise<Object>} API response
    */
-  async makeRequest(endpoint, method = 'GET', data = null) {
+  async callBackendAPI(endpoint, data) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     try {
-      const options = {
-        method: method,
-        headers: this.baseHeaders,
+      const url = `${this.backendUrl}${endpoint}`;
+      
+      console.log(`📡 Backend API Request: ${url}`);
+      console.log('   Payload:', data);
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
         signal: controller.signal
-      };
+      });
 
-      if (data) {
-        options.body = JSON.stringify(data);
-      }
-
-      const response = await fetch(`${this.apiUrl}${endpoint}`, options);
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || `HTTP ${response.status}: ${response.statusText}`);
+        let error = `HTTP ${response.status}: ${response.statusText}`;
+        let errorData = null;
+        try {
+          errorData = await response.json();
+          error = errorData.message || error;
+          // Log the full error details
+          console.error('📋 Full Error Response:', errorData);
+        } catch (e) {
+          // Couldn't parse error response
+        }
+        throw new Error(error);
       }
 
-      return await response.json();
+      const responseData = await response.json();
+      console.log('✅ Backend API Response:', responseData);
+      return responseData;
     } catch (error) {
       clearTimeout(timeoutId);
       if (error.name === 'AbortError') {
         throw new Error('Request timeout - please check your connection');
       }
+      console.error('❌ Backend API Error:', error);
       throw error;
     }
   }
 
   /**
-   * 🧪 Test API Connection
+   * 🧪 Test Backend Connection
    * @returns {Promise<Object>} Connection test result
    */
   async testConnection() {
     try {
-      const response = await this.makeRequest('/health', 'GET');
+      const response = await this.callBackendAPI('/momo/health', {});
       return {
         status: 'SUCCESS',
         connected: true,
-        message: 'MOMO API connection is healthy',
+        message: 'Backend MOMO API connection is healthy',
         apiVersion: response.version
       };
     } catch (error) {
-      console.error('❌ Connection test failed:', error);
+      console.error('❌ Backend connection test failed:', error);
       return {
         status: 'FAILED',
         connected: false,
-        message: 'Unable to connect to MOMO API',
+        message: 'Unable to connect to backend MOMO API',
         error: error.message
       };
     }
