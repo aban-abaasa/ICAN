@@ -5,11 +5,11 @@
 
 class MOmoService {
   constructor() {
-    this.apiKey = import.meta.env.VITE_MOMO_API_KEY || '967f8537fec84cc6829b0ee5650dc355';
-    this.primaryKey = import.meta.env.VITE_MOMO_PRIMARY_KEY || '967f8537fec84cc6829b0ee5650dc355';
-    this.secondaryKey = import.meta.env.VITE_MOMO_SECONDARY_KEY || '51384ad5e0f6477385b26a15ca156737';
+    this.apiKey = import.meta.env.VITE_MOMO_API_KEY || '';
+    this.primaryKey = import.meta.env.VITE_MOMO_PRIMARY_KEY || '';
+    this.secondaryKey = import.meta.env.VITE_MOMO_SECONDARY_KEY || '';
     this.currentKey = this.primaryKey; // Active key tracker
-    this.apiUrl = import.meta.env.VITE_MOMO_API_URL || 'https://api.momo.provider.com';
+    this.apiUrl = import.meta.env.VITE_MOMO_API_URL || 'https://api.sandbox.momoapi.mtn.com';
     this.useMockMode = import.meta.env.VITE_MOMO_USE_MOCK === 'true';
     this.timeout = import.meta.env.VITE_MOMO_TIMEOUT || 30000;
     this.keyRotationAttempts = 0;
