@@ -25,22 +25,39 @@ const supabase = createClient(
 
 const config = {
   // Authentication credentials (from environment variables)
-  subscriptionKey: process.env.MOMO_SUBSCRIPTION_KEY || '8b59afc46b7a43b0a32856e709af1de3',
-  apiUser: process.env.MOMO_API_USER_ID || 'ICAN_PRIMARY_USER',
-  apiKey: process.env.MOMO_API_SECRET_KEY || '0c83153ce97f40c68622c16a2d69d69e',
+  subscriptionKey: () => process.env.MOMO_SUBSCRIPTION_KEY || '8b59afc46b7a43b0a32856e709af1de3',
+  apiUser: () => process.env.MOMO_API_USER_ID || 'ICAN_PRIMARY_USER',
+  apiKey: () => process.env.MOMO_API_SECRET_KEY || '0c83153ce97f40c68622c16a2d69d69e',
+  
+  // Disbursement credentials
+  disbursementSubscriptionKey: () => process.env.MOMO_DISBURSEMENT_SUBSCRIPTION_KEY || '084b11d7b90a49349977be0c744fa450',
+  disbursementApiUser: () => process.env.MOMO_DISBURSEMENT_API_USER || 'ICAN_DISBURSEMENT_USER',
+  disbursementApiKey: () => process.env.MOMO_DISBURSEMENT_API_KEY || 'pending',
   
   // Base URL (sandbox for testing, production for live)
-  baseUrl: process.env.MOMO_BASE_URL || 'https://sandbox.momodeveloper.mtn.com',
-  environment: process.env.MOMO_ENVIRONMENT || 'sandbox',
+  baseUrl: () => process.env.MOMO_BASE_URL || 'https://sandbox.momodeveloper.mtn.com',
+  environment: () => process.env.MOMO_ENVIRONMENT || 'sandbox',
   
   // Timeouts
-  tokenTimeout: parseInt(process.env.MOMO_TOKEN_TIMEOUT) || 3600, // 1 hour
-  requestTimeout: parseInt(process.env.MOMO_REQUEST_TIMEOUT) || 30000 // 30 seconds
+  tokenTimeout: () => parseInt(process.env.MOMO_TOKEN_TIMEOUT) || 3600, // 1 hour
+  requestTimeout: () => parseInt(process.env.MOMO_REQUEST_TIMEOUT) || 30000 // 30 seconds
 };
 
 class MTNMomoService {
   constructor() {
-    this.config = config;
+    // Load config values from environment at runtime, not at module load time
+    this.config = {
+      subscriptionKey: config.subscriptionKey(),
+      apiUser: config.apiUser(),
+      apiKey: config.apiKey(),
+      disbursementSubscriptionKey: config.disbursementSubscriptionKey(),
+      disbursementApiUser: config.disbursementApiUser(),
+      disbursementApiKey: config.disbursementApiKey(),
+      baseUrl: config.baseUrl(),
+      environment: config.environment(),
+      tokenTimeout: config.tokenTimeout(),
+      requestTimeout: config.requestTimeout()
+    };
     this.supabaseConfig = null;
     this.accessToken = null;
     this.tokenExpiry = null;
@@ -194,14 +211,29 @@ class MTNMomoService {
       }
 
       console.log(`🔐 Fetching new ${productType} access token from MTN...`);
-      console.log(`   Using credentials:`, {
-        apiUser: this.config.apiUser ? this.config.apiUser.substring(0, 10) + '...' : 'MISSING',
-        apiKey: this.config.apiKey ? this.config.apiKey.substring(0, 10) + '...' : 'MISSING',
-        subscriptionKey: this.config.subscriptionKey ? this.config.subscriptionKey.substring(0, 10) + '...' : 'MISSING'
+      
+      // Select credentials based on product type
+      let apiUser, apiKey, subscriptionKey;
+      if (productType === 'disbursement') {
+        apiUser = this.config.disbursementApiUser;
+        apiKey = this.config.disbursementApiKey;
+        subscriptionKey = this.config.disbursementSubscriptionKey;
+        console.log(`   Using DISBURSEMENT credentials:`);
+      } else {
+        apiUser = this.config.apiUser;
+        apiKey = this.config.apiKey;
+        subscriptionKey = this.config.subscriptionKey;
+        console.log(`   Using COLLECTION credentials:`);
+      }
+      
+      console.log({
+        apiUser: apiUser ? apiUser.substring(0, 10) + '...' : 'MISSING',
+        apiKey: apiKey ? apiKey.substring(0, 10) + '...' : 'MISSING',
+        subscriptionKey: subscriptionKey ? subscriptionKey.substring(0, 10) + '...' : 'MISSING'
       });
 
       // Create Basic Auth header
-      const credentials = `${this.config.apiUser}:${this.config.apiKey}`;
+      const credentials = `${apiUser}:${apiKey}`;
       const auth = Buffer.from(credentials).toString('base64');
 
       // Request token from MTN
@@ -211,7 +243,7 @@ class MTNMomoService {
         {
           headers: {
             'Authorization': `Basic ${auth}`,
-            'Ocp-Apim-Subscription-Key': this.config.subscriptionKey,
+            'Ocp-Apim-Subscription-Key': subscriptionKey,
             'Content-Type': 'application/json'
           },
           timeout: this.config.requestTimeout
@@ -457,7 +489,7 @@ class MTNMomoService {
             'Authorization': `Bearer ${token}`,
             'X-Reference-Id': transactionId,
             'X-Target-Environment': this.config.environment,
-            'Ocp-Apim-Subscription-Key': this.config.subscriptionKey,
+            'Ocp-Apim-Subscription-Key': this.config.disbursementSubscriptionKey,
             'Content-Type': 'application/json'
           },
           timeout: this.config.requestTimeout

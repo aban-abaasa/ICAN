@@ -2,18 +2,29 @@
  * 🏦 MOMO Collections Service
  * Handles fee collections and charges on mobile services
  * 
- * Primary Key: 9728a40cbf7e4d31ad0d311e8f13a5c1
- * Secondary Key: 4f49c99528344e12a6662ef89baa9a8a
+ * Collections:
+ * Primary Key: 8b59afc46b7a43b0a32856e709af1de3
+ * Secondary Key: 7bd511260f764defa2bde723ad81939b
  * 
- * Purpose: Collect fees, charges, and subscription payments
+ * Disbursements:
+ * Primary Key: 084b11d7b90a49349977be0c744fa450
+ * Secondary Key: 847aa902f16748a2bd6a84070c8b9f80
+ * 
+ * Purpose: Collect fees and charges on mobile services
  */
 
 class MOmoCollectionsService {
   constructor() {
     // Collections API Configuration
-    this.primaryKey = '9728a40cbf7e4d31ad0d311e8f13a5c1';
-    this.secondaryKey = '4f49c99528344e12a6662ef89baa9a8a';
+    this.primaryKey = '8b59afc46b7a43b0a32856e709af1de3';
+    this.secondaryKey = '7bd511260f764defa2bde723ad81939b';
     this.currentKey = this.primaryKey;
+    
+    // Disbursements API Configuration
+    this.disbursementPrimaryKey = '084b11d7b90a49349977be0c744fa450';
+    this.disbursementSecondaryKey = '847aa902f16748a2bd6a84070c8b9f80';
+    this.disbursementCurrentKey = this.disbursementPrimaryKey;
+    
     this.apiUrl = import.meta.env.VITE_MOMO_API_URL || 'https://api.momo.provider.com';
     
     // Mock mode for development
@@ -21,8 +32,10 @@ class MOmoCollectionsService {
     
     const mode = this.useMockMode ? '🧪 MOCK' : '🟢 LIVE';
     console.log(`✅ MOMO Collections Service Initialized (${mode})`);
-    console.log(`   Primary Key: ${this.primaryKey.substring(0, 8)}...`);
-    console.log(`   Secondary Key: ${this.secondaryKey.substring(0, 8)}...`);
+    console.log(`   Collections - Primary Key: ${this.primaryKey.substring(0, 8)}...`);
+    console.log(`   Collections - Secondary Key: ${this.secondaryKey.substring(0, 8)}...`);
+    console.log(`   Disbursements - Primary Key: ${this.disbursementPrimaryKey.substring(0, 8)}...`);
+    console.log(`   Disbursements - Secondary Key: ${this.disbursementSecondaryKey.substring(0, 8)}...`);
   }
 
   /**

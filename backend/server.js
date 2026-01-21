@@ -15,7 +15,9 @@ require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const express = require('express');
 const cors = require('cors');
 const momoRoutes = require('./routes/momoRoutes');
+const p2pTransferRoutes = require('./routes/p2pTransferRoutes');
 const paymentsRoutes = require('./routes/paymentsRoutes');
+const withdrawalRoutes = require('./routes/withdrawalRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -82,8 +84,14 @@ app.get('/api/health', (req, res) => {
 // MOMO Payment Routes
 app.use('/api/momo', momoRoutes);
 
+// P2P Transfer Routes (2-step workflow)
+app.use('/api/p2p', p2pTransferRoutes);
+
 // Payment Routes
 app.use('/api/payments', paymentsRoutes);
+
+// Withdrawal Routes
+app.use('/api/withdrawals', withdrawalRoutes);
 
 // ==========================================
 // Error Handling
@@ -121,6 +129,8 @@ app.listen(PORT, () => {
 ╠══════════════════════════════════════════╣
 ║  🌐 Listening on: http://localhost:${PORT}  ║
 ║  ✅ MOMO Routes: /api/momo/*             ║
+║  ✅ P2P Routes: /api/p2p/*               ║
+║  ✅ Withdrawal Routes: /api/withdrawals/*║
 ║  ✅ Payment Routes: /api/payments/*      ║
 ║  ✅ Health Check: /health                ║
 ║  ✅ Supabase: Connected                  ║

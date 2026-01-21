@@ -138,19 +138,30 @@ export const createStatus = async (userId, statusData) => {
  */
 export const getActiveStatuses = async (userId = null) => {
   try {
+    // CRITICAL: Check authentication BEFORE querying
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !authUser) {
+      console.warn('⚠️ getActiveStatuses: User not authenticated. Cannot query statuses.');
+      return [];
+    }
+    
+    // Use authenticated user ID for the query
+    const queryUserId = userId || authUser.id;
+
     let query = supabase
       .from('ican_statuses')
       .select('*')
       .gt('expires_at', new Date().toISOString())
       .order('created_at', { ascending: false });
 
-    if (userId) {
-      query = query.eq('user_id', userId);
+    if (queryUserId) {
+      query = query.eq('user_id', queryUserId);
     }
 
     const { data, error } = await query;
 
-    console.log('getActiveStatuses - Query result:', { userId, count: data?.length || 0, data });
+    console.log('getActiveStatuses - Query result:', { userId: queryUserId, count: data?.length || 0, data });
 
     if (error) throw error;
 
@@ -200,9 +211,20 @@ export const getActiveStatuses = async (userId = null) => {
  */
 export const recordStatusView = async (statusId, viewedBy) => {
   try {
+    // CRITICAL: Check authentication BEFORE querying
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !authUser) {
+      console.warn('⚠️ recordStatusView: User not authenticated. Cannot record view.');
+      return { view: null, error: new Error('User not authenticated') };
+    }
+
+    // Use authenticated user ID for the view record
+    const actualViewedBy = viewedBy || authUser.id;
+
     const { data, error } = await supabase
       .from('ican_status_views')
-      .insert([{ status_id: statusId, viewed_by: viewedBy }])
+      .insert([{ status_id: statusId, viewed_by: actualViewedBy }])
       .select()
       .single();
 
@@ -222,6 +244,14 @@ export const recordStatusView = async (statusId, viewedBy) => {
  */
 export const getStatusViewers = async (statusId) => {
   try {
+    // CRITICAL: Check authentication BEFORE querying
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !authUser) {
+      console.warn('⚠️ getStatusViewers: User not authenticated. Cannot retrieve viewers.');
+      return { viewers: [], error: new Error('User not authenticated') };
+    }
+
     const { data, error } = await supabase
       .from('ican_status_views')
       .select('viewed_by, viewed_at')

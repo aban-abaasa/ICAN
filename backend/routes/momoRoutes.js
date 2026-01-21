@@ -170,9 +170,9 @@ router.post('/request-payment', async (req, res) => {
     const isProduction = (process.env.MOMO_ENVIRONMENT === 'production');
     
     if (!isProduction) {
-      // SANDBOX REQUIREMENTS
-      console.log(`   ⚠️  SANDBOX MODE - Using EUR currency and Swedish test numbers`);
-      currency = 'EUR'; // Sandbox ONLY supports EUR
+      // SANDBOX REQUIREMENTS: EUR currency ONLY
+      console.log(`   ⚠️  SANDBOX MODE - EUR currency ONLY (received: ${currency})`);
+      currency = 'EUR'; // Force EUR in sandbox
       
       // Convert to Swedish test format if needed
       let testPhone = phoneNumber;
@@ -183,7 +183,7 @@ router.post('/request-payment', async (req, res) => {
       }
       phoneNumber = testPhone;
     } else {
-      // PRODUCTION: UGX with real numbers
+      // PRODUCTION: Use provided currency
       currency = currency.toUpperCase() || 'UGX';
       console.log(`   ✅ PRODUCTION MODE - Using ${currency} currency`);
     }
@@ -294,12 +294,13 @@ router.post('/request-payment', async (req, res) => {
  */
 router.post('/send-payment', async (req, res) => {
   try {
-    const { amount, phoneNumber, currency = 'UGX', description, userId } = req.body;
+    let { amount, phoneNumber, currency = 'UGX', description, userId } = req.body;
 
     console.log(`\n📤 Send Payment API Called:`);
     console.log(`   Amount: ${amount} ${currency}`);
     console.log(`   Phone: ${phoneNumber}`);
     console.log(`   User: ${userId}`);
+    console.log(`   Environment: ${process.env.MOMO_ENVIRONMENT || 'sandbox'}`);
 
     // Validate required fields
     if (!amount || !phoneNumber) {
@@ -315,6 +316,28 @@ router.post('/send-payment', async (req, res) => {
         success: false,
         error: 'Amount must be a positive number'
       });
+    }
+
+    // CRITICAL: MTN MOMO Sandbox vs Production differences
+    const isProduction = (process.env.MOMO_ENVIRONMENT === 'production');
+    
+    if (!isProduction) {
+      // SANDBOX REQUIREMENTS: EUR currency ONLY
+      console.log(`   ⚠️  SANDBOX MODE - EUR currency ONLY (received: ${currency})`);
+      currency = 'EUR'; // Force EUR in sandbox
+      
+      // Convert to Swedish test format if needed
+      let testPhone = phoneNumber;
+      if (phoneNumber.includes('256')) {
+        // Convert Uganda number to Swedish test format
+        testPhone = '46733123454'; // Swedish test number for successful payment
+        console.log(`   📱 Converted Uganda number to Swedish test number: ${testPhone}`);
+      }
+      phoneNumber = testPhone;
+    } else {
+      // PRODUCTION: Use provided currency
+      currency = currency.toUpperCase() || 'UGX';
+      console.log(`   ✅ PRODUCTION MODE - Using ${currency} currency`);
     }
 
     // Format phone number to E.164

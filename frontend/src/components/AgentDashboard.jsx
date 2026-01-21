@@ -40,7 +40,8 @@ const AgentDashboard = () => {
   const [cashOutForm, setCashOutForm] = useState({
     userAccountId: '',
     amount: '',
-    currency: 'USD'
+    currency: 'USD',
+    phoneNumber: ''
   });
 
   // Float Top-Up Form
@@ -73,6 +74,11 @@ const AgentDashboard = () => {
   const [agentMessage, setAgentMessage] = useState(null);
   const [showPinInput, setShowPinInput] = useState(false);
   const [showFingerprintSetup, setShowFingerprintSetup] = useState(false);
+
+  // Collapsible Agent Info State
+  const [showAgentIdCard, setShowAgentIdCard] = useState(true);
+  const [collapsedAgentIdCard, setCollapsedAgentIdCard] = useState(false);
+  const [collapsedAgentCodeCard, setCollapsedAgentCodeCard] = useState(false);
 
   // ============================================
   // LIFECYCLE
@@ -214,10 +220,10 @@ const AgentDashboard = () => {
     if (result.success) {
       setNotification({
         type: 'success',
-        title: '✅ Cash-Out Successful',
-        message: `${result.amount} ${result.currency} withdrawn. Commission earned: ${result.commissionEarned} ${result.currency}`
+        title: '✅ Payment Sent to Wallet',
+        message: `${result.amount} ${result.currency} sent to customer wallet. Commission earned: ${result.commissionEarned} ${result.currency}`
       });
-      setCashOutForm({ userAccountId: '', amount: '', currency: 'USD' });
+      setCashOutForm({ userAccountId: '', amount: '', currency: 'USD', phoneNumber: '' });
       await refreshFloatBalances();
       await refreshRecentTransactions();
     } else {
@@ -686,7 +692,7 @@ const AgentDashboard = () => {
           <div className="bg-gradient-to-br from-amber-900/40 to-amber-800/20 border border-amber-500/30 rounded-xl p-6">
             <div className="flex justify-between items-start mb-4">
               <div>
-                <p className="text-amber-300 text-sm font-semibold mb-1">UGX Float Balance</p>
+                <p className="text-amber-300 text-sm font-semibold mb-1">UGX</p>
                 <p className="text-4xl font-bold text-white">₦{(ugxFloat / 1000).toFixed(2)}K</p>
               </div>
               <TrendingUp className="w-10 h-10 text-amber-400 opacity-50" />
@@ -738,6 +744,111 @@ const AgentDashboard = () => {
           {/* DASHBOARD TAB */}
           {activeTab === 'dashboard' && (
             <div className="space-y-6">
+              {/* Collapsible Agent Info Cards */}
+              {showAgentIdCard && agentService.userId && (
+                <div className="space-y-3">
+                  {/* Agent ID Card - Collapsible */}
+                  {collapsedAgentIdCard ? (
+                    // Collapsed Icon View - Very Small
+                    <div className="flex gap-2 items-center">
+                      <button
+                        onClick={() => setCollapsedAgentIdCard(false)}
+                        title="Expand Agent ID"
+                        className="p-1.5 bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 rounded transition-all border border-blue-500/30 text-lg"
+                      >
+                        🆔
+                      </button>
+                      {agentData && agentData.agent_code && (
+                        <button
+                          onClick={() => setCollapsedAgentCodeCard(false)}
+                          title="Expand Agent Code"
+                          className="p-1.5 bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 rounded transition-all border border-purple-500/30 text-lg"
+                        >
+                          🏷️
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setShowAgentIdCard(false)}
+                        title="Hide all agent info"
+                        className="p-1.5 bg-red-600/30 hover:bg-red-600/50 text-red-300 rounded transition-all border border-red-500/30 ml-auto text-sm"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    // Expanded Card View
+                    <div className="grid md:grid-cols-2 gap-4 mb-6">
+                      {/* Agent ID Card */}
+                      <div className="bg-gradient-to-br from-blue-900/40 to-blue-800/20 border border-blue-500/30 rounded-xl p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <p className="text-blue-300 text-sm font-semibold">Agent Auth User ID</p>
+                          <button
+                            onClick={() => setCollapsedAgentIdCard(true)}
+                            title="Collapse"
+                            className="text-gray-400 hover:text-gray-200 transition text-sm"
+                          >
+                            ▼
+                          </button>
+                        </div>
+                        <p className="text-white font-mono text-sm break-all mb-3 p-3 bg-slate-700/50 rounded border border-slate-600/50">
+                          {agentService.userId}
+                        </p>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(agentService.userId);
+                            setNotification({ type: 'success', text: '✅ Agent ID copied to clipboard!' });
+                            setTimeout(() => setNotification(null), 2000);
+                          }}
+                          className="w-full px-3 py-2 bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 rounded-lg text-sm font-medium transition-all border border-blue-500/30"
+                        >
+                          📋 Copy ID
+                        </button>
+                      </div>
+
+                      {/* Agent Code Card */}
+                      {agentData && agentData.agent_code && (
+                        <div className="bg-gradient-to-br from-purple-900/40 to-purple-800/20 border border-purple-500/30 rounded-xl p-4">
+                          <div className="flex justify-between items-start mb-2">
+                            <p className="text-purple-300 text-sm font-semibold">Agent Code</p>
+                            <button
+                              onClick={() => setCollapsedAgentCodeCard(true)}
+                              title="Collapse"
+                              className="text-gray-400 hover:text-gray-200 transition text-sm"
+                            >
+                              ▼
+                            </button>
+                          </div>
+                          <p className="text-white font-mono text-sm break-all mb-3 p-3 bg-slate-700/50 rounded border border-slate-600/50">
+                            {agentData.agent_code}
+                          </p>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(agentData.agent_code);
+                              setNotification({ type: 'success', text: '✅ Agent code copied to clipboard!' });
+                              setTimeout(() => setNotification(null), 2000);
+                            }}
+                            className="w-full px-3 py-2 bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 rounded-lg text-sm font-medium transition-all border border-purple-500/30"
+                          >
+                            📋 Copy Code
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Show Hidden Info Button */}
+              {!showAgentIdCard && agentService.userId && (
+                <button
+                  onClick={() => setShowAgentIdCard(true)}
+                  title="Show agent info"
+                  className="p-2 bg-gray-600/30 hover:bg-gray-600/50 text-gray-300 rounded-lg transition-all border border-gray-500/30"
+                >
+                  👤 Show Agent Info
+                </button>
+              )}
+
               <h2 className="text-2xl font-bold text-white">Recent Settlements</h2>
               
               <div className="space-y-3 max-h-96 overflow-y-auto">
@@ -839,14 +950,14 @@ const AgentDashboard = () => {
           {/* CASH-OUT TAB */}
           {activeTab === 'cash-out' && (
             <div className="max-w-2xl">
-              <h2 className="text-2xl font-bold text-white mb-6">💸 Process Cash-Out</h2>
+              <h2 className="text-2xl font-bold text-white mb-6">💸 Send to ICAN User Wallet</h2>
               
               <form onSubmit={handleCashOut} className="space-y-4">
                 <div>
-                  <label className="block text-gray-300 font-semibold mb-2">User Account ID</label>
+                  <label className="block text-gray-300 font-semibold mb-2">Customer Account Number</label>
                   <input
                     type="text"
-                    placeholder="Verify customer account"
+                    placeholder="e.g., ICAN-3610252715435498"
                     value={cashOutForm.userAccountId}
                     onChange={(e) => setCashOutForm({...cashOutForm, userAccountId: e.target.value})}
                     className="w-full bg-slate-700/50 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
@@ -868,11 +979,11 @@ const AgentDashboard = () => {
                   </div>
 
                   <div>
-                    <label className="block text-gray-300 font-semibold mb-2">Amount to Withdraw</label>
+                    <label className="block text-gray-300 font-semibold mb-2">Amount to Send</label>
                     <input
                       type="number"
                       step="0.01"
-                      placeholder="Amount to give"
+                      placeholder="Amount"
                       value={cashOutForm.amount}
                       onChange={(e) => setCashOutForm({...cashOutForm, amount: e.target.value})}
                       className="w-full bg-slate-700/50 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
@@ -883,17 +994,24 @@ const AgentDashboard = () => {
 
                 <div className="bg-blue-900/30 border border-blue-500/30 rounded-lg p-4">
                   <p className="text-blue-300 text-sm">
-                    <strong>Commission:</strong> 2.5% will be earned on this transaction
+                    <strong>💡 How it works:</strong>
+                  </p>
+                  <p className="text-blue-200 text-sm mt-2">
+                    1. Enter customer's Account Number (ICAN-...)<br/>
+                    2. Money deducted from your float<br/>
+                    3. Amount added to customer's ICAN wallet<br/>
+                    4. You earn 2.5% commission<br/>
+                    5. Customer receives instant notification
                   </p>
                 </div>
 
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 disabled:opacity-50 text-white font-bold py-3 rounded-lg transition flex items-center justify-center gap-2"
+                  className="w-full bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 disabled:opacity-50 text-white font-bold py-3 rounded-lg transition flex items-center justify-center gap-2"
                 >
-                  <Minus className="w-5 h-5" />
-                  {loading ? 'Processing...' : 'Complete Cash-Out'}
+                  <Plus className="w-5 h-5" />
+                  {loading ? 'Processing...' : 'Send to Wallet'}
                 </button>
               </form>
             </div>

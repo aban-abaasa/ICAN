@@ -46,7 +46,7 @@ const ICANWallet = () => {
   const [sendForm, setSendForm] = useState({ recipient: '', amount: '', description: '' });
   const [receiveForm, setReceiveForm] = useState({ amount: '', description: '' });
   const [topupForm, setTopupForm] = useState({ amount: '', paymentInput: '', method: null, detectedMethod: null });
-  const [withdrawForm, setWithdrawForm] = useState({ method: '', phoneAccount: '', amount: '' });
+  const [withdrawForm, setWithdrawForm] = useState({ method: '', phoneAccount: '', amount: '', bankName: '' });
   const [detectedPaymentMethod, setDetectedPaymentMethod] = useState(null);
   const [transactionInProgress, setTransactionInProgress] = useState(false);
   const [transactionResult, setTransactionResult] = useState(null);
@@ -125,6 +125,15 @@ const ICANWallet = () => {
   // 💰 Unified Transaction System (Deposit/Withdraw for Users & Agents)
   const [transactionHistory, setTransactionHistory] = useState([]);
   const [transactionInitiator, setTransactionInitiator] = useState('user'); // 'user' or 'agent'
+  
+  // 💵 Real Wallet Balances from Database
+  const [realWalletBalances, setRealWalletBalances] = useState({
+    USD: 0,
+    UGX: 0,
+    KES: 0
+  });
+  const [balancesLoading, setBalancesLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState(null);
 
   const dropdownRef = useRef(null);
 
@@ -172,10 +181,78 @@ const ICANWallet = () => {
     }
   };
 
-  // Mock wallet data with country information
+  // 💾 Load wallet balances from database
+  const loadWalletBalances = async (userId) => {
+    try {
+      setBalancesLoading(true);
+      const supabase = getSupabaseClient();
+      
+      // CRITICAL: Check authentication BEFORE querying wallet_accounts
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+      if (authError || !authUser) {
+        console.warn('⚠️ loadWalletBalances: User not authenticated');
+        setBalancesLoading(false);
+        return;
+      }
+      
+      // Try to get balances from wallet_accounts table (updated by agent transactions)
+      const { data: walletAccounts, error: walletError } = await supabase
+        .from('wallet_accounts')
+        .select('currency, balance')
+        .eq('user_id', userId);
+      
+      if (walletAccounts && walletAccounts.length > 0) {
+        // Build balances from wallet_accounts
+        const balances = { USD: 0, UGX: 0, KES: 0, GBP: 0, EUR: 0 };
+        walletAccounts.forEach(account => {
+          if (balances.hasOwnProperty(account.currency)) {
+            balances[account.currency] = parseFloat(account.balance) || 0;
+          }
+        });
+        
+        setRealWalletBalances({
+          USD: balances.USD,
+          UGX: balances.UGX,
+          KES: balances.KES
+        });
+        console.log('✅ Wallet balances loaded from wallet_accounts:', balances);
+        return;
+      }
+      
+      // Fallback: Get from user_accounts table
+      const summary = await walletAccountService.getAccountSummary(userId);
+      
+      if (summary && summary.balances) {
+        setRealWalletBalances({
+          USD: summary.balances.USD || 0,
+          UGX: summary.balances.UGX || 0,
+          KES: summary.balances.KES || 0
+        });
+        console.log('✅ Wallet balances loaded from user_accounts:', summary.balances);
+      } else {
+        console.warn('⚠️ No wallet balances found');
+        setRealWalletBalances({
+          USD: 0,
+          UGX: 0,
+          KES: 0
+        });
+      }
+    } catch (error) {
+      console.error('❌ Error loading wallet balances:', error);
+      setRealWalletBalances({
+        USD: 0,
+        UGX: 0,
+        KES: 0
+      });
+    } finally {
+      setBalancesLoading(false);
+    }
+  };
+
+  // Build wallet data with real balances from database
   const walletData = {
     USD: {
-      balance: 5420.50,
+      balance: realWalletBalances.USD,
       currency: 'USD',
       flag: '🇺🇸',
       country: 'United States',
@@ -187,7 +264,7 @@ const ICANWallet = () => {
       ]
     },
     KES: {
-      balance: 680250.75,
+      balance: realWalletBalances.KES,
       currency: 'KES',
       flag: '🇰🇪',
       country: 'Kenya',
@@ -199,7 +276,7 @@ const ICANWallet = () => {
       ]
     },
     UGX: {
-      balance: 19850000.00,
+      balance: realWalletBalances.UGX,
       currency: 'UGX',
       flag: '🇺🇬',
       country: 'Uganda',
@@ -262,6 +339,15 @@ const ICANWallet = () => {
           return;
         }
 
+        // Store user ID for later use
+        setCurrentUserId(user.id);
+
+        // Ensure wallet accounts exist for all currencies
+        await walletAccountService.ensureWalletAccountsExist(user.id);
+
+        // Load wallet balances
+        await loadWalletBalances(user.id);
+
         // Check for wallet account
         setAccountCheckLoading(true);
         const account = await walletAccountService.checkUserAccount(user.id);
@@ -295,7 +381,7 @@ const ICANWallet = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // 💳 SEND MONEY HANDLER
+  // 💳 SEND MONEY HANDLER - Support both ICAN users and MOMO
   const handleSendMoney = async (e) => {
     e.preventDefault();
     if (!sendForm.recipient || !sendForm.amount) {
@@ -306,43 +392,17 @@ const ICANWallet = () => {
     setTransactionInProgress(true);
     
     try {
-      // Process MOMO payment
-      const result = await momoService.processTransfer({
-        amount: sendForm.amount,
-        currency: selectedCurrency,
-        recipientPhone: sendForm.recipient,
-        description: sendForm.description || `Send to ${sendForm.recipient}`
-      });
-
-      if (result.success) {
-        // Save transaction to Supabase
-        await walletTransactionService.initialize();
-        await walletTransactionService.saveSend({
-          amount: sendForm.amount,
-          currency: selectedCurrency,
-          recipientPhone: sendForm.recipient,
-          paymentMethod: 'MOMO',
-          transactionId: result.transactionId,
-          memoKey: result.activeKey,
-          mode: result.mode,
-          description: sendForm.description
-        });
-
-        setTransactionResult({
-          type: 'send',
-          success: true,
-          message: `✅ Successfully sent ${sendForm.amount} ${selectedCurrency} to ${sendForm.recipient}`,
-          amount: sendForm.amount,
-          recipient: sendForm.recipient,
-          transactionId: result.transactionId
-        });
+      // Determine if recipient is ICAN account or phone number
+      const isICANAccount = sendForm.recipient.toUpperCase().startsWith('ICAN-') || 
+                            sendForm.recipient.includes('@') ||
+                            sendForm.recipient.length > 16; // Likely email or account number
+      
+      if (isICANAccount) {
+        // Send to ICAN Wallet User
+        await handleSendToICANUser(sendForm.recipient, sendForm.amount, sendForm.description);
       } else {
-        setTransactionResult({
-          type: 'send',
-          success: false,
-          message: result.message || 'Transfer failed. Please try again.',
-          error: result.error
-        });
+        // Send via MOMO (phone number)
+        await handleSendViaMOMO(sendForm.recipient, sendForm.amount, sendForm.description);
       }
     } catch (error) {
       console.error('❌ Send error:', error);
@@ -362,6 +422,380 @@ const ICANWallet = () => {
       setActiveModal(null);
       setTransactionResult(null);
     }, 3000);
+  };
+
+  // 💳 Send to ICAN Wallet User
+  const handleSendToICANUser = async (recipientIdentifier, amount, description) => {
+    try {
+      const supabase = getSupabaseClient();
+
+      // CRITICAL: Check authentication BEFORE querying user_accounts
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+      if (authError || !authUser) {
+        throw new Error('User not authenticated');
+      }
+
+      // Find recipient by account number, email, or phone
+      let recipientUser = null;
+      let lookupError = null;
+      
+      if (recipientIdentifier.toUpperCase().startsWith('ICAN-')) {
+        // Search by account number
+        const { data, error } = await supabase
+          .from('user_accounts')
+          .select('user_id, account_holder_name, account_number')
+          .eq('account_number', recipientIdentifier.toUpperCase())
+          .single();
+        recipientUser = data;
+        lookupError = error;
+        console.log('Search by account number:', { recipientIdentifier: recipientIdentifier.toUpperCase(), data, error });
+      } else if (recipientIdentifier.includes('@')) {
+        // Search by email
+        const { data, error } = await supabase
+          .from('user_accounts')
+          .select('user_id, account_holder_name, email')
+          .eq('email', recipientIdentifier.toLowerCase())
+          .single();
+        recipientUser = data;
+        lookupError = error;
+        console.log('Search by email:', { email: recipientIdentifier.toLowerCase(), data, error });
+      } else {
+        // Search by phone number
+        const { data, error } = await supabase
+          .from('user_accounts')
+          .select('user_id, account_holder_name, phone_number')
+          .eq('phone_number', recipientIdentifier)
+          .single();
+        recipientUser = data;
+        lookupError = error;
+        console.log('Search by phone:', { phone: recipientIdentifier, data, error });
+      }
+
+      if (!recipientUser || lookupError) {
+        console.error('Recipient lookup failed:', { recipientIdentifier, lookupError, recipientUser });
+        setTransactionResult({
+          type: 'send',
+          success: false,
+          message: `Recipient not found: ${recipientIdentifier}${lookupError ? ` (${lookupError.message})` : ''}`
+        });
+        return;
+      }
+
+      // Prevent self-transfer
+      if (recipientUser.user_id === currentUserId) {
+        setTransactionResult({
+          type: 'send',
+          success: false,
+          message: 'Cannot send money to yourself'
+        });
+        return;
+      }
+
+      const parsedAmount = parseFloat(amount);
+      
+      // Optional: Add small transaction fee (0.5% for ICAN transfers)
+      const transactionFee = parsedAmount * 0.005;
+      const totalDeduction = parsedAmount + transactionFee;
+
+      // Check sender's balance
+      if (totalDeduction > parseFloat(currentWallet.balance)) {
+        setTransactionResult({
+          type: 'send',
+          success: false,
+          message: `Insufficient balance. You have ${currentWallet.balance} ${currentWallet.currency}, need ${totalDeduction.toFixed(2)}`
+        });
+        return;
+      }
+
+      // Get wallet accounts for both users
+      const { data: senderWallet, error: senderWalletError } = await supabase
+        .from('wallet_accounts')
+        .select('id, balance')
+        .eq('user_id', currentUserId)
+        .eq('currency', selectedCurrency)
+        .maybeSingle();
+
+      const { data: recipientWallet, error: recipientWalletError } = await supabase
+        .from('wallet_accounts')
+        .select('id, balance')
+        .eq('user_id', recipientUser.user_id)
+        .eq('currency', selectedCurrency)
+        .maybeSingle();
+
+      console.log('Wallet lookups:', {
+        currentUserId,
+        recipientUserId: recipientUser.user_id,
+        selectedCurrency,
+        senderWallet,
+        senderWalletError,
+        recipientWallet,
+        recipientWalletError
+      });
+
+      // If recipient doesn't have wallet in this currency, create it using backend function
+      let finalRecipientWallet = recipientWallet;
+      if (!finalRecipientWallet && !recipientWalletError) {
+        console.log('Creating wallet for recipient in currency:', selectedCurrency);
+        const { data: walletsData, error: createError } = await supabase
+          .rpc('ensure_recipient_wallet_exists', {
+            p_user_id: recipientUser.user_id,
+            p_curr: selectedCurrency
+          });
+        
+        const newWallet = walletsData && walletsData.length > 0 ? walletsData[0] : null;
+        
+        if (createError) {
+          console.error('Failed to create recipient wallet:', createError);
+          setTransactionResult({
+            type: 'send',
+            success: false,
+            message: `Failed to create wallet for recipient: ${createError.message}`
+          });
+          return;
+        }
+        
+        if (!newWallet) {
+          console.error('Wallet creation returned no data');
+          setTransactionResult({
+            type: 'send',
+            success: false,
+            message: 'Failed to create recipient wallet - no wallet returned'
+          });
+          return;
+        }
+        
+        console.log('✅ Recipient wallet created:', newWallet);
+        finalRecipientWallet = newWallet;
+      }
+
+      if (!senderWallet || !finalRecipientWallet) {
+        setTransactionResult({
+          type: 'send',
+          success: false,
+          message: `Wallet accounts not found${senderWalletError ? ` (sender: ${senderWalletError.message})` : ''}`
+        });
+        return;
+      }
+
+      // Deduct from sender (amount + fee)
+      const { error: senderError } = await supabase
+        .from('wallet_accounts')
+        .update({
+          balance: parseFloat(senderWallet.balance) - totalDeduction,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', senderWallet.id);
+
+      if (senderError) throw senderError;
+
+      // Add to recipient (amount only, not fee) using backend function to bypass RLS
+      console.log('Updating recipient wallet:', { id: finalRecipientWallet.id, currentBalance: finalRecipientWallet.balance, adding: parsedAmount });
+      const { data: updatedWallets, error: recipientError } = await supabase
+        .rpc('update_recipient_wallet_balance', {
+          p_user_id: recipientUser.user_id,
+          p_curr: selectedCurrency,
+          p_amount: parsedAmount
+        });
+
+      if (recipientError) {
+        console.error('❌ Recipient update failed:', recipientError);
+        throw recipientError;
+      }
+      
+      console.log('✅ Recipient wallet updated successfully', updatedWallets);
+
+      // Record transaction
+      const transactionId = `ICAN-TRANSFER-${Date.now()}`;
+      const { error: txError } = await supabase
+        .from('wallet_transactions')
+        .insert([{
+          user_id: currentUserId,
+          transaction_type: 'send',
+          amount: parsedAmount,
+          currency: selectedCurrency,
+          recipient_user_id: recipientUser.user_id,
+          recipient_name: recipientUser.account_holder_name,
+          payment_method: 'ICAN_WALLET',
+          transaction_id: transactionId,
+          description: description || `Transfer to ${recipientUser.account_holder_name}`,
+          status: 'completed',
+          created_at: new Date().toISOString(),
+          metadata: {
+            fee: transactionFee,
+            total_deduction: totalDeduction
+          }
+        }]);
+
+      if (txError) console.warn('Transaction record error:', txError);
+
+      // Refresh balances
+      if (currentUserId) {
+        await loadWalletBalances(currentUserId);
+      }
+
+      setTransactionResult({
+        type: 'send',
+        success: true,
+        message: `✅ Successfully sent ${parsedAmount} ${selectedCurrency} to ${recipientUser.account_holder_name}${transactionFee > 0 ? ` (Fee: ${transactionFee.toFixed(2)})` : ''}`,
+        amount: parsedAmount,
+        recipient: recipientUser.account_holder_name,
+        transactionId: transactionId,
+        fee: transactionFee
+      });
+
+      console.log('💸 ICAN transfer completed:', {
+        transactionId,
+        amount: parsedAmount,
+        recipient: recipientUser.account_holder_name,
+        fee: transactionFee
+      });
+    } catch (error) {
+      console.error('❌ ICAN transfer failed:', error);
+      setTransactionResult({
+        type: 'send',
+        success: false,
+        message: 'Transfer to ICAN wallet user failed.',
+        error: error.message
+      });
+    }
+  };
+
+  // 💳 Send via MOMO
+  const handleSendViaMOMO = async (phoneNumber, amount, description) => {
+    try {
+      // Check sender's balance first
+      if (parseFloat(amount) > parseFloat(currentWallet.balance)) {
+        setTransactionResult({
+          type: 'send',
+          success: false,
+          message: `Insufficient balance. You have ${currentWallet.balance} ${currentWallet.currency}`
+        });
+        return;
+      }
+
+      // Deduct from sender's wallet first
+      const supabase = getSupabaseClient();
+      
+      // CRITICAL: Check authentication BEFORE querying wallet_accounts
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+      if (authError || !authUser) {
+        throw new Error('User not authenticated');
+      }
+
+      const { data: senderWallet } = await supabase
+        .from('wallet_accounts')
+        .select('id, balance')
+        .eq('user_id', currentUserId)
+        .eq('currency', selectedCurrency)
+        .single();
+
+      if (!senderWallet) {
+        setTransactionResult({
+          type: 'send',
+          success: false,
+          message: 'Wallet account not found'
+        });
+        return;
+      }
+
+      // Deduct from sender's balance
+      const { error: deductError } = await supabase
+        .from('wallet_accounts')
+        .update({
+          balance: parseFloat(senderWallet.balance) - parseFloat(amount),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', senderWallet.id);
+
+      if (deductError) throw deductError;
+
+      // Process MOMO payment
+      const result = await momoService.processTransfer({
+        amount: amount,
+        currency: selectedCurrency,
+        recipientPhone: phoneNumber,
+        description: description || `Send to ${phoneNumber}`
+      });
+
+      if (result.success) {
+        // Save transaction to Supabase
+        await walletTransactionService.initialize();
+        await walletTransactionService.saveSend({
+          amount: amount,
+          currency: selectedCurrency,
+          recipientPhone: phoneNumber,
+          paymentMethod: 'MOMO',
+          transactionId: result.transactionId,
+          memoKey: result.activeKey,
+          mode: result.mode,
+          description: description
+        });
+
+        // Refresh wallet balances
+        if (currentUserId) {
+          await loadWalletBalances(currentUserId);
+        }
+
+        setTransactionResult({
+          type: 'send',
+          success: true,
+          message: `✅ Successfully sent ${amount} ${selectedCurrency} to ${phoneNumber}`,
+          amount: amount,
+          recipient: phoneNumber,
+          transactionId: result.transactionId
+        });
+
+        console.log('💸 MOMO transfer completed:', result.transactionId);
+      } else {
+        // Refund to sender if MOMO failed
+        await supabase
+          .from('wallet_accounts')
+          .update({
+            balance: parseFloat(senderWallet.balance),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', senderWallet.id);
+
+        setTransactionResult({
+          type: 'send',
+          success: false,
+          message: result.message || 'MOMO transfer failed. Balance refunded.',
+          error: result.error
+        });
+      }
+    } catch (error) {
+      console.error('❌ MOMO transfer failed:', error);
+      
+      // Refund on error
+      try {
+        const supabase = getSupabaseClient();
+        
+        // CRITICAL: Check authentication BEFORE querying wallet_accounts
+        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+        if (!authError && authUser) {
+          const { data: senderWallet } = await supabase
+            .from('wallet_accounts')
+            .select('id')
+            .eq('user_id', currentUserId)
+            .eq('currency', selectedCurrency)
+            .single();
+
+          if (senderWallet) {
+            // Reload current balance and refund
+            await loadWalletBalances(currentUserId);
+          }
+        }
+      } catch (e) {
+        console.warn('⚠️ Could not refund:', e);
+      }
+
+      setTransactionResult({
+        type: 'send',
+        success: false,
+        message: 'An error occurred during MOMO transfer.',
+        error: error.message
+      });
+    }
   };
 
   // 📥 RECEIVE MONEY HANDLER
@@ -514,6 +948,11 @@ const ICANWallet = () => {
             memoKey: result.activeKey,
             mode: result.mode
           });
+        }
+
+        // Refresh wallet balances
+        if (currentUserId) {
+          await loadWalletBalances(currentUserId);
         }
 
         setTransactionResult({
@@ -1145,12 +1584,10 @@ const ICANWallet = () => {
       // Add to transaction history
       setTransactionHistory([transaction, ...transactionHistory]);
 
-      // Update wallet balance
-      const newBalance = parseFloat(currentWallet.balance) + parseFloat(amount);
-      setCurrentWallet({
-        ...currentWallet,
-        balance: newBalance
-      });
+      // Refresh wallet balances from database
+      if (currentUserId) {
+        await loadWalletBalances(currentUserId);
+      }
 
       setTransactionResult({
         success: true,
@@ -1218,12 +1655,10 @@ const ICANWallet = () => {
       // Add to transaction history
       setTransactionHistory([transaction, ...transactionHistory]);
 
-      // Update wallet balance
-      const newBalance = parseFloat(currentWallet.balance) - parseFloat(amount);
-      setCurrentWallet({
-        ...currentWallet,
-        balance: newBalance
-      });
+      // Refresh wallet balances from database
+      if (currentUserId) {
+        await loadWalletBalances(currentUserId);
+      }
 
       setTransactionResult({
         success: true,
@@ -2458,14 +2893,19 @@ const ICANWallet = () => {
 
             <form onSubmit={handleSendMoney} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Recipient Phone</label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  👤 Recipient (ICAN Account, Phone, or Email)
+                </label>
                 <input
-                  type="tel"
-                  placeholder="256701234567"
+                  type="text"
+                  placeholder="ICAN-1234567890123456 | +256701234567 | user@example.com"
                   value={sendForm.recipient}
                   onChange={(e) => setSendForm({ ...sendForm, recipient: e.target.value })}
                   className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none transition-all"
                 />
+                <p className="text-xs text-gray-400 mt-1">
+                  Send to ICAN account number, phone number, or email address
+                </p>
               </div>
 
               <div>
@@ -3204,26 +3644,112 @@ const ICANWallet = () => {
               Withdraw Money
             </h3>
 
-            <form onSubmit={(e) => {
+            <form onSubmit={async (e) => {
               e.preventDefault();
               if (!withdrawForm.method || !withdrawForm.phoneAccount || !withdrawForm.amount) {
                 alert('Please fill in all fields');
                 return;
               }
+
               setTransactionInProgress(true);
-              setTimeout(() => {
+
+              try {
+                // Get current user
+                const supabase = getSupabaseClient();
+                const { data: { user } } = await supabase.auth.getUser();
+
+                if (!user) {
+                  throw new Error('Not authenticated');
+                }
+
+                // Prepare withdrawal request
+                const withdrawalData = {
+                  userId: user.id,
+                  amount: parseFloat(withdrawForm.amount),
+                  currency: selectedCurrency,
+                  phoneNumber: withdrawForm.phoneAccount,
+                  provider: withdrawForm.method
+                };
+
+                console.log('💸 Submitting withdrawal:', withdrawalData);
+
+                // Call appropriate withdrawal endpoint
+                let response;
+                if (withdrawForm.method === 'bank') {
+                  response = await fetch('http://localhost:5000/api/withdrawals/bank', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                      userId: user.id,
+                      amount: parseFloat(withdrawForm.amount),
+                      currency: selectedCurrency,
+                      accountNumber: withdrawForm.phoneAccount,
+                      bankName: withdrawForm.bankName || 'Not specified'
+                    })
+                  });
+                } else {
+                  // Mobile money withdrawal
+                  response = await fetch('http://localhost:5000/api/withdrawals/mobile-money', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(withdrawalData)
+                  });
+                }
+
+                const result = await response.json();
+
+                if (result.success) {
+                  // Update wallet balance (optional - can be fetched from backend)
+                  // Commented out because setCurrentWallet is not a state hook
+                  // const newBalance = parseFloat(currentWallet.balance) - parseFloat(withdrawForm.amount);
+                  // setCurrentWallet({
+                  //   ...currentWallet,
+                  //   balance: newBalance
+                  // });
+
+                  // Add to transaction history
+                  const transaction = {
+                    id: result.transaction.id,
+                    type: 'withdraw',
+                    amount: parseFloat(withdrawForm.amount),
+                    to: withdrawForm.phoneAccount,
+                    date: new Date().toLocaleDateString(),
+                    status: result.transaction.status,
+                    provider: withdrawForm.method,
+                    fee: result.transaction.fee
+                  };
+
+                  setTransactionHistory([transaction, ...transactionHistory]);
+
+                  setTransactionResult({
+                    type: 'withdraw',
+                    success: true,
+                    message: `✅ ${result.message}`,
+                    transaction: result.transaction
+                  });
+                } else {
+                  throw new Error(result.error || 'Withdrawal failed');
+                }
+
+              } catch (error) {
+                console.error('❌ Withdrawal error:', error);
                 setTransactionResult({
                   type: 'withdraw',
-                  success: true,
-                  message: 'Withdrawal request submitted successfully! You will receive your funds within 24-48 hours.'
+                  success: false,
+                  message: `❌ Withdrawal failed: ${error.message}`
                 });
+              } finally {
                 setTransactionInProgress(false);
                 setTimeout(() => {
                   setActiveModal(null);
                   setTransactionResult(null);
-                  setWithdrawForm({ method: '', phoneAccount: '', amount: '' });
+                  setWithdrawForm({ method: '', phoneAccount: '', amount: '', bankName: '' });
                 }, 3000);
-              }, 1500);
+              }
             }} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Withdrawal Method *</label>
@@ -3271,6 +3797,19 @@ const ICANWallet = () => {
                 />
               </div>
 
+              {withdrawForm.method === 'bank' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Bank Name *</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., Stanbic Bank, Equity Bank"
+                    value={withdrawForm.bankName}
+                    onChange={(e) => setWithdrawForm({ ...withdrawForm, bankName: e.target.value })}
+                    className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:border-orange-400 focus:outline-none transition-all"
+                  />
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Amount ({selectedCurrency}) *</label>
                 <input
@@ -3293,7 +3832,7 @@ const ICANWallet = () => {
                   type="button"
                   onClick={() => {
                     setActiveModal(null);
-                    setWithdrawForm({ method: '', phoneAccount: '', amount: '' });
+                    setWithdrawForm({ method: '', phoneAccount: '', amount: '', bankName: '' });
                   }}
                   className="flex-1 px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-all"
                 >

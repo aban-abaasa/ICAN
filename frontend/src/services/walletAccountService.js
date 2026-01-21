@@ -185,6 +185,31 @@ class WalletAccountService {
         accountHolder: data.account_holder_name
       });
 
+      // Create wallet entries for each supported currency using backend function
+      // This bypasses RLS policies which block direct INSERT
+      const currencies = ['USD', 'UGX', 'KES'];
+      
+      for (const currency of currencies) {
+        try {
+          const { data: walletsData, error: walletError } = await this.supabase
+            .rpc('ensure_recipient_wallet_exists', {
+              p_user_id: userId,
+              p_curr: currency
+            });
+
+          const walletData = walletsData && walletsData.length > 0 ? walletsData[0] : null;
+
+          if (walletError) {
+            console.warn(`⚠️ Warning: Could not create wallet for ${currency}:`, walletError);
+            // Don't fail account creation if individual wallet creation fails
+          } else {
+            console.log(`✅ Wallet created for ${currency}:`, walletData);
+          }
+        } catch (error) {
+          console.warn(`⚠️ Error creating wallet for ${currency}:`, error);
+        }
+      }
+
       return {
         success: true,
         account: data,
@@ -665,6 +690,66 @@ class WalletAccountService {
         success: false,
         error: error.message
       };
+    }
+  }
+
+  /**
+   * Ensure wallet accounts exist for all currencies
+   * Creates missing wallet_accounts entries if they don't exist
+   * @param {string} userId - User ID
+   * @returns {Promise<Object>} Result
+   */
+  async ensureWalletAccountsExist(userId) {
+    try {
+      // CRITICAL: Check authentication BEFORE querying
+      this.supabase = getSupabaseClient();
+      const { data: { user: authUser }, error: authError } = await this.supabase.auth.getUser();
+      
+      if (authError || !authUser) {
+        console.warn('⚠️ ensureWalletAccountsExist: User not authenticated');
+        return { success: false, error: 'User not authenticated' };
+      }
+      
+      const currencies = ['USD', 'UGX', 'KES'];
+
+      // Check which currencies are missing
+      const { data: existingAccounts } = await this.supabase
+        .from('wallet_accounts')
+        .select('currency')
+        .eq('user_id', userId);
+
+      const existingCurrencies = existingAccounts?.map(a => a.currency) || [];
+      const missingCurrencies = currencies.filter(c => !existingCurrencies.includes(c));
+
+      if (missingCurrencies.length === 0) {
+        console.log('✅ All wallet accounts exist for user');
+        return { success: true, created: 0 };
+      }
+
+      // Create missing wallet accounts
+      const walletEntries = missingCurrencies.map(currency => ({
+        user_id: userId,
+        currency: currency,
+        balance: 0,
+        status: 'active',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }));
+
+      const { error } = await this.supabase
+        .from('wallet_accounts')
+        .insert(walletEntries);
+
+      if (error) {
+        console.warn('⚠️ Could not create wallet accounts:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log('✅ Created wallet accounts for:', missingCurrencies);
+      return { success: true, created: missingCurrencies.length };
+    } catch (error) {
+      console.error('❌ Error in ensureWalletAccountsExist:', error);
+      return { success: false, error: error.message };
     }
   }
 }

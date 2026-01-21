@@ -83,105 +83,269 @@ class AgentService {
         throw new Error('Missing required fields');
       }
 
-      if (!['USD', 'UGX'].includes(currency)) {
-        throw new Error('Currency must be USD or UGX');
+      if (!['USD', 'UGX', 'KES'].includes(currency)) {
+        throw new Error('Currency must be USD, UGX, or KES');
       }
 
       if (amount <= 0) {
         throw new Error('Amount must be greater than 0');
       }
 
-      // ============================================
-      // LIQUIDITY GUARD: Check agent's float
-      // ============================================
-      const { data: agentFloat, error: floatError } = await this.supabase
-        .from('agent_floats')
-        .select('*')
-        .eq('agent_id', this.agentId)
-        .eq('currency', currency)
+      // Get the actual user UUID from the account number
+      const { data: userAccount, error: lookupError } = await this.supabase
+        .from('user_accounts')
+        .select('user_id')
+        .eq('account_number', userAccountId)
         .single();
 
-      if (floatError || !agentFloat) {
-        throw new Error(`No ${currency} float account found for agent`);
+      if (lookupError || !userAccount) {
+        throw new Error(`User account ${userAccountId} not found`);
       }
 
-      if (agentFloat.is_frozen) {
-        throw new Error(`${currency} float is frozen: ${agentFloat.frozen_reason}`);
-      }
-
-      if (agentFloat.current_balance < amount) {
-        return {
-          success: false,
-          error: `Insufficient ${currency} float. Available: ${agentFloat.current_balance}, Needed: ${amount}`,
-          availableBalance: agentFloat.current_balance,
-          shortfall: amount - agentFloat.current_balance
-        };
-      }
+      const userId = userAccount.user_id;
 
       // ============================================
-      // DUAL-LEDGER: Deduct from agent, add to user
+      // Step 1: REQUEST CASH-IN (Create pending request)
       // ============================================
+      console.log('📋 Step 1: Creating cash-in request for user approval...');
+      const { data: requestData, error: requestError } = await this.supabase
+        .rpc('request_cash_in', {
+          p_user_id: userId,
+          p_agent_id: this.agentId,
+          p_curr: currency,
+          p_amount: parseFloat(amount)
+        });
+
+      if (requestError) {
+        console.error('❌ Failed to create cash-in request:', requestError);
+        throw new Error(`Request creation failed: ${requestError.message}`);
+      }
+
+      const requestId = requestData && requestData.length > 0 ? requestData[0].request_id : null;
       
-      // 1. Reduce agent's float
-      const { error: floatUpdateError } = await this.supabase
-        .from('agent_floats')
-        .update({
-          current_balance: agentFloat.current_balance - amount,
-          total_withdrawn: (agentFloat.total_withdrawn || 0) + amount,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', agentFloat.id);
+      if (!requestId) {
+        throw new Error('No request ID returned');
+      }
 
-      if (floatUpdateError) throw floatUpdateError;
+      console.log('✅ Cash-in request created:', {
+        requestId: requestId,
+        status: 'pending',
+        userAccount: userAccountId,
+        amount: amount,
+        currency: currency
+      });
 
-      // 2. Add to user's wallet
-      const { error: walletError } = await this.supabase
-        .from('user_wallets')
-        .update({
-          balance: `balance + ${amount}`,
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', userAccountId)
-        .eq('currency', currency);
-
-      if (walletError) throw walletError;
-
-      // 3. Record transaction
-      const referenceNumber = `CASH-IN-${Date.now()}`;
-      const { data: transaction, error: txError } = await this.supabase
-        .from('agent_transactions')
-        .insert([{
-          agent_id: this.agentId,
-          user_id: userAccountId,
-          transaction_type: 'cash_in',
-          amount: parseFloat(amount),
-          currency: currency,
-          commission_amount: 0, // 0% deposit fee
-          net_amount: parseFloat(amount),
-          user_account_id: userAccountId,
-          reference_number: referenceNumber,
-          status: 'completed',
-          completed_at: new Date().toISOString(),
-          metadata: { description }
-        }])
-        .select();
-
-      if (txError) throw txError;
-
-      console.log('✅ Cash-In processed successfully:', transaction[0]);
       return {
         success: true,
-        transactionId: transaction[0].id,
-        referenceNumber: referenceNumber,
+        requestId: requestId,
+        status: 'pending',
+        userAccount: userAccountId,
         amount: amount,
         currency: currency,
-        userAccount: userAccountId,
-        newAgentBalance: agentFloat.current_balance - amount,
-        timestamp: new Date().toISOString()
+        message: '📋 Cash-in request created! User must approve to continue.'
       };
 
     } catch (error) {
-      console.error('❌ Cash-In failed:', error);
+      console.error('❌ Cash-in request failed:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * 🔔 APPROVE CASH-IN: User approves the pending request
+   * @param {Object} params
+   * @param {string} params.requestId - Request ID to approve
+   * @param {string} params.userAccountId - User account ID
+   * @param {number} params.amount - Amount to transfer
+   * @param {string} params.currency - Currency
+   */
+  async approveCashIn(params) {
+    const { requestId, userAccountId, amount, currency } = params;
+
+    try {
+      if (!requestId || !userAccountId || !amount || !currency) {
+        throw new Error('Missing required fields');
+      }
+
+      // Get user UUID
+      const { data: userAccount, error: lookupError } = await this.supabase
+        .from('user_accounts')
+        .select('user_id')
+        .eq('account_number', userAccountId)
+        .single();
+
+      if (lookupError || !userAccount) {
+        throw new Error(`User account ${userAccountId} not found`);
+      }
+
+      const userId = userAccount.user_id;
+
+      // ============================================
+      // Step 2: APPROVE & PROCESS (Deduct from wallet, add to agent)
+      // ============================================
+      console.log('✅ Step 2: Approving and processing cash-in...');
+      const { data: approvalData, error: approvalError } = await this.supabase
+        .rpc('approve_cash_in', {
+          p_request_id: requestId,
+          p_user_id: userId,
+          p_agent_id: this.agentId,
+          p_curr: currency,
+          p_amount: parseFloat(amount)
+        });
+
+      if (approvalError) {
+        console.error('❌ Failed to approve cash-in:', approvalError);
+        throw new Error(`Approval failed: ${approvalError.message}`);
+      }
+
+      const approval = approvalData && approvalData.length > 0 ? approvalData[0] : null;
+
+      if (!approval || !approval.success) {
+        throw new Error(approval?.message || 'Approval failed');
+      }
+
+      console.log('✅ Cash-in approved and processed:', {
+        userBalance: approval.user_balance,
+        agentBalance: approval.agent_balance,
+        amount: amount,
+        currency: currency
+      });
+
+      return {
+        success: true,
+        requestId: requestId,
+        status: 'completed',
+        userBalance: approval.user_balance,
+        agentBalance: approval.agent_balance,
+        amount: amount,
+        currency: currency,
+        message: `✅ Cash-in completed! User: ${approval.user_balance} ${currency}, Agent: ${approval.agent_balance} ${currency}`
+      };
+
+    } catch (error) {
+      console.error('❌ Cash-in approval failed:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * 🔐 APPROVE CASH-IN WITH PIN: User approves with PIN verification
+   * @param {Object} params
+   * @param {string} params.requestId - Request ID to approve
+   * @param {string} params.userAccountId - User account ID
+   * @param {string} params.pin - User's PIN
+   * @param {number} params.amount - Amount to transfer
+   * @param {string} params.currency - Currency
+   */
+  async approveCashInWithPin(params) {
+    const { requestId, userAccountId, pin, amount, currency } = params;
+
+    try {
+      if (!requestId || !userAccountId || !pin || !amount || !currency) {
+        throw new Error('Missing required fields: request ID, account, PIN, amount, currency');
+      }
+
+      if (pin.length !== 4 || !/^\d+$/.test(pin)) {
+        throw new Error('PIN must be 4 digits');
+      }
+
+      // Get user UUID
+      const { data: userAccount, error: lookupError } = await this.supabase
+        .from('user_accounts')
+        .select('user_id')
+        .eq('account_number', userAccountId)
+        .single();
+
+      if (lookupError || !userAccount) {
+        throw new Error(`User account ${userAccountId} not found`);
+      }
+
+      const userId = userAccount.user_id;
+
+      // ============================================
+      // Step 2: APPROVE WITH PIN VERIFICATION
+      // ============================================
+      console.log('🔐 Step 2: Verifying PIN and processing cash-in...');
+      const { data: approvalData, error: approvalError } = await this.supabase
+        .rpc('approve_cash_in_with_pin', {
+          p_request_id: requestId,
+          p_user_id: userId,
+          p_agent_id: this.agentId,
+          p_pin_attempt: pin,
+          p_curr: currency,
+          p_amount: parseFloat(amount)
+        });
+
+      if (approvalError) {
+        console.error('❌ Failed to approve cash-in with PIN:', approvalError);
+        throw new Error(`PIN verification failed: ${approvalError.message}`);
+      }
+
+      const approval = approvalData && approvalData.length > 0 ? approvalData[0] : null;
+
+      if (!approval || !approval.success) {
+        console.warn('⚠️ PIN verification result:', approval?.message);
+        return {
+          success: false,
+          error: approval?.message || 'PIN verification failed',
+          pinValid: false
+        };
+      }
+
+      console.log('✅ PIN verified and cash-in processed:', {
+        userBalance: approval.user_balance,
+        agentBalance: approval.agent_balance,
+        amount: amount,
+        currency: currency
+      });
+
+      return {
+        success: true,
+        pinValid: true,
+        requestId: requestId,
+        status: 'completed',
+        userBalance: approval.user_balance,
+        agentBalance: approval.agent_balance,
+        amount: amount,
+        currency: currency,
+        message: `✅ PIN verified! Cash-in completed! User: ${approval.user_balance} ${currency}, Agent: ${approval.agent_balance} ${currency}`
+      };
+
+    } catch (error) {
+      console.error('❌ Cash-in approval with PIN failed:', error);
+      return { success: false, pinValid: false, error: error.message };
+    }
+  }
+
+  /**
+   * ❌ REJECT CASH-IN: User rejects the pending request
+   * @param {string} requestId - Request ID to reject
+   */
+  async rejectCashIn(requestId) {
+    try {
+      if (!requestId) {
+        throw new Error('Request ID is required');
+      }
+
+      const { data: rejectData, error: rejectError } = await this.supabase
+        .rpc('reject_cash_in', {
+          p_request_id: requestId
+        });
+
+      if (rejectError) {
+        throw new Error(`Rejection failed: ${rejectError.message}`);
+      }
+
+      console.log('✅ Cash-in request rejected:', requestId);
+      return {
+        success: true,
+        requestId: requestId,
+        status: 'rejected',
+        message: 'Cash-in request rejected'
+      };
+
+    } catch (error) {
+      console.error('❌ Cash-in rejection failed:', error);
       return { success: false, error: error.message };
     }
   }
@@ -199,7 +363,7 @@ class AgentService {
     try {
       // Validate
       if (!userAccountId || !amount || !currency) {
-        throw new Error('Missing required fields');
+        throw new Error('Missing required fields: Account Number, amount, currency');
       }
 
       if (amount <= 0) {
@@ -207,25 +371,38 @@ class AgentService {
       }
 
       // ============================================
-      // ID VERIFICATION: Ensure user exists
+      // FIND USER BY ACCOUNT NUMBER
       // ============================================
-      const { data: userWallet, error: userError } = await this.supabase
-        .from('user_wallets')
+      const { data: userAccount, error: accountError } = await this.supabase
+        .from('user_accounts')
+        .select('id, user_id')
+        .eq('account_number', userAccountId)
+        .single();
+
+      if (accountError || !userAccount) {
+        throw new Error(`Account not found: ${userAccountId}`);
+      }
+
+      const userId = userAccount.user_id;
+
+      // ============================================
+      // GET USER'S WALLET
+      // ============================================
+      // CRITICAL: Check authentication BEFORE querying
+      const { data: { user: authUser }, error: authError } = await this.supabase.auth.getUser();
+      if (authError || !authUser) {
+        throw new Error('User not authenticated');
+      }
+
+      const { data: userWallet, error: walletError } = await this.supabase
+        .from('wallet_accounts')
         .select('*')
-        .eq('user_id', userAccountId)
+        .eq('user_id', userId)
         .eq('currency', currency)
         .single();
 
-      if (userError || !userWallet) {
-        throw new Error('User wallet not found');
-      }
-
-      if (userWallet.balance < amount) {
-        return {
-          success: false,
-          error: `User has insufficient balance. Available: ${userWallet.balance}, Requested: ${amount}`,
-          userBalance: userWallet.balance
-        };
+      if (walletError || !userWallet) {
+        throw new Error(`User wallet not found for ${currency}`);
       }
 
       // ============================================
@@ -244,22 +421,8 @@ class AgentService {
       const netAmount = amount - commissionAmount;
 
       // ============================================
-      // DUAL-LEDGER: Deduct from user, add to agent
+      // CHECK AGENT'S FLOAT
       // ============================================
-
-      // 1. Reduce user's wallet
-      const { error: userUpdateError } = await this.supabase
-        .from('user_wallets')
-        .update({
-          balance: userWallet.balance - amount,
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', userAccountId)
-        .eq('currency', currency);
-
-      if (userUpdateError) throw userUpdateError;
-
-      // 2. Increase agent's float (they now have more cash)
       const { data: agentFloat, error: floatError } = await this.supabase
         .from('agent_floats')
         .select('*')
@@ -267,26 +430,77 @@ class AgentService {
         .eq('currency', currency)
         .single();
 
-      if (floatError) throw floatError;
+      if (floatError || !agentFloat) {
+        throw new Error(`Agent float not found for ${currency}`);
+      }
 
-      const { error: agentFloatUpdateError } = await this.supabase
+      if (agentFloat.current_balance < amount) {
+        return {
+          success: false,
+          error: `Insufficient float. Available: ${agentFloat.current_balance}, Needed: ${amount}`,
+          availableBalance: agentFloat.current_balance
+        };
+      }
+
+      // ============================================
+      // TRANSFER: Deduct from agent float, add to user wallet
+      // ============================================
+
+      // 1. Reduce agent's float
+      const { error: floatUpdateError } = await this.supabase
         .from('agent_floats')
         .update({
-          current_balance: agentFloat.current_balance + netAmount,
-          total_deposited: (agentFloat.total_deposited || 0) + amount,
+          current_balance: agentFloat.current_balance - amount,
+          total_withdrawn: (agentFloat.total_withdrawn || 0) + amount,
           updated_at: new Date().toISOString()
         })
         .eq('id', agentFloat.id);
 
-      if (agentFloatUpdateError) throw agentFloatUpdateError;
+      if (floatUpdateError) throw floatUpdateError;
 
-      // 3. Record transaction
+      // 2. Add to user's wallet
+      const { error: walletUpdateError } = await this.supabase
+        .from('wallet_accounts')
+        .update({
+          balance: userWallet.balance + amount,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userWallet.id);
+
+      if (walletUpdateError) throw walletUpdateError;
+
+      // 3. Update user's account balance (for quick access)
+      const balanceColumn = currency === 'USD' ? 'usd_balance' : currency === 'UGX' ? 'ugx_balance' : 'kes_balance';
+      const { data: currentAccount } = await this.supabase
+        .from('user_accounts')
+        .select(balanceColumn)
+        .eq('user_id', userId)
+        .single();
+      
+      if (currentAccount) {
+        const currentBalance = parseFloat(currentAccount[balanceColumn]) || 0;
+        const newBalance = currentBalance + parseFloat(amount);
+        const updateQuery = {};
+        updateQuery[balanceColumn] = newBalance;
+        updateQuery['updated_at'] = new Date().toISOString();
+        
+        const { error: accountUpdateError } = await this.supabase
+          .from('user_accounts')
+          .update(updateQuery)
+          .eq('user_id', userId);
+
+        if (accountUpdateError) {
+          console.warn('⚠️ Could not update user_accounts balance:', accountUpdateError);
+        }
+      }
+
+      // 4. Record transaction
       const referenceNumber = `CASH-OUT-${Date.now()}`;
       const { data: transaction, error: txError } = await this.supabase
         .from('agent_transactions')
         .insert([{
           agent_id: this.agentId,
-          user_id: userAccountId,
+          user_id: userId,
           transaction_type: 'cash_out',
           amount: parseFloat(amount),
           currency: currency,
@@ -594,6 +808,185 @@ class AgentService {
     } catch (error) {
       console.error('❌ Error in getAgentDetails:', error);
       return null;
+    }
+  }
+
+  /**
+   * Update agent profile
+   * @param {string} agentId - Agent ID
+   * @param {Object} params - Fields to update
+   * @returns {Promise<Object>} Updated agent data
+   */
+  async updateAgentProfile(agentId, params) {
+    try {
+      this.supabase = getSupabaseClient();
+
+      const updateData = {};
+
+      // Only add provided fields
+      if (params.agentName) updateData.agent_name = params.agentName;
+      if (params.phoneNumber) updateData.phone_number = params.phoneNumber;
+      if (params.locationCity) updateData.location_city = params.locationCity;
+      if (params.locationName) updateData.location_name = params.locationName;
+
+      if (Object.keys(updateData).length === 0) {
+        return {
+          success: false,
+          error: 'No fields to update'
+        };
+      }
+
+      const { data, error } = await this.supabase
+        .from('agents')
+        .update(updateData)
+        .eq('id', agentId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Error updating agent profile:', error);
+        return {
+          success: false,
+          error: error.message
+        };
+      }
+
+      return {
+        success: true,
+        data: data
+      };
+    } catch (error) {
+      console.error('❌ Error in updateAgentProfile:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * 🔐 WITHDRAWAL WITH PIN
+   */
+  async processWithdrawalWithPin(params) {
+    const { userAccountId, pin, amount, currency } = params;
+
+    try {
+      if (!userAccountId || !pin || !amount || !currency) {
+        throw new Error('Missing required fields');
+      }
+
+      const { data: userAccount } = await this.supabase
+        .from('user_accounts')
+        .select('user_id')
+        .eq('account_number', userAccountId)
+        .single();
+
+      if (!userAccount) throw new Error('User account not found');
+
+      const { data: result, error } = await this.supabase.rpc('process_withdrawal_with_pin', {
+        p_user_id: userAccount.user_id,
+        p_agent_id: this.agentId,
+        p_pin_attempt: pin,
+        p_curr: currency,
+        p_amount: parseFloat(amount)
+      });
+
+      if (error) throw new Error(`Withdrawal failed: ${error.message}`);
+
+      const data = result && result.length > 0 ? result[0] : null;
+      if (!data?.success) {
+        return { success: false, pinValid: false, error: data?.message };
+      }
+
+      console.log('✅ Withdrawal with PIN verified:', data);
+      return { success: true, pinValid: true, ...data };
+    } catch (error) {
+      console.error('❌ Withdrawal with PIN failed:', error);
+      return { success: false, pinValid: false, error: error.message };
+    }
+  }
+
+  /**
+   * 💳 DEPOSIT WITH PIN
+   */
+  async processDepositWithPin(params) {
+    const { userAccountId, pin, amount, currency } = params;
+
+    try {
+      if (!userAccountId || !pin || !amount || !currency) {
+        throw new Error('Missing required fields');
+      }
+
+      const { data: userAccount } = await this.supabase
+        .from('user_accounts')
+        .select('user_id')
+        .eq('account_number', userAccountId)
+        .single();
+
+      if (!userAccount) throw new Error('User account not found');
+
+      const { data: result, error } = await this.supabase.rpc('process_deposit_with_pin', {
+        p_user_id: userAccount.user_id,
+        p_agent_id: this.agentId,
+        p_pin_attempt: pin,
+        p_curr: currency,
+        p_amount: parseFloat(amount)
+      });
+
+      if (error) throw new Error(`Deposit failed: ${error.message}`);
+
+      const data = result && result.length > 0 ? result[0] : null;
+      if (!data?.success) {
+        return { success: false, pinValid: false, error: data?.message };
+      }
+
+      console.log('✅ Deposit with PIN verified:', data);
+      return { success: true, pinValid: true, ...data };
+    } catch (error) {
+      console.error('❌ Deposit with PIN failed:', error);
+      return { success: false, pinValid: false, error: error.message };
+    }
+  }
+
+  /**
+   * 💸 CASH-OUT WITH PIN
+   */
+  async processCashOutWithPin(params) {
+    const { userAccountId, pin, amount, currency } = params;
+
+    try {
+      if (!userAccountId || !pin || !amount || !currency) {
+        throw new Error('Missing required fields');
+      }
+
+      const { data: userAccount } = await this.supabase
+        .from('user_accounts')
+        .select('user_id')
+        .eq('account_number', userAccountId)
+        .single();
+
+      if (!userAccount) throw new Error('User account not found');
+
+      const { data: result, error } = await this.supabase.rpc('process_cashout_with_pin', {
+        p_user_id: userAccount.user_id,
+        p_agent_id: this.agentId,
+        p_pin_attempt: pin,
+        p_curr: currency,
+        p_amount: parseFloat(amount)
+      });
+
+      if (error) throw new Error(`Cash-out failed: ${error.message}`);
+
+      const data = result && result.length > 0 ? result[0] : null;
+      if (!data?.success) {
+        return { success: false, pinValid: false, error: data?.message };
+      }
+
+      console.log('✅ Cash-out with PIN verified:', data);
+      return { success: true, pinValid: true, ...data };
+    } catch (error) {
+      console.error('❌ Cash-out with PIN failed:', error);
+      return { success: false, pinValid: false, error: error.message };
     }
   }
 

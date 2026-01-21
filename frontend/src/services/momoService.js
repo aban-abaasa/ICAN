@@ -47,9 +47,12 @@ class MOmoService {
       }
 
       const mode = this.useMockMode ? 'MOCK' : 'LIVE';
+      // Force EUR in sandbox mode
+      const finalCurrency = this.useMockMode ? 'EUR' : currency.toUpperCase();
+      
       console.log(`🚀 Processing MOMO Top-Up (${mode} Mode):`, { 
         amount, 
-        currency, 
+        currency: finalCurrency, 
         phoneNumber
       });
 
@@ -72,8 +75,8 @@ class MOmoService {
 
       // Call backend proxy endpoint
       const response = await this.callBackendAPI('/momo/request-payment', {
-        amount,
-        currency,
+        amount: parseFloat(amount) || amount,
+        currency: finalCurrency,
         phoneNumber,
         description: description || 'ICAN Wallet Top-Up'
       });
@@ -126,7 +129,9 @@ class MOmoService {
         throw new Error('Missing required fields: amount, currency, recipientPhone');
       }
 
-      console.log('🚀 Processing MOMO Transfer:', { amount, currency, recipientPhone });
+      // Force EUR in sandbox mode
+      const finalCurrency = this.useMockMode ? 'EUR' : currency.toUpperCase();
+      console.log('🚀 Processing MOMO Transfer:', { amount, currency: finalCurrency, recipientPhone });
 
       // Mock mode - skip real API call
       if (this.useMockMode) {
@@ -148,9 +153,9 @@ class MOmoService {
 
       // Call backend proxy endpoint
       const response = await this.callBackendAPI('/momo/send-payment', {
-        amount,
-        currency,
-        recipientPhone,
+        amount: parseFloat(amount) || amount,
+        currency: finalCurrency,
+        phoneNumber: recipientPhone,
         description: description || 'Payment from ICAN'
       });
 
