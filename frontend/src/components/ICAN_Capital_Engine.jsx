@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseClient } from '../lib/supabase/client';
 import { ProfileIcon, ProfilePage } from './auth';
 import { Header } from './Header';
 import { StatusPage } from './StatusPage';
@@ -99,20 +99,25 @@ import {
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// Wallet data from browser storage or initial state
+let currentUser = null;
+let userWallets = [];
+
+// Use singleton Supabase client from client.js to prevent multiple instances
 let supabase = null;
 
-// Initialize Supabase safely
-if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-  try {
-    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    console.log('✅ Supabase initialized successfully');
-  } catch (error) {
-    console.error('❌ Supabase initialization failed:', error);
-    supabase = null;
+// Helper function to get or initialize Supabase client
+const initializeSupabaseClient = () => {
+  if (!supabase) {
+    supabase = getSupabaseClient();
+    if (supabase) {
+      console.log('✅ Supabase client initialized successfully');
+    } else {
+      console.warn('⚠️ Failed to initialize Supabase - check environment variables');
+    }
   }
-} else {
-  console.warn('⚠️ Missing Supabase environment variables: VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY');
-}
+  return supabase;
+};
 
 // AI Spending Advice Modal
 const AIAdviceModal = ({ isOpen, advice, transaction, onConfirm, onCancel }) => {
@@ -3690,7 +3695,9 @@ const ICANCapitalEngine = () => {
       console.log('Auth user object:', user);
       
       // Get the actual Supabase session to get the real UUID
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      const sbClient = initializeSupabaseClient();
+      if (!sbClient) throw new Error('Supabase client not initialized');
+      const { data: { session }, error: sessionError } = await sbClient.auth.getSession();
       
       if (sessionError || !session) {
         console.error('Session error:', sessionError);
@@ -3794,7 +3801,9 @@ const ICANCapitalEngine = () => {
 
     setContributingTrustId(trustId);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const sbClient = initializeSupabaseClient();
+      if (!sbClient) throw new Error('Supabase client not initialized');
+      const { data: { session } } = await sbClient.auth.getSession();
       const userUUID = session?.user.id;
 
       if (!userUUID) {
@@ -3849,7 +3858,9 @@ const ICANCapitalEngine = () => {
 
     setCreatingTrust(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const sbClient = initializeSupabaseClient();
+      if (!sbClient) throw new Error('Supabase client not initialized');
+      const { data: { session } } = await sbClient.auth.getSession();
       const userUUID = session?.user.id;
 
       if (!userUUID) {
@@ -3917,11 +3928,12 @@ const ICANCapitalEngine = () => {
 
   // Fetch dashboard data
   const fetchDashboardData = async () => {
-    if (!selectedTrust || !supabase) return;
+    const sbClient = initializeSupabaseClient();
+    if (!selectedTrust || !sbClient) return;
     
     setDashboardLoading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await sbClient.auth.getSession();
       const userUUID = session?.user.id;
 
       if (!userUUID) return;
@@ -4104,7 +4116,8 @@ const ICANCapitalEngine = () => {
   // Fetch Trust Data from Supabase
   useEffect(() => {
     const fetchTrustData = async () => {
-      if (!user?.id || !supabase) {
+      const sbClient = initializeSupabaseClient();
+      if (!user?.id || !sbClient) {
         console.log('No user ID or supabase available for trust data fetch');
         return;
       }
@@ -4113,7 +4126,7 @@ const ICANCapitalEngine = () => {
         console.log('Fetching trust data for user auth ID:', user.id);
         
         // Get the real Supabase UUID from session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        const { data: { session }, error: sessionError } = await sbClient.auth.getSession();
         
         if (sessionError || !session) {
           console.error('Session error:', sessionError);
@@ -8373,13 +8386,14 @@ Data Freshness: ${reportData.metadata.dataFreshness}
     localStorage.setItem('ican_goals', JSON.stringify(goals));
 
     // Also sync to Supabase if available
-    if (supabase && transactions.length > 0) {
+    const sbClient = initializeSupabaseClient();
+    if (sbClient && transactions.length > 0) {
       try {
         const { user } = useAuth();
         const userId = user?.uid || 'demo-user';
 
         for (const transaction of transactions) {
-          const { error } = await supabase.rpc('sync_firebase_transaction', {
+          const { error } = await sbClient.rpc('sync_firebase_transaction', {
             p_firebase_id: transaction.id,
             p_user_id: userId,
             p_amount: transaction.amount,

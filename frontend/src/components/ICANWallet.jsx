@@ -34,8 +34,10 @@ import { walletService } from '../services/walletService';
 import paymentMethodDetector from '../services/paymentMethodDetector';
 import agentService from '../services/agentService';
 import { walletAccountService } from '../services/walletAccountService';
+import universalTransactionService from '../services/universalTransactionService';
 import { getSupabaseClient } from '../lib/supabase/client';
 import AgentDashboard from './AgentDashboard';
+import UnifiedApprovalModal from './UnifiedApprovalModal';
 
 const ICANWallet = () => {
   const [showBalance, setShowBalance] = useState(true);
@@ -51,6 +53,11 @@ const ICANWallet = () => {
   const [transactionInProgress, setTransactionInProgress] = useState(false);
   const [transactionResult, setTransactionResult] = useState(null);
   const [showPaymentPicker, setShowPaymentPicker] = useState(false);
+  // ✅ ADD APPROVAL MODAL STATE
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [pendingTransaction, setPendingTransaction] = useState(null);
+  const [approvalError, setApprovalError] = useState(null);
+  const [isApproving, setIsApproving] = useState(false);
   const [isAgent, setIsAgent] = useState(false);
   const [agentCheckLoading, setAgentCheckLoading] = useState(true);
   const [showAgentRegistration, setShowAgentRegistration] = useState(false);
@@ -79,7 +86,8 @@ const ICANWallet = () => {
   const [showAccountCreation, setShowAccountCreation] = useState(false);
   const [showAccountEdit, setShowAccountEdit] = useState(false);
   const [showPinChangeSection, setShowPinChangeSection] = useState(false);
-  const [showPhoneOtpSection, setShowPhoneOtpSection] = useState(false);
+  // Remove OTP for PIN change
+  // const [showPhoneOtpSection, setShowPhoneOtpSection] = useState(false);
   const [accountCreationForm, setAccountCreationForm] = useState({
     accountHolderName: '',
     phoneNumber: '',
@@ -507,156 +515,69 @@ const ICANWallet = () => {
         return;
       }
 
-      // Get wallet accounts for both users
-      const { data: senderWallet, error: senderWalletError } = await supabase
-        .from('wallet_accounts')
-        .select('id, balance')
-        .eq('user_id', currentUserId)
-        .eq('currency', selectedCurrency)
-        .maybeSingle();
-
-      const { data: recipientWallet, error: recipientWalletError } = await supabase
-        .from('wallet_accounts')
-        .select('id, balance')
-        .eq('user_id', recipientUser.user_id)
-        .eq('currency', selectedCurrency)
-        .maybeSingle();
-
-      console.log('Wallet lookups:', {
-        currentUserId,
-        recipientUserId: recipientUser.user_id,
-        selectedCurrency,
-        senderWallet,
-        senderWalletError,
-        recipientWallet,
-        recipientWalletError
-      });
-
-      // If recipient doesn't have wallet in this currency, create it using backend function
-      let finalRecipientWallet = recipientWallet;
-      if (!finalRecipientWallet && !recipientWalletError) {
-        console.log('Creating wallet for recipient in currency:', selectedCurrency);
-        const { data: walletsData, error: createError } = await supabase
-          .rpc('ensure_recipient_wallet_exists', {
-            p_user_id: recipientUser.user_id,
-            p_curr: selectedCurrency
-          });
-        
-        const newWallet = walletsData && walletsData.length > 0 ? walletsData[0] : null;
-        
-        if (createError) {
-          console.error('Failed to create recipient wallet:', createError);
-          setTransactionResult({
-            type: 'send',
-            success: false,
-            message: `Failed to create wallet for recipient: ${createError.message}`
-          });
-          return;
-        }
-        
-        if (!newWallet) {
-          console.error('Wallet creation returned no data');
-          setTransactionResult({
-            type: 'send',
-            success: false,
-            message: 'Failed to create recipient wallet - no wallet returned'
-          });
-          return;
-        }
-        
-        console.log('✅ Recipient wallet created:', newWallet);
-        finalRecipientWallet = newWallet;
-      }
-
-      if (!senderWallet || !finalRecipientWallet) {
-        setTransactionResult({
-          type: 'send',
-          success: false,
-          message: `Wallet accounts not found${senderWalletError ? ` (sender: ${senderWalletError.message})` : ''}`
-        });
-        return;
-      }
-
-      // Deduct from sender (amount + fee)
-      const { error: senderError } = await supabase
-        .from('wallet_accounts')
-        .update({
-          balance: parseFloat(senderWallet.balance) - totalDeduction,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', senderWallet.id);
-
-      if (senderError) throw senderError;
-
-      // Add to recipient (amount only, not fee) using backend function to bypass RLS
-      console.log('Updating recipient wallet:', { id: finalRecipientWallet.id, currentBalance: finalRecipientWallet.balance, adding: parsedAmount });
-      const { data: updatedWallets, error: recipientError } = await supabase
-        .rpc('update_recipient_wallet_balance', {
-          p_user_id: recipientUser.user_id,
-          p_curr: selectedCurrency,
-          p_amount: parsedAmount
-        });
-
-      if (recipientError) {
-        console.error('❌ Recipient update failed:', recipientError);
-        throw recipientError;
-      }
-      
-      console.log('✅ Recipient wallet updated successfully', updatedWallets);
-
-      // Record transaction
-      const transactionId = `ICAN-TRANSFER-${Date.now()}`;
-      const { error: txError } = await supabase
-        .from('wallet_transactions')
-        .insert([{
-          user_id: currentUserId,
-          transaction_type: 'send',
-          amount: parsedAmount,
-          currency: selectedCurrency,
-          recipient_user_id: recipientUser.user_id,
-          recipient_name: recipientUser.account_holder_name,
-          payment_method: 'ICAN_WALLET',
-          transaction_id: transactionId,
-          description: description || `Transfer to ${recipientUser.account_holder_name}`,
-          status: 'completed',
-          created_at: new Date().toISOString(),
-          metadata: {
-            fee: transactionFee,
-            total_deduction: totalDeduction
-          }
-        }]);
-
-      if (txError) console.warn('Transaction record error:', txError);
-
-      // Refresh balances
-      if (currentUserId) {
-        await loadWalletBalances(currentUserId);
-      }
-
-      setTransactionResult({
+      // ✅ SHOW APPROVAL MODAL INSTEAD OF PROCESSING IMMEDIATELY
+      setPendingTransaction({
         type: 'send',
-        success: true,
-        message: `✅ Successfully sent ${parsedAmount} ${selectedCurrency} to ${recipientUser.account_holder_name}${transactionFee > 0 ? ` (Fee: ${transactionFee.toFixed(2)})` : ''}`,
+        recipientId: recipientUser.user_id,
+        recipientName: recipientUser.account_holder_name,
         amount: parsedAmount,
-        recipient: recipientUser.account_holder_name,
-        transactionId: transactionId,
-        fee: transactionFee
+        currency: selectedCurrency,
+        description: description || `Transfer to ${recipientUser.account_holder_name}`,
+        fee: transactionFee,
+        totalDeduction,
+        senderWalletId: null  // Will be set when processing
       });
+      
+      setShowApprovalModal(true);
+      setActiveModal(null);  // Close send modal
+      setSendForm({ recipient: '', amount: '', description: '' });  // Clear form
 
-      console.log('💸 ICAN transfer completed:', {
-        transactionId,
-        amount: parsedAmount,
-        recipient: recipientUser.account_holder_name,
-        fee: transactionFee
-      });
     } catch (error) {
       console.error('❌ ICAN transfer failed:', error);
       setTransactionResult({
         type: 'send',
         success: false,
-        message: 'Transfer to ICAN wallet user failed.',
-        error: error.message
+        message: error.message || 'Transfer failed'
       });
+    }
+  };
+
+  // ✅ HANDLE TRANSACTION APPROVAL (FROM UNIFIED APPROVAL MODAL)
+  const handleTransactionApproval = async (pin, authMethod, result) => {
+    if (!pendingTransaction) return;
+    
+    setIsApproving(true);
+    try {
+      const supabase = getSupabaseClient();
+
+      if (result && result.success) {
+        // Transaction was already processed by the universal service
+        // The backend already recorded it in wallet_transactions, so no need to insert here
+        // Just update UI with new balances
+        await loadWalletBalances(currentUserId);
+        
+        // Show success
+        setTransactionResult({
+          type: pendingTransaction.type,
+          success: true,
+          message: `✅ Successfully sent ${pendingTransaction.amount} ${pendingTransaction.currency} to ${pendingTransaction.recipientName}${pendingTransaction.fee > 0 ? ` (Fee: ${pendingTransaction.fee.toFixed(2)})` : ''}`,
+          amount: pendingTransaction.amount,
+          recipient: pendingTransaction.recipientName,
+          fee: pendingTransaction.fee
+        });
+        
+        // Close modal and reset
+        setShowApprovalModal(false);
+        setPendingTransaction(null);
+        setApprovalError(null);
+      } else {
+        setApprovalError(result?.message || 'Transaction failed');
+      }
+    } catch (error) {
+      console.error('❌ Approval processing error:', error);
+      setApprovalError(error.message);
+    } finally {
+      setIsApproving(false);
     }
   };
 
@@ -1204,59 +1125,60 @@ const ICANWallet = () => {
   };
 
   // 🎯 WALLET ACCOUNT EDIT HANDLER
-  const handleSendPhoneOtp = async () => {
+
+  // Direct PIN change handler (no OTP)
+  const handleChangePinDirect = async () => {
+    if (accountEditForm.newPin !== accountEditForm.confirmNewPin) {
+      setAccountMessage({
+        type: 'error',
+        text: 'New PINs do not match'
+      });
+      return;
+    }
+    if (accountEditForm.newPin.length < 4) {
+      setAccountMessage({
+        type: 'error',
+        text: 'PIN must be at least 4 digits'
+      });
+      return;
+    }
     setAccountEditLoading(true);
     try {
       const supabase = getSupabaseClient();
       const { data: { user } } = await supabase.auth.getUser();
-      
       if (!user) {
         setAccountMessage({
           type: 'error',
           text: 'Authentication required'
         });
-        setAccountEditLoading(false);
         return;
       }
-
-      // Call backend to send OTP to phone
-      const response = await fetch('/api/auth/send-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user.id,
-          phoneNumber: accountEditForm.phoneNumber,
-          type: 'pin_change'
-        })
-      });
-
-      // Handle non-JSON responses
-      if (!response.ok) {
-        const contentType = response.headers.get('content-type');
-        let errorMessage = 'Failed to send OTP';
-        
-        if (contentType && contentType.includes('application/json')) {
-          const data = await response.json();
-          errorMessage = data.error || errorMessage;
-        } else {
-          errorMessage = `Server error (${response.status})`;
-        }
-        
-        throw new Error(errorMessage);
+      // Call backend/service to change PIN directly (replace with your actual update logic)
+      const result = await walletAccountService.updateUserPIN(user.id, accountEditForm.currentPin, accountEditForm.newPin);
+      if (!result.success) {
+        setAccountMessage({
+          type: 'error',
+          text: `PIN change failed: ${result.error}`
+        });
+        return;
       }
-
-      const data = await response.json();
-
       setAccountMessage({
         type: 'success',
-        text: '✅ OTP sent to your phone! Check SMS within 5 minutes'
+        text: '✅ PIN changed successfully!'
       });
-      setShowPhoneOtpSection(true);
+      setTimeout(() => {
+        setShowPinChangeSection(false);
+        setAccountEditForm(prev => ({
+          ...prev,
+          currentPin: '',
+          newPin: '',
+          confirmNewPin: ''
+        }));
+      }, 1500);
     } catch (error) {
-      console.error('❌ OTP send failed:', error);
       setAccountMessage({
         type: 'error',
-        text: `Failed to send OTP: ${error.message}`
+        text: `PIN change failed: ${error.message}`
       });
     } finally {
       setAccountEditLoading(false);
@@ -1564,46 +1486,33 @@ const ICANWallet = () => {
           success: false,
           message: 'Authentication required'
         });
+        setTransactionInProgress(false);
         return;
       }
 
-      // Create transaction record
-      const transaction = {
-        id: Math.random().toString(36).substr(2, 9),
-        userId: user.id,
+      // ✅ OPEN APPROVAL MODAL INSTEAD OF PROCESSING IMMEDIATELY
+      setPendingTransaction({
         type: 'deposit',
+        recipientId: sourceDetails?.agentId,
+        recipientName: sourceDetails?.agentName || 'Agent',
         amount: parseFloat(amount),
-        sourceType: sourceType, // 'agent', 'momo', 'card'
-        sourceDetails: sourceDetails,
-        initiator: transactionInitiator, // 'user' or 'agent'
-        status: 'completed',
-        timestamp: new Date().toISOString(),
-        date: new Date().toLocaleDateString()
-      };
-
-      // Add to transaction history
-      setTransactionHistory([transaction, ...transactionHistory]);
-
-      // Refresh wallet balances from database
-      if (currentUserId) {
-        await loadWalletBalances(currentUserId);
-      }
-
-      setTransactionResult({
-        success: true,
-        message: `✅ Deposit successful! +${amount} ${currentWallet.currency}`,
-        transaction: transaction
+        currency: currentWallet.currency,
+        description: sourceDetails?.description || 'Deposit transaction',
+        metadata: {
+          agentId: sourceDetails?.agentId,
+          userId: sourceDetails?.userId
+        }
       });
 
-      console.log('💰 Deposit completed:', transaction);
+      setShowApprovalModal(true);
+      setTransactionInProgress(false);
 
     } catch (error) {
-      console.error('❌ Deposit failed:', error);
+      console.error('❌ Deposit setup failed:', error);
       setTransactionResult({
         success: false,
-        message: `Deposit failed: ${error.message}`
+        message: `Error: ${error.message}`
       });
-    } finally {
       setTransactionInProgress(false);
     }
   };
@@ -1625,6 +1534,7 @@ const ICANWallet = () => {
           success: false,
           message: 'Authentication required'
         });
+        setTransactionInProgress(false);
         return;
       }
 
@@ -1638,43 +1548,34 @@ const ICANWallet = () => {
         return;
       }
 
-      // Create transaction record
-      const transaction = {
-        id: Math.random().toString(36).substr(2, 9),
-        userId: user.id,
-        type: 'withdraw',
+      // ✅ OPEN APPROVAL MODAL INSTEAD OF PROCESSING IMMEDIATELY
+      const commission = destinationDetails?.commission || 0;
+      const transactionType = destinationDetails?.commission ? 'cashout' : 'withdraw';
+
+      setPendingTransaction({
+        type: transactionType,
+        recipientId: destinationDetails?.agentId,
+        recipientName: destinationDetails?.agentName || 'Agent',
         amount: parseFloat(amount),
-        destinationType: destinationType, // 'agent', 'momo', 'bank'
-        destinationDetails: destinationDetails,
-        initiator: transactionInitiator, // 'user' or 'agent'
-        status: 'completed',
-        timestamp: new Date().toISOString(),
-        date: new Date().toLocaleDateString()
-      };
-
-      // Add to transaction history
-      setTransactionHistory([transaction, ...transactionHistory]);
-
-      // Refresh wallet balances from database
-      if (currentUserId) {
-        await loadWalletBalances(currentUserId);
-      }
-
-      setTransactionResult({
-        success: true,
-        message: `✅ Withdrawal successful! -${amount} ${currentWallet.currency}`,
-        transaction: transaction
+        currency: currentWallet.currency,
+        description: destinationDetails?.description || `${transactionType === 'cashout' ? 'Cash-out' : 'Withdrawal'} transaction`,
+        fee: commission,
+        metadata: {
+          agentId: destinationDetails?.agentId,
+          commission: commission,
+          commissionPercentage: destinationDetails?.commissionPercentage || 2.5
+        }
       });
 
-      console.log('💸 Withdrawal completed:', transaction);
+      setShowApprovalModal(true);
+      setTransactionInProgress(false);
 
     } catch (error) {
-      console.error('❌ Withdrawal failed:', error);
+      console.error('❌ Withdrawal setup failed:', error);
       setTransactionResult({
         success: false,
-        message: `Withdrawal failed: ${error.message}`
+        message: `Error: ${error.message}`
       });
-    } finally {
       setTransactionInProgress(false);
     }
   };
@@ -3355,99 +3256,52 @@ const ICANWallet = () => {
 
                 {showPinChangeSection && (
                   <div className="mt-4 space-y-3 border-t border-blue-500/20 pt-4">
-                    {!showPhoneOtpSection ? (
-                      <>
-                        {/* Current PIN */}
-                        <div>
-                          <label className="block text-xs font-medium text-gray-300 mb-1">Current PIN</label>
-                          <input
-                            type="password"
-                            value={accountEditForm.currentPin}
-                            onChange={(e) => setAccountEditForm({ ...accountEditForm, currentPin: e.target.value })}
-                            placeholder="Enter current PIN"
-                            className="w-full px-3 py-2 bg-slate-700/50 border border-blue-500/30 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none transition-all text-sm"
-                          />
-                        </div>
+                    {/* Current PIN */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-300 mb-1">Current PIN</label>
+                      <input
+                        type="password"
+                        value={accountEditForm.currentPin}
+                        onChange={(e) => setAccountEditForm({ ...accountEditForm, currentPin: e.target.value })}
+                        placeholder="Enter current PIN"
+                        className="w-full px-3 py-2 bg-slate-700/50 border border-blue-500/30 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none transition-all text-sm"
+                      />
+                    </div>
 
-                        {/* New PIN */}
-                        <div>
-                          <label className="block text-xs font-medium text-gray-300 mb-1">New PIN (4+ digits)</label>
-                          <input
-                            type="password"
-                            value={accountEditForm.newPin}
-                            onChange={(e) => setAccountEditForm({ ...accountEditForm, newPin: e.target.value })}
-                            placeholder="Enter new PIN"
-                            maxLength="6"
-                            className="w-full px-3 py-2 bg-slate-700/50 border border-blue-500/30 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none transition-all text-sm"
-                          />
-                        </div>
+                    {/* New PIN */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-300 mb-1">New PIN (4+ digits)</label>
+                      <input
+                        type="password"
+                        value={accountEditForm.newPin}
+                        onChange={(e) => setAccountEditForm({ ...accountEditForm, newPin: e.target.value })}
+                        placeholder="Enter new PIN"
+                        maxLength="6"
+                        className="w-full px-3 py-2 bg-slate-700/50 border border-blue-500/30 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none transition-all text-sm"
+                      />
+                    </div>
 
-                        {/* Confirm New PIN */}
-                        <div>
-                          <label className="block text-xs font-medium text-gray-300 mb-1">Confirm New PIN</label>
-                          <input
-                            type="password"
-                            value={accountEditForm.confirmNewPin}
-                            onChange={(e) => setAccountEditForm({ ...accountEditForm, confirmNewPin: e.target.value })}
-                            placeholder="Confirm new PIN"
-                            maxLength="6"
-                            className="w-full px-3 py-2 bg-slate-700/50 border border-blue-500/30 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none transition-all text-sm"
-                          />
-                        </div>
+                    {/* Confirm New PIN */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-300 mb-1">Confirm New PIN</label>
+                      <input
+                        type="password"
+                        value={accountEditForm.confirmNewPin}
+                        onChange={(e) => setAccountEditForm({ ...accountEditForm, confirmNewPin: e.target.value })}
+                        placeholder="Confirm new PIN"
+                        maxLength="6"
+                        className="w-full px-3 py-2 bg-slate-700/50 border border-blue-500/30 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none transition-all text-sm"
+                      />
+                    </div>
 
-                        <button
-                          type="button"
-                          onClick={handleSendPhoneOtp}
-                          disabled={accountEditLoading || !accountEditForm.newPin}
-                          className="w-full mt-3 px-3 py-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white rounded-lg text-sm font-semibold transition-all disabled:opacity-50"
-                        >
-                          {accountEditLoading ? '⏳ Sending OTP...' : '📱 Send OTP to Phone'}
-                        </button>
-
-                        <p className="text-xs text-gray-400 text-center mt-2">
-                          ℹ️ We'll send a verification code to confirm your PIN change
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        {/* OTP Input */}
-                        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 mb-3">
-                          <p className="text-xs text-yellow-400 font-medium mb-3">
-                            📬 OTP Sent! Check your SMS for the 6-digit code
-                          </p>
-                          <input
-                            type="text"
-                            value={accountEditForm.phoneOtp}
-                            onChange={(e) => setAccountEditForm({ ...accountEditForm, phoneOtp: e.target.value.replace(/\D/g, '').slice(0, 6) })}
-                            placeholder="Enter 6-digit OTP"
-                            maxLength="6"
-                            className="w-full px-3 py-2 bg-slate-700/50 border border-yellow-500/30 rounded-lg text-white placeholder-gray-500 focus:border-yellow-500 focus:outline-none transition-all text-center text-lg font-mono font-bold tracking-widest"
-                          />
-                        </div>
-
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowPhoneOtpSection(false);
-                              setAccountEditForm(prev => ({ ...prev, phoneOtp: '' }));
-                            }}
-                            disabled={accountEditLoading}
-                            className="flex-1 px-3 py-2 bg-slate-600/50 hover:bg-slate-600 text-white rounded-lg text-sm font-medium transition-all disabled:opacity-50"
-                          >
-                            Back
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleVerifyPhoneOtp}
-                            disabled={accountEditLoading || accountEditForm.phoneOtp.length !== 6}
-                            className="flex-1 px-3 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white rounded-lg text-sm font-semibold transition-all disabled:opacity-50"
-                          >
-                            {accountEditLoading ? '⏳ Verifying...' : '✅ Verify & Change'}
-                          </button>
-                        </div>
-                      </>
-                    )}
+                    <button
+                      type="button"
+                      onClick={handleChangePinDirect}
+                      disabled={accountEditLoading || !accountEditForm.newPin}
+                      className="w-full mt-3 px-3 py-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white rounded-lg text-sm font-semibold transition-all disabled:opacity-50"
+                    >
+                      {accountEditLoading ? '⏳ Changing PIN...' : '💾 Save Changes'}
+                    </button>
                   </div>
                 )}
               </div>
@@ -3858,6 +3712,34 @@ const ICANWallet = () => {
           </div>
         </div>
       )}
+
+      {/* ✅ UNIFIED APPROVAL MODAL */}
+      <UnifiedApprovalModal
+        isOpen={showApprovalModal}
+        transactionType={pendingTransaction?.type}
+        amount={pendingTransaction?.amount}
+        currency={pendingTransaction?.currency}
+        recipient={pendingTransaction?.recipientName}
+        description={pendingTransaction?.description}
+        userId={currentUserId}
+        recipientId={pendingTransaction?.recipientId}
+        metadata={{
+          recipient_id: pendingTransaction?.recipientId,
+          sender_id: currentUserId,
+          description: pendingTransaction?.description,
+          fee: pendingTransaction?.fee
+        }}
+        onApprove={handleTransactionApproval}
+        onCancel={() => {
+          setShowApprovalModal(false);
+          setPendingTransaction(null);
+          setApprovalError(null);
+        }}
+        isLoading={isApproving}
+        error={approvalError}
+        attemptsRemaining={3}
+        supportsBiometric={true}
+      />
     </div>
   );
 };

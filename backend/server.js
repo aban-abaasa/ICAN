@@ -19,6 +19,18 @@ const p2pTransferRoutes = require('./routes/p2pTransferRoutes');
 const paymentsRoutes = require('./routes/paymentsRoutes');
 const withdrawalRoutes = require('./routes/withdrawalRoutes');
 
+// ES6 module imports for pinReset and email routes
+let pinResetRoutes;
+let emailRoutes;
+
+// Load ES6 modules
+(async () => {
+  const pinResetModule = await import('./routes/pinResetRoutes.js');
+  const emailModule = await import('./routes/emailRoutes.js');
+  pinResetRoutes = pinResetModule.default;
+  emailRoutes = emailModule.default;
+})();
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -78,7 +90,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // ==========================================
-// API Routes
+// API Routes (CommonJS)
 // ==========================================
 
 // MOMO Payment Routes
@@ -94,36 +106,58 @@ app.use('/api/payments', paymentsRoutes);
 app.use('/api/withdrawals', withdrawalRoutes);
 
 // ==========================================
-// Error Handling
+// API Routes (ES6 modules - loaded dynamically)
 // ==========================================
 
-// 404 Handler
-app.use((req, res) => {
-  console.error(`❌ 404 - ${req.method} ${req.path}`);
-  res.status(404).json({
-    success: false,
-    error: 'Endpoint not found',
-    path: req.path,
-    method: req.method
+// Async function to load ES6 modules and start server
+async function loadRoutesAndStartServer() {
+  try {
+    const pinResetModule = await import('./routes/pinResetRoutes.js');
+    const emailModule = await import('./routes/emailRoutes.js');
+    
+    // PIN Reset Routes (account unlock, PIN recovery)
+    app.use('/api', pinResetModule.default);
+    
+    // Email Routes (send PIN reset, unlock confirmations)
+    app.use('/api/email', emailModule.default);
+    
+    console.log('✅ ES6 module routes loaded successfully');
+  } catch (error) {
+    console.error('❌ Error loading ES6 module routes:', error);
+    process.exit(1);
+  }
+
+  // ==========================================
+  // Error Handling
+  // ==========================================
+
+  // 404 Handler
+  app.use((req, res) => {
+    console.error(`❌ 404 - ${req.method} ${req.path}`);
+    res.status(404).json({
+      success: false,
+      error: 'Endpoint not found',
+      path: req.path,
+      method: req.method
+    });
   });
-});
 
-// Global Error Handler
-app.use((err, req, res, next) => {
-  console.error('❌ Error:', err);
-  res.status(err.status || 500).json({
-    success: false,
-    error: err.message || 'Internal server error',
-    statusCode: err.status || 500
+  // Global Error Handler
+  app.use((err, req, res, next) => {
+    console.error('❌ Error:', err);
+    res.status(err.status || 500).json({
+      success: false,
+      error: err.message || 'Internal server error',
+      statusCode: err.status || 500
+    });
   });
-});
 
-// ==========================================
-// Start Server
-// ==========================================
+  // ==========================================
+  // Start Server
+  // ==========================================
 
-app.listen(PORT, () => {
-  console.log(`
+  app.listen(PORT, () => {
+    console.log(`
 ╔══════════════════════════════════════════╗
 ║   🚀 ICAN Backend API Server Started    ║
 ╠══════════════════════════════════════════╣
@@ -132,10 +166,16 @@ app.listen(PORT, () => {
 ║  ✅ P2P Routes: /api/p2p/*               ║
 ║  ✅ Withdrawal Routes: /api/withdrawals/*║
 ║  ✅ Payment Routes: /api/payments/*      ║
+║  ✅ PIN Reset Routes: /api/admin/*       ║
+║  ✅ Email Routes: /api/email/*           ║
 ║  ✅ Health Check: /health                ║
 ║  ✅ Supabase: Connected                  ║
 ╚══════════════════════════════════════════╝
-  `);
-});
+    `);
+  });
+}
+
+// Load routes and start server
+loadRoutesAndStartServer();
 
 module.exports = app;

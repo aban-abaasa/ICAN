@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "@sendgrid/mail": "^8.1.6",
     "@supabase/supabase-js": "^2.89.0",
     "axios": "^1.6.0",
     "cors": "^2.8.5",

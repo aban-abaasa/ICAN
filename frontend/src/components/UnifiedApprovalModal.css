@@ -1,0 +1,653 @@
+/* 🔐 UNIFIED APPROVAL MODAL STYLES */
+
+.unified-approval-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.2s ease-out;
+  padding: 0;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.unified-approval-container {
+  background: white;
+  border-radius: 24px 24px 0 0;
+  box-shadow: 0 -5px 40px rgba(0, 0, 0, 0.1);
+  max-width: 100%;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 20px;
+  animation: slideUp 0.3s ease-out;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Header */
+.approval-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.close-btn {
+  position: absolute;
+  left: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  color: #666;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+.close-btn:hover:not(:disabled) {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.close-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: center;
+}
+
+.transaction-icon {
+  font-size: 32px;
+}
+
+.header-title h2 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #2c3e50;
+  margin: 0;
+}
+
+/* Transaction Summary Card */
+.transaction-summary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 16px;
+  padding: 20px;
+  color: white;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.transaction-detail {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+}
+
+.transaction-detail .label {
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.9;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.transaction-detail .value {
+  font-size: 16px;
+  font-weight: 600;
+  text-align: right;
+  word-break: break-word;
+}
+
+.transaction-detail .amount {
+  font-size: 24px;
+  font-weight: 700;
+  color: #ffd700;
+}
+
+.transaction-detail .recipient-info {
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.2);
+  margin: 0;
+}
+
+/* Authentication Method Selector */
+.auth-method-selector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.auth-method-btn {
+  padding: 12px 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  background: white;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  color: #666;
+}
+
+.auth-method-btn:hover:not(:disabled) {
+  border-color: #667eea;
+  background: #f8f9ff;
+  color: #667eea;
+}
+
+.auth-method-btn.active {
+  border-color: #667eea;
+  background: #667eea;
+  color: white;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.auth-method-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* PIN Entry Section */
+.pin-entry-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.pin-display-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+}
+
+.pin-dots {
+  display: flex;
+  gap: 12px;
+}
+
+.pin-dot {
+  width: 50px;
+  height: 50px;
+  border: 2px solid #e0e0e0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 700;
+  color: #667eea;
+  background: #f8f9fa;
+  transition: all 0.2s ease;
+}
+
+.pin-dot.filled {
+  border-color: #667eea;
+  background: #f0f4ff;
+  box-shadow: 0 0 10px rgba(102, 126, 234, 0.2);
+}
+
+.show-pin-toggle {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 5px;
+  transition: transform 0.2s;
+}
+
+.show-pin-toggle:hover {
+  transform: scale(1.1);
+}
+
+/* Error Message */
+.error-message {
+  background: #fee;
+  border: 1px solid #fcc;
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: shake 0.3s ease-out;
+}
+
+@keyframes shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-5px);
+  }
+  75% {
+    transform: translateX(5px);
+  }
+}
+
+.error-message p {
+  margin: 0;
+  font-size: 14px;
+  color: #c33;
+  font-weight: 500;
+}
+
+.error-message svg {
+  color: #c33;
+  flex-shrink: 0;
+}
+
+.attempts-info {
+  font-size: 12px !important;
+  color: #e67 !important;
+  margin-top: 4px !important;
+}
+
+/* Numeric Keypad */
+.numeric-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 10px 0;
+}
+
+.keypad-btn {
+  padding: 15px;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #2c3e50;
+}
+
+.keypad-btn:hover:not(:disabled) {
+  border-color: #667eea;
+  background: #f0f4ff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+}
+
+.keypad-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(102, 126, 234, 0.1);
+}
+
+.keypad-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.zero-btn {
+  grid-column: 1 / 3;
+}
+
+.backspace-btn {
+  background: #fee;
+  border-color: #fcc;
+  color: #c33;
+  font-size: 18px;
+}
+
+.backspace-btn:hover:not(:disabled) {
+  background: #fdd;
+  border-color: #faa;
+}
+
+/* Biometric Section */
+.biometric-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 40px 20px;
+}
+
+.biometric-scanning {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.fingerprint-scanner {
+  width: 100px;
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f0f4ff;
+  border-radius: 50%;
+  border: 3px solid #667eea;
+}
+
+.scanning-animation {
+  animation: pulse 1.5s ease-in-out infinite;
+  color: #667eea;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(0.8);
+  }
+}
+
+.biometric-scanning p {
+  font-size: 16px;
+  color: #666;
+  margin: 0;
+}
+
+.biometric-success {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+}
+
+.success-animation {
+  animation: scaleIn 0.5s ease-out;
+  color: #4caf50;
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.biometric-success p {
+  font-size: 18px;
+  font-weight: 600;
+  color: #4caf50;
+  margin: 0;
+}
+
+.biometric-failed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+}
+
+.biometric-failed svg {
+  color: #c33;
+}
+
+.biometric-failed p {
+  font-size: 16px;
+  color: #666;
+  margin: 0;
+}
+
+.retry-btn {
+  padding: 12px 24px;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.retry-btn:hover:not(:disabled) {
+  background: #5568d3;
+  transform: translateY(-2px);
+}
+
+.biometric-ready {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+}
+
+.fingerprint-icon {
+  color: #667eea;
+  opacity: 0.8;
+}
+
+.biometric-instruction {
+  font-size: 16px;
+  color: #666;
+  text-align: center;
+  margin: 0;
+}
+
+.biometric-scan-btn {
+  padding: 14px 32px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.biometric-scan-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.biometric-scan-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Action Buttons */
+.approval-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.btn-cancel {
+  padding: 14px 20px;
+  background: #f0f0f0;
+  color: #2c3e50;
+  border: none;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-cancel:hover:not(:disabled) {
+  background: #e0e0e0;
+}
+
+.btn-approve {
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-approve:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.btn-approve:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top: 2px solid white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Security Info */
+.security-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #999;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.security-info svg {
+  flex-shrink: 0;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .unified-approval-container {
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .header-title h2 {
+    font-size: 20px;
+  }
+
+  .transaction-summary {
+    padding: 16px;
+  }
+
+  .transaction-detail .value,
+  .transaction-detail .amount {
+    font-size: 14px;
+  }
+
+  .transaction-detail .amount {
+    font-size: 20px;
+  }
+
+  .pin-dot {
+    width: 44px;
+    height: 44px;
+    font-size: 20px;
+  }
+
+  .keypad-btn {
+    padding: 12px;
+    font-size: 14px;
+  }
+
+  .fingerprint-icon {
+    width: 60px;
+    height: 60px;
+  }
+
+  .approval-actions {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 360px) {
+  .unified-approval-container {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .header-title h2 {
+    font-size: 18px;
+  }
+
+  .pin-dot {
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+  }
+
+  .keypad-btn {
+    padding: 10px;
+    font-size: 12px;
+  }
+
+  .fingerprint-scanner {
+    width: 80px;
+    height: 80px;
+  }
+
+  .fingerprint-icon {
+    width: 50px;
+    height: 50px;
+  }
+}

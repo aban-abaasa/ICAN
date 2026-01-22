@@ -9,9 +9,12 @@ import {
   CheckCircle,
   Clock,
   LogOut,
-  BarChart3
+  BarChart3,
+  Mail,
+  Lock
 } from 'lucide-react';
 import agentService from '../services/agentService';
+import PinResetFlow from './PinResetFlow';
 
 /**
  * 🏪 AGENT DASHBOARD
@@ -75,6 +78,10 @@ const AgentDashboard = () => {
   const [showPinInput, setShowPinInput] = useState(false);
   const [showFingerprintSetup, setShowFingerprintSetup] = useState(false);
 
+  // State for unlock/reset modals
+  const [showPinReset, setShowPinReset] = useState(false);
+  const [showAccountUnlock, setShowAccountUnlock] = useState(false);
+
   // Collapsible Agent Info State
   const [showAgentIdCard, setShowAgentIdCard] = useState(true);
   const [collapsedAgentIdCard, setCollapsedAgentIdCard] = useState(false);
@@ -136,15 +143,40 @@ const AgentDashboard = () => {
     
     // Show confirmation modal instead of directly processing
     if (!showConfirmation) {
-      setConfirmationData({
-        type: 'cashIn',
-        userAccountId: cashInForm.userAccountId,
-        amount: cashInForm.amount,
-        currency: cashInForm.currency,
-        description: cashInForm.description
-      });
-      setConfirmationAction('cashIn');
-      setShowConfirmation(true);
+      try {
+        // Look up customer name before showing confirmation
+        const { data: userAccount, error: userError } = await agentService.supabase
+          .from('user_accounts')
+          .select('user_id, account_holder_name')
+          .eq('account_number', cashInForm.userAccountId)
+          .single();
+
+        if (userError || !userAccount) {
+          setNotification({
+            type: 'error',
+            title: '❌ Customer Not Found',
+            message: `Account ${cashInForm.userAccountId} not found`
+          });
+          return;
+        }
+
+        setConfirmationData({
+          type: 'cashIn',
+          userAccountId: cashInForm.userAccountId,
+          customerName: userAccount.account_holder_name,
+          amount: cashInForm.amount,
+          currency: cashInForm.currency,
+          description: cashInForm.description
+        });
+        setConfirmationAction('cashIn');
+        setShowConfirmation(true);
+      } catch (error) {
+        setNotification({
+          type: 'error',
+          title: '❌ Error',
+          message: error.message
+        });
+      }
       return;
     }
   };
@@ -154,30 +186,83 @@ const AgentDashboard = () => {
     setLoading(true);
     setNotification(null);
 
-    const result = await agentService.processCashIn({
-      userAccountId: confirmationData.userAccountId,
-      amount: parseFloat(confirmationData.amount),
-      currency: confirmationData.currency,
-      description: confirmationData.description
-    });
+    try {
+      // Validate PIN was entered
+      if (!confirmationPin || confirmationPin.length !== 4) {
+        setNotification({
+          type: 'error',
+          title: '❌ PIN Required',
+          message: 'Please enter your 4-digit PIN'
+        });
+        setLoading(false);
+        return;
+      }
 
-    setLoading(false);
-    setShowConfirmation(false);
+      // Look up the customer account to get their user_id
+      const { data: userAccount, error: userError } = await agentService.supabase
+        .from('user_accounts')
+        .select('user_id')
+        .eq('account_number', confirmationData.userAccountId)
+        .single();
 
-    if (result.success) {
-      setNotification({
-        type: 'success',
-        title: '✅ Cash-In Successful',
-        message: `${result.amount} ${result.currency} transferred to user. New balance: ${result.newAgentBalance}`
+      if (userError || !userAccount) throw new Error('Customer account not found');
+
+      // Get agent's user_id for PIN verification from agents table
+      const { data: agentData, error: agentError } = await agentService.supabase
+        .from('agents')
+        .select('user_id')
+        .eq('id', agentService.agentId)
+        .single();
+
+      if (agentError || !agentData) throw new Error('Agent account not found');
+
+      // Use universal transaction service with PIN verification
+      // Verify AGENT's PIN, but process transaction for CUSTOMER
+      const universalTransactionService = (await import('../services/universalTransactionService')).default;
+      
+      const amount = parseFloat(confirmationData.amount);
+      const currency = confirmationData.currency;
+      
+      const result = await universalTransactionService.processTransaction({
+        transactionType: 'cashin',
+        userId: userAccount.user_id,  // CUSTOMER's account
+        pin_user_id: agentData.user_id,  // Verify AGENT's PIN
+        agentId: agentService.agentId,
+        pin: confirmationPin,
+        currency: currency,
+        amount: amount,
+        metadata: {
+          agent_name: agentData?.agent_name || 'Agent',
+          description: confirmationData.description || 'Cash-in transaction'
+        }
       });
-      setCashInForm({ userAccountId: '', amount: '', currency: 'USD', description: '' });
-      await refreshFloatBalances();
-      await refreshRecentTransactions();
-    } else {
+
+      setLoading(false);
+      setShowConfirmation(false);
+      setConfirmationPin('');
+
+      if (result.success) {
+        setNotification({
+          type: 'success',
+          title: '✅ Cash-In Successful',
+          message: `${amount} ${currency} received from ${confirmationData.customerName}. New agent float: ${result.agent_balance}`
+        });
+        setCashInForm({ userAccountId: '', amount: '', currency: 'USD', description: '' });
+        await refreshFloatBalances();
+        await refreshRecentTransactions();
+      } else {
+        setNotification({
+          type: 'error',
+          title: '❌ Cash-In Failed',
+          message: result.message || 'Transaction failed'
+        });
+      }
+    } catch (error) {
+      setLoading(false);
       setNotification({
         type: 'error',
-        title: '❌ Cash-In Failed',
-        message: result.error
+        title: '❌ Cash-In Error',
+        message: error.message || 'An error occurred'
       });
     }
   };
@@ -185,20 +270,44 @@ const AgentDashboard = () => {
   // ============================================
   // CASH-OUT HANDLER
   // ============================================
-
   const handleCashOut = async (e) => {
     e.preventDefault();
     
     // Show confirmation modal instead of directly processing
     if (!showConfirmation) {
-      setConfirmationData({
-        type: 'cashOut',
-        userAccountId: cashOutForm.userAccountId,
-        amount: cashOutForm.amount,
-        currency: cashOutForm.currency
-      });
-      setConfirmationAction('cashOut');
-      setShowConfirmation(true);
+      try {
+        // Look up customer name before showing confirmation
+        const { data: userAccount, error: userError } = await agentService.supabase
+          .from('user_accounts')
+          .select('user_id, account_holder_name')
+          .eq('account_number', cashOutForm.userAccountId)
+          .single();
+
+        if (userError || !userAccount) {
+          setNotification({
+            type: 'error',
+            title: '❌ Customer Not Found',
+            message: `Account ${cashOutForm.userAccountId} not found`
+          });
+          return;
+        }
+
+        setConfirmationData({
+          type: 'cashOut',
+          userAccountId: cashOutForm.userAccountId,
+          customerName: userAccount.account_holder_name,
+          amount: cashOutForm.amount,
+          currency: cashOutForm.currency
+        });
+        setConfirmationAction('cashOut');
+        setShowConfirmation(true);
+      } catch (error) {
+        setNotification({
+          type: 'error',
+          title: '❌ Error',
+          message: error.message
+        });
+      }
       return;
     }
   };
@@ -208,29 +317,85 @@ const AgentDashboard = () => {
     setLoading(true);
     setNotification(null);
 
-    const result = await agentService.processCashOut({
-      userAccountId: confirmationData.userAccountId,
-      amount: parseFloat(confirmationData.amount),
-      currency: confirmationData.currency
-    });
+    try {
+      // Validate PIN was entered
+      if (!confirmationPin || confirmationPin.length !== 4) {
+        setNotification({
+          type: 'error',
+          title: '❌ PIN Required',
+          message: 'Please enter your 4-digit PIN'
+        });
+        setLoading(false);
+        return;
+      }
 
-    setLoading(false);
-    setShowConfirmation(false);
+      // Look up the customer account to get their user_id
+      const { data: userAccount, error: userError } = await agentService.supabase
+        .from('user_accounts')
+        .select('user_id, account_holder_name')
+        .eq('account_number', confirmationData.userAccountId)
+        .single();
 
-    if (result.success) {
-      setNotification({
-        type: 'success',
-        title: '✅ Payment Sent to Wallet',
-        message: `${result.amount} ${result.currency} sent to customer wallet. Commission earned: ${result.commissionEarned} ${result.currency}`
+      if (userError || !userAccount) throw new Error('Customer account not found');
+
+      // Get agent's user_id for PIN verification from agents table
+      const { data: agentData, error: agentError } = await agentService.supabase
+        .from('agents')
+        .select('user_id')
+        .eq('id', agentService.agentId)
+        .single();
+
+      if (agentError || !agentData) throw new Error('Agent account not found');
+
+      // Use universal transaction service with PIN verification
+      // Verify AGENT's PIN, but process transaction for CUSTOMER
+      const universalTransactionService = (await import('../services/universalTransactionService')).default;
+      
+      const amount = parseFloat(confirmationData.amount);
+      const currency = confirmationData.currency;
+      
+      const result = await universalTransactionService.processTransaction({
+        transactionType: 'cashout',
+        userId: userAccount.user_id,  // CUSTOMER's account
+        pin_user_id: agentData.user_id,  // Verify AGENT's PIN
+        agentId: agentService.agentId,
+        pin: confirmationPin,
+        currency: currency,
+        amount: amount,
+        metadata: {
+          commission_rate: 2.5,
+          recipient_name: userAccount.account_holder_name,
+          description: 'Cash-out transaction'
+        }
       });
-      setCashOutForm({ userAccountId: '', amount: '', currency: 'USD', phoneNumber: '' });
-      await refreshFloatBalances();
-      await refreshRecentTransactions();
-    } else {
+
+      setLoading(false);
+      setShowConfirmation(false);
+      setConfirmationPin('');
+
+      if (result.success) {
+        setNotification({
+          type: 'success',
+          title: '✅ Payment Sent to Wallet',
+          message: `${amount} ${currency} sent to customer wallet. Commission earned: ${((amount * 2.5) / 100).toFixed(2)} ${currency}`
+        });
+        setCashOutForm({ userAccountId: '', amount: '', currency: 'USD', phoneNumber: '' });
+        await refreshFloatBalances();
+        await refreshRecentTransactions();
+      } else {
+        setNotification({
+          type: 'error',
+          title: '❌ Cash-Out Failed',
+          message: result.message || 'Transaction failed'
+        });
+      }
+    } catch (error) {
+      console.error('❌ Cash-Out error:', error);
+      setLoading(false);
       setNotification({
         type: 'error',
-        title: '❌ Cash-Out Failed',
-        message: result.error
+        title: '❌ Error',
+        message: error.message
       });
     }
   };
@@ -316,13 +481,66 @@ const AgentDashboard = () => {
       info: <Clock className="w-5 h-5 text-blue-400" />
     }[notification.type];
 
+    // Check if account is locked
+    const isAccountLocked = notification.message && notification.message.includes('Account locked');
+
     return (
-      <div className={`border ${bgColor} rounded-lg p-4 flex gap-3 mb-4`}>
-        {icon}
-        <div>
-          <h3 className="font-semibold text-white">{notification.title}</h3>
-          <p className="text-gray-300 text-sm">{notification.message}</p>
+      <div className="space-y-4 mb-4">
+        {/* Main Notification */}
+        <div className={`border ${bgColor} rounded-lg p-4 flex gap-3`}>
+          {icon}
+          <div>
+            <h3 className="font-semibold text-white">{notification.title}</h3>
+            <p className="text-gray-300 text-sm">{notification.message}</p>
+          </div>
         </div>
+
+        {/* Account Unlock Actions - Show when account is locked */}
+        {isAccountLocked && (
+          <div className="bg-gradient-to-br from-red-900/40 to-orange-900/40 border border-orange-500/50 rounded-lg p-6">
+            <div className="flex items-start gap-4 mb-4">
+              <div className="text-4xl">🏪</div>
+              <div className="flex-1">
+                <h3 className="text-white font-bold text-lg mb-1">🔐 Account Locked</h3>
+                <p className="text-gray-300 text-sm">
+                  Your account has been locked due to too many failed PIN attempts. Choose an option below to unlock your account:
+                </p>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="grid md:grid-cols-2 gap-3 mb-3">
+              {/* Reset PIN Button */}
+              <button
+                onClick={() => setShowPinReset(true)}
+                className="flex items-center gap-3 p-4 bg-blue-600/30 hover:bg-blue-600/50 border border-blue-500/50 rounded-lg transition-all group"
+              >
+                <div className="text-2xl">🔐</div>
+                <div className="text-left">
+                  <p className="font-semibold text-blue-300 group-hover:text-blue-200">Reset PIN</p>
+                  <p className="text-xs text-gray-400">Send reset link to email</p>
+                </div>
+              </button>
+
+              {/* Request Unlock Button */}
+              <button
+                onClick={() => setShowAccountUnlock(true)}
+                className="flex items-center gap-3 p-4 bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/50 rounded-lg transition-all group"
+              >
+                <div className="text-2xl">🔓</div>
+                <div className="text-left">
+                  <p className="font-semibold text-purple-300 group-hover:text-purple-200">Request Unlock</p>
+                  <p className="text-xs text-gray-400">Contact support team</p>
+                </div>
+              </button>
+            </div>
+
+            {/* Tip */}
+            <p className="text-xs text-gray-400 bg-slate-700/30 p-3 rounded">
+              💡 <strong>Tip:</strong> Have your Agent ID ready for faster verification
+            </p>
+          </div>
+        )}
       </div>
     );
   };
@@ -331,6 +549,8 @@ const AgentDashboard = () => {
   // CONFIRMATION MODAL
   // ============================================
   
+  const [confirmationPin, setConfirmationPin] = useState('');
+
   const renderConfirmationModal = () => {
     if (!showConfirmation || !confirmationData) return null;
 
@@ -348,13 +568,22 @@ const AgentDashboard = () => {
           </h2>
 
           {/* Confirmation Details */}
-          <div className="space-y-4 mb-8">
+          <div className="space-y-4 mb-6">
             <div className="bg-white/10 border border-white/20 rounded-lg p-4">
               <p className="text-gray-400 text-sm mb-1">Transaction Type</p>
               <p className="text-white font-semibold text-lg">
                 {isCashIn ? 'Cash-In (Transfer to User)' : 'Cash-Out (User Withdrawal)'}
               </p>
             </div>
+
+            {confirmationData.customerName && (
+              <div className="bg-blue-500/10 border border-blue-400/30 rounded-lg p-4">
+                <p className="text-gray-400 text-sm mb-1">Customer Name</p>
+                <p className="text-white font-semibold text-lg">
+                  👤 {confirmationData.customerName}
+                </p>
+              </div>
+            )}
 
             <div className="bg-white/10 border border-white/20 rounded-lg p-4">
               <p className="text-gray-400 text-sm mb-1">Amount</p>
@@ -384,6 +613,22 @@ const AgentDashboard = () => {
                 </p>
               </div>
             )}
+
+            {/* PIN INPUT - REQUIRED FOR APPROVAL */}
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+              <label className="block text-blue-300 text-sm font-semibold mb-2">
+                🔐 Enter Your PIN to Approve
+              </label>
+              <input
+                type="password"
+                placeholder="••••"
+                maxLength="4"
+                value={confirmationPin}
+                onChange={(e) => setConfirmationPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                className="w-full px-4 py-2 bg-white/10 border border-blue-400/50 rounded-lg text-white placeholder-gray-500 text-center tracking-widest focus:outline-none focus:border-blue-400 transition-all"
+              />
+              <p className="text-xs text-gray-400 mt-1">Your 4-digit transaction PIN</p>
+            </div>
           </div>
 
           {/* Action Buttons */}
@@ -393,6 +638,7 @@ const AgentDashboard = () => {
                 setShowConfirmation(false);
                 setConfirmationData(null);
                 setConfirmationAction(null);
+                setConfirmationPin('');
               }}
               disabled={loading}
               className="flex-1 px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all font-medium disabled:opacity-50"
@@ -401,7 +647,7 @@ const AgentDashboard = () => {
             </button>
             <button
               onClick={isCashIn ? processCashInConfirmed : processCashOutConfirmed}
-              disabled={loading}
+              disabled={loading || confirmationPin.length !== 4}
               className={`flex-1 px-4 py-3 bg-gradient-to-r ${actionColor} text-white rounded-lg font-medium hover:shadow-lg transition-all disabled:opacity-50`}
             >
               {loading ? '⏳ Processing...' : actionButtonText}
@@ -471,9 +717,243 @@ const AgentDashboard = () => {
     }
   };
 
+  // ============================================
+  // REQUEST ACCOUNT UNLOCK MODAL
+  // ============================================
+
+  const [unlockRequestPin, setUnlockRequestPin] = useState('');
+  const [unlockRequestLoading, setUnlockRequestLoading] = useState(false);
+  const [unlockRequestMessage, setUnlockRequestMessage] = useState(null);
+
+  const handleQuickUnlock = async () => {
+    if (!unlockRequestPin || unlockRequestPin.length !== 4) {
+      setUnlockRequestMessage({
+        type: 'error',
+        text: '❌ Please enter your 4-digit PIN'
+      });
+      return;
+    }
+
+    setUnlockRequestLoading(true);
+    setUnlockRequestMessage(null);
+
+    try {
+      // Hash PIN same way backend expects it
+      const hashedPin = btoa(unlockRequestPin);
+
+      console.log('🔓 Quick Unlock attempt...');
+
+      // Import the existing Supabase client singleton
+      const { getSupabaseClient } = await import('../lib/supabase/client.js');
+      const supabase = getSupabaseClient();
+
+      // Get the AUTHENTICATED user (from Supabase auth, not agentService)
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        throw new Error('Not authenticated. Please log in again.');
+      }
+
+      const userId = user.id;
+      console.log('Using auth user ID:', userId);
+
+      // Query user account from Supabase
+      const { data: userAccounts, error: queryError } = await supabase
+        .from('user_accounts')
+        .select('*')
+        .eq('user_id', userId);
+
+      console.log('Query result:', { userAccounts, queryError, count: userAccounts?.length });
+
+      if (queryError) {
+        console.error('Query error:', queryError);
+        throw new Error(`Query failed: ${queryError.message}`);
+      }
+
+      if (!userAccounts || userAccounts.length === 0) {
+        throw new Error('User account not found in system');
+      }
+
+      const userAccount = userAccounts[0];
+      console.log('User account found:', { 
+        id: userAccount.id, 
+        hasPin: !!userAccount.pin_hash,
+        status: userAccount.status 
+      });
+
+      // Verify PIN matches
+      if (userAccount.pin_hash !== hashedPin) {
+        console.warn('PIN mismatch');
+        throw new Error('Invalid PIN. Please try again.');
+      }
+
+      console.log('✅ PIN verified, unlocking account...');
+
+      // PIN is correct - unlock account by clearing the lock
+      const { error: updateError } = await supabase
+        .from('user_accounts')
+        .update({
+          pin_attempts: 0,
+          pin_locked_until: null,  // Clear the lock timestamp
+          status: 'active',
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId);
+
+      if (updateError) {
+        throw new Error('Failed to unlock account: ' + updateError.message);
+      }
+
+      console.log('✅ Account unlocked successfully');
+
+      setUnlockRequestMessage({
+        type: 'success',
+        text: '✅ Account unlocked successfully! You can now proceed with transactions.'
+      });
+      setTimeout(() => {
+        setShowAccountUnlock(false);
+        setUnlockRequestPin('');
+        setUnlockRequestMessage(null);
+        // Refresh to update account status
+        window.location.reload();
+      }, 1500);
+    } catch (error) {
+      console.error('Unlock error:', error);
+      setUnlockRequestMessage({
+        type: 'error',
+        text: '❌ ' + error.message
+      });
+    } finally {
+      setUnlockRequestLoading(false);
+    }
+  };
+
+  const renderUnlockRequestModal = () => {
+    if (!showAccountUnlock) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-purple-500/30 rounded-lg p-8 max-w-md w-full">
+          <div className="flex items-center gap-3 mb-6">
+            <Lock className="w-8 h-8 text-purple-400" />
+            <h2 className="text-2xl font-bold text-white">🔓 Unlock Account</h2>
+          </div>
+
+          {unlockRequestMessage && (
+            <div className={`mb-4 p-4 rounded-lg border ${
+              unlockRequestMessage.type === 'success'
+                ? 'bg-green-500/10 border-green-500/30 text-green-300'
+                : 'bg-red-500/10 border-red-500/30 text-red-300'
+            }`}>
+              {unlockRequestMessage.text}
+            </div>
+          )}
+
+          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-6">
+            <p className="text-blue-300 text-sm mb-2">
+              <strong>🔐 Verify Your Identity</strong>
+            </p>
+            <p className="text-blue-200 text-xs">
+              Enter your 4-digit PIN to verify ownership and unlock your account immediately.
+            </p>
+          </div>
+
+          <form onSubmit={(e) => { e.preventDefault(); handleQuickUnlock(); }} className="space-y-4">
+            <div>
+              <label className="block text-gray-300 text-sm font-semibold mb-2">
+                Your 4-Digit PIN
+              </label>
+              <input
+                type="password"
+                placeholder="••••"
+                maxLength="4"
+                value={unlockRequestPin}
+                onChange={(e) => setUnlockRequestPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-500 text-center tracking-widest text-2xl focus:outline-none focus:border-purple-400 transition-all"
+                disabled={unlockRequestLoading}
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Your transaction PIN (not your login password)
+              </p>
+            </div>
+
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+              <p className="text-yellow-300 text-xs">
+                ⚡ <strong>Fast Unlock:</strong> Your account will unlock instantly once PIN is verified.
+              </p>
+            </div>
+
+            <div className="flex gap-3 pt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAccountUnlock(false);
+                  setUnlockRequestPin('');
+                  setUnlockRequestMessage(null);
+                }}
+                disabled={unlockRequestLoading}
+                className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition-all disabled:opacity-50"
+              >
+                ❌ Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={unlockRequestLoading || unlockRequestPin.length !== 4}
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white font-semibold rounded-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {unlockRequestLoading ? (
+                  <>
+                    <Clock className="w-4 h-4 animate-spin" />
+                    Unlocking...
+                  </>
+                ) : (
+                  <>
+                    🔓 Unlock
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Alternative: Request via support */}
+            <button
+              type="button"
+              onClick={() => {
+                setShowAccountUnlock(false);
+                setShowPinReset(true);
+              }}
+              className="w-full text-sm text-purple-400 hover:text-purple-300 mt-4 py-2 border-t border-gray-700 pt-4"
+            >
+              💬 Prefer to request via Support?
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
+
+        {/* ============================================ */}
+        {/* MODALS - PIN RESET & ACCOUNT UNLOCK */}
+        {/* ============================================ */}
+
+        {showPinReset && (
+          <PinResetFlow
+            onSuccess={() => {
+              setShowPinReset(false);
+              setNotification({
+                type: 'success',
+                title: '✅ PIN Reset Complete',
+                message: 'Check your email for the reset link. Your account will be unlocked once you reset your PIN.'
+              });
+            }}
+            onCancel={() => setShowPinReset(false)}
+          />
+        )}
+
+        {renderUnlockRequestModal()}
 
         {/* ============================================ */}
         {/* HEADER */}
