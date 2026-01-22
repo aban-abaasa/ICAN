@@ -810,6 +810,11 @@ const AgentDashboard = () => {
         type: 'success',
         text: '✅ Account unlocked successfully! You can now proceed with transactions.'
       });
+      
+      // Clear the lock notification by removing it or updating it
+      // This removes the "Account locked" message from showing
+      setNotification(null);
+      
       setTimeout(() => {
         setShowAccountUnlock(false);
         setUnlockRequestPin('');
