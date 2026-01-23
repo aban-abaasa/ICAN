@@ -145,23 +145,34 @@ const LandingPage = ({ onGetStarted }) => {
       </nav>
 
       {/* Hero Section */}
-      <div className="relative pt-32 pb-8 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto grid md:grid-cols-2 gap-12 items-center">
-          {/* Left Content */}
-          <div className="space-y-8 animate-fadeInUp">
-            <div className="space-y-4">
-              <div className="inline-flex items-center space-x-2 bg-purple-500/10 border border-purple-500/30 rounded-full px-2 sm:px-4 py-2">
-                <Zap className="w-4 h-4 text-purple-400 flex-shrink-0" />
-                <span className="text-xs sm:text-sm text-purple-300">From Volatility to Global Capital</span>
+      <div className="relative pt-20 md:pt-32 pb-8 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto grid md:grid-cols-2 gap-8 md:gap-12 items-start md:items-center">
+          {/* Left Content - Collapsed to Icon */}
+          <div className="flex items-center justify-center md:justify-start animate-fadeInUp">
+            <div className="group relative w-full md:w-auto flex md:block">
+              {/* Info Icon Button */}
+              <button 
+                className="flex items-center justify-center w-16 h-16 md:w-20 md:h-20 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 hover:shadow-lg hover:shadow-purple-500/50 transition transform hover:scale-110 flex-shrink-0"
+                title="About ICAN Capital Engine"
+              >
+                <Zap className="w-8 h-8 md:w-10 md:h-10 text-white" />
+              </button>
+              
+              {/* Hidden Content - Visible on Hover */}
+              <div className="absolute top-20 md:bottom-20 left-0 md:left-1/2 md:transform md:-translate-x-1/2 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all duration-300 w-64 md:w-96 z-50">
+                <div className="bg-slate-900 border border-purple-500/50 rounded-lg p-4 md:p-6 space-y-3 shadow-xl shadow-purple-500/20">
+                  <div className="inline-flex items-center space-x-2 bg-purple-500/20 border border-purple-500/30 rounded-full px-3 py-1">
+                    <Zap className="w-3 h-3 text-purple-400 flex-shrink-0" />
+                    <span className="text-xs text-purple-300">From Volatility to Global Capital</span>
+                  </div>
+                  <h2 className="text-lg md:text-xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
+                    Build Generational Wealth Together
+                  </h2>
+                  <p className="text-xs md:text-sm text-gray-300 leading-relaxed">
+                    Harness the power of democratic savings groups, secure wallet management, intelligent financial tracking for income and expenses, spiritual wealth growth through tithing, and blockchain-verified transactions—all in one platform designed to build generational wealth for personal and business growth.
+                  </p>
+                </div>
               </div>
-              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold leading-tight">
-                <span className="bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
-                  Build Generational Wealth Together
-                </span>
-              </h1>
-              <p className="text-base sm:text-lg md:text-xl text-gray-300 leading-relaxed">
-                Harness the power of democratic savings groups, secure wallet management, intelligent financial tracking for income and expenses, spiritual wealth growth through tithing, and blockchain-verified transactions—all in one platform designed to build generational wealth for personal and business growth.
-              </p>
             </div>
           </div>
 
@@ -376,15 +387,15 @@ const LandingPage = ({ onGetStarted }) => {
               />
               
               {/* Overlay with content */}
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent flex flex-col justify-end p-6 md:p-8 lg:p-12">
-                <div className="space-y-3 md:space-y-4 animate-fadeIn">
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent flex flex-col justify-end p-4 md:p-6 lg:p-8">
+                <div className="space-y-2 md:space-y-3 animate-fadeIn">
                   <div>
-                    <h3 className="text-2xl md:text-3xl lg:text-4xl font-bold mb-2">{slides[currentSlide].title}</h3>
-                    <p className="text-sm md:text-base lg:text-xl text-gray-300">{slides[currentSlide].description}</p>
+                    <h3 className="text-lg md:text-2xl lg:text-3xl font-bold mb-1">{slides[currentSlide].title}</h3>
+                    <p className="text-xs md:text-sm lg:text-base text-gray-300 line-clamp-2">{slides[currentSlide].description}</p>
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-1 md:gap-2">
                     {slides[currentSlide].features.map((feature, idx) => (
-                      <span key={idx} className="px-3 py-1 md:px-4 md:py-2 bg-purple-500/30 border border-purple-500/50 rounded-full text-xs md:text-sm text-purple-200">
+                      <span key={idx} className="px-2 py-0.5 md:px-3 md:py-1 bg-purple-500/30 border border-purple-500/50 rounded-full text-xs text-purple-200">
                         {feature}
                       </span>
                     ))}
@@ -442,7 +453,7 @@ const LandingPage = ({ onGetStarted }) => {
                     className="w-full h-full object-cover"
                   />
                 </div>
-                <p className="font-medium text-xs md:text-sm text-center whitespace-nowrap text-purple-200 opacity-0 group-hover:opacity-100 group-[.bg-purple-500/30]:opacity-100 transition-opacity duration-200 h-4 md:h-5">{slide.title}</p>
+                <p className="font-medium text-[0.5rem] md:text-sm text-center whitespace-nowrap text-purple-200 opacity-0 md:opacity-0 md:group-hover:opacity-100 md:group-[.bg-purple-500/30]:opacity-100 transition-opacity duration-200 h-3 md:h-5 lg:opacity-0 lg:group-hover:opacity-100">{slide.title}</p>
               </button>
             ))}
           </div>
