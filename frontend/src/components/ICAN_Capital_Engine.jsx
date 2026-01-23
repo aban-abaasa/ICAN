@@ -4259,6 +4259,14 @@ const ICANCapitalEngine = () => {
 
     fetchTrustData();
   }, [user?.id, supabase]);
+
+  // Fetch business profiles on component mount and when user changes
+  useEffect(() => {
+    if (user?.id) {
+      fetchUserBusinessProfiles();
+    }
+  }, [user?.id]);
+
   const recognitionRef = useRef(null);
   const messagesEndRef = useRef(null);
   const mediaRecorderRef = useRef(null);

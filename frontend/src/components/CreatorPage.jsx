@@ -27,7 +27,7 @@ const CreatorPage = ({ onClose, onPitchCreated, selectedBusinessProfile }) => {
       }
 
       if (!selectedBusinessProfile) {
-        alert('Please select a business profile for this pitch');
+        alert('No business profile available. Please create a business profile first before creating a pitch.');
         return;
       }
 
