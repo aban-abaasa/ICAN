@@ -2,18 +2,66 @@ import React, { useState } from 'react';
 import { X, Camera, Smartphone, Download, Radio } from 'lucide-react';
 import PitchVideoRecorder from './PitchVideoRecorder';
 import PitchDetailsForm from './PitchDetailsForm';
+import { createPitch, getSupabase } from '../services/pitchingService';
 
 const CreatorPage = ({ onClose, onPitchCreated }) => {
   const [cameraMode, setCameraMode] = useState('front'); // 'front' or 'back'
   const [recordingMethod, setRecordingMethod] = useState('record'); // 'record' or 'upload'
   const [showDetailsForm, setShowDetailsForm] = useState(false);
 
-  const handlePitchSubmit = (formData) => {
-    console.log('Pitch submitted:', formData);
-    // Here you would typically send the data to your backend
-    setShowDetailsForm(false);
-    if (onPitchCreated) {
-      onPitchCreated(formData);
+  const handlePitchSubmit = async (formData) => {
+    try {
+      console.log('Pitch submitted:', formData);
+      
+      // Get current user
+      const sb = getSupabase();
+      if (!sb) {
+        alert('Database not configured');
+        return;
+      }
+
+      const { data: { user } } = await sb.auth.getUser();
+      if (!user) {
+        alert('Please login to create a pitch');
+        return;
+      }
+
+      // Create pitch in database with published status
+      const newPitch = {
+        title: formData.title || 'Untitled Pitch',
+        description: formData.description || '',
+        creator: formData.creator || user.email,
+        category: formData.category || 'Technology',
+        pitch_type: formData.pitchType || 'Equity',
+        target_funding: parseInt(formData.targetGoal) || 0,
+        raised_amount: parseInt(formData.currentlyRaised) || 0,
+        equity_offering: parseFloat(formData.equityOffering) || 0,
+        video_url: null, // Will be uploaded separately
+        has_ip: formData.hasIP || false,
+        status: 'published', // Set to published immediately
+        likes_count: 0,
+        comments_count: 0,
+        shares_count: 0,
+        views_count: 0
+      };
+
+      console.log('Creating pitch:', newPitch);
+      const result = await createPitch(newPitch);
+      
+      if (!result.success) {
+        alert('Error creating pitch: ' + result.error);
+        return;
+      }
+
+      console.log('Pitch created successfully:', result.data);
+      
+      setShowDetailsForm(false);
+      if (onPitchCreated) {
+        await onPitchCreated(result.data);
+      }
+    } catch (error) {
+      console.error('Error in handlePitchSubmit:', error);
+      alert('Error creating pitch: ' + error.message);
     }
   };
 

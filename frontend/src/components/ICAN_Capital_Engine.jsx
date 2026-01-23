@@ -12083,10 +12083,14 @@ Data Freshness: ${reportData.metadata.dataFreshness}
         {showPitchinCreator && (
           <CreatorPage 
             onClose={() => setShowPitchinCreator(false)}
-            onPitchCreated={() => {
+            onPitchCreated={async () => {
               setShowPitchinCreator(false);
               // Refresh pitches list
               console.log('Pitch created successfully');
+              // Reload pitches to show the new one
+              await fetchPitchinPitches();
+              // Switch to My Pitches tab to see the new pitch
+              setActiveTab('share');
             }}
           />
         )}
