@@ -5,6 +5,7 @@ import DashboardPreview from './DashboardPreview';
 const LandingPage = ({ onGetStarted }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [scrollPosition, setScrollPosition] = useState(0);
+  const [isHeroExpanded, setIsHeroExpanded] = useState(false);
 
   // Image slides with descriptions
   const slides = [
@@ -154,8 +155,50 @@ const LandingPage = ({ onGetStarted }) => {
           {/* Left Content - Collapsed to Icon */}
           <div className="flex items-center justify-center md:justify-start animate-fadeInUp relative z-40 w-full md:w-auto">
             <div className="w-full md:w-auto">
-              {/* Full Info Container - Always Visible */}
-              <div className="bg-gradient-to-br from-slate-900/95 to-slate-950/95 border border-purple-500/40 rounded-2xl p-6 md:p-8 space-y-5 shadow-2xl shadow-purple-500/30 backdrop-blur-xl w-full md:w-full lg:max-w-2xl">
+              {/* Mobile: Collapsible Badge */}
+              <div className="md:hidden">
+                <button 
+                  onClick={() => setIsHeroExpanded(!isHeroExpanded)}
+                  className="inline-flex items-center space-x-3 px-6 py-3 bg-gradient-to-r from-purple-500/90 via-pink-500/90 to-purple-600/90 hover:from-purple-500 hover:via-pink-500 hover:to-purple-600 rounded-full border border-purple-300/40 backdrop-blur-sm shadow-lg hover:shadow-2xl hover:shadow-purple-500/50 transition-all duration-300 transform hover:scale-110 w-full justify-center"
+                  title="About ICAN Capital Engine"
+                >
+                  <Zap className="w-5 h-5 text-white drop-shadow-lg animate-pulse flex-shrink-0" />
+                  <span className="text-sm font-bold text-white">Learn More</span>
+                  <ChevronDown className={`w-4 h-4 text-white transition-transform duration-300 ${isHeroExpanded ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Mobile Expanded Container */}
+                {isHeroExpanded && (
+                  <div className="mt-4 bg-gradient-to-br from-slate-900/95 to-slate-950/95 border border-purple-500/40 rounded-2xl p-6 space-y-5 shadow-2xl shadow-purple-500/30 backdrop-blur-xl animate-fadeInUp">
+                    <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-400/30 rounded-full px-4 py-2 w-full">
+                      <Zap className="w-4 h-4 text-purple-300 flex-shrink-0" />
+                      <span className="text-sm text-purple-200 font-medium">From Volatility to Global Capital → Your Path to Prosperity</span>
+                    </div>
+                    
+                    <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-300 via-pink-300 to-blue-300 bg-clip-text text-transparent leading-tight">
+                      Build Generational Wealth Together
+                    </h2>
+                    
+                    <div className="text-sm text-gray-300 leading-relaxed space-y-3">
+                      <span className="block font-semibold text-purple-200 text-base">Empower Your Financial Future:</span>
+                      <p>Harness the transformative power of democratic savings groups, secure wallet management, intelligent financial tracking for income and expenses, spiritual wealth growth through tithing, and blockchain-verified transactions. Join thousands building generational wealth through collaboration, transparency, and prosperity—designed for personal liberation and unstoppable business growth.</p>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2 pt-3">
+                      <Shield className="w-5 h-5 text-green-400 flex-shrink-0" />
+                      <span className="text-sm text-green-300 font-medium">Blockchain-Secured • Trusted • Transparent</span>
+                    </div>
+                    
+                    <button className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 rounded-full font-bold text-white transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl hover:shadow-purple-500/50 mt-4 w-full justify-center">
+                      <span>Explore Platforms</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Desktop: Always Visible Full Container */}
+              <div className="hidden md:block bg-gradient-to-br from-slate-900/95 to-slate-950/95 border border-purple-500/40 rounded-2xl p-6 md:p-8 space-y-5 shadow-2xl shadow-purple-500/30 backdrop-blur-xl w-full md:w-full lg:max-w-2xl">
                 {/* Tag */}
                 <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-400/30 rounded-full px-4 py-2">
                   <Zap className="w-4 h-4 text-purple-300 flex-shrink-0" />
