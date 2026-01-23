@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Users, Plus, X, Trash2, DollarSign, PieChart, Loader, Search, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Building2, Users, Plus, X, Trash2, DollarSign, PieChart, Loader, Search, CheckCircle2, AlertCircle, Wallet } from 'lucide-react';
 import { createBusinessProfile, updateBusinessProfile, getSupabase, verifyICANUser, searchICANUsers, saveBusinessCoOwners } from '../services/pitchingService';
+import { walletAccountService } from '../services/walletAccountService';
 
 const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfile }) => {
-  const [step, setStep] = useState('business'); // business, owners, review
+  const [step, setStep] = useState('business'); // business, owners, wallet, review
   const [loading, setLoading] = useState(false);
   const [searchingUsers, setSearchingUsers] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
@@ -22,6 +23,17 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
   });
 
   const [coOwners, setCoOwners] = useState([]);
+
+  // 💳 Wallet Account Fields
+  const [walletData, setWalletData] = useState({
+    preferredCurrency: 'UGX',
+    pin: '',
+    confirmPin: '',
+    showPin: false
+  });
+
+  const [walletCreated, setWalletCreated] = useState(false);
+  const [walletAccountNumber, setWalletAccountNumber] = useState(null);
 
   const [newOwner, setNewOwner] = useState({
     name: '',
@@ -244,6 +256,22 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
       return;
     }
 
+    // Validate wallet PIN
+    if (!walletData.pin) {
+      alert('Please set a wallet PIN for the business account');
+      return;
+    }
+
+    if (walletData.pin !== walletData.confirmPin) {
+      alert('PIN and Confirm PIN do not match');
+      return;
+    }
+
+    if (!/^\d{4,6}$/.test(walletData.pin)) {
+      alert('PIN must be 4-6 digits');
+      return;
+    }
+
     // Verify all co-owners have ICAN accounts
     for (const owner of coOwners) {
       if (!owner.verified) {
@@ -311,14 +339,41 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
           const coOwnersResult = await saveBusinessCoOwners(result.data.id, coOwners);
           
           if (coOwnersResult.success) {
-            const createdProfile = {
-              id: result.data.id,
-              ...profile,
-              business_co_owners: coOwners
-            };
-            console.log('✅ Profile and co-owners created successfully');
-            alert('✅ Profile created successfully!');
-            onProfileCreated(createdProfile);
+            // 💳 Create wallet account for business
+            console.log('💳 Creating business wallet account...');
+            const walletAccountResult = await walletAccountService.createBusinessWalletAccount({
+              businessId: result.data.id,
+              businessName: businessData.businessName,
+              userId: userId,
+              accountHolderName: businessData.businessName,
+              phoneNumber: coOwners[0]?.phone || '',
+              email: coOwners[0]?.email || '',
+              pin: walletData.pin,
+              preferredCurrency: walletData.preferredCurrency,
+              biometrics: { enabled: false }
+            });
+
+            if (walletAccountResult.success) {
+              console.log('✅ Business wallet account created:', walletAccountResult.data.accountNumber);
+              const createdProfile = {
+                id: result.data.id,
+                ...profile,
+                business_co_owners: coOwners,
+                wallet_account: walletAccountResult.data
+              };
+              alert('✅ Profile and business wallet account created successfully!');
+              onProfileCreated(createdProfile);
+            } else {
+              // Profile created but wallet creation failed
+              console.warn('⚠️ Profile created but wallet account failed:', walletAccountResult.error);
+              const createdProfile = {
+                id: result.data.id,
+                ...profile,
+                business_co_owners: coOwners
+              };
+              alert('Profile created! Note: Wallet account creation had an issue. You can set it up later.');
+              onProfileCreated(createdProfile);
+            }
           } else {
             alert('Profile created but failed to save co-owners: ' + coOwnersResult.error);
           }
@@ -354,7 +409,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
         <div className="p-6">
           {/* Step Indicator */}
           <div className="flex gap-2 mb-8">
-            {['business', 'owners', 'review'].map((s, idx) => (
+            {['business', 'owners', 'wallet', 'review'].map((s, idx) => (
               <button
                 key={s}
                 onClick={() => setStep(s)}
@@ -364,7 +419,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                     : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                 }`}
               >
-                {idx + 1}. {['Business Info', 'Co-Owners', 'Review'][idx]}
+                {idx + 1}. {['Business Info', 'Co-Owners', 'Wallet', 'Review'][idx]}
               </button>
             ))}
           </div>
@@ -781,16 +836,128 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                   Back
                 </button>
                 <button
-                  onClick={() => setStep('review')}
+                  onClick={() => setStep('wallet')}
                   className="flex-1 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white py-3 rounded-lg font-semibold transition"
                 >
-                  Review Profile
+                  Next: Setup Wallet
                 </button>
               </div>
             </div>
           )}
 
-          {/* Step 3: Review */}
+          {/* Step 3: Wallet Account Setup */}
+          {step === 'wallet' && (
+            <div className="space-y-6">
+              <div className="bg-blue-900/30 border border-blue-700 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <Wallet className="w-5 h-5 text-blue-400 flex-shrink-0 mt-1" />
+                  <div>
+                    <h4 className="text-white font-semibold mb-1">💳 Business Wallet Account</h4>
+                    <p className="text-slate-300 text-sm">Create a dedicated ICAN wallet account for your business. This is required for receiving pitch earnings, payments, and managing finances.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-slate-300 text-sm block mb-2">Preferred Currency</label>
+                  <select
+                    value={walletData.preferredCurrency}
+                    onChange={(e) => setWalletData({...walletData, preferredCurrency: e.target.value})}
+                    className="w-full bg-slate-700 text-white rounded-lg px-4 py-2 border border-slate-600 focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="UGX">🇺🇬 UGX (Ugandan Shilling)</option>
+                    <option value="KES">🇰🇪 KES (Kenyan Shilling)</option>
+                    <option value="USD">🇺🇸 USD (US Dollar)</option>
+                    <option value="EUR">🇪🇺 EUR (Euro)</option>
+                  </select>
+                </div>
+
+                <div className="bg-slate-700/50 p-4 rounded-lg border border-slate-600">
+                  <h4 className="text-white font-semibold mb-4">🔐 Wallet PIN (4-6 digits)</h4>
+                  <p className="text-slate-400 text-xs mb-4">The PIN will be required for all wallet transactions and sensitive operations.</p>
+                  
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-slate-300 text-xs block mb-2">PIN</label>
+                      <div className="flex items-center">
+                        <input
+                          type={walletData.showPin ? 'text' : 'password'}
+                          value={walletData.pin}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 6);
+                            setWalletData({...walletData, pin: val});
+                          }}
+                          maxLength="6"
+                          placeholder="Enter 4-6 digits"
+                          className="flex-1 bg-slate-600 text-white rounded-lg px-4 py-2 border border-slate-500 focus:border-blue-500 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setWalletData({...walletData, showPin: !walletData.showPin})}
+                          className="ml-2 text-slate-400 hover:text-slate-200 text-sm"
+                        >
+                          {walletData.showPin ? '🙈 Hide' : '👁️ Show'}
+                        </button>
+                      </div>
+                      {walletData.pin && (
+                        <div className="text-xs text-slate-400 mt-1">
+                          Strength: {walletData.pin.length < 4 ? '⚠️ Too short' : walletData.pin.length < 6 ? '✓ Good' : '✓✓ Strong'}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="text-slate-300 text-xs block mb-2">Confirm PIN</label>
+                      <input
+                        type={walletData.showPin ? 'text' : 'password'}
+                        value={walletData.confirmPin}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 6);
+                          setWalletData({...walletData, confirmPin: val});
+                        }}
+                        maxLength="6"
+                        placeholder="Confirm PIN"
+                        className="w-full bg-slate-600 text-white rounded-lg px-4 py-2 border border-slate-500 focus:border-blue-500 focus:outline-none"
+                      />
+                      {walletData.pin && walletData.confirmPin && (
+                        <div className={`text-xs mt-1 ${walletData.pin === walletData.confirmPin ? 'text-green-400' : 'text-red-400'}`}>
+                          {walletData.pin === walletData.confirmPin ? '✓ PINs match' : '✗ PINs do not match'}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Wallet Account Summary */}
+                <div className="bg-slate-700/30 p-3 rounded-lg border border-slate-600">
+                  <p className="text-slate-300 text-xs">
+                    <span className="font-semibold">Account Holder:</span> {businessData.businessName}<br />
+                    <span className="font-semibold">Currency:</span> {walletData.preferredCurrency}<br />
+                    <span className="font-semibold">PIN Set:</span> {walletData.pin ? '✓ Yes' : '✗ No'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setStep('owners')}
+                  className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-lg font-semibold transition"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={() => setStep('review')}
+                  disabled={!walletData.pin || walletData.pin !== walletData.confirmPin || !/^\d{4,6}$/.test(walletData.pin)}
+                  className="flex-1 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 disabled:from-slate-600 disabled:to-slate-600 disabled:cursor-not-allowed text-white py-3 rounded-lg font-semibold transition"
+                >
+                  Review & Create
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 4: Review */}
           {step === 'review' && (
             <div className="space-y-6">
               <h3 className="text-xl font-bold text-white">Review Your Business Profile</h3>

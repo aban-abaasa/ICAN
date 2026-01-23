@@ -752,6 +752,151 @@ class WalletAccountService {
       return { success: false, error: error.message };
     }
   }
+
+  /**
+   * Create wallet account for business profile
+   * @param {Object} params - Business wallet parameters
+   * @param {string} params.businessId - Business profile ID
+   * @param {string} params.businessName - Business name
+   * @param {string} params.userId - User ID (business owner)
+   * @param {string} params.accountHolderName - Account holder name
+   * @param {string} params.phoneNumber - Phone number
+   * @param {string} params.email - Email address
+   * @param {string} params.pin - 4-6 digit PIN
+   * @param {string} params.preferredCurrency - Preferred currency (USD, UGX, KES)
+   * @returns {Promise<Object>} Success/error response with account details
+   */
+  async createBusinessWalletAccount(params) {
+    const {
+      businessId,
+      businessName,
+      userId,
+      accountHolderName,
+      phoneNumber,
+      email,
+      pin,
+      preferredCurrency = 'UGX',
+      biometrics = {}
+    } = params;
+
+    try {
+      // Validate inputs
+      if (!businessId || !businessName || !userId || !accountHolderName || !phoneNumber || !email || !pin) {
+        return {
+          success: false,
+          error: 'Missing required fields for business wallet creation'
+        };
+      }
+
+      // Validate PIN
+      if (!this.validatePIN(pin)) {
+        return {
+          success: false,
+          error: 'PIN must be 4-6 digits'
+        };
+      }
+
+      this.supabase = getSupabaseClient();
+
+      // Check if business already has a wallet account
+      const { data: existingWallet } = await this.supabase
+        .from('user_accounts')
+        .select('*')
+        .eq('business_id', businessId)
+        .eq('account_type', 'business')
+        .maybeSingle();
+
+      if (existingWallet) {
+        return {
+          success: false,
+          error: 'This business already has an active wallet account',
+          account: existingWallet
+        };
+      }
+
+      // Generate unique account number
+      const accountNumber = this.generateAccountNumber();
+      const pinHash = hashPIN(pin);
+
+      // Create business wallet account
+      const { data, error } = await this.supabase
+        .from('user_accounts')
+        .insert([
+          {
+            user_id: userId,
+            business_id: businessId,
+            account_number: accountNumber,
+            account_type: 'business',
+            status: 'active',
+            account_holder_name: businessName,
+            phone_number: phoneNumber,
+            email: email,
+            pin_hash: pinHash,
+            pin_created_at: new Date().toISOString(),
+            preferred_currency: preferredCurrency,
+            fingerprint_enabled: biometrics.fingerprintEnabled || false,
+            phone_pin_enabled: biometrics.phonePinEnabled || false,
+            biometric_enabled: (biometrics.fingerprintEnabled || biometrics.phonePinEnabled) || false,
+            kyc_verified: false,
+            usd_balance: 0,
+            ugx_balance: 0,
+            kes_balance: 0,
+            daily_limit: 50000,
+            monthly_limit: 500000,
+            allow_agent_transfers: true,
+            metadata: {
+              businessId: businessId,
+              created_via: 'business_profile',
+              business_type: 'profile'
+            }
+          }
+        ])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Error creating business wallet account:', error);
+        return {
+          success: false,
+          error: error.message || 'Failed to create business wallet account'
+        };
+      }
+
+      console.log('✅ Business wallet account created successfully:', {
+        accountNumber: data.account_number,
+        businessId: data.business_id,
+        businessName: businessName
+      });
+
+      // Create wallet entries for each supported currency
+      const currencies = ['USD', 'UGX', 'KES'];
+      
+      for (const currency of currencies) {
+        try {
+          await this.supabase
+            .rpc('ensure_recipient_wallet_exists', {
+              p_user_id: userId,
+              p_curr: currency
+            });
+        } catch (error) {
+          console.warn(`⚠️ Warning: Could not create wallet for ${currency}:`, error);
+        }
+      }
+
+      return {
+        success: true,
+        data: data,
+        accountNumber: data.account_number,
+        message: 'Business wallet account created successfully'
+      };
+    } catch (error) {
+      console.error('❌ Error in createBusinessWalletAccount:', error);
+      return {
+        success: false,
+        error: error.message || 'An error occurred while creating business wallet account'
+      };
+    }
+  }
 }
 
 export const walletAccountService = new WalletAccountService();

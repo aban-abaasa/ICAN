@@ -1,10 +1,17 @@
-import React from 'react';
-import { Building2, Edit2, Users, DollarSign, Globe, MapPin, Calendar } from 'lucide-react';
+import React, { useState } from 'react';
+import { Building2, Edit2, Users, DollarSign, Globe, MapPin, Calendar, Wallet, AlertCircle, Lock, Unlock } from 'lucide-react';
 
-const BusinessProfileCard = ({ profile, onEdit, onSelect }) => {
+const BusinessProfileCard = ({ profile, onEdit, onSelect, isOwner = false }) => {
+  const [isLocked, setIsLocked] = useState(profile?.locked === true);
+  
   if (!profile) return null;
 
   const coOwnersCount = profile.business_co_owners?.length || 0;
+
+  const handleToggleLock = (e) => {
+    e.stopPropagation();
+    setIsLocked(!isLocked);
+  };
 
   return (
     <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-xl p-5 hover:border-blue-500 transition cursor-pointer group" onClick={onSelect}>
@@ -14,19 +21,41 @@ const BusinessProfileCard = ({ profile, onEdit, onSelect }) => {
             <Building2 className="w-6 h-6 text-white" />
           </div>
           <div className="flex-1">
-            <h3 className="text-white font-bold text-lg group-hover:text-blue-400 transition">{profile.business_name}</h3>
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="text-white font-bold text-lg group-hover:text-blue-400 transition">{profile.business_name}</h3>
+              {isOwner && (
+                <span className="text-xs bg-yellow-600/30 text-yellow-300 px-2 py-1 rounded flex items-center gap-1">
+                  👑 Owner
+                </span>
+              )}
+            </div>
             <p className="text-slate-400 text-sm">{profile.business_type}</p>
           </div>
         </div>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onEdit?.();
-          }}
-          className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg transition"
-        >
-          <Edit2 className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-2">
+          {isOwner && (
+            <button
+              onClick={handleToggleLock}
+              className={`p-2 rounded-lg transition ${
+                isLocked
+                  ? 'bg-red-600/30 text-red-400 hover:bg-red-600/50'
+                  : 'bg-green-600/30 text-green-400 hover:bg-green-600/50'
+              }`}
+              title={isLocked ? 'Unlock profile to allow edits' : 'Lock profile to prevent edits'}
+            >
+              {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+            </button>
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit?.();
+            }}
+            className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg transition"
+          >
+            <Edit2 className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {profile.description && (
@@ -98,6 +127,81 @@ const BusinessProfileCard = ({ profile, onEdit, onSelect }) => {
         </div>
       )}
 
+      {/* 💳 Wallet Account Section */}
+      <div className="pt-4 border-t border-slate-700">
+        {profile.wallet_account ? (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Wallet className="w-4 h-4 text-green-400" />
+              <p className="text-slate-400 text-xs font-semibold">BUSINESS WALLET</p>
+              <span className="ml-auto text-xs bg-green-900/50 text-green-300 px-2 py-1 rounded">✓ Active</span>
+            </div>
+            
+            <div className="bg-slate-700/30 p-3 rounded-lg space-y-2">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-slate-500 text-xs">Account Number</p>
+                  <p className="text-white font-mono font-semibold text-sm">{profile.wallet_account.account_number}</p>
+                </div>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigator.clipboard.writeText(profile.wallet_account.account_number);
+                  }}
+                  className="text-slate-400 hover:text-blue-400 text-xs"
+                  title="Copy account number"
+                >
+                  📋
+                </button>
+              </div>
+
+              {profile.wallet_account.preferred_currency && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400 text-xs">Currency</span>
+                  <span className="text-white font-semibold">{profile.wallet_account.preferred_currency}</span>
+                </div>
+              )}
+
+              {(profile.wallet_account.usd_balance !== undefined || 
+                profile.wallet_account.ugx_balance !== undefined ||
+                profile.wallet_account.kes_balance !== undefined) && (
+                <div className="pt-2 border-t border-slate-600">
+                  <p className="text-slate-400 text-xs mb-2 font-semibold">Balances</p>
+                  <div className="space-y-1 text-xs">
+                    {profile.wallet_account.usd_balance !== undefined && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">USD</span>
+                        <span className="text-green-400 font-semibold">${(profile.wallet_account.usd_balance || 0).toFixed(2)}</span>
+                      </div>
+                    )}
+                    {profile.wallet_account.ugx_balance !== undefined && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">UGX</span>
+                        <span className="text-green-400 font-semibold">{(profile.wallet_account.ugx_balance || 0).toLocaleString()}</span>
+                      </div>
+                    )}
+                    {profile.wallet_account.kes_balance !== undefined && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">KES</span>
+                        <span className="text-green-400 font-semibold">{(profile.wallet_account.kes_balance || 0).toLocaleString()}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="bg-yellow-900/20 border border-yellow-700 rounded-lg p-3 flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-yellow-300 text-xs font-semibold">No Wallet Account</p>
+              <p className="text-yellow-200/70 text-xs">Business wallet not yet created. Create one to enable payments and transactions.</p>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="mt-4 flex items-center gap-2">
         <div className="flex-1 h-1 bg-slate-700 rounded-full overflow-hidden">
           <div
@@ -114,6 +218,12 @@ const BusinessProfileCard = ({ profile, onEdit, onSelect }) => {
         }`}>
           {profile.verification_status === 'verified' ? '✓ Verified' : '⏳ Pending'}
         </span>
+        {isLocked && (
+          <span className="text-xs font-semibold px-2 py-1 rounded bg-red-900/50 text-red-300 flex items-center gap-1">
+            <Lock className="w-3 h-3" />
+            Locked
+          </span>
+        )}
       </div>
     </div>
   );
