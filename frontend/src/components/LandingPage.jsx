@@ -10,39 +10,39 @@ const LandingPage = ({ onGetStarted }) => {
   const slides = [
     {
       image: '/images/icanera%20wallet.png',
-      title: 'ICAN Wallet',
-      description: 'Secure digital wallet for managing your finances with real-time transaction tracking',
-      features: ['Real-time tracking', 'Secure transactions', 'Multiple accounts']
+      title: 'Digital Wallet',
+      description: 'Manage your accounts, balances & transactions with secure digital wallet management',
+      features: ['Account management', 'Balance tracking', 'Secure transactions']
     },
     {
       image: '/images/incaera%20share.png',
-      title: 'Share Network',
-      description: 'Allow businesses to pitch and share equity opportunities, enabling investors and community members to discover and invest in promising ventures',
-      features: ['Business pitches', 'Investment opportunities', 'Share ownership']
+      title: 'Pitchin',
+      description: 'Share your vision, connect with investors and build your business dreams',
+      features: ['Business pitches', 'Investor connections', 'Growth opportunities']
     },
     {
       image: '/images/dairy%20expense%20and%20inacome.png',
-      title: 'Expense & Income Tracker',
-      description: 'Intelligent financial tracking to monitor your daily expenses and income with detailed insights',
-      features: ['Daily tracking', 'Smart categorization', 'Financial insights']
+      title: 'Investment Portfolio',
+      description: 'Performance Analytics to track and optimize your investment returns',
+      features: ['Performance tracking', 'Analytics insights', 'Portfolio optimization']
     },
     {
       image: '/images/cmms.png',
-      title: 'CMMS System',
-      description: 'Comprehensive Maintenance Management System for enterprise-level operations',
-      features: ['Asset tracking', 'Maintenance scheduling', 'Analytics dashboard']
+      title: 'Treasury Guardian',
+      description: 'Account security & privacy controls with enterprise-level protection',
+      features: ['Security controls', 'Privacy protection', 'Account verification']
     },
     {
       image: '/images/sacco.png',
-      title: 'SACCO Hub',
-      description: 'Savings and Credit Cooperative Organization platform for group management',
-      features: ['Group savings', 'Loan management', 'Member benefits']
+      title: 'Trust Management',
+      description: 'Collaborate, contribute, and grow wealth together in SACCO groups',
+      features: ['Group collaboration', 'Wealth growth', 'Community benefits']
     },
     {
       image: '/images/trust.png',
-      title: 'Trust System',
-      description: 'Verify member credibility and manage SACCO group transactions with blockchain-backed verification and reputation tracking for secure community lending',
-      features: ['Member verification', 'SACCO management', 'Transaction verification']
+      title: 'ICAN Opportunity Rating',
+      description: 'Your readiness for global opportunities with comprehensive assessment',
+      features: ['Opportunity assessment', 'Readiness evaluation', 'Global access']
     }
   ];
 
@@ -152,30 +152,38 @@ const LandingPage = ({ onGetStarted }) => {
         
         <div className="max-w-7xl mx-auto grid md:grid-cols-2 gap-6 md:gap-8 lg:gap-12 items-center relative">
           {/* Left Content - Collapsed to Icon */}
-          <div className="flex items-center justify-center md:justify-start animate-fadeInUp relative z-40">
-            <div className="group relative w-full md:w-auto flex md:block">
-              {/* Info Icon Button - Enhanced */}
-              <button 
-                className="flex items-center justify-center w-20 h-20 md:w-24 md:h-24 rounded-full bg-gradient-to-br from-purple-500 via-pink-500 to-purple-600 hover:shadow-2xl hover:shadow-purple-500/60 transition-all duration-300 transform hover:scale-125 flex-shrink-0 border border-purple-300/30 backdrop-blur-sm"
-                title="About ICAN Capital Engine"
-              >
-                <Zap className="w-10 h-10 md:w-12 md:h-12 text-white drop-shadow-lg animate-pulse" />
-              </button>
-              
-              {/* Hidden Content - Visible on Hover */}
-              <div className="absolute top-full left-1/2 -translate-x-1/2 mt-4 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all duration-300 w-80 md:w-96 z-[9999]">
-                <div className="bg-gradient-to-br from-slate-900/95 to-slate-950/95 border border-purple-500/40 rounded-2xl p-5 md:p-7 space-y-4 shadow-2xl shadow-purple-500/30 backdrop-blur-xl">
-                  <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-400/30 rounded-full px-3 py-1.5">
-                    <Zap className="w-3 h-3 text-purple-300 flex-shrink-0" />
-                    <span className="text-xs text-purple-200 font-medium">From Volatility to Global Capital</span>
-                  </div>
-                  <h2 className="text-lg md:text-2xl font-bold bg-gradient-to-r from-purple-300 via-pink-300 to-blue-300 bg-clip-text text-transparent">
-                    Build Generational Wealth Together
-                  </h2>
-                  <p className="text-xs md:text-sm text-gray-300 leading-relaxed">
-                    Harness the power of democratic savings groups, secure wallet management, intelligent financial tracking for income and expenses, spiritual wealth growth through tithing, and blockchain-verified transactions—all in one platform designed to build generational wealth for personal and business growth.
-                  </p>
+          <div className="flex items-center justify-center md:justify-start animate-fadeInUp relative z-40 w-full md:w-auto">
+            <div className="w-full md:w-auto">
+              {/* Full Info Container - Always Visible */}
+              <div className="bg-gradient-to-br from-slate-900/95 to-slate-950/95 border border-purple-500/40 rounded-2xl p-6 md:p-8 space-y-5 shadow-2xl shadow-purple-500/30 backdrop-blur-xl w-full md:w-full lg:max-w-2xl">
+                {/* Tag */}
+                <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-400/30 rounded-full px-4 py-2">
+                  <Zap className="w-4 h-4 text-purple-300 flex-shrink-0" />
+                  <span className="text-sm md:text-base text-purple-200 font-medium">From Volatility to Global Capital → Your Path to Prosperity</span>
                 </div>
+                
+                {/* Headline */}
+                <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-purple-300 via-pink-300 to-blue-300 bg-clip-text text-transparent leading-tight">
+                  Build Generational Wealth Together
+                </h2>
+                
+                {/* Description */}
+                <div className="text-sm md:text-base text-gray-300 leading-relaxed space-y-3">
+                  <span className="block font-semibold text-purple-200 text-base md:text-lg">Empower Your Financial Future:</span>
+                  <p>Harness the transformative power of democratic savings groups, secure wallet management, intelligent financial tracking for income and expenses, spiritual wealth growth through tithing, and blockchain-verified transactions. Join thousands building generational wealth through collaboration, transparency, and prosperity—designed for personal liberation and unstoppable business growth.</p>
+                </div>
+                
+                {/* Trust Badge */}
+                <div className="flex items-center space-x-2 pt-3">
+                  <Shield className="w-5 h-5 text-green-400 flex-shrink-0" />
+                  <span className="text-sm text-green-300 font-medium">Blockchain-Secured • Trusted • Transparent</span>
+                </div>
+                
+                {/* CTA Button */}
+                <button className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 rounded-full font-bold text-white transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl hover:shadow-purple-500/50 mt-4">
+                  <span>Explore Platforms</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
               </div>
             </div>
           </div>
@@ -265,9 +273,12 @@ const LandingPage = ({ onGetStarted }) => {
           <div className="text-center mb-12 md:mb-16">
             <h2 className="text-2xl md:text-4xl lg:text-5xl font-bold mb-3 md:mb-4 leading-tight">
               <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-                Build Wealth Smarter
+                Complete Financial Solutions
               </span>
             </h2>
+            <p className="text-gray-400 text-sm md:text-base max-w-2xl mx-auto">
+              ICAN's comprehensive suite of integrated platforms designed to empower your financial journey—from opportunity discovery to wealth management and beyond
+            </p>
           </div>
 
           {/* Carousel */}
