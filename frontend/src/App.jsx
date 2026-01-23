@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from './context/AuthContext';
 import { AuthPage } from './components/auth';
 import ICANCapitalEngine from './components/ICAN_Capital_Engine';
+import LandingPage from './components/LandingPage';
 import { Loader2 } from 'lucide-react';
 
 const App = () => {
   const { user, loading } = useAuth();
+  const [showLanding, setShowLanding] = useState(!user); // Show landing by default when not logged in
 
   // Show loading screen while checking auth status
   if (loading) {
@@ -19,8 +21,11 @@ const App = () => {
     );
   }
 
-  // If user is not logged in, show auth page
+  // If user is not logged in
   if (!user) {
+    if (showLanding) {
+      return <LandingPage onGetStarted={() => setShowLanding(false)} />;
+    }
     return <AuthPage />;
   }
 
