@@ -132,13 +132,16 @@ export const searchICANUsers = async (searchTerm) => {
  */
 
 // Fetch all published pitches
-export const getAllPitches = async () => {
+export const getAllPitches = async (limit = 20, offset = 0) => {
   try {
     const sb = getSupabase();
     if (!sb) {
       console.log('Supabase not configured, returning demo pitches');
       return getDemoPitches();
     }
+
+    console.log(`📥 Fetching pitches (limit: ${limit}, offset: ${offset})...`);
+    const startTime = performance.now();
 
     const { data, error } = await sb
       .from('pitches')
@@ -166,31 +169,47 @@ export const getAllPitches = async () => {
           description,
           business_co_owners(owner_name)
         )
-      `)
+      `, { count: 'exact' })
       .eq('status', 'published')
       .order('created_at', { ascending: false })
-      .limit(50);
+      .range(offset, offset + limit - 1);
 
+    const fetchTime = (performance.now() - startTime).toFixed(0);
+    
     if (error) {
       console.warn('Error fetching pitches:', error);
       return getDemoPitches();
     }
     
-    // 🎥 Debug video URLs
+    // 🎥 Filter and validate video URLs
     if (data && data.length > 0) {
-      data.forEach(pitch => {
-        if (pitch.video_url) {
-          console.log(`📹 Pitch "${pitch.title}" video URL:`, pitch.video_url);
-          // Check if URL is valid
-          if (!pitch.video_url.includes('supabase') && !pitch.video_url.startsWith('blob:')) {
-            console.warn(`⚠️  Invalid video URL for pitch ${pitch.id}: ${pitch.video_url}`);
-          }
-        } else {
-          console.log(`ℹ️  Pitch "${pitch.title}" has no video (legacy pitch - created before video requirement)`);
+      const validPitches = data.filter(pitch => {
+        if (!pitch.video_url) {
+          console.log(`ℹ️  Pitch "${pitch.title}" has no video (legacy pitch - skipping)`);
+          return false;
         }
+
+        // ❌ Reject blob URLs (temporary, not playable)
+        if (pitch.video_url.startsWith('blob:')) {
+          console.warn(`⚠️  Pitch "${pitch.title}" has blob URL (not saved to Supabase) - excluding from available`);
+          return false;
+        }
+
+        // ❌ Reject invalid URLs (not from Supabase)
+        if (!pitch.video_url.includes('supabase') && !pitch.video_url.startsWith('https://')) {
+          console.warn(`⚠️  Pitch "${pitch.title}" has invalid URL format - excluding from available`);
+          return false;
+        }
+
+        // ✅ Valid pitch
+        return true;
       });
+
+      console.log(`✅ Loaded ${validPitches.length}/${data.length} pitches in ${fetchTime}ms`);
+      return validPitches;
     }
     
+    console.log(`✅ No pitches found (${fetchTime}ms)`);
     return data || [];
   } catch (error) {
     console.error('Error fetching pitches:', error);
@@ -204,7 +223,8 @@ export const getUserPitches = async (userId) => {
     const sb = getSupabase();
     if (!sb) return [];
     
-    const { data, error } = await sb
+    // Fetch pitches and filter on client side to ensure accuracy
+    const { data: pitches, error } = await sb
       .from('pitches')
       .select(`
         id,
@@ -218,17 +238,28 @@ export const getUserPitches = async (userId) => {
         equity_offering,
         status,
         created_at,
+        business_profile_id,
         business_profiles(
           id,
           business_name,
           user_id
         )
       `)
-      .eq('business_profiles.user_id', userId)
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
-    return data || [];
+    if (error) {
+      console.error('Error fetching pitches:', error);
+      return [];
+    }
+
+    // Filter pitches to only those belonging to the current user
+    const userPitches = (pitches || []).filter(pitch => {
+      return pitch.business_profiles && pitch.business_profiles.user_id === userId;
+    });
+
+    console.log(`📌 Total pitches: ${pitches?.length}, User pitches: ${userPitches.length}`);
+    
+    return userPitches;
   } catch (error) {
     console.error('Error fetching user pitches:', error);
     return [];
@@ -240,6 +271,22 @@ export const createPitch = async (pitchData) => {
   try {
     const sb = getSupabase();
     if (!sb) return { success: false, error: 'Supabase not configured' };
+    
+    // VALIDATION: Reject blob URLs - they won't persist after page reload
+    if (pitchData.video_url && pitchData.video_url.startsWith('blob:')) {
+      const errorMsg = '❌ ERROR: Cannot save blob URLs to database. Videos must be uploaded to Supabase first using uploadVideo().';
+      console.error(errorMsg);
+      console.error('Received blob URL:', pitchData.video_url);
+      return { success: false, error: errorMsg };
+    }
+
+    // VALIDATION: Ensure video_url is from Supabase if provided
+    if (pitchData.video_url && !pitchData.video_url.startsWith('http')) {
+      const errorMsg = '❌ ERROR: Invalid video URL. Must be a complete Supabase URL starting with https://';
+      console.error(errorMsg);
+      console.error('Received URL:', pitchData.video_url);
+      return { success: false, error: errorMsg };
+    }
     
     const { data, error } = await sb
       .from('pitches')
@@ -274,62 +321,174 @@ export const updatePitch = async (pitchId, updates) => {
   }
 };
 
-// Delete pitch
-export const deletePitch = async (pitchId) => {
+// Delete pitch - ONLY creator can delete
+export const deletePitch = async (pitchId, userId = null) => {
   try {
     const sb = getSupabase();
     if (!sb) return { success: false, error: 'Supabase not configured' };
     
-    // First, fetch the pitch to get the video URL
-    const { data: pitch, error: fetchError } = await sb
-      .from('pitches')
-      .select('video_url')
-      .eq('id', pitchId)
-      .single();
-
-    if (fetchError) {
-      console.warn('Could not fetch pitch before deletion:', fetchError);
+    // Verify user is authenticated
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) {
+      return { success: false, error: 'Must be signed in to delete pitch' };
     }
 
-    // Delete video file from storage if it exists
-    if (pitch?.video_url) {
+    console.log(`🗑️  Starting deletion process for pitch ${pitchId}...`);
+    
+    // Fetch the pitch with business profile to get creator info
+    const { data: pitch, error: fetchError } = await sb
+      .from('pitches')
+      .select(`
+        id,
+        title,
+        video_url,
+        thumbnail_url,
+        business_profiles(
+          id,
+          user_id
+        )
+      `)
+      .match({ id: pitchId });
+
+    if (fetchError) {
+      console.warn('Fetch error details:', fetchError);
+      return { success: false, error: `Failed to fetch pitch: ${fetchError.message}` };
+    }
+
+    if (!pitch || pitch.length === 0) {
+      console.warn(`Pitch not found with ID: ${pitchId}`);
+      return { success: false, error: 'Pitch not found' };
+    }
+
+    const pitchData = pitch[0];
+    
+    // Get creator user_id from business profile
+    const creatorUserId = pitchData.business_profiles?.user_id;
+    
+    if (!creatorUserId) {
+      return { success: false, error: 'Could not verify pitch creator' };
+    }
+
+    // SECURITY: Verify user is the creator
+    if (creatorUserId !== session.user.id && creatorUserId !== userId) {
+      console.warn(`⚠️  Unauthorized deletion attempt: User ${session.user.id} tried to delete pitch by ${creatorUserId}`);
+      return { success: false, error: 'You can only delete your own pitches' };
+    }
+
+    console.log(`📌 Pitch "${pitchData.title}" belongs to creator. Proceeding with deletion...`);
+
+    let storageDeletedCount = 0;
+
+    // Delete video file from storage if it exists (and is not a blob URL)
+    if (pitchData?.video_url && !pitchData.video_url.startsWith('blob:')) {
       try {
-        // Extract filename from URL
-        // URL format: https://...supabase.co/storage/v1/object/public/pitches/UUID/filename
-        const urlParts = pitch.video_url.split('/');
-        const fileName = urlParts[urlParts.length - 1];
-        const uuidFolder = urlParts[urlParts.length - 2];
-        const filePath = `${uuidFolder}/${fileName}`;
+        // Extract file path from Supabase URL
+        // URL formats:
+        // - Signed: https://xyz.supabase.co/storage/v1/object/sign/pitches/UUID/timestamp_filename?token=...
+        // - Public: https://xyz.supabase.co/storage/v1/object/public/pitches/UUID/timestamp_filename
+        
+        let filePath = null;
 
-        console.log(`🗑️  Deleting video file: ${filePath}`);
-        const { error: storageError } = await sb.storage
-          .from('pitches')
-          .remove([filePath]);
+        // Try to extract from signed URL (with token)
+        if (pitchData.video_url.includes('?token=')) {
+          const urlWithoutToken = pitchData.video_url.split('?')[0];
+          const match = urlWithoutToken.match(/pitches\/(.+)$/);
+          if (match) {
+            filePath = match[1];
+          }
+        } 
+        // Try to extract from public URL
+        else if (pitchData.video_url.includes('/pitches/')) {
+          const match = pitchData.video_url.match(/\/pitches\/(.+)$/);
+          if (match) {
+            filePath = match[1];
+          }
+        }
 
-        if (storageError) {
-          console.warn('Warning: Could not delete video file from storage:', storageError);
-          // Continue with database deletion even if storage deletion fails
+        if (filePath) {
+          console.log(`   🎥 Video file path: pitches/${filePath}`);
+          const { error: storageError } = await sb.storage
+            .from('pitches')
+            .remove([filePath]);
+
+          if (storageError) {
+            console.warn(`   ⚠️  Could not delete video from storage:`, storageError.message);
+            // Continue with database deletion even if storage deletion fails
+          } else {
+            console.log(`   ✅ Video file deleted from Supabase storage`);
+            storageDeletedCount++;
+          }
         } else {
-          console.log('✅ Video file deleted from storage');
+          console.warn(`   ⚠️  Could not extract file path from URL: ${pitchData.video_url}`);
         }
       } catch (storageErr) {
-        console.warn('Error parsing video URL or deleting storage:', storageErr);
+        console.warn('⚠️  Error parsing video URL or deleting from storage:', storageErr.message);
         // Continue with database deletion
       }
+    } else if (pitchData?.video_url?.startsWith('blob:')) {
+      console.log(`   ℹ️  Video is a blob URL (not saved to Supabase) - skipping storage deletion`);
+    }
+
+    // Delete thumbnail from storage if it exists
+    if (pitchData?.thumbnail_url && !pitchData.thumbnail_url.startsWith('blob:')) {
+      try {
+        let thumbPath = null;
+
+        if (pitchData.thumbnail_url.includes('?token=')) {
+          const urlWithoutToken = pitchData.thumbnail_url.split('?')[0];
+          const match = urlWithoutToken.match(/pitches\/(.+)$/);
+          if (match) {
+            thumbPath = match[1];
+          }
+        } else if (pitchData.thumbnail_url.includes('/pitches/')) {
+          const match = pitchData.thumbnail_url.match(/\/pitches\/(.+)$/);
+          if (match) {
+            thumbPath = match[1];
+          }
+        }
+
+        if (thumbPath) {
+          console.log(`   🖼️  Thumbnail file path: pitches/${thumbPath}`);
+          const { error: thumbError } = await sb.storage
+            .from('pitches')
+            .remove([thumbPath]);
+
+          if (thumbError) {
+            console.warn(`   ⚠️  Could not delete thumbnail from storage:`, thumbError.message);
+          } else {
+            console.log(`   ✅ Thumbnail deleted from Supabase storage`);
+            storageDeletedCount++;
+          }
+        }
+      } catch (thumbErr) {
+        console.warn('⚠️  Error deleting thumbnail:', thumbErr.message);
+      }
+    } else if (pitchData?.thumbnail_url?.startsWith('blob:')) {
+      console.log(`   ℹ️  Thumbnail is a blob URL (not saved to Supabase) - skipping storage deletion`);
     }
 
     // Delete pitch record from database
-    const { error } = await sb
+    console.log(`🗄️  Deleting pitch record from database...`);
+    const { error: dbError } = await sb
       .from('pitches')
       .delete()
-      .eq('id', pitchId);
+      .match({ id: pitchId });
 
-    if (error) throw error;
-    console.log('✅ Pitch deleted from database');
-    return { success: true };
+    if (dbError) {
+      return { success: false, error: `Failed to delete pitch: ${dbError.message}` };
+    }
+
+    console.log(`✅ Pitch "${pitchData.title}" fully deleted`);
+    console.log(`   - Storage files deleted: ${storageDeletedCount}`);
+    console.log(`   - Database record deleted: ✅`);
+    
+    return { 
+      success: true, 
+      message: `Pitch deleted successfully (${storageDeletedCount} file(s) removed from storage)`
+    };
   } catch (error) {
-    console.error('Error deleting pitch:', error);
-    return { success: false, error: error.message };
+    console.error('❌ Error deleting pitch:', error);
+    return { success: false, error: error.message || 'Failed to delete pitch' };
   }
 };
 
@@ -900,24 +1059,33 @@ export const uploadVideo = async (file, pitchId) => {
   try {
     const sb = getSupabase();
     if (!sb) {
-      console.log('📹 Demo mode: Using local blob URL for video');
-      return { success: true, url: URL.createObjectURL(file), path: 'demo', isDemoMode: true };
+      const errorMsg = '❌ CRITICAL: Supabase not configured - videos CANNOT be saved. Configure .env.local with VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY';
+      console.error(errorMsg);
+      return { success: false, error: errorMsg, url: null, isDemoMode: false };
     }
 
     // Check authentication status
     const { data: { session } } = await sb.auth.getSession();
     if (!session) {
-      console.warn('⚠️  Not authenticated - falling back to local blob URL');
-      return { success: true, url: URL.createObjectURL(file), path: 'local', isDemoMode: true };
+      const errorMsg = '❌ CRITICAL: Not authenticated - cannot upload videos to Supabase. Please sign in first.';
+      console.error(errorMsg);
+      return { success: false, error: errorMsg, url: null, isDemoMode: false };
     }
 
     console.log(`📹 Uploading video for pitch ${pitchId}...`);
     
     // Generate filename if file doesn't have one (Blob objects don't have .name property)
     const videoFileName = file.name || `pitch-video-${Date.now()}.webm`;
+    const fileSizeMB = (file.size / 1024 / 1024).toFixed(2);
     
-    console.log(`   File: ${videoFileName} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+    console.log(`   File: ${videoFileName} (${fileSizeMB}MB)`);
     console.log(`   User: ${session.user.email}`);
+    
+    // Warn if file is large (should be < 50MB for fast playback)
+    if (file.size > 50 * 1024 * 1024) {
+      console.warn(`⚠️  Video is ${fileSizeMB}MB - consider compressing to < 50MB for faster playback`);
+      console.warn('   💡 Tip: Use HandBrake or FFmpeg to compress: ffmpeg -i input.webm -c:v libvp8 -crf 30 output.webm');
+    }
 
     const timestamp = Date.now();
     const fileName = `${pitchId}/${timestamp}_${videoFileName}`;

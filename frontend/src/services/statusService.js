@@ -99,6 +99,22 @@ export const createStatus = async (userId, statusData) => {
       blockchain_tx_hash = null
     } = statusData;
 
+    // VALIDATION: Reject blob URLs - they won't persist after page reload
+    if (media_url && media_url.startsWith('blob:')) {
+      const errorMsg = '❌ ERROR: Cannot save blob URLs to database. Videos must be uploaded to Supabase first. Use uploadStatusMedia() before creating status.';
+      console.error(errorMsg);
+      console.error('Received blob URL:', media_url);
+      return { status: null, error: new Error(errorMsg) };
+    }
+
+    // VALIDATION: Ensure URL is from Supabase or is a valid absolute URL
+    if (media_url && !media_url.startsWith('http')) {
+      const errorMsg = '❌ ERROR: Invalid media URL. Must be a complete Supabase URL starting with https://';
+      console.error(errorMsg);
+      console.error('Received URL:', media_url);
+      return { status: null, error: new Error(errorMsg) };
+    }
+
     // Status expires after 24 hours
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
@@ -358,19 +374,116 @@ export const incrementStatusView = async (statusId) => {
  * @param {string} statusId - Status ID
  * @returns {Promise<{success: boolean, error: Object|null}>}
  */
-export const deleteStatus = async (statusId) => {
+export const deleteStatus = async (statusId, userId = null) => {
   try {
-    const { error } = await supabase
+    // Verify user is authenticated
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !authUser) {
+      return { success: false, error: 'Must be signed in to delete status' };
+    }
+
+    console.log(`🗑️  Starting deletion process for status ${statusId}...`);
+
+    // Fetch the status to get media URL and verify ownership
+    const { data: status, error: fetchError } = await supabase
+      .from('ican_statuses')
+      .select('id, user_id, media_url, media_type, caption')
+      .eq('id', statusId)
+      .single();
+
+    if (fetchError) {
+      return { success: false, error: 'Status not found' };
+    }
+
+    if (!status) {
+      return { success: false, error: 'Status not found' };
+    }
+
+    // SECURITY: Verify user is the creator
+    if (status.user_id !== authUser.id && status.user_id !== userId) {
+      console.warn(`⚠️  Unauthorized deletion attempt: User ${authUser.id} tried to delete status by ${status.user_id}`);
+      return { success: false, error: 'You can only delete your own status updates' };
+    }
+
+    console.log(`📌 Status belongs to creator. Proceeding with deletion...`);
+
+    let storageDeletedCount = 0;
+
+    // Delete media file from storage if it exists (and is not a shared pitch video)
+    if (status?.media_url) {
+      // Only delete if it's a user-uploaded file (starts with Supabase storage domain)
+      // Don't delete if it's a shared pitch video (those are managed separately)
+      if (status.media_url.includes('user-content')) {
+        try {
+          // Extract file path from Supabase URL
+          // URL formats:
+          // - Signed: https://xyz.supabase.co/storage/v1/object/sign/user-content/statuses/UUID/filename?token=...
+          // - Public: https://xyz.supabase.co/storage/v1/object/public/user-content/statuses/UUID/filename
+          
+          let filePath = null;
+
+          // Try to extract from signed URL (with token)
+          if (status.media_url.includes('?token=')) {
+            const urlWithoutToken = status.media_url.split('?')[0];
+            const match = urlWithoutToken.match(/user-content\/(.+)$/);
+            if (match) {
+              filePath = match[1];
+            }
+          } 
+          // Try to extract from public URL
+          else if (status.media_url.includes('/user-content/')) {
+            const match = status.media_url.match(/\/user-content\/(.+)$/);
+            if (match) {
+              filePath = match[1];
+            }
+          }
+
+          if (filePath) {
+            console.log(`   📹 Media file path: user-content/${filePath}`);
+            const { error: storageError } = await supabase.storage
+              .from('user-content')
+              .remove([filePath]);
+
+            if (storageError) {
+              console.warn(`   ⚠️  Could not delete media from storage:`, storageError.message);
+              // Continue with database deletion even if storage deletion fails
+            } else {
+              console.log(`   ✅ Media file deleted from Supabase storage`);
+              storageDeletedCount++;
+            }
+          } else {
+            console.warn(`   ⚠️  Could not extract file path from URL`);
+          }
+        } catch (storageErr) {
+          console.warn('⚠️  Error parsing media URL or deleting from storage:', storageErr.message);
+          // Continue with database deletion
+        }
+      } else if (status.media_url.includes('pitches')) {
+        // This is a shared pitch video - don't delete it
+        console.log(`   ℹ️  Media is a shared pitch video (managed separately)`);
+      }
+    }
+
+    // Delete status record from database
+    console.log(`🗄️  Deleting status record from database...`);
+    const { error: dbError } = await supabase
       .from('ican_statuses')
       .delete()
       .eq('id', statusId);
 
-    if (error) throw error;
+    if (dbError) {
+      return { success: false, error: `Failed to delete status: ${dbError.message}` };
+    }
+
+    console.log(`✅ Status deleted successfully`);
+    console.log(`   - Storage files deleted: ${storageDeletedCount}`);
+    console.log(`   - Database record deleted: ✅`);
 
     return { success: true, error: null };
   } catch (error) {
-    console.error('Delete status error:', error);
-    return { success: false, error };
+    console.error('❌ Error deleting status:', error);
+    return { success: false, error: error.message || 'Failed to delete status' };
   }
 };
 

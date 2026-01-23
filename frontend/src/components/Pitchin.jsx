@@ -47,6 +47,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
   const [showBusinessForm, setShowBusinessForm] = useState(false);
   const [showProfileSelector, setShowProfileSelector] = useState(false);
   const [showProfileDetails, setShowProfileDetails] = useState(false);
+  const [showWallet, setShowWallet] = useState(false);
   const [editingProfile, setEditingProfile] = useState(null);
   const [likedPitches, setLikedPitches] = useState(new Set());
   const [showComments, setShowComments] = useState(null); // pitch id for comments modal
@@ -440,6 +441,37 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
     console.error('   Error code:', errorCode);
     console.error('   Error message:', errorMessage);
     console.error('');
+    
+    // Handle QUIC protocol errors (ERR_QUIC_PROTOCOL_ERROR)
+    if (errorMessage?.includes('QUIC') || errorCode === 4) {
+      console.error('   🌐 QUIC PROTOCOL ERROR DETECTED');
+      console.error('   Attempting HTTP/1.1 fallback...');
+      
+      // Retry with HTTP/1.1 by fetching a fresh signed URL
+      const retryWithHTTP11 = async () => {
+        try {
+          const { getSupabase } = await import('../services/pitchingService');
+          const sb = getSupabase();
+          if (!sb) return;
+          
+          // Try to reload the video element or notify user
+          console.log('   Retrying video load with HTTP/1.1 protocol...');
+          // Reload the same URL (browser may auto-upgrade to HTTP/1.1)
+          event.target.load();
+        } catch (err) {
+          console.error('   Failed to retry:', err);
+          setVideoErrors(prev => ({
+            ...prev,
+            [pitchId]: true
+          }));
+        }
+      };
+      
+      // Retry after brief delay
+      setTimeout(retryWithHTTP11, 500);
+      return;
+    }
+    
     console.error('   📊 VIDEO ERROR DIAGNOSTICS:');
     console.error('   1️⃣  RLS Policy Issue (most likely):');
     console.error('      → Go to Supabase Dashboard');
@@ -782,12 +814,42 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
               className="grid grid-cols-1 md:grid-cols-2 gap-0 md:gap-0 w-full h-full md:h-auto p-0 md:px-8"
             >
               {loading ? (
-                <div className="col-span-full flex items-center justify-center py-12">
-                  <div className="text-center">
-                    <Loader className="w-12 h-12 text-purple-400 animate-spin mx-auto mb-4" />
-                    <p className="text-slate-400">Loading pitches...</p>
-                  </div>
-                </div>
+                // TikTok-style skeleton loading
+                <>
+                  {[...Array(4)].map((_, idx) => (
+                    <div
+                      key={`skeleton-${idx}`}
+                      className="group bg-slate-800 backdrop-blur border-0 md:border border-slate-700 rounded-none md:rounded-none overflow-hidden flex flex-col h-full w-full animate-pulse"
+                    >
+                      {/* Video Skeleton */}
+                      <div className="relative bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 aspect-video w-full flex-shrink-0 flex items-center justify-center">
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer"></div>
+                      </div>
+                      
+                      {/* Info Section Skeleton */}
+                      <div className="flex-1 p-4 space-y-3">
+                        {/* Title Skeleton */}
+                        <div className="space-y-2">
+                          <div className="h-4 bg-gradient-to-r from-slate-700 to-slate-800 rounded w-3/4"></div>
+                          <div className="h-3 bg-gradient-to-r from-slate-700 to-slate-800 rounded w-1/2"></div>
+                        </div>
+                        
+                        {/* Creator Name Skeleton */}
+                        <div className="h-3 bg-gradient-to-r from-slate-700 to-slate-800 rounded w-2/3"></div>
+                        
+                        {/* Funding Info Skeleton */}
+                        <div className="grid grid-cols-3 gap-2 pt-2">
+                          <div className="h-10 bg-gradient-to-r from-slate-700 to-slate-800 rounded"></div>
+                          <div className="h-10 bg-gradient-to-r from-slate-700 to-slate-800 rounded"></div>
+                          <div className="h-10 bg-gradient-to-r from-slate-700 to-slate-800 rounded"></div>
+                        </div>
+                        
+                        {/* Button Skeleton */}
+                        <div className="h-10 bg-gradient-to-r from-slate-700 to-slate-800 rounded mt-4"></div>
+                      </div>
+                    </div>
+                  ))}
+                </>
               ) : filteredPitches.length === 0 ? (
                 <div className="col-span-full text-center py-12">
                   <Zap className="w-12 h-12 text-slate-500 mx-auto mb-4" />
@@ -814,16 +876,26 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                           </div>
                         </div>
                       ) : (
-                        <video
-                          src={pitch.video_url}
-                          className="w-full h-full object-contain"
-                          controls
-                          crossOrigin="anonymous"
-                          onError={(event) => handleVideoError(pitch.id, event)}
-                          onLoadStart={() => console.log(`📹 Loading video: ${pitch.video_url}`)}
-                          onCanPlay={() => console.log(`✅ Video can play: ${pitch.id}`)}
-                          onLoadedMetadata={(event) => handleVideoLoadedMetadata(pitch.id, event)}
-                        />
+                        <>
+                          <video
+                            src={pitch.video_url}
+                            className="w-full h-full object-contain"
+                            controls
+                            crossOrigin="anonymous"
+                            preload="auto"
+                            playsInline
+                            onError={(event) => handleVideoError(pitch.id, event)}
+                            onLoadStart={() => console.log(`📹 Loading video: ${pitch.video_url}`)}
+                            onCanPlay={() => console.log(`✅ Video can play: ${pitch.id}`)}
+                            onLoadedMetadata={(event) => handleVideoLoadedMetadata(pitch.id, event)}
+                            onWaiting={() => console.log(`⏳ Buffering: ${pitch.id}`)}
+                            onPlaying={() => console.log(`▶️ Playing: ${pitch.id}`)}
+                          />
+                          {/* Loading indicator overlay */}
+                          <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="w-16 h-16 rounded-full border-4 border-white/20 border-t-white/80 animate-spin hidden group-hover:block"></div>
+                          </div>
+                        </>
                       )}
                       {/* Pitch Type Badge */}
                       <div className="absolute top-4 right-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-3 py-1 rounded-full text-sm font-semibold">
@@ -1132,7 +1204,6 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
             setShowProfileSelector(false);
             setShowWallet(true);
           }}
-          currentUserId={currentUser?.id}
         />
       )}
 
@@ -1212,6 +1283,22 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
           </div>
         </div>
       )}
+
+      {/* Shimmer Animation CSS */}
+      <style>{`
+        @keyframes shimmer {
+          0% {
+            transform: translateX(-100%);
+          }
+          100% {
+            transform: translateX(100%);
+          }
+        }
+        
+        .animate-shimmer {
+          animation: shimmer 2s infinite;
+        }
+      `}</style>
     </div>
   );
 };

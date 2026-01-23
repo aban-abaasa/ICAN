@@ -194,26 +194,50 @@ export const AuthProvider = ({ children }) => {
       return;
     }
 
-    // Get initial session - Supabase will automatically process OAuth tokens from URL
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        loadProfile(session.user.id);
+    let isMounted = true;
+
+    const initializeAuth = async () => {
+      try {
+        // Add small delay to let Supabase settle
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        if (!isMounted) return;
+
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (!isMounted) return;
+
+        if (error && error.message !== 'signal is aborted') {
+          console.error('Auth initialization error:', error);
+        }
+
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          await loadProfile(session.user.id);
+        }
+        setLoading(false);
+        
+        // Clear hash after Supabase has processed it
+        if (window.location.hash && isMounted) {
+          window.history.replaceState(null, '', window.location.pathname);
+        }
+      } catch (err) {
+        // Silently ignore abort errors and only log other errors
+        if (isMounted && err.name !== 'AbortError' && !err.message?.includes('aborted')) {
+          console.error('Error getting session:', err);
+        }
+        if (isMounted) {
+          setLoading(false);
+        }
       }
-      setLoading(false);
-      
-      // Clear hash after Supabase has processed it
-      if (window.location.hash) {
-        window.history.replaceState(null, '', window.location.pathname);
-      }
-    }).catch((err) => {
-      console.error('Error getting session:', err);
-      setLoading(false);
-    });
+    };
+
+    initializeAuth();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        if (!isMounted) return;
         setUser(session?.user ?? null);
         if (session?.user) {
           loadProfile(session.user.id);
@@ -224,7 +248,10 @@ export const AuthProvider = ({ children }) => {
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   // Sign up - exactly like FARM-AGENT

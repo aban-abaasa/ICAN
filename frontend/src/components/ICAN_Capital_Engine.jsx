@@ -92,7 +92,8 @@ import {
   MoreVertical,
   Loader,
   ArrowRight,
-  Circle
+  Circle,
+  Trash2
 } from 'lucide-react';
 
 // ============================================
@@ -4103,24 +4104,36 @@ const ICANCapitalEngine = () => {
       setPitchinLoading(true);
       const { getAllPitches, getUserPitches, getSupabase } = await import('../services/pitchingService');
       
-      // Get current user
+      // Get current user from auth
       const sb = getSupabase();
-      if (sb) {
-        const { data: { user } } = await sb.auth.getUser();
+      if (!sb) {
+        setPitchinLoading(false);
+        return;
+      }
+
+      const { data: { user } } = await sb.auth.getUser();
+      
+      if (user) {
         setCurrentUser(user);
       }
+
+      console.time('⏱️ Fetch all pitches');
       
-      // Also fetch user's business profiles
-      await fetchUserBusinessProfiles();
-
-      // Fetch all published pitches for Available tab
-      const allPitches = await getAllPitches();
+      // Fetch published pitches with pagination (20 at a time for faster initial load)
+      const allPitches = await getAllPitches(20, 0);
       setPitchinPitches(allPitches || []);
+      
+      console.timeEnd('⏱️ Fetch all pitches');
 
-      // If user is logged in, fetch their pitches for My Pitches tab
-      if (currentUser?.id) {
-        const myPitches = await getUserPitches(currentUser.id);
+      // If user is logged in, fetch ONLY their pitches for My Pitches tab
+      if (user?.id) {
+        console.log(`📌 Fetching pitches for user: ${user.id}`);
+        const myPitches = await getUserPitches(user.id);
+        console.log(`✅ Found ${myPitches?.length || 0} pitches for current user`);
         setUserPitches(myPitches || []);
+      } else {
+        console.log('⚠️ User not authenticated - no personal pitches to fetch');
+        setUserPitches([]);
       }
 
       console.log('✅ Pitchin data loaded:', { all: allPitches?.length, mine: userPitches?.length });
@@ -4128,6 +4141,37 @@ const ICANCapitalEngine = () => {
       console.error('Error fetching Pitchin data:', error);
     } finally {
       setPitchinLoading(false);
+    }
+  };
+
+  // Handle deleting a pitch
+  const handleDeletePitch = async (pitchId, pitchTitle) => {
+    // Confirmation dialog
+    const confirmed = window.confirm(
+      `🗑️ Are you sure you want to delete "${pitchTitle}"?\n\nThis will:\n✓ Delete the video from Supabase storage\n✓ Remove the pitch permanently\n\nThis action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      // Import the deletePitch function
+      const { deletePitch } = await import('../services/pitchingService');
+
+      console.log(`🗑️ Deleting pitch: ${pitchTitle}`);
+      const { success, error, message } = await deletePitch(pitchId);
+
+      if (success) {
+        console.log('✅', message);
+        // Remove from local state
+        setUserPitches(userPitches.filter(p => p.id !== pitchId));
+        alert(`✅ ${message}`);
+      } else {
+        console.error('❌', error);
+        alert(`❌ Failed to delete: ${error}`);
+      }
+    } catch (err) {
+      console.error('Error deleting pitch:', err);
+      alert('❌ Error deleting pitch: ' + err.message);
     }
   };
 
@@ -12087,6 +12131,13 @@ Data Freshness: ${reportData.metadata.dataFreshness}
                           )}
                           <button className="w-full px-3 py-2 bg-white/5 hover:bg-white/10 text-gray-300 rounded text-sm font-medium transition-all">
                             {pitch.status === 'draft' ? 'Edit & Submit' : 'View Details'}
+                          </button>
+                          <button 
+                            onClick={() => handleDeletePitch(pitch.id, pitch.title)}
+                            className="w-full px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-300 hover:text-red-200 rounded text-sm font-medium transition-all flex items-center justify-center gap-2 border border-red-500/30"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Delete Pitch
                           </button>
                         </div>
                       </div>

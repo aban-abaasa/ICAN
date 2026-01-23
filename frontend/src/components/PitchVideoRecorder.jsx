@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, Mic, Square, Play, Upload, X, RotateCcw, Pin, Maximize, Minimize, Smartphone } from 'lucide-react';
+import { Camera, Mic, Square, Play, Upload, X, RotateCcw, Pin, Maximize, Minimize, Smartphone, Scissors } from 'lucide-react';
 import { uploadVideo } from '../services/pitchingService';
+import { VideoClipper } from './status/VideoClipper';
 
 const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', onPitchCreated, onClose, hideControls = false, onVideoRecorded }) => {
   const videoRef = useRef(null);
@@ -22,6 +23,7 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
   const [facingMode, setFacingMode] = useState(cameraMode === 'back' ? 'environment' : 'user'); // 'user' for front, 'environment' for back
   const [hasMultipleCameras, setHasMultipleCameras] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [showVideoClipper, setShowVideoClipper] = useState(false);
   
   const [formData, setFormData] = useState({
     title: '',
@@ -247,6 +249,14 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
   const handleUploadVideo = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Show video clipper for uploaded videos
+      if (file.type.startsWith('video')) {
+        setVideoBlob(file);
+        setShowVideoClipper(true);
+        return;
+      }
+      
+      // For non-videos, just set directly
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
       setVideoBlob(file);
@@ -256,6 +266,22 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
       if (onVideoRecorded) {
         onVideoRecorded(file);
       }
+    }
+  };
+
+  const handleVideoClip = (clipData) => {
+    // User clipped the video, now use the clipped blob
+    setShowVideoClipper(false);
+    setVideoBlob(clipData.blob);
+    
+    // Create preview URL for clipped video
+    const url = URL.createObjectURL(clipData.blob);
+    setPreviewUrl(url);
+    setRecordedChunks([clipData.blob]);
+    
+    // Notify parent
+    if (onVideoRecorded) {
+      onVideoRecorded(clipData.blob);
     }
   };
 
@@ -389,19 +415,18 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
               </>
             ) : (
               <>
-                {console.log('Rendering preview video with URL:', previewUrl)}
                 <video
                   src={previewUrl}
                   controls
                   autoPlay
                   playsInline
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                  backgroundColor: '#000',
-                  display: 'block'
-                }}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    backgroundColor: '#000',
+                    display: 'block'
+                  }}
                 />
               </>
             )}
@@ -465,19 +490,34 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                   </div>
                 </>
               ) : (
-                <div className="relative group">
-                  <button
-                    onClick={() => setPreviewUrl(null)}
-                    className="w-12 h-12 md:w-12 md:h-12 rounded-full bg-slate-700 hover:bg-slate-600 text-white flex items-center justify-center transition focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 focus:ring-offset-slate-900 shadow-xl"
-                  >
-                    <RotateCcw className="w-6 h-6 md:w-6 md:h-6" />
-                  </button>
+                <>
+                  <div className="relative group">
+                    <button
+                      onClick={() => setShowVideoClipper(true)}
+                      className="w-12 h-12 md:w-12 md:h-12 rounded-full bg-gradient-to-br from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700 text-white flex items-center justify-center transition focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:ring-offset-slate-900 shadow-xl hover:shadow-orange-500/50"
+                    >
+                      <Scissors className="w-6 h-6 md:w-6 md:h-6" />
+                    </button>
+                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none hidden md:block">
+                      <div className="bg-slate-900 border border-orange-500/50 text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap font-semibold shadow-lg">
+                        ✂️ Clip Video
+                      </div>
+                    </div>
+                  </div>
+                  <div className="relative group">
+                    <button
+                      onClick={() => setPreviewUrl(null)}
+                      className="w-12 h-12 md:w-12 md:h-12 rounded-full bg-slate-700 hover:bg-slate-600 text-white flex items-center justify-center transition focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 focus:ring-offset-slate-900 shadow-xl"
+                    >
+                      <RotateCcw className="w-6 h-6 md:w-6 md:h-6" />
+                    </button>
                   <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none hidden md:block">
                     <div className="bg-slate-900 text-white text-xs px-3 py-1 rounded whitespace-nowrap border border-slate-700">
                       Re-record
                     </div>
                   </div>
-                </div>
+                  </div>
+                </>
               )}
             </div>
 
@@ -759,6 +799,15 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
             </button>
           </div>
         </div>
+
+        {/* Video Clipper Modal */}
+        {showVideoClipper && videoBlob && (
+          <VideoClipper 
+            videoFile={videoBlob}
+            onClip={handleVideoClip}
+            onCancel={() => setShowVideoClipper(false)}
+          />
+        )}
       </div>
     </div>
   );
