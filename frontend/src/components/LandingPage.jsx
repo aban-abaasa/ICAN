@@ -17,8 +17,8 @@ const LandingPage = ({ onGetStarted }) => {
     {
       image: '/images/incaera%20share.png',
       title: 'Share Network',
-      description: 'Connect and collaborate with your community through our integrated sharing platform',
-      features: ['Community driven', 'Easy sharing', 'Social features']
+      description: 'Allow businesses to pitch and share equity opportunities, enabling investors and community members to discover and invest in promising ventures',
+      features: ['Business pitches', 'Investment opportunities', 'Share ownership']
     },
     {
       image: '/images/dairy%20expense%20and%20inacome.png',
@@ -145,27 +145,31 @@ const LandingPage = ({ onGetStarted }) => {
       </nav>
 
       {/* Hero Section */}
-      <div className="relative pt-20 md:pt-32 pb-8 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto grid md:grid-cols-2 gap-8 md:gap-12 items-start md:items-center">
+      <div className="relative pt-16 md:pt-20 pb-12 md:pb-16 px-4 sm:px-6 lg:px-8 overflow-visible">
+        {/* Decorative elements */}
+        <div className="absolute top-10 left-5 w-32 h-32 bg-purple-500/5 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-10 right-10 w-40 h-40 bg-pink-500/5 rounded-full blur-3xl"></div>
+        
+        <div className="max-w-7xl mx-auto grid md:grid-cols-2 gap-6 md:gap-8 lg:gap-12 items-center relative">
           {/* Left Content - Collapsed to Icon */}
-          <div className="flex items-center justify-center md:justify-start animate-fadeInUp">
+          <div className="flex items-center justify-center md:justify-start animate-fadeInUp relative z-40">
             <div className="group relative w-full md:w-auto flex md:block">
-              {/* Info Icon Button */}
+              {/* Info Icon Button - Enhanced */}
               <button 
-                className="flex items-center justify-center w-16 h-16 md:w-20 md:h-20 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 hover:shadow-lg hover:shadow-purple-500/50 transition transform hover:scale-110 flex-shrink-0"
+                className="flex items-center justify-center w-20 h-20 md:w-24 md:h-24 rounded-full bg-gradient-to-br from-purple-500 via-pink-500 to-purple-600 hover:shadow-2xl hover:shadow-purple-500/60 transition-all duration-300 transform hover:scale-125 flex-shrink-0 border border-purple-300/30 backdrop-blur-sm"
                 title="About ICAN Capital Engine"
               >
-                <Zap className="w-8 h-8 md:w-10 md:h-10 text-white" />
+                <Zap className="w-10 h-10 md:w-12 md:h-12 text-white drop-shadow-lg animate-pulse" />
               </button>
               
               {/* Hidden Content - Visible on Hover */}
-              <div className="absolute top-20 md:bottom-20 left-0 md:left-1/2 md:transform md:-translate-x-1/2 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all duration-300 w-64 md:w-96 z-50">
-                <div className="bg-slate-900 border border-purple-500/50 rounded-lg p-4 md:p-6 space-y-3 shadow-xl shadow-purple-500/20">
-                  <div className="inline-flex items-center space-x-2 bg-purple-500/20 border border-purple-500/30 rounded-full px-3 py-1">
-                    <Zap className="w-3 h-3 text-purple-400 flex-shrink-0" />
-                    <span className="text-xs text-purple-300">From Volatility to Global Capital</span>
+              <div className="absolute top-full left-1/2 -translate-x-1/2 mt-4 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all duration-300 w-80 md:w-96 z-[9999]">
+                <div className="bg-gradient-to-br from-slate-900/95 to-slate-950/95 border border-purple-500/40 rounded-2xl p-5 md:p-7 space-y-4 shadow-2xl shadow-purple-500/30 backdrop-blur-xl">
+                  <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-400/30 rounded-full px-3 py-1.5">
+                    <Zap className="w-3 h-3 text-purple-300 flex-shrink-0" />
+                    <span className="text-xs text-purple-200 font-medium">From Volatility to Global Capital</span>
                   </div>
-                  <h2 className="text-lg md:text-xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
+                  <h2 className="text-lg md:text-2xl font-bold bg-gradient-to-r from-purple-300 via-pink-300 to-blue-300 bg-clip-text text-transparent">
                     Build Generational Wealth Together
                   </h2>
                   <p className="text-xs md:text-sm text-gray-300 leading-relaxed">
@@ -176,143 +180,33 @@ const LandingPage = ({ onGetStarted }) => {
             </div>
           </div>
 
-          {/* Right - Ugandan User Illustration */}
-          <div className="relative animate-fadeInDown hidden md:flex items-center justify-center h-full">
-            <svg viewBox="0 0 400 600" className="w-full max-w-md h-auto" xmlns="http://www.w3.org/2000/svg">
-              {/* Background Glow */}
-              <defs>
-                <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" style={{stopColor: '#a855f7', stopOpacity: 0.2}} />
-                  <stop offset="100%" style={{stopColor: '#ec4899', stopOpacity: 0.2}} />
-                </linearGradient>
-                <linearGradient id="skinTone" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" style={{stopColor: '#92612d'}} />
-                  <stop offset="100%" style={{stopColor: '#6d4423'}} />
-                </linearGradient>
-              </defs>
-
-              {/* Background Circle */}
-              <circle cx="200" cy="300" r="180" fill="url(#bgGradient)" opacity="0.5" />
-
-              {/* Head */}
-              <circle cx="200" cy="120" r="45" fill="url(#skinTone)" />
-
-              {/* Hair */}
-              <path d="M 155 110 Q 155 60 200 60 Q 245 60 245 110" fill="#3d2817" />
-
-              {/* Ears */}
-              <circle cx="155" cy="120" r="12" fill="#8b5a2b" />
-              <circle cx="245" cy="120" r="12" fill="#8b5a2b" />
-
-              {/* Face Expression - Happy */}
-              {/* Eyes */}
-              <circle cx="185" cy="110" r="5" fill="#1a1a1a" />
-              <circle cx="215" cy="110" r="5" fill="#1a1a1a" />
-              <circle cx="186" cy="108" r="2" fill="#ffffff" />
-              <circle cx="216" cy="108" r="2" fill="#ffffff" />
-
-              {/* Smile */}
-              <path d="M 185 125 Q 200 135 215 125" stroke="#6d4423" strokeWidth="2" fill="none" strokeLinecap="round" />
-              <path d="M 190 125 L 210 125" stroke="#f5deb3" strokeWidth="1" fill="none" />
-
-              {/* Nose */}
-              <path d="M 200 115 L 200 123" stroke="#8b5a2b" strokeWidth="1" />
-
-              {/* Neck */}
-              <rect x="185" y="160" width="30" height="20" fill="url(#skinTone)" />
-
-              {/* Shirt - Smart Casual Ugandan Style */}
-              <path d="M 140 180 L 140 280 Q 140 300 160 300 L 240 300 Q 260 300 260 280 L 260 180 Z" fill="#1e40af" />
-              <path d="M 140 180 L 260 180" stroke="#ec4899" strokeWidth="2" />
-
-              {/* Collar */}
-              <path d="M 190 180 L 185 200 L 200 195 L 215 200 L 210 180" fill="#1e40af" />
-
-              {/* Shirt Details - Gold/Purple accent stripes (Ugandan fashion) */}
-              <line x1="160" y1="200" x2="240" y2="200" stroke="#f59e0b" strokeWidth="2" opacity="0.6" />
-              <line x1="160" y1="250" x2="240" y2="250" stroke="#a855f7" strokeWidth="2" opacity="0.6" />
-
-              {/* Left Arm - Holding Phone */}
-              <g transform="translate(140, 200)">
-                {/* Arm */}
-                <rect x="0" y="0" width="20" height="80" rx="10" fill="url(#skinTone)" />
-                {/* Hand */}
-                <circle cx="10" cy="85" r="12" fill="#92612d" />
-              </g>
-
-              {/* Right Arm - Gesturing happily */}
-              <g transform="translate(240, 190) rotate(-30)">
-                <rect x="0" y="0" width="20" height="75" rx="10" fill="url(#skinTone)" />
-                <circle cx="10" cy="80" r="12" fill="#92612d" />
-              </g>
-
-              {/* ICAN Wallet/Phone in Hand */}
-              <g transform="translate(100, 240)">
-                {/* Phone Body */}
-                <rect x="0" y="0" width="60" height="110" rx="8" fill="#1f2937" stroke="#ec4899" strokeWidth="2" />
+          {/* Right - Feature Image Showcase */}
+          <div className="relative animate-fadeInDown hidden md:flex items-center justify-center h-full min-h-96 z-0">
+            <div className="relative w-full max-w-lg">
+              {/* Glow background */}
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-3xl blur-3xl"></div>
+              
+              {/* Image container */}
+              <div className="relative bg-gradient-to-br from-purple-900/40 to-blue-900/40 border border-purple-500/30 rounded-3xl p-8 backdrop-blur-xl shadow-2xl shadow-purple-500/30 overflow-hidden">
+                {/* Animated border gradient */}
+                <div className="absolute inset-0 bg-gradient-to-r from-purple-500/0 via-purple-500/20 to-pink-500/0 rounded-3xl animate-pulse"></div>
                 
-                {/* Screen */}
-                <rect x="4" y="8" width="52" height="94" rx="4" fill="#0f172a" />
-
-                {/* ICAN Wallet Display */}
-                {/* Header */}
-                <rect x="6" y="12" width="48" height="18" fill="#a855f7" rx="2" />
-                <text x="30" y="25" textAnchor="middle" fill="#ffffff" fontSize="8" fontWeight="bold">ICAN Wallet</text>
-
-                {/* Balance */}
-                <text x="30" y="45" textAnchor="middle" fill="#ec4899" fontSize="7" fontWeight="bold">SACCO Balance</text>
-                <text x="30" y="56" textAnchor="middle" fill="#22c55e" fontSize="10" fontWeight="bold">450,000 UGX</text>
-
-                {/* Quick Actions */}
-                <rect x="8" y="65" width="14" height="14" rx="2" fill="#3b82f6" />
-                <text x="15" y="73" textAnchor="middle" fill="#ffffff" fontSize="6" fontWeight="bold">Send</text>
-
-                <rect x="24" y="65" width="14" height="14" rx="2" fill="#10b981" />
-                <text x="31" y="73" textAnchor="middle" fill="#ffffff" fontSize="6" fontWeight="bold">Receive</text>
-
-                <rect x="40" y="65" width="14" height="14" rx="2" fill="#f59e0b" />
-                <text x="47" y="73" textAnchor="middle" fill="#ffffff" fontSize="6" fontWeight="bold">Contribute</text>
-
-                {/* Recent Activity */}
-                <line x1="8" y1="85" x2="52" y2="85" stroke="#4b5563" strokeWidth="0.5" />
-                <text x="30" y="98" textAnchor="middle" fill="#9ca3af" fontSize="5">✓ Contribution Approved</text>
-              </g>
-
-              {/* Lower body - Pants and Shoes */}
-              <path d="M 170 300 L 165 360 L 190 360 L 195 300" fill="#2d3748" />
-              <path d="M 205 300 L 210 360 L 235 360 L 230 300" fill="#1a202c" />
-
-              {/* Shoes */}
-              <ellipse cx="177" cy="365" rx="15" ry="8" fill="#1a1a1a" />
-              <ellipse cx="222" cy="365" rx="15" ry="8" fill="#1a1a1a" />
-
-              {/* Success Badge - Floating */}
-              <g transform="translate(300, 150)">
-                <circle cx="0" cy="0" r="35" fill="#10b981" opacity="0.9" />
-                <text x="0" y="0" textAnchor="middle" dominantBaseline="middle" fill="#ffffff" fontSize="16" fontWeight="bold">✓</text>
-                <text x="0" y="22" textAnchor="middle" fill="#ffffff" fontSize="11" fontWeight="bold">Transaction</text>
-                <text x="0" y="35" textAnchor="middle" fill="#ffffff" fontSize="11" fontWeight="bold">Successful</text>
-              </g>
-
-              {/* Confetti/Celebration - Small animated circles */}
-              <circle cx="80" cy="100" r="3" fill="#fbbf24" opacity="0.8" />
-              <circle cx="320" cy="120" r="3" fill="#a855f7" opacity="0.8" />
-              <circle cx="100" cy="160" r="2.5" fill="#ec4899" opacity="0.8" />
-              <circle cx="300" cy="180" r="2.5" fill="#10b981" opacity="0.8" />
-
-              {/* Text Label */}
-              <text x="200" y="540" textAnchor="middle" fill="#a78bfa" fontSize="14" fontWeight="bold">
-                Happy SACCO Member
-              </text>
-              <text x="200" y="560" textAnchor="middle" fill="#9ca3af" fontSize="11">
-                Contributing & Growing Together
-              </text>
-            </svg>
-
-            {/* Animated background elements */}
-            <div className="absolute inset-0 -z-10">
-              <div className="absolute top-10 right-10 w-20 h-20 bg-purple-500/20 rounded-full blur-3xl animate-pulse"></div>
-              <div className="absolute bottom-20 left-10 w-32 h-32 bg-pink-500/10 rounded-full blur-3xl animate-pulse" style={{animationDelay: '0.5s'}}></div>
+                {/* Content */}
+                <div className="relative space-y-6">
+                  {/* Image */}
+                  <img 
+                    src="/images/dairy%20expense%20and%20inacome.png" 
+                    alt="Expense & Income Tracker"
+                    className="w-full h-80 object-cover rounded-2xl shadow-lg"
+                  />
+                  
+                  {/* Label */}
+                  <div className="text-center space-y-2">
+                    <h3 className="text-xl font-bold text-purple-300">Expense & Income Tracker</h3>
+                    <p className="text-sm text-gray-400">Smart financial management at your fingertips</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -459,34 +353,34 @@ const LandingPage = ({ onGetStarted }) => {
           </div>
 
           {/* Call-to-Action Buttons and Stats Section */}
-          <div className="mt-12 md:mt-16 space-y-8 text-center">
+          <div className="mt-4 md:mt-12 space-y-3 md:space-y-8 text-center">
             {/* Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <div className="flex flex-col sm:flex-row gap-2 md:gap-4 justify-center">
               <button
                 onClick={onGetStarted}
-                className="group bg-gradient-to-r from-purple-500 to-pink-500 px-8 py-4 rounded-lg font-bold text-lg flex items-center justify-center space-x-2 hover:shadow-lg hover:shadow-purple-500/50 transition transform hover:scale-105"
+                className="group bg-gradient-to-r from-purple-500 to-pink-500 px-4 md:px-8 py-2 md:py-4 rounded-lg font-bold text-sm md:text-lg flex items-center justify-center space-x-2 hover:shadow-lg hover:shadow-purple-500/50 transition transform hover:scale-105"
               >
                 <span>Start Your Journey</span>
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition" />
+                <ArrowRight className="w-4 h-4 md:w-5 md:h-5 group-hover:translate-x-1 transition" />
               </button>
-              <button className="border-2 border-purple-400 px-8 py-4 rounded-lg font-bold text-lg hover:bg-purple-500/10 transition">
+              <button className="border-2 border-purple-400 px-4 md:px-8 py-2 md:py-4 rounded-lg font-bold text-sm md:text-lg hover:bg-purple-500/10 transition">
                 Learn More
               </button>
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-3 gap-4 pt-8 border-t border-purple-500/20">
+            <div className="grid grid-cols-3 gap-2 md:gap-4 pt-3 md:pt-8 border-t border-purple-500/20">
               <div className="text-center">
-                <p className="text-3xl md:text-4xl font-bold text-purple-400">10K+</p>
-                <p className="text-gray-400 text-sm md:text-base">Active Users</p>
+                <p className="text-lg md:text-4xl font-bold text-purple-400">10K+</p>
+                <p className="text-gray-400 text-xs md:text-base">Active Users</p>
               </div>
               <div className="text-center">
-                <p className="text-3xl md:text-4xl font-bold text-pink-400">$50M+</p>
-                <p className="text-gray-400 text-sm md:text-base">Volume Managed</p>
+                <p className="text-lg md:text-4xl font-bold text-pink-400">$50M+</p>
+                <p className="text-gray-400 text-xs md:text-base">Volume Managed</p>
               </div>
               <div className="text-center">
-                <p className="text-3xl md:text-4xl font-bold text-blue-400">99.9%</p>
-                <p className="text-gray-400 text-sm md:text-base">Uptime</p>
+                <p className="text-lg md:text-4xl font-bold text-blue-400">99.9%</p>
+                <p className="text-gray-400 text-xs md:text-base">Uptime</p>
               </div>
             </div>
           </div>
@@ -494,31 +388,31 @@ const LandingPage = ({ onGetStarted }) => {
       </section>
 
       {/* Testimonials Section */}
-      <section id="testimonials" className="relative py-16 md:py-20 px-4 sm:px-6 lg:px-8">
+      <section id="testimonials" className="relative py-6 md:py-12 lg:py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-12 md:mb-16">
-            <h2 className="text-2xl md:text-4xl lg:text-5xl font-bold mb-3 md:mb-4 leading-tight">
+          <div className="text-center mb-4 md:mb-8 lg:mb-16">
+            <h2 className="text-lg md:text-3xl lg:text-5xl font-bold mb-1 md:mb-2 lg:mb-4 leading-tight">
               <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
                 What Users Say
               </span>
             </h2>
-            <p className="text-gray-400 text-sm md:text-base lg:text-lg">Join thousands of satisfied users</p>
+            <p className="text-gray-400 text-xs md:text-sm lg:text-lg">Join thousands of satisfied users</p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-4 md:gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-3 lg:gap-6">
             {testimonials.map((testimonial, index) => (
               <div
                 key={index}
-                className="bg-gradient-to-br from-purple-900/20 to-blue-900/20 border border-purple-500/20 rounded-xl p-4 md:p-6 lg:p-8 hover:border-purple-500/50 transition"
+                className="bg-gradient-to-br from-purple-900/20 to-blue-900/20 border border-purple-500/20 rounded-lg p-3 md:p-4 lg:p-6 hover:border-purple-500/50 transition"
               >
-                <div className="flex items-center mb-4">
-                  <span className="text-3xl md:text-4xl mr-3">{testimonial.avatar}</span>
+                <div className="flex items-center mb-3">
+                  <span className="text-2xl md:text-3xl mr-2">{testimonial.avatar}</span>
                   <div>
-                    <p className="font-bold text-sm md:text-base">{testimonial.name}</p>
-                    <p className="text-xs md:text-sm text-purple-400">{testimonial.role}</p>
+                    <p className="font-bold text-xs md:text-sm">{testimonial.name}</p>
+                    <p className="text-xs text-purple-400">{testimonial.role}</p>
                   </div>
                 </div>
-                <p className="text-gray-300 italic text-xs md:text-sm lg:text-base leading-relaxed">"{testimonial.text}"</p>
+                <p className="text-gray-300 italic text-xs md:text-sm leading-relaxed">"{testimonial.text}"</p>
               </div>
             ))}
           </div>
@@ -526,18 +420,18 @@ const LandingPage = ({ onGetStarted }) => {
       </section>
 
       {/* CTA Section */}
-      <section className="relative py-16 md:py-20 px-4 sm:px-6 lg:px-8">
+      <section className="relative py-8 md:py-12 lg:py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto">
-          <div className="bg-gradient-to-r from-purple-900/40 via-pink-900/40 to-blue-900/40 border border-purple-500/30 rounded-2xl p-6 md:p-12 lg:p-16 text-center">
-            <h2 className="text-2xl md:text-4xl lg:text-5xl font-bold mb-4 md:mb-6 leading-tight">
+          <div className="bg-gradient-to-r from-purple-900/40 via-pink-900/40 to-blue-900/40 border border-purple-500/30 rounded-xl md:rounded-2xl p-4 md:p-8 lg:p-16 text-center">
+            <h2 className="text-xl md:text-3xl lg:text-5xl font-bold mb-3 md:mb-4 lg:mb-6 leading-tight">
               Ready to Transform Your Capital?
             </h2>
-            <p className="text-sm md:text-base lg:text-xl text-gray-300 mb-6 md:mb-8 leading-relaxed">
+            <p className="text-xs md:text-sm lg:text-xl text-gray-300 mb-4 md:mb-6 lg:mb-8 leading-relaxed">
               Join the revolution and take control of your financial future today.
             </p>
             <button
               onClick={onGetStarted}
-              className="group bg-gradient-to-r from-purple-500 to-pink-500 px-6 md:px-10 py-3 md:py-4 rounded-lg font-bold text-sm md:text-base lg:text-lg inline-flex items-center space-x-2 hover:shadow-lg hover:shadow-purple-500/50 transition transform hover:scale-105"
+              className="group bg-gradient-to-r from-purple-500 to-pink-500 px-4 md:px-8 lg:px-10 py-2 md:py-3 lg:py-4 rounded-lg font-bold text-xs md:text-sm lg:text-lg inline-flex items-center space-x-2 hover:shadow-lg hover:shadow-purple-500/50 transition transform hover:scale-105"
             >
               <span>Get Started Now</span>
               <ArrowRight className="w-4 h-4 md:w-5 md:h-5 group-hover:translate-x-1 transition" />
@@ -547,41 +441,41 @@ const LandingPage = ({ onGetStarted }) => {
       </section>
 
       {/* Footer */}
-      <footer className="relative border-t border-purple-500/10 py-12 px-4 sm:px-6 lg:px-8">
+      <footer className="relative border-t border-purple-500/10 py-6 md:py-10 lg:py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
-          <div className="grid md:grid-cols-4 gap-8 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 lg:gap-8 mb-4 md:mb-8">
             <div>
-              <h3 className="text-xl font-bold text-purple-400 mb-4">ICAN</h3>
-              <p className="text-gray-400 text-sm">Transform Volatility to Global Capital</p>
+              <h3 className="text-lg md:text-xl font-bold text-purple-400 mb-2 md:mb-4">ICAN</h3>
+              <p className="text-gray-400 text-xs md:text-sm">Transform Volatility to Global Capital</p>
             </div>
             <div>
-              <h4 className="font-bold mb-4">Product</h4>
-              <ul className="space-y-2 text-gray-400 text-sm">
+              <h4 className="font-bold text-sm md:text-base mb-2 md:mb-4">Product</h4>
+              <ul className="space-y-1 md:space-y-2 text-gray-400 text-xs md:text-sm">
                 <li><a href="#" className="hover:text-purple-400 transition">Features</a></li>
                 <li><a href="#" className="hover:text-purple-400 transition">Pricing</a></li>
                 <li><a href="#" className="hover:text-purple-400 transition">Security</a></li>
               </ul>
             </div>
             <div>
-              <h4 className="font-bold mb-4">Company</h4>
-              <ul className="space-y-2 text-gray-400 text-sm">
+              <h4 className="font-bold text-sm md:text-base mb-2 md:mb-4">Company</h4>
+              <ul className="space-y-1 md:space-y-2 text-gray-400 text-xs md:text-sm">
                 <li><a href="#" className="hover:text-purple-400 transition">About</a></li>
                 <li><a href="#" className="hover:text-purple-400 transition">Blog</a></li>
                 <li><a href="#" className="hover:text-purple-400 transition">Careers</a></li>
               </ul>
             </div>
             <div>
-              <h4 className="font-bold mb-4">Legal</h4>
-              <ul className="space-y-2 text-gray-400 text-sm">
+              <h4 className="font-bold text-sm md:text-base mb-2 md:mb-4">Legal</h4>
+              <ul className="space-y-1 md:space-y-2 text-gray-400 text-xs md:text-sm">
                 <li><a href="#" className="hover:text-purple-400 transition">Privacy</a></li>
                 <li><a href="#" className="hover:text-purple-400 transition">Terms</a></li>
                 <li><a href="#" className="hover:text-purple-400 transition">Contact</a></li>
               </ul>
             </div>
           </div>
-          <div className="border-t border-purple-500/10 pt-8 flex flex-col md:flex-row justify-between items-center text-gray-400 text-sm">
+          <div className="border-t border-purple-500/10 pt-4 md:pt-6 lg:pt-8 flex flex-col md:flex-row justify-between items-center text-gray-400 text-xs md:text-sm gap-3">
             <p>&copy; 2024 ICAN Capital Engine. All rights reserved.</p>
-            <div className="flex space-x-6 mt-4 md:mt-0">
+            <div className="flex space-x-4 md:space-x-6">
               <a href="#" className="hover:text-purple-400 transition">Twitter</a>
               <a href="#" className="hover:text-purple-400 transition">LinkedIn</a>
               <a href="#" className="hover:text-purple-400 transition">Discord</a>
