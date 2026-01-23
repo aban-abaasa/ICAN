@@ -30,7 +30,7 @@ import {
   hasUserLikedPitch
 } from '../services/pitchInteractionsService';
 
-const Pitchin = () => {
+const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
   const [pitches, setPitches] = useState([]);
   const [filteredPitches, setFilteredPitches] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -130,6 +130,14 @@ const Pitchin = () => {
       setFilteredPitches(pitches); // TODO: Implement interested pitches
     }
   }, [activeTab, pitches, currentUser]);
+  // Handle external showPitchCreator trigger from parent
+  useEffect(() => {
+    console.log('Pitchin: showPitchCreator changed to:', showPitchCreator);
+    if (showPitchCreator) {
+      console.log('Pitchin: Setting showRecorder to true');
+      setShowRecorder(true);
+    }
+  }, [showPitchCreator]);
 
   const handleCreatePitch = async (pitchData) => {
     try {
@@ -746,15 +754,24 @@ const Pitchin = () => {
       {/* Main Content - Full screen on mobile */}
       <div className="fixed inset-0 w-screen h-screen md:relative md:inset-auto md:w-full md:h-auto px-0 py-0 md:py-8 overflow-hidden md:overflow-visible bg-slate-900">
         {showRecorder ? (
-          <div className="mb-8 px-4 md:px-8">
-            <button
-              onClick={() => setShowRecorder(false)}
-              className="text-slate-400 hover:text-slate-200 mb-6 font-medium flex items-center gap-2 text-lg"
-            >
-              ← Back to Feed
-            </button>
-            <div className="max-w-5xl">
-              <PitchVideoRecorder onPitchCreated={handleCreatePitch} onClose={() => setShowRecorder(false)} />
+          <div className="w-full h-full md:h-auto flex flex-col md:flex-row md:items-center md:justify-center px-4 md:px-8 py-4 md:py-8">
+            <div className="w-full max-w-4xl">
+              <button
+                onClick={() => {
+                  setShowRecorder(false);
+                  if (onClosePitchCreator) onClosePitchCreator();
+                }}
+                className="text-slate-400 hover:text-slate-200 mb-6 font-medium flex items-center gap-2 text-lg"
+              >
+                ← Back to Pitches
+              </button>
+              <PitchVideoRecorder 
+                onPitchCreated={handleCreatePitch} 
+                onClose={() => {
+                  setShowRecorder(false);
+                  if (onClosePitchCreator) onClosePitchCreator();
+                }} 
+              />
             </div>
           </div>
         ) : (

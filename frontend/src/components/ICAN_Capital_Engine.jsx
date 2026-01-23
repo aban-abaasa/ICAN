@@ -13,6 +13,7 @@ import SHAREHub from './SHAREHub';
 import CMMSModule from './CMSSModule';
 import ICANWallet from './ICANWallet';
 import Pitchin from './Pitchin';
+import CreatorPage from './CreatorPage';
 import LiveBoardroom from './LiveBoardroom';
 import { 
   Shield, 
@@ -3492,6 +3493,7 @@ const ICANCapitalEngine = () => {
   const [isListening, setIsListening] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showPitchinDetail, setShowPitchinDetail] = useState(false);
+  const [showPitchinCreator, setShowPitchinCreator] = useState(false);
   const [shareSubTab, setShareSubTab] = useState('opportunities');
   const [trustSubTab, setTrustSubTab] = useState('my-trusts');
   const [growthSubTab, setGrowthSubTab] = useState('opportunities');
@@ -3507,6 +3509,12 @@ const ICANCapitalEngine = () => {
   const [contractText, setContractText] = useState('');
   const [contractAnalysis, setContractAnalysis] = useState(null);
   const [complianceData, setComplianceData] = useState(null);
+
+  // Monitor showPitchinCreator and activeTab changes
+  useEffect(() => {
+    console.log('Parent: showPitchinCreator =', showPitchinCreator);
+    console.log('Parent: activeTab =', activeTab);
+  }, [showPitchinCreator, activeTab]);
 
   // Handle theme changes
   const handleThemeChange = (theme) => {
@@ -3582,6 +3590,7 @@ const ICANCapitalEngine = () => {
   const [statusRefresh, setStatusRefresh] = useState(0);
   const [showTRUST, setShowTRUST] = useState(false);
   const [showSHARE, setShowSHARE] = useState(false);
+  const [showSHARECreateForm, setShowSHARECreateForm] = useState(false);
   const [showWallet, setShowWallet] = useState(false);
   const [showJourneyDetails, setShowJourneyDetails] = useState(false);
   const [showAIInsights, setShowAIInsights] = useState(false);
@@ -3635,10 +3644,22 @@ const ICANCapitalEngine = () => {
   // Video Recording Management - Using local refs
   const startVideoRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: true, 
-        audio: true 
-      });
+      // Request with fallback for devices without camera
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: 'user' }, 
+          audio: true 
+        });
+      } catch (videoError) {
+        // If camera fails, try audio only
+        if (videoError.name === 'NotFoundError' || videoError.name === 'DeviceNotFoundError') {
+          console.warn('Camera not found, attempting audio-only recording');
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } else {
+          throw videoError;
+        }
+      }
       
       const mediaRecorderRef = { current: null };
       const videoStreamRef = { current: stream };
@@ -3651,10 +3672,11 @@ const ICANCapitalEngine = () => {
       };
 
       mediaRecorderRef.current.onstop = () => {
-        const blob = new Blob(chunks, { type: 'video/webm' });
-        const videoUrl = URL.createObjectURL(blob);
-        console.log('Video recording completed:', videoUrl);
-        // You can save or use this video URL here
+        const mimeType = stream.getVideoTracks().length > 0 ? 'video/webm' : 'audio/webm';
+        const blob = new Blob(chunks, { type: mimeType });
+        const recordingUrl = URL.createObjectURL(blob);
+        console.log('Recording completed:', recordingUrl);
+        // You can save or use this recording URL here
       };
 
       mediaRecorderRef.current.start();
@@ -3663,8 +3685,16 @@ const ICANCapitalEngine = () => {
       // Store refs in window for cleanup
       window.currentVideoRecorder = { mediaRecorderRef, videoStreamRef };
     } catch (error) {
-      console.error('Video recording failed:', error);
-      alert('Camera access denied or not available');
+      console.error('Recording failed:', error);
+      if (error.name === 'NotAllowedError') {
+        alert('Permission denied. Please allow camera/microphone access.');
+      } else if (error.name === 'NotFoundError' || error.name === 'DeviceNotFoundError') {
+        alert('No camera or microphone found on this device.');
+      } else if (error.name === 'NotReadableError') {
+        alert('Camera/microphone is already in use by another application.');
+      } else {
+        alert('Recording failed: ' + error.message);
+      }
     }
   };
 
@@ -11475,8 +11505,13 @@ Data Freshness: ${reportData.metadata.dataFreshness}
                     <div className="group relative">
                       <button
                         onClick={() => {
-                          // This can be extended to open a full create pitch form/modal
-                          alert('Create Pitch: Opens full pitch creation form\nCan integrate with video from camera or upload');
+                          // Open Pitchin with Create form ready
+                          console.log('Create button clicked');
+                          console.log('Current activeTab:', activeTab);
+                          setActiveTab('share');
+                          setShowPitchinCreator(true);
+                          console.log('showPitchinCreator set to true');
+                          console.log('Should render Share tab now');
                         }}
                         className="h-10 px-3 bg-gradient-to-r from-pink-500 to-purple-600 rounded-lg flex items-center gap-1 hover:shadow-lg hover:shadow-pink-500/50 transition-all transform hover:scale-110 active:scale-95 border border-pink-400/50 text-white font-semibold text-xs"
                         title="Create New Pitch"
@@ -12043,6 +12078,18 @@ Data Freshness: ${reportData.metadata.dataFreshness}
             </div>
           )}
         </div>
+
+        {/* CreatorPage - Show when user clicks Create */}
+        {showPitchinCreator && (
+          <CreatorPage 
+            onClose={() => setShowPitchinCreator(false)}
+            onPitchCreated={() => {
+              setShowPitchinCreator(false);
+              // Refresh pitches list
+              console.log('Pitch created successfully');
+            }}
+          />
+        )}
       </div>
     );
   };
@@ -12535,8 +12582,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
           </div>
         </div>
 
-        {/* Full Pitchin Component */}
-        <Pitchin />
+        {/* Show pitch details here if needed */}
       </div>
     );
   };
@@ -12819,7 +12865,13 @@ Data Freshness: ${reportData.metadata.dataFreshness}
       {/* SHARE Section - Show when SHARE is activated */}
       {showSHARE && (
         <div className="fixed inset-0 z-[1000] overflow-y-auto">
-          <SHAREHub onClose={() => setShowSHARE(false)} />
+          <SHAREHub 
+            onClose={() => {
+              setShowSHARE(false);
+              setShowSHARECreateForm(false);
+            }} 
+            openCreateForm={showSHARECreateForm}
+          />
         </div>
       )}
 

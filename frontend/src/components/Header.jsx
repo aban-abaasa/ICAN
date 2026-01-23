@@ -30,17 +30,24 @@ export const Header = ({ onOpenProfileEdit = null, statusRefreshTrigger = 0 }) =
 
   // Load statuses on mount and when refreshTrigger changes
   useEffect(() => {
+    if (!user?.id) {
+      setStatuses([]);
+      return;
+    }
+    
     loadStatuses();
-    const interval = setInterval(loadStatuses, 30000);
+    const interval = setInterval(loadStatuses, 60000); // Increased to 60 seconds to reduce API calls
     return () => clearInterval(interval);
   }, [user?.id, statusRefreshTrigger]);
 
   const loadStatuses = async () => {
+    if (!user?.id) return; // Don't query if no user
     try {
-      const activeStatuses = await getActiveStatuses();
+      const activeStatuses = await getActiveStatuses(user.id); // Pass userId to avoid querying all users
       setStatuses(activeStatuses || []);
     } catch (error) {
       console.error('Failed to load statuses:', error);
+      // Don't crash on status load failure
     }
   };
 
