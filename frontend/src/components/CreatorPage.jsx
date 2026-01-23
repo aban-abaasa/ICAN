@@ -4,7 +4,7 @@ import PitchVideoRecorder from './PitchVideoRecorder';
 import PitchDetailsForm from './PitchDetailsForm';
 import { createPitch, getSupabase } from '../services/pitchingService';
 
-const CreatorPage = ({ onClose, onPitchCreated }) => {
+const CreatorPage = ({ onClose, onPitchCreated, selectedBusinessProfile }) => {
   const [cameraMode, setCameraMode] = useState('front'); // 'front' or 'back'
   const [recordingMethod, setRecordingMethod] = useState('record'); // 'record' or 'upload'
   const [showDetailsForm, setShowDetailsForm] = useState(false);
@@ -26,11 +26,16 @@ const CreatorPage = ({ onClose, onPitchCreated }) => {
         return;
       }
 
+      if (!selectedBusinessProfile) {
+        alert('Please select a business profile for this pitch');
+        return;
+      }
+
       // Create pitch in database with published status
       const newPitch = {
+        business_profile_id: selectedBusinessProfile.id,
         title: formData.title || 'Untitled Pitch',
         description: formData.description || '',
-        creator: formData.creator || user.email,
         category: formData.category || 'Technology',
         pitch_type: formData.pitchType || 'Equity',
         target_funding: parseInt(formData.targetGoal) || 0,

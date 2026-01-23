@@ -3626,6 +3626,8 @@ const ICANCapitalEngine = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [expandedPitchInfo, setExpandedPitchInfo] = useState(null); // Track which pitch info dropdown is open
   const [expandedBusinessProfile, setExpandedBusinessProfile] = useState(false); // Business profile expansion
+  const [selectedPitchBusinessProfile, setSelectedPitchBusinessProfile] = useState(null); // Selected profile for pitch creation
+  const [userBusinessProfiles, setUserBusinessProfiles] = useState([]); // User's business profiles
   const [showCameraRecorder, setShowCameraRecorder] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -4048,6 +4050,35 @@ const ICANCapitalEngine = () => {
     }
   };
 
+  // Fetch user's business profiles for pitch creation
+  const fetchUserBusinessProfiles = async () => {
+    try {
+      const { getSupabase } = await import('../services/pitchingService');
+      const sb = getSupabase();
+      
+      if (!sb) return;
+      
+      const { data: { user } } = await sb.auth.getUser();
+      if (!user) return;
+      
+      // Get user's business profiles - where user is creator or co-owner
+      const { data: profiles } = await sb
+        .from('business_profiles')
+        .select('*')
+        .eq('user_id', user.id);
+      
+      if (profiles && profiles.length > 0) {
+        setUserBusinessProfiles(profiles);
+        // Auto-select first profile if not already selected
+        if (!selectedPitchBusinessProfile) {
+          setSelectedPitchBusinessProfile(profiles[0]);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching user business profiles:', error);
+    }
+  };
+
   // Fetch Pitchin pitches data
   const fetchPitchinPitches = async () => {
     try {
@@ -4060,6 +4091,9 @@ const ICANCapitalEngine = () => {
         const { data: { user } } = await sb.auth.getUser();
         setCurrentUser(user);
       }
+      
+      // Also fetch user's business profiles
+      await fetchUserBusinessProfiles();
 
       // Fetch all published pitches for Available tab
       const allPitches = await getAllPitches();
@@ -12083,6 +12117,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
         {showPitchinCreator && (
           <CreatorPage 
             onClose={() => setShowPitchinCreator(false)}
+            selectedBusinessProfile={selectedPitchBusinessProfile}
             onPitchCreated={async () => {
               setShowPitchinCreator(false);
               // Refresh pitches list
