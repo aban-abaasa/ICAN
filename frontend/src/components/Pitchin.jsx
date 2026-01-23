@@ -1128,6 +1128,10 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
             setShowBusinessForm(true);
           }}
           onDelete={handleDeleteBusinessProfile}
+          onWalletClick={(profile) => {
+            setShowProfileSelector(false);
+            setShowWallet(true);
+          }}
           currentUserId={currentUser?.id}
         />
       )}

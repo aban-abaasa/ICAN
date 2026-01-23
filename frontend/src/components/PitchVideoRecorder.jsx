@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Camera, Mic, Square, Play, Upload, X, RotateCcw, Pin, Maximize, Minimize, Smartphone } from 'lucide-react';
 import { uploadVideo } from '../services/pitchingService';
 
-const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', onPitchCreated, onClose, hideControls = false }) => {
+const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', onPitchCreated, onClose, hideControls = false, onVideoRecorded }) => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -177,6 +177,11 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
         setRecordedChunks(chunks);
         console.log('Preview state updated');
         
+        // Notify parent of video blob (not URL) so it persists
+        if (onVideoRecorded) {
+          onVideoRecorded(blob);
+        }
+        
         // Stop animation frame
         if (animationFrameRef.current) {
           cancelAnimationFrame(animationFrameRef.current);
@@ -246,6 +251,11 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
       setPreviewUrl(url);
       setVideoBlob(file);
       setRecordedChunks([file]);
+      
+      // Notify parent of video blob (not URL) so it persists
+      if (onVideoRecorded) {
+        onVideoRecorded(file);
+      }
     }
   };
 

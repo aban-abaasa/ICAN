@@ -37,11 +37,12 @@ CREATE TABLE IF NOT EXISTS public.business_profiles (
     metadata JSONB DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    verified_at TIMESTAMP WITH TIME ZONE,
-    
-    -- Constraints
-    CONSTRAINT unique_tax_id UNIQUE(tax_id)
+    verified_at TIMESTAMP WITH TIME ZONE
 );
+
+-- Drop old unique constraint and index if they exist
+ALTER TABLE public.business_profiles DROP CONSTRAINT IF EXISTS unique_tax_id;
+DROP INDEX IF EXISTS public.idx_unique_tax_id;
 
 -- Enable RLS
 ALTER TABLE public.business_profiles ENABLE ROW LEVEL SECURITY;
@@ -112,58 +113,50 @@ DROP POLICY IF EXISTS "Co-owners visible to profile members" ON public.business_
 DROP POLICY IF EXISTS "Users can add co-owners to their profiles" ON public.business_co_owners;
 DROP POLICY IF EXISTS "Users can update co-owners of their profiles" ON public.business_co_owners;
 DROP POLICY IF EXISTS "Users can delete co-owners from their profiles" ON public.business_co_owners;
+DROP POLICY IF EXISTS "Co-owners can view co-owner records" ON public.business_co_owners;
+DROP POLICY IF EXISTS "Authenticated users can add co-owners" ON public.business_co_owners;
+DROP POLICY IF EXISTS "Users can update co-owners" ON public.business_co_owners;
+DROP POLICY IF EXISTS "Users can delete co-owners" ON public.business_co_owners;
 
 -- RLS Policies for Co-Owners
+-- Simplified to avoid recursive policy checks
 
--- SELECT policy - Users can see co-owners of their own profiles
-CREATE POLICY "Co-owners visible to profile members" 
+-- SELECT policy - Users can see co-owners they're listed as
+CREATE POLICY "Co-owners can view co-owner records" 
     ON public.business_co_owners FOR SELECT 
     USING (
-        EXISTS (
-            SELECT 1 FROM public.business_profiles bp
-            WHERE bp.id = business_co_owners.business_profile_id
-            AND bp.user_id = auth.uid()
-        )
+        auth.uid() = user_id 
+        OR owner_email = auth.jwt()->>'email'
     );
 
--- INSERT policy - Users can add co-owners to their own profiles
-CREATE POLICY "Users can add co-owners to their profiles"
+-- INSERT policy - Allow authenticated users to add co-owners
+-- Allow if user owns the business profile
+CREATE POLICY "Authenticated users can add co-owners"
     ON public.business_co_owners FOR INSERT
     WITH CHECK (
-        EXISTS (
+        auth.uid() IS NOT NULL 
+        AND EXISTS (
             SELECT 1 FROM public.business_profiles bp
-            WHERE bp.id = business_co_owners.business_profile_id
+            WHERE bp.id = business_profile_id
             AND bp.user_id = auth.uid()
         )
     );
 
--- UPDATE policy - Users can update co-owners of their own profiles
-CREATE POLICY "Users can update co-owners of their profiles"
+-- UPDATE policy - Users can update co-owners
+CREATE POLICY "Users can update co-owners"
     ON public.business_co_owners FOR UPDATE
     USING (
-        EXISTS (
-            SELECT 1 FROM public.business_profiles bp
-            WHERE bp.id = business_co_owners.business_profile_id
-            AND bp.user_id = auth.uid()
-        )
+        auth.uid() = user_id 
+        OR owner_email = auth.jwt()->>'email'
     )
-    WITH CHECK (
-        EXISTS (
-            SELECT 1 FROM public.business_profiles bp
-            WHERE bp.id = business_co_owners.business_profile_id
-            AND bp.user_id = auth.uid()
-        )
-    );
+    WITH CHECK (auth.uid() IS NOT NULL);
 
--- DELETE policy - Users can remove co-owners from their own profiles
-CREATE POLICY "Users can delete co-owners from their profiles"
+-- DELETE policy - Users can remove co-owners
+CREATE POLICY "Users can delete co-owners"
     ON public.business_co_owners FOR DELETE
     USING (
-        EXISTS (
-            SELECT 1 FROM public.business_profiles bp
-            WHERE bp.id = business_co_owners.business_profile_id
-            AND bp.user_id = auth.uid()
-        )
+        auth.uid() = user_id 
+        OR owner_email = auth.jwt()->>'email'
     );
 
 -- =============================================
@@ -222,6 +215,10 @@ CREATE INDEX IF NOT EXISTS idx_pitches_created_at ON public.pitches(created_at);
 
 -- Enable RLS
 ALTER TABLE public.pitches ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies to ensure clean state
+DROP POLICY IF EXISTS "Anyone can view published pitches" ON public.pitches;
+DROP POLICY IF EXISTS "Profile owners can view their own pitches" ON public.pitches;
 
 -- RLS Policies
 CREATE POLICY "Anyone can view published pitches" 
@@ -294,6 +291,9 @@ CREATE INDEX IF NOT EXISTS idx_smart_contracts_status ON public.smart_contracts(
 -- Enable RLS
 ALTER TABLE public.smart_contracts ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies to ensure clean state
+DROP POLICY IF EXISTS "Parties can view their contracts" ON public.smart_contracts;
+
 -- RLS Policies
 CREATE POLICY "Parties can view their contracts" 
     ON public.smart_contracts FOR SELECT 
@@ -356,6 +356,9 @@ CREATE INDEX IF NOT EXISTS idx_digital_signatures_signature_timestamp ON public.
 
 -- Enable RLS
 ALTER TABLE public.digital_signatures ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies to ensure clean state
+DROP POLICY IF EXISTS "Signers can view their own signatures" ON public.digital_signatures;
 
 -- RLS Policies
 CREATE POLICY "Signers can view their own signatures" 
@@ -470,6 +473,9 @@ CREATE TABLE IF NOT EXISTS public.notifications (
 -- Enable RLS
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies to ensure clean state
+DROP POLICY IF EXISTS "Users can view their own notifications" ON public.notifications;
+
 -- RLS Policies
 CREATE POLICY "Users can view their own notifications" 
     ON public.notifications FOR SELECT 
@@ -562,6 +568,14 @@ GRANT SELECT, INSERT, UPDATE ON public.qr_code_verifications TO authenticated;
 -- =============================================
 -- BLOCKCHAIN INTEGRATION TRIGGERS
 -- =============================================
+
+-- Drop existing triggers and functions to ensure clean state
+DROP TRIGGER IF EXISTS trigger_record_signature_blockchain ON public.digital_signatures;
+DROP FUNCTION IF EXISTS public.record_signature_blockchain();
+
+DROP TRIGGER IF EXISTS trigger_business_profiles_timestamp ON public.business_profiles;
+DROP TRIGGER IF EXISTS trigger_smart_contracts_timestamp ON public.smart_contracts;
+DROP FUNCTION IF EXISTS public.update_timestamp();
 
 -- Auto-update blockchain_records when signatures are created
 CREATE OR REPLACE FUNCTION public.record_signature_blockchain()

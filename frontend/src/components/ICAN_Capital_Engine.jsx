@@ -14,6 +14,7 @@ import CMMSModule from './CMSSModule';
 import ICANWallet from './ICANWallet';
 import Pitchin from './Pitchin';
 import CreatorPage from './CreatorPage';
+import BusinessProfileForm from './BusinessProfileForm';
 import LiveBoardroom from './LiveBoardroom';
 import { 
   Shield, 
@@ -3628,6 +3629,7 @@ const ICANCapitalEngine = () => {
   const [expandedBusinessProfile, setExpandedBusinessProfile] = useState(false); // Business profile expansion
   const [selectedPitchBusinessProfile, setSelectedPitchBusinessProfile] = useState(null); // Selected profile for pitch creation
   const [userBusinessProfiles, setUserBusinessProfiles] = useState([]); // User's business profiles
+  const [showBusinessProfileForm, setShowBusinessProfileForm] = useState(false); // Show business profile creation form
   const [showCameraRecorder, setShowCameraRecorder] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -4061,17 +4063,33 @@ const ICANCapitalEngine = () => {
       const { data: { user } } = await sb.auth.getUser();
       if (!user) return;
       
-      // Get user's business profiles - where user is creator or co-owner
+      // Get user's business profiles with wallet account data
       const { data: profiles } = await sb
         .from('business_profiles')
-        .select('*')
+        .select(`
+          *,
+          user_accounts(
+            id,
+            account_number,
+            preferred_currency,
+            usd_balance,
+            ugx_balance,
+            kes_balance,
+            status
+          )
+        `)
         .eq('user_id', user.id);
       
       if (profiles && profiles.length > 0) {
-        setUserBusinessProfiles(profiles);
+        // Remove duplicates based on profile ID
+        const uniqueProfiles = Array.from(
+          new Map(profiles.map(profile => [profile.id, profile])).values()
+        );
+        
+        setUserBusinessProfiles(uniqueProfiles);
         // Auto-select first profile if not already selected
         if (!selectedPitchBusinessProfile) {
-          setSelectedPitchBusinessProfile(profiles[0]);
+          setSelectedPitchBusinessProfile(uniqueProfiles[0]);
         }
       }
     } catch (error) {
@@ -11355,9 +11373,12 @@ Data Freshness: ${reportData.metadata.dataFreshness}
                               crossOrigin="anonymous"
                             />
                           ) : (
-                            <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-black/60 flex items-center justify-center">
-                              <AlertCircle className="w-12 h-12 text-gray-500" />
-                              <p className="text-gray-400 ml-3">Video unavailable</p>
+                            <div className="absolute inset-0 bg-gradient-to-b from-yellow-900/20 to-black/80 flex flex-col items-center justify-center gap-3">
+                              <div className="bg-yellow-500/20 border-2 border-yellow-500 rounded-lg p-6 text-center max-w-xs">
+                                <AlertCircle className="w-12 h-12 text-yellow-400 mx-auto mb-3" />
+                                <p className="text-yellow-300 font-semibold mb-2">⚠️ No Video Uploaded</p>
+                                <p className="text-yellow-200 text-sm">This pitch ({selectedPitchForPlay.title}) was created before the video requirement.</p>
+                              </div>
                             </div>
                           )}
 
@@ -11888,9 +11909,18 @@ Data Freshness: ${reportData.metadata.dataFreshness}
                             <button className="w-full px-3 py-2 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white rounded text-xs font-semibold transition-all">
                               💰 Invest Now
                             </button>
-                            <button className="w-full px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded text-xs font-semibold transition-all border border-white/20">
-                              📤 Share
-                            </button>
+                            <div className="flex gap-2">
+                              <button className="flex-1 px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded text-xs font-semibold transition-all border border-white/20">
+                                📤 Share
+                              </button>
+                              <button 
+                                onClick={() => setShowWallet(true)}
+                                title="View Wallet Account"
+                                className="flex-1 px-3 py-2 bg-gradient-to-r from-cyan-500/30 to-blue-500/30 hover:from-cyan-500/50 hover:to-blue-500/50 text-cyan-300 hover:text-cyan-200 rounded text-xs font-semibold transition-all border border-cyan-500/50 flex items-center justify-center gap-1"
+                              >
+                                💳 Wallet
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -11937,11 +11967,16 @@ Data Freshness: ${reportData.metadata.dataFreshness}
                               onMouseLeave={(e) => e.target.pause()}
                             />
                           ) : (
-                            <Video className="w-6 h-6 text-white" />
+                            <div className="w-full h-full flex items-center justify-center bg-yellow-500/20">
+                              <Video className="w-6 h-6 text-yellow-300" />
+                            </div>
                           )}
                           <div className="absolute inset-0 flex items-center justify-center">
                             <span className="text-2xl">{idx + 1}</span>
                           </div>
+                          {!pitch.video_url && (
+                            <div className="absolute top-1 right-1 bg-yellow-500 text-black px-2 py-1 rounded-full text-xs font-bold">⚠️</div>
+                          )}
                         </div>
                         <p className="text-white text-xs font-medium truncate group-hover:text-pink-300">{pitch.title}</p>
                         <p className="text-gray-400 text-xs truncate">{pitch.business_profiles?.business_name}</p>
@@ -11949,6 +11984,9 @@ Data Freshness: ${reportData.metadata.dataFreshness}
                           <span className="text-xs bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded truncate">
                             {pitch.equity_offering || 0}%
                           </span>
+                          {!pitch.video_url && (
+                            <span className="text-xs bg-yellow-500/20 text-yellow-300 px-1.5 py-0.5 rounded truncate">No video</span>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -12126,6 +12164,11 @@ Data Freshness: ${reportData.metadata.dataFreshness}
           <CreatorPage 
             onClose={() => setShowPitchinCreator(false)}
             selectedBusinessProfile={selectedPitchBusinessProfile}
+            onNoProfileCreateProfile={() => {
+              // Close creator and open business profile form
+              setShowPitchinCreator(false);
+              setShowBusinessProfileForm(true);
+            }}
             onPitchCreated={async () => {
               setShowPitchinCreator(false);
               // Refresh pitches list
@@ -12948,7 +12991,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
 
             {/* Wallet Content */}
             <div className="max-w-7xl mx-auto">
-              <ICANWallet />
+              <ICANWallet businessProfiles={userBusinessProfiles} onRefreshProfiles={fetchUserBusinessProfiles} />
             </div>
           </div>
         </div>
@@ -13213,6 +13256,29 @@ Data Freshness: ${reportData.metadata.dataFreshness}
         onClose={() => setShowBiometricModal(false)}
         onAuthenticate={handleBiometricAuthentication}
       />
+
+      {/* Business Profile Creation Modal */}
+      {showBusinessProfileForm && (
+        <div className="fixed inset-0 bg-black/40 z-[1000]" onClick={() => setShowBusinessProfileForm(false)}>
+          <div className="fixed inset-0 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <BusinessProfileForm
+              userId={currentUser?.id}
+              onClose={() => {
+                setShowBusinessProfileForm(false);
+                // Refresh business profiles after creation
+                fetchUserBusinessProfiles();
+              }}
+              onProfileCreated={() => {
+                setShowBusinessProfileForm(false);
+                // Refresh business profiles and reopen creator
+                fetchUserBusinessProfiles().then(() => {
+                  setShowPitchinCreator(true);
+                });
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

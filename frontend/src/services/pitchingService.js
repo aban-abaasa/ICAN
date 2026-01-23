@@ -186,7 +186,7 @@ export const getAllPitches = async () => {
             console.warn(`⚠️  Invalid video URL for pitch ${pitch.id}: ${pitch.video_url}`);
           }
         } else {
-          console.warn(`⚠️  Pitch "${pitch.title}" has NO video_url set`);
+          console.log(`ℹ️  Pitch "${pitch.title}" has no video (legacy pitch - created before video requirement)`);
         }
       });
     }
@@ -443,9 +443,14 @@ export const createBusinessProfile = async (userId, profileData) => {
     const sb = getSupabase();
     if (!sb) return { success: false, error: 'Supabase not configured' };
     
+    // Get authenticated user from session to ensure RLS passes
+    const { data: { user: authUser } } = await sb.auth.getUser();
+    if (!authUser) return { success: false, error: 'User not authenticated' };
+    
+    // Always use the authenticated user's ID for RLS compliance
     const { data, error } = await sb
       .from('business_profiles')
-      .insert([{ user_id: userId, ...profileData }])
+      .insert([{ user_id: authUser.id, ...profileData }])
       .select();
 
     if (error) throw error;

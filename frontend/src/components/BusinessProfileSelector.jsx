@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Building2, Users, Plus, X, Check, Edit2, Lock, Crown, UserCheck } from 'lucide-react';
+import { Building2, Users, Plus, X, Check, Edit2, Lock, Crown, UserCheck, Wallet } from 'lucide-react';
 
-const BusinessProfileSelector = ({ profiles, currentProfile, onSelectProfile, onCreateNew, onEdit, onDelete, currentUserId, currentUserEmail }) => {
+const BusinessProfileSelector = ({ profiles, currentProfile, onSelectProfile, onCreateNew, onEdit, onDelete, currentUserId, currentUserEmail, onWalletClick }) => {
   const [showForm, setShowForm] = useState(false);
 
   // Helper to check if user is the creator
@@ -98,6 +98,16 @@ const BusinessProfileSelector = ({ profiles, currentProfile, onSelectProfile, on
                       ) : (
                         <Lock className="w-5 h-5" />
                       )}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onWalletClick?.({ profileId: profile.id, profileName: profile.business_name || profile.businessName });
+                      }}
+                      className="text-emerald-400 hover:text-emerald-300 transition p-2"
+                      title="View business wallet account"
+                    >
+                      <Wallet className="w-5 h-5" />
                     </button>
                   </div>
 

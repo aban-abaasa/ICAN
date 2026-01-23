@@ -4,10 +4,11 @@ import PitchVideoRecorder from './PitchVideoRecorder';
 import PitchDetailsForm from './PitchDetailsForm';
 import { createPitch, getSupabase } from '../services/pitchingService';
 
-const CreatorPage = ({ onClose, onPitchCreated, selectedBusinessProfile }) => {
+const CreatorPage = ({ onClose, onPitchCreated, selectedBusinessProfile, onNoProfileCreateProfile }) => {
   const [cameraMode, setCameraMode] = useState('front'); // 'front' or 'back'
   const [recordingMethod, setRecordingMethod] = useState('record'); // 'record' or 'upload'
   const [showDetailsForm, setShowDetailsForm] = useState(false);
+  const [videoBlob, setVideoBlob] = useState(null); // Track video blob from recorder
 
   const handlePitchSubmit = async (formData) => {
     try {
@@ -27,11 +28,55 @@ const CreatorPage = ({ onClose, onPitchCreated, selectedBusinessProfile }) => {
       }
 
       if (!selectedBusinessProfile) {
-        alert('No business profile available. Please create a business profile first before creating a pitch.');
+        // Trigger profile creation flow instead of just alerting
+        if (onNoProfileCreateProfile) {
+          onNoProfileCreateProfile();
+        } else {
+          alert('No business profile available. Please create a business profile first before creating a pitch.');
+        }
         return;
       }
 
       // Create pitch in database with published status
+      let videoUrl = null;
+      
+      // Upload video blob if present
+      if (videoBlob) {
+        try {
+          const timestamp = Date.now();
+          const fileName = `${timestamp}_pitch-video-${timestamp}.webm`;
+          
+          const { data, error } = await sb.storage
+            .from('pitches')
+            .upload(`${selectedBusinessProfile.id}/${fileName}`, videoBlob, {
+              cacheControl: '3600',
+              upsert: true
+            });
+          
+          if (error) {
+            console.error('Video upload error:', error);
+            alert('Failed to upload video: ' + error.message);
+            return;
+          }
+          
+          // Get signed URL for the video
+          const { data: urlData, error: urlError } = await sb.storage
+            .from('pitches')
+            .createSignedUrl(`${selectedBusinessProfile.id}/${fileName}`, 3600 * 24 * 365); // 1 year
+          
+          if (urlError) {
+            console.error('URL generation error:', urlError);
+          } else {
+            videoUrl = urlData.signedUrl;
+            console.log('Video uploaded successfully:', videoUrl);
+          }
+        } catch (error) {
+          console.error('Error uploading video:', error);
+          alert('Failed to upload video: ' + error.message);
+          return;
+        }
+      }
+      
       const newPitch = {
         business_profile_id: selectedBusinessProfile.id,
         title: formData.title || 'Untitled Pitch',
@@ -41,7 +86,7 @@ const CreatorPage = ({ onClose, onPitchCreated, selectedBusinessProfile }) => {
         target_funding: parseInt(formData.targetGoal) || 0,
         raised_amount: parseInt(formData.currentlyRaised) || 0,
         equity_offering: parseFloat(formData.equityOffering) || 0,
-        video_url: null, // Will be uploaded separately
+        video_url: videoUrl, // Use uploaded video URL
         has_ip: formData.hasIP || false,
         status: 'published', // Set to published immediately
         likes_count: 0,
@@ -150,12 +195,24 @@ const CreatorPage = ({ onClose, onPitchCreated, selectedBusinessProfile }) => {
           hideControls={true}
           onPitchCreated={onPitchCreated}
           onClose={onClose}
+          onVideoRecorded={setVideoBlob}
         />
         
         {/* Submit Button - Floating on Video */}
         <button
-          onClick={() => setShowDetailsForm(true)}
-          className="absolute bottom-4 right-4 px-4 py-2 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white font-bold rounded-lg transition flex items-center gap-2 shadow-lg"
+          onClick={() => {
+            if (!videoBlob) {
+              alert('Please record or upload a video before submitting your pitch.');
+              return;
+            }
+            setShowDetailsForm(true);
+          }}
+          disabled={!videoBlob}
+          className={`absolute bottom-4 right-4 px-4 py-2 rounded-lg transition flex items-center gap-2 shadow-lg font-bold ${
+            videoBlob 
+              ? 'bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white cursor-pointer'
+              : 'bg-gray-500 text-gray-300 cursor-not-allowed opacity-50'
+          }`}
         >
           <span>🚀</span>
           <span className="hidden sm:inline">Submit</span>

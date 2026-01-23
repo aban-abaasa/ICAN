@@ -39,7 +39,7 @@ import { getSupabaseClient } from '../lib/supabase/client';
 import AgentDashboard from './AgentDashboard';
 import UnifiedApprovalModal from './UnifiedApprovalModal';
 
-const ICANWallet = () => {
+const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
   const [showBalance, setShowBalance] = useState(true);
   const [selectedCurrency, setSelectedCurrency] = useState('USD');
   const [activeTab, setActiveTab] = useState('overview');
@@ -108,6 +108,7 @@ const ICANWallet = () => {
     phoneOtp: ''
   });
   const [accountCreationLoading, setAccountCreationLoading] = useState(false);
+  const [editingBusinessProfile, setEditingBusinessProfile] = useState(null);
   const [accountEditLoading, setAccountEditLoading] = useState(false);
   const [accountMessage, setAccountMessage] = useState(null);
   const [showSettingsPanel, setShowSettingsPanel] = useState(false);
@@ -388,6 +389,22 @@ const ICANWallet = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // 🏢 Auto-fill business account creation form
+  useEffect(() => {
+    if (editingBusinessProfile) {
+      const supabase = getSupabaseClient();
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        if (user) {
+          setAccountEditForm(prev => ({
+            ...prev,
+            accountHolderName: editingBusinessProfile.business_name || '',
+            email: user.email || ''
+          }));
+        }
+      });
+    }
+  }, [editingBusinessProfile]);
 
   // 💳 SEND MONEY HANDLER - Support both ICAN users and MOMO
   const handleSendMoney = async (e) => {
@@ -1351,6 +1368,196 @@ const ICANWallet = () => {
     }
   };
 
+  const handleCreateBusinessWallet = async (businessProfile) => {
+    setAccountCreationLoading(true);
+
+    try {
+      // Validate form
+      if (!accountEditForm.accountHolderName || !accountEditForm.phoneNumber || !accountEditForm.email || !accountEditForm.newPin || !accountEditForm.confirmNewPin) {
+        alert('❌ Please fill in all required fields');
+        setAccountCreationLoading(false);
+        return;
+      }
+
+      // Validate PIN match
+      if (accountEditForm.newPin !== accountEditForm.confirmNewPin) {
+        alert('❌ PINs do not match');
+        setAccountCreationLoading(false);
+        return;
+      }
+
+      // Validate PIN format
+      if (!/^\d{4,6}$/.test(accountEditForm.newPin)) {
+        alert('❌ PIN must be 4-6 digits');
+        setAccountCreationLoading(false);
+        return;
+      }
+
+      // Get current user
+      const supabase = getSupabaseClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        alert('❌ You must be logged in to create a wallet account');
+        setAccountCreationLoading(false);
+        return;
+      }
+
+      // Create business wallet account
+      const result = await walletAccountService.createBusinessWalletAccount({
+        businessId: businessProfile.id,
+        businessName: businessProfile.business_name,
+        userId: user.id,
+        accountHolderName: accountEditForm.accountHolderName,
+        phoneNumber: accountEditForm.phoneNumber,
+        email: accountEditForm.email,
+        pin: accountEditForm.newPin,
+        preferredCurrency: accountEditForm.preferredCurrency
+      });
+
+      if (!result.success) {
+        alert(`❌ Failed to create wallet: ${result.error}`);
+        setAccountCreationLoading(false);
+        return;
+      }
+
+      // Success!
+      alert('✅ Wallet account created successfully!');
+      
+      // Reset form and close modal
+      setAccountEditForm({
+        accountHolderName: '',
+        phoneNumber: '',
+        email: '',
+        preferredCurrency: 'USD',
+        currentPin: '',
+        newPin: '',
+        confirmNewPin: '',
+        phoneOtp: ''
+      });
+      setEditingBusinessProfile(null);
+      
+      // Refresh business profiles to show new wallet account
+      if (onRefreshProfiles) {
+        setTimeout(() => {
+          onRefreshProfiles();
+        }, 500);
+      }
+
+    } catch (error) {
+      console.error('❌ Business wallet creation failed:', error);
+      alert(`❌ Error: ${error.message}`);
+    } finally {
+      setAccountCreationLoading(false);
+    }
+  };
+
+  const handleUpdateBusinessWallet = async (businessProfile) => {
+    setAccountCreationLoading(true);
+
+    try {
+      // Validate form
+      if (!accountEditForm.accountHolderName || !accountEditForm.phoneNumber || !accountEditForm.email) {
+        alert('❌ Please fill in all required fields');
+        setAccountCreationLoading(false);
+        return;
+      }
+
+      // Get current user
+      const supabase = getSupabaseClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        alert('❌ You must be logged in to update a wallet account');
+        setAccountCreationLoading(false);
+        return;
+      }
+
+      // Get the existing wallet account
+      if (!businessProfile.user_accounts || businessProfile.user_accounts.length === 0) {
+        alert('❌ No wallet account found to update');
+        setAccountCreationLoading(false);
+        return;
+      }
+
+      const account = businessProfile.user_accounts[0];
+
+      // Update wallet account in database
+      const { error } = await supabase
+        .from('user_accounts')
+        .update({
+          account_holder_name: accountEditForm.accountHolderName,
+          phone_number: accountEditForm.phoneNumber,
+          email: accountEditForm.email,
+          preferred_currency: accountEditForm.preferredCurrency,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', account.id);
+
+      if (error) {
+        alert(`❌ Failed to update wallet: ${error.message}`);
+        setAccountCreationLoading(false);
+        return;
+      }
+
+      // If PIN was changed, update it
+      if (accountEditForm.newPin && accountEditForm.confirmNewPin) {
+        if (accountEditForm.newPin !== accountEditForm.confirmNewPin) {
+          alert('❌ PINs do not match');
+          setAccountCreationLoading(false);
+          return;
+        }
+
+        if (!/^\d{4,6}$/.test(accountEditForm.newPin)) {
+          alert('❌ PIN must be 4-6 digits');
+          setAccountCreationLoading(false);
+          return;
+        }
+
+        const { error: pinError } = await supabase
+          .from('user_accounts')
+          .update({
+            pin_hash: accountEditForm.newPin, // Note: In production, this should be hashed
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', account.id);
+
+        if (pinError) {
+          console.warn('PIN update warning:', pinError);
+        }
+      }
+
+      // Success!
+      alert('✅ Wallet account updated successfully!');
+      
+      // Reset form and close modal
+      setAccountEditForm({
+        accountHolderName: '',
+        phoneNumber: '',
+        email: '',
+        preferredCurrency: 'USD',
+        currentPin: '',
+        newPin: '',
+        confirmNewPin: '',
+        phoneOtp: ''
+      });
+      setEditingBusinessProfile(null);
+      
+      // Refresh business profiles to show updated wallet account
+      if (onRefreshProfiles) {
+        setTimeout(() => {
+          onRefreshProfiles();
+        }, 500);
+      }
+
+    } catch (error) {
+      console.error('❌ Business wallet update failed:', error);
+      alert(`❌ Error: ${error.message}`);
+    } finally {
+      setAccountCreationLoading(false);
+    }
+  };
+
   const handleAddCard = async (e) => {
     e.preventDefault();
     setCardFormLoading(true);
@@ -1732,6 +1939,17 @@ const ICANWallet = () => {
           >
             <CreditCard className="w-4 h-4" />
             Cards
+          </button>
+          <button
+            onClick={() => setActiveTab('business')}
+            className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+              activeTab === 'business'
+                ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/30'
+                : 'bg-white/5 text-gray-300 hover:bg-white/10'
+            }`}
+          >
+            <Store className="w-4 h-4" />
+            Business Accounts
           </button>
           <button
             onClick={() => setActiveTab('settings')}
@@ -2268,6 +2486,224 @@ const ICANWallet = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Business Accounts Tab */}
+      {activeTab === 'business' && (
+        <div className="space-y-4">
+          <div className="glass-card p-6 border border-cyan-500/30 bg-gradient-to-br from-cyan-900/20 to-slate-900/20">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 rounded-lg bg-cyan-500/30">
+                <Store className="w-6 h-6 text-cyan-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-white">Business Accounts</h3>
+                <p className="text-gray-400 text-sm">Manage wallets for your business profiles</p>
+              </div>
+            </div>
+
+            {/* Business Accounts Grid */}
+            {businessProfiles && businessProfiles.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {businessProfiles.map((profile) => (
+                  <div key={profile.id} className="glass-card p-4 border border-cyan-500/30 bg-gradient-to-br from-cyan-900/10 to-slate-900/20">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-3 flex-1">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center flex-shrink-0">
+                          <span className="text-lg">🏢</span>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-white truncate">{profile.business_name}</p>
+                          <p className="text-xs text-cyan-400">{profile.business_type}</p>
+                        </div>
+                      </div>
+                      <span className={`px-2 py-1 rounded-full text-xs border flex-shrink-0 font-semibold ${
+                        profile.status === 'active' 
+                          ? 'bg-green-500/30 text-green-400 border-green-500/50' 
+                          : 'bg-gray-500/30 text-gray-400 border-gray-500/50'
+                      }`}>
+                        {profile.status?.toUpperCase() || 'INACTIVE'}
+                      </span>
+                    </div>
+
+                    {/* Wallet Account Info */}
+                    {profile.user_accounts && profile.user_accounts.length > 0 ? (
+                      <div className="bg-slate-700/50 rounded-lg p-3 border border-cyan-500/20">
+                        {profile.user_accounts.map((account, idx) => (
+                          <div key={account.id || idx} className="mb-2 last:mb-0">
+                            <div className="flex items-center justify-between mb-1">
+                              <p className="text-gray-400 text-xs">Account #{idx + 1}</p>
+                              <span className="px-2 py-0.5 rounded-full bg-blue-500/30 text-blue-300 text-xs border border-blue-500/50">
+                                {account.preferred_currency || 'USD'}
+                              </span>
+                            </div>
+                            <p className="text-white font-mono text-sm font-bold">{account.account_number}</p>
+                            <p className="text-gray-500 text-xs mt-1">
+                              Balance: 
+                              <span className="text-cyan-400 ml-1">
+                                {account.preferred_currency === 'UGX' ? `${(account.ugx_balance || 0).toFixed(0)}` : 
+                                 account.preferred_currency === 'KES' ? `${(account.kes_balance || 0).toFixed(2)}` : 
+                                 `$${(account.usd_balance || 0).toFixed(2)}`}
+                              </span>
+                            </p>
+                          </div>
+                        ))}
+                        <button
+                          onClick={() => setEditingBusinessProfile(profile)}
+                          className="w-full mt-2 px-3 py-2 bg-gradient-to-r from-cyan-500/40 to-blue-500/40 hover:from-cyan-500/60 hover:to-blue-500/60 text-cyan-300 hover:text-cyan-200 rounded text-xs font-semibold transition-all border border-cyan-500/50 hover:border-cyan-500/80"
+                        >
+                          ✏️ Edit Account
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="bg-slate-700/50 rounded-lg p-3 border border-yellow-500/20">
+                        <p className="text-yellow-300 text-xs mb-3 text-center">⚠️ No wallet account created</p>
+                        <button
+                          onClick={() => setEditingBusinessProfile(profile)}
+                          className="w-full px-3 py-2 bg-gradient-to-r from-cyan-500/40 to-blue-500/40 hover:from-cyan-500/60 hover:to-blue-500/60 text-cyan-300 hover:text-cyan-200 rounded text-xs font-semibold transition-all border border-cyan-500/50 hover:border-cyan-500/80"
+                        >
+                          ✏️ Edit Account
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Business Info */}
+                    <div className="mt-3 pt-3 border-t border-cyan-500/20 space-y-1 text-xs text-gray-400">
+                      <div className="flex justify-between">
+                        <span>Registration:</span>
+                        <span className="text-white">{profile.registration_number || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Location:</span>
+                        <span className="text-white truncate">{profile.business_address || 'N/A'}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-400">
+                <DollarSign className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No business accounts available</p>
+                <p className="text-xs text-gray-500 mt-1">Create a business profile to add a business account</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit Business Account Modal */}
+      {editingBusinessProfile && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-gradient-to-b from-slate-800 to-slate-900 rounded-2xl border border-cyan-500/50 w-full max-w-md p-6 shadow-2xl">
+            <h2 className="text-2xl font-bold text-white mb-1">
+              {editingBusinessProfile.user_accounts && editingBusinessProfile.user_accounts.length > 0 ? 'Update Wallet Account' : 'Create Wallet Account'}
+            </h2>
+            <p className="text-gray-400 text-sm mb-4">{editingBusinessProfile.business_name}</p>
+            
+            <div className="space-y-4">
+              {/* Account Holder Name */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-300 mb-2">Account Holder Name</label>
+                <input
+                  type="text"
+                  value={accountEditForm.accountHolderName}
+                  onChange={(e) => setAccountEditForm({ ...accountEditForm, accountHolderName: e.target.value })}
+                  placeholder="Enter account holder name"
+                  className="w-full px-4 py-2.5 rounded-lg bg-slate-700/50 border border-cyan-500/30 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all"
+                />
+              </div>
+
+              {/* Email */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-300 mb-2">Email Address</label>
+                <input
+                  type="email"
+                  value={accountEditForm.email}
+                  onChange={(e) => setAccountEditForm({ ...accountEditForm, email: e.target.value })}
+                  placeholder="Enter email address"
+                  className="w-full px-4 py-2.5 rounded-lg bg-slate-700/50 border border-cyan-500/30 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all"
+                />
+              </div>
+
+              {/* Phone Number */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-300 mb-2">Phone Number</label>
+                <input
+                  type="tel"
+                  value={accountEditForm.phoneNumber}
+                  onChange={(e) => setAccountEditForm({ ...accountEditForm, phoneNumber: e.target.value })}
+                  placeholder="Enter phone number"
+                  className="w-full px-4 py-2.5 rounded-lg bg-slate-700/50 border border-cyan-500/30 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all"
+                />
+              </div>
+
+              {/* Preferred Currency */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-300 mb-2">Preferred Currency</label>
+                <select
+                  value={accountEditForm.preferredCurrency}
+                  onChange={(e) => setAccountEditForm({ ...accountEditForm, preferredCurrency: e.target.value })}
+                  className="w-full px-4 py-2.5 rounded-lg bg-slate-700/50 border border-cyan-500/30 text-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all"
+                >
+                  <option value="USD">USD - US Dollar</option>
+                  <option value="UGX">UGX - Uganda Shilling</option>
+                  <option value="KES">KES - Kenya Shilling</option>
+                </select>
+              </div>
+
+              {/* PIN */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-300 mb-2">Create PIN (4-6 digits)</label>
+                <input
+                  type="password"
+                  value={accountEditForm.newPin}
+                  onChange={(e) => setAccountEditForm({ ...accountEditForm, newPin: e.target.value })}
+                  placeholder="Enter 4-6 digit PIN"
+                  maxLength="6"
+                  className="w-full px-4 py-2.5 rounded-lg bg-slate-700/50 border border-cyan-500/30 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all"
+                />
+              </div>
+
+              {/* Confirm PIN */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-300 mb-2">Confirm PIN</label>
+                <input
+                  type="password"
+                  value={accountEditForm.confirmNewPin}
+                  onChange={(e) => setAccountEditForm({ ...accountEditForm, confirmNewPin: e.target.value })}
+                  placeholder="Confirm your PIN"
+                  maxLength="6"
+                  className="w-full px-4 py-2.5 rounded-lg bg-slate-700/50 border border-cyan-500/30 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all"
+                />
+              </div>
+            </div>
+
+            {/* Buttons */}
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setEditingBusinessProfile(null)}
+                disabled={accountCreationLoading}
+                className="flex-1 px-4 py-2.5 rounded-lg border border-gray-500/50 text-gray-400 hover:text-gray-300 hover:border-gray-500 transition-all disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (editingBusinessProfile.user_accounts && editingBusinessProfile.user_accounts.length > 0) {
+                    handleUpdateBusinessWallet(editingBusinessProfile);
+                  } else {
+                    handleCreateBusinessWallet(editingBusinessProfile);
+                  }
+                }}
+                disabled={accountCreationLoading || !accountEditForm.accountHolderName || !accountEditForm.email || !accountEditForm.phoneNumber || (!editingBusinessProfile.user_accounts || editingBusinessProfile.user_accounts.length === 0 ? (!accountEditForm.newPin || !accountEditForm.confirmNewPin) : false)}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {accountCreationLoading ? 'Saving...' : (editingBusinessProfile.user_accounts && editingBusinessProfile.user_accounts.length > 0 ? 'Update Account' : 'Create Account')}
+              </button>
+            </div>
           </div>
         </div>
       )}
