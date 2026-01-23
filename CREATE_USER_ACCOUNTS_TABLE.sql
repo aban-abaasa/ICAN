@@ -6,6 +6,7 @@
 CREATE TABLE IF NOT EXISTS public.user_accounts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+    business_id UUID REFERENCES public.business_profiles(id) ON DELETE CASCADE, -- Optional: for business accounts
     
     -- Account Information
     account_number TEXT NOT NULL UNIQUE, -- Format: ICAN-XXXXXXXXXXXXX (16 digits)
@@ -60,6 +61,7 @@ CREATE TABLE IF NOT EXISTS public.user_accounts (
 );
 
 -- Step 1b: Add missing columns if they don't exist
+ALTER TABLE public.user_accounts ADD COLUMN IF NOT EXISTS business_id UUID REFERENCES public.business_profiles(id) ON DELETE CASCADE;
 ALTER TABLE public.user_accounts ADD COLUMN IF NOT EXISTS pin_hash TEXT;
 ALTER TABLE public.user_accounts ADD COLUMN IF NOT EXISTS pin_created_at TIMESTAMP WITH TIME ZONE;
 ALTER TABLE public.user_accounts ADD COLUMN IF NOT EXISTS pin_attempts INTEGER DEFAULT 0;
@@ -79,11 +81,25 @@ DROP POLICY IF EXISTS "Users can view their own account" ON public.user_accounts
 DROP POLICY IF EXISTS "Users can create their own account" ON public.user_accounts;
 DROP POLICY IF EXISTS "Users can update their own account" ON public.user_accounts;
 DROP POLICY IF EXISTS "Service role can manage user accounts" ON public.user_accounts;
+DROP POLICY IF EXISTS "Co-owners can view business wallet account" ON public.user_accounts;
 
 -- Users can view their own account
 CREATE POLICY "Users can view their own account"
     ON public.user_accounts FOR SELECT 
     USING (auth.uid() = user_id);
+
+-- Co-owners can view business wallet account
+CREATE POLICY "Co-owners can view business wallet account"
+    ON public.user_accounts FOR SELECT 
+    USING (
+      account_type = 'business' 
+      AND business_id IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM public.business_co_owners 
+        WHERE business_co_owners.business_profile_id = user_accounts.business_id
+        AND business_co_owners.owner_email = auth.jwt()->>'email'
+      )
+    );
 
 -- Users can create their own account
 CREATE POLICY "Users can create their own account"

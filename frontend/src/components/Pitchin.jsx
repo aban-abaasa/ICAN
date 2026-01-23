@@ -1102,6 +1102,8 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
         <BusinessProfileSelector
           profiles={businessProfiles}
           currentProfile={currentBusinessProfile}
+          currentUserId={currentUser?.id}
+          currentUserEmail={currentUser?.email}
           onSelectProfile={handleSelectBusinessProfile}
           onCreateNew={() => {
             setShowProfileSelector(false);

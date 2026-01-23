@@ -1,17 +1,10 @@
-import React, { useState } from 'react';
-import { Building2, Edit2, Users, DollarSign, Globe, MapPin, Calendar, Wallet, AlertCircle, Lock, Unlock } from 'lucide-react';
+import React from 'react';
+import { Building2, Edit2, Users, DollarSign, Globe, MapPin, Calendar, Wallet, AlertCircle } from 'lucide-react';
 
-const BusinessProfileCard = ({ profile, onEdit, onSelect, isOwner = false }) => {
-  const [isLocked, setIsLocked] = useState(profile?.locked === true);
-  
+const BusinessProfileCard = ({ profile, onEdit, onSelect }) => {
   if (!profile) return null;
 
   const coOwnersCount = profile.business_co_owners?.length || 0;
-
-  const handleToggleLock = (e) => {
-    e.stopPropagation();
-    setIsLocked(!isLocked);
-  };
 
   return (
     <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-xl p-5 hover:border-blue-500 transition cursor-pointer group" onClick={onSelect}>
@@ -21,41 +14,19 @@ const BusinessProfileCard = ({ profile, onEdit, onSelect, isOwner = false }) => 
             <Building2 className="w-6 h-6 text-white" />
           </div>
           <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="text-white font-bold text-lg group-hover:text-blue-400 transition">{profile.business_name}</h3>
-              {isOwner && (
-                <span className="text-xs bg-yellow-600/30 text-yellow-300 px-2 py-1 rounded flex items-center gap-1">
-                  👑 Owner
-                </span>
-              )}
-            </div>
+            <h3 className="text-white font-bold text-lg group-hover:text-blue-400 transition">{profile.business_name}</h3>
             <p className="text-slate-400 text-sm">{profile.business_type}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {isOwner && (
-            <button
-              onClick={handleToggleLock}
-              className={`p-2 rounded-lg transition ${
-                isLocked
-                  ? 'bg-red-600/30 text-red-400 hover:bg-red-600/50'
-                  : 'bg-green-600/30 text-green-400 hover:bg-green-600/50'
-              }`}
-              title={isLocked ? 'Unlock profile to allow edits' : 'Lock profile to prevent edits'}
-            >
-              {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
-            </button>
-          )}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit?.();
-            }}
-            className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg transition"
-          >
-            <Edit2 className="w-4 h-4" />
-          </button>
-        </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit?.();
+          }}
+          className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg transition"
+        >
+          <Edit2 className="w-4 h-4" />
+        </button>
       </div>
 
       {profile.description && (
@@ -218,12 +189,6 @@ const BusinessProfileCard = ({ profile, onEdit, onSelect, isOwner = false }) => 
         }`}>
           {profile.verification_status === 'verified' ? '✓ Verified' : '⏳ Pending'}
         </span>
-        {isLocked && (
-          <span className="text-xs font-semibold px-2 py-1 rounded bg-red-900/50 text-red-300 flex items-center gap-1">
-            <Lock className="w-3 h-3" />
-            Locked
-          </span>
-        )}
       </div>
     </div>
   );

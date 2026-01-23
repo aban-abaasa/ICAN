@@ -1,11 +1,17 @@
 import React, { useState } from 'react';
 import { Building2, Users, Plus, X, Check, Edit2, Lock, Crown, UserCheck } from 'lucide-react';
 
-const BusinessProfileSelector = ({ profiles, currentProfile, onSelectProfile, onCreateNew, onEdit, onDelete, currentUserId }) => {
+const BusinessProfileSelector = ({ profiles, currentProfile, onSelectProfile, onCreateNew, onEdit, onDelete, currentUserId, currentUserEmail }) => {
   const [showForm, setShowForm] = useState(false);
 
   // Helper to check if user is the creator
   const isCreator = (profile) => profile.user_id === currentUserId;
+  
+  // Helper to check if user is a co-owner
+  const isCoOwner = (profile, userEmail) => {
+    const coOwners = profile.business_co_owners || profile.coOwners || [];
+    return coOwners.some(co => (co.owner_email || co.email) === userEmail);
+  };
   
   // Helper to check if user is the largest shareholder
   const isLargestShareholder = (profile, userEmail) => {
@@ -18,9 +24,14 @@ const BusinessProfileSelector = ({ profiles, currentProfile, onSelectProfile, on
     return userOwner && (userOwner.ownership_share || userOwner.ownershipShare) === maxShare;
   };
   
+  // Helper to check if user can view and access
+  const canAccess = (profile, userEmail) => {
+    return isCreator(profile) || isCoOwner(profile, userEmail);
+  };
+  
   // Helper to check if user can edit
-  const canEdit = (profile) => {
-    return isCreator(profile) || profile.isCoOwned === false;
+  const canEdit = (profile, userEmail) => {
+    return isCreator(profile) || profile.isCoOwned === false || isCoOwner(profile, userEmail);
   };
 
   return (
@@ -80,9 +91,9 @@ const BusinessProfileSelector = ({ profiles, currentProfile, onSelectProfile, on
                         onEdit?.(profile);
                       }}
                       className="text-blue-400 hover:text-blue-300 transition p-2"
-                      title={isCreator(profile) ? "Edit profile" : "Request edit permission"}
+                      title={isCreator(profile) ? "Edit profile" : isCoOwner(profile, currentUserEmail) ? "Edit as co-owner" : "Request edit permission"}
                     >
-                      {isCreator(profile) ? (
+                      {isCreator(profile) || isCoOwner(profile, currentUserEmail) ? (
                         <Edit2 className="w-5 h-5" />
                       ) : (
                         <Lock className="w-5 h-5" />

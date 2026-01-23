@@ -676,7 +676,7 @@ export const getAllAccessibleBusinessProfiles = async (userId, userEmail) => {
 export const checkBusinessProfileEditPermission = async (profileId, userId, userEmail) => {
   try {
     const sb = getSupabase();
-    if (!sb) return { canEdit: false, reason: 'Supabase not configured' };
+    if (!sb) return { canEdit: false, canAccess: false, reason: 'Supabase not configured' };
     
     // Fetch the profile with co-owners
     const { data: profile, error } = await sb
@@ -693,36 +693,39 @@ export const checkBusinessProfileEditPermission = async (profileId, userId, user
       .single();
 
     if (error) throw error;
-    if (!profile) return { canEdit: false, reason: 'Profile not found' };
+    if (!profile) return { canEdit: false, canAccess: false, reason: 'Profile not found' };
 
     // Check if user is the creator
     if (profile.user_id === userId) {
-      return { canEdit: true, reason: 'You are the creator of this profile' };
+      return { 
+        canEdit: true, 
+        canAccess: true,
+        reason: 'You are the creator of this profile' 
+      };
     }
 
-    // Check if user is a co-owner with the largest share
+    // Check if user is a co-owner
     const coOwners = profile.business_co_owners || [];
     const userCoOwner = coOwners.find(co => co.owner_email === userEmail);
     
     if (!userCoOwner) {
-      return { canEdit: false, reason: 'You are not a co-owner of this profile' };
+      return { 
+        canEdit: false, 
+        canAccess: false,
+        reason: 'You are not a co-owner of this profile' 
+      };
     }
 
-    // Find the maximum ownership share
-    const maxShare = Math.max(...coOwners.map(co => co.ownership_share));
-    
-    // Check if user has the maximum share
-    if (userCoOwner.ownership_share === maxShare) {
-      return { canEdit: true, reason: `You have the largest ownership share (${maxShare}%)` };
-    }
-
+    // If user is a co-owner, allow both access and edit
     return { 
-      canEdit: false, 
-      reason: `Only the creator or largest shareholder (${maxShare}%) can edit this profile. Your share: ${userCoOwner.ownership_share}%` 
+      canEdit: true, 
+      canAccess: true,
+      reason: `You are a co-owner with ${userCoOwner.ownership_share}% ownership share`,
+      ownership_share: userCoOwner.ownership_share
     };
   } catch (error) {
     console.error('Error checking edit permission:', error);
-    return { canEdit: false, reason: error.message };
+    return { canEdit: false, canAccess: false, reason: error.message };
   }
 };
 
