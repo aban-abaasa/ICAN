@@ -423,26 +423,26 @@ const LandingPage = ({ onGetStarted }) => {
             </div>
           </div>
 
-          {/* Platform Icons Grid - Compact */}
-          <div className="flex justify-center gap-2 md:gap-4 mt-8 md:mt-12 flex-wrap">
+          {/* Platform Icons Grid - Single Row, Text on Hover */}
+          <div className="flex justify-center gap-3 md:gap-5 mt-6 md:mt-8 overflow-x-auto px-4 pb-2">
             {slides.map((slide, index) => (
               <button
                 key={index}
                 onClick={() => setCurrentSlide(index)}
-                className={`flex flex-col items-center space-y-1 md:space-y-2 px-3 md:px-4 py-2 md:py-3 rounded-lg transition transform hover:scale-110 ${
+                className={`group flex flex-col items-center space-y-1 px-0 py-1 rounded-md transition transform hover:scale-110 flex-shrink-0 ${
                   index === currentSlide
-                    ? 'bg-purple-500/40 border border-purple-500/80'
-                    : 'bg-purple-500/10 border border-purple-500/20 hover:border-purple-500/50'
+                    ? 'bg-purple-500/30'
+                    : 'hover:bg-purple-500/10'
                 }`}
               >
-                <div className="w-12 h-12 md:w-16 md:h-16 rounded-lg overflow-hidden border border-purple-500/30 hover:border-purple-500/60">
+                <div className="w-8 h-8 md:w-10 md:h-10 rounded-md overflow-hidden border border-purple-500/40">
                   <img
                     src={slide.image}
                     alt={slide.title}
                     className="w-full h-full object-cover"
                   />
                 </div>
-                <p className="font-semibold text-xs md:text-sm text-center whitespace-nowrap">{slide.title}</p>
+                <p className="font-medium text-xs md:text-sm text-center whitespace-nowrap text-purple-200 opacity-0 group-hover:opacity-100 group-[.bg-purple-500/30]:opacity-100 transition-opacity duration-200 h-4 md:h-5">{slide.title}</p>
               </button>
             ))}
           </div>
