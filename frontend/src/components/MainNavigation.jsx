@@ -153,8 +153,8 @@ export default function MainNavigation({ onTrustClick, onShareClick, onWalletCli
                 <Shield className="w-6 h-6 text-blue-400" />
               </div>
               <div>
-                <p className="text-white font-bold text-xl">ICAN Capital Engine</p>
-                <p className="text-blue-300 text-sm">From Volatility to Global Capital</p>
+                <p className="text-white font-bold text-xl bg-gradient-to-r from-yellow-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">ICANera</p>
+                <p className="text-blue-300 text-sm">Financial Ecosystem & Wealth Platform</p>
               </div>
             </div>
 

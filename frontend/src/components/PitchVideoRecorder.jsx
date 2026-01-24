@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, Mic, Square, Play, Upload, X, RotateCcw, Pin, Maximize, Minimize, Smartphone, Scissors } from 'lucide-react';
+import { Camera, Mic, Square, Play, Upload, X, RotateCcw, Pin, Maximize, Minimize, Smartphone, Scissors, CheckCircle } from 'lucide-react';
 import { uploadVideo } from '../services/pitchingService';
 import { VideoClipper } from './status/VideoClipper';
 
@@ -24,6 +24,8 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
   const [hasMultipleCameras, setHasMultipleCameras] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [showVideoClipper, setShowVideoClipper] = useState(false);
+  const [showTrimDialog, setShowTrimDialog] = useState(false);
+  const [showReview, setShowReview] = useState(false);
   
   const [formData, setFormData] = useState({
     title: '',
@@ -174,9 +176,12 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
         console.log('Blob created:', blob.size, 'bytes');
         const url = URL.createObjectURL(blob);
         console.log('Preview URL created:', url);
+        console.log('Preview URL is valid:', url && url.startsWith('blob:'));
         setVideoBlob(blob);
         setPreviewUrl(url);
         setRecordedChunks(chunks);
+        setShowReview(true); // Show review dialog for recorded videos
+        console.log('Review mode enabled, previewUrl:', url);
         console.log('Preview state updated');
         
         // Notify parent of video blob (not URL) so it persists
@@ -249,10 +254,25 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
   const handleUploadVideo = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Show video clipper for uploaded videos
+      // Validate file size - maximum 100MB
+      const maxUploadMB = 100;
+      const fileSizeMB = file.size / 1024 / 1024;
+      
+      if (fileSizeMB > maxUploadMB) {
+        console.error(`❌ Video is ${fileSizeMB.toFixed(2)}MB, exceeds maximum ${maxUploadMB}MB`);
+        alert(`❌ Video Too Large!\n\nYour video is ${fileSizeMB.toFixed(2)}MB but the maximum allowed is ${maxUploadMB}MB.\n\nPlease:\n1. Compress your video using tools like:\n   - HandBrake (free)\n   - ffmpeg (command line)\n   - Online compressors\n2. Reduce resolution or frame rate\n3. Try again with a smaller file\n\n💡 Tip: A 5-10 minute pitch video typically compresses to 20-50MB`);
+        return;
+      }
+      
+      // Warn if over 50MB
+      if (fileSizeMB > 50) {
+        console.warn(`⚠️ Warning: Video is ${fileSizeMB.toFixed(2)}MB, exceeds recommended 50MB. Upload will take several minutes.`);
+      }
+      
+      // Show trim dialog for uploaded videos
       if (file.type.startsWith('video')) {
         setVideoBlob(file);
-        setShowVideoClipper(true);
+        setShowTrimDialog(true);
         return;
       }
       
@@ -267,6 +287,26 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
         onVideoRecorded(file);
       }
     }
+  };
+  
+  const handleSkipTrim = () => {
+    // User chose to skip trimming - use video as is
+    setShowTrimDialog(false);
+    if (videoBlob) {
+      const url = URL.createObjectURL(videoBlob);
+      setPreviewUrl(url);
+      setRecordedChunks([videoBlob]);
+      
+      if (onVideoRecorded) {
+        onVideoRecorded(videoBlob);
+      }
+    }
+  };
+  
+  const handleOpenTrimmer = () => {
+    // User chose to trim the video
+    setShowTrimDialog(false);
+    setShowVideoClipper(true);
   };
 
   const handleVideoClip = (clipData) => {
@@ -303,14 +343,19 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
 
   const handleSubmit = async () => {
     if (!videoBlob || !formData.title || !formData.description || !formData.creator) {
-      setSubmitError('Please fill in all required fields and record/upload a video');
+      const missingFields = [];
+      if (!videoBlob) missingFields.push('video');
+      if (!formData.title) missingFields.push('title');
+      if (!formData.description) missingFields.push('description');
+      if (!formData.creator) missingFields.push('creator name');
+      setSubmitError(`Missing required fields: ${missingFields.join(', ')}`);
       return;
     }
 
     try {
       setIsSubmitting(true);
       setSubmitError(null);
-      console.log('Submitting pitch with data:', {
+      console.log('🚀 Submitting pitch with data:', {
         title: formData.title,
         creator: formData.creator,
         videoBlob: videoBlob ? `${videoBlob.size} bytes` : 'missing'
@@ -323,19 +368,42 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
         timestamp: 'just now'
       };
 
-      console.log('Calling onPitchCreated...');
+      console.log('📤 Calling onPitchCreated...');
+      if (!onPitchCreated) {
+        throw new Error('onPitchCreated callback is not defined');
+      }
+      
       await onPitchCreated(pitchData);
       
-      console.log('Pitch created successfully');
+      console.log('✅ Pitch created successfully');
       setSubmitSuccess(true);
       
-      // Show success message for 2 seconds then close
+      // Show success message for 3 seconds then close
       setTimeout(() => {
         setSubmitSuccess(false);
-      }, 2000);
+        // Reset form
+        setFormData({
+          title: '',
+          description: '',
+          creator: '',
+          category: 'Technology',
+          raised: '$0',
+          goal: '$500K',
+          equity: '10%',
+          pitchType: 'Equity',
+          hasIP: false,
+          members: []
+        });
+        setVideoBlob(null);
+        setPreviewUrl(null);
+        // Close the recorder
+        if (onClose) {
+          onClose();
+        }
+      }, 3000);
     } catch (error) {
-      console.error('Error submitting pitch:', error);
-      setSubmitError(error.message || 'Failed to create pitch');
+      console.error('❌ Error submitting pitch:', error);
+      setSubmitError(error.message || 'Failed to create pitch. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -375,7 +443,7 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
         </div>
 
         {/* Video Container - Full screen on mobile */}
-        <div ref={fullscreenRef} className="flex-1 md:flex-shrink-0 md:mb-8 relative w-full h-full md:h-auto">
+        <div ref={fullscreenRef} className="flex-1 md:flex-shrink-0 md:mb-8 relative w-full h-full md:h-auto bg-black">
           <div style={{
             backgroundColor: '#000',
             position: 'relative',
@@ -384,8 +452,9 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            borderRadius: '0rem'
-          }} className="md:rounded-xl md:aspect-video border-0 md:border-2 md:border-purple-500/30 md:shadow-2xl md:shadow-purple-500/20">
+            borderRadius: '0rem',
+            overflow: 'hidden'
+          }} className="md:rounded-xl md:aspect-video border-0 md:border-2 md:border-purple-500/30 md:shadow-2xl md:shadow-purple-500/20 bg-black">
             {!previewUrl ? (
               <>
                 {/* Hidden video element for stream capture */}
@@ -416,6 +485,7 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
             ) : (
               <>
                 <video
+                  key={previewUrl}
                   src={previewUrl}
                   controls
                   autoPlay
@@ -423,9 +493,17 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                   style={{
                     width: '100%',
                     height: '100%',
-                    objectFit: 'cover',
+                    objectFit: 'contain',
                     backgroundColor: '#000',
-                    display: 'block'
+                    display: 'block',
+                    maxWidth: '100%',
+                    maxHeight: '100%'
+                  }}
+                  onLoadedMetadata={(e) => {
+                    console.log('Video loaded:', e.target.videoWidth, e.target.videoHeight);
+                  }}
+                  onError={(e) => {
+                    console.error('Video load error:', e);
                   }}
                 />
               </>
@@ -520,6 +598,47 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                 </>
               )}
             </div>
+
+            {/* Review Controls - Small Icons on Video (Top Right) */}
+            {showReview && previewUrl && (
+              <div className="absolute top-4 right-4 flex gap-2 z-50 pointer-events-auto">
+                {/* Re-record Icon */}
+                <button
+                  onClick={() => {
+                    setShowReview(false);
+                    setPreviewUrl(null);
+                    setVideoBlob(null);
+                    setRecordedChunks([]);
+                    setRecordingTime(0);
+                  }}
+                  title="Re-record"
+                  className="w-10 h-10 rounded-full bg-slate-900/90 hover:bg-slate-800 text-white flex items-center justify-center transition-all opacity-80 hover:opacity-100 backdrop-blur-md border border-slate-600 hover:border-slate-500 shadow-xl"
+                >
+                  <RotateCcw className="w-5 h-5" />
+                </button>
+
+                {/* Trim Icon */}
+                <button
+                  onClick={() => {
+                    setShowReview(false);
+                    setShowVideoClipper(true);
+                  }}
+                  title="Trim video"
+                  className="w-10 h-10 rounded-full bg-orange-700/90 hover:bg-orange-800 text-white flex items-center justify-center transition-all opacity-80 hover:opacity-100 backdrop-blur-md border border-orange-600 hover:border-orange-500 shadow-xl"
+                >
+                  <Scissors className="w-5 h-5" />
+                </button>
+
+                {/* Approve Icon */}
+                <button
+                  onClick={() => setShowReview(false)}
+                  title="Approve & Continue"
+                  className="w-10 h-10 rounded-full bg-green-700/90 hover:bg-green-800 text-white flex items-center justify-center transition-all opacity-80 hover:opacity-100 backdrop-blur-md border border-green-600 hover:border-green-500 shadow-xl"
+                >
+                  <CheckCircle className="w-5 h-5" />
+                </button>
+              </div>
+            )}
 
             {/* Camera Toggle - Top Left (Mobile), Bottom Left (Desktop) */}
             {hasMultipleCameras && !previewUrl && (
@@ -788,17 +907,50 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
             {/* Submit */}
             <button
               onClick={handleSubmit}
-              disabled={isSubmitting}
+              disabled={isSubmitting || !videoBlob || !formData.title || !formData.description || !formData.creator}
+              title={!videoBlob ? 'Please upload or record a video' : !formData.title ? 'Please enter a pitch title' : !formData.description ? 'Please enter a description' : !formData.creator ? 'Please enter creator name' : 'Click to go live'}
               className={`w-full py-3 md:py-4 rounded-lg font-bold text-base md:text-lg transition shadow-xl ${
-                isSubmitting
-                  ? 'bg-slate-600 cursor-not-allowed opacity-75'
-                  : 'bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 hover:from-purple-700 hover:via-pink-700 hover:to-red-700 text-white hover:shadow-2xl hover:shadow-pink-500/50 transform hover:scale-105'
+                isSubmitting || !videoBlob || !formData.title || !formData.description || !formData.creator
+                  ? 'bg-slate-600 cursor-not-allowed opacity-60'
+                  : 'bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 hover:from-purple-700 hover:via-pink-700 hover:to-red-700 text-white hover:shadow-2xl hover:shadow-pink-500/50 transform hover:scale-105 cursor-pointer active:scale-95'
               }`}
             >
-              {isSubmitting ? '⏳ Launching Pitch...' : '🚀 Launch Your Pitch & Connect With Investors'}
+              {isSubmitting ? '⏳ Going Live...' : '🚀 Go Live'}
             </button>
           </div>
         </div>
+
+        {/* Trim Dialog Modal */}
+        {showTrimDialog && (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[9999] p-4">
+            <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-black rounded-2xl shadow-2xl p-6 max-w-md w-full border border-purple-500/30">
+              <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                <Scissors className="w-5 h-5 text-purple-400" />
+                Trim Your Video?
+              </h3>
+              
+              <p className="text-gray-300 mb-6 text-sm">
+                You can optionally trim your video to cut out unwanted parts, or upload it as is. Trimming is optional!
+              </p>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={handleSkipTrim}
+                  className="flex-1 px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition-colors"
+                >
+                  📤 Skip & Upload
+                </button>
+                
+                <button
+                  onClick={handleOpenTrimmer}
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold rounded-lg transition-all hover:shadow-lg hover:shadow-purple-500/50"
+                >
+                  ✂️ Trim Video
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Video Clipper Modal */}
         {showVideoClipper && videoBlob && (

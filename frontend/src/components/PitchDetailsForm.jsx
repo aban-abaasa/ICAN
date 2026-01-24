@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronUp, Plus, X } from 'lucide-react';
+import { ChevronUp, Plus, X, AlertCircle } from 'lucide-react';
 
 const PitchDetailsForm = ({ isOpen, onClose, onSubmit }) => {
   const [formData, setFormData] = useState({
@@ -15,6 +15,8 @@ const PitchDetailsForm = ({ isOpen, onClose, onSubmit }) => {
     teamMembers: []
   });
   const [newMember, setNewMember] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -41,9 +43,42 @@ const PitchDetailsForm = ({ isOpen, onClose, onSubmit }) => {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onSubmit(formData);
+    
+    // Validation
+    if (!formData.title.trim()) {
+      setSubmitError('Please enter a pitch title');
+      return;
+    }
+    if (!formData.creator.trim()) {
+      setSubmitError('Please enter creator/company name');
+      return;
+    }
+    if (!formData.description.trim()) {
+      setSubmitError('Please enter a pitch description');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setSubmitError('');
+      
+      console.log('📤 Submitting pitch details:', formData);
+      
+      if (!onSubmit) {
+        throw new Error('onSubmit callback is not defined');
+      }
+      
+      await onSubmit(formData);
+      
+      console.log('✅ Pitch submitted successfully');
+    } catch (error) {
+      console.error('❌ Error submitting pitch:', error);
+      setSubmitError(error.message || 'Failed to submit pitch. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -261,14 +296,28 @@ const PitchDetailsForm = ({ isOpen, onClose, onSubmit }) => {
             </div>
           </div>
 
+          {/* Error Message */}
+          {submitError && (
+            <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-3 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+              <p className="text-red-200 text-sm">{submitError}</p>
+            </div>
+          )}
+
           {/* Submit Button */}
           <button
             type="submit"
-            className="w-full mt-6 px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white font-bold rounded-lg transition flex items-center justify-center gap-2 group"
+            disabled={isSubmitting || !formData.title.trim() || !formData.creator.trim() || !formData.description.trim()}
+            className={`w-full mt-6 px-6 py-3 rounded-lg font-bold transition flex items-center justify-center gap-2 group ${
+              isSubmitting || !formData.title.trim() || !formData.creator.trim() || !formData.description.trim()
+                ? 'bg-gray-600 cursor-not-allowed opacity-60 text-gray-300'
+                : 'bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white hover:shadow-lg hover:shadow-pink-500/50 transform hover:scale-105 active:scale-95'
+            }`}
+            title={!formData.title.trim() ? 'Please enter a pitch title' : !formData.creator.trim() ? 'Please enter creator name' : !formData.description.trim() ? 'Please enter a description' : 'Click to launch your pitch'}
           >
-            <span>🚀</span>
-            <span>Launch Your Pitch & Connect With Investors</span>
-            <ChevronUp className="w-4 h-4 group-hover:-translate-y-1 transition" />
+            <span>{isSubmitting ? '⏳' : '🚀'}</span>
+            <span>{isSubmitting ? 'Going Live...' : 'Go Live'}</span>
+            <ChevronUp className={`w-4 h-4 transition ${isSubmitting ? '' : 'group-hover:-translate-y-1'}`} />
           </button>
         </form>
       </div>

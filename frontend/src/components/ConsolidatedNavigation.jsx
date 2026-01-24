@@ -269,8 +269,8 @@ export const ConsolidatedNavigation = ({
                 <Shield className="w-5 h-5 text-blue-400" />
               </div>
               <div>
-                <h1 className="text-white font-bold text-lg leading-tight">ICAN Capital Engine</h1>
-                <p className="text-blue-300 text-xs">From Volatility to Global Capital</p>
+                <h1 className="text-white font-bold text-lg leading-tight bg-gradient-to-r from-yellow-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">ICANera</h1>
+                <p className="text-blue-300 text-xs">Financial Ecosystem & Wealth Platform</p>
               </div>
             </div>
 
