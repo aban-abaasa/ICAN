@@ -9418,97 +9418,83 @@ Data Freshness: ${reportData.metadata.dataFreshness}
           </div>
         </div>
 
-        {/* Icon Command Bar: 7 Icons in Single Horizontal Row */}
-        <div className="flex gap-3 items-center overflow-x-auto pb-2">
-          {/* Icon 1: Journey Progress */}
+        {/* Icon Command Bar: 7 Icons with Labels in Single Horizontal Row */}
+        <div className="flex gap-4 items-start overflow-x-auto pb-3 px-2">
+          {/* Icon 1: Progress */}
           <button
             onClick={() => setShowJourneyDetails(!showJourneyDetails)}
-            className="flex-shrink-0 w-14 h-14 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg shadow-blue-500/30 cursor-pointer group relative"
-            title="Journey Progress"
+            className="flex-shrink-0 flex flex-col items-center gap-2 p-3 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg shadow-blue-500/30 cursor-pointer group hover:scale-105 transform"
+            title="Progress"
           >
-            <Building className="w-7 h-7 text-white" />
-            <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-              Stage {currentJourneyStage}
-            </div>
-            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+            <Building className="w-6 h-6 text-white" />
+            <span className="text-xs font-semibold text-white whitespace-nowrap">Progress</span>
+            <div className="absolute bottom-0 right-0 w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
           </button>
 
-          {/* Icon 2: Financial Reports */}
+          {/* Icon 2: Analytics */}
           <button
             onClick={() => setShowFinancialAnalytics(!showFinancialAnalytics)}
-            className="flex-shrink-0 w-14 h-14 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center hover:from-orange-600 hover:to-red-700 transition-all shadow-lg shadow-orange-500/30 cursor-pointer group relative"
-            title="Financial Reports"
+            className="flex-shrink-0 flex flex-col items-center gap-2 p-3 rounded-lg bg-gradient-to-br from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 transition-all shadow-lg shadow-orange-500/30 cursor-pointer group hover:scale-105 transform"
+            title="Analytics"
           >
-            <BarChart3 className="w-7 h-7 text-white" />
-            <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-              Reports
-            </div>
-            <div className="absolute bottom-0 right-0 w-3 h-3 bg-orange-400 rounded-full animate-pulse"></div>
+            <BarChart3 className="w-6 h-6 text-white" />
+            <span className="text-xs font-semibold text-white whitespace-nowrap">Analytics</span>
+            <div className="absolute bottom-0 right-0 w-2 h-2 bg-orange-400 rounded-full animate-pulse"></div>
           </button>
 
-          {/* Icon 3: Loan & Tithe */}
+          {/* Icon 3: Loans */}
           <button
             onClick={() => setShowBusinessLoanCalculator(!showBusinessLoanCalculator)}
-            className="flex-shrink-0 w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center hover:from-purple-600 hover:to-indigo-700 transition-all shadow-lg shadow-purple-500/30 cursor-pointer group relative"
-            title="Loan & Tithe Tools"
+            className="flex-shrink-0 flex flex-col items-center gap-2 p-3 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 transition-all shadow-lg shadow-purple-500/30 cursor-pointer group hover:scale-105 transform"
+            title="Loans"
           >
-            <Briefcase className="w-7 h-7 text-white" />
-            <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-              Loan & Tithe
-            </div>
-            <div className="absolute bottom-0 right-0 w-3 h-3 bg-purple-400 rounded-full animate-pulse"></div>
+            <Briefcase className="w-6 h-6 text-white" />
+            <span className="text-xs font-semibold text-white whitespace-nowrap">Loans</span>
+            <div className="absolute bottom-0 right-0 w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
           </button>
 
-          {/* Icon 4: Business Loan Calculator */}
+          {/* Icon 4: Wallet */}
           <button
             onClick={() => setShowBusinessLoanCalculator(!showBusinessLoanCalculator)}
-            className="flex-shrink-0 w-14 h-14 rounded-full bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center hover:from-teal-600 hover:to-cyan-700 transition-all shadow-lg shadow-teal-500/30 cursor-pointer group relative"
-            title="Business Loan Calculator"
+            className="flex-shrink-0 flex flex-col items-center gap-2 p-3 rounded-lg bg-gradient-to-br from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 transition-all shadow-lg shadow-teal-500/30 cursor-pointer group hover:scale-105 transform"
+            title="Wallet"
           >
-            <DollarSign className="w-7 h-7 text-white" />
-            <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-              Loan Calc
-            </div>
-            <div className="absolute bottom-0 right-0 w-3 h-3 bg-cyan-400 rounded-full animate-pulse"></div>
+            <DollarSign className="w-6 h-6 text-white" />
+            <span className="text-xs font-semibold text-white whitespace-nowrap">Wallet</span>
+            <div className="absolute bottom-0 right-0 w-2 h-2 bg-cyan-400 rounded-full animate-pulse"></div>
           </button>
 
-          {/* Icon 5: Tithing Manager */}
+          {/* Icon 5: Goals */}
           <button
             onClick={() => setShowTithingCalculator(!showTithingCalculator)}
-            className="flex-shrink-0 w-14 h-14 rounded-full bg-gradient-to-br from-yellow-500 to-amber-600 flex items-center justify-center hover:from-yellow-600 hover:to-amber-700 transition-all shadow-lg shadow-yellow-500/30 cursor-pointer group relative"
-            title="Tithing Manager"
+            className="flex-shrink-0 flex flex-col items-center gap-2 p-3 rounded-lg bg-gradient-to-br from-yellow-500 to-amber-600 hover:from-yellow-600 hover:to-amber-700 transition-all shadow-lg shadow-yellow-500/30 cursor-pointer group hover:scale-105 transform"
+            title="Goals"
           >
-            <Heart className="w-7 h-7 text-white" />
-            <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-              Tithe
-            </div>
-            <div className="absolute bottom-0 right-0 w-3 h-3 bg-yellow-400 rounded-full animate-pulse"></div>
+            <Heart className="w-6 h-6 text-white" />
+            <span className="text-xs font-semibold text-white whitespace-nowrap">Goals</span>
+            <div className="absolute bottom-0 right-0 w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
           </button>
 
-          {/* Icon 6: Advanced Reporting System */}
+          {/* Icon 6: Reports */}
           <button
             onClick={() => setShowReportingSystem(!showReportingSystem)}
-            className="flex-shrink-0 w-14 h-14 rounded-full bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center hover:from-red-600 hover:to-pink-700 transition-all shadow-lg shadow-red-500/30 cursor-pointer group relative"
-            title="Advanced Reporting"
+            className="flex-shrink-0 flex flex-col items-center gap-2 p-3 rounded-lg bg-gradient-to-br from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 transition-all shadow-lg shadow-red-500/30 cursor-pointer group hover:scale-105 transform"
+            title="Reports"
           >
-            <PieChart className="w-7 h-7 text-white" />
-            <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-              Reports Adv
-            </div>
-            <div className="absolute bottom-0 right-0 w-3 h-3 bg-red-400 rounded-full animate-pulse"></div>
+            <PieChart className="w-6 h-6 text-white" />
+            <span className="text-xs font-semibold text-white whitespace-nowrap">Reports</span>
+            <div className="absolute bottom-0 right-0 w-2 h-2 bg-red-400 rounded-full animate-pulse"></div>
           </button>
 
-          {/* Icon 7: ICAN AI Assistant */}
+          {/* Icon 7: ICAN AI */}
           <button
             onClick={() => setShowAIChat(!showAIChat)}
-            className="flex-shrink-0 w-14 h-14 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center hover:from-violet-600 hover:to-purple-700 transition-all shadow-lg shadow-violet-500/30 cursor-pointer group relative"
-            title="ICAN AI Assistant"
+            className="flex-shrink-0 flex flex-col items-center gap-2 p-3 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 transition-all shadow-lg shadow-violet-500/30 cursor-pointer group hover:scale-105 transform"
+            title="ICAN AI"
           >
-            <Brain className="w-7 h-7 text-white" />
-            <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-              AI Advisor
-            </div>
-            <div className="absolute bottom-0 right-0 w-3 h-3 bg-violet-400 rounded-full animate-pulse"></div>
+            <Brain className="w-6 h-6 text-white" />
+            <span className="text-xs font-semibold text-white whitespace-nowrap">ICAN AI</span>
+            <div className="absolute bottom-0 right-0 w-2 h-2 bg-violet-400 rounded-full animate-pulse"></div>
           </button>
         </div>
 
@@ -9520,7 +9506,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                   <Building className="w-5 h-5 text-blue-400" />
-                  Journey Progress
+                  Progress Journey
                 </h3>
                 <button onClick={() => setShowJourneyDetails(false)} className="text-gray-400 hover:text-white">✕</button>
               </div>

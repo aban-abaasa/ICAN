@@ -16,33 +16,36 @@ import {
   BarChart3,
   X,
   Eye,
-  EyeOff
+  EyeOff,
+  Video
 } from 'lucide-react';
+import LiveBoardroom from './LiveBoardroom';
 import {
   getPublicTrustGroups,
   getUserTrustGroups,
   createTrustGroup,
-  joinTrustGroup,
+  submitMembershipApplication,
   getTrustGroupDetails,
   getGroupStatistics,
   recordTrustTransaction,
   removeMemberFromGroup,
   promoteMemberToAdmin,
-  demoteMemberFromAdmin,
-  setGroupStatus,
-  closeGroup,
   updateGroupSettings,
-  updateMemberPaymentStatus
+  approveApplicationByAdmin,
+  rejectApplicationByAdmin,
+  voteOnMemberApplication,
+  getVotingResults
 } from '../services/trustService';
 
 const TrustSystem = ({ currentUser }) => {
-  const [activeTab, setActiveTab] = useState('explore'); // 'explore', 'mygroups', 'create'
+  const [activeTab, setActiveTab] = useState('explore'); // 'explore', 'mygroups', 'create', 'dashboard'
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [showContributeModal, setShowContributeModal] = useState(false);
+  const [boardroomGroupId, setBoardroomGroupId] = useState(null);
   const [groupForm, setGroupForm] = useState({
     name: '',
     description: '',
@@ -67,7 +70,7 @@ const TrustSystem = ({ currentUser }) => {
 
   useEffect(() => {
     loadGroups();
-  }, [activeTab]);
+  }, [activeTab, currentUser?.id]);
 
   const loadGroups = async () => {
     setLoading(true);
@@ -132,10 +135,10 @@ const TrustSystem = ({ currentUser }) => {
 
     setLoading(true);
     try {
-      const result = await joinTrustGroup(groupId, currentUser.id, currentUser.email);
+      const result = await submitMembershipApplication(groupId, currentUser.id, currentUser.email, 'Join request from user');
 
       if (result.success) {
-        setMessage({ type: 'success', text: '✓ Successfully joined group!' });
+        setMessage({ type: 'success', text: '✓ Membership application submitted!' });
         loadGroups();
       } else {
         setMessage({ type: 'error', text: result.error || 'Failed to join group' });
@@ -241,7 +244,7 @@ const TrustSystem = ({ currentUser }) => {
 
     setLoading(true);
     try {
-      const result = await setGroupStatus(selectedGroup.id, newStatus);
+      const result = await updateGroupSettings(selectedGroup.id, { status: newStatus });
 
       if (result.success) {
         setMessage({ type: 'success', text: `✓ Group ${newStatus}!` });
@@ -301,7 +304,8 @@ const TrustSystem = ({ currentUser }) => {
 
     setLoading(true);
     try {
-      const result = await demoteMemberFromAdmin(selectedGroup.id, memberId);
+      // Remove admin role by updating group settings
+      const result = await updateGroupSettings(selectedGroup.id, { removedAdmin: memberId });
 
       if (result.success) {
         setMessage({ type: 'success', text: '✓ Member demoted to member' });
@@ -321,7 +325,7 @@ const TrustSystem = ({ currentUser }) => {
 
     setLoading(true);
     try {
-      const result = await closeGroup(selectedGroup.id);
+      const result = await updateGroupSettings(selectedGroup.id, { status: 'closed' });
 
       if (result.success) {
         setMessage({ type: 'success', text: '✓ Group archived' });
@@ -345,9 +349,11 @@ const TrustSystem = ({ currentUser }) => {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <Shield className="w-10 h-10 text-amber-500" />
-            <h1 className="text-4xl font-bold text-white">TRUST System</h1>
+            <div>
+              <h1 className="text-4xl font-bold text-white">Trust Management (SACCO)</h1>
+              <p className="text-amber-300 text-lg mt-1">Collaborate, contribute, and grow wealth together</p>
+            </div>
           </div>
-          <p className="text-slate-400">Cooperative Savings & Blockchain Verification</p>
         </div>
 
         {/* Message Alert */}
@@ -368,22 +374,22 @@ const TrustSystem = ({ currentUser }) => {
         )}
 
         {/* Tabs */}
-        <div className="flex gap-4 border-b border-slate-700">
+        <div className="flex gap-4 border-b border-slate-700 overflow-x-auto">
           {[
-            { id: 'explore', label: '🔍 Explore Groups', icon: Search },
-            { id: 'mygroups', label: '👥 My Groups', icon: Users },
-            { id: 'create', label: '➕ Create New', icon: Plus }
+            { id: 'mygroups', label: '👥 My Trusts', icon: Users },
+            { id: 'explore', label: '🔍 Explore', icon: Search },
+            { id: 'create', label: '✨ Create', icon: Plus },
+            { id: 'dashboard', label: '📊 Dashboard', icon: BarChart3 }
           ].map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-6 py-4 font-semibold transition-all flex items-center gap-2 ${
+              className={`px-6 py-4 font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
                 activeTab === tab.id
                   ? 'text-amber-500 border-b-2 border-amber-500'
                   : 'text-slate-400 hover:text-slate-300'
               }`}
             >
-              <tab.icon size={18} />
               {tab.label}
             </button>
           ))}
@@ -531,6 +537,13 @@ const TrustSystem = ({ currentUser }) => {
                       >
                         Contribute
                       </button>
+                      <button
+                        onClick={() => setBoardroomGroupId(group.id)}
+                        className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-1"
+                      >
+                        <Video size={16} />
+                        Boardroom
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -644,6 +657,91 @@ const TrustSystem = ({ currentUser }) => {
                   )}
                 </button>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* DASHBOARD TAB */}
+        {activeTab === 'dashboard' && (
+          <div className="max-w-7xl mx-auto">
+            <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+              <BarChart3 className="text-amber-500" />
+              Trust Network Dashboard
+            </h2>
+
+            {/* Summary Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              <div className="bg-gradient-to-br from-slate-800 to-slate-800/50 border border-slate-700 rounded-lg p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-slate-400 text-sm font-semibold">Total Trusts</p>
+                  <Users className="w-5 h-5 text-amber-500" />
+                </div>
+                <p className="text-3xl font-bold text-white">{groups.length}</p>
+                <p className="text-slate-500 text-xs mt-2">Active trust groups</p>
+              </div>
+
+              <div className="bg-gradient-to-br from-slate-800 to-slate-800/50 border border-slate-700 rounded-lg p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-slate-400 text-sm font-semibold">Total Members</p>
+                  <Users className="w-5 h-5 text-blue-500" />
+                </div>
+                <p className="text-3xl font-bold text-white">
+                  {groups.reduce((sum, g) => sum + (g.member_count || 0), 0)}
+                </p>
+                <p className="text-slate-500 text-xs mt-2">Across all trusts</p>
+              </div>
+
+              <div className="bg-gradient-to-br from-slate-800 to-slate-800/50 border border-slate-700 rounded-lg p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-slate-400 text-sm font-semibold">Total Contributed</p>
+                  <DollarSign className="w-5 h-5 text-emerald-500" />
+                </div>
+                <p className="text-3xl font-bold text-emerald-400">
+                  ${groups.reduce((sum, g) => sum + (g.total_contributed || 0), 0).toFixed(2)}
+                </p>
+                <p className="text-slate-500 text-xs mt-2">Network total</p>
+              </div>
+
+              <div className="bg-gradient-to-br from-slate-800 to-slate-800/50 border border-slate-700 rounded-lg p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-slate-400 text-sm font-semibold">Verified Transactions</p>
+                  <CheckCircle className="w-5 h-5 text-amber-500" />
+                </div>
+                <p className="text-3xl font-bold text-amber-400">
+                  {groups.reduce((sum, g) => sum + (g.verified_transactions || 0), 0)}
+                </p>
+                <p className="text-slate-500 text-xs mt-2">Blockchain verified</p>
+              </div>
+            </div>
+
+            {/* Recent Activity */}
+            <div className="bg-gradient-to-br from-slate-800 to-slate-800/50 border border-slate-700 rounded-lg p-6">
+              <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                <TrendingUp className="text-amber-500" />
+                Recent Trust Groups
+              </h3>
+
+              {groups.length === 0 ? (
+                <p className="text-slate-400 text-center py-8">No trust groups yet</p>
+              ) : (
+                <div className="space-y-3">
+                  {groups.slice(0, 5).map(group => (
+                    <div key={group.id} className="flex items-center justify-between p-4 bg-slate-900/50 rounded-lg">
+                      <div className="flex-1">
+                        <p className="text-white font-semibold">{group.name}</p>
+                        <p className="text-slate-400 text-sm">{group.member_count || 0} members • ${group.monthly_contribution}/month</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-emerald-400 font-semibold">${(group.total_contributed || 0).toFixed(2)}</p>
+                        <p className="text-slate-500 text-xs">contributed</p>
+                      </div>
+                    </div>
+                  ))}
+                  {groups.length > 5 && (
+                    <p className="text-slate-400 text-center py-2">+{groups.length - 5} more groups</p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -944,6 +1042,32 @@ const TrustSystem = ({ currentUser }) => {
                 {loading ? 'Processing...' : 'Confirm Contribution'}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* LIVE BOARDROOM MODAL */}
+      {boardroomGroupId && (
+        <div className="fixed inset-0 bg-black/90 z-50 flex flex-col">
+          <div className="flex items-center justify-between p-4 bg-slate-900 border-b border-slate-700">
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <Video className="text-blue-400" />
+              {groups.find(g => g.id === boardroomGroupId)?.name} - Live Boardroom
+            </h2>
+            <button
+              onClick={() => setBoardroomGroupId(null)}
+              className="p-2 hover:bg-slate-800 rounded-lg transition text-slate-400 hover:text-white"
+            >
+              <X size={24} />
+            </button>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <LiveBoardroom
+              groupId={boardroomGroupId}
+              groupName={groups.find(g => g.id === boardroomGroupId)?.name}
+              members={selectedGroup?.members || []}
+              creatorId={selectedGroup?.creator_id}
+            />
           </div>
         </div>
       )}

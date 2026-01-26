@@ -10,10 +10,10 @@ const LandingPage = ({ onGetStarted }) => {
   const [scrollPosition, setScrollPosition] = useState(0);
   const [isHeroExpanded, setIsHeroExpanded] = useState(false);
 
-  // Image slides with descriptions
+  // Image slides with descriptions (using all 20 images from public/images)
   const slides = [
     {
-      image: '/images/dairy%20expense%20and%20inacome.png',
+      image: '/images/dairy expense and inacome.png',
       title: 'Expense & Income Tracker',
       subtitle: 'Smart Financial Management',
       description: 'Track every transaction with precision. Smart categorization, real-time insights, and predictive analytics for complete financial control',
@@ -21,40 +21,42 @@ const LandingPage = ({ onGetStarted }) => {
       highlight: true
     },
     {
-      image: '/images/ICANera%20expense.png',
+      image: '/images/ICANera expense.png',
       title: 'Financial Dashboard',
       subtitle: 'Advanced Analytics',
       description: 'Comprehensive financial overview with real-time analytics and performance metrics',
       features: ['Real-time analytics', 'Performance tracking', 'Financial reports']
     },
     {
-      image: '/images/icanera%20wallet.png',
+      image: '/images/icanera wallet.png',
       title: 'Digital Wallet',
+      subtitle: 'Secure Management',
       description: 'Manage your accounts, balances & transactions with secure digital wallet management',
       features: ['Account management', 'Balance tracking', 'Secure transactions']
     },
     {
       image: '/images/ICANwallet.png',
-      title: 'Wallet Management',
+      title: 'Smart Wallet',
       subtitle: 'Secure & Fast',
       description: 'Advanced wallet features with multi-currency support and instant transactions',
       features: ['Multi-currency', 'Instant transfers', 'Security verified']
     },
     {
-      image: '/images/incaera%20share.png',
+      image: '/images/incaera share.png',
       title: 'Pitchin',
+      subtitle: 'Investment Hub',
       description: 'Share your vision, connect with investors and build your business dreams',
       features: ['Business pitches', 'Investor connections', 'Growth opportunities']
     },
     {
-      image: '/images/ICANera%20pitchin.png',
+      image: '/images/ICANera pitchin.png',
       title: 'Pitchin Pro',
-      subtitle: 'Investment Platform',
+      subtitle: 'Professional Platform',
       description: 'Professional platform for sharing and funding innovative business ideas',
       features: ['Pitch templates', 'Investor network', 'Funding support']
     },
     {
-      image: '/images/ICANera%20pitchin%208.png',
+      image: '/images/ICANera pitchin 8.png',
       title: 'Pitchin Advanced',
       subtitle: 'Smart Matching',
       description: 'AI-powered investor matching and business growth acceleration',
@@ -63,18 +65,19 @@ const LandingPage = ({ onGetStarted }) => {
     {
       image: '/images/cmms.png',
       title: 'Treasury Guardian',
+      subtitle: 'Security Platform',
       description: 'Account security & privacy controls with enterprise-level protection',
       features: ['Security controls', 'Privacy protection', 'Account verification']
     },
     {
-      image: '/images/ICANera%20CMMS.png',
+      image: '/images/ICANera CMMS.png',
       title: 'CMMS Platform',
       subtitle: 'Management System',
       description: 'Comprehensive management system for operations and resources',
       features: ['Resource mgmt', 'Operations tracking', 'Team coordination']
     },
     {
-      image: '/images/ICANera%20CMMS1.png',
+      image: '/images/ICANera CMMS1.png',
       title: 'CMMS Pro',
       subtitle: 'Enterprise Edition',
       description: 'Enterprise-grade management and operational excellence',
@@ -83,31 +86,33 @@ const LandingPage = ({ onGetStarted }) => {
     {
       image: '/images/sacco.png',
       title: 'Trust Management',
+      subtitle: 'Community Wealth',
       description: 'Collaborate, contribute, and grow wealth together in SACCO groups',
       features: ['Group collaboration', 'Wealth growth', 'Community benefits']
     },
     {
-      image: '/images/ICAN%20era%20sacco.png',
+      image: '/images/ICAN era sacco.png',
       title: 'SACCO Groups',
-      subtitle: 'Community Wealth',
+      subtitle: 'Community Finance',
       description: 'Democratic savings groups with transparent fund management and rapid growth',
       features: ['Group savings', 'Transparent mgmt', 'Rapid growth']
     },
     {
       image: '/images/trust.png',
-      title: 'ICAN Opportunity Rating',
+      title: 'ICAN Opportunities',
+      subtitle: 'Global Access',
       description: 'Your readiness for global opportunities with comprehensive assessment',
       features: ['Opportunity assessment', 'Readiness evaluation', 'Global access']
     },
     {
-      image: '/images/ICANera%20trust.png',
+      image: '/images/ICANera trust.png',
       title: 'Trust Platform',
       subtitle: 'Verified & Secure',
       description: 'Blockchain-verified trust management with complete transparency',
       features: ['Blockchain verified', 'Full transparency', 'Secure transfers']
     },
     {
-      image: '/images/ICANera%20trust%202.png',
+      image: '/images/ICANera trust 2.png',
       title: 'Trust Pro',
       subtitle: 'Advanced Features',
       description: 'Advanced trust management with smart contracts and automation',
@@ -121,14 +126,14 @@ const LandingPage = ({ onGetStarted }) => {
       features: ['Integrated platform', 'All features', 'Unified experience']
     },
     {
-      image: '/images/ICANera%203.png',
+      image: '/images/ICANera 3.png',
       title: 'ICAN Premium',
       subtitle: 'Elite Features',
       description: 'Premium features for power users and enterprise clients',
       features: ['Premium tools', 'Priority support', 'Advanced analytics']
     },
     {
-      image: '/images/ICANera%20tithe.png',
+      image: '/images/ICANera tithe.png',
       title: 'Tithe Management',
       subtitle: 'Spiritual Giving',
       description: 'Give back to your faith community with smart tithe calculations and automatic contributions',
@@ -136,30 +141,37 @@ const LandingPage = ({ onGetStarted }) => {
       highlight: true
     },
     {
-      image: '/images/ICANera%20tith2.png',
+      image: '/images/ICANera tith2.png',
       title: 'Tithe Pro',
       subtitle: 'Advanced Giving',
       description: 'Professional tithe management with offerings, donations, and spiritual accountability',
       features: ['Multiple giving types', 'Donation tracking', 'Spiritual accountability', 'Community support', 'Impact reports']
+    },
+    {
+      image: '/images/ICANera i.png',
+      title: 'ICAN Core',
+      subtitle: 'Foundation Platform',
+      description: 'The core foundation enabling all ICAN financial services and integrations',
+      features: ['Foundation', 'Integration hub', 'Core services']
     }
   ];
 
   // Hero Feature Slides with same images
   const heroSlides = [
     {
-      image: '/images/dairy%20expense%20and%20inacome.png',
+      image: '/images/dairy expense and inacome.png',
       title: 'Expense & Income Tracker',
       subtitle: 'Smart financial management',
       description: 'Track every transaction with precision'
     },
     {
-      image: '/images/ICANera%20expense.png',
-      title: 'Financial Analytics',
+      image: '/images/ICANera expense.png',
+      title: 'Financial Dashboard',
       subtitle: 'Advanced tracking',
       description: 'Real-time financial insights'
     },
     {
-      image: '/images/icanera%20wallet.png',
+      image: '/images/icanera wallet.png',
       title: 'Digital Wallet',
       subtitle: 'Secure management',
       description: 'Manage accounts & balances'
@@ -171,19 +183,19 @@ const LandingPage = ({ onGetStarted }) => {
       description: 'Instant transactions'
     },
     {
-      image: '/images/incaera%20share.png',
+      image: '/images/incaera share.png',
       title: 'Pitchin',
       subtitle: 'Investment hub',
       description: 'Share your vision'
     },
     {
-      image: '/images/ICANera%20pitchin.png',
+      image: '/images/ICANera pitchin.png',
       title: 'Pitchin Pro',
       subtitle: 'Professional platform',
       description: 'Connect with investors'
     },
     {
-      image: '/images/ICANera%20pitchin%208.png',
+      image: '/images/ICANera pitchin 8.png',
       title: 'Smart Matching',
       subtitle: 'AI-powered',
       description: 'Find perfect investors'
@@ -195,13 +207,13 @@ const LandingPage = ({ onGetStarted }) => {
       description: 'Enterprise protection'
     },
     {
-      image: '/images/ICANera%20CMMS.png',
+      image: '/images/ICANera CMMS.png',
       title: 'CMMS System',
       subtitle: 'Management tools',
       description: 'Resource optimization'
     },
     {
-      image: '/images/ICANera%20CMMS1.png',
+      image: '/images/ICANera CMMS1.png',
       title: 'CMMS Pro',
       subtitle: 'Enterprise edition',
       description: 'Advanced operations'
@@ -213,7 +225,7 @@ const LandingPage = ({ onGetStarted }) => {
       description: 'Group savings & growth'
     },
     {
-      image: '/images/ICAN%20era%20sacco.png',
+      image: '/images/ICAN era sacco.png',
       title: 'Trust Management',
       subtitle: 'Collaborative finance',
       description: 'Transparent group funds'
@@ -225,13 +237,13 @@ const LandingPage = ({ onGetStarted }) => {
       description: 'Readiness assessment'
     },
     {
-      image: '/images/ICANera%20trust.png',
+      image: '/images/ICANera trust.png',
       title: 'Trust Platform',
       subtitle: 'Blockchain verified',
       description: 'Transparent transfers'
     },
     {
-      image: '/images/ICANera%20trust%202.png',
+      image: '/images/ICANera trust 2.png',
       title: 'Trust Pro',
       subtitle: 'Smart contracts',
       description: 'Automated trust mgmt'
@@ -243,22 +255,22 @@ const LandingPage = ({ onGetStarted }) => {
       description: 'Integrated experience'
     },
     {
-      image: '/images/ICANera%203.png',
+      image: '/images/ICANera 3.png',
       title: 'ICAN Premium',
       subtitle: 'Elite features',
-      description: 'Power user tools'
+      description: 'Power users'
     },
     {
-      image: '/images/ICANera%20tithe.png',
+      image: '/images/ICANera tithe.png',
       title: 'Tithe Management',
       subtitle: 'Spiritual giving',
-      description: 'Give back to your faith community'
+      description: 'Smart contributions'
     },
     {
-      image: '/images/ICANera%20tith2.png',
+      image: '/images/ICANera tith2.png',
       title: 'Tithe Pro',
       subtitle: 'Advanced giving',
-      description: 'Professional tithe management'
+      description: 'Community support'
     }
   ];
 
@@ -535,19 +547,8 @@ const LandingPage = ({ onGetStarted }) => {
           {/* Right - Feature Image Showcase Carousel */}
           <div className="relative animate-fadeInDown hidden md:flex items-center justify-center h-full min-h-96 z-0">
             <div className="relative w-full max-w-lg group">
-              {/* Glow background */}
-              <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/20 to-pink-500/20 rounded-3xl blur-3xl group-hover:opacity-100 opacity-60 transition duration-500"></div>
-              
-              {/* Golden Border Frame */}
-              <div className="absolute inset-0 rounded-3xl bg-gradient-to-r from-yellow-500/40 to-yellow-400/20 p-1 pointer-events-none">
-                <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900"></div>
-              </div>
-
               {/* Image container with carousel */}
-              <div className="relative bg-gradient-to-br from-purple-900/40 to-blue-900/40 rounded-3xl p-6 backdrop-blur-xl shadow-2xl shadow-purple-500/30 overflow-hidden">
-                {/* Animated border gradient */}
-                <div className="absolute inset-0 bg-gradient-to-r from-purple-500/0 via-yellow-500/20 to-pink-500/0 rounded-3xl animate-pulse"></div>
-                
+              <div className="relative rounded-3xl overflow-hidden">
                 {/* Content - Animated Carousel */}
                 <div className="relative space-y-6">
                   {/* Image with slide transition */}
@@ -555,10 +556,11 @@ const LandingPage = ({ onGetStarted }) => {
                     <img 
                       src={heroSlides[currentHeroSlide].image}
                       alt={heroSlides[currentHeroSlide].title}
-                      className="w-full h-full object-cover opacity-90 group-hover/image:opacity-100 transition-all duration-500 transform group-hover/image:scale-110"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                      }}
                     />
-                    {/* Overlay gradient */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900/20 to-transparent"></div>
                   </div>
                   
                   {/* Label with animation */}
@@ -713,53 +715,21 @@ const LandingPage = ({ onGetStarted }) => {
           </div>
 
           {/* Carousel Container with Golden Border Animation */}
-          <div className="relative group">
-            {/* Animated Border Container */}
-            <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/30 via-purple-500/20 to-yellow-500/30 rounded-3xl blur-2xl opacity-0 group-hover:opacity-100 transition duration-500 animate-pulse"></div>
-            
+          <div className="relative">
             {/* Main Carousel */}
             <div className="relative">
-              {/* Golden Border Frame Effect */}
-              <div className="absolute inset-0 rounded-3xl bg-gradient-to-r from-yellow-500/40 to-yellow-400/20 p-1 pointer-events-none">
-                <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950"></div>
-              </div>
-
               {/* Inner Content */}
               <div className="relative rounded-3xl overflow-hidden">
                 {/* Main Image - Full Screen */}
-                <div className="relative h-96 md:h-[600px] lg:h-[700px] bg-gradient-to-br from-purple-900/30 to-blue-900/30 overflow-hidden shadow-2xl shadow-purple-500/20">
-                  {/* Animated background for featured slide */}
-                  {slides[currentSlide].highlight && (
-                    <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 via-transparent to-pink-500/10 animate-pulse"></div>
-                  )}
-                  
+                <div className="relative h-96 md:h-[600px] lg:h-[700px] overflow-hidden shadow-2xl">
                   <img
                     src={slides[currentSlide].image}
                     alt={slides[currentSlide].title}
-                    className="w-full h-full object-cover opacity-85 group-hover:opacity-100 transition duration-700 transform group-hover:scale-105"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                    }}
                   />
-                  
-                  {/* Overlay with content */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent flex flex-col justify-end p-4 md:p-6 lg:p-8">
-                    <div className="space-y-3 md:space-y-4 animate-fadeIn">
-                      <div>
-                        {slides[currentSlide].subtitle && (
-                          <div className="inline-block px-3 py-1 bg-gradient-to-r from-purple-500/40 to-pink-500/40 border border-purple-400/60 rounded-full text-xs font-semibold text-purple-200 mb-2 animate-pulse">
-                            ✨ {slides[currentSlide].subtitle}
-                          </div>
-                        )}
-                        <h3 className="text-xl md:text-3xl lg:text-4xl font-bold mb-2 bg-gradient-to-r from-white via-purple-200 to-pink-200 bg-clip-text text-transparent">{slides[currentSlide].title}</h3>
-                        <p className="text-sm md:text-base lg:text-lg text-gray-300 line-clamp-3">{slides[currentSlide].description}</p>
-                      </div>
-                      <div className="flex flex-wrap gap-2 md:gap-3">
-                        {slides[currentSlide].features.map((feature, idx) => (
-                          <span key={idx} className="px-3 py-1 md:px-4 md:py-2 bg-gradient-to-r from-purple-500/40 to-pink-500/30 border border-purple-400/50 rounded-full text-xs md:text-sm text-purple-100 font-medium backdrop-blur-sm hover:border-purple-400 transition transform hover:scale-105">
-                            {feature}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
 
                   {/* Featured badge for Expense & Income Tracker */}
                   {slides[currentSlide].highlight && (
@@ -799,10 +769,6 @@ const LandingPage = ({ onGetStarted }) => {
                 </div>
               </div>
             </div>
-
-            {/* Decorative Glow Elements */}
-            <div className="absolute -top-20 -right-20 w-40 h-40 bg-yellow-500/20 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition duration-500"></div>
-            <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-purple-500/20 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition duration-500"></div>
           </div>
 
           {/* Platform Icons Grid - Single Row, Text on Hover */}
@@ -822,6 +788,9 @@ const LandingPage = ({ onGetStarted }) => {
                     src={slide.image}
                     alt={slide.title}
                     className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                    }}
                   />
                 </div>
                 <p className="font-medium text-[0.5rem] md:text-sm text-center whitespace-nowrap text-purple-200 opacity-0 md:opacity-0 md:group-hover:opacity-100 md:group-[.bg-purple-500/30]:opacity-100 transition-opacity duration-200 h-3 md:h-5 lg:opacity-0 lg:group-hover:opacity-100">{slide.title}</p>

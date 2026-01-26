@@ -6,7 +6,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { User, Mail, Phone, Edit2, Save, X, Upload, Shield, Wallet, Key, LogOut, Plus } from 'lucide-react';
+import { User, Mail, Phone, Edit2, Save, X, Upload, Shield, Wallet, Key, LogOut, Plus, Camera, Trash2 } from 'lucide-react';
 import { StatusUploader } from '../status/StatusUploader';
 
 export const ProfilePage = ({ onClose = null, onLogout = null }) => {
@@ -17,6 +17,7 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
     getAvatarUrl,
     updateProfile,
     uploadAvatar,
+    loadProfile,
     signOut
   } = useAuth();
 
@@ -27,6 +28,10 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
   const [success, setSuccess] = useState(null);
   const [imageError, setImageError] = useState(false);
   const [showStatusUploader, setShowStatusUploader] = useState(false);
+  const [showAvatarModal, setShowAvatarModal] = useState(false);
+  const [showAvatarView, setShowAvatarView] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState(null);
   const fileInputRef = useRef(null);
 
   // Form state
@@ -58,7 +63,9 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
 
   const handleAvatarClick = () => {
     if (isEditing) {
-      fileInputRef.current?.click();
+      setShowAvatarModal(true);
+    } else {
+      setShowAvatarView(true);
     }
   };
 
@@ -66,13 +73,46 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setIsUploadingAvatar(true);
     setError(null);
+
+    // Create preview immediately and wait for it to complete
+    await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        console.log('🖼️ Preview ready:', reader.result?.substring(0, 50));
+        setPreviewUrl(reader.result);
+        resolve();
+      };
+      reader.readAsDataURL(file);
+    });
+
     try {
-      await uploadAvatar(file);
-      setSuccess('Avatar updated successfully!');
-      setTimeout(() => setSuccess(null), 3000);
+      console.log('📤 Starting upload...');
+      const uploadedUrl = await uploadAvatar(file);
+      console.log('✅ Upload complete, showing success message');
+      setSuccess('Avatar updated successfully! ✅');
+      setImageError(false);
+      
+      // Refresh profile to show new avatar
+      if (user?.id) {
+        console.log('🔄 Refreshing profile...');
+        await loadProfile(user.id);
+      }
+      
+      // Keep preview visible for 3 seconds showing the uploaded result
+      setTimeout(() => {
+        console.log('⏱️ Closing modal...');
+        setShowAvatarModal(false);
+        setPreviewUrl(null);
+        setSuccess(null);
+      }, 3000);
     } catch (err) {
+      console.error('❌ Upload failed:', err);
       setError('Failed to upload avatar: ' + err.message);
+      setPreviewUrl(null);
+    } finally {
+      setIsUploadingAvatar(false);
     }
   };
 
@@ -103,7 +143,20 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
     }
   };
 
+  const triggerFileInput = () => {
+    fileInputRef.current?.click();
+  };
+
   const avatarUrl = getAvatarUrl();
+
+  // Log and reset imageError whenever profile changes
+  useEffect(() => {
+    console.log('📸 Avatar URL updated:', avatarUrl);
+    if (avatarUrl) {
+      console.log('✅ Avatar URL exists, resetting imageError');
+      setImageError(false);
+    }
+  }, [avatarUrl]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 p-4 md:p-8">
@@ -153,7 +206,11 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                         src={avatarUrl}
                         alt={getDisplayName()}
                         className="w-32 h-32 rounded-full object-cover ring-4 ring-slate-800 hover:ring-purple-500/50 transition-all"
-                        onError={() => setImageError(true)}
+                        onError={(e) => {
+                          console.error('❌ Image failed to load:', avatarUrl, e);
+                          setImageError(true);
+                        }}
+                        onLoad={() => console.log('✅ Image loaded successfully:', avatarUrl)}
                       />
                     ) : (
                       <div className="w-32 h-32 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center ring-4 ring-slate-800 text-white text-4xl font-bold">
@@ -368,6 +425,154 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
             Member since {new Date(user?.created_at).toLocaleDateString()}
           </p>
         </div>
+
+        {/* Avatar Change Modal */}
+        {showAvatarModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-end z-50">
+            <div className="w-full bg-gradient-to-t from-slate-900 via-slate-850 to-slate-800 rounded-t-2xl p-6 max-h-96 overflow-y-auto animate-in slide-in-from-bottom">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-white">Change Profile Picture</h2>
+                <button
+                  onClick={() => setShowAvatarModal(false)}
+                  className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Preview Section */}
+              <div className="mb-6">
+                {previewUrl ? (
+                  <div>
+                    <p className="text-xs text-gray-400 text-center mb-2">Preview</p>
+                    <div className="flex justify-center">
+                      <img
+                        src={previewUrl}
+                        alt="Preview"
+                        className="w-32 h-32 rounded-full object-cover ring-4 ring-green-500/50"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-xs text-gray-400 text-center mb-2">Current Avatar</p>
+                    <div className="flex justify-center">
+                      <div className="relative">
+                        {avatarUrl && !imageError ? (
+                          <img
+                            src={avatarUrl}
+                            alt={getDisplayName()}
+                            className="w-24 h-24 rounded-full object-cover ring-4 ring-purple-500/50"
+                          />
+                        ) : (
+                          <div className="w-24 h-24 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center ring-4 ring-purple-500/50 text-white text-3xl font-bold">
+                            {profile?.first_name?.charAt(0) || ''}
+                            {profile?.last_name?.charAt(0) || 'U'}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Upload Options */}
+              <div className="space-y-3">
+                {/* Upload Photo Button */}
+                <button
+                  onClick={triggerFileInput}
+                  disabled={isUploadingAvatar}
+                  className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-purple-600/50 disabled:to-pink-600/50 text-white rounded-lg font-medium transition-all"
+                >
+                  <Upload className="w-5 h-5" />
+                  <span>{isUploadingAvatar ? 'Uploading...' : 'Upload Photo'}</span>
+                </button>
+
+                {/* Take Photo Button (Placeholder) */}
+                <button
+                  className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-slate-700/50 hover:bg-slate-700 border border-slate-600 text-white rounded-lg font-medium transition-all"
+                >
+                  <Camera className="w-5 h-5" />
+                  <span>Take Photo</span>
+                </button>
+
+                {/* Remove Photo Button */}
+                <button
+                  className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-red-600/20 hover:bg-red-600/30 border border-red-600/50 text-red-400 rounded-lg font-medium transition-all"
+                >
+                  <Trash2 className="w-5 h-5" />
+                  <span>Remove Photo</span>
+                </button>
+
+                {/* Info Text */}
+                <p className="text-xs text-gray-400 text-center mt-4">
+                  Recommended: Square image, at least 400x400 pixels, JPG or PNG format
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Avatar View Modal */}
+        {showAvatarView && (
+          <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4">
+            <div className="relative max-w-2xl w-full animate-in fade-in zoom-in-95">
+              {/* Close Button */}
+              <button
+                onClick={() => setShowAvatarView(false)}
+                className="absolute -top-10 right-0 p-2 text-gray-400 hover:text-white transition-colors"
+              >
+                <X className="w-8 h-8" />
+              </button>
+
+              {/* Avatar Container */}
+              <div className="flex flex-col items-center gap-4">
+                {/* Main Avatar Display */}
+                <div className="rounded-2xl overflow-hidden shadow-2xl">
+                  {avatarUrl && !imageError ? (
+                    <img
+                      src={avatarUrl}
+                      alt={getDisplayName()}
+                      className="w-96 h-96 object-cover"
+                    />
+                  ) : (
+                    <div className="w-96 h-96 bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-7xl font-bold">
+                      {profile?.first_name?.charAt(0) || ''}
+                      {profile?.last_name?.charAt(0) || 'U'}
+                    </div>
+                  )}
+                </div>
+
+                {/* Name Below Avatar */}
+                <div className="text-center">
+                  <h2 className="text-3xl font-bold text-white">{getDisplayName()}</h2>
+                  <p className="text-gray-400 text-sm mt-2">{user?.email}</p>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-3 mt-4">
+                  <button
+                    onClick={() => {
+                      setShowAvatarView(false);
+                      setIsEditing(true);
+                    }}
+                    className="flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                    Edit Profile
+                  </button>
+                  <button
+                    onClick={() => setShowAvatarView(false)}
+                    className="flex items-center gap-2 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Status Uploader Modal */}
         {showStatusUploader && (

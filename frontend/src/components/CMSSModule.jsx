@@ -241,6 +241,7 @@ const CMMSModule = ({
             
             console.log(`📋 User roles found:`, roleNames);
             console.log(`✅ User authorized with primary role: ${primaryRole}`);
+            console.log(`🔐 Role Permissions:`, rolePermissions[primaryRole]);
             
             localStorage.setItem('cmms_user_role', primaryRole);
             localStorage.setItem('cmms_user_profile', 'true');
@@ -250,14 +251,40 @@ const CMMSModule = ({
             setAccessDeniedReason('');
             console.log('🔓 hasBusinessProfile set to TRUE - should load dashboard');
           } else {
-            console.log('⚠️ User in CMMS but no active roles assigned - assigning viewer role');
-            localStorage.setItem('cmms_user_role', 'viewer');
+            // No explicit roles - check if user is the company creator
+            console.log('⚠️ User in CMMS but no active roles assigned - checking if creator...');
+            
+            // Get company info to check if user is the creator
+            const { data: company, error: companyError } = await supabase
+              .from('cmms_company_profiles')
+              .select('created_by, ican_user_id')
+              .eq('id', cmmsUser.cmms_company_id)
+              .single();
+
+            if (!companyError && company) {
+              // Check if the current user (cmmsUser.id) matches the company creator
+              // or check if the ICAN user ID matches
+              const isCreator = company.created_by === cmmsUser.id || company.created_by === user?.id;
+              
+              if (isCreator) {
+                console.log('👑 User is the company creator - assigning admin role');
+                localStorage.setItem('cmms_user_role', 'admin');
+                setUserRole('admin');
+              } else {
+                console.log('ℹ️ User is not creator - assigning viewer role');
+                localStorage.setItem('cmms_user_role', 'viewer');
+                setUserRole('viewer');
+              }
+            } else {
+              localStorage.setItem('cmms_user_role', 'viewer');
+              setUserRole('viewer');
+            }
+            
             localStorage.setItem('cmms_user_profile', 'true');
-            setUserRole('viewer');
             setHasBusinessProfile(true);  // ✅ SET THIS SO DASHBOARD LOADS
             setIsAuthorized(true);
             setAccessDeniedReason('');
-            console.log('🔓 hasBusinessProfile set to TRUE (viewer) - should load dashboard');
+            console.log('🔓 hasBusinessProfile set to TRUE (viewer/admin) - should load dashboard');
           }
 
           // Load company data
@@ -1532,15 +1559,20 @@ const CMMSModule = ({
       industry: cmmsData.companyProfile?.industry || 'Manufacturing'
     });
 
-    // Strict: Only Admin can manage company profile
-    if (!hasPermission('canEditCompany')) {
+    // Permission check: Allow admin and any assigned role (not just admin for profile management)
+    // Changed from strict admin-only to allow any CMMS member to view and edit company profile
+    const isAssignedMember = userRole && userRole !== 'guest' && userRole !== 'viewer';
+    const isAdmin = userRole === 'admin';
+    const canManageProfile = isAdmin || isAssignedMember;
+
+    if (!canManageProfile) {
       return (
         <div className="glass-card p-6 bg-orange-500 bg-opacity-10 border-l-4 border-orange-500">
           <div className="flex items-center gap-3">
             <AlertTriangle className="w-6 h-6 text-orange-400" />
             <div>
               <p className="text-orange-300 font-semibold">🔒 Access Restricted</p>
-              <p className="text-gray-400 text-sm mt-1">Only Administrators can manage company profiles. Your role: <span className="text-blue-300 font-bold uppercase">{userRole}</span></p>
+              <p className="text-gray-400 text-sm mt-1">Only CMMS members can manage company profiles. Your role: <span className="text-blue-300 font-bold uppercase">{userRole}</span></p>
             </div>
           </div>
         </div>

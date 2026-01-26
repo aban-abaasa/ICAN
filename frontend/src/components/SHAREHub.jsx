@@ -68,7 +68,92 @@ const SHAREHub = ({ onClose, openCreateForm = false }) => {
   const renderContent = () => {
     switch (activeTab) {
       case 'pitchin':
-        return <Pitchin onOpenCreate={() => setShowPitchCreator(true)} showPitchCreator={showPitchCreator} onClosePitchCreator={() => setShowPitchCreator(false)} />;
+        return (
+          <div>
+            {/* Featured Pitches Grid - Web Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6 mb-8">
+              {[1, 2, 3, 4, 5, 6].map((item) => (
+                <div
+                  key={item}
+                  className="glass-card overflow-hidden hover:bg-white/10 transition-all cursor-pointer border border-white/10 hover:border-pink-500/50 group"
+                >
+                  {/* Thumbnail - Video Preview */}
+                  <div className="relative w-full aspect-video bg-gradient-to-br from-purple-600 to-pink-600 overflow-hidden flex items-center justify-center">
+                    <span className="text-5xl opacity-50 group-hover:opacity-100 transition">🎬</span>
+                    <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition"></div>
+                  </div>
+
+                  {/* Content */}
+                  <div className="p-4 md:p-6">
+                    {/* Header */}
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <h3 className="text-base md:text-lg font-bold text-white mb-1">
+                          Pitch {item}
+                        </h3>
+                        <p className="text-xs text-gray-400">Entrepreneur Network</p>
+                      </div>
+                      <span className="px-2 md:px-3 py-0.5 md:py-1 text-xs font-medium bg-pink-500/30 text-pink-300 rounded-full whitespace-nowrap">
+                        Trending
+                      </span>
+                    </div>
+
+                    {/* Description */}
+                    <p className="text-gray-400 text-xs md:text-sm mb-4 line-clamp-2">
+                      Innovative business solution connecting entrepreneurs with investors worldwide.
+                    </p>
+
+                    {/* Stats */}
+                    <div className="grid grid-cols-3 gap-2 mb-4 bg-white/5 p-3 rounded-lg">
+                      <div className="text-center">
+                        <p className="text-xs text-gray-500">RAISED</p>
+                        <p className="text-sm font-bold text-white">UGX {(50000000 * item).toLocaleString()}</p>
+                      </div>
+                      <div className="text-center border-x border-white/10">
+                        <p className="text-xs text-gray-500">GOAL</p>
+                        <p className="text-sm font-bold text-white">UGX {(100000000 * item).toLocaleString()}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs text-gray-500">EQUITY</p>
+                        <p className="text-sm font-bold text-white">{10 + item}%</p>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs text-gray-400">Funding Progress</span>
+                        <span className="text-xs font-bold text-pink-400">{50 - item * 5}%</span>
+                      </div>
+                      <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-gradient-to-r from-pink-500 to-purple-500 rounded-full transition-all"
+                          style={{width: `${50 - item * 5}%`}}
+                        ></div>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex gap-2">
+                      <button className="flex-1 px-3 py-2 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white rounded-lg text-xs md:text-sm font-medium transition-all">
+                        View Pitch
+                      </button>
+                      <button className="flex-1 px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs md:text-sm font-medium transition-all">
+                        💰 Invest
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Full Pitchin Component Below */}
+            <div className="mt-12 pt-8 border-t border-white/10">
+              <h2 className="text-2xl font-bold text-white mb-6">All Active Pitches</h2>
+              <Pitchin onOpenCreate={() => setShowPitchCreator(true)} showPitchCreator={showPitchCreator} onClosePitchCreator={() => setShowPitchCreator(false)} />
+            </div>
+          </div>
+        );
       
       case 'opportunities':
         return (
@@ -250,41 +335,89 @@ const SHAREHub = ({ onClose, openCreateForm = false }) => {
       </button>
 
       <div className="max-w-6xl mx-auto">
-        {/* Header - Collapsible on Mobile - HIDDEN */}
-        {/* <div className="mb-6 md:mb-12">
-          {/* Desktop: Always visible */}
-          {/* <div className="hidden md:block text-center mb-8 pt-4">
-            <h1 className="text-5xl font-bold mb-3">
-              <span className="gradient-text">🚀 SHARE Hub</span>
-            </h1>
-            <p className="text-xl text-gray-300">
-              Share your pitches, explore grants, and discover investment opportunities
-            </p>
-          </div> */}
-
-          {/* Mobile: Collapsible header */}
-          {/* <div className="md:hidden">
-            <button
-              onClick={() => setHeaderExpanded(!headerExpanded)}
-              className="flex items-center justify-center p-1.5 rounded-md bg-white/5 hover:bg-white/10 transition-all border border-white/10 mb-4 opacity-60 hover:opacity-100"
-              title="Toggle SHARE Hub details"
-            >
-              <span className="text-lg">🚀</span>
-            </button>
-            
-            {/* Expanded header content */}
-            {/* {headerExpanded && (
-              <div className="text-center pb-4 mb-4 animate-in fade-in duration-200">
-                <h1 className="text-2xl font-bold mb-2">
-                  <span className="gradient-text">🚀 SHARE Hub</span>
-                </h1>
-                <p className="text-xs text-gray-400">
-                  Share pitches, explore grants, discover opportunities
-                </p>
+        {/* Pitchin Header - Always Visible */}
+        {activeTab === 'pitchin' && (
+          <div className="mb-8 md:mb-12 text-center">
+            {/* Desktop: Full Header */}
+            <div className="hidden md:block pt-4">
+              <div className="inline-block mb-4">
+                <div className="w-16 h-16 bg-gradient-to-br from-pink-500 to-purple-500 rounded-xl flex items-center justify-center shadow-lg shadow-pink-500/30 mx-auto mb-4">
+                  <span className="text-3xl">🎥</span>
+                </div>
               </div>
-            )}
+              <h1 className="text-5xl font-bold mb-3 bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text text-transparent">
+                Pitchin
+              </h1>
+              <p className="text-xl text-gray-300 mb-6">
+                Share your vision, connect with investors
+              </p>
+              {/* Icon Grid - Desktop */}
+              <div className="flex justify-center items-center gap-8 md:gap-12 text-center">
+                <div className="flex flex-col items-center">
+                  <span className="text-4xl mb-2">🎥</span>
+                  <span className="text-sm text-gray-400">Available</span>
+                </div>
+                <div className="flex flex-col items-center">
+                  <span className="text-4xl mb-2">🎬</span>
+                  <span className="text-sm text-gray-400">My Pitches</span>
+                </div>
+                <div className="flex flex-col items-center">
+                  <span className="text-4xl mb-2">📹</span>
+                  <span className="text-sm text-gray-400">Record</span>
+                </div>
+                <div className="flex flex-col items-center">
+                  <span className="text-4xl mb-2">🎤</span>
+                  <span className="text-sm text-gray-400">Voice</span>
+                </div>
+                <div className="flex flex-col items-center">
+                  <span className="text-4xl mb-2">🗳️</span>
+                  <span className="text-sm text-gray-400">Pending Votes</span>
+                </div>
+                <div className="flex flex-col items-center">
+                  <span className="text-4xl mb-2">⏳</span>
+                  <span className="text-sm text-gray-400">In Progress</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Mobile: Compact Header */}
+            <div className="md:hidden pt-2">
+              <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text text-transparent">
+                Pitchin
+              </h1>
+              <p className="text-sm text-gray-300 mb-4">
+                Share your vision, connect with investors
+              </p>
+              {/* Icon Grid - Mobile (Same as Desktop) */}
+              <div className="flex justify-center items-center gap-4 flex-wrap">
+                <div className="flex flex-col items-center">
+                  <span className="text-2xl mb-1">🎥</span>
+                  <span className="text-xs text-gray-400">Available</span>
+                </div>
+                <div className="flex flex-col items-center">
+                  <span className="text-2xl mb-1">🎬</span>
+                  <span className="text-xs text-gray-400">My Pitches</span>
+                </div>
+                <div className="flex flex-col items-center">
+                  <span className="text-2xl mb-1">📹</span>
+                  <span className="text-xs text-gray-400">Record</span>
+                </div>
+                <div className="flex flex-col items-center">
+                  <span className="text-2xl mb-1">🎤</span>
+                  <span className="text-xs text-gray-400">Voice</span>
+                </div>
+                <div className="flex flex-col items-center">
+                  <span className="text-2xl mb-1">🗳️</span>
+                  <span className="text-xs text-gray-400">Pending Votes</span>
+                </div>
+                <div className="flex flex-col items-center">
+                  <span className="text-2xl mb-1">⏳</span>
+                  <span className="text-xs text-gray-400">In Progress</span>
+                </div>
+              </div>
+            </div>
           </div>
-        </div> */}
+        )}
 
         {/* Tabs - Responsive */}
         <div className="flex flex-wrap gap-2 md:gap-3 mb-8 md:mb-12 justify-center px-1">

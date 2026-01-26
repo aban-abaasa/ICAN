@@ -141,20 +141,31 @@ export const AuthProvider = ({ children }) => {
     const fileName = `${user.id}-${Date.now()}.${fileExt}`;
     const filePath = `avatars/${fileName}`;
 
+    console.log('🚀 Starting avatar upload:', { filePath, fileName, fileSize: file.size });
+
     // Upload to Supabase Storage
-    const { error: uploadError } = await supabase.storage
+    const { data, error: uploadError } = await supabase.storage
       .from('user-content')
       .upload(filePath, file, { upsert: true });
 
-    if (uploadError) throw uploadError;
+    if (uploadError) {
+      console.error('❌ Upload error:', uploadError);
+      throw uploadError;
+    }
+
+    console.log('✅ File uploaded successfully:', data);
 
     // Get public URL
     const { data: { publicUrl } } = supabase.storage
       .from('user-content')
       .getPublicUrl(filePath);
 
+    console.log('🔗 Public URL:', publicUrl);
+
     // Update profile with new avatar URL
     await updateProfile({ avatar_url: publicUrl });
+
+    console.log('💾 Profile updated with avatar URL');
 
     return publicUrl;
   };

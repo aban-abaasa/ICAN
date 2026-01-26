@@ -62,19 +62,22 @@ class WalletAccountService {
     try {
       this.supabase = getSupabaseClient();
 
+      // Get all active accounts (there might be multiple)
       const { data, error } = await this.supabase
         .from('user_accounts')
         .select('*')
         .eq('user_id', userId)
         .eq('status', 'active')
-        .maybeSingle();
+        .order('created_at', { ascending: false })
+        .limit(1);
 
       if (error) {
         console.error('❌ Error checking user account:', error);
         return null;
       }
 
-      return data;
+      // Return the first (most recent) active account
+      return data && data.length > 0 ? data[0] : null;
     } catch (error) {
       console.error('❌ Error in checkUserAccount:', error);
       return null;
