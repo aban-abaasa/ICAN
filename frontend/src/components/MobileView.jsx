@@ -58,6 +58,39 @@ const MobileView = ({ userProfile }) => {
   const [showProfilePanel, setShowProfilePanel] = useState(false);
   const [showPitchinPanel, setShowPitchinPanel] = useState(false);
   const [showWalletPanel, setShowWalletPanel] = useState(false);
+  const [mobileError, setMobileError] = useState(null);
+
+  // Error handling for mobile view
+  useEffect(() => {
+    const handleMobileError = (error) => {
+      console.error('🔴 Mobile View Error:', error);
+      setMobileError(error.message || 'Something went wrong');
+    };
+
+    window.addEventListener('error', handleMobileError);
+    return () => window.removeEventListener('error', handleMobileError);
+  }, []);
+
+  if (mobileError) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
+        <div className="text-center">
+          <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <h1 className="text-xl font-bold text-white mb-2">Error Loading Mobile View</h1>
+          <p className="text-gray-400 mb-4">{mobileError}</p>
+          <button
+            onClick={() => {
+              setMobileError(null);
+              window.location.reload();
+            }}
+            className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-lg font-medium"
+          >
+            Reload App
+          </button>
+        </div>
+      </div>
+    );
+  }
   const [showTrustPanel, setShowTrustPanel] = useState(false);
   const [showCmmsPanel, setShowCmmsPanel] = useState(false);
   

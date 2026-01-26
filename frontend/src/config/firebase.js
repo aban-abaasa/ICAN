@@ -14,33 +14,57 @@ import {
   onSnapshot
 } from 'firebase/firestore';
 
-// Firebase configuration
+// Firebase configuration - with fallback for missing credentials
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'sk_test_missing_api_key',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'ican-engine.firebaseapp.com',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'ican-engine',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'ican-engine.appspot.com',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '0',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:0:web:0'
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Check if Firebase is properly configured
+const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_API_KEY && 
+                           import.meta.env.VITE_FIREBASE_PROJECT_ID;
 
-// Initialize Firebase Authentication and get a reference to the service
-export const auth = getAuth(app);
+if (!isFirebaseConfigured) {
+  console.warn('⚠️ Firebase credentials not configured. Using Supabase auth instead.');
+}
 
-// Initialize Cloud Firestore and get a reference to the service
-export const db = getFirestore(app);
+let app = null;
+let auth = null;
+let db = null;
+
+try {
+  // Initialize Firebase only if properly configured
+  app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
+} catch (error) {
+  console.error('❌ Firebase initialization failed:', error);
+  console.log('ℹ️ App will use Supabase authentication instead.');
+}
 
 // Authentication utilities
 export const signInAnonymousUser = () => {
+  if (!auth) {
+    console.warn('⚠️ Firebase auth not configured');
+    return Promise.reject(new Error('Firebase not configured'));
+  }
   return signInAnonymously(auth);
 };
 
 export const onAuthStateChange = (callback) => {
+  if (!auth) {
+    console.warn('⚠️ Firebase auth not configured');
+    return () => {}; // Return no-op unsubscribe function
+  }
   return onAuthStateChanged(auth, callback);
 };
+
+// Export auth and db for use in other parts of the app
+export { auth, db, app };
 
 // Firestore utilities for ICAN Capital Engine
 const COLLECTIONS = {
@@ -53,6 +77,10 @@ const COLLECTIONS = {
 
 // User data operations
 export const createOrUpdateUser = async (userId, userData) => {
+  if (!db) {
+    console.warn('⚠️ Firebase not configured - skipping user update');
+    return { success: true }; // Silently fail
+  }
   try {
     const userRef = doc(db, COLLECTIONS.USERS, userId);
     await updateDoc(userRef, {
@@ -67,6 +95,10 @@ export const createOrUpdateUser = async (userId, userData) => {
 };
 
 export const getUserData = async (userId) => {
+  if (!db) {
+    console.warn('⚠️ Firebase not configured - skipping user fetch');
+    return { success: true, data: {} };
+  }
   try {
     const userRef = doc(db, COLLECTIONS.USERS, userId);
     const userDoc = await userRef.get();

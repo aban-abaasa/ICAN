@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>ICAN Health Check</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a2e;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      text-align: center;
+      max-width: 500px;
+    }
+    .status {
+      font-size: 48px;
+      margin: 20px 0;
+    }
+    .ok { color: #10b981; }
+    .error { color: #ef4444; }
+    h1 { margin: 0 0 10px 0; }
+    p { margin: 10px 0; opacity: 0.8; }
+    .info { 
+      background: #16213e; 
+      padding: 20px; 
+      border-radius: 8px; 
+      margin: 20px 0;
+      text-align: left;
+      font-family: monospace;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>ICAN Capital Engine</h1>
+    <div class="status ok">✓ Online</div>
+    <p>Application server is running</p>
+    
+    <div class="info">
+      <div><strong>Environment:</strong> Production</div>
+      <div><strong>Timestamp:</strong> <span id="timestamp"></span></div>
+      <div><strong>Browser:</strong> <span id="browser"></span></div>
+      <div><strong>Device:</strong> <span id="device"></span></div>
+    </div>
+    
+    <p style="margin-top: 30px;">
+      <a href="/" style="color: #8b5cf6; text-decoration: none; font-weight: bold;">→ Go to App</a>
+    </p>
+  </div>
+  
+  <script>
+    document.getElementById('timestamp').textContent = new Date().toISOString();
+    document.getElementById('browser').textContent = navigator.userAgent.split(' ').slice(-2).join(' ');
+    document.getElementById('device').textContent = window.innerWidth < 768 ? 'Mobile' : 'Desktop';
+  </script>
+</body>
+</html>
