@@ -34,7 +34,8 @@ import {
   Calendar,
   ChevronDown,
   Crown,
-  Rocket
+  Rocket,
+  AlertTriangle
 } from 'lucide-react';
 import SmartTransactionEntry from './SmartTransactionEntry';
 import { ProfilePage } from './auth/ProfilePage';
