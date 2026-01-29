@@ -529,8 +529,7 @@ class MOmoService {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${supabaseKey}`
         },
-        body: JSON.stringify(data),
-        timeout: this.timeout
+        body: JSON.stringify(data)
       })
 
       const responseData = await response.json()
@@ -571,8 +570,7 @@ class MOmoService {
         method: 'GET',
         headers: {
           'Ocp-Apim-Subscription-Key': this.momoApiKey
-        },
-        timeout: this.timeout
+        }
       });
 
       if (!response.ok) {
@@ -583,6 +581,16 @@ class MOmoService {
       
       console.log('✅ Transaction Status:', responseData);
       
+      return responseData;
+    } catch (error) {
+      console.error('❌ Error checking transaction status:', error);
+      return {
+        status: 'UNKNOWN',
+        error: error.message
+      };
+    }
+  }
+
   /**
    * 🌍 Process Cross-Border Remittance via MTN MOMO Remittances
    * Send money to diaspora recipients in other countries
