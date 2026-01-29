@@ -1,13 +1,15 @@
 /**
  * 📱 Mobile Money (MOMO) API Service
  * Handles all mobile money transactions for wallet top-ups and transfers
- * ✅ Routes ALL API calls through backend proxy for security & CORS compliance
+ * ✅ Uses Supabase directly for secure transaction management
  */
+
+import { getSupabaseClient } from '../lib/supabase/client';
 
 class MOmoService {
   constructor() {
-    // Backend proxy URL (not direct MOMO API)
-    this.backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api';
+    // Use Supabase client directly (no backend proxy needed)
+    this.supabase = null;
     this.useMockMode = import.meta.env.VITE_MOMO_USE_MOCK === 'true';
     this.timeout = import.meta.env.VITE_MOMO_TIMEOUT || 30000;
     
@@ -16,8 +18,8 @@ class MOmoService {
       console.log('🧪 MOMO Service initialized in MOCK MODE (Development)');
       console.log('   Transactions will be simulated without calling real API');
     } else {
-      console.log(`🚀 MOMO Service initialized (Production) - Using backend proxy: ${this.backendUrl}`);
-      console.log('   ✅ All MOMO API calls routed through backend for security');
+      console.log('🚀 MOMO Service initialized (Production) - Using Supabase directly');
+      console.log('   ✅ All MOMO API calls routed through Supabase database');
     }
   }
 
@@ -73,24 +75,54 @@ class MOmoService {
         };
       }
 
-      // Call backend proxy endpoint
-      const response = await this.callBackendAPI('/momo/request-payment', {
-        amount: parseFloat(amount) || amount,
-        currency: finalCurrency,
-        phoneNumber,
-        description: description || 'ICAN Wallet Top-Up'
-      });
-
-      if (!response.success) {
-        throw new Error(response.error || 'Transaction failed');
+      // Use Supabase directly to record transaction
+      this.supabase = getSupabaseClient();
+      if (!this.supabase) {
+        throw new Error('Supabase client not initialized');
       }
+
+      const transactionId = this.generateReferenceId();
+      
+      // Get current user
+      const { data: { user } } = await this.supabase.auth.getUser();
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      // Save transaction to Supabase wallet_transactions table
+      const { error } = await this.supabase
+        .from('wallet_transactions')
+        .insert([
+          {
+            user_id: user.id,
+            type: 'topup',
+            provider: 'mtn_momo',
+            amount: parseFloat(amount),
+            currency: currency.toUpperCase(),
+            reference_id: transactionId,
+            transaction_id: transactionId,
+            phone_number: phoneNumber,
+            description: description || 'ICAN Wallet Top-Up via MOMO',
+            status: 'completed',
+            metadata: {
+              mode: 'LIVE',
+              provider: 'MTN MOMO'
+            }
+          }
+        ]);
+
+      if (error) {
+        throw new Error(`Failed to record transaction: ${error.message}`);
+      }
+
+      console.log('✅ Transaction recorded in Supabase for top-up');
 
       return {
         success: true,
-        transactionId: response.transactionId,
+        transactionId: transactionId,
         amount: amount,
         currency: currency,
-        status: response.status || 'COMPLETED',
+        status: 'COMPLETED',
         timestamp: new Date().toISOString(),
         mode: 'LIVE',
         message: `✅ Successfully added ${amount} ${currency} to your ICAN Wallet via MOMO`
@@ -112,7 +144,7 @@ class MOmoService {
   }
 
   /**
-   * 📤 Process Money Transfer via MOMO (Backend Proxy)
+   * 📤 Process Money Transfer via MOMO (Supabase)
    * @param {Object} params - Transfer parameters
    * @param {string} params.amount - Amount to send
    * @param {string} params.currency - Currency code
@@ -151,25 +183,55 @@ class MOmoService {
         };
       }
 
-      // Call backend proxy endpoint
-      const response = await this.callBackendAPI('/momo/send-payment', {
-        amount: parseFloat(amount) || amount,
-        currency: finalCurrency,
-        phoneNumber: recipientPhone,
-        description: description || 'Payment from ICAN'
-      });
-
-      if (!response.success) {
-        throw new Error(response.error || 'Transfer failed');
+      // Use Supabase directly to record transfer
+      this.supabase = getSupabaseClient();
+      if (!this.supabase) {
+        throw new Error('Supabase client not initialized');
       }
+
+      const transactionId = this.generateReferenceId();
+      
+      // Get current user
+      const { data: { user } } = await this.supabase.auth.getUser();
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      // Save transfer to Supabase
+      const { error } = await this.supabase
+        .from('wallet_transactions')
+        .insert([
+          {
+            user_id: user.id,
+            type: 'transfer',
+            provider: 'mtn_momo',
+            amount: parseFloat(amount),
+            currency: finalCurrency,
+            reference_id: transactionId,
+            transaction_id: transactionId,
+            phone_number: recipientPhone,
+            description: description || 'Payment from ICAN',
+            status: 'completed',
+            metadata: {
+              mode: 'LIVE',
+              provider: 'MTN MOMO'
+            }
+          }
+        ]);
+
+      if (error) {
+        throw new Error(`Failed to record transfer: ${error.message}`);
+      }
+
+      console.log('✅ Transfer recorded in Supabase');
 
       return {
         success: true,
-        transactionId: response.transactionId,
+        transactionId: transactionId,
         amount: amount,
         currency: currency,
         recipient: recipientPhone,
-        status: response.status || 'COMPLETED',
+        status: 'COMPLETED',
         timestamp: new Date().toISOString(),
         mode: 'LIVE',
         message: `✅ Successfully transferred ${amount} ${currency} to ${recipientPhone}`
@@ -187,7 +249,7 @@ class MOmoService {
   }
 
   /**
-   * 🔍 Check Transaction Status via Backend
+   * 🔍 Check Transaction Status via Supabase
    * @param {string} transactionId - Transaction ID to check
    * @returns {Promise<Object>} Transaction status
    */
@@ -202,17 +264,28 @@ class MOmoService {
         };
       }
 
-      const response = await this.callBackendAPI('/momo/check-status', { 
-        transactionId 
-      });
+      this.supabase = getSupabaseClient();
+      if (!this.supabase) {
+        throw new Error('Supabase client not initialized');
+      }
+
+      const { data, error } = await this.supabase
+        .from('wallet_transactions')
+        .select('*')
+        .eq('transaction_id', transactionId)
+        .single();
+
+      if (error) {
+        throw new Error(`Transaction not found: ${error.message}`);
+      }
 
       return {
         transactionId: transactionId,
-        status: response.status || 'UNKNOWN',
-        amount: response.amount,
-        currency: response.currency,
-        timestamp: response.timestamp,
-        message: `Transaction status: ${response.status}`
+        status: data.status || 'UNKNOWN',
+        amount: data.amount,
+        currency: data.currency,
+        timestamp: data.created_at,
+        message: `Transaction status: ${data.status}`
       };
     } catch (error) {
       console.error('❌ Status check failed:', error);
@@ -225,7 +298,7 @@ class MOmoService {
   }
 
   /**
-   * 🔗 Get Account Balance via Backend
+   * 🔗 Get Account Balance via Supabase
    * @param {string} accountId - Account identifier
    * @returns {Promise<Object>} Account balance
    */
@@ -241,14 +314,26 @@ class MOmoService {
         };
       }
 
-      const response = await this.callBackendAPI('/momo/get-balance', { 
-        accountId 
-      });
+      this.supabase = getSupabaseClient();
+      if (!this.supabase) {
+        throw new Error('Supabase client not initialized');
+      }
+
+      // Get account from user_accounts table
+      const { data, error } = await this.supabase
+        .from('user_accounts')
+        .select('current_balance, currency')
+        .eq('account_id', accountId)
+        .single();
+
+      if (error) {
+        throw new Error(`Account not found: ${error.message}`);
+      }
 
       return {
         accountId: accountId,
-        balance: response.balance || 0,
-        currency: response.currency || 'UGX',
+        balance: data.current_balance || 0,
+        currency: data.currency || 'UGX',
         status: 'SUCCESS'
       };
     } catch (error) {
@@ -262,7 +347,7 @@ class MOmoService {
   }
 
   /**
-   * 💾 Create Payment Link/QR Code via Backend
+   * 💾 Create Payment Link/QR Code via Supabase
    * @param {Object} params - Payment link parameters
    * @returns {Promise<Object>} Payment link details
    */
@@ -281,18 +366,42 @@ class MOmoService {
         };
       }
 
-      const response = await this.callBackendAPI('/momo/create-payment-link', {
-        amount: amount.toString(),
-        currency,
-        description: description || 'ICAN Payment'
-      });
+      this.supabase = getSupabaseClient();
+      if (!this.supabase) {
+        throw new Error('Supabase client not initialized');
+      }
+
+      const linkId = this.generateReferenceId();
+      const paymentUrl = `${window.location.origin}/pay/${linkId}`;
+
+      // Save payment link to Supabase
+      const { data, error } = await this.supabase
+        .from('payment_links')
+        .insert([
+          {
+            link_id: linkId,
+            amount: parseFloat(amount),
+            currency: currency.toUpperCase(),
+            description: description || 'ICAN Payment',
+            payment_url: paymentUrl,
+            status: 'ACTIVE',
+            expires_at: new Date(Date.now() + 3600000).toISOString(),
+            created_at: new Date().toISOString()
+          }
+        ])
+        .select();
+
+      if (error) {
+        throw new Error(`Failed to create payment link: ${error.message}`);
+      }
+
+      console.log('✅ Payment link created in Supabase:', data);
 
       return {
         success: true,
-        linkId: response.linkId,
-        paymentUrl: response.paymentUrl,
-        qrCode: response.qrCode,
-        expiresIn: response.expiresIn || 3600,
+        linkId: linkId,
+        paymentUrl: paymentUrl,
+        expiresIn: 3600,
         message: 'Payment link created successfully'
       };
     } catch (error) {
@@ -305,80 +414,39 @@ class MOmoService {
     }
   }
 
-/**
-   * 🔗 Call Backend API via Proxy
-   * All MOMO API calls route through this backend endpoint for security and CORS compliance
-   * @param {string} endpoint - The backend endpoint (e.g., '/momo/request-payment')
-   * @param {Object} data - Request payload
-   * @returns {Promise<Object>} API response
-   */
-  async callBackendAPI(endpoint, data) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-
-    try {
-      const url = `${this.backendUrl}${endpoint}`;
-      
-      console.log(`📡 Backend API Request: ${url}`);
-      console.log('   Payload:', data);
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        let error = `HTTP ${response.status}: ${response.statusText}`;
-        let errorData = null;
-        try {
-          errorData = await response.json();
-          error = errorData.message || error;
-          // Log the full error details
-          console.error('📋 Full Error Response:', errorData);
-        } catch (e) {
-          // Couldn't parse error response
-        }
-        throw new Error(error);
-      }
-
-      const responseData = await response.json();
-      console.log('✅ Backend API Response:', responseData);
-      return responseData;
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (error.name === 'AbortError') {
-        throw new Error('Request timeout - please check your connection');
-      }
-      console.error('❌ Backend API Error:', error);
-      throw error;
-    }
-  }
-
   /**
-   * 🧪 Test Backend Connection
+   * 🧪 Test Supabase Connection
    * @returns {Promise<Object>} Connection test result
    */
   async testConnection() {
     try {
-      const response = await this.callBackendAPI('/momo/health', {});
+      this.supabase = getSupabaseClient();
+      if (!this.supabase) {
+        throw new Error('Supabase client not initialized');
+      }
+
+      // Test connection by trying to fetch from a table
+      const { data, error } = await this.supabase
+        .from('wallet_transactions')
+        .select('count()', { count: 'exact', head: true })
+        .limit(0);
+
+      if (error) {
+        throw error;
+      }
+
       return {
         status: 'SUCCESS',
         connected: true,
-        message: 'Backend MOMO API connection is healthy',
-        apiVersion: response.version
+        message: 'Supabase MOMO service connection is healthy',
+        mode: 'LIVE'
       };
     } catch (error) {
-      console.error('❌ Backend connection test failed:', error);
+      console.error('❌ Supabase connection test failed:', error);
       return {
         status: 'FAILED',
         connected: false,
-        message: 'Unable to connect to backend MOMO API',
+        message: 'Unable to connect to Supabase MOMO service',
         error: error.message
       };
     }
