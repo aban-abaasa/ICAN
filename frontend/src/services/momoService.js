@@ -493,8 +493,9 @@ class MOmoService {
 
   /**
    * 🔗 Call MTN MOMO API via Supabase Edge Function
+   * Handles: Collections, Disbursements, Remittances (cross-border), Status checks
    * This avoids CORS issues by calling from server-side
-   * @param {string} endpoint - API endpoint (request-payment, transfer, etc.)
+   * @param {string} endpoint - API endpoint (request-payment, transfer, collections, remittance, status)
    * @param {Object} data - Request payload
    * @returns {Promise<Object>} API response
    */
@@ -504,11 +505,19 @@ class MOmoService {
       const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
       
       // Map endpoint to Supabase Edge Function
-      const functionName = endpoint === 'request-payment' 
-        ? 'momo-request-payment'
-        : endpoint === 'transfer'
-        ? 'momo-transfer'
-        : 'momo-request-payment'
+      let functionName = 'momo-request-payment'
+      
+      if (endpoint === 'request-payment' || endpoint === 'requestpayment') {
+        functionName = 'momo-request-payment'
+      } else if (endpoint === 'transfer' || endpoint === 'disbursement') {
+        functionName = 'momo-transfer'
+      } else if (endpoint === 'collections' || endpoint === 'requesttopay') {
+        functionName = 'momo-collections'
+      } else if (endpoint === 'remittance' || endpoint === 'cross-border') {
+        functionName = 'momo-remittance'
+      } else if (endpoint === 'status' || endpoint === 'transaction-status') {
+        functionName = 'momo-transaction-status'
+      }
       
       const url = `${supabaseUrl}/functions/v1/${functionName}`
       
@@ -530,7 +539,7 @@ class MOmoService {
         throw new Error(responseData.error || `HTTP ${response.status}: ${response.statusText}`);
       }
 
-      console.log('✅ Supabase Edge Function Response:', responseData);
+      console.log(`✅ ${functionName} Response:`, responseData);
       
       return {
         success: true,
@@ -574,16 +583,140 @@ class MOmoService {
       
       console.log('✅ Transaction Status:', responseData);
       
+  /**
+   * 🌍 Process Cross-Border Remittance via MTN MOMO Remittances
+   * Send money to diaspora recipients in other countries
+   * @param {Object} params - Remittance parameters
+   * @param {string} params.amount - Amount to send
+   * @param {string} params.currency - Currency code (UGX, KES, USD, etc.)
+   * @param {Object} params.recipient - Recipient details { firstName, lastName, phone }
+   * @param {string} params.recipientCountry - Recipient country code (UG, KE, TZ, etc.)
+   * @param {string} params.senderName - Sender name
+   * @param {string} params.description - Remittance description
+   * @returns {Promise<Object>} Remittance result
+   */
+  async processRemittance(params) {
+    const { amount, currency, recipient, recipientCountry, senderName, description } = params;
+
+    try {
+      // Validate inputs
+      if (!amount || !currency || !recipient || !recipientCountry) {
+        throw new Error('Missing required fields: amount, currency, recipient, recipientCountry');
+      }
+
+      const mode = this.useMockMode ? 'MOCK' : 'LIVE';
+      const finalCurrency = this.useMockMode ? 'EUR' : currency.toUpperCase();
+      
+      console.log(`🌍 Processing Cross-Border Remittance (${mode} Mode):`, { 
+        amount, 
+        currency: finalCurrency, 
+        recipientCountry,
+        recipient
+      });
+
+      // Mock mode
+      if (this.useMockMode) {
+        console.log('🧪 Mock Mode: Simulating successful remittance');
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
+        return {
+          success: true,
+          transactionId: this.generateReferenceId(),
+          amount: amount,
+          currency: currency,
+          recipientCountry: recipientCountry,
+          recipient: recipient.firstName || recipient.name,
+          status: 'COMPLETED',
+          timestamp: new Date().toISOString(),
+          mode: 'MOCK',
+          remittanceType: 'cross-border',
+          message: `✅ [MOCK MODE] Successfully sent ${amount} ${currency} to ${recipientCountry}`
+        };
+      }
+
+      // Call MTN MOMO Remittances API via Edge Function
+      const transactionId = this.generateReferenceId();
+      const momoResponse = await this.callMOMOAPI('remittance', {
+        amount: amount,
+        currency: finalCurrency,
+        externalId: transactionId,
+        recipient: {
+          firstName: recipient.firstName || recipient.name || 'Recipient',
+          lastName: recipient.lastName || '',
+          phone: recipient.phone || recipient.phoneNumber
+        },
+        recipientCountry: recipientCountry.toUpperCase(),
+        senderName: senderName,
+        description: description || `Remittance to ${recipientCountry}`
+      });
+
+      if (!momoResponse.success) {
+        throw new Error(momoResponse.error || 'Failed to process remittance');
+      }
+
+      // Record remittance to Supabase
+      this.supabase = getSupabaseClient();
+      if (!this.supabase) {
+        throw new Error('Supabase client not initialized');
+      }
+
+      const { data: { user } } = await this.supabase.auth.getUser();
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      const { error } = await this.supabase
+        .from('wallet_transactions')
+        .insert([
+          {
+            user_id: user.id,
+            type: 'remittance',
+            provider: 'mtn_momo',
+            amount: parseFloat(amount),
+            currency: finalCurrency,
+            reference_id: transactionId,
+            transaction_id: momoResponse.transactionId || transactionId,
+            phone_number: recipient.phone || recipient.phoneNumber,
+            description: description || `Cross-border remittance to ${recipientCountry}`,
+            status: 'completed',
+            metadata: {
+              mode: 'LIVE',
+              provider: 'MTN MOMO Remittances',
+              recipientCountry: recipientCountry,
+              recipientName: recipient.firstName,
+              remittanceType: 'cross-border',
+              momoResponse: momoResponse
+            }
+          }
+        ]);
+
+      if (error) {
+        console.error('Remittance recording error:', error);
+      }
+
       return {
         success: true,
-        status: responseData.status,
-        ...responseData
+        transactionId: momoResponse.transactionId || transactionId,
+        amount: amount,
+        currency: finalCurrency,
+        recipientCountry: recipientCountry,
+        recipient: recipient.firstName,
+        status: 'COMPLETED',
+        timestamp: new Date().toISOString(),
+        mode: 'LIVE',
+        remittanceType: 'cross-border',
+        message: `✅ Successfully sent ${amount} ${finalCurrency} to ${recipient.firstName} in ${recipientCountry}`
       };
     } catch (error) {
-      console.error('❌ Status check failed:', error);
+      console.error('❌ Remittance failed:', error);
       return {
         success: false,
-        error: error.message
+        error: error.message,
+        status: 'FAILED',
+        mode: this.useMockMode ? 'MOCK' : 'LIVE',
+        message: error.message.includes('Network')
+          ? '⚠️ Network error. Check your internet connection and try again.'
+          : error.message
       };
     }
   }
