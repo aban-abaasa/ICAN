@@ -1,15 +1,21 @@
 /**
  * 📱 Mobile Money (MOMO) API Service
  * Handles all mobile money transactions for wallet top-ups and transfers
- * ✅ Uses Supabase directly for secure transaction management
+ * ✅ Uses MTN MOMO API + Supabase for secure transaction management
  */
 
 import { getSupabaseClient } from '../lib/supabase/client';
 
 class MOmoService {
   constructor() {
-    // Use Supabase client directly (no backend proxy needed)
+    // Supabase client for transaction recording
     this.supabase = null;
+    
+    // MTN MOMO API Configuration
+    this.momoApiUrl = import.meta.env.VITE_MOMO_API_URL || 'https://api.sandbox.momodeveloper.mtn.com';
+    this.momoApiKey = import.meta.env.VITE_MOMO_PRIMARY_KEY;
+    this.momoApiKeySecondary = import.meta.env.VITE_MOMO_SECONDARY_KEY;
+    
     this.useMockMode = import.meta.env.VITE_MOMO_USE_MOCK === 'true';
     this.timeout = import.meta.env.VITE_MOMO_TIMEOUT || 30000;
     
@@ -18,8 +24,9 @@ class MOmoService {
       console.log('🧪 MOMO Service initialized in MOCK MODE (Development)');
       console.log('   Transactions will be simulated without calling real API');
     } else {
-      console.log('🚀 MOMO Service initialized (Production) - Using Supabase directly');
-      console.log('   ✅ All MOMO API calls routed through Supabase database');
+      console.log('🚀 MOMO Service initialized (Production)');
+      console.log(`   📡 MTN MOMO API: ${this.momoApiUrl}`);
+      console.log('   💾 Recording transactions in Supabase');
     }
   }
 
@@ -75,21 +82,35 @@ class MOmoService {
         };
       }
 
-      // Use Supabase directly to record transaction
+      // Call MTN MOMO API for real transaction
+      const transactionId = this.generateReferenceId();
+      const momoResponse = await this.callMOMOAPI('request-payment', {
+        amount: amount,
+        currency: finalCurrency,
+        externalId: transactionId,
+        payer: {
+          partyIdType: 'MSISDN',
+          partyId: phoneNumber
+        },
+        payerMessage: 'ICAN Wallet Top-Up',
+        payeeNote: description || 'Wallet top-up'
+      });
+
+      if (!momoResponse.success) {
+        throw new Error(momoResponse.error || 'Failed to process MOMO request');
+      }
+
+      // Record transaction to Supabase
       this.supabase = getSupabaseClient();
       if (!this.supabase) {
         throw new Error('Supabase client not initialized');
       }
 
-      const transactionId = this.generateReferenceId();
-      
-      // Get current user
       const { data: { user } } = await this.supabase.auth.getUser();
       if (!user) {
         throw new Error('User not authenticated');
       }
 
-      // Save transaction to Supabase wallet_transactions table
       const { error } = await this.supabase
         .from('wallet_transactions')
         .insert([
@@ -98,34 +119,33 @@ class MOmoService {
             type: 'topup',
             provider: 'mtn_momo',
             amount: parseFloat(amount),
-            currency: currency.toUpperCase(),
+            currency: finalCurrency,
             reference_id: transactionId,
-            transaction_id: transactionId,
+            transaction_id: momoResponse.transactionId || transactionId,
             phone_number: phoneNumber,
             description: description || 'ICAN Wallet Top-Up via MOMO',
             status: 'completed',
             metadata: {
               mode: 'LIVE',
-              provider: 'MTN MOMO'
+              provider: 'MTN MOMO',
+              momoResponse: momoResponse
             }
           }
         ]);
 
       if (error) {
-        throw new Error(`Failed to record transaction: ${error.message}`);
+        console.error('Transaction recording error:', error);
       }
-
-      console.log('✅ Transaction recorded in Supabase for top-up');
 
       return {
         success: true,
-        transactionId: transactionId,
+        transactionId: momoResponse.transactionId || transactionId,
         amount: amount,
-        currency: currency,
+        currency: finalCurrency,
         status: 'COMPLETED',
         timestamp: new Date().toISOString(),
         mode: 'LIVE',
-        message: `✅ Successfully added ${amount} ${currency} to your ICAN Wallet via MOMO`
+        message: `✅ Successfully added ${amount} ${finalCurrency} to your ICAN Wallet via MOMO`
       };
     } catch (error) {
       console.error('❌ MOMO Top-Up failed:', error);
@@ -189,15 +209,35 @@ class MOmoService {
         throw new Error('Supabase client not initialized');
       }
 
+      // Call MTN MOMO API for transfer
       const transactionId = this.generateReferenceId();
-      
-      // Get current user
+      const momoResponse = await this.callMOMOAPI('transfer', {
+        amount: amount,
+        currency: finalCurrency,
+        externalId: transactionId,
+        payee: {
+          partyIdType: 'MSISDN',
+          partyId: recipientPhone
+        },
+        payerMessage: description || 'Payment from ICAN',
+        payeeNote: 'Payment received'
+      });
+
+      if (!momoResponse.success) {
+        throw new Error(momoResponse.error || 'Failed to process MOMO transfer');
+      }
+
+      // Record transfer to Supabase
+      this.supabase = getSupabaseClient();
+      if (!this.supabase) {
+        throw new Error('Supabase client not initialized');
+      }
+
       const { data: { user } } = await this.supabase.auth.getUser();
       if (!user) {
         throw new Error('User not authenticated');
       }
 
-      // Save transfer to Supabase
       const { error } = await this.supabase
         .from('wallet_transactions')
         .insert([
@@ -208,26 +248,25 @@ class MOmoService {
             amount: parseFloat(amount),
             currency: finalCurrency,
             reference_id: transactionId,
-            transaction_id: transactionId,
+            transaction_id: momoResponse.transactionId || transactionId,
             phone_number: recipientPhone,
             description: description || 'Payment from ICAN',
             status: 'completed',
             metadata: {
               mode: 'LIVE',
-              provider: 'MTN MOMO'
+              provider: 'MTN MOMO',
+              momoResponse: momoResponse
             }
           }
         ]);
 
       if (error) {
-        throw new Error(`Failed to record transfer: ${error.message}`);
+        console.error('Transfer recording error:', error);
       }
-
-      console.log('✅ Transfer recorded in Supabase');
 
       return {
         success: true,
-        transactionId: transactionId,
+        transactionId: momoResponse.transactionId || transactionId,
         amount: amount,
         currency: currency,
         recipient: recipientPhone,
@@ -447,6 +486,94 @@ class MOmoService {
         status: 'FAILED',
         connected: false,
         message: 'Unable to connect to Supabase MOMO service',
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * 🔗 Call MTN MOMO API Endpoint
+   * @param {string} endpoint - API endpoint (request-payment, send-money, etc.)
+   * @param {Object} data - Request payload
+   * @returns {Promise<Object>} API response
+   */
+  async callMOMOAPI(endpoint, data) {
+    try {
+      const url = `${this.momoApiUrl}/v1_0/${endpoint}`;
+      
+      console.log(`📡 MTN MOMO API Request: ${endpoint}`, data);
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Reference-Id': data.externalId || this.generateReferenceId(),
+          'Ocp-Apim-Subscription-Key': this.momoApiKey
+        },
+        body: JSON.stringify(data),
+        timeout: this.timeout
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`HTTP ${response.status}: ${errorData.message || response.statusText}`);
+      }
+
+      const responseData = await response.json();
+      
+      console.log('✅ MTN MOMO API Response:', responseData);
+      
+      return {
+        success: true,
+        transactionId: responseData.transactionId || data.externalId,
+        ...responseData
+      };
+    } catch (error) {
+      console.error('❌ MTN MOMO API Error:', error);
+      return {
+        success: false,
+        error: error.message,
+        message: 'Failed to process MOMO transaction'
+      };
+    }
+  }
+
+  /**
+   * ✅ Get MTN MOMO Transaction Status
+   * @param {string} transactionId - Transaction ID
+   * @returns {Promise<Object>} Transaction status
+   */
+  async getMOMOTransactionStatus(transactionId) {
+    try {
+      const url = `${this.momoApiUrl}/v1_0/requeststatus/${transactionId}`;
+      
+      console.log(`📡 Checking MOMO Transaction Status: ${transactionId}`);
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Ocp-Apim-Subscription-Key': this.momoApiKey
+        },
+        timeout: this.timeout
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const responseData = await response.json();
+      
+      console.log('✅ Transaction Status:', responseData);
+      
+      return {
+        success: true,
+        status: responseData.status,
+        ...responseData
+      };
+    } catch (error) {
+      console.error('❌ Status check failed:', error);
+      return {
+        success: false,
         error: error.message
       };
     }
