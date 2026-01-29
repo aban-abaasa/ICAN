@@ -1,13 +1,14 @@
 // Treasury Guardian - Pillar II: Legal Resilience
-// Contract vetting and security analysis with Gemini API integration
+// Contract vetting and security analysis with OpenAI Integration
 
 import { saveContractAnalysis, getContractAnalyses } from '../config/firebase.js';
 
 export class TreasuryGuardian {
   constructor(userId) {
     this.userId = userId;
-    this.geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    this.geminiApiUrl = import.meta.env.VITE_GEMINI_API_URL;
+    this.openaiApiKey = import.meta.env.VITE_OPENAI_API_KEY;
+    this.openaiApiUrl = import.meta.env.VITE_OPENAI_API_URL || 'https://api.openai.com/v1';
+    this.openaiModel = 'gpt-4-turbo-preview';
   }
 
   // Main contract analysis function
@@ -24,30 +25,31 @@ export class TreasuryGuardian {
       // Step 1: Pre-process the contract text
       const preprocessedText = this.preprocessContract(contractText);
       
-      // Step 2: Analyze with Gemini API
-      const geminiAnalysis = await this.getGeminiAnalysis(preprocessedText);
+      // Step 2: Analyze with OpenAI API
+      const openaiAnalysis = await this.getOpenAIAnalysis(preprocessedText);
       
       // Step 3: Cross-reference with legal databases (simulated)
       const legalCrossReference = await this.performLegalCrossReference(contractText);
       
       // Step 4: Calculate financial safety score
-      const safetyScore = this.calculateFinancialSafetyScore(geminiAnalysis, legalCrossReference);
+      const safetyScore = this.calculateFinancialSafetyScore(openaiAnalysis, legalCrossReference);
       
       // Step 5: Extract liability flags
-      const liabilityFlags = this.extractLiabilityFlags(geminiAnalysis, contractText);
+      const liabilityFlags = this.extractLiabilityFlags(openaiAnalysis, contractText);
       
       // Step 6: Generate recommendations
-      const recommendations = this.generateRecommendations(geminiAnalysis, safetyScore);
+      const recommendations = this.generateRecommendations(openaiAnalysis, safetyScore);
 
       const analysis = {
         safetyScore,
         liabilityFlags,
         recommendations,
-        geminiInsights: geminiAnalysis,
+        openaiInsights: openaiAnalysis,
         legalCrossReference,
         riskLevel: this.determineRiskLevel(safetyScore),
         analysisDate: new Date().toISOString(),
-        contractHash: this.hashContract(contractText)
+        contractHash: this.hashContract(contractText),
+        aiProvider: 'OpenAI'
       };
 
       // Save to Firebase
@@ -69,53 +71,57 @@ export class TreasuryGuardian {
       .trim();
   }
 
-  // Gemini API analysis with grounding
-  async getGeminiAnalysis(contractText) {
-    if (!this.geminiApiKey) {
+  // OpenAI API analysis
+  async getOpenAIAnalysis(contractText) {
+    if (!this.openaiApiKey) {
       // Fallback to mock analysis for demo
-      return this.getMockGeminiAnalysis(contractText);
+      return this.getMockOpenAIAnalysis(contractText);
     }
 
     try {
       const prompt = this.buildAnalysisPrompt(contractText);
       
-      const response = await fetch(`${this.geminiApiUrl}?key=${this.geminiApiKey}`, {
+      const response = await fetch(`${this.openaiApiUrl}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.openaiApiKey}`
         },
         body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: prompt
-            }]
-          }],
-          generationConfig: {
-            temperature: 0.1, // Low temperature for consistent legal analysis
-            topK: 40,
-            topP: 0.95,
-            maxOutputTokens: 1024,
-          }
+          model: this.openaiModel,
+          messages: [
+            {
+              role: 'system',
+              content: 'You are an expert legal and financial contract analyzer. Provide structured analysis in JSON format.'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0.1,
+          max_tokens: 1024,
+          response_format: { type: 'json_object' }
         })
       });
 
       if (!response.ok) {
-        throw new Error(`Gemini API error: ${response.status}`);
+        throw new Error(`OpenAI API error: ${response.status}`);
       }
 
       const data = await response.json();
       
-      if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-        const analysisText = data.candidates[0].content.parts[0].text;
-        return this.parseGeminiResponse(analysisText);
+      if (data.choices && data.choices[0] && data.choices[0].message) {
+        const analysisText = data.choices[0].message.content;
+        return this.parseOpenAIResponse(analysisText);
       }
       
-      throw new Error('Invalid response from Gemini API');
+      throw new Error('Invalid response from OpenAI API');
       
     } catch (error) {
-      console.error('Gemini API call failed:', error);
+      console.error('OpenAI API call failed:', error);
       // Fallback to mock analysis
-      return this.getMockGeminiAnalysis(contractText);
+      return this.getMockOpenAIAnalysis(contractText);
     }
   }
 
@@ -161,22 +167,30 @@ Focus on protecting the contract signatory's financial interests.
 `;
   }
 
-  // Parse Gemini API response
-  parseGeminiResponse(responseText) {
+  // Parse OpenAI API response
+  parseOpenAIResponse(responseText) {
     try {
-      // Extract structured data from response text
-      const analysis = {
-        financialRisks: this.extractSection(responseText, 'financial', 'risk'),
-        liabilityIssues: this.extractSection(responseText, 'liability', 'flag'),
-        recommendations: this.extractSection(responseText, 'recommend', 'suggest'),
-        riskFactors: this.extractSection(responseText, 'risk factor', 'concern'),
-        overallAssessment: this.extractOverallAssessment(responseText)
-      };
+      // Parse JSON response from OpenAI
+      let analysis;
+      if (typeof responseText === 'string') {
+        analysis = JSON.parse(responseText);
+      } else {
+        analysis = responseText;
+      }
 
-      return analysis;
+      return {
+        financialRisks: analysis.financial_risks || [],
+        liabilityIssues: analysis.liability_issues || [],
+        recommendations: analysis.recommendations || [],
+        riskFactors: analysis.risk_factors || [],
+        overallAssessment: {
+          score: analysis.safety_score || 50,
+          riskLevel: analysis.risk_level || 'medium'
+        }
+      };
     } catch (error) {
-      console.error('Error parsing Gemini response:', error);
-      return this.getMockGeminiAnalysis();
+      console.error('Error parsing OpenAI response:', error);
+      return this.getMockOpenAIAnalysis();
     }
   }
 
@@ -203,8 +217,8 @@ Focus on protecting the contract signatory's financial interests.
     return { score, riskLevel };
   }
 
-  // Mock Gemini analysis for demo purposes
-  getMockGeminiAnalysis(contractText = '') {
+  // Mock OpenAI analysis for demo purposes
+  getMockOpenAIAnalysis(contractText = '') {
     const mockRisks = [
       'Unlimited liability clause detected in section 4.2',
       'Broad indemnification requirements may expose to third-party claims',

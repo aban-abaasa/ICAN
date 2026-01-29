@@ -6,8 +6,9 @@ import { saveScheduleOptimization, getLatestScheduleOptimization } from '../conf
 export class ProsperityArchitect {
   constructor(userId) {
     this.userId = userId;
-    this.geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    this.geminiApiUrl = import.meta.env.VITE_GEMINI_API_URL;
+    this.openaiApiKey = import.meta.env.VITE_OPENAI_API_KEY;
+    this.openaiApiUrl = import.meta.env.VITE_OPENAI_API_URL || 'https://api.openai.com/v1';
+    this.openaiModel = 'gpt-4-turbo-preview';
   }
 
   // Main schedule optimization function
@@ -368,47 +369,51 @@ export class ProsperityArchitect {
     };
   }
 
-  // Get AI optimization using Gemini API
+  // Get AI optimization using OpenAI API
   async getAIOptimization(patterns, hvw, alignment) {
-    if (!this.geminiApiKey) {
+    if (!this.openaiApiKey) {
       return this.getMockAIOptimization(patterns, hvw, alignment);
     }
 
     try {
       const prompt = this.buildOptimizationPrompt(patterns, hvw, alignment);
       
-      const response = await fetch(`${this.geminiApiUrl}?key=${this.geminiApiKey}`, {
+      const response = await fetch(`${this.openaiApiUrl}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.openaiApiKey}`
         },
         body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: prompt
-            }]
-          }],
-          generationConfig: {
-            temperature: 0.3,
-            topK: 40,
-            topP: 0.95,
-            maxOutputTokens: 2048,
-          }
+          model: this.openaiModel,
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a productivity and life optimization expert. Provide schedule recommendations in JSON format.'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0.3,
+          max_tokens: 2048,
+          response_format: { type: 'json_object' }
         })
       });
 
       if (!response.ok) {
-        throw new Error(`Gemini API error: ${response.status}`);
+        throw new Error(`OpenAI API error: ${response.status}`);
       }
 
       const data = await response.json();
       
-      if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-        const optimizationText = data.candidates[0].content.parts[0].text;
+      if (data.choices && data.choices[0] && data.choices[0].message) {
+        const optimizationText = data.choices[0].message.content;
         return this.parseOptimizationResponse(optimizationText);
       }
       
-      throw new Error('Invalid response from Gemini API');
+      throw new Error('Invalid response from OpenAI API');
 
     } catch (error) {
       console.error('AI Optimization API call failed:', error);
