@@ -492,36 +492,45 @@ class MOmoService {
   }
 
   /**
-   * 🔗 Call MTN MOMO API Endpoint
-   * @param {string} endpoint - API endpoint (request-payment, send-money, etc.)
+   * 🔗 Call MTN MOMO API via Supabase Edge Function
+   * This avoids CORS issues by calling from server-side
+   * @param {string} endpoint - API endpoint (request-payment, transfer, etc.)
    * @param {Object} data - Request payload
    * @returns {Promise<Object>} API response
    */
   async callMOMOAPI(endpoint, data) {
     try {
-      const url = `${this.momoApiUrl}/v1_0/${endpoint}`;
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
       
-      console.log(`📡 MTN MOMO API Request: ${endpoint}`, data);
+      // Map endpoint to Supabase Edge Function
+      const functionName = endpoint === 'request-payment' 
+        ? 'momo-request-payment'
+        : endpoint === 'transfer'
+        ? 'momo-transfer'
+        : 'momo-request-payment'
+      
+      const url = `${supabaseUrl}/functions/v1/${functionName}`
+      
+      console.log(`📡 Calling Supabase Edge Function: ${functionName}`, data);
 
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Reference-Id': data.externalId || this.generateReferenceId(),
-          'Ocp-Apim-Subscription-Key': this.momoApiKey
+          'Authorization': `Bearer ${supabaseKey}`
         },
         body: JSON.stringify(data),
         timeout: this.timeout
-      });
+      })
+
+      const responseData = await response.json()
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(`HTTP ${response.status}: ${errorData.message || response.statusText}`);
+        throw new Error(responseData.error || `HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const responseData = await response.json();
-      
-      console.log('✅ MTN MOMO API Response:', responseData);
+      console.log('✅ Supabase Edge Function Response:', responseData);
       
       return {
         success: true,
@@ -529,7 +538,7 @@ class MOmoService {
         ...responseData
       };
     } catch (error) {
-      console.error('❌ MTN MOMO API Error:', error);
+      console.error('❌ Supabase Edge Function Error:', error);
       return {
         success: false,
         error: error.message,
