@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './context/AuthContext';
 import { AuthPage } from './components/auth';
+import CountryCheckMiddleware from './components/auth/CountryCheckMiddleware';
 import ICANCapitalEngine from './components/ICAN_Capital_Engine';
 import LandingPage from './components/LandingPage';
 import MobileView from './components/MobileView';
@@ -145,20 +146,25 @@ const App = () => {
   }
 
   // User is logged in, show appropriate view
+  // CountryCheckMiddleware will verify country is set - if not, shows mandatory modal
   if (isMobile) {
-    console.log('📱 Rendering mobile view');
+    console.log('📱 Rendering mobile view (with country check)');
     return (
       <ErrorBoundary>
-        <MobileView userProfile={user} />
+        <CountryCheckMiddleware>
+          <MobileView userProfile={user} />
+        </CountryCheckMiddleware>
       </ErrorBoundary>
     );
   }
 
-  // User is logged in, show main app (desktop)
-  console.log('🖥️ Rendering desktop view');
+  // User is logged in, show main app (desktop) with country check
+  console.log('🖥️ Rendering desktop view (with country check)');
   return (
     <ErrorBoundary>
-      <ICANCapitalEngine />
+      <CountryCheckMiddleware>
+        <ICANCapitalEngine />
+      </CountryCheckMiddleware>
     </ErrorBoundary>
   );
 };

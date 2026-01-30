@@ -1,0 +1,442 @@
+/**
+ * Country Setup Dropdown Styles (Minimal & Functional)
+ */
+
+.country-dropdown-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+  z-index: 100;
+  overflow: visible;
+}
+
+.country-dropdown-wrapper.mandatory {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  overflow: visible;
+  padding: 20px;
+}
+
+.dropdown-container {
+  position: relative;
+  width: 100%;
+  z-index: 10000;
+  overflow: visible;
+}
+
+.country-dropdown-wrapper.mandatory .dropdown-container {
+  background: white;
+  border-radius: 15px;
+  padding: 15px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+/* ============================
+   DROPDOWN HEADER / TOGGLE
+   ============================ */
+
+.dropdown-header {
+  position: relative;
+  z-index: 10;
+}
+
+.dropdown-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #f8f9fa;
+  border: 2px solid #e0e0e0;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  color: #333;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.dropdown-toggle:hover:not(:disabled) {
+  border-color: #667eea;
+  background: #f0f0f0;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+  transform: translateY(-2px);
+}
+
+.dropdown-toggle.open {
+  border-color: #667eea;
+  background: white;
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.25);
+}
+
+.dropdown-toggle:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: #f0f0f0;
+}
+
+.dropdown-toggle .flag-icon {
+  font-size: 20px;
+  display: inline-block;
+}
+
+.dropdown-toggle .header-text {
+  flex: 1;
+  text-align: left;
+  letter-spacing: 0.3px;
+}
+
+.dropdown-toggle .chevron {
+  display: inline-block;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: #667eea;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dropdown-toggle .chevron.open {
+  transform: rotateZ(180deg);
+}
+
+/* ============================
+   DROPDOWN ERROR
+   ============================ */
+
+.dropdown-error {
+  color: #d32f2f;
+  font-size: 13px;
+  padding: 10px 14px;
+  background: #ffebee;
+  border-radius: 6px;
+  margin-top: 8px;
+  border-left: 3px solid #d32f2f;
+  display: flex;
+  align-items: center;
+  animation: slideDown 0.2s ease-out;
+}
+
+/* ============================
+   DROPDOWN CONTENT
+   ============================ */
+
+.dropdown-content {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  max-height: 420px;
+  overflow: hidden;
+  z-index: 10001;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.15);
+  animation: slideDown 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 100%;
+  min-width: 100%;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ============================
+   SEARCH BOX
+   ============================ */
+
+.search-box {
+  padding: 12px;
+  border-bottom: 1px solid #e0e0e0;
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 10002;
+}
+
+.search-box input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.search-box input:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  background: #fafbfc;
+}
+
+.search-box input::placeholder {
+  color: #b0b0b0;
+}
+
+.search-box input:disabled {
+  background: #f5f5f5;
+  cursor: not-allowed;
+  color: #999;
+}
+
+/* ============================
+   COUNTRIES LIST
+   ============================ */
+
+.countries-list {
+  max-height: 340px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 6px;
+}
+
+.country-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 8px;
+  text-align: left;
+  font-size: 14px;
+  color: #333;
+}
+
+.country-item:hover:not(:disabled) {
+  background: #f5f7ff;
+  transform: translateX(4px);
+  box-shadow: inset 2px 0 0 #667eea;
+}
+
+.country-item:active:not(:disabled) {
+  background: #eeebff;
+}
+
+.country-item:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: transparent;
+}
+
+.country-item:focus-visible {
+  outline: 2px solid #667eea;
+  outline-offset: -2px;
+}
+
+.country-flag {
+  font-size: 24px;
+  min-width: 32px;
+  text-align: center;
+  line-height: 1;
+}
+
+.country-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.country-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.country-rate {
+  font-size: 12px;
+  color: #777;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.spinner-mini {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #e0e0e0;
+  border-top-color: #667eea;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================
+   NO RESULTS STATE
+   ============================ */
+
+.no-results {
+  text-align: center;
+  padding: 40px 20px;
+  color: #999;
+}
+
+.no-results p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* ============================
+   LOADING INDICATOR
+   ============================ */
+
+.loading-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 20px;
+  border-top: 1px solid #e0e0e0;
+  color: #667eea;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* ============================
+   SUCCESS STATE
+   ============================ */
+
+.country-setup-minimal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+}
+
+.success-checkmark {
+  text-align: center;
+  color: white;
+  animation: scaleIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.checkmark {
+  font-size: 72px;
+  line-height: 1;
+  margin-bottom: 16px;
+  display: inline-block;
+  animation: scaleIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.success-checkmark p {
+  font-size: 26px;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: 0.3px;
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ============================
+   SCROLLBAR STYLING
+   ============================ */
+
+.countries-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.countries-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.countries-list::-webkit-scrollbar-thumb {
+  background: #d0d0d0;
+  border-radius: 3px;
+  transition: background 0.3s ease;
+}
+
+.countries-list::-webkit-scrollbar-thumb:hover {
+  background: #999;
+}
+
+/* ============================
+   RESPONSIVE
+   ============================ */
+
+@media (max-width: 600px) {
+  .country-dropdown-wrapper {
+    max-width: 100%;
+    padding: 0 12px;
+  }
+
+  .dropdown-content {
+    max-height: 360px;
+  }
+
+  .countries-list {
+    max-height: 280px;
+  }
+
+  .country-flag {
+    font-size: 20px;
+    min-width: 28px;
+  }
+
+  .country-name {
+    font-size: 13px;
+  }
+
+  .country-rate {
+    font-size: 11px;
+  }
+
+  .dropdown-toggle {
+    padding: 12px 14px;
+    font-size: 14px;
+  }
+
+  .success-checkmark p {
+    font-size: 22px;
+  }
+
+  .checkmark {
+    font-size: 60px;
+  }
+}

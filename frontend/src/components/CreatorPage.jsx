@@ -83,9 +83,9 @@ const CreatorPage = ({ onClose, onPitchCreated, selectedBusinessProfile, onNoPro
     throw lastError;
   };
 
-  const handlePitchSubmit = async (formData) => {
+  const handlePitchSubmit = async (businessProfile) => {
     try {
-      console.log('Pitch submitted:', formData);
+      console.log('Pitch submitted with business profile:', businessProfile);
       
       // Get current user
       const sb = getSupabase();
@@ -181,15 +181,15 @@ const CreatorPage = ({ onClose, onPitchCreated, selectedBusinessProfile, onNoPro
       
       const newPitch = {
         business_profile_id: selectedBusinessProfile.id,
-        title: formData.title || 'Untitled Pitch',
-        description: formData.description || '',
-        category: formData.category || 'Technology',
-        pitch_type: formData.pitchType || 'Equity',
-        target_funding: parseInt(formData.targetGoal) || 0,
-        raised_amount: parseInt(formData.currentlyRaised) || 0,
-        equity_offering: parseFloat(formData.equityOffering) || 0,
+        title: selectedBusinessProfile.business_name || 'Untitled Pitch',
+        description: selectedBusinessProfile.description || '',
+        category: selectedBusinessProfile.category || 'Technology',
+        pitch_type: 'Equity',
+        target_funding: 0,
+        raised_amount: 0,
+        equity_offering: 0,
         video_url: videoUrl, // Use uploaded video URL
-        has_ip: formData.hasIP || false,
+        has_ip: false,
         status: 'published', // Set to published immediately
         likes_count: 0,
         comments_count: 0,
@@ -338,6 +338,7 @@ const CreatorPage = ({ onClose, onPitchCreated, selectedBusinessProfile, onNoPro
         isOpen={showDetailsForm}
         onClose={() => setShowDetailsForm(false)}
         onSubmit={handlePitchSubmit}
+        currentBusinessProfile={selectedBusinessProfile}
       />
 
       {/* Animated Upload Progress UI - Minimal */}

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { CountryService } from '../../services/countryService';
 
 const SignUp = ({ onSwitchToSignIn, onSuccess }) => {
   const { signUp } = useAuth();
@@ -9,6 +10,7 @@ const SignUp = ({ onSwitchToSignIn, onSuccess }) => {
     confirmPassword: '',
     fullName: '',
     phone: '',
+    countryCode: 'US', // NEW: Country selection
     operatingMode: 'SE', // 'SE' = Salaried Employee, 'BO' = Business Owner
     financialGoal: '',
     riskTolerance: 'moderate',
@@ -20,6 +22,8 @@ const SignUp = ({ onSwitchToSignIn, onSuccess }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [regions] = useState(CountryService.getRegions());
+  const [selectedRegion, setSelectedRegion] = useState('East Africa');
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -31,8 +35,8 @@ const SignUp = ({ onSwitchToSignIn, onSuccess }) => {
   };
 
   const validateForm = () => {
-    if (!formData.email || !formData.password || !formData.fullName) {
-      setError('Please fill in all required fields');
+    if (!formData.email || !formData.password || !formData.fullName || !formData.countryCode) {
+      setError('Please fill in all required fields including country selection');
       return false;
     }
     if (formData.password !== formData.confirmPassword) {
@@ -162,6 +166,56 @@ const SignUp = ({ onSwitchToSignIn, onSuccess }) => {
               placeholder="you@example.com"
               required
             />
+          </div>
+
+          {/* 🌍 Country Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Country/Region * 🌍</label>
+            <div className="mb-3">
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                {regions.map(region => (
+                  <button
+                    key={region}
+                    type="button"
+                    onClick={() => setSelectedRegion(region)}
+                    className={`p-2 rounded-lg border text-sm transition-all ${
+                      selectedRegion === region
+                        ? 'border-purple-500 bg-purple-500/20 text-white'
+                        : 'border-slate-600 bg-slate-700/50 text-gray-400 hover:border-slate-500'
+                    }`}
+                  >
+                    {region}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+              {Object.entries(CountryService.getCountriesByRegion(selectedRegion)).map(([code, country]) => (
+                <button
+                  key={code}
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, countryCode: code }))}
+                  className={`p-3 rounded-lg border-2 transition-all text-left ${
+                    formData.countryCode === code
+                      ? 'border-purple-500 bg-purple-500/20 text-white'
+                      : 'border-slate-600 bg-slate-700/50 text-gray-400 hover:border-slate-500'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">{country.flag}</span>
+                    <div>
+                      <div className="font-medium text-sm">{country.name}</div>
+                      <div className="text-xs opacity-70">{country.currency} - 1 ICAN = {country.icanCoinRate}</div>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+            <div className="mt-2 p-2 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+              <p className="text-xs text-purple-300">
+                💎 Selected: {CountryService.getCountry(formData.countryCode)?.name} ({CountryService.getCurrencyCode(formData.countryCode)})
+              </p>
+            </div>
           </div>
 
           {/* Password */}

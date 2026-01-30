@@ -38,6 +38,9 @@ import universalTransactionService from '../services/universalTransactionService
 import { getSupabaseClient } from '../lib/supabase/client';
 import AgentDashboard from './AgentDashboard';
 import UnifiedApprovalModal from './UnifiedApprovalModal';
+import CandlestickChart from './CandlestickChart';
+import BuyIcan from './ican/BuyIcan';
+import SellIcan from './ican/SellIcan';
 
 const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
   const [showBalance, setShowBalance] = useState(true);
@@ -143,8 +146,173 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
   });
   const [balancesLoading, setBalancesLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState(null);
+  
+  // 📊 Candlestick Chart States
+  const [showTradeModal, setShowTradeModal] = useState(false);
+  const [candleData, setCandleData] = useState([]);
+  const [candleLoading, setCandleLoading] = useState(false);
+  const [candleSettings, setCandleSettings] = useState({
+    upColor: '#10b981',
+    downColor: '#ef4444',
+    wickColor: '#808080',
+    showVolume: true,
+    selectedTimeframe: '7s'
+  });
+  const [showColorSettings, setShowColorSettings] = useState(false);
+  
+  // 📑 Trade Modal Tabs
+  const [activeTradeTab, setActiveTradeTab] = useState('wallet'); // 'wallet', 'chart', 'buy', 'sell', 'history'
+  const [tradeHistory, setTradeHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [icanBalance, setIcanBalance] = useState(0);
+  const [balanceLoading, setBalanceLoading] = useState(false);
 
   const dropdownRef = useRef(null);
+
+  // Load candlestick data when trade modal opens
+  useEffect(() => {
+    if (showTradeModal) {
+      loadCandlestickData();
+      // Refresh candlestick data every 7 seconds
+      const interval = setInterval(loadCandlestickData, 7000);
+      return () => clearInterval(interval);
+    }
+  }, [showTradeModal]);
+
+  // Load candlestick data from database
+  const loadCandlestickData = async () => {
+    try {
+      setCandleLoading(true);
+      const supabase = getSupabaseClient();
+      
+      // Fetch latest 100 candlesticks
+      const { data, error } = await supabase
+        .from('ican_price_ohlc')
+        .select('*')
+        .order('open_time', { ascending: false })
+        .limit(100);
+      
+      if (error) {
+        console.error('Error loading candlesticks:', error);
+        setCandleData([]);
+        return;
+      }
+      
+      if (data && data.length > 0) {
+        // Format data for chart and reverse to chronological order
+        const formatted = data.reverse().map(candle => ({
+          timestamp: candle.open_time,
+          time: new Date(candle.open_time).toLocaleTimeString('en-US', { 
+            hour: '2-digit', 
+            minute: '2-digit', 
+            second: '2-digit' 
+          }),
+          open: parseFloat(candle.open_price || 0),
+          high: parseFloat(candle.high_price || 0),
+          low: parseFloat(candle.low_price || 0),
+          close: parseFloat(candle.close_price || 0),
+          volume: parseFloat(candle.trading_volume || 0),
+          open_price: candle.open_price,
+          high_price: candle.high_price,
+          low_price: candle.low_price,
+          close_price: candle.close_price,
+          trading_volume: candle.trading_volume,
+          open_time: candle.open_time,
+          close_time: candle.close_time
+        }));
+        
+        // Only update if data actually changed (compare last candle close price)
+        setCandleData(prev => {
+          if (prev.length > 0 && prev[prev.length - 1].close === formatted[formatted.length - 1].close) {
+            return prev; // Don't update if data hasn't changed
+          }
+          return formatted;
+        });
+      } else {
+        setCandleData([]);
+      }
+    } catch (error) {
+      console.error('Failed to load candlestick data:', error);
+      setCandleData([]);
+    } finally {
+      setCandleLoading(false);
+    }
+  };
+
+  // 📜 Load Trade History
+  const loadTradeHistory = async () => {
+    try {
+      setHistoryLoading(true);
+      const supabase = getSupabaseClient();
+      
+      const { data, error } = await supabase
+        .from('ican_transactions')
+        .select('*')
+        .eq('user_id', currentUserId)
+        .in('transaction_type', ['purchase', 'sale'])
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) {
+        console.error('Error loading history:', error);
+        return;
+      }
+
+      if (data) {
+        setTradeHistory(data);
+      }
+    } catch (err) {
+      console.error('Failed to load trade history:', err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  // 💎 Load ICAN Wallet Balance (Only coins purchased for trading)
+  const loadIcanBalance = async () => {
+    try {
+      setBalanceLoading(true);
+      const supabase = getSupabaseClient();
+      
+      // Query the actual ICAN coins purchased
+      const { data, error } = await supabase
+        .from('ican_user_wallets')
+        .select('ican_balance')
+        .eq('user_id', currentUserId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error loading ICAN balance:', error);
+        setIcanBalance(0);
+        return;
+      }
+
+      if (data && data.ican_balance) {
+        setIcanBalance(parseFloat(data.ican_balance) || 0);
+      } else {
+        setIcanBalance(0);
+      }
+    } catch (err) {
+      console.error('Failed to load ICAN balance:', err);
+      setIcanBalance(0);
+    } finally {
+      setBalanceLoading(false);
+    }
+  };
+
+  // Load trade history when trade modal opens
+  useEffect(() => {
+    if (showTradeModal && activeTradeTab === 'history' && currentUserId) {
+      loadTradeHistory();
+    }
+  }, [showTradeModal, activeTradeTab, currentUserId]);
+
+  // Load ICAN balance when trade modal opens
+  useEffect(() => {
+    if (showTradeModal && (activeTradeTab === 'wallet' || activeTradeTab === 'buy' || activeTradeTab === 'sell') && currentUserId) {
+      loadIcanBalance();
+    }
+  }, [showTradeModal, activeTradeTab, currentUserId]);
 
   // Load agent account data when settings panel opens
   useEffect(() => {
@@ -1846,7 +2014,593 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
   };
 
   return (
-    <div className="w-full space-y-6">{/* Header Card */}
+    <div className="w-full space-y-6">
+      <style>{`
+        /* Buy/Sell components in modal styling */
+        .trade-tab-content .ican-trading-container {
+          max-width: 100%;
+          padding: 0;
+          min-height: auto;
+          background: transparent;
+        }
+
+        .trade-tab-content .trading-card {
+          background: transparent;
+          border-radius: 12px;
+          padding: 0;
+          box-shadow: none;
+        }
+
+        .trade-tab-content .trading-header {
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+          padding-bottom: 16px;
+          margin-bottom: 20px;
+        }
+
+        .trade-tab-content .trading-header h2 {
+          font-size: 20px;
+          color: white;
+          margin-bottom: 8px;
+        }
+
+        .trade-tab-content .subtitle {
+          color: #999;
+          font-size: 12px;
+        }
+
+        .trade-tab-content .balance-display {
+          background: rgba(255, 255, 255, 0.05);
+          border-radius: 8px;
+          padding: 16px;
+          margin-bottom: 20px;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+        }
+
+        .trade-tab-content .balance-item {
+          text-align: center;
+        }
+
+        .trade-tab-content .balance-label {
+          color: #999;
+          font-size: 12px;
+          display: block;
+          margin-bottom: 8px;
+        }
+
+        .trade-tab-content .balance-value {
+          color: white;
+          font-size: 18px;
+          font-weight: 600;
+          display: block;
+        }
+
+        .trade-tab-content .market-info {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+          margin-bottom: 20px;
+        }
+
+        .trade-tab-content .price-display,
+        .trade-tab-content .rate-display {
+          background: rgba(255, 255, 255, 0.05);
+          border-radius: 8px;
+          padding: 16px;
+        }
+
+        .trade-tab-content .price-label,
+        .trade-tab-content .rate-label {
+          color: #999;
+          font-size: 12px;
+          margin-bottom: 8px;
+          display: block;
+        }
+
+        .trade-tab-content .price-value,
+        .trade-tab-content .rate-value {
+          color: white;
+          font-weight: 600;
+          font-size: 16px;
+        }
+
+        .trade-tab-content .price-change {
+          margin-left: 8px;
+          font-size: 12px;
+        }
+
+        .trade-tab-content .price-change.positive {
+          color: #10b981;
+        }
+
+        .trade-tab-content .price-change.negative {
+          color: #ef4444;
+        }
+
+        .trade-tab-content .rate-info {
+          font-size: 12px;
+          color: #999;
+          margin-top: 4px;
+        }
+
+        .trade-tab-content .trading-form {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+
+        .trade-tab-content .form-group {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .trade-tab-content .form-label {
+          color: #ddd;
+          font-size: 14px;
+          font-weight: 500;
+        }
+
+        .trade-tab-content .input-wrapper {
+          position: relative;
+          display: flex;
+          align-items: center;
+        }
+
+        .trade-tab-content .currency-prefix {
+          position: absolute;
+          left: 12px;
+          color: #999;
+          font-size: 14px;
+          font-weight: 600;
+        }
+
+        .trade-tab-content .amount-input {
+          width: 100%;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          color: white;
+          padding: 10px 12px 10px 40px;
+          border-radius: 8px;
+          font-size: 14px;
+        }
+
+        .trade-tab-content .amount-input:focus {
+          outline: none;
+          border-color: rgba(255, 255, 255, 0.3);
+          background: rgba(255, 255, 255, 0.08);
+        }
+
+        .trade-tab-content .input-help {
+          font-size: 12px;
+          color: #999;
+          display: flex;
+          gap: 8px;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+
+        .trade-tab-content .quick-btn {
+          background: rgba(255, 255, 255, 0.1);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          color: #ddd;
+          padding: 6px 12px;
+          border-radius: 6px;
+          font-size: 12px;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .trade-tab-content .quick-btn:hover:not(:disabled) {
+          background: rgba(255, 255, 255, 0.2);
+          border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .trade-tab-content .quick-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .trade-tab-content .conversion-display {
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 8px;
+          padding: 20px;
+          text-align: center;
+          display: flex;
+          align-items: center;
+          justify-content: space-around;
+          gap: 16px;
+        }
+
+        .trade-tab-content .conversion-item {
+          flex: 1;
+        }
+
+        .trade-tab-content .conversion-label {
+          color: #999;
+          font-size: 12px;
+          margin-bottom: 8px;
+        }
+
+        .trade-tab-content .conversion-value {
+          color: white;
+          font-size: 18px;
+          font-weight: 600;
+        }
+
+        .trade-tab-content .conversion-value.highlight {
+          color: #10b981;
+        }
+
+        .trade-tab-content .conversion-arrow {
+          font-size: 20px;
+        }
+
+        .trade-tab-content .gain-loss-display {
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 8px;
+          padding: 16px;
+          display: flex;
+          gap: 16px;
+          align-items: center;
+        }
+
+        .trade-tab-content .gain-loss-display.gain {
+          border-color: rgba(16, 185, 129, 0.3);
+          background: rgba(16, 185, 129, 0.05);
+        }
+
+        .trade-tab-content .gain-loss-display.loss {
+          border-color: rgba(239, 68, 68, 0.3);
+          background: rgba(239, 68, 68, 0.05);
+        }
+
+        .trade-tab-content .gain-loss-icon {
+          font-size: 24px;
+        }
+
+        .trade-tab-content .gain-loss-label {
+          color: #999;
+          font-size: 12px;
+        }
+
+        .trade-tab-content .gain-loss-value {
+          color: white;
+          font-weight: 600;
+          font-size: 16px;
+          margin: 4px 0;
+        }
+
+        .trade-tab-content .gain-loss-value.gain {
+          color: #10b981;
+        }
+
+        .trade-tab-content .gain-loss-value.loss {
+          color: #ef4444;
+        }
+
+        .trade-tab-content .gain-loss-note {
+          font-size: 11px;
+          color: #666;
+        }
+
+        .trade-tab-content .transaction-summary {
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 8px;
+          padding: 16px;
+        }
+
+        .trade-tab-content .summary-row {
+          display: flex;
+          justify-content: space-between;
+          padding: 8px 0;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+          font-size: 14px;
+          color: #ddd;
+        }
+
+        .trade-tab-content .summary-row:last-child {
+          border-bottom: none;
+        }
+
+        .trade-tab-content .summary-row.highlight-row {
+          background: rgba(255, 255, 255, 0.05);
+          padding: 8px;
+          margin: 8px 0;
+          border-radius: 4px;
+          border-bottom: none;
+        }
+
+        .trade-tab-content .summary-row .highlight {
+          color: #10b981;
+          font-weight: 600;
+        }
+
+        .trade-tab-content .form-select {
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          color: white;
+          padding: 10px 12px;
+          border-radius: 8px;
+          font-size: 14px;
+        }
+
+        .trade-tab-content .form-select:focus {
+          outline: none;
+          border-color: rgba(255, 255, 255, 0.3);
+          background: rgba(255, 255, 255, 0.08);
+        }
+
+        .trade-tab-content .form-select option {
+          background: #1f2937;
+          color: white;
+        }
+
+        .trade-tab-content .btn-primary {
+          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+          color: white;
+          padding: 12px 24px;
+          border: none;
+          border-radius: 8px;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          width: 100%;
+        }
+
+        .trade-tab-content .btn-primary:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+
+        .trade-tab-content .btn-primary:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .trade-tab-content .sell-btn {
+          background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        }
+
+        .trade-tab-content .sell-btn:hover:not(:disabled) {
+          box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+        }
+
+        .trade-tab-content .alert {
+          padding: 12px 16px;
+          border-radius: 8px;
+          font-size: 14px;
+        }
+
+        .trade-tab-content .alert-error {
+          background: rgba(239, 68, 68, 0.1);
+          border: 1px solid rgba(239, 68, 68, 0.3);
+          color: #fca5a5;
+        }
+
+        .trade-tab-content .alert-success {
+          background: rgba(16, 185, 129, 0.1);
+          border: 1px solid rgba(16, 185, 129, 0.3);
+          color: #a7f3d0;
+        }
+
+        .trade-tab-content .info-box {
+          background: rgba(255, 255, 255, 0.05);
+          border-left: 3px solid rgba(100, 116, 139, 0.5);
+          border-radius: 6px;
+          padding: 16px;
+          margin-top: 16px;
+        }
+
+        .trade-tab-content .info-box h4 {
+          color: white;
+          font-size: 14px;
+          font-weight: 600;
+          margin: 0 0 12px 0;
+        }
+
+        .trade-tab-content .info-box ul {
+          list-style: none;
+          padding: 0;
+          margin: 0;
+          color: #999;
+          font-size: 13px;
+        }
+
+        .trade-tab-content .info-box li {
+          padding: 4px 0;
+          padding-left: 16px;
+          position: relative;
+        }
+
+        .trade-tab-content .info-box li:before {
+          content: "•";
+          position: absolute;
+          left: 0;
+          color: #10b981;
+        }
+
+        .trade-tab-content .info-box.secondary {
+          border-left-color: rgba(59, 130, 246, 0.5);
+        }
+
+        .trade-tab-content .info-box.secondary li:before {
+          color: #3b82f6;
+        }
+
+        .trade-tab-content .price-history {
+          background: rgba(255, 255, 255, 0.05);
+          border-radius: 8px;
+          padding: 16px;
+          margin-top: 16px;
+        }
+
+        .trade-tab-content .price-history h3 {
+          color: white;
+          font-size: 14px;
+          font-weight: 600;
+          margin: 0 0 12px 0;
+        }
+
+        .trade-tab-content .chart-container {
+          color: #999;
+          font-size: 13px;
+        }
+
+        .trade-tab-content .price-range {
+          display: flex;
+          justify-content: space-around;
+          gap: 16px;
+        }
+
+        .ugx-price {
+          color: white;
+          font-weight: 600;
+        }
+
+        .spinner {
+          display: inline-block;
+          width: 12px;
+          height: 12px;
+          border: 2px solid rgba(255, 255, 255, 0.3);
+          border-top-color: white;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+
+        /* Wallet Tab Styles */
+        .wallet-balance-card {
+          background: linear-gradient(135deg, rgba(168, 85, 247, 0.2) 0%, rgba(139, 92, 246, 0.2) 100%);
+          border: 1px solid rgba(168, 85, 247, 0.5);
+          border-radius: 12px;
+          padding: 32px;
+          text-align: center;
+        }
+
+        .wallet-info-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+          gap: 16px;
+        }
+
+        .wallet-info-card {
+          border-radius: 12px;
+          padding: 20px;
+          border: 1px solid;
+        }
+
+        .wallet-info-card h4 {
+          font-weight: 600;
+          margin-bottom: 12px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .wallet-info-card ul {
+          list-style: none;
+          padding: 0;
+          margin: 0;
+          font-size: 13px;
+        }
+
+        .wallet-info-card li {
+          padding: 6px 0;
+          line-height: 1.4;
+        }
+
+        .wallet-action-buttons {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+        }
+
+        .wallet-action-buttons button {
+          padding: 16px 24px;
+          border-radius: 8px;
+          font-weight: 600;
+          border: 1px solid;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .wallet-action-buttons button:hover:not(:disabled) {
+          transform: translateY(-2px);
+        }
+
+        .wallet-action-buttons button:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .wallet-instructions {
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 8px;
+          padding: 16px;
+        }
+
+        .wallet-instructions h4 {
+          color: white;
+          font-weight: 600;
+          margin: 0 0 12px 0;
+        }
+
+        .wallet-instructions ol {
+          list-style-position: inside;
+          padding: 0;
+          margin: 0;
+          font-size: 13px;
+          color: #ccc;
+        }
+
+        .wallet-instructions li {
+          padding: 6px 0;
+          line-height: 1.4;
+        }
+
+        .wallet-instructions strong {
+          color: #ddd;
+        }
+
+        .wallet-note {
+          background: rgba(234, 179, 8, 0.1);
+          border: 1px solid rgba(234, 179, 8, 0.3);
+          border-radius: 8px;
+          padding: 12px 16px;
+          margin-top: 16px;
+        }
+
+        .wallet-note p {
+          color: #fcd34d;
+          font-size: 13px;
+          margin: 0;
+          line-height: 1.4;
+        }
+
+        @media (max-width: 768px) {
+          .wallet-info-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .wallet-action-buttons {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>{/* Header Card */}
       <div className="glass-card p-4 md:p-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
           <div className="flex items-center gap-4">
@@ -1987,7 +2741,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
           </div>
 
           {/* Action Buttons */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <button 
               onClick={() => setActiveModal('send')}
               className="bg-gradient-to-br from-blue-500/30 to-blue-600/30 border border-blue-400/50 hover:border-blue-400/80 rounded-lg py-3 px-4 flex flex-col items-center gap-2 transition-all"
@@ -2008,6 +2762,13 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
             >
               <Plus className="w-5 h-5 text-green-400" />
               <span className="text-sm font-medium text-white">Top Up</span>
+            </button>
+            <button 
+              onClick={() => setShowTradeModal(true)}
+              className="bg-gradient-to-br from-orange-500/30 to-red-600/30 border border-orange-400/50 hover:border-orange-400/80 rounded-lg py-3 px-4 flex flex-col items-center gap-2 transition-all"
+            >
+              <TrendingUp className="w-5 h-5 text-orange-400" />
+              <span className="text-sm font-medium text-white">Trade</span>
             </button>
           </div>
         </div>
@@ -4176,6 +4937,300 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
         attemptsRemaining={3}
         supportsBiometric={true}
       />
+
+      {/* TRADE MODAL - Tabbed Interface with Chart, Buy, Sell, History */}
+      {showTradeModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="glass-card p-6 w-full max-w-6xl max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                💰 ICAN Trading Center
+                <span className="text-sm text-gray-400">Real-time trading platform</span>
+              </h2>
+              <button
+                onClick={() => setShowTradeModal(false)}
+                className="px-4 py-2 bg-red-500/20 text-red-300 hover:bg-red-500/30 rounded-lg font-semibold transition-all"
+              >
+                ✕ Close
+              </button>
+            </div>
+
+            {/* Tab Navigation */}
+            <div className="flex gap-2 mb-6 border-b border-white/10 pb-4 flex-wrap">
+              <button
+                onClick={() => setActiveTradeTab('wallet')}
+                className={`px-4 py-2 rounded-t-lg font-semibold transition-all flex items-center gap-2 ${
+                  activeTradeTab === 'wallet'
+                    ? 'bg-gradient-to-r from-purple-500/40 to-purple-600/40 border border-purple-500/50 text-purple-300'
+                    : 'bg-white/10 text-gray-400 hover:text-gray-300'
+                }`}
+              >
+                💎 My Wallet
+              </button>
+
+              <button
+                onClick={() => setActiveTradeTab('chart')}
+                className={`px-4 py-2 rounded-t-lg font-semibold transition-all flex items-center gap-2 ${
+                  activeTradeTab === 'chart'
+                    ? 'bg-gradient-to-r from-orange-500/40 to-orange-600/40 border border-orange-500/50 text-orange-300'
+                    : 'bg-white/10 text-gray-400 hover:text-gray-300'
+                }`}
+              >
+                📊 Chart & Analysis
+              </button>
+              
+              <button
+                onClick={() => setActiveTradeTab('buy')}
+                className={`px-4 py-2 rounded-t-lg font-semibold transition-all flex items-center gap-2 ${
+                  activeTradeTab === 'buy'
+                    ? 'bg-gradient-to-r from-green-500/40 to-green-600/40 border border-green-500/50 text-green-300'
+                    : 'bg-white/10 text-gray-400 hover:text-gray-300'
+                }`}
+              >
+                💳 Buy ICAN
+              </button>
+
+              <button
+                onClick={() => setActiveTradeTab('sell')}
+                className={`px-4 py-2 rounded-t-lg font-semibold transition-all flex items-center gap-2 ${
+                  activeTradeTab === 'sell'
+                    ? 'bg-gradient-to-r from-red-500/40 to-red-600/40 border border-red-500/50 text-red-300'
+                    : 'bg-white/10 text-gray-400 hover:text-gray-300'
+                }`}
+              >
+                💰 Sell ICAN
+              </button>
+
+              <button
+                onClick={() => setActiveTradeTab('history')}
+                className={`px-4 py-2 rounded-t-lg font-semibold transition-all flex items-center gap-2 ${
+                  activeTradeTab === 'history'
+                    ? 'bg-gradient-to-r from-blue-500/40 to-blue-600/40 border border-blue-500/50 text-blue-300'
+                    : 'bg-white/10 text-gray-400 hover:text-gray-300'
+                }`}
+              >
+                📜 History
+              </button>
+            </div>
+
+            {/* Tab Content */}
+            <div className="min-h-96">
+              {/* Wallet Tab - Collapsed */}
+              {activeTradeTab === 'wallet' && (
+                <div className="space-y-4">
+                  {balanceLoading ? (
+                    <div className="flex items-center justify-center py-16">
+                      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
+                    </div>
+                  ) : (
+                    <div className="bg-gradient-to-br from-purple-900/40 to-purple-800/40 border border-purple-500/50 rounded-lg p-12 text-center">
+                      <p className="text-purple-300 text-sm font-medium mb-4">💎 Total ICAN Coins</p>
+                      <h2 className="text-6xl font-bold text-white">{icanBalance.toFixed(2)}</h2>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Chart Tab */}
+              {activeTradeTab === 'chart' && (
+                <div className="space-y-4">
+                  {/* Header */}
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                      📈 Real-Time Candlestick Chart - Updates every 7 seconds
+                    </h3>
+                    <button
+                      onClick={() => setShowColorSettings(!showColorSettings)}
+                      className="px-4 py-2 bg-gradient-to-r from-orange-500/30 to-red-500/30 border border-orange-500/50 text-orange-300 rounded-lg hover:from-orange-500/50 hover:to-red-500/50 transition-all font-semibold flex items-center gap-2"
+                    >
+                      🎨 Colors
+                    </button>
+                  </div>
+
+                  {/* Color Settings */}
+                  {showColorSettings && (
+                    <div className="bg-white/5 border border-white/10 rounded-lg p-6 mb-6">
+                      <h4 className="text-lg font-bold text-white mb-4">Customize Chart Colors</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div>
+                          <label className="block text-sm text-gray-300 mb-2">Up Candle (Price ↑)</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="color"
+                              value={candleSettings.upColor}
+                              onChange={(e) => setCandleSettings({...candleSettings, upColor: e.target.value})}
+                              className="w-12 h-10 rounded cursor-pointer border border-gray-500/50"
+                            />
+                            <input
+                              type="text"
+                              value={candleSettings.upColor}
+                              onChange={(e) => setCandleSettings({...candleSettings, upColor: e.target.value})}
+                              className="flex-1 bg-white/10 border border-white/20 rounded px-2 py-1 text-white text-sm font-mono"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm text-gray-300 mb-2">Down Candle (Price ↓)</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="color"
+                              value={candleSettings.downColor}
+                              onChange={(e) => setCandleSettings({...candleSettings, downColor: e.target.value})}
+                              className="w-12 h-10 rounded cursor-pointer border border-gray-500/50"
+                            />
+                            <input
+                              type="text"
+                              value={candleSettings.downColor}
+                              onChange={(e) => setCandleSettings({...candleSettings, downColor: e.target.value})}
+                              className="flex-1 bg-white/10 border border-white/20 rounded px-2 py-1 text-white text-sm font-mono"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm text-gray-300 mb-2">Wick Color</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="color"
+                              value={candleSettings.wickColor}
+                              onChange={(e) => setCandleSettings({...candleSettings, wickColor: e.target.value})}
+                              className="w-12 h-10 rounded cursor-pointer border border-gray-500/50"
+                            />
+                            <input
+                              type="text"
+                              value={candleSettings.wickColor}
+                              onChange={(e) => setCandleSettings({...candleSettings, wickColor: e.target.value})}
+                              className="flex-1 bg-white/10 border border-white/20 rounded px-2 py-1 text-white text-sm font-mono"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Chart Container */}
+                  <div className="bg-white/5 rounded-lg p-6 border border-orange-500/30">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-lg font-bold text-orange-300">7-Second Candlesticks</h4>
+                      {candleLoading && <span className="text-xs text-yellow-400 animate-pulse">⏳ Updating...</span>}
+                    </div>
+                    {candleData && candleData.length > 0 ? (
+                      <CandlestickChart 
+                        candleData={candleData}
+                        loading={candleLoading}
+                        settings={candleSettings}
+                      />
+                    ) : (
+                      <div className="h-96 flex items-center justify-center text-gray-400 bg-white/5 rounded border border-white/10">
+                        <p className="text-center">
+                          <span className="text-5xl mb-4 block">📊</span>
+                          Loading candlestick chart...
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Technical Analysis Info */}
+                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                    <p className="text-sm text-blue-300">
+                      💡 <strong>Tip:</strong> Watch the candlesticks and technical indicators to identify trading opportunities. 
+                      Green candles indicate price increases, red indicates decreases. Use the Support/Resistance levels to decide entry/exit points.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Buy Tab */}
+              {activeTradeTab === 'buy' && (
+                <div className="trade-tab-content">
+                  <BuyIcan />
+                </div>
+              )}
+
+              {/* Sell Tab */}
+              {activeTradeTab === 'sell' && (
+                <div className="trade-tab-content">
+                  <SellIcan />
+                </div>
+              )}
+
+              {/* History Tab */}
+              {activeTradeTab === 'history' && (
+                <div className="space-y-4">
+                  <h3 className="text-xl font-bold text-white mb-4">📜 Your Trading History</h3>
+                  
+                  {historyLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+                    </div>
+                  ) : tradeHistory.length === 0 ? (
+                    <div className="text-center py-12 bg-white/5 rounded-lg border border-white/10">
+                      <History className="w-16 h-16 text-gray-500 mx-auto mb-4" />
+                      <p className="text-gray-400 text-lg">No trading history yet</p>
+                      <p className="text-gray-500 text-sm mt-2">Start buying or selling ICAN to see your transactions here</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 max-h-96 overflow-y-auto">
+                      {tradeHistory.map((transaction, idx) => (
+                        <div
+                          key={idx}
+                          className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg p-4 transition-all"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              {transaction.transaction_type === 'purchase' ? (
+                                <div className="w-10 h-10 bg-green-500/20 rounded-full flex items-center justify-center">
+                                  <ArrowDownLeft className="w-5 h-5 text-green-400" />
+                                </div>
+                              ) : (
+                                <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
+                                  <ArrowUpRight className="w-5 h-5 text-red-400" />
+                                </div>
+                              )}
+                              <div>
+                                <p className="font-semibold text-white">
+                                  {transaction.transaction_type === 'purchase' ? '💳 Bought ICAN' : '💰 Sold ICAN'}
+                                </p>
+                                <p className="text-xs text-gray-400">
+                                  {new Date(transaction.created_at).toLocaleDateString()} {new Date(transaction.created_at).toLocaleTimeString()}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className={`font-bold text-lg ${transaction.transaction_type === 'purchase' ? 'text-green-400' : 'text-red-400'}`}>
+                                {transaction.transaction_type === 'purchase' ? '+' : '-'}{Math.abs(transaction.amount).toFixed(2)}
+                              </p>
+                              <p className="text-xs text-gray-400">
+                                {transaction.metadata?.amount_usd ? `$${transaction.metadata.amount_usd.toFixed(2)}` : transaction.currency}
+                              </p>
+                            </div>
+                          </div>
+                          
+                          {/* Status Badge */}
+                          <div className="mt-3 flex items-center justify-between">
+                            <span className={`text-xs px-2 py-1 rounded ${
+                              transaction.status === 'completed' 
+                                ? 'bg-green-500/20 text-green-400' 
+                                : 'bg-yellow-500/20 text-yellow-400'
+                            }`}>
+                              {transaction.status === 'completed' ? '✓ Completed' : '⏳ Pending'}
+                            </span>
+                            {transaction.metadata?.pricePerCoin && (
+                              <span className="text-xs text-gray-400">
+                                Price: {transaction.metadata.pricePerCoin.toLocaleString()} UGX/ICAN
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

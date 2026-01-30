@@ -2,8 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Camera, Mic, Square, Play, Upload, X, RotateCcw, Pin, Maximize, Minimize, Smartphone, Scissors, CheckCircle } from 'lucide-react';
 import { uploadVideo } from '../services/pitchingService';
 import { VideoClipper } from './status/VideoClipper';
+import BusinessProfileDocuments from './BusinessProfileDocuments';
 
-const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', onPitchCreated, onClose, hideControls = false, onVideoRecorded }) => {
+const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', onPitchCreated, onClose, hideControls = false, onVideoRecorded, currentBusinessProfile }) => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -713,182 +714,27 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
             {/* Form Header */}
             <div className="hidden md:block mb-4 pb-4 border-b border-purple-500/30">
               <h3 className="text-lg font-bold bg-gradient-to-r from-purple-300 to-pink-300 bg-clip-text text-transparent">
-                Tell Your Story
+                ✨ Pitch Details
               </h3>
-              <p className="text-sm text-slate-400 mt-1">Fill in the details to help investors understand your vision</p>
+              <p className="text-sm text-slate-400 mt-1">Document your business plan, financials, and share allocation</p>
             </div>
 
-            {/* Title */}
-            <div>
-              <label className="block text-slate-300 font-semibold mb-2 text-sm md:text-base">
-                ✨ Pitch Title *
-              </label>
-              <input
-                type="text"
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder="e.g., AI-Powered Supply Chain Platform"
-                className="w-full bg-slate-800/50 text-white rounded-lg px-3 md:px-4 py-2.5 md:py-3 border border-purple-500/30 hover:border-purple-500/50 focus:border-purple-500 focus:outline-none text-sm md:text-base transition placeholder-slate-500"
+            {/* Business Profile Documents Component */}
+            {currentBusinessProfile ? (
+              <BusinessProfileDocuments
+                businessProfile={currentBusinessProfile}
+                onDocumentsComplete={(docs) => {
+                  console.log('Documents completed:', docs);
+                }}
+                onCancel={() => {
+                  setIsFormExpanded(false);
+                }}
               />
-            </div>
-
-            {/* Creator Name */}
-            <div>
-              <label className="block text-slate-300 font-semibold mb-2 text-sm md:text-base">
-                👤 Creator/Company Name *
-              </label>
-              <input
-                type="text"
-                value={formData.creator}
-                onChange={(e) => setFormData({ ...formData, creator: e.target.value })}
-                placeholder="Your name or company"
-                className="w-full bg-slate-800/50 text-white rounded-lg px-3 md:px-4 py-2.5 md:py-3 border border-purple-500/30 hover:border-purple-500/50 focus:border-purple-500 focus:outline-none text-sm md:text-base transition placeholder-slate-500"
-              />
-            </div>
-
-            {/* Description */}
-            <div>
-              <label className="block text-slate-300 font-semibold mb-2 text-sm md:text-base">
-                📝 Pitch Description *
-              </label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Describe your idea, business model, and what you're seeking. Be compelling and clear!"
-                rows={3}
-                className="w-full bg-slate-800/50 text-white rounded-lg px-3 md:px-4 py-2.5 md:py-3 border border-purple-500/30 hover:border-purple-500/50 focus:border-purple-500 focus:outline-none text-sm md:text-base resize-none transition placeholder-slate-500"
-              />
-            </div>
-
-            {/* Grid: Category, Pitch Type */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-              <div>
-                <label className="block text-slate-300 font-semibold mb-2 text-sm md:text-base">
-                  🎯 Category
-                </label>
-                <select
-                  value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  className="w-full bg-slate-800/50 text-white rounded-lg px-3 md:px-4 py-2.5 md:py-3 border border-purple-500/30 hover:border-purple-500/50 focus:border-purple-500 focus:outline-none text-sm md:text-base transition"
-                >
-                  <option>Technology</option>
-                  <option>Healthcare</option>
-                  <option>Finance</option>
-                  <option>Agriculture</option>
-                  <option>Education</option>
-                  <option>Sustainability</option>
-                </select>
+            ) : (
+              <div className="bg-yellow-900/30 border border-yellow-600/50 rounded-lg p-4 text-yellow-300 text-sm">
+                ⚠️ Please select or create a business profile first to document your pitch details.
               </div>
-              <div>
-                <label className="block text-slate-300 font-semibold mb-2 text-sm md:text-base">
-                  💼 Pitch Type
-                </label>
-                <select
-                  value={formData.pitchType}
-                  onChange={(e) => setFormData({ ...formData, pitchType: e.target.value })}
-                  className="w-full bg-slate-800/50 text-white rounded-lg px-3 md:px-4 py-2.5 md:py-3 border border-purple-500/30 hover:border-purple-500/50 focus:border-purple-500 focus:outline-none text-sm md:text-base transition"
-                >
-                  <option>Equity</option>
-                  <option>Partnership</option>
-                  <option>Debt</option>
-                  <option>Grant</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Grid: Funding Details */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
-              <div>
-                <label className="block text-slate-300 font-semibold mb-2 text-sm md:text-base">
-                  💰 Target Goal
-                </label>
-                <input
-                  type="text"
-                  value={formData.goal}
-                  onChange={(e) => setFormData({ ...formData, goal: e.target.value })}
-                  placeholder="$500K"
-                  className="w-full bg-slate-800/50 text-white rounded-lg px-3 md:px-4 py-2.5 md:py-3 border border-purple-500/30 hover:border-purple-500/50 focus:border-purple-500 focus:outline-none text-sm md:text-base transition placeholder-slate-500"
-                />
-              </div>
-              <div>
-                <label className="block text-slate-300 font-semibold mb-2 text-sm md:text-base">
-                  📊 Equity Offering
-                </label>
-                <input
-                  type="text"
-                  value={formData.equity}
-                  onChange={(e) => setFormData({ ...formData, equity: e.target.value })}
-                  placeholder="10%"
-                  className="w-full bg-slate-800/50 text-white rounded-lg px-3 md:px-4 py-2.5 md:py-3 border border-purple-500/30 hover:border-purple-500/50 focus:border-purple-500 focus:outline-none text-sm md:text-base transition placeholder-slate-500"
-                />
-              </div>
-              <div>
-                <label className="block text-slate-300 font-semibold mb-2 text-sm md:text-base">
-                  💵 Currently Raised
-                </label>
-                <input
-                  type="text"
-                  value={formData.raised}
-                  onChange={(e) => setFormData({ ...formData, raised: e.target.value })}
-                  placeholder="$0"
-                  className="w-full bg-slate-800/50 text-white rounded-lg px-3 md:px-4 py-2.5 md:py-3 border border-purple-500/30 hover:border-purple-500/50 focus:border-purple-500 focus:outline-none text-sm md:text-base transition placeholder-slate-500"
-                />
-              </div>
-            </div>
-
-            {/* IP Checkbox */}
-            <div className="flex items-center gap-3 p-3 bg-slate-800/30 rounded-lg border border-purple-500/20">
-              <input
-                type="checkbox"
-                checked={formData.hasIP}
-                onChange={(e) => setFormData({ ...formData, hasIP: e.target.checked })}
-                className="w-4 h-4 md:w-5 md:h-5 rounded border-purple-500/50 cursor-pointer accent-purple-500"
-              />
-              <label className="text-slate-300 font-semibold cursor-pointer text-sm md:text-base">
-                🔐 This pitch includes Intellectual Property (IP)
-              </label>
-            </div>
-
-            {/* Team Members */}
-            <div>
-              <label className="block text-slate-300 font-semibold mb-2 text-sm md:text-base">
-                👥 Team Members
-              </label>
-              <div className="flex flex-col md:flex-row gap-2 mb-2">
-                <input
-                  type="text"
-                  id="memberInput"
-                  placeholder="Add team member name"
-                  className="flex-1 bg-slate-800/50 text-white rounded-lg px-3 md:px-4 py-2.5 md:py-3 border border-purple-500/30 hover:border-purple-500/50 focus:border-purple-500 focus:outline-none text-sm md:text-base transition placeholder-slate-500"
-                />
-                <button
-                  onClick={() => {
-                    const input = document.getElementById('memberInput');
-                    handleAddMember(input.value);
-                    input.value = '';
-                  }}
-                  className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-4 md:px-6 py-2.5 md:py-3 rounded-lg font-semibold transition text-sm md:text-base shadow-lg hover:shadow-purple-500/50"
-                >
-                  ➕ Add
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {formData.members.map((member, idx) => (
-                  <div
-                    key={idx}
-                    className="bg-purple-600/30 text-purple-300 px-3 py-1 rounded-full text-xs md:text-sm flex items-center gap-2 border border-purple-500/50"
-                  >
-                    {member}
-                    <button
-                      onClick={() => handleRemoveMember(member)}
-                      className="hover:text-purple-100"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
+            )}
 
             {/* Error Message */}
             {submitError && (

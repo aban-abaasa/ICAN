@@ -219,6 +219,7 @@ ALTER TABLE public.pitches ENABLE ROW LEVEL SECURITY;
 -- Drop existing policies to ensure clean state
 DROP POLICY IF EXISTS "Anyone can view published pitches" ON public.pitches;
 DROP POLICY IF EXISTS "Profile owners can view their own pitches" ON public.pitches;
+DROP POLICY IF EXISTS "Owners can create pitches for their profiles" ON public.pitches;
 
 -- RLS Policies
 CREATE POLICY "Anyone can view published pitches" 
@@ -228,6 +229,33 @@ CREATE POLICY "Anyone can view published pitches"
 CREATE POLICY "Profile owners can view their own pitches" 
     ON public.pitches FOR SELECT 
     USING (
+        EXISTS (
+            SELECT 1 FROM public.business_profiles bp
+            WHERE bp.id = pitches.business_profile_id
+            AND bp.user_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Owners can create pitches for their profiles" 
+    ON public.pitches FOR INSERT 
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM public.business_profiles bp
+            WHERE bp.id = pitches.business_profile_id
+            AND bp.user_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Owners can update their own pitches" 
+    ON public.pitches FOR UPDATE 
+    USING (
+        EXISTS (
+            SELECT 1 FROM public.business_profiles bp
+            WHERE bp.id = pitches.business_profile_id
+            AND bp.user_id = auth.uid()
+        )
+    )
+    WITH CHECK (
         EXISTS (
             SELECT 1 FROM public.business_profiles bp
             WHERE bp.id = pitches.business_profile_id

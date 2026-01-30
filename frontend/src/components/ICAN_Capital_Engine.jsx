@@ -3594,6 +3594,7 @@ const ICANCapitalEngine = () => {
   const [showSHARE, setShowSHARE] = useState(false);
   const [showSHARECreateForm, setShowSHARECreateForm] = useState(false);
   const [showWallet, setShowWallet] = useState(false);
+  const [activeWalletAccountTab, setActiveWalletAccountTab] = useState('ICANCoin');
   const [showJourneyDetails, setShowJourneyDetails] = useState(false);
   const [showAIInsights, setShowAIInsights] = useState(false);
   const [showFinancialAnalytics, setShowFinancialAnalytics] = useState(false);
@@ -11548,51 +11549,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
 
                   {/* Icons Row - Horizontal Layout Below Video */}
                   <div className="flex items-center justify-start gap-2 lg:gap-3 py-2 flex-wrap">
-                    {/* Record Camera Button */}
-                    <div className="group relative">
-                      <button
-                        onClick={isVideoRecording ? stopVideoRecording : startVideoRecording}
-                        className="w-10 h-10 bg-gradient-to-br from-red-500 to-pink-600 rounded-lg flex items-center justify-center hover:shadow-lg hover:shadow-red-500/50 transition-all transform hover:scale-110 active:scale-95 border border-red-400/50"
-                        title={isVideoRecording ? "Stop Recording" : "Record Pitch with Camera"}
-                      >
-                        <Video className={`w-5 h-5 text-white ${isVideoRecording ? 'animate-pulse' : ''}`} />
-                      </button>
-                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                        <div className="bg-slate-900 border border-red-500/40 rounded-lg px-3 py-2 whitespace-nowrap text-xs text-white shadow-lg">
-                          {isVideoRecording ? '⏹️ Stop Recording' : '🎥 Record Pitch'}
-                        </div>
-                      </div>
-                    </div>
 
-                    {/* Upload Video Button */}
-                    <div className="group relative">
-                      <input
-                        type="file"
-                        accept="video/*"
-                        className="hidden"
-                        id="pitchin-video-upload"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            // Handle file upload - can be extended with actual upload logic
-                            console.log('Video file selected:', file.name);
-                            alert(`Video selected: ${file.name}\nUpload functionality can be implemented here`);
-                          }
-                        }}
-                      />
-                      <label
-                        htmlFor="pitchin-video-upload"
-                        className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center hover:shadow-lg hover:shadow-blue-500/50 transition-all transform hover:scale-110 active:scale-95 border border-blue-400/50 cursor-pointer block"
-                        title="Upload Existing Video"
-                      >
-                        <Upload className="w-5 h-5 text-white" />
-                      </label>
-                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                        <div className="bg-slate-900 border border-blue-500/40 rounded-lg px-3 py-2 whitespace-nowrap text-xs text-white shadow-lg">
-                          📤 Upload Video
-                        </div>
-                      </div>
-                    </div>
 
                     {/* Create Button */}
                     <div className="group relative">
@@ -11649,163 +11606,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
                       </div>
                     )}
 
-                    {/* Feature 1: Escrow Vault */}
-                    <div className="group relative">
-                      <button 
-                        onClick={() => setShowEscrowModal(true)}
-                        className="w-10 h-10 bg-emerald-500/20 border border-emerald-500/40 rounded-lg flex items-center justify-center hover:bg-emerald-500/40 hover:border-emerald-500/60 transition-all transform hover:scale-110 active:scale-95"
-                        title="Escrow Vault - Safety"
-                      >
-                        <Lock className="w-5 h-5 text-emerald-400" />
-                      </button>
-                      {/* Tooltip on hover */}
-                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                        <div className="bg-slate-900 border border-emerald-500/40 rounded-lg p-3 w-48 text-center shadow-lg">
-                          <p className="text-xs font-bold text-emerald-300 mb-1">🛡️ Escrow Vault</p>
-                          <p className="text-xs text-gray-300">Money held safely until buyer confirms receipt of certificates</p>
-                        </div>
-                      </div>
-                    </div>
 
-                    {/* Feature 2: Digital SPA Generator */}
-                    <div className="group relative">
-                      <button 
-                        onClick={() => setShowSPAModal(true)}
-                        className="w-10 h-10 bg-blue-500/20 border border-blue-500/40 rounded-lg flex items-center justify-center hover:bg-blue-500/40 hover:border-blue-500/60 transition-all transform hover:scale-110 active:scale-95"
-                        title="Digital SPA Generator - How It Works"
-                      >
-                        <FileText className="w-5 h-5 text-blue-400" />
-                      </button>
-                      {/* Tooltip on hover */}
-                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                        <div className="bg-slate-900 border border-blue-500/40 rounded-lg p-3 w-48 text-center shadow-lg">
-                          <p className="text-xs font-bold text-blue-300 mb-1">⚙️ Digital SPA</p>
-                          <p className="text-xs text-gray-300">Auto-generates & manages share agreements digitally</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Feature 3: KYC Verification */}
-                    <div className="group relative">
-                      <button 
-                        onClick={() => setShowKYCModal(true)}
-                        className="w-10 h-10 bg-pink-500/20 border border-pink-500/40 rounded-lg flex items-center justify-center hover:bg-pink-500/40 hover:border-pink-500/60 transition-all transform hover:scale-110 active:scale-95"
-                        title="KYC Verification - Safety"
-                      >
-                        <Shield className="w-5 h-5 text-pink-400" />
-                      </button>
-                      {/* Tooltip on hover */}
-                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                        <div className="bg-slate-900 border border-pink-500/40 rounded-lg p-3 w-48 text-center shadow-lg">
-                          <p className="text-xs font-bold text-pink-300 mb-1">🔐 KYC Verification</p>
-                          <p className="text-xs text-gray-300">Government ID verification prevents fraud & scams</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Feature 4: Policies */}
-                    <div className="group relative">
-                      <button 
-                        onClick={() => setShowPoliciesModal(true)}
-                        className="w-10 h-10 bg-amber-500/20 border border-amber-500/40 rounded-lg flex items-center justify-center hover:bg-amber-500/40 hover:border-amber-500/60 transition-all transform hover:scale-110 active:scale-95"
-                        title="View Policies"
-                      >
-                        <FileText className="w-5 h-5 text-amber-400" />
-                      </button>
-                      {/* Tooltip on hover */}
-                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                        <div className="bg-slate-900 border border-amber-500/40 rounded-lg p-3 w-48 text-center shadow-lg">
-                          <p className="text-xs font-bold text-amber-300 mb-1">📋 Policies</p>
-                          <p className="text-xs text-gray-300">Read and review investment policies</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Feature 5: Sign Document */}
-                    <div className="group relative">
-                      <button 
-                        onClick={() => setShowSignModal(true)}
-                        className={`w-10 h-10 bg-violet-500/20 border border-violet-500/40 rounded-lg flex items-center justify-center hover:bg-violet-500/40 hover:border-violet-500/60 transition-all transform hover:scale-110 active:scale-95 ${
-                          selectedPitchForPlay?.id && signedNDA.has(selectedPitchForPlay.id) ? 'ring-2 ring-violet-500 bg-violet-500/40' : ''
-                        }`}
-                        title={signedNDA.has(selectedPitchForPlay?.id) ? "Signed" : "Sign Agreement"}
-                      >
-                        <CheckCircle className={`w-5 h-5 ${signedNDA.has(selectedPitchForPlay?.id) ? 'text-green-400' : 'text-violet-400'}`} />
-                      </button>
-                      {/* Tooltip on hover */}
-                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                        <div className="bg-slate-900 border border-violet-500/40 rounded-lg p-3 w-48 text-center shadow-lg">
-                          <p className="text-xs font-bold text-violet-300 mb-1">✍️ Sign Agreement</p>
-                          <p className="text-xs text-gray-300">Digitally sign investment agreements</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Feature 6: First Read */}
-                    <div className="group relative">
-                      <button 
-                        onClick={() => setShowFirstReadModal(true)}
-                        className="w-10 h-10 bg-indigo-500/20 border border-indigo-500/40 rounded-lg flex items-center justify-center hover:bg-indigo-500/40 hover:border-indigo-500/60 transition-all transform hover:scale-110 active:scale-95"
-                        title="First Read - Document Review"
-                      >
-                        <Eye className="w-5 h-5 text-indigo-400" />
-                      </button>
-                      {/* Tooltip on hover */}
-                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                        <div className="bg-slate-900 border border-indigo-500/40 rounded-lg p-3 w-48 text-center shadow-lg">
-                          <p className="text-xs font-bold text-indigo-300 mb-1">👁️ First Read</p>
-                          <p className="text-xs text-gray-300">Review key documents before investing</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Feature 7: Live Boardroom */}
-                    <div className="group relative">
-                      <button 
-                        onClick={() => {
-                          // Open live boardroom for trust groups
-                          if (selectedTrust?.id) {
-                            setBoardroomTrustId(selectedTrust.id);
-                          } else if (userTrusts.length > 0) {
-                            setBoardroomTrustId(userTrusts[0].id);
-                          } else {
-                            alert('No trust group selected. Please select a trust group first.');
-                          }
-                        }}
-                        className="w-10 h-10 bg-cyan-500/20 border border-cyan-500/40 rounded-lg flex items-center justify-center hover:bg-cyan-500/40 hover:border-cyan-500/60 transition-all transform hover:scale-110 active:scale-95"
-                        title="Live Boardroom"
-                      >
-                        <Users className="w-5 h-5 text-cyan-400" />
-                      </button>
-                      {/* Tooltip on hover */}
-                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                        <div className="bg-slate-900 border border-cyan-500/40 rounded-lg p-3 w-48 text-center shadow-lg">
-                          <p className="text-xs font-bold text-cyan-300 mb-1">🎥 Live Boardroom</p>
-                          <p className="text-xs text-gray-300">Join live boardroom meeting with trust members</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Feature 8: Import from Trust Groups - COMMENTED OUT
-                    <div className="group relative">
-                      <button 
-                        onClick={() => {
-                          // Show dialog to import from trust groups
-                          alert(`Available Trust Groups:\n\n${userTrusts.map(t => `• ${t.name}`).join('\n')}\n\nSelect a trust to import data`);
-                        }}
-                        className="w-10 h-10 bg-lime-500/20 border border-lime-500/40 rounded-lg flex items-center justify-center hover:bg-lime-500/40 hover:border-lime-500/60 transition-all transform hover:scale-110 active:scale-95"
-                        title="Import from Trust Groups"
-                      >
-                        <Download className="w-5 h-5 text-lime-400" />
-                      </button>
-                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                        <div className="bg-slate-900 border border-lime-500/40 rounded-lg p-3 w-48 text-center shadow-lg">
-                          <p className="text-xs font-bold text-lime-300 mb-1">📥 Import from Trust</p>
-                          <p className="text-xs text-gray-300">Import pitch data from your trust groups</p>
-                        </div>
-                      </div>
-                    </div>
-                    */}
                   </div>
                 </div>
 
@@ -13024,10 +12825,136 @@ Data Freshness: ${reportData.metadata.dataFreshness}
                   <p className="text-sm md:text-base text-gray-300">Manage your accounts, balances & transactions</p>
                 </div>
               </div>
+
+              {/* Wallet Account Type Tabs */}
+              <div className="mt-4 flex flex-wrap gap-2">
+                {[
+                  // COMMENTED OUT: ICANCoin moved to ICANWallet component
+                  // { id: 'ICANCoin', label: '💰 ICANCoin', color: 'from-yellow-600 to-amber-600' }
+                  // COMMENTED OUT: Other wallet types (Personal, Agent, Business, Trust)
+                  // { id: 'Personal', label: '👤 Personal', color: 'from-blue-600 to-blue-500' },
+                  // { id: 'Agent', label: '🤝 Agent', color: 'from-orange-600 to-orange-500' },
+                  // { id: 'Business', label: '🏢 Business', color: 'from-indigo-600 to-indigo-500' },
+                  // { id: 'Trust', label: '🔐 Trust', color: 'from-pink-600 to-pink-500' }
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveWalletAccountTab(tab.id)}
+                    className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                      activeWalletAccountTab === tab.id
+                        ? `bg-gradient-to-r ${tab.color} text-white shadow-lg`
+                        : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {/* Wallet Content */}
-            <div className="max-w-7xl mx-auto">
+            {/* Wallet Tab Content */}
+            <div className="max-w-7xl mx-auto mt-6">
+              {/* COMMENTED OUT: ICANCoin moved to ICANWallet component - was here but now in ICANWallet.jsx */}
+
+              {activeWalletAccountTab === 'Personal' && (
+                <div className="glass-card p-6 bg-gradient-to-br from-blue-600/20 to-blue-500/20">
+                  <h2 className="text-2xl font-bold text-blue-300 mb-4">👤 Personal Account</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="bg-white/5 rounded-lg p-4 border border-blue-500/30">
+                      <p className="text-gray-400 text-sm">Total Balance</p>
+                      <p className="text-2xl font-bold text-blue-300">$5,234.50</p>
+                    </div>
+                    <div className="bg-white/5 rounded-lg p-4 border border-blue-500/30">
+                      <p className="text-gray-400 text-sm">Monthly Income</p>
+                      <p className="text-2xl font-bold text-green-400">$2,100.00</p>
+                    </div>
+                    <div className="bg-white/5 rounded-lg p-4 border border-blue-500/30">
+                      <p className="text-gray-400 text-sm">Monthly Expenses</p>
+                      <p className="text-2xl font-bold text-red-400">$1,250.00</p>
+                    </div>
+                    <div className="bg-white/5 rounded-lg p-4 border border-blue-500/30">
+                      <p className="text-gray-400 text-sm">Net Savings</p>
+                      <p className="text-2xl font-bold text-green-400">+$850.00</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeWalletAccountTab === 'Agent' && (
+                <div className="glass-card p-6 bg-gradient-to-br from-orange-600/20 to-orange-500/20">
+                  <h2 className="text-2xl font-bold text-orange-300 mb-4">🤝 Agent Account</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="bg-white/5 rounded-lg p-4 border border-orange-500/30">
+                      <p className="text-gray-400 text-sm">Commission Balance</p>
+                      <p className="text-2xl font-bold text-orange-300">$856.75</p>
+                    </div>
+                    <div className="bg-white/5 rounded-lg p-4 border border-orange-500/30">
+                      <p className="text-gray-400 text-sm">This Month Transactions</p>
+                      <p className="text-2xl font-bold text-orange-400">234</p>
+                    </div>
+                    <div className="bg-white/5 rounded-lg p-4 border border-orange-500/30">
+                      <p className="text-gray-400 text-sm">Commission Rate</p>
+                      <p className="text-2xl font-bold text-orange-400">2.5%</p>
+                    </div>
+                    <div className="bg-white/5 rounded-lg p-4 border border-orange-500/30">
+                      <p className="text-gray-400 text-sm">Agent Rating</p>
+                      <p className="text-2xl font-bold text-yellow-400">⭐ 4.8</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeWalletAccountTab === 'Business' && (
+                <div className="glass-card p-6 bg-gradient-to-br from-indigo-600/20 to-indigo-500/20">
+                  <h2 className="text-2xl font-bold text-indigo-300 mb-4">🏢 Business Account</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="bg-white/5 rounded-lg p-4 border border-indigo-500/30">
+                      <p className="text-gray-400 text-sm">Business Balance</p>
+                      <p className="text-2xl font-bold text-indigo-300">$12,450.00</p>
+                    </div>
+                    <div className="bg-white/5 rounded-lg p-4 border border-indigo-500/30">
+                      <p className="text-gray-400 text-sm">Monthly Revenue</p>
+                      <p className="text-2xl font-bold text-green-400">$8,950.00</p>
+                    </div>
+                    <div className="bg-white/5 rounded-lg p-4 border border-indigo-500/30">
+                      <p className="text-gray-400 text-sm">Active Customers</p>
+                      <p className="text-2xl font-bold text-indigo-400">47</p>
+                    </div>
+                    <div className="bg-white/5 rounded-lg p-4 border border-indigo-500/30">
+                      <p className="text-gray-400 text-sm">YTD Growth</p>
+                      <p className="text-2xl font-bold text-green-400">+18%</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeWalletAccountTab === 'Trust' && (
+                <div className="glass-card p-6 bg-gradient-to-br from-pink-600/20 to-pink-500/20">
+                  <h2 className="text-2xl font-bold text-pink-300 mb-4">🔐 Trust Account</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="bg-white/5 rounded-lg p-4 border border-pink-500/30">
+                      <p className="text-gray-400 text-sm">Trust Balance</p>
+                      <p className="text-2xl font-bold text-pink-300">$25,600.00</p>
+                    </div>
+                    <div className="bg-white/5 rounded-lg p-4 border border-pink-500/30">
+                      <p className="text-gray-400 text-sm">Active Trusts</p>
+                      <p className="text-2xl font-bold text-pink-400">3</p>
+                    </div>
+                    <div className="bg-white/5 rounded-lg p-4 border border-pink-500/30">
+                      <p className="text-gray-400 text-sm">Security Level</p>
+                      <p className="text-2xl font-bold text-green-400">🔒 Verified</p>
+                    </div>
+                    <div className="bg-white/5 rounded-lg p-4 border border-pink-500/30">
+                      <p className="text-gray-400 text-sm">Trust Yield</p>
+                      <p className="text-2xl font-bold text-green-400">+4.2%</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Full ICANWallet Component Below Tabs */}
+            <div className="max-w-7xl mx-auto mt-8">
               <ICANWallet businessProfiles={userBusinessProfiles} onRefreshProfiles={fetchUserBusinessProfiles} />
             </div>
           </div>

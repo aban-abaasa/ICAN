@@ -151,7 +151,7 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
           </div>
         </div>
 
-        {/* Google Sign In Button */}
+        {/* Google Sign In Button - Automatically checks for country after login */}
         <button
           type="button"
           disabled={googleLoading}
@@ -160,6 +160,9 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
             setGoogleLoading(true);
             setError('');
             try {
+              // signInWithGoogle redirects to OAuth, then CountryCheckMiddleware
+              // will automatically verify if user has country_code set in user_accounts
+              // If not set, CountrySetup modal appears - user CANNOT proceed without setting country
               await signInWithGoogle();
             } catch (err) {
               setError(err.message || 'Failed to sign in with Google');

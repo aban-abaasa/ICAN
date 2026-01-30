@@ -1,62 +1,27 @@
-import React, { useState } from 'react';
-import { ChevronUp, Plus, X, AlertCircle } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { ChevronUp, X, AlertCircle } from 'lucide-react';
+import BusinessProfileDocuments from './BusinessProfileDocuments';
 
-const PitchDetailsForm = ({ isOpen, onClose, onSubmit }) => {
-  const [formData, setFormData] = useState({
-    title: '',
-    creator: '',
-    description: '',
-    category: 'Technology',
-    pitchType: 'Equity',
-    targetGoal: '$500K',
-    equityOffering: '10%',
-    currentlyRaised: '$0',
-    hasIP: false,
-    teamMembers: []
-  });
-  const [newMember, setNewMember] = useState('');
+const PitchDetailsForm = ({ isOpen, onClose, onSubmit, currentBusinessProfile }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [allDocumentsComplete, setAllDocumentsComplete] = useState(false);
+  const businessDocRef = useRef(null);
 
-  const handleInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
-  };
-
-  const addTeamMember = () => {
-    if (newMember.trim()) {
-      setFormData(prev => ({
-        ...prev,
-        teamMembers: [...prev.teamMembers, newMember]
-      }));
-      setNewMember('');
-    }
-  };
-
-  const removeTeamMember = (index) => {
-    setFormData(prev => ({
-      ...prev,
-      teamMembers: prev.teamMembers.filter((_, i) => i !== index)
-    }));
+  const handleDocumentsComplete = (isComplete) => {
+    setAllDocumentsComplete(isComplete);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Validation
-    if (!formData.title.trim()) {
-      setSubmitError('Please enter a pitch title');
+
+    if (!currentBusinessProfile) {
+      setSubmitError('No business profile found');
       return;
     }
-    if (!formData.creator.trim()) {
-      setSubmitError('Please enter creator/company name');
-      return;
-    }
-    if (!formData.description.trim()) {
-      setSubmitError('Please enter a pitch description');
+
+    if (!allDocumentsComplete) {
+      setSubmitError('Please complete all required document fields before submitting');
       return;
     }
 
@@ -64,13 +29,13 @@ const PitchDetailsForm = ({ isOpen, onClose, onSubmit }) => {
       setIsSubmitting(true);
       setSubmitError('');
       
-      console.log('📤 Submitting pitch details:', formData);
+      console.log('📤 Submitting with business profile:', currentBusinessProfile);
       
       if (!onSubmit) {
         throw new Error('onSubmit callback is not defined');
       }
       
-      await onSubmit(formData);
+      await onSubmit(currentBusinessProfile);
       
       console.log('✅ Pitch submitted successfully');
     } catch (error) {
@@ -104,197 +69,17 @@ const PitchDetailsForm = ({ isOpen, onClose, onSubmit }) => {
 
         {/* Form Content */}
         <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 sm:space-y-6">
-          {/* Pitch Title */}
-          <div>
-            <label className="block text-white font-semibold mb-2 flex items-center gap-2">
-              <span>✨</span> Pitch Title <span className="text-pink-400">*</span>
-            </label>
-            <input
-              type="text"
-              name="title"
-              value={formData.title}
-              onChange={handleInputChange}
-              placeholder="e.g., AI-Powered Supply Chain Platform"
-              className="w-full px-4 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-pink-500/50 focus:ring-2 focus:ring-pink-500/20 transition"
-              required
+          {currentBusinessProfile ? (
+            <BusinessProfileDocuments 
+              ref={businessDocRef}
+              businessProfile={currentBusinessProfile} 
+              onDocumentsComplete={handleDocumentsComplete}
             />
-          </div>
-
-          {/* Creator/Company Name */}
-          <div>
-            <label className="block text-white font-semibold mb-2 flex items-center gap-2">
-              <span>👤</span> Creator/Company Name <span className="text-pink-400">*</span>
-            </label>
-            <input
-              type="text"
-              name="creator"
-              value={formData.creator}
-              onChange={handleInputChange}
-              placeholder="Your name or company"
-              className="w-full px-4 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-pink-500/50 focus:ring-2 focus:ring-pink-500/20 transition"
-              required
-            />
-          </div>
-
-          {/* Pitch Description */}
-          <div>
-            <label className="block text-white font-semibold mb-2 flex items-center gap-2">
-              <span>📝</span> Pitch Description <span className="text-pink-400">*</span>
-            </label>
-            <textarea
-              name="description"
-              value={formData.description}
-              onChange={handleInputChange}
-              placeholder="Describe your idea, business model, and what you're seeking. Be compelling and clear!"
-              rows="4"
-              className="w-full px-4 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-pink-500/50 focus:ring-2 focus:ring-pink-500/20 transition resize-none"
-              required
-            />
-          </div>
-
-          {/* Two Column Layout */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Category */}
-            <div>
-              <label className="block text-white font-semibold mb-2 flex items-center gap-2">
-                <span>🎯</span> Category
-              </label>
-              <select
-                name="category"
-                value={formData.category}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-pink-500/50 focus:ring-2 focus:ring-pink-500/20 transition"
-              >
-                <option value="Technology">Technology</option>
-                <option value="Healthcare">Healthcare</option>
-                <option value="Finance">Finance</option>
-                <option value="Retail">Retail</option>
-                <option value="Energy">Energy</option>
-                <option value="Other">Other</option>
-              </select>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-red-400 text-sm">⚠️ No business profile found. Please create one first.</p>
             </div>
-
-            {/* Pitch Type */}
-            <div>
-              <label className="block text-white font-semibold mb-2 flex items-center gap-2">
-                <span>💼</span> Pitch Type
-              </label>
-              <select
-                name="pitchType"
-                value={formData.pitchType}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-pink-500/50 focus:ring-2 focus:ring-pink-500/20 transition"
-              >
-                <option value="Equity">Equity</option>
-                <option value="Debt">Debt</option>
-                <option value="Revenue Share">Revenue Share</option>
-                <option value="Donation">Donation</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Three Column Layout */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {/* Target Goal */}
-            <div>
-              <label className="block text-white font-semibold mb-2 flex items-center gap-2">
-                <span>🎯</span> Target Goal
-              </label>
-              <input
-                type="text"
-                name="targetGoal"
-                value={formData.targetGoal}
-                onChange={handleInputChange}
-                placeholder="$500K"
-                className="w-full px-4 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-pink-500/50 focus:ring-2 focus:ring-pink-500/20 transition"
-              />
-            </div>
-
-            {/* Equity Offering */}
-            <div>
-              <label className="block text-white font-semibold mb-2 flex items-center gap-2">
-                <span>📊</span> Equity Offering
-              </label>
-              <input
-                type="text"
-                name="equityOffering"
-                value={formData.equityOffering}
-                onChange={handleInputChange}
-                placeholder="10%"
-                className="w-full px-4 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-pink-500/50 focus:ring-2 focus:ring-pink-500/20 transition"
-              />
-            </div>
-
-            {/* Currently Raised */}
-            <div>
-              <label className="block text-white font-semibold mb-2 flex items-center gap-2">
-                <span>💵</span> Currently Raised
-              </label>
-              <input
-                type="text"
-                name="currentlyRaised"
-                value={formData.currentlyRaised}
-                onChange={handleInputChange}
-                placeholder="$0"
-                className="w-full px-4 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-pink-500/50 focus:ring-2 focus:ring-pink-500/20 transition"
-              />
-            </div>
-          </div>
-
-          {/* IP Checkbox */}
-          <div className="bg-white/5 border border-white/10 rounded-lg p-4">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                name="hasIP"
-                checked={formData.hasIP}
-                onChange={handleInputChange}
-                className="w-5 h-5 rounded border-white/20 bg-white/10 text-pink-500 focus:ring-pink-500 cursor-pointer"
-              />
-              <span className="text-white font-semibold flex items-center gap-2">
-                <span>🔐</span> This pitch includes Intellectual Property (IP)
-              </span>
-            </label>
-          </div>
-
-          {/* Team Members */}
-          <div>
-            <label className="block text-white font-semibold mb-3 flex items-center gap-2">
-              <span>👥</span> Team Members
-            </label>
-            <div className="space-y-2 mb-3">
-              {formData.teamMembers.map((member, index) => (
-                <div key={index} className="flex items-center justify-between bg-white/5 border border-white/10 rounded-lg p-3">
-                  <span className="text-gray-300">{member}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeTeamMember(index)}
-                    className="p-1 hover:bg-white/10 rounded transition text-gray-400 hover:text-white"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newMember}
-                onChange={(e) => setNewMember(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTeamMember())}
-                placeholder="Add team member name"
-                className="flex-1 px-4 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-pink-500/50 focus:ring-2 focus:ring-pink-500/20 transition"
-              />
-              <button
-                type="button"
-                onClick={addTeamMember}
-                className="px-4 py-2.5 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white font-semibold rounded-lg transition flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">Add</span>
-              </button>
-            </div>
-          </div>
+          )}
 
           {/* Error Message */}
           {submitError && (
@@ -307,13 +92,13 @@ const PitchDetailsForm = ({ isOpen, onClose, onSubmit }) => {
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={isSubmitting || !formData.title.trim() || !formData.creator.trim() || !formData.description.trim()}
+            disabled={isSubmitting || !currentBusinessProfile || !allDocumentsComplete}
             className={`w-full mt-6 px-6 py-3 rounded-lg font-bold transition flex items-center justify-center gap-2 group ${
-              isSubmitting || !formData.title.trim() || !formData.creator.trim() || !formData.description.trim()
+              isSubmitting || !currentBusinessProfile || !allDocumentsComplete
                 ? 'bg-gray-600 cursor-not-allowed opacity-60 text-gray-300'
                 : 'bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white hover:shadow-lg hover:shadow-pink-500/50 transform hover:scale-105 active:scale-95'
             }`}
-            title={!formData.title.trim() ? 'Please enter a pitch title' : !formData.creator.trim() ? 'Please enter creator name' : !formData.description.trim() ? 'Please enter a description' : 'Click to launch your pitch'}
+            title={!currentBusinessProfile ? 'Please create a business profile first' : !allDocumentsComplete ? 'Please complete all document fields' : 'Click to launch your pitch'}
           >
             <span>{isSubmitting ? '⏳' : '🚀'}</span>
             <span>{isSubmitting ? 'Going Live...' : 'Go Live'}</span>

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Users, Plus, X, Trash2, DollarSign, PieChart, Loader, Search, CheckCircle2, AlertCircle, Wallet } from 'lucide-react';
+import { Building2, Users, Plus, X, Trash2, DollarSign, PieChart, Loader, Search, CheckCircle2, AlertCircle, Wallet, FileText } from 'lucide-react';
 import { createBusinessProfile, updateBusinessProfile, getSupabase, verifyICANUser, searchICANUsers, saveBusinessCoOwners } from '../services/pitchingService';
 import { walletAccountService } from '../services/walletAccountService';
+import BusinessProfileDocuments from './BusinessProfileDocuments';
 
 const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfile }) => {
-  const [step, setStep] = useState('business'); // business, owners, wallet, review
+  const [step, setStep] = useState('business'); // business, owners, documents, wallet, review
   const [loading, setLoading] = useState(false);
   const [searchingUsers, setSearchingUsers] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
@@ -409,7 +410,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
         <div className="p-6">
           {/* Step Indicator */}
           <div className="flex gap-2 mb-8">
-            {['business', 'owners', 'wallet', 'review'].map((s, idx) => (
+            {['business', 'owners', 'documents', 'wallet', 'review'].map((s, idx) => (
               <button
                 key={s}
                 onClick={() => setStep(s)}
@@ -419,7 +420,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                     : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                 }`}
               >
-                {idx + 1}. {['Business Info', 'Co-Owners', 'Wallet', 'Review'][idx]}
+                {idx + 1}. {['Business Info', 'Co-Owners', 'Documents', 'Wallet', 'Review'][idx]}
               </button>
             ))}
           </div>
@@ -836,16 +837,41 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                   Back
                 </button>
                 <button
-                  onClick={() => setStep('wallet')}
+                  onClick={() => setStep('documents')}
                   className="flex-1 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white py-3 rounded-lg font-semibold transition"
                 >
-                  Next: Setup Wallet
+                  Next: Documents
                 </button>
               </div>
             </div>
           )}
 
-          {/* Step 3: Wallet Account Setup */}
+          {/* Step 3: Business Documents */}
+          {step === 'documents' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                    <FileText className="w-6 h-6 text-blue-400" />
+                    Document Management
+                  </h3>
+                  <p className="text-slate-400 text-sm mt-1">
+                    Complete required documents for {businessProfile?.business_name}
+                  </p>
+                </div>
+              </div>
+              <BusinessProfileDocuments
+                businessProfile={{
+                  id: editingProfile?.id,
+                  business_name: businessData.businessName
+                }}
+                onDocumentsComplete={() => setStep('wallet')}
+                onCancel={() => setStep('owners')}
+              />
+            </div>
+          )}
+
+          {/* Step 4: Wallet Account Setup */}
           {step === 'wallet' && (
             <div className="space-y-6">
               <div className="bg-blue-900/30 border border-blue-700 rounded-lg p-4">
@@ -947,6 +973,134 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                   Back
                 </button>
                 <button
+                  onClick={() => setStep('documents')}
+                  className="flex-1 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white py-3 rounded-lg font-semibold transition"
+                >
+                  Next: Documents
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Business Documents */}
+          {step === 'documents' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                    <FileText className="w-6 h-6 text-blue-400" />
+                    Document Management
+                  </h3>
+                  <p className="text-slate-400 text-sm mt-1">
+                    Complete required documents for {businessProfile?.business_name}
+                  </p>
+                </div>
+              </div>
+
+              <BusinessProfileDocuments
+                businessProfile={editingProfile || { business_name: businessData.businessName }}
+                onDocumentsComplete={() => setStep('wallet')}
+                onCancel={() => setStep('owners')}
+              />
+
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setStep('owners')}
+                  className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-lg font-semibold transition"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={() => setStep('wallet')}
+                  className="flex-1 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white py-3 rounded-lg font-semibold transition"
+                >
+                  Next: Setup Wallet
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 4: Wallet Account Setup */}
+          {step === 'wallet' && (
+            <div className="space-y-6">
+              <div className="bg-blue-900/30 border border-blue-700 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <Wallet className="w-5 h-5 text-blue-400 flex-shrink-0 mt-1" />
+                  <div>
+                    <h4 className="text-white font-semibold mb-1">💳 Business Wallet Account</h4>
+                    <p className="text-slate-300 text-sm">Create a dedicated ICAN wallet account for your business. This is required for receiving pitch earnings, payments, and managing finances.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-slate-300 text-sm block mb-2">Preferred Currency</label>
+                  <select
+                    value={walletData.preferredCurrency}
+                    onChange={(e) => setWalletData({...walletData, preferredCurrency: e.target.value})}
+                    className="w-full bg-slate-700 text-white rounded-lg px-4 py-2 border border-slate-600 focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="UGX">🇺🇬 UGX (Ugandan Shilling)</option>
+                    <option value="KES">🇰🇪 KES (Kenyan Shilling)</option>
+                    <option value="USD">🇺🇸 USD (US Dollar)</option>
+                    <option value="EUR">🇪🇺 EUR (Euro)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-slate-300 text-sm block mb-2">Wallet PIN (4-6 digits) *</label>
+                  <input
+                    type={walletData.showPin ? 'text' : 'password'}
+                    value={walletData.pin}
+                    onChange={(e) => setWalletData({...walletData, pin: e.target.value})}
+                    placeholder="Enter 4-6 digit PIN"
+                    className="w-full bg-slate-700 text-white rounded-lg px-4 py-2 border border-slate-600 focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-300 text-sm block mb-2">Confirm PIN *</label>
+                  <input
+                    type={walletData.showPin ? 'text' : 'password'}
+                    value={walletData.confirmPin}
+                    onChange={(e) => setWalletData({...walletData, confirmPin: e.target.value})}
+                    placeholder="Confirm your PIN"
+                    className="w-full bg-slate-700 text-white rounded-lg px-4 py-2 border border-slate-600 focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+
+                <label className="flex items-center gap-2 text-slate-300 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={walletData.showPin}
+                    onChange={(e) => setWalletData({...walletData, showPin: e.target.checked})}
+                    className="w-4 h-4 rounded"
+                  />
+                  Show PIN
+                </label>
+
+                {walletData.pin && walletData.confirmPin && walletData.pin !== walletData.confirmPin && (
+                  <div className="text-red-400 text-sm">⚠️ PINs do not match</div>
+                )}
+
+                {walletData.pin && !/^\d{4,6}$/.test(walletData.pin) && (
+                  <div className="text-red-400 text-sm">⚠️ PIN must be 4-6 digits</div>
+                )}
+
+                {walletData.pin === walletData.confirmPin && /^\d{4,6}$/.test(walletData.pin) && (
+                  <div className="text-green-400 text-sm">✅ PIN is valid</div>
+                )}
+              </div>
+
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setStep('documents')}
+                  className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-lg font-semibold transition"
+                >
+                  Back
+                </button>
+                <button
                   onClick={() => setStep('review')}
                   disabled={!walletData.pin || walletData.pin !== walletData.confirmPin || !/^\d{4,6}$/.test(walletData.pin)}
                   className="flex-1 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 disabled:from-slate-600 disabled:to-slate-600 disabled:cursor-not-allowed text-white py-3 rounded-lg font-semibold transition"
@@ -957,7 +1111,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
             </div>
           )}
 
-          {/* Step 4: Review */}
+          {/* Step 5: Review */}
           {step === 'review' && (
             <div className="space-y-6">
               <h3 className="text-xl font-bold text-white">Review Your Business Profile</h3>
@@ -1047,7 +1201,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
 
               <div className="flex gap-4">
                 <button
-                  onClick={() => setStep('owners')}
+                  onClick={() => setStep('wallet')}
                   disabled={loading}
                   className="flex-1 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-700 text-white py-3 rounded-lg font-semibold transition"
                 >

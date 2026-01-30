@@ -786,7 +786,8 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                 onClose={() => {
                   setShowRecorder(false);
                   if (onClosePitchCreator) onClosePitchCreator();
-                }} 
+                }}
+                currentBusinessProfile={currentBusinessProfile}
               />
             </div>
           </div>

@@ -326,7 +326,7 @@ export const AuthProvider = ({ children }) => {
     return data;
   };
 
-  // Sign in with Google - exactly like FARM-AGENT
+  // Sign in with Google - with automatic country check
   const signInWithGoogle = async () => {
     const supabase = getSupabase();
     if (!supabase) throw new Error('Supabase not initialized');
@@ -348,7 +348,31 @@ export const AuthProvider = ({ children }) => {
     });
     
     if (error) throw error;
+    
+    // Note: After OAuth redirect and auth state updates, CountryCheckMiddleware 
+    // will automatically verify if user has country_code set in user_accounts
+    // If not set, it will force CountrySetup modal before app proceeds
     return data;
+  };
+  
+  // Helper: Check if user has country set in user_accounts
+  const checkUserCountry = async (userId) => {
+    const supabase = getSupabase();
+    if (!supabase) return false;
+    
+    try {
+      const { data, error } = await supabase
+        .from('user_accounts')
+        .select('country_code')
+        .eq('user_id', userId)
+        .single();
+      
+      if (error) return false;
+      return data?.country_code !== null && data?.country_code !== undefined;
+    } catch (error) {
+      console.error('Error checking country:', error);
+      return false;
+    }
   };
 
   const value = {
@@ -360,6 +384,7 @@ export const AuthProvider = ({ children }) => {
     signOut,
     resetPassword,
     signInWithGoogle,
+    checkUserCountry,
     loadProfile,
     updateProfile,
     uploadAvatar,
