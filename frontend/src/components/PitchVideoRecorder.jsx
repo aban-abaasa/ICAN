@@ -27,6 +27,7 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
   const [showVideoClipper, setShowVideoClipper] = useState(false);
   const [showTrimDialog, setShowTrimDialog] = useState(false);
   const [showReview, setShowReview] = useState(false);
+  const [documentsComplete, setDocumentsComplete] = useState(false); // Track document completion
   
   const [formData, setFormData] = useState({
     title: '',
@@ -356,6 +357,63 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
     try {
       setIsSubmitting(true);
       setSubmitError(null);
+
+      // Check if documents are saved to Supabase BEFORE allowing video submission
+      if (currentBusinessProfile) {
+        try {
+          const supabase = getSupabase();
+          if (supabase) {
+            const { data: docs, error } = await supabase
+              .from('business_documents')
+              .select('*')
+              .eq('business_profile_id', currentBusinessProfile.id)
+              .single();
+
+            if (error || !docs) {
+              // No documents found in database
+              setSubmitError('❌ Documents not saved. Please save all business documents before publishing your pitch.\n\nGo to Business Profile → Documents → Fill all fields → Save Documents');
+              setIsSubmitting(false);
+              return;
+            }
+
+            // Check if all required fields are filled in the saved documents
+            const allDocumentsComplete = 
+              docs.business_plan_content?.trim() &&
+              docs.financial_projection_content?.trim() &&
+              docs.value_proposition_wants?.trim() &&
+              docs.value_proposition_fears?.trim() &&
+              docs.value_proposition_needs?.trim() &&
+              docs.mou_content?.trim() &&
+              docs.share_allocation_shares &&
+              docs.share_allocation_share_price;
+
+            if (!allDocumentsComplete) {
+              setSubmitError('❌ Incomplete documents. All document fields must be filled and saved before publishing.\n\nPlease complete: Business Plan, Financial Projection, Value Proposition, MOU, and Share Allocation.');
+              setIsSubmitting(false);
+              return;
+            }
+
+            // Check that all documents are marked as completed
+            const allMarkedComplete = 
+              docs.business_plan_completed &&
+              docs.financial_projection_completed &&
+              docs.value_proposition_completed &&
+              docs.mou_completed &&
+              docs.share_allocation_completed &&
+              docs.all_documents_completed === true;
+
+            if (!allMarkedComplete) {
+              setSubmitError('❌ Documents not marked complete. Please ensure all document checkboxes are checked and click "Save Documents".');
+              setIsSubmitting(false);
+              return;
+            }
+          }
+        } catch (docError) {
+          console.warn('Error checking documents:', docError?.message);
+          // Continue with submission even if document check fails (demo mode)
+        }
+      }
+
       console.log('🚀 Submitting pitch with data:', {
         title: formData.title,
         creator: formData.creator,
@@ -411,40 +469,89 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
   };
 
   return (
-    <div className="w-full h-full px-0 relative flex flex-col">
+    <div className="w-full h-full px-0 relative flex flex-col bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* Close Button - Hidden when using CreatorPage */}
       {onClose && !hideControls && (
         <button
           onClick={onClose}
-          className="absolute top-3 left-3 md:top-4 md:right-4 w-9 h-9 md:w-10 md:h-10 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white flex items-center justify-center transition z-50 focus:outline-none focus:ring-2 focus:ring-white/30"
+          className="absolute top-4 left-4 md:top-6 md:left-6 w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white flex items-center justify-center transition z-50 focus:outline-none focus:ring-2 focus:ring-white/30 backdrop-blur-sm border border-white/10"
           aria-label="Close"
         >
           <X className="w-5 h-5 md:w-6 md:h-6" />
         </button>
       )}
-      <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 rounded-none p-0 border-0 h-full flex flex-col overflow-hidden flex-1 space-y-4">
-        {/* Header - Unified Pitchin Design */}
-        <div className="hidden md:block mb-6 relative">
-          <div className="relative">
-            {/* Pitchin Title with Icon */}
-            <div className="flex items-center gap-3 mb-4">
-              <div className="text-4xl">🎬</div>
-              <div>
-                <h2 className="text-3xl font-bold bg-gradient-to-r from-pink-300 to-purple-300 bg-clip-text text-transparent">
-                  Create Your Pitch
-                </h2>
-                <p className="text-sm text-gray-400">Share your vision, connect with investors</p>
-              </div>
-            </div>
 
-            <p className="text-slate-300 text-base font-medium">
-              Record or upload a compelling pitch video (up to 3 minutes). Tell your story, showcase your passion, and let your vision shine! 🚀
-            </p>
+      {/* Enhanced Header Section - COMMENTED OUT */}
+      {/* 
+      <div className="hidden md:block bg-gradient-to-r from-purple-900/80 via-pink-900/60 to-purple-900/80 backdrop-blur-sm border-b border-purple-500/20 px-8 py-8 space-y-6">
+        {/* Mode Tabs / Icons Row */}
+        {/* 
+        <div className="flex items-center justify-between">
+          <div className="flex gap-3">
+            <button className="w-12 h-12 rounded-lg bg-pink-500 text-white flex items-center justify-center hover:bg-pink-600 transition font-semibold text-lg">📱</button>
+            <button className="w-12 h-12 rounded-lg bg-slate-700/50 text-slate-300 flex items-center justify-center hover:bg-slate-700 transition font-semibold text-lg">📸</button>
+            <button className="w-12 h-12 rounded-lg bg-slate-700/50 text-slate-300 flex items-center justify-center hover:bg-slate-700 transition font-semibold text-lg">🎥</button>
+            <button className="w-12 h-12 rounded-lg bg-slate-700/50 text-slate-300 flex items-center justify-center hover:bg-slate-700 transition font-semibold text-lg">📤</button>
+            <button className="w-12 h-12 rounded-lg bg-slate-700/50 text-slate-300 flex items-center justify-center hover:bg-slate-700 transition font-semibold text-lg">🎬</button>
           </div>
+          <div className="text-white/60 text-sm">Pitch Recorder v1.0</div>
         </div>
 
+        {/* Main Title Section */}
+        {/* 
+        <div className="space-y-4">
+          <div className="flex items-start gap-4">
+            <div className="text-5xl md:text-6xl">🎬</div>
+            <div className="flex-1">
+              <h1 className="text-4xl md:text-5xl font-black bg-gradient-to-r from-pink-200 via-purple-200 to-pink-200 bg-clip-text text-transparent leading-tight">
+                Create Your Pitch
+              </h1>
+              <p className="text-lg text-purple-200 mt-2">Share your vision, connect with investors</p>
+            </div>
+          </div>
+
+          {/* Description */}
+        {/*
+          <p className="text-slate-200 text-base leading-relaxed max-w-2xl">
+            Record or upload a compelling pitch video (up to 3 minutes). Tell your story, showcase your passion, and let your vision shine! 🚀
+          </p>
+
+          {/* Quick Stats */}
+        {/*
+          <div className="flex gap-6 pt-4 border-t border-purple-500/20">
+            <div className="space-y-1">
+              <p className="text-slate-400 text-sm">Max Duration</p>
+              <p className="text-white font-bold text-lg">3 Minutes</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-slate-400 text-sm">Supported Formats</p>
+              <p className="text-white font-bold text-lg">MP4, WebM</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-slate-400 text-sm">File Size Limit</p>
+              <p className="text-white font-bold text-lg">500 MB</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      */}
+
+      {/* Mobile Header */}
+      <div className="md:hidden bg-gradient-to-r from-purple-900 to-pink-900 px-4 py-4 space-y-3 border-b border-purple-500/20">
+        <div className="flex gap-2">
+          <button className="w-10 h-10 rounded-lg bg-pink-500 text-white flex items-center justify-center text-base">📱</button>
+          <button className="w-10 h-10 rounded-lg bg-slate-700/50 text-slate-300 flex items-center justify-center text-base">📸</button>
+          <button className="w-10 h-10 rounded-lg bg-slate-700/50 text-slate-300 flex items-center justify-center text-base">🎥</button>
+          <button className="w-10 h-10 rounded-lg bg-slate-700/50 text-slate-300 flex items-center justify-center text-base">📤</button>
+        </div>
+        <h1 className="text-2xl font-bold text-white">Create Your Pitch</h1>
+        <p className="text-sm text-purple-200">Share your vision, connect with investors</p>
+      </div>
+
+      <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 rounded-none p-0 border-0 h-full flex flex-col overflow-hidden flex-1 space-y-4">
+
         {/* Video Container - Full screen on mobile */}
-        <div ref={fullscreenRef} className="flex-1 md:flex-shrink-0 md:mb-8 relative w-full h-full md:h-auto bg-black">
+        <div ref={fullscreenRef} className="flex-1 md:flex-shrink-0 md:mx-8 md:mb-8 relative w-full h-full md:h-auto bg-black md:rounded-2xl md:border-2 md:border-purple-500/30 md:shadow-2xl md:shadow-purple-500/20 overflow-hidden">
           <div style={{
             backgroundColor: '#000',
             position: 'relative',
@@ -453,9 +560,9 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            borderRadius: '0rem',
+            borderRadius: '0.5rem',
             overflow: 'hidden'
-          }} className="md:rounded-xl md:aspect-video border-0 md:border-2 md:border-purple-500/30 md:shadow-2xl md:shadow-purple-500/20 bg-black">
+          }} className="md:aspect-video">
             {!previewUrl ? (
               <>
                 {/* Hidden video element for stream capture */}
@@ -688,7 +795,8 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                 <span className="text-sm font-bold">{Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, '0')}</span>
               </div>
             )}
-            <div className="absolute top-14 md:top-4 right-4 md:right-4 z-40">
+            {/* Pin icon button - Commented out */}
+            {/* <div className="absolute top-14 md:top-4 right-4 md:right-4 z-40">
               <button
                 onClick={() => setIsFormExpanded(!isFormExpanded)}
                 className="relative group w-11 h-11 md:w-12 md:h-12 rounded-full bg-slate-700/80 hover:bg-slate-600 text-purple-400 hover:text-purple-300 flex items-center justify-center transition focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-slate-900 shadow-lg"
@@ -700,7 +808,7 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                   </div>
                 </div>
               </button>
-            </div>
+            </div> */}
           </div>
         </div>
 
@@ -711,16 +819,16 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
             : 'hidden'
         }`}>
           <div className="space-y-3 md:space-y-4 px-0 md:px-0">
-            {/* Form Header */}
-            <div className="hidden md:block mb-4 pb-4 border-b border-purple-500/30">
+            {/* Form Header - Commented out */}
+            {/* <div className="hidden md:block mb-4 pb-4 border-b border-purple-500/30">
               <h3 className="text-lg font-bold bg-gradient-to-r from-purple-300 to-pink-300 bg-clip-text text-transparent">
                 ✨ Pitch Details
               </h3>
               <p className="text-sm text-slate-400 mt-1">Document your business plan, financials, and share allocation</p>
-            </div>
+            </div> */}
 
-            {/* Business Profile Documents Component */}
-            {currentBusinessProfile ? (
+            {/* Business Profile Documents Component - Commented out */}
+            {/* {currentBusinessProfile ? (
               <BusinessProfileDocuments
                 businessProfile={currentBusinessProfile}
                 onDocumentsComplete={(docs) => {
@@ -734,35 +842,38 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
               <div className="bg-yellow-900/30 border border-yellow-600/50 rounded-lg p-4 text-yellow-300 text-sm">
                 ⚠️ Please select or create a business profile first to document your pitch details.
               </div>
-            )}
+            )} */}
 
-            {/* Error Message */}
-            {submitError && (
-              <div className="bg-gradient-to-r from-red-600 to-red-700 text-white px-4 py-3 rounded-lg mb-3 text-sm font-semibold border border-red-500/50 shadow-lg">
-                ⚠️ {submitError}
-              </div>
-            )}
-
-            {/* Success Message */}
-            {submitSuccess && (
-              <div className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-4 py-3 rounded-lg mb-3 text-center font-semibold border border-green-500/50 shadow-lg">
-                ✅ Pitch created successfully! Redirecting...
-              </div>
-            )}
-
-            {/* Submit */}
-            <button
-              onClick={handleSubmit}
-              disabled={isSubmitting || !videoBlob || !formData.title || !formData.description || !formData.creator}
-              title={!videoBlob ? 'Please upload or record a video' : !formData.title ? 'Please enter a pitch title' : !formData.description ? 'Please enter a description' : !formData.creator ? 'Please enter creator name' : 'Click to go live'}
-              className={`w-full py-3 md:py-4 rounded-lg font-bold text-base md:text-lg transition shadow-xl ${
-                isSubmitting || !videoBlob || !formData.title || !formData.description || !formData.creator
-                  ? 'bg-slate-600 cursor-not-allowed opacity-60'
-                  : 'bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 hover:from-purple-700 hover:via-pink-700 hover:to-red-700 text-white hover:shadow-2xl hover:shadow-pink-500/50 transform hover:scale-105 cursor-pointer active:scale-95'
-              }`}
-            >
-              {isSubmitting ? '⏳ Going Live...' : '🚀 Go Live'}
-            </button>
+            {/* Submit Button Area */}
+            <div className="md:px-8 md:pb-8 space-y-3">
+              <button
+                onClick={handleSubmit}
+                disabled={isSubmitting || !videoBlob || !formData.title || !formData.description || !formData.creator}
+                title={!videoBlob ? 'Please upload or record a video' : !formData.title ? 'Please enter a pitch title' : !formData.description ? 'Please enter a description' : !formData.creator ? 'Please enter creator name' : 'Click to go live'}
+                className={`w-full py-3 md:py-4 px-6 rounded-xl font-bold text-base md:text-lg transition shadow-xl flex items-center justify-center gap-2 ${
+                  isSubmitting || !videoBlob || !formData.title || !formData.description || !formData.creator
+                    ? 'bg-slate-600 cursor-not-allowed opacity-50 text-slate-300'
+                    : 'bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 hover:from-pink-600 hover:via-purple-600 hover:to-indigo-600 text-white hover:shadow-2xl hover:shadow-pink-500/50 transform hover:scale-105 cursor-pointer active:scale-95'
+                }`}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Upload className="w-5 h-5 animate-spin" />
+                    <span>Processing Your Pitch...</span>
+                  </>
+                ) : (
+                  <>
+                    {/* Go Live button content - Commented out */}
+                    {/* <span>🚀</span>
+                    <span>Go Live</span> */}
+                  </>
+                )}
+              </button>
+              {/* Helper text - Commented out */}
+              {/* <p className="text-center text-slate-400 text-xs md:text-sm">
+                {isSubmitting ? 'Please wait while we process your pitch...' : 'Fill all fields and record/upload a video to proceed'}
+              </p> */}
+            </div>
           </div>
         </div>
 

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ThumbsUp, MessageCircle, Share2, Clock, Users, FileText, Zap, AlertCircle, Building2, Loader, Plus, Trash2, Lock, Unlock, X, Send, Copy, Check, Play, Home, BookMarked, Heart } from 'lucide-react';
 import PitchVideoRecorder from './PitchVideoRecorder';
 import SmartContractGenerator from './SmartContractGenerator';
+import ShareSigningFlow from './ShareSigningFlow';
 import BusinessProfileForm from './BusinessProfileForm';
 import BusinessProfileSelector from './BusinessProfileSelector';
 import BusinessProfileCard from './BusinessProfileCard';
@@ -42,6 +43,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
   const [currentPitch, setCurrentPitch] = useState(null);
   const [activeTab, setActiveTab] = useState('feed');
   const [selectedForContract, setSelectedForContract] = useState(null);
+  const [selectedForInvestment, setSelectedForInvestment] = useState(null); // For ShareSigningFlow
   const [videoErrors, setVideoErrors] = useState({});
   const [businessProfiles, setBusinessProfiles] = useState([]);
   const [currentBusinessProfile, setCurrentBusinessProfile] = useState(null);
@@ -157,6 +159,73 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
       if (!currentBusinessProfile) {
         alert('Please select or create a business profile first');
         return;
+      }
+
+      // Check if business profile documents are complete AND saved to database
+      try {
+        const sb = getSupabase();
+        if (sb) {
+          try {
+            const { data: docs, error } = await sb
+              .from('business_documents')
+              .select('*')
+              .eq('business_profile_id', currentBusinessProfile.id)
+              .single();
+
+            if (!error && docs) {
+              // Check if all required fields are filled AND saved
+              const allDocumentsComplete = 
+                docs.business_plan_content?.trim() &&
+                docs.financial_projection_content?.trim() &&
+                docs.value_proposition_wants?.trim() &&
+                docs.value_proposition_fears?.trim() &&
+                docs.value_proposition_needs?.trim() &&
+                docs.mou_content?.trim() &&
+                docs.share_allocation_shares &&
+                docs.share_allocation_share_price;
+
+              // Also check that documents are marked as completed
+              const allMarkedComplete = 
+                docs.business_plan_completed &&
+                docs.financial_projection_completed &&
+                docs.value_proposition_completed &&
+                docs.mou_completed &&
+                docs.share_allocation_completed &&
+                docs.all_documents_completed === true;
+
+              if (!allDocumentsComplete) {
+                alert('❌ All pitch documents must be filled in before publishing.\n\nPlease complete:\n• Business Plan\n• Financial Projection\n• Value Proposition (Wants, Fears, Needs)\n• Memorandum of Understanding\n• Share Allocation\n\nThen click "Save Documents" to save your changes.');
+                return;
+              }
+
+              if (!allMarkedComplete) {
+                alert('❌ All documents must be saved and marked as complete.\n\nPlease:\n1. Fill in all document fields\n2. Click "Save Documents" button\n3. Try publishing again');
+                return;
+              }
+            } else if (error) {
+              // Handle different error codes
+              if (error.code === '404' || error.code === 'PGRST116' || error.message?.includes('No rows')) {
+                console.warn('No documents saved for this business profile');
+                alert('❌ Pitch documents have not been saved yet.\n\nPlease:\n1. Go to Business Profile → Documents\n2. Fill in all required fields\n3. Click "Save Documents"\n4. Then publish your pitch');
+                return;
+              } else if (error.code === '406' || error.message?.includes('406')) {
+                // 406 error - server issue with RLS or connection
+                console.warn('Server error (406) checking documents');
+                alert('❌ Unable to verify documents due to a server issue.\n\nPlease ensure you have:\n1. Saved all documents to your Business Profile\n2. Marked them as complete\n3. Try again in a moment');
+                return;
+              } else {
+                throw error;
+              }
+            }
+          } catch (docError) {
+            console.warn('Document check error:', docError?.message || docError);
+            alert('❌ Please complete and save all pitch documents in your business profile before publishing.');
+            return;
+          }
+        }
+      } catch (docError) {
+        console.warn('Document verification error:', docError?.message);
+        // Continue in demo mode
       }
 
       // Map form data to database schema
@@ -532,7 +601,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
 
   const handleSmartContractClick = (pitch) => {
     if (!currentUser) {
-      alert('Please login to create a smart contract');
+      alert('Please login to invest');
       return;
     }
     if (!currentBusinessProfile) {
@@ -543,7 +612,8 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
       }
       return;
     }
-    setSelectedForContract(pitch);
+    // Use ShareSigningFlow for investment
+    setSelectedForInvestment(pitch);
   };
 
   const handleBusinessProfileCreated = async (profile) => {
@@ -682,8 +752,64 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
             </button>
           </div>
 
-          {/* Spacer */}
-          <div className="w-10"></div>
+          {/* Action Icons - Right */}
+          <div className="flex items-center gap-2">
+            {/* Like Icon */}
+            <button
+              title="Like"
+              className="p-2 hover:bg-white/10 rounded-lg transition flex items-center justify-center"
+              onClick={() => alert('❤️ Like functionality')}
+            >
+              <Heart className="w-5 h-5 text-red-400" />
+            </button>
+
+            {/* Comment Icon */}
+            <button
+              title="Comment"
+              className="p-2 hover:bg-white/10 rounded-lg transition flex items-center justify-center"
+              onClick={() => alert('💬 Comment functionality')}
+            >
+              <MessageCircle className="w-5 h-5 text-blue-400" />
+            </button>
+
+            {/* Invest Icon */}
+            <button
+              title="Invest"
+              className="p-2 hover:bg-white/10 rounded-lg transition flex items-center justify-center"
+              onClick={() => alert('💰 Invest functionality')}
+            >
+              <Zap className="w-5 h-5 text-yellow-400" />
+            </button>
+
+            {/* Share Icon */}
+            <button
+              title="Share"
+              className="p-2 hover:bg-white/10 rounded-lg transition flex items-center justify-center"
+              onClick={() => alert('🔗 Share functionality')}
+            >
+              <Share2 className="w-5 h-5 text-green-400" />
+            </button>
+
+            {/* Create Button */}
+            <button
+              onClick={() => {
+                handleCreatePitchClick();
+              }}
+              className="ml-2 px-4 py-2 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white rounded-lg font-semibold transition flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Create</span>
+            </button>
+
+            {/* Profile Button */}
+            <button
+              onClick={() => setShowProfileSelector(true)}
+              className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-semibold transition flex items-center gap-2"
+            >
+              <Building2 className="w-4 h-4" />
+              <span className="hidden sm:inline">Profile</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -909,29 +1035,50 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                         </div>
                       </div> */}
 
-                      {/* Action Buttons */}
+                      {/* Action Buttons with Icons */}
                       <div className="flex gap-2">
+                        {/* Like Button */}
                         <button
                           onClick={() => handleLike(pitch.id)}
-                          className={`flex-1 px-2 py-1.5 rounded text-xs font-medium transition ${
+                          className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-medium transition ${
                             likedPitches.has(pitch.id)
-                              ? 'bg-purple-500/50 text-purple-200'
-                              : 'bg-slate-700/50 hover:bg-purple-500/30 text-slate-300'
+                              ? 'bg-red-500/40 hover:bg-red-500/50 text-red-300'
+                              : 'bg-slate-700/50 hover:bg-red-500/30 text-slate-300'
                           }`}
+                          title="Like"
                         >
-                          👍 {pitch.likes_count || 0}
+                          <Heart className="w-4 h-4" />
+                          <span>{pitch.likes_count || 0}</span>
                         </button>
+
+                        {/* Comment Button */}
                         <button
                           onClick={() => handleOpenComments(pitch.id)}
-                          className="flex-1 px-2 py-1.5 bg-slate-700/50 hover:bg-blue-500/30 text-slate-300 rounded text-xs font-medium transition"
+                          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 bg-slate-700/50 hover:bg-blue-500/30 text-slate-300 rounded-lg text-xs font-medium transition"
+                          title="Comment"
                         >
-                          💬 {pitch.comments_count || 0}
+                          <MessageCircle className="w-4 h-4" />
+                          <span>{pitch.comments_count || 0}</span>
                         </button>
+
+                        {/* Share Button */}
                         <button
                           onClick={() => handleShare(pitch.id)}
-                          className="flex-1 px-2 py-1.5 bg-slate-700/50 hover:bg-green-500/30 text-slate-300 rounded text-xs font-medium transition"
+                          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 bg-slate-700/50 hover:bg-green-500/30 text-slate-300 rounded-lg text-xs font-medium transition"
+                          title="Share"
                         >
-                          🔗 {pitch.shares_count || 0}
+                          <Share2 className="w-4 h-4" />
+                          <span>{pitch.shares_count || 0}</span>
+                        </button>
+
+                        {/* Invest Button */}
+                        <button
+                          onClick={() => handleSmartContractClick(pitch)}
+                          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 bg-gradient-to-r from-yellow-500/40 to-orange-500/40 hover:from-yellow-500/50 hover:to-orange-500/50 text-yellow-300 rounded-lg text-xs font-medium transition"
+                          title="Invest"
+                        >
+                          <Zap className="w-4 h-4" />
+                          <span>Invest</span>
                         </button>
                       </div>
                     </div>
@@ -948,6 +1095,16 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
         <SmartContractGenerator
           pitch={selectedForContract}
           onClose={() => setSelectedForContract(null)}
+          businessProfile={currentBusinessProfile}
+          currentUser={currentUser}
+        />
+      )}
+
+      {/* Share Signing & Investment Flow Modal */}
+      {selectedForInvestment && (
+        <ShareSigningFlow
+          pitch={selectedForInvestment}
+          onClose={() => setSelectedForInvestment(null)}
           businessProfile={currentBusinessProfile}
           currentUser={currentUser}
         />
@@ -1112,6 +1269,16 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
         <SmartContractGenerator
           pitch={selectedForContract}
           onClose={() => setSelectedForContract(null)}
+          businessProfile={currentBusinessProfile}
+          currentUser={currentUser}
+        />
+      )}
+
+      {/* Share Signing & Investment Flow Modal */}
+      {selectedForInvestment && (
+        <ShareSigningFlow
+          pitch={selectedForInvestment}
+          onClose={() => setSelectedForInvestment(null)}
           businessProfile={currentBusinessProfile}
           currentUser={currentUser}
         />
@@ -1380,29 +1547,40 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                         </div>
                       </div>
 
-                      {/* Action Buttons */}
+                      {/* Action Buttons with Icons */}
                       <div className="flex gap-2">
+                        {/* Like Button */}
                         <button
                           onClick={() => handleLike(pitch.id)}
-                          className={`flex-1 px-2 py-1.5 rounded text-xs font-medium transition-all ${
+                          className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-medium transition-all ${
                             likedPitches.has(pitch.id)
-                              ? 'bg-purple-500/50 text-purple-200'
-                              : 'bg-slate-700/50 hover:bg-purple-500/30 text-slate-300'
+                              ? 'bg-red-500/40 hover:bg-red-500/50 text-red-300'
+                              : 'bg-slate-700/50 hover:bg-red-500/30 text-slate-300'
                           }`}
+                          title="Like"
                         >
-                          👍 ({pitch.likes_count || 0})
+                          <Heart className="w-4 h-4" />
+                          <span>{pitch.likes_count || 0}</span>
                         </button>
+
+                        {/* Comment Button */}
                         <button
                           onClick={() => handleOpenComments(pitch.id)}
-                          className="flex-1 px-2 py-1.5 bg-slate-700/50 hover:bg-blue-500/30 text-slate-300 rounded text-xs font-medium transition-all"
+                          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 bg-slate-700/50 hover:bg-blue-500/30 text-slate-300 rounded-lg text-xs font-medium transition-all"
+                          title="Comment"
                         >
-                          💬 ({pitch.comments_count || 0})
+                          <MessageCircle className="w-4 h-4" />
+                          <span>{pitch.comments_count || 0}</span>
                         </button>
+
+                        {/* Invest Button */}
                         <button
                           onClick={() => handleSmartContractClick(pitch)}
-                          className="flex-1 px-2 py-1.5 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white rounded text-xs font-medium transition-all"
+                          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 bg-gradient-to-r from-yellow-500/40 to-orange-500/40 hover:from-yellow-500/50 hover:to-orange-500/50 text-yellow-300 rounded-lg text-xs font-medium transition-all"
+                          title="Invest"
                         >
-                          💰 Invest
+                          <Zap className="w-4 h-4" />
+                          <span>Invest</span>
                         </button>
                       </div>
                     </div>

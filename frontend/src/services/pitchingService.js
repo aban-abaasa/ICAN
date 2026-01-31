@@ -343,24 +343,26 @@ export const deletePitch = async (pitchId, userId = null) => {
         title,
         video_url,
         thumbnail_url,
-        business_profiles(
+        business_profile_id,
+        business_profiles!inner(
           id,
           user_id
         )
       `)
-      .match({ id: pitchId });
+      .eq('id', pitchId)
+      .single();
 
     if (fetchError) {
       console.warn('Fetch error details:', fetchError);
       return { success: false, error: `Failed to fetch pitch: ${fetchError.message}` };
     }
 
-    if (!pitch || pitch.length === 0) {
+    if (!pitch) {
       console.warn(`Pitch not found with ID: ${pitchId}`);
       return { success: false, error: 'Pitch not found' };
     }
 
-    const pitchData = pitch[0];
+    const pitchData = pitch;
     
     // Get creator user_id from business profile
     const creatorUserId = pitchData.business_profiles?.user_id;

@@ -62,8 +62,10 @@ const BusinessProfileDocuments = ({ businessProfile, onDocumentsComplete, onCanc
       documents.valueProposition.fears.trim() !== '' &&
       documents.valueProposition.needs.trim() !== '' &&
       documents.mou.content.trim() !== '' &&
-      documents.shareAllocation.shares.trim() !== '' &&
-      documents.shareAllocation.sharePrice.trim() !== '';
+      documents.shareAllocation.shares !== '' &&
+      documents.shareAllocation.shares !== null &&
+      documents.shareAllocation.sharePrice !== '' &&
+      documents.shareAllocation.sharePrice !== null;
 
     if (onDocumentsComplete) {
       onDocumentsComplete(allComplete);
@@ -159,16 +161,16 @@ const BusinessProfileDocuments = ({ businessProfile, onDocumentsComplete, onCanc
     }));
   };
 
-  const calculateShareAllocation = () => {
-    const shares = parseFloat(documents.shareAllocation.shares) || 0;
-    const price = parseFloat(documents.shareAllocation.sharePrice) || 0;
-    const total = shares * price;
+  const calculateShareAllocation = (shares = null, price = null) => {
+    const sharesValue = shares !== null ? parseFloat(shares) : parseFloat(documents.shareAllocation.shares) || 0;
+    const priceValue = price !== null ? parseFloat(price) : parseFloat(documents.shareAllocation.sharePrice) || 0;
+    const total = sharesValue * priceValue;
 
     setDocuments(prev => ({
       ...prev,
       shareAllocation: {
         ...prev.shareAllocation,
-        totalAmount: total.toString()
+        totalAmount: total.toFixed(2)
       }
     }));
   };
@@ -215,40 +217,52 @@ const BusinessProfileDocuments = ({ businessProfile, onDocumentsComplete, onCanc
         ) ? new Date().toISOString() : null
       };
 
-      // Check if document exists
-      const { data: existing } = await supabase
+      console.log('💾 Saving documents to database...');
+      console.log('Business Profile ID:', businessProfile.id);
+
+      // Check if document exists - use regular select, not single()
+      const { data: existing, error: selectError } = await supabase
         .from('business_documents')
         .select('id')
-        .eq('business_profile_id', businessProfile.id)
-        .single();
+        .eq('business_profile_id', businessProfile.id);
+
+      if (selectError && selectError.code !== 'PGRST116') {
+        throw selectError;
+      }
 
       let result;
-      if (existing?.id) {
+      if (existing && existing.length > 0) {
+        console.log('📝 Updating existing document...');
         // Update
         result = await supabase
           .from('business_documents')
           .update(documentData)
-          .eq('id', existing.id);
+          .eq('business_profile_id', businessProfile.id)
+          .select();
       } else {
+        console.log('✨ Creating new document...');
         // Insert
         result = await supabase
           .from('business_documents')
-          .insert([documentData]);
+          .insert([documentData])
+          .select();
       }
 
       if (result.error) {
+        console.error('Save error:', result.error);
         throw result.error;
       }
 
-      setSaveStatus('✅ Saved successfully!');
-      setTimeout(() => setSaveStatus(''), 2000);
+      console.log('✅ Documents saved successfully to database!', result.data);
+      setSaveStatus('✅ Saved successfully! Documents stored in database.');
+      setTimeout(() => setSaveStatus(''), 3000);
 
       if (onDocumentsComplete) {
         onDocumentsComplete(documentData);
       }
     } catch (error) {
-      console.error('Error saving documents:', error);
-      setSaveStatus('❌ Error saving: ' + error.message);
+      console.error('❌ Error saving documents:', error);
+      setSaveStatus('❌ ERROR: ' + (error.message || 'Failed to save documents to database'));
     } finally {
       setLoading(false);
     }
@@ -423,7 +437,7 @@ const BusinessProfileDocuments = ({ businessProfile, onDocumentsComplete, onCanc
                     value={documents.shareAllocation.shares}
                     onChange={(e) => {
                       handleContentChange('shareAllocation', e.target.value, 'shares');
-                      setTimeout(calculateShareAllocation, 0);
+                      calculateShareAllocation(e.target.value, documents.shareAllocation.sharePrice);
                     }}
                     placeholder="e.g., 1000"
                     className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:border-blue-500 focus:outline-none"
@@ -440,7 +454,7 @@ const BusinessProfileDocuments = ({ businessProfile, onDocumentsComplete, onCanc
                     value={documents.shareAllocation.sharePrice}
                     onChange={(e) => {
                       handleContentChange('shareAllocation', e.target.value, 'sharePrice');
-                      setTimeout(calculateShareAllocation, 0);
+                      calculateShareAllocation(documents.shareAllocation.shares, e.target.value);
                     }}
                     placeholder="e.g., 1000000"
                     className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:border-blue-500 focus:outline-none"
@@ -449,14 +463,11 @@ const BusinessProfileDocuments = ({ businessProfile, onDocumentsComplete, onCanc
 
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-2">
-                    Total Amount
+                    Total Valuation
                   </label>
-                  <input
-                    type="number"
-                    value={documents.shareAllocation.totalAmount}
-                    disabled
-                    className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-slate-300 placeholder-slate-400 cursor-not-allowed"
-                  />
+                  <div className="w-full px-4 py-2 bg-gradient-to-r from-green-900/30 to-emerald-900/30 border-2 border-green-500/50 rounded-lg text-green-300 font-bold text-lg">
+                    ${documents.shareAllocation.totalAmount || '0'}
+                  </div>
                 </div>
               </div>
 
@@ -531,8 +542,9 @@ const BusinessProfileDocuments = ({ businessProfile, onDocumentsComplete, onCanc
             <button
               onClick={saveDocuments}
               disabled={loading}
-              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-medium transition disabled:opacity-50"
+              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-medium transition disabled:opacity-50 flex items-center gap-2"
             >
+              {loading ? '💾 Saving to Database...' : '💾 Save Documents to Database'}
             </button>
           </div>
         </div>
