@@ -2968,6 +2968,8 @@ const TransactionInput = ({
 
 // 🧠 AI FINANCIAL INTELLIGENCE DASHBOARD
 const AIFinancialIntelligenceDashboard = ({ intelligence, recommendations, loanOpportunities, netWorth, trend }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
   if (!intelligence) return null;
 
   const getTrendIcon = (trend) => {
@@ -2986,6 +2988,36 @@ const AIFinancialIntelligenceDashboard = ({ intelligence, recommendations, loanO
     }
   };
 
+  // Collapsed Badge View
+  if (!isExpanded) {
+    return (
+      <div 
+        className="glass-card p-3 mb-4 cursor-pointer hover:bg-white hover:bg-opacity-5 transition-all"
+        onClick={() => setIsExpanded(true)}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+            <span className="text-white font-medium">🧠 AI Financial Intelligence</span>
+            <div className={`flex items-center gap-1 ${getTrendColor(trend)}`}>
+              <span>{getTrendIcon(trend)}</span>
+              <span className="text-xs font-bold">
+                {trend} {intelligence.growthRate > 0 ? '+' : ''}{intelligence.growthRate.toFixed(1)}%
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400">
+              {recommendations?.length || 0} insights • {loanOpportunities?.length || 0} opportunities
+            </span>
+            <span className="text-gray-400 text-xs">▼</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Expanded Full View
   return (
     <div className="glass-card p-4 mb-4">
       <div className="flex items-center justify-between mb-3">
@@ -2993,9 +3025,17 @@ const AIFinancialIntelligenceDashboard = ({ intelligence, recommendations, loanO
           <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
           <span className="text-white font-medium">🧠 AI Financial Intelligence</span>
         </div>
-        <div className={`flex items-center gap-1 ${getTrendColor(trend)}`}>
-          <span>{getTrendIcon(trend)}</span>
-          <span className="text-xs">{trend}</span>
+        <div className="flex items-center gap-2">
+          <div className={`flex items-center gap-1 ${getTrendColor(trend)}`}>
+            <span>{getTrendIcon(trend)}</span>
+            <span className="text-xs">{trend}</span>
+          </div>
+          <button
+            onClick={() => setIsExpanded(false)}
+            className="text-gray-400 hover:text-white text-xs ml-2"
+          >
+            ▲
+          </button>
         </div>
       </div>
 
@@ -4223,19 +4263,29 @@ const ICANCapitalEngine = () => {
         }
 
         // Fetch User Investments (only if user is authenticated)
-        if (user?.id) {
-          const { data: invs, error: invErr } = await supabase
-            .from('investments')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false });
-          
-          if (!invErr && invs) {
-            setUserInvestments(invs);
-          } else if (invErr) {
-            console.error('Error fetching investments:', invErr);
+        try {
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          if (authUser?.id) {
+            console.log(`🔍 Fetching investments for auth user: ${authUser.id}`);
+            const { data: invs, error: invErr } = await supabase
+              .from('investments')
+              .select('*')
+              .eq('user_id', authUser.id)
+              .order('created_at', { ascending: false });
+            
+            if (!invErr && invs) {
+              console.log(`✅ Loaded ${invs.length} investments`);
+              setUserInvestments(invs);
+            } else if (invErr) {
+              console.error('Error fetching investments:', invErr);
+              setUserInvestments([]);
+            }
+          } else {
+            console.log('No authenticated user - skipping investments fetch');
+            setUserInvestments([]);
           }
-        } else {
+        } catch (invError) {
+          console.error('Error getting user for investments:', invError);
           setUserInvestments([]);
         }
 
@@ -8483,96 +8533,144 @@ Data Freshness: ${reportData.metadata.dataFreshness}
 
   const loadUserData = async () => {
     try {
-      // Use demo-user for now (hooks can't be called in regular functions)
-      const userId = 'demo-user';
-
-      // Try loading from Supabase first
-      if (supabase) {
-        console.log('📊 Loading transactions from Supabase...');
-        const { data, error } = await supabase
-          .from('firebase_transactions_sync')
-          .select('*')
-          .eq('user_id', userId)
-          .order('firebase_created_at', { ascending: false });
-
-        if (error) {
-          console.warn('⚠️ Supabase fetch error:', error);
-        } else if (data && data.length > 0) {
-          console.log(`✅ Loaded ${data.length} transactions from Supabase`);
-          // Convert Supabase data format to app format
-          const convertedTransactions = data.map(t => ({
-            id: t.firebase_id,
-            amount: t.amount,
-            type: t.type,
-            description: t.description,
-            category: t.category,
-            date: t.firebase_created_at,
-            projectName: t.project_name,
-            termMonths: t.project_term_months,
-            expectedReturn: t.expected_return_percent,
-            confidence: t.confidence
-          }));
-          setTransactions(convertedTransactions);
-          return;
-        }
+      // Get authenticated user
+      const sbClient = initializeSupabaseClient();
+      if (!sbClient) {
+        console.warn('⚠️ Supabase client not available');
+        loadFromLocalStorage();
+        return;
       }
 
-      // Fallback to localStorage if Supabase unavailable
-      console.log('💾 Falling back to localStorage...');
+      const { data: { user } } = await sbClient.auth.getUser();
+      const userId = user?.id || 'demo-user';
+
+      // Use VelocityEngine for consistent transaction loading
+      console.log('📊 Loading transactions with VelocityEngine...');
+      const { VelocityEngine } = await import('../utils/velocityEngine');
+      const engine = new VelocityEngine(userId);
+      const loadResult = await engine.loadTransactions();
+      
+      if (loadResult.success && loadResult.data.length > 0) {
+        console.log(`✅ Web: Loaded ${loadResult.data.length} transactions via VelocityEngine for user ${userId}`);
+        // Convert VelocityEngine data format to app format
+        const convertedTransactions = loadResult.data.map(t => ({
+          id: t.id,
+          amount: t.amount,
+          type: t.transaction_type,
+          description: t.description,
+          category: (t.metadata && t.metadata.category) || 'other',
+          date: t.created_at,
+          projectName: (t.metadata && t.metadata.projectName) || null,
+          termMonths: (t.metadata && t.metadata.termMonths) || null,
+          expectedReturn: (t.metadata && t.metadata.expectedReturn) || null,
+          confidence: (t.metadata && t.metadata.confidence) || 0,
+          // Preserve accounting data if it exists
+          accounting: (t.metadata && t.metadata.accounting) || null
+        }));
+        console.log('🔄 Web: Converting to app format:', convertedTransactions);
+        setTransactions(convertedTransactions);
+        console.log('✅ Web: State updated - transactions.length should now be:', convertedTransactions.length);
+        console.log('💾 Web: Also backing up to localStorage...');
+        localStorage.setItem('ican_transactions', JSON.stringify(convertedTransactions));
+        return;
+      } else if (loadResult.success && loadResult.data.length === 0) {
+        console.log('📝 Web: VelocityEngine returned 0 transactions - user has no data yet');
+        setTransactions([]);
+        return;
+      } else {
+        console.warn('⚠️ Web: VelocityEngine load failed:', loadResult.error);
+        loadFromLocalStorage();
+      }
+    } catch (error) {
+      console.error('❌ Error loading user data:', error);
+      loadFromLocalStorage();
+    }
+  };
+
+  const loadFromLocalStorage = () => {
+    try {
+
+      console.log('💾 Loading from localStorage...');
       const savedTransactions = localStorage.getItem('ican_transactions');
       const savedMode = localStorage.getItem('ican_mode');
       const savedCountry = localStorage.getItem('ican_country');
       const savedGoals = localStorage.getItem('ican_goals');
 
-      if (savedTransactions) setTransactions(JSON.parse(savedTransactions));
+      if (savedTransactions) {
+        const parsedTransactions = JSON.parse(savedTransactions);
+        console.log(`📂 Web: Found ${parsedTransactions.length} transactions in localStorage:`, parsedTransactions);
+        setTransactions(parsedTransactions);
+      } else {
+        console.log('📂 Web: No transactions found in localStorage');
+        setTransactions([]);
+      }
       if (savedMode) setMode(savedMode);
       if (savedCountry) setOperatingCountry(savedCountry);
       if (savedGoals) setGoals(JSON.parse(savedGoals));
     } catch (error) {
-      console.error('❌ Error loading user data:', error);
-      // Fallback to localStorage
-      const savedTransactions = localStorage.getItem('ican_transactions');
-      if (savedTransactions) setTransactions(JSON.parse(savedTransactions));
+      console.error('❌ Error loading from localStorage:', error);
     }
   };
 
   const saveUserData = async () => {
-    // Always save to localStorage
+    // Always save to localStorage as backup
     localStorage.setItem('ican_transactions', JSON.stringify(transactions));
     localStorage.setItem('ican_mode', mode);
     localStorage.setItem('ican_country', operatingCountry);
     localStorage.setItem('ican_goals', JSON.stringify(goals));
+  };
 
-    // Also sync to Supabase if available
+  const saveTransactionToSupabase = async (transaction) => {
     const sbClient = initializeSupabaseClient();
-    if (sbClient && transactions.length > 0) {
-      try {
-        const { user } = useAuth();
-        const userId = user?.uid || 'demo-user';
+    if (!sbClient) {
+      console.warn('⚠️ Supabase client not available for transaction save');
+      return { success: false, error: 'Client not available' };
+    }
 
-        for (const transaction of transactions) {
-          const { error } = await sbClient.rpc('sync_firebase_transaction', {
-            p_firebase_id: transaction.id,
-            p_user_id: userId,
-            p_amount: transaction.amount,
-            p_type: transaction.type,
-            p_description: transaction.description,
-            p_category: transaction.category,
-            p_project_name: transaction.projectName,
-            p_term_months: transaction.termMonths,
-            p_expected_return: transaction.expectedReturn,
-            p_confidence: transaction.confidence || 0,
-            p_firebase_created_at: transaction.date
-          });
+    try {
+      const { data: { user } } = await sbClient.auth.getUser();
+      const userId = user?.id || 'demo-user';
 
-          if (error) {
-            console.warn(`⚠️ Failed to sync transaction ${transaction.id}:`, error);
+      // Use the same table structure as mobile (velocityEngine)
+      const { data, error } = await sbClient
+        .from('transactions')
+        .insert([
+          {
+            user_id: userId,
+            amount: transaction.amount,
+            transaction_type: transaction.type,
+            description: transaction.description,
+            currency: transaction.currency || 'UGX',
+            status: 'completed',
+            metadata: {
+              category: transaction.category,
+              projectName: transaction.projectName,
+              termMonths: transaction.termMonths,
+              expectedReturn: transaction.expectedReturn,
+              confidence: transaction.confidence || 0,
+              source: 'web_smart_entry',
+              // Preserve accounting analysis data
+              accounting: transaction.accounting || null,
+              displayAmount: transaction.displayAmount || null,
+              displayType: transaction.displayType || null,
+              icon: transaction.icon || null,
+              displayColor: transaction.displayColor || null
+            }
           }
-        }
-        console.log('✅ Transactions synced to Supabase');
-      } catch (error) {
-        console.warn('⚠️ Supabase sync error:', error);
+        ])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error saving transaction to Supabase:', error);
+        return { success: false, error };
       }
+
+      console.log('✅ Transaction saved to Supabase:', data);
+      return { success: true, transaction: data };
+    } catch (error) {
+      console.error('Error in saveTransactionToSupabase:', error);
+      return { success: false, error };
     }
   };
 
@@ -9016,15 +9114,93 @@ Data Freshness: ${reportData.metadata.dataFreshness}
     }
     
     // Process transaction immediately for low-risk or income
-    const newTransactions = [...transactions, transaction];
-    setTransactions(newTransactions);
+    // Save using VelocityEngine for consistency with mobile view
+    try {
+      const sbClient = initializeSupabaseClient();
+      const { data: { user } } = await sbClient.auth.getUser();
+      const userId = user?.id || 'demo-user';
+      
+      const { VelocityEngine } = await import('../utils/velocityEngine');
+      const engine = new VelocityEngine(userId);
+      const saveResult = await engine.addTransaction({
+        amount: transaction.amount,
+        type: transaction.type,
+        description: transaction.description,
+        category: transaction.category,
+        currency: transaction.currency || 'UGX',
+        source: 'web_smart_entry'
+      });
+      
+      if (saveResult.success) {
+        console.log(`✅ Web: Saved transaction via VelocityEngine for user ${userId}`);
+        // Update transaction with VelocityEngine data
+        const savedTransaction = {
+          ...transaction,
+          id: saveResult.transaction.id,
+          date: saveResult.transaction.created_at
+        };
+        const newTransactions = [...transactions, savedTransaction];
+        setTransactions(newTransactions);
+      } else {
+        console.error('Web: VelocityEngine save failed:', saveResult.error);
+        // Fallback to local storage if VelocityEngine fails
+        const newTransactions = [...transactions, transaction];
+        setTransactions(newTransactions);
+      }
+    } catch (error) {
+      console.error('Web: Error saving transaction:', error);
+      // Fallback to local storage
+      const newTransactions = [...transactions, transaction];
+      setTransactions(newTransactions);
+    }
+    
+    // Always save to localStorage as backup
     saveUserData();
   };
 
-  const handleConfirmTransaction = () => {
+  const handleConfirmTransaction = async () => {
     if (pendingTransaction) {
-      const newTransactions = [...transactions, pendingTransaction];
-      setTransactions(newTransactions);
+      // Save using VelocityEngine for consistency with mobile view
+      try {
+        const sbClient = initializeSupabaseClient();
+        const { data: { user } } = await sbClient.auth.getUser();
+        const userId = user?.id || 'demo-user';
+        
+        const { VelocityEngine } = await import('../utils/velocityEngine');
+        const engine = new VelocityEngine(userId);
+        const saveResult = await engine.addTransaction({
+          amount: pendingTransaction.amount,
+          type: pendingTransaction.type,
+          description: pendingTransaction.description,
+          category: pendingTransaction.category,
+          currency: pendingTransaction.currency || 'UGX',
+          source: 'web_confirmed_entry'
+        });
+        
+        if (saveResult.success) {
+          console.log(`✅ Web: Confirmed transaction via VelocityEngine for user ${userId}`);
+          // Update transaction with VelocityEngine data
+          const savedTransaction = {
+            ...pendingTransaction,
+            id: saveResult.transaction.id,
+            date: saveResult.transaction.created_at
+          };
+          const newTransactions = [...transactions, savedTransaction];
+          setTransactions(newTransactions);
+        } else {
+          console.error('Web: VelocityEngine confirm save failed:', saveResult.error);
+          // Fallback to local storage if VelocityEngine fails
+          const newTransactions = [...transactions, pendingTransaction];
+          setTransactions(newTransactions);
+        }
+      } catch (error) {
+        console.error('Web: Error confirming transaction:', error);
+        // Fallback to local storage
+        const newTransactions = [...transactions, pendingTransaction];
+        setTransactions(newTransactions);
+      }
+      
+      // Always save to localStorage as backup
       saveUserData();
       
       // 🙏 AUTO-TITHING SUGGESTION FOR INCOME

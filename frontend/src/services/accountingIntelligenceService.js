@@ -6,6 +6,54 @@
 
 const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 
+// Rate limiting configuration - relaxed for better user experience
+let lastAPICall = 0;
+let requestCount = 0;
+const MIN_INTERVAL = 100; // Minimal 0.1 second between requests
+const MAX_REQUESTS_PER_MINUTE = 100; // Much higher limit
+
+/**
+ * 🛡️ Minimal rate limiting helper
+ */
+const waitForRateLimit = async () => {
+  const now = Date.now();
+  const timeSinceLastCall = now - lastAPICall;
+  
+  if (timeSinceLastCall < MIN_INTERVAL) {
+    const waitTime = MIN_INTERVAL - timeSinceLastCall;
+    // Only wait if very recent request
+    await new Promise(resolve => setTimeout(resolve, waitTime));
+  }
+  
+  lastAPICall = Date.now();
+  requestCount++;
+};
+
+/**
+ * 🔄 Retry with minimal backoff - more aggressive retries
+ */
+const retryWithBackoff = async (fn, maxRetries = 5, baseDelay = 500) => {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (error.message.includes('429') || error.message.includes('Too Many Requests')) {
+        if (attempt === maxRetries) {
+          console.warn('⚠️ Max retries reached. Falling back to local classification.');
+          throw error;
+        }
+        
+        // Shorter delays for faster recovery
+        const delay = baseDelay * Math.pow(1.5, attempt - 1) + Math.random() * 500;
+        console.log(`🔄 Rate limited. Retry ${attempt}/${maxRetries} in ${Math.round(delay)}ms`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else {
+        throw error; // Non-rate-limit errors should not be retried
+      }
+    }
+  }
+};
+
 /**
  * 🎯 MAIN FUNCTION: Intelligent transaction classification
  * Acts like a real accountant analyzing business vs personal transactions
@@ -53,33 +101,43 @@ RULES FOR CLASSIFICATION:
 7. Vehicle context: If business-related, it's a fixed asset; if personal, it's depreciated
     `;
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        temperature: 0.3, // Low temperature for consistent accounting analysis
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a professional accountant. Provide JSON responses only.'
-          },
-          {
-            role: 'user',
-            content: accountingPrompt
-          }
-        ]
-      })
-    });
+    // Apply rate limiting and retry logic
+    const makeAPICall = async () => {
+      await waitForRateLimit();
+      
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${OPENAI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          temperature: 0.3, // Low temperature for consistent accounting analysis
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a professional accountant. Provide JSON responses only.'
+            },
+            {
+              role: 'user',
+              content: accountingPrompt
+            }
+          ]
+        })
+      });
 
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.statusText}`);
-    }
+      if (!response.ok) {
+        if (response.status === 429) {
+          throw new Error(`OpenAI API rate limit: ${response.status} - ${response.statusText}`);
+        }
+        throw new Error(`OpenAI API error: ${response.status} - ${response.statusText}`);
+      }
 
-    const data = await response.json();
+      return await response.json();
+    };
+
+    const data = await retryWithBackoff(makeAPICall, 5, 500);
     const content = data.choices[0].message.content;
     
     // Extract JSON from response
@@ -95,6 +153,12 @@ RULES FOR CLASSIFICATION:
 
   } catch (error) {
     console.error('❌ OpenAI accounting analysis failed:', error);
+    
+    // Show user-friendly message for rate limits
+    if (error.message.includes('429') || error.message.includes('rate limit')) {
+      console.warn('⚠️ OpenAI rate limit reached. Using local fallback classification.');
+    }
+    
     return fallbackAccountingClassification(transactionInput);
   }
 };

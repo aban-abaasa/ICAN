@@ -35,7 +35,11 @@ import {
   ChevronDown,
   Crown,
   Rocket,
-  AlertTriangle
+  AlertTriangle,
+  Activity,
+  Upload,
+  Search,
+  Play
 } from 'lucide-react';
 import SmartTransactionEntry from './SmartTransactionEntry';
 import { ProfilePage } from './auth/ProfilePage';
@@ -45,6 +49,236 @@ import TrustSystem from './TrustSystem';
 import CMMSModule from './CMSSModule';
 import { VelocityEngine } from '../utils/velocityEngine';
 import { supabase } from '../lib/supabase/client';
+import { walletAccountService } from '../services/walletAccountService';
+import { walletService } from '../services/walletService';
+
+// Recent Transactions Collapsible Component
+const RecentTransactionsCollapsible = ({ transactions, formatCurrency }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // Get summary data
+  const recentCount = Math.min(transactions.length, 10);
+  const totalIncome = transactions
+    .filter(t => t.transaction_type === 'income')
+    .slice(0, 5)
+    .reduce((sum, t) => sum + (t.amount || 0), 0);
+  const totalExpense = transactions
+    .filter(t => t.transaction_type !== 'income')
+    .slice(0, 5)
+    .reduce((sum, t) => sum + (t.amount || 0), 0);
+
+  // Collapsed Badge View
+  if (!isExpanded) {
+    return (
+      <div className="px-4 pb-4">
+        <div 
+          className="glass-card p-3 cursor-pointer hover:bg-white hover:bg-opacity-5 transition-all"
+          onClick={() => setIsExpanded(true)}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Activity className="w-5 h-5 text-blue-400" />
+              <span className="text-white font-medium">Recent Transactions</span>
+              <span className="text-xs text-gray-400">({recentCount})</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="text-right text-xs">
+                <div className="text-green-400">+{formatCurrency(totalIncome)}</div>
+                <div className="text-red-400">-{formatCurrency(totalExpense)}</div>
+              </div>
+              <span className="text-gray-400 text-xs">▼</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Expanded Full View
+  return (
+    <div className="px-4 pb-4">
+      <div className="glass-card p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+            <Activity className="w-5 h-5 text-blue-400" />
+            Recent Transactions
+          </h3>
+          <button
+            onClick={() => setIsExpanded(false)}
+            className="text-gray-400 hover:text-white text-xs"
+          >
+            ▲
+          </button>
+        </div>
+        <div className="space-y-2 max-h-60 overflow-y-auto">
+          {transactions.slice(0, 10).map((transaction) => (
+            <div key={transaction.id} className="flex items-center justify-between p-3 bg-slate-800/30 rounded-lg border border-slate-700/30">
+              <div className="flex items-center gap-3">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  transaction.transaction_type === 'income' 
+                    ? 'bg-green-500/20 text-green-400' 
+                    : 'bg-red-500/20 text-red-400'
+                }`}>
+                  {transaction.transaction_type === 'income' ? '+' : '-'}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-white truncate max-w-32">
+                    {transaction.description || 'Transaction'}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {new Date(transaction.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className={`text-sm font-bold ${
+                  transaction.transaction_type === 'income' ? 'text-green-300' : 'text-red-300'
+                }`}>
+                  {transaction.transaction_type === 'income' ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount || 0))}
+                </p>
+                <p className="text-xs text-gray-400 capitalize">
+                  {transaction.metadata?.category || 'general'}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Feature Card Component with Image Slideshow - Updated with animations
+const FeatureCardWithSlideshow = ({ card, onExplore }) => {
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  useEffect(() => {
+    if (!card.images || card.images.length === 0) return;
+
+    const interval = setInterval(() => {
+      setCurrentImageIndex((prev) => (prev + 1) % card.images.length);
+    }, 3000); // Change image every 3 seconds
+
+    return () => clearInterval(interval);
+  }, [card.images]);
+
+  return (
+    <div className="w-full bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+      {/* Card Header */}
+      <div className={`bg-gradient-to-r ${card.color} p-4 text-white`}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <card.icon className="w-6 h-6" />
+            <div>
+              <h3 className="text-xl font-bold">{card.title}</h3>
+              {card.subtitle && (
+                <p className="text-[10px] text-white/60 font-medium">{card.subtitle}</p>
+              )}
+            </div>
+          </div>
+          
+          {/* Action buttons for Pitchin card */}
+          {card.title === 'Pitchin' && card.actions && (
+            <div className="flex items-center gap-2">
+              {card.actions.map((action, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => onExplore && onExplore(card.title, action.type)}
+                  className="flex items-center gap-1 bg-white/20 hover:bg-white/30 backdrop-blur-sm px-3 py-1.5 rounded-full transition-all transform hover:scale-105 active:scale-95"
+                  title={action.label}
+                >
+                  <action.icon className="w-4 h-4" />
+                  <span className="text-xs font-medium">{action.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <p className="text-xs text-white/80">{card.description}</p>
+        {card.info && (
+          <p className="text-[9px] text-white/50 mt-1 italic">{card.info}</p>
+        )}
+      </div>
+
+      {/* Full Screen Image Slideshow - Mobile Optimized */}
+      {card.images && card.images.length > 0 && (
+        <div className="relative w-full h-[60vh] bg-slate-950 overflow-hidden">
+          {card.images.map((image, imgIdx) => (
+            <img
+              key={imgIdx}
+              src={image}
+              alt={`${card.title} ${imgIdx + 1}`}
+              className={`absolute inset-0 w-full h-full object-cover transition-all duration-1000 ease-in-out ${
+                imgIdx === currentImageIndex 
+                  ? 'opacity-100 scale-100' 
+                  : 'opacity-0 scale-110'
+              }`}
+              style={{
+                transform: imgIdx === currentImageIndex ? 'scale(1)' : 'scale(1.1)',
+              }}
+            />
+          ))}
+          
+          {/* Gradient overlay for better text visibility */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none" />
+          
+          {/* Quick action overlay for Pitchin */}
+          {card.title === 'Pitchin' && onExplore && (
+            <button
+              onClick={() => onExplore(card.title, 'launch')}
+              className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-purple-600/90 hover:bg-purple-500 backdrop-blur-md px-6 py-3 rounded-full flex items-center gap-2 transition-all transform hover:scale-110 active:scale-95 shadow-2xl shadow-purple-500/50"
+            >
+              <Play className="w-5 h-5 text-white" />
+              <span className="text-white font-bold text-sm">Launch Pitchin</span>
+            </button>
+          )}
+          
+          {/* Image indicators - Bottom center */}
+          <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex gap-2">
+            {card.images.map((_, dotIdx) => (
+              <div
+                key={dotIdx}
+                className={`rounded-full transition-all duration-500 ${
+                  dotIdx === currentImageIndex
+                    ? 'bg-white w-8 h-2'
+                    : 'bg-white/40 w-2 h-2'
+                }`}
+              />
+            ))}
+          </div>
+
+          {/* Image counter */}
+          <div className="absolute top-4 right-4 bg-black/50 backdrop-blur-sm px-3 py-1 rounded-full text-white text-xs font-medium">
+            {currentImageIndex + 1} / {card.images.length}
+          </div>
+        </div>
+      )}
+
+      {/* Card Body - Compact */}
+      <div className="p-4">
+        <div className="space-y-2">
+          {card.features.map((feature, fIdx) => (
+            <div key={fIdx} className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 bg-purple-500 rounded-full flex-shrink-0"></div>
+              <span className="text-xs text-gray-300">{feature}</span>
+            </div>
+          ))}
+        </div>
+        
+        {/* Explore button for all cards */}
+        {onExplore && (
+          <button
+            onClick={() => onExplore(card.title, 'explore')}
+            className="w-full mt-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white py-2.5 rounded-lg font-semibold text-sm transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+          >
+            <Rocket className="w-4 h-4" />
+            Explore {card.title}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const MobileView = ({ userProfile }) => {
   const [activeSlide, setActiveSlide] = useState(0);
@@ -183,6 +417,19 @@ const MobileView = ({ userProfile }) => {
   const [aiInputMessage, setAiInputMessage] = useState('');
   const [aiIsThinking, setAiIsThinking] = useState(false);
 
+  // Wallet Accounts State
+  const [walletAccounts, setWalletAccounts] = useState({
+    ican: { balance: 0, currency: 'USD', loading: true, exists: false },
+    personal: { balance: 0, currency: 'UGX', loading: true, exists: false },
+    agent: { balance: 0, currency: 'USD', loading: true, exists: false },
+    business: { balance: 0, currency: 'UGX', loading: true, exists: false },
+    trust: { balance: 0, currency: 'USD', loading: true, exists: false }
+  });
+  const [activeWalletTab, setActiveWalletTab] = useState('ican');
+  const [walletAccountsLoading, setWalletAccountsLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState(null);
+  const [availableWalletTabs, setAvailableWalletTabs] = useState([]);
+
   // Business Loan Calculator state
   const [loanAmount, setLoanAmount] = useState('10000000');
   const [interestRate, setInterestRate] = useState('18');
@@ -308,11 +555,24 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
   useEffect(() => {
     const loadFinancialMetrics = async () => {
       try {
-        if (userProfile?.id) {
-          const engine = new VelocityEngine(userProfile.id);
-          await engine.loadTransactions();
+        // Get user ID from Supabase auth (same as web view)
+        const { data: { user } } = await supabase.auth.getUser();
+        const userId = user?.id || userProfile?.id || 'demo-user';
+        
+        if (userId) {
+          const engine = new VelocityEngine(userId);
+          const loadResult = await engine.loadTransactions();
+          
+          if (loadResult.success) {
+            // Update local transactions state
+            setTransactions(loadResult.data || []);
+            console.log(`✅ Mobile: Loaded ${loadResult.data?.length || 0} transactions for user ${userId}`);
+          } else {
+            console.warn('⚠️ Mobile: VelocityEngine load failed:', loadResult.error);
+          }
+          
           const metrics = engine.calculateMetrics();
-          console.log('📊 VelocityEngine Metrics:', metrics);
+          console.log('📊 Mobile VelocityEngine Metrics:', metrics);
           setVelocityMetrics(metrics);
         }
       } catch (error) {
@@ -548,8 +808,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       startDate.setDate(startDate.getDate() - days);
 
       const { data, error } = await supabase
-        .from('ican_transactions')
-        .select('amount, type')
+        .from('transactions')
+        .select('amount, transaction_type')
         .eq('user_id', user.id)
         .eq('status', 'completed')
         .gte('created_at', startDate.toISOString());
@@ -562,9 +822,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       // Calculate metric based on type
       let result = 0;
       if (metricType === 'income') {
-        result = data.filter(t => t.type === 'income').reduce((sum, t) => sum + (t.amount || 0), 0);
+        result = data.filter(t => t.transaction_type === 'income').reduce((sum, t) => sum + (t.amount || 0), 0);
       } else if (metricType === 'expense') {
-        result = data.filter(t => t.type === 'expense').reduce((sum, t) => sum + (t.amount || 0), 0);
+        result = data.filter(t => t.transaction_type === 'expense').reduce((sum, t) => sum + (t.amount || 0), 0);
       } else if (metricType === 'transactions') {
         result = data.length;
       }
@@ -576,7 +836,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     }
   };
 
-  // Handle metric dropdown click - fetch data
+  // Handle metric dropdown click - fetch data using VelocityEngine
   const handleMetricClick = async (metricKey) => {
     // Toggle dropdown
     setMetricDropdowns({...metricDropdowns, [metricKey]: !metricDropdowns[metricKey]});
@@ -588,22 +848,46 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         [metricKey]: {...prev[metricKey], loading: true}
       }));
 
-      // Fetch data for each period
-      const dailyData = await fetchMetricDataByPeriod(metricKey, 1);
-      const weeklyData = await fetchMetricDataByPeriod(metricKey, 7);
-      const monthlyData = await fetchMetricDataByPeriod(metricKey, 30);
-      const yearlyData = await fetchMetricDataByPeriod(metricKey, 365);
+      try {
+        // Use VelocityEngine for consistent calculations
+        const engine = new VelocityEngine(userProfile?.id || 'demo-user');
+        await engine.loadTransactions(); // Ensure data is loaded
 
-      setMetricPeriodData(prev => ({
-        ...prev,
-        [metricKey]: {
-          daily: dailyData || 0,
-          weekly: weeklyData || 0,
-          monthly: monthlyData || 0,
-          yearly: yearlyData || 0,
-          loading: false
-        }
-      }));
+        // Get period data using velocityEngine
+        const dailyData = engine.getPeriodMetric(metricKey, 'daily');
+        const weeklyData = engine.getPeriodMetric(metricKey, 'weekly');
+        const monthlyData = engine.getPeriodMetric(metricKey, 'monthly');  
+        const yearlyData = engine.getPeriodMetric(metricKey, 'yearly');
+
+        setMetricPeriodData(prev => ({
+          ...prev,
+          [metricKey]: {
+            daily: dailyData || 0,
+            weekly: weeklyData || 0,
+            monthly: monthlyData || 0,
+            yearly: yearlyData || 0,
+            loading: false
+          }
+        }));
+      } catch (error) {
+        console.error('Error loading period metrics:', error);
+        // Fallback to direct Supabase query
+        const dailyData = await fetchMetricDataByPeriod(metricKey, 1);
+        const weeklyData = await fetchMetricDataByPeriod(metricKey, 7);
+        const monthlyData = await fetchMetricDataByPeriod(metricKey, 30);
+        const yearlyData = await fetchMetricDataByPeriod(metricKey, 365);
+
+        setMetricPeriodData(prev => ({
+          ...prev,
+          [metricKey]: {
+            daily: dailyData || 0,
+            weekly: weeklyData || 0,
+            monthly: monthlyData || 0,
+            yearly: yearlyData || 0,
+            loading: false
+          }
+        }));
+      }
     }
   };
 
@@ -660,6 +944,157 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     }
   };
 
+  // Load Wallet Accounts Data
+  const loadWalletAccounts = async (userId) => {
+    try {
+      setWalletAccountsLoading(true);
+      
+      // Get wallet balances from database (wallet_accounts table only has: user_id, currency, balance, status)
+      const { data: walletData, error } = await supabase
+        .from('wallet_accounts')
+        .select('currency, balance')
+        .eq('user_id', userId);
+      
+      if (error) {
+        console.error('Error loading wallet accounts:', error);
+        return;
+      }
+
+      // Initialize wallet accounts
+      const accounts = {
+        ican: { balance: 0, currency: 'ICAN', loading: false, exists: false },
+        personal: { balance: 0, currency: 'UGX', loading: false, exists: false },
+        agent: { balance: 0, currency: 'USD', loading: false, exists: false },
+        business: { balance: 0, currency: 'UGX', loading: false, exists: false },
+        trust: { balance: 0, currency: 'USD', loading: false, exists: false }
+      };
+
+      // Check if user has agent account - Table doesn't exist yet, commenting out
+      // const { data: agentData, error: agentError } = await supabase
+      //   .from('agent_accounts')
+      //   .select('id')
+      //   .eq('user_id', userId)
+      //   .single();
+
+      // if (!agentError && agentData) {
+      //   accounts.agent.exists = true;
+      // }
+
+      // Check if user has business profiles
+      const { data: businessData, error: businessError } = await supabase
+        .from('business_profiles')
+        .select('id')
+        .eq('user_id', userId)
+        .limit(1);
+
+      if (!businessError && businessData && businessData.length > 0) {
+        accounts.business.exists = true;
+      }
+
+      // Check if user has trust account (assuming all users have trust potential)
+      accounts.trust.exists = true;
+
+      // Personal account exists for all users
+      accounts.personal.exists = true;
+
+      // Map wallet data to accounts by currency
+      if (walletData && walletData.length > 0) {
+        walletData.forEach(account => {
+          const currency = account.currency;
+          const balance = parseFloat(account.balance) || 0;
+          
+          // Map currencies to account types
+          // UGX can be personal or business
+          // USD can be agent or trust
+          if (currency === 'UGX') {
+            accounts.personal.balance = balance;
+            accounts.personal.currency = currency;
+            accounts.personal.exists = true;
+          } else if (currency === 'USD') {
+            // Default to trust wallet for USD (agent account check disabled)
+            accounts.trust.balance = balance;
+            accounts.trust.currency = currency;
+            accounts.trust.exists = true;
+            accounts.trust.balance = balance;
+            accounts.trust.currency = currency;
+            accounts.trust.exists = true;
+          }
+        });
+      }
+
+      // Get ICAN token balance
+      try {
+        const { data: icanBalance, error: icanError } = await supabase
+          .from('ican_transactions')
+          .select('amount, transaction_type')
+          .eq('user_id', userId)
+          .eq('currency', 'ICAN');
+
+        if (!icanError && icanBalance && icanBalance.length > 0) {
+          const totalIcan = icanBalance.reduce((sum, tx) => {
+            return sum + (tx.transaction_type === 'purchase' ? tx.amount : -tx.amount);
+          }, 0);
+          accounts.ican.balance = totalIcan;
+          accounts.ican.exists = totalIcan > 0; // Only show if user has ICAN tokens
+        }
+      } catch (icanError) {
+        console.warn('Could not load ICAN balance:', icanError);
+      }
+
+      setWalletAccounts(accounts);
+      
+      // Filter available wallet tabs based on existing accounts
+      const availableTabs = walletTabs.filter(tab => {
+        const tabKey = tab.name.toLowerCase().replace(' ', '');
+        return accounts[tabKey]?.exists;
+      });
+      
+      setAvailableWalletTabs(availableTabs);
+      
+      // Set active tab to first available account
+      if (availableTabs.length > 0) {
+        const firstAvailable = availableTabs[0].name.toLowerCase().replace(' ', '');
+        setActiveWalletTab(firstAvailable);
+      }
+      
+      console.log('✅ Wallet accounts loaded:', accounts);
+      console.log('✅ Available wallet tabs:', availableTabs.map(t => t.name));
+      
+    } catch (error) {
+      console.error('Error loading wallet accounts:', error);
+    } finally {
+      setWalletAccountsLoading(false);
+    }
+  };
+
+  // Initialize wallet data on component mount
+  useEffect(() => {
+    const initializeWalletData = async () => {
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        
+        if (error || !user) {
+          console.warn('⚠️ User not authenticated for wallet data');
+          return;
+        }
+
+        setCurrentUserId(user.id);
+        
+        // Ensure wallet accounts exist
+        await walletAccountService.ensureWalletAccountsExist(user.id);
+        
+        // Load wallet data
+        await loadWalletAccounts(user.id);
+        
+      } catch (error) {
+        console.error('❌ Error initializing wallet data:', error);
+        setWalletAccountsLoading(false);
+      }
+    };
+
+    initializeWalletData();
+  }, []);
+
   // Financial metrics data
   const formatCurrency = (value) => {
     if (!value) return '0';
@@ -681,7 +1116,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
   const secondMetrics = [
     { label: 'Transactions', value: velocityMetrics?.transactionCount || '0', icon: Briefcase, color: 'from-blue-500 to-cyan-600' },
-    { label: 'Savings Rate', value: formatSavingsRate(velocityMetrics?.income30Days || 0, velocityMetrics?.expenses30Days || 0), icon: PieChart, color: 'from-purple-500 to-pink-600' },
+    { label: 'Savings Rate', value: `${velocityMetrics?.savingsRate || 0}%`, icon: PieChart, color: 'from-purple-500 to-pink-600' },
     { label: 'Net Worth', value: formatCurrency(velocityMetrics?.netWorth || 0), icon: TrendingUp, color: 'from-yellow-500 to-orange-600' }
   ];
 
@@ -722,21 +1157,81 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     { label: 'ICAN AI', icon: Brain, color: 'bg-gradient-to-br from-violet-500 to-violet-600' }
   ];
 
-  // Carousel content
+  // Carousel content with images
   const carouselCards = [
     {
       title: 'Pitchin',
+      subtitle: 'Video Pitch Platform',
       description: 'Share your vision and connect with investors',
+      info: 'Create compelling video pitches to attract funding and partnerships',
       color: 'from-purple-600 to-pink-600',
       icon: Briefcase,
-      features: ['Business pitches', 'Investor connections', 'Growth opportunities']
+      features: ['Business pitches', 'Investor connections', 'Growth opportunities'],
+      images: ['/images/ICANera pitchin.png', '/images/ICANera pitchin 8.png'],
+      actions: [
+        { label: 'Create', icon: Upload, type: 'create' },
+        { label: 'Explore', icon: Search, type: 'explore' }
+      ]
     },
     {
       title: 'Wallet',
+      subtitle: 'Multi-Currency Hub',
       description: 'Manage your digital assets',
+      info: 'Secure wallet supporting UGX, USD, ICAN and more currencies',
       color: 'from-green-600 to-emerald-600',
       icon: Wallet,
-      features: ['Multi-currency', 'Instant transfers', 'Security verified']
+      features: ['Multi-currency', 'Instant transfers', 'Security verified'],
+      images: ['/images/icanera wallet.png', '/images/ICANwallet.png']
+    },
+    {
+      title: 'Trust',
+      subtitle: 'Estate & Legacy',
+      description: 'Secure trust and estate management',
+      info: 'Protect your assets and plan for future generations with legal backing',
+      color: 'from-blue-600 to-cyan-600',
+      icon: Lock,
+      features: ['Estate planning', 'Beneficiary management', 'Legal compliance'],
+      images: ['/images/ICANera trust.png', '/images/ICANera trust 2.png', '/images/trust.png']
+    },
+    {
+      title: 'CMMS',
+      subtitle: 'Operations Manager',
+      description: 'Complete maintenance management system',
+      info: 'Track assets, schedule maintenance and optimize operational efficiency',
+      color: 'from-indigo-600 to-purple-600',
+      icon: Settings,
+      features: ['Asset tracking', 'Work orders', 'Preventive maintenance'],
+      images: ['/images/ICANera CMMS.png', '/images/ICANera CMMS1.png', '/images/cmms.png']
+    },
+    {
+      title: 'Expense & Income',
+      subtitle: 'Financial Diary',
+      description: 'Track and manage your finances',
+      info: 'Record daily transactions and gain insights into spending patterns',
+      color: 'from-orange-600 to-red-600',
+      icon: TrendingUp,
+      features: ['Expense tracking', 'Income monitoring', 'Budget planning'],
+      images: ['/images/ICANera expense.png', '/images/dairy expense and inacome.png']
+    },
+    {
+      title: 'Trade',
+      subtitle: 'Investment Platform',
+      description: 'Buy and sell digital assets',
+      info: 'Access shares, SACCO investments and build diversified portfolios',
+      color: 'from-yellow-600 to-orange-600',
+      icon: BarChart3,
+      features: ['Market analysis', 'Real-time trading', 'Portfolio management'],
+      images: ['/images/incaera share.png', '/images/ICAN era sacco.png', '/images/sacco.png']
+    },
+    {
+      title: 'Tithe',
+      subtitle: 'Spiritual Giving',
+      description: 'Manage your spiritual giving and contributions',
+      info: 'Track tithes and offerings with digital records and receipts',
+      color: 'from-pink-600 to-rose-600',
+      icon: Heart,
+      features: ['Tithe tracking', 'Giving history', 'Spiritual blessings'],
+      images: ['/images/ICANera tithe.png', '/images/ICANera tith2.png']
     }
   ];
 
@@ -1456,7 +1951,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             >
               <div className="text-center">
                 <p className="text-xs text-white/70">ROI</p>
-                <p className="text-sm font-bold text-white">24%</p>
+                <p className="text-sm font-bold text-white">{velocityMetrics?.roi || 0}%</p>
               </div>
             </button>
             
@@ -1525,6 +2020,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           })}
         </div>
       </div>
+
+      {/* Recent Transactions Section */}
+      {transactions.length > 0 && <RecentTransactionsCollapsible transactions={transactions} formatCurrency={formatCurrency} />}
 
       {/* ====== MODAL PANELS (appear below action chips) ====== */}
       <div className="px-4 py-4 space-y-4">
@@ -1636,7 +2134,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               </div>
               <div className="bg-purple-900/30 border border-purple-500/30 rounded p-2">
                 <p className="text-xs text-gray-400 mb-0.5">Savings Rate</p>
-                <p className="text-sm font-bold text-purple-300">{formatSavingsRate(velocityMetrics?.income30Days || 0, velocityMetrics?.expenses30Days || 0)}</p>
+                <p className="text-sm font-bold text-purple-300">{velocityMetrics?.savingsRate || 0}%</p>
               </div>
             </div>
 
@@ -1808,7 +2306,207 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           </div>
         )}
 
-        {/* 4. Tithing Calculator Panel */}
+        {/* 4. Wallet Accounts Panel */}
+        {showWalletAccounts && (
+          <div className="glass-card p-4 border-l-4 border-teal-500 animate-in fade-in">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                <Wallet className="w-5 h-5 text-teal-400" />
+                Wallet Accounts
+              </h3>
+              <button onClick={() => setShowWalletAccounts(false)} className="text-gray-400 hover:text-white text-xl">✕</button>
+            </div>
+
+            {/* Wallet Tabs */}
+            <div className="mb-4">
+              <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                {availableWalletTabs.map((tab, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setActiveWalletTab(tab.name.toLowerCase().replace(' ', ''))}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg whitespace-nowrap transition-all transform hover:scale-105 active:scale-95 ${
+                      activeWalletTab === tab.name.toLowerCase().replace(' ', '')
+                        ? 'bg-gradient-to-r from-teal-500/30 to-teal-600/30 text-teal-300 border border-teal-400/50 shadow-lg shadow-teal-500/20'
+                        : 'bg-slate-800/50 text-gray-300 hover:bg-slate-700/50 hover:text-white border border-transparent'
+                    }`}
+                  >
+                    <tab.icon className={`w-5 h-5 transition-all ${
+                      activeWalletTab === tab.name.toLowerCase().replace(' ', '')
+                        ? 'text-teal-300 animate-pulse'
+                        : 'text-gray-400 group-hover:text-white'
+                    }`} />
+                    <span className="text-sm font-medium">{tab.name}</span>
+                    
+                    {/* Account status indicator */}
+                    <div className={`w-2 h-2 rounded-full ${
+                      walletAccounts[tab.name.toLowerCase().replace(' ', '')]?.exists 
+                        ? 'bg-green-400' 
+                        : 'bg-red-400'
+                    }`} 
+                    title={walletAccounts[tab.name.toLowerCase().replace(' ', '')]?.exists 
+                      ? 'Active Account' 
+                      : 'No Account'
+                    }/>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Quick Access Wallet Icons */}
+            <div className="mb-4">
+              <p className="text-xs text-gray-400 mb-2 uppercase tracking-wide">Quick Access</p>
+              <div className="flex justify-center gap-4">
+                {availableWalletTabs.map((tab, idx) => {
+                  const tabKey = tab.name.toLowerCase().replace(' ', '');
+                  const account = walletAccounts[tabKey];
+                  const balance = account?.balance || 0;
+                  const currency = account?.currency || 'UGX';
+                  
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => setActiveWalletTab(tabKey)}
+                      className={`relative group p-4 rounded-xl transition-all transform hover:scale-105 active:scale-95 min-w-[80px] ${
+                        activeWalletTab === tabKey
+                          ? 'bg-gradient-to-br from-teal-500 to-teal-600 shadow-lg shadow-teal-500/30'
+                          : 'bg-slate-800/50 hover:bg-slate-700/50 border border-slate-700 hover:border-slate-600'
+                      }`}
+                      title={`Switch to ${tab.name} Wallet`}
+                    >
+                      <div className="flex flex-col items-center gap-1">
+                        <tab.icon className={`w-6 h-6 transition-all ${
+                          activeWalletTab === tabKey
+                            ? 'text-white'
+                            : 'text-gray-400 group-hover:text-white'
+                        }`} />
+                        
+                        {/* Balance Amount */}
+                        <div className={`text-xs font-semibold transition-all ${
+                          activeWalletTab === tabKey
+                            ? 'text-white'
+                            : 'text-gray-300 group-hover:text-white'
+                        }`}>
+                          {balance.toLocaleString('en-US', {
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 2
+                          })}
+                        </div>
+                        
+                        {/* Currency */}
+                        <div className={`text-[10px] font-medium transition-all ${
+                          activeWalletTab === tabKey
+                            ? 'text-teal-100'
+                            : 'text-gray-500 group-hover:text-gray-300'
+                        }`}>
+                          {currency}
+                        </div>
+                      </div>
+                      
+                      {/* Active indicator */}
+                      {activeWalletTab === tabKey && (
+                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-slate-900 animate-pulse"></div>
+                      )}
+                      
+                      {/* Wallet name tooltip */}
+                      <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-slate-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
+                        {tab.name}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Wallet Account Display */}
+            <div className="space-y-4">
+              {walletAccountsLoading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin w-6 h-6 border-2 border-teal-400 border-t-transparent rounded-full mx-auto mb-2"></div>
+                  <p className="text-gray-400 text-sm">Loading wallet accounts...</p>
+                </div>
+              ) : (
+                <div className="bg-slate-800/50 rounded-lg p-4 border border-teal-500/20">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-10 h-10 bg-teal-500/20 rounded-full flex items-center justify-center">
+                        {activeWalletTab === 'ican' && <Wallet className="w-5 h-5 text-teal-400" />}
+                        {activeWalletTab === 'personal' && <User2 className="w-5 h-5 text-blue-400" />}
+                        {activeWalletTab === 'agent' && <Settings className="w-5 h-5 text-purple-400" />}
+                        {activeWalletTab === 'business' && <Briefcase className="w-5 h-5 text-orange-400" />}
+                        {activeWalletTab === 'trust' && <Lock className="w-5 h-5 text-red-400" />}
+                      </div>
+                      <div>
+                        <h4 className="text-white font-semibold capitalize">{activeWalletTab} Account</h4>
+                        <p className="text-gray-400 text-xs">
+                          {walletAccounts[activeWalletTab]?.currency || 'USD'} Wallet
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-gray-400">Current Balance</p>
+                      <p className="text-xl font-bold text-white">
+                        {walletAccounts[activeWalletTab]?.loading ? (
+                          <span className="animate-pulse">Loading...</span>
+                        ) : (
+                          `${formatCurrency(walletAccounts[activeWalletTab]?.balance || 0)} ${walletAccounts[activeWalletTab]?.currency}`
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Account Actions */}
+                  <div className="grid grid-cols-2 gap-2 mt-4">
+                    <button className="px-3 py-2 bg-green-500/20 text-green-300 rounded-lg text-sm font-medium hover:bg-green-500/30 transition border border-green-500/30">
+                      💰 Deposit
+                    </button>
+                    <button className="px-3 py-2 bg-red-500/20 text-red-300 rounded-lg text-sm font-medium hover:bg-red-500/30 transition border border-red-500/30">
+                      💸 Withdraw
+                    </button>
+                  </div>
+
+                  {/* Account Info */}
+                  <div className="mt-4 pt-3 border-t border-slate-700/50">
+                    <div className="grid grid-cols-2 gap-4 text-xs">
+                      <div>
+                        <p className="text-gray-400">Account Type</p>
+                        <p className="text-white font-medium capitalize">{activeWalletTab}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400">Status</p>
+                        <p className="text-green-400 font-medium">✓ Active</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400">Currency</p>
+                        <p className="text-white font-medium">{walletAccounts[activeWalletTab]?.currency || 'USD'}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400">Last Updated</p>
+                        <p className="text-white font-medium">Just now</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Quick Balance Overview */}
+                  <div className="mt-4 pt-3 border-t border-slate-700/50">
+                    <p className="text-gray-400 text-xs mb-2">All Account Balances:</p>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      {Object.entries(walletAccounts).map(([type, account]) => (
+                        <div key={type} className="flex justify-between">
+                          <span className="text-gray-400 capitalize">{type}:</span>
+                          <span className="text-white font-medium">
+                            {account.loading ? '...' : `${formatCurrency(account.balance)} ${account.currency}`}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 5. Tithing Calculator Panel */}
         {showTithingCalculator && (
           <div className="mt-4 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-6 border border-blue-200 shadow-lg">
             <div className="flex justify-between items-center mb-6">
@@ -2321,100 +3019,72 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         <div className="mb-3">
           <p className="text-xs text-gray-400 mb-2">WALLET ACCOUNTS</p>
           <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-            {walletTabs.map((tab, idx) => (
-              <button
-                key={idx}
-                className="px-3 py-2 rounded-full border border-purple-500/40 bg-purple-900/30 hover:bg-purple-900/50 text-xs font-medium text-purple-300 whitespace-nowrap transition flex items-center gap-1"
-              >
-                <tab.icon className="w-4 h-4" />
-                {tab.name}
-              </button>
-            ))}
+            {availableWalletTabs.map((tab, idx) => {
+              const tabKey = tab.name.toLowerCase().replace(' ', '');
+              const account = walletAccounts[tabKey];
+              const balance = account?.balance || 0;
+              const currency = account?.currency || 'UGX';
+              
+              return (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    setActiveWalletTab(tabKey);
+                    setCurrentBalance(balance.toLocaleString('en-US', {
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 2
+                    }));
+                  }}
+                  className={`px-3 py-2 rounded-full border transition flex flex-col items-center gap-1 min-w-[70px] ${
+                    activeWalletTab === tabKey
+                      ? 'border-purple-400 bg-purple-600/50 text-purple-100'
+                      : 'border-purple-500/40 bg-purple-900/30 hover:bg-purple-900/50 text-purple-300'
+                  }`}
+                >
+                  <tab.icon className="w-4 h-4" />
+                  <span className="text-xs font-medium whitespace-nowrap">{tab.name}</span>
+                  <span className="text-[10px] font-semibold">
+                    {balance.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  </span>
+                  <span className="text-[9px] text-gray-400">{currency}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
         {/* Current Balance Display */}
-        <div className="bg-gradient-to-r from-green-600/20 to-emerald-600/20 border border-green-500/30 rounded-lg p-4">
+        {/* <div className="bg-gradient-to-r from-green-600/20 to-emerald-600/20 border border-green-500/30 rounded-lg p-4">
           <p className="text-xs text-gray-300 mb-1">Current Balance</p>
           <p className="text-2xl font-bold text-green-400">${currentBalance}</p>
           <p className="text-xs text-gray-400 mt-1">+2.5% this month</p>
-        </div>
+        </div> */}
       </div>
 
-      {/* ====== SWIPEABLE CAROUSEL ====== */}
-      <div className="px-4 py-6">
-        <div className="relative">
-          {/* Carousel Container */}
-          <div
-            ref={carouselRef}
-            className="flex gap-4 overflow-x-auto scroll-smooth no-scrollbar"
-          >
-            {carouselCards.map((card, idx) => (
-              <div
-                key={idx}
-                className="flex-shrink-0 w-full bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl overflow-hidden shadow-2xl"
-              >
-                {/* Card Header */}
-                <div className={`bg-gradient-to-r ${card.color} p-6 text-white`}>
-                  <div className="flex items-center gap-3 mb-4">
-                    <card.icon className="w-8 h-8" />
-                    <h3 className="text-2xl font-bold">{card.title}</h3>
-                  </div>
-                  <p className="text-sm text-white/80">{card.description}</p>
-                </div>
-
-                {/* Card Body */}
-                <div className="p-6">
-                  <div className="space-y-3 mb-6">
-                    {card.features.map((feature, fIdx) => (
-                      <div key={fIdx} className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                        <span className="text-sm text-gray-300">{feature}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Navigation Dots */}
-                  <div className="flex justify-center gap-2">
-                    {carouselCards.map((_, dotIdx) => (
-                      <button
-                        key={dotIdx}
-                        onClick={() => {
-                          if (carouselRef.current) {
-                            carouselRef.current.scrollTo({
-                              left: dotIdx * carouselRef.current.clientWidth,
-                              behavior: 'smooth'
-                            });
-                            setActiveSlide(dotIdx);
-                          }
-                        }}
-                        className={`w-2 h-2 rounded-full transition ${
-                          dotIdx === activeSlide
-                            ? 'bg-gradient-to-r from-purple-500 to-pink-500 w-6'
-                            : 'bg-gray-600 hover:bg-gray-500'
-                        }`}
-                      ></button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Carousel Navigation Buttons */}
-          <button
-            onClick={() => handleCarouselScroll('prev')}
-            className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-6 z-20 bg-purple-600 hover:bg-purple-500 rounded-full p-2 transition shadow-lg"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => handleCarouselScroll('next')}
-            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-6 z-20 bg-purple-600 hover:bg-purple-500 rounded-full p-2 transition shadow-lg"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
-        </div>
+      {/* ====== FEATURE CARDS SECTION ====== */}
+      <div className="px-4 py-6 space-y-4 overflow-y-auto">
+        {carouselCards.map((card, idx) => (
+          <FeatureCardWithSlideshow 
+            key={idx} 
+            card={card}
+            onExplore={(title, action) => {
+              console.log(`Exploring ${title} - Action: ${action}`);
+              
+              // Handle different card actions
+              if (title === 'Pitchin') {
+                setShowPitchinPanel(true);
+                setActiveBottomTab('pitchin');
+              } else if (title === 'Wallet') {
+                setShowWalletPanel(true);
+                setActiveBottomTab('wallet');
+              } else if (title === 'Trust') {
+                setShowTrustPanel(true);
+              } else if (title === 'CMMS') {
+                setShowCMMSPanel(true);
+              }
+            }}
+          />
+        ))}
       </div>
 
       {/* ====== CMMS SECTION ====== */}
@@ -2663,8 +3333,71 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             transaction.timestamp = new Date().toISOString();
           }
 
-          // Store transaction
-          setTransactions(prev => [transaction, ...prev]);
+          // Store transaction locally with proper format
+          const formattedTransaction = {
+            id: transaction.id || `temp_${Date.now()}`,
+            amount: transaction.amount || 0,
+            transaction_type: transaction.isIncome ? 'income' : 'expense',
+            description: transaction.description || 'Transaction',
+            created_at: transaction.timestamp || new Date().toISOString(),
+            user_id: userProfile?.id,
+            currency: 'UGX',
+            status: 'completed',
+            metadata: {
+              category: transaction.category || 'other',
+              source: 'smart_entry'
+            }
+          };
+          setTransactions(prev => [formattedTransaction, ...prev]);
+
+          // Persist transaction to Supabase via VelocityEngine
+          const saveAndRefresh = async () => {
+            try {
+              // Get user ID from Supabase auth (same as web view)
+              const { data: { user } } = await supabase.auth.getUser();
+              const userId = user?.id || userProfile?.id || 'demo-user';
+              
+              if (userId) {
+                // Save transaction using VelocityEngine
+                const engine = new VelocityEngine(userId);
+                const result = await engine.addTransaction({
+                  amount: transaction.amount || 0,
+                  type: transaction.isIncome ? 'income' : 'expense',
+                  description: transaction.description || 'Transaction',
+                  category: transaction.category || 'other',
+                  date: transaction.timestamp || new Date().toISOString(),
+                  source: 'smart_entry',
+                  currency: 'UGX'
+                });
+
+                if (result.success) {
+                  console.log(`✅ Mobile: Saved transaction for user ${userId}`, result.transaction);
+                  // Update with real transaction data
+                  setTransactions(prev => [
+                    result.transaction,
+                    ...prev.filter(t => t.id !== formattedTransaction.id)
+                  ]);
+                  
+                  // Reload metrics from VelocityEngine
+                  const loadResult = await engine.loadTransactions();
+                  if (loadResult.success) {
+                    const metrics = engine.calculateMetrics();
+                    console.log('📊 Updated VelocityEngine Metrics:', metrics);
+                    setVelocityMetrics(metrics);
+                  }
+                } else {
+                  console.error('Failed to save transaction:', result.error);
+                  // Remove failed transaction
+                  setTransactions(prev => prev.filter(t => t.id !== formattedTransaction.id));
+                }
+              }
+            } catch (error) {
+              console.error('Error saving transaction to database:', error);
+              // Remove failed transaction
+              setTransactions(prev => prev.filter(t => t.id !== formattedTransaction.id));
+            }
+          };
+          saveAndRefresh();
 
           // Update balance if valid amount
           if (transaction.amount) {
