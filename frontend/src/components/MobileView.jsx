@@ -757,36 +757,36 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 text-white pb-28 overflow-x-hidden">
       {/* ====== HEADER ====== */}
       <div className="sticky top-0 z-40 bg-gradient-to-b from-slate-950/95 to-purple-950/80 backdrop-blur-md border-b border-purple-500/20">
-        <div className="px-4 py-3 relative">
+        <div className="px-3 py-2.5 sm:px-4 sm:py-3 relative">
           {/* Header Row - Recording Input, Branding & Settings */}
-          <div className="flex items-center w-full gap-2">
-            {/* Recording Input Badge - CLICKABLE - EXTENDED */}
+          <div className="flex items-center w-full gap-1.5 sm:gap-2">
+            {/* Recording Input Badge - CLICKABLE - Mobile optimized */}
             <button
               onClick={() => setShowRecordTypeModal(true)}
-              className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-purple-500 border border-purple-400/50 hover:border-purple-300/80 rounded-full px-4 py-2.5 hover:bg-gradient-to-r hover:from-purple-500 hover:to-purple-400 transition-all active:scale-95 flex-shrink-0 shadow-lg shadow-purple-500/30 flex-grow max-w-xs"
+              className="flex items-center gap-1.5 sm:gap-2 bg-gradient-to-r from-purple-600 to-purple-500 border border-purple-400/50 hover:border-purple-300/80 rounded-full px-3 sm:px-4 py-1.5 sm:py-2.5 hover:bg-gradient-to-r hover:from-purple-500 hover:to-purple-400 transition-all active:scale-95 flex-shrink-0 shadow-lg shadow-purple-500/30 whitespace-nowrap"
             >
-              <Mic className="w-5 h-5 text-white flex-shrink-0" />
-              <span className="text-sm font-semibold text-white whitespace-nowrap">Record</span>
-              <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse flex-shrink-0"></div>
+              <Mic className="w-4 sm:w-5 h-4 sm:h-5 text-white flex-shrink-0" />
+              <span className="text-xs sm:text-sm font-semibold text-white">Record</span>
+              <div className="w-1.5 sm:w-2 h-1.5 sm:h-2 bg-red-400 rounded-full animate-pulse flex-shrink-0"></div>
             </button>
 
-            {/* IcanEra Branding - LARGE CLASSIC STYLE */}
-            <h1 className="text-4xl md:text-5xl font-serif font-bold text-transparent bg-gradient-to-r from-amber-200 via-yellow-100 to-amber-300 bg-clip-text tracking-wider flex-1 text-center px-2">
+            {/* IcanEra Branding - Responsive sizing */}
+            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-serif font-bold text-transparent bg-gradient-to-r from-amber-200 via-yellow-100 to-amber-300 bg-clip-text tracking-wide sm:tracking-wider flex-1 text-center px-1 sm:px-2 leading-tight">
               IcanEra
             </h1>
 
-            {/* Settings Menu - ABSOLUTE EXTREME RIGHT CORNER */}
-            <div className="absolute right-3 top-3">
+            {/* Settings Menu - ABSOLUTE RIGHT */}
+            <div className="absolute right-2 sm:right-3 top-2 sm:top-3">
               <button 
                 onClick={() => setShowMenuDropdown(!showMenuDropdown)}
-                className="p-2 hover:bg-purple-500/20 rounded-lg transition"
+                className="p-1.5 sm:p-2 hover:bg-purple-500/20 rounded-lg transition active:scale-95"
               >
-                <MoreVertical className="w-6 h-6 text-purple-400" />
+                <MoreVertical className="w-5 sm:w-6 h-5 sm:h-6 text-purple-400" />
               </button>
 
               {/* Dropdown Menu */}
               {showMenuDropdown && (
-                <div className="absolute right-0 top-full mt-2 bg-slate-900 border border-purple-500/30 rounded-lg shadow-2xl z-50 w-72 overflow-hidden">
+                <div className="absolute right-0 top-full mt-2 bg-slate-900 border border-purple-500/30 rounded-lg shadow-2xl z-50 w-64 sm:w-72 overflow-hidden">
                   {/* Tab Navigation */}
                   <div className="flex border-b border-purple-500/20">
                     {Object.entries(menuOptions).map(([key, option]) => {
