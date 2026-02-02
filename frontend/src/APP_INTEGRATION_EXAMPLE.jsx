@@ -13,9 +13,9 @@ import CountryCheckMiddleware from './components/auth/CountryCheckMiddleware';
 import LoginPage from './pages/LoginPage';
 import SignUpPage from './pages/SignUpPage';
 import DashboardPage from './pages/DashboardPage';
-import BuyIcan from './components/ican/BuyIcan';
-import SellIcan from './components/ican/SellIcan';
-import IcanPortfolio from './components/ican/IcanPortfolio';
+import BuyIcan from './components/ICAN/BuyIcan';
+import SellIcan from './components/ICAN/SellIcan';
+import IcanPortfolio from './components/ICAN/IcanPortfolio';
 
 function App() {
   return (
