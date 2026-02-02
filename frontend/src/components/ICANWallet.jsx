@@ -39,8 +39,8 @@ import { getSupabaseClient } from '../lib/supabase/client';
 import AgentDashboard from './AgentDashboard';
 import UnifiedApprovalModal from './UnifiedApprovalModal';
 import CandlestickChart from './CandlestickChart';
-import BuyIcan from './ican/BuyIcan';
-import SellIcan from './ican/SellIcan';
+import BuyIcan from './ICAN/BuyIcan';
+import SellIcan from './ICAN/SellIcan';
 
 const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
   const [showBalance, setShowBalance] = useState(true);
