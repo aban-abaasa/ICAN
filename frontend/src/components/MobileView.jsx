@@ -51,6 +51,8 @@ const MobileView = ({ userProfile }) => {
   const [currentBalance, setCurrentBalance] = useState('156,002');
   const [activeBottomTab, setActiveBottomTab] = useState('wallet');
   const [showTransactionEntry, setShowTransactionEntry] = useState(false);
+  const [transactionType, setTransactionType] = useState(null); // 'business' or 'personal'
+  const [showRecordTypeModal, setShowRecordTypeModal] = useState(false);
   const [transactions, setTransactions] = useState([]);
   const [showMenuDropdown, setShowMenuDropdown] = useState(false);
   const [activeMenuTab, setActiveMenuTab] = useState('security');
@@ -755,34 +757,31 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 text-white pb-28 overflow-x-hidden">
       {/* ====== HEADER ====== */}
       <div className="sticky top-0 z-40 bg-gradient-to-b from-slate-950/95 to-purple-950/80 backdrop-blur-md border-b border-purple-500/20">
-        <div className="px-4 py-3">
+        <div className="px-4 py-3 relative">
           {/* Header Row - Recording Input, Branding & Settings */}
-          <div className="flex items-center gap-3 w-full">
-            {/* Recording Input Badge - CLICKABLE */}
+          <div className="flex items-center w-full gap-2">
+            {/* Recording Input Badge - CLICKABLE - EXTENDED */}
             <button
-              onClick={() => setShowTransactionEntry(true)}
-              className="flex items-center gap-2 bg-purple-900/40 border border-purple-500/30 rounded-full px-3 py-2 hover:bg-purple-900/60 hover:border-purple-400/50 transition-all active:scale-95"
+              onClick={() => setShowRecordTypeModal(true)}
+              className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-purple-500 border border-purple-400/50 hover:border-purple-300/80 rounded-full px-4 py-2.5 hover:bg-gradient-to-r hover:from-purple-500 hover:to-purple-400 transition-all active:scale-95 flex-shrink-0 shadow-lg shadow-purple-500/30 flex-grow max-w-xs"
             >
-              <Mic className="w-4 h-4 text-purple-400 flex-shrink-0" />
-              <span className="text-xs text-gray-300 whitespace-nowrap">Record</span>
-              <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse flex-shrink-0"></div>
+              <Mic className="w-5 h-5 text-white flex-shrink-0" />
+              <span className="text-sm font-semibold text-white whitespace-nowrap">Record</span>
+              <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse flex-shrink-0"></div>
             </button>
 
-            {/* Spacer */}
-            <div className="flex-1"></div>
-
-            {/* IcanEra Branding */}
-            <h1 className="text-sm font-black bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400 bg-clip-text text-transparent whitespace-nowrap">
+            {/* IcanEra Branding - LARGE CLASSIC STYLE */}
+            <h1 className="text-4xl md:text-5xl font-serif font-bold text-transparent bg-gradient-to-r from-amber-200 via-yellow-100 to-amber-300 bg-clip-text tracking-wider flex-1 text-center px-2">
               IcanEra
             </h1>
 
-            {/* Settings Menu - Relative positioned for dropdown */}
-            <div className="relative">
+            {/* Settings Menu - ABSOLUTE EXTREME RIGHT CORNER */}
+            <div className="absolute right-3 top-3">
               <button 
                 onClick={() => setShowMenuDropdown(!showMenuDropdown)}
-                className="p-1.5 hover:bg-purple-500/20 rounded-lg transition flex-shrink-0"
+                className="p-2 hover:bg-purple-500/20 rounded-lg transition"
               >
-                <MoreVertical className="w-5 h-5 text-purple-400" />
+                <MoreVertical className="w-6 h-6 text-purple-400" />
               </button>
 
               {/* Dropdown Menu */}
@@ -2588,10 +2587,76 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         </div>
       </div>
 
+      {/* Record Type Selection Modal */}
+      {showRecordTypeModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-purple-500/30 rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-purple-600 to-purple-500 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-white">Record Transaction</h2>
+              <button
+                onClick={() => setShowRecordTypeModal(false)}
+                className="text-white/80 hover:text-white transition"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4">
+              <p className="text-gray-300 text-center mb-6">Select transaction type to proceed</p>
+
+              {/* Business Option */}
+              <button
+                onClick={() => {
+                  setTransactionType('business');
+                  setShowRecordTypeModal(false);
+                  setShowTransactionEntry(true);
+                }}
+                className="w-full bg-gradient-to-br from-blue-600/20 to-blue-700/20 border-2 border-blue-500/50 hover:border-blue-400/80 rounded-xl p-4 flex flex-col items-center gap-3 transition-all hover:bg-blue-600/30 group"
+              >
+                <Briefcase className="w-8 h-8 text-blue-400 group-hover:text-blue-300 transition" />
+                <div className="text-center">
+                  <h3 className="text-lg font-bold text-white group-hover:text-blue-100 transition">Business</h3>
+                  <p className="text-xs text-gray-400">Company transactions & operations</p>
+                </div>
+              </button>
+
+              {/* Personal Option */}
+              <button
+                onClick={() => {
+                  setTransactionType('personal');
+                  setShowRecordTypeModal(false);
+                  setShowTransactionEntry(true);
+                }}
+                className="w-full bg-gradient-to-br from-green-600/20 to-green-700/20 border-2 border-green-500/50 hover:border-green-400/80 rounded-xl p-4 flex flex-col items-center gap-3 transition-all hover:bg-green-600/30 group"
+              >
+                <User className="w-8 h-8 text-green-400 group-hover:text-green-300 transition" />
+                <div className="text-center">
+                  <h3 className="text-lg font-bold text-white group-hover:text-green-100 transition">Personal</h3>
+                  <p className="text-xs text-gray-400">Personal income & expenses</p>
+                </div>
+              </button>
+
+              {/* Info Footer */}
+              <div className="mt-6 pt-4 border-t border-purple-500/20">
+                <p className="text-xs text-gray-500 text-center">
+                  💡 Tip: Transactions are recorded with AI-powered categorization for precise accounting
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Smart Transaction Entry Modal */}
       <SmartTransactionEntry
         isOpen={showTransactionEntry}
-        onClose={() => setShowTransactionEntry(false)}
+        transactionType={transactionType}
+        onClose={() => {
+          setShowTransactionEntry(false);
+          setTransactionType(null);
+        }}
         onSubmit={(transaction) => {
           // Add timestamp if not present
           if (!transaction.timestamp) {

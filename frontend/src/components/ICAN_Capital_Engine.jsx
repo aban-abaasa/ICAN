@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getSupabaseClient } from '../lib/supabase/client';
 import { ProfileIcon, ProfilePage } from './auth';
+import { analyzeTransactionAsAccountant, formatTransactionForAccounting, formatTransactionDisplay } from '../services/accountingIntelligenceService';
 import { Header } from './Header';
 import { StatusPage } from './StatusPage';
 import { StatusUploader } from './status/StatusUploader';
@@ -2025,10 +2026,26 @@ const TransactionInput = ({
         type = 'income';
         console.log('🏠 Detected large property sale:', amount);
       }
-      // 🚗 Medium-large amounts (1M-10M) with vehicle/asset keywords = INCOME (asset sales)
-      else if (amount > 1000000 && /car|vehicle|motorbike|motorcycle|truck|phone|laptop|jewelry|gold/i.test(lowerText)) {
-        type = 'income';
-        console.log('🚗 Detected asset sale:', amount);
+      // 🚗 Vehicle/Asset context - CRITICAL: Check if BUYING or SELLING
+      else if (/car|vehicle|motorbike|motorcycle|truck|phone|laptop|jewelry|gold|van|bus|equipment/i.test(lowerText)) {
+        // If they "bought" it = INVESTMENT (asset purchase)
+        if (/bought|purchased|acquire|invest|capital/i.test(lowerText)) {
+          type = 'investment';
+          console.log('🚗 Detected vehicle/asset PURCHASE as investment:', amount);
+        }
+        // If they "sold" it = INCOME (asset sale)
+        else if (/sold|sell|dispose|liquidate/i.test(lowerText)) {
+          type = 'income';
+          console.log('🚗 Detected asset sale (income):', amount);
+        }
+        // Default: Large vehicle purchases are investments
+        else if (amount > 1000000) {
+          type = 'investment';
+          console.log('🚗 Large vehicle/asset purchase classified as investment:', amount);
+        }
+        else {
+          type = 'income'; // Smaller amounts might be sales
+        }
       }
       // 💼 Business context with substantial amounts = INCOME
       else if (amount > 100000 && /business|company|enterprise|client|customer|contract|project|service/i.test(lowerText)) {
@@ -2042,9 +2059,15 @@ const TransactionInput = ({
         console.log('🏦 Detected loan transaction:', amount);
       }
       // 🍽️ Personal/lifestyle keywords typically = EXPENSE
-      else if (/personal|bought|shopping|meal|transport|medical|education|groceries|clothes/i.test(lowerText)) {
+      // BUT: Check if it's a large purchase (likely asset) FIRST
+      else if (/personal|meal|transport|medical|education|groceries|clothes|lunch|dinner|breakfast|food|shopping/i.test(lowerText)) {
         type = 'expense';
         console.log('🛒 Detected personal expense:', amount);
+      }
+      // 🎯 Default: For large amounts (>1M) with "bought", classify as ASSET not expense
+      else if ((amount > 1000000 || /bought|purchased|acquired|invest/i.test(lowerText)) && !/spent|paid for|cost|bill/i.test(lowerText)) {
+        type = 'investment';
+        console.log('💰 Large purchase detected as investment:', amount);
       }
       // 🎯 Default to expense for unclear smaller amounts
       else {
@@ -8736,7 +8759,43 @@ Data Freshness: ${reportData.metadata.dataFreshness}
   };
 
   const handleAddTransaction = async (transaction) => {
-    // 🧠 RUN AI FINANCIAL INTELLIGENCE ANALYSIS FIRST
+    // � PROFESSIONAL ACCOUNTING ANALYSIS FIRST
+    // Determine if this is a business investment (asset) or personal expense
+    try {
+      const accountingAnalysis = await analyzeTransactionAsAccountant({
+        description: transaction.description,
+        text: transaction.description,
+        amount: transaction.amount,
+        userType: 'business_owner' // Adjust based on user profile
+      });
+
+      // Format transaction with accounting intelligence
+      const enrichedTransaction = formatTransactionForAccounting(transaction, accountingAnalysis);
+      const displayInfo = formatTransactionDisplay(transaction, accountingAnalysis);
+
+      console.log('💼 ACCOUNTING CLASSIFICATION:', {
+        classification: accountingAnalysis.classification,
+        type: accountingAnalysis.accountingType,
+        businessVsPersonal: accountingAnalysis.businessVsPersonal,
+        display: displayInfo,
+        reasoning: accountingAnalysis.reasoning
+      });
+
+      // Update transaction with accounting data
+      transaction = {
+        ...transaction,
+        accounting: enrichedTransaction.accounting,
+        displayAmount: displayInfo.displayAmount,
+        displayType: displayInfo.label,
+        icon: displayInfo.icon,
+        displayColor: displayInfo.color
+      };
+    } catch (error) {
+      console.warn('⚠️ Accounting analysis failed, using fallback:', error);
+      // Continue without accounting analysis if service fails
+    }
+
+    // �🧠 RUN AI FINANCIAL INTELLIGENCE ANALYSIS FIRST
     const intelligence = analyzeFinancialIntelligence();
     
     // 💼 ENHANCED LOAN TRANSACTION DETECTION & INTELLIGENT RECOMMENDATIONS
