@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ThumbsUp, MessageCircle, Share2, Clock, Users, FileText, Zap, AlertCircle, Building2, Loader, Plus, Trash2, Lock, Unlock, X, Send, Copy, Check, Play, Home, BookMarked, Heart } from 'lucide-react';
+import { ThumbsUp, MessageCircle, Share2, Clock, Users, FileText, Zap, AlertCircle, Building2, Loader, Plus, Trash2, Lock, Unlock, X, Send, Copy, Check, Play, Home, BookMarked, Heart, Briefcase } from 'lucide-react';
 import PitchVideoRecorder from './PitchVideoRecorder';
 import SmartContractGenerator from './SmartContractGenerator';
 import ShareSigningFlow from './ShareSigningFlow';
@@ -919,48 +919,103 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
           </div>
         ) : (
           <>
-            {/* Web Card Grid - SHAREHub Style */}
-            <div
-              ref={videoScrollRef}
-              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 w-full px-4 md:px-8 py-6 overflow-y-auto"
-            >
+            {/* Pitch Feed - Full-Screen TikTok-Style with Snap Scroll */}
+            <div className="h-full w-full overflow-y-auto snap-y snap-mandatory scroll-smooth" ref={videoScrollRef}>
               {loading ? (
-                // TikTok-style skeleton loading
-                <>
-                  {[...Array(4)].map((_, idx) => (
-                    <div
-                      key={`skeleton-${idx}`}
-                      className="group bg-slate-800 backdrop-blur border-0 md:border border-slate-700 rounded-none md:rounded-none overflow-hidden flex flex-col h-full w-full animate-pulse"
-                    >
-                      {/* Video Skeleton */}
-                      <div className="relative bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 aspect-video w-full flex-shrink-0 flex items-center justify-center">
-                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer"></div>
-                      </div>
-                      
-                      {/* Info Section Skeleton */}
-                      <div className="flex-1 p-4 space-y-3">
-                        {/* Title Skeleton */}
-                        <div className="space-y-2">
-                          <div className="h-4 bg-gradient-to-r from-slate-700 to-slate-800 rounded w-3/4"></div>
-                          <div className="h-3 bg-gradient-to-r from-slate-700 to-slate-800 rounded w-1/2"></div>
-                        </div>
-                        
-                        {/* Creator Name Skeleton */}
-                        <div className="h-3 bg-gradient-to-r from-slate-700 to-slate-800 rounded w-2/3"></div>
-                        
-                        {/* Funding Info Skeleton */}
-                        <div className="grid grid-cols-3 gap-2 pt-2">
-                          <div className="h-10 bg-gradient-to-r from-slate-700 to-slate-800 rounded"></div>
-                          <div className="h-10 bg-gradient-to-r from-slate-700 to-slate-800 rounded"></div>
-                          <div className="h-10 bg-gradient-to-r from-slate-700 to-slate-800 rounded"></div>
-                        </div>
-                        
-                        {/* Button Skeleton */}
-                        <div className="h-10 bg-gradient-to-r from-slate-700 to-slate-800 rounded mt-4"></div>
+                // Creative Full-Screen Loading Experience with Video Preview
+                <div className="fixed inset-0 z-50 bg-black flex items-center justify-center overflow-hidden">
+                  {/* Full-Screen Video Background */}
+                  <div className="absolute inset-0 w-full h-full">
+                    {/* Fallback animated gradient pattern - shows by default */}
+                    <div className="w-full h-full bg-gradient-to-br from-purple-900 via-black to-pink-900">
+                      <div className="absolute top-0 left-0 w-96 h-96 bg-purple-500/30 rounded-full blur-3xl animate-blob"></div>
+                      <div className="absolute top-0 right-0 w-96 h-96 bg-pink-500/30 rounded-full blur-3xl animate-blob animation-delay-2000"></div>
+                      <div className="absolute bottom-0 left-1/2 w-96 h-96 bg-orange-500/30 rounded-full blur-3xl animate-blob animation-delay-4000"></div>
+                    </div>
+                    {/* Dark overlay for better text visibility */}
+                    <div className="absolute inset-0 bg-black/40"></div>
+                  </div>
+
+                  {/* Floating Transparent Icons */}
+                  <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                    {/* Icon 1 - Briefcase */}
+                    <div className="absolute top-20 left-10 animate-float" style={{ animationDelay: '0s' }}>
+                      <Briefcase className="w-16 h-16 text-white/20 drop-shadow-lg" />
+                    </div>
+                    {/* Icon 2 - Users */}
+                    <div className="absolute top-40 right-20 animate-float" style={{ animationDelay: '0.5s' }}>
+                      <Users className="w-20 h-20 text-white/20 drop-shadow-lg" />
+                    </div>
+                    {/* Icon 3 - Zap */}
+                    <div className="absolute bottom-32 left-20 animate-float" style={{ animationDelay: '1s' }}>
+                      <Zap className="w-14 h-14 text-white/20 drop-shadow-lg" />
+                    </div>
+                    {/* Icon 4 - Share */}
+                    <div className="absolute bottom-20 right-32 animate-float" style={{ animationDelay: '1.5s' }}>
+                      <Share2 className="w-12 h-12 text-white/20 drop-shadow-lg" />
+                    </div>
+                    {/* Icon 5 - Heart */}
+                    <div className="absolute top-1/3 left-1/4 animate-float" style={{ animationDelay: '2s' }}>
+                      <Heart className="w-18 h-18 text-white/20 drop-shadow-lg" />
+                    </div>
+                    {/* Icon 6 - Play */}
+                    <div className="absolute top-1/2 right-1/4 animate-float" style={{ animationDelay: '2.5s' }}>
+                      <Play className="w-16 h-16 text-white/20 drop-shadow-lg" />
+                    </div>
+                  </div>
+
+                  {/* Center Content */}
+                  <div className="relative z-10 text-center space-y-6 px-4">
+                    {/* Logo with Glow */}
+                    <div className="flex justify-center mb-6">
+                      <div className="relative">
+                        <Briefcase className="w-24 h-24 text-white animate-pulse-slow drop-shadow-2xl" />
+                        <div className="absolute inset-0 bg-purple-500/50 blur-3xl animate-pulse"></div>
                       </div>
                     </div>
-                  ))}
-                </>
+
+                    {/* Pitchin Text */}
+                    <h1 className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-orange-400 animate-gradient-x">
+                      Pitchin
+                    </h1>
+                    
+                    {/* Tagline */}
+                    <p className="text-xl text-gray-300 font-light tracking-wide animate-fade-in">
+                      Where Ideas Meet Investment
+                    </p>
+
+                    {/* Loading Animation */}
+                    <div className="flex items-center justify-center gap-2 pt-4">
+                      <div className="w-3 h-3 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
+                      <div className="w-3 h-3 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                      <div className="w-3 h-3 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                    </div>
+
+                    {/* Loading Text */}
+                    <p className="text-sm text-gray-400 animate-pulse">
+                      Loading amazing pitches...
+                    </p>
+
+                    {/* Floating Stats */}
+                    <div className="grid grid-cols-3 gap-4 mt-8 max-w-md mx-auto">
+                      <div className="bg-white/5 backdrop-blur-sm rounded-lg p-3 border border-white/10 animate-fade-in" style={{ animationDelay: '0.3s' }}>
+                        <div className="text-2xl font-bold text-purple-400">100+</div>
+                        <div className="text-xs text-gray-400">Pitches</div>
+                      </div>
+                      <div className="bg-white/5 backdrop-blur-sm rounded-lg p-3 border border-white/10 animate-fade-in" style={{ animationDelay: '0.6s' }}>
+                        <div className="text-2xl font-bold text-pink-400">50+</div>
+                        <div className="text-xs text-gray-400">Investors</div>
+                      </div>
+                      <div className="bg-white/5 backdrop-blur-sm rounded-lg p-3 border border-white/10 animate-fade-in" style={{ animationDelay: '0.9s' }}>
+                        <div className="text-2xl font-bold text-orange-400">$1M+</div>
+                        <div className="text-xs text-gray-400">Funded</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bottom Wave Effect */}
+                  <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black to-transparent"></div>
+                </div>
               ) : filteredPitches.length === 0 ? (
                 <div className="col-span-full text-center py-12">
                   <Zap className="w-12 h-12 text-slate-500 mx-auto mb-4" />
@@ -970,116 +1025,130 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                 filteredPitches.map((pitch) => (
                   <div
                     key={pitch.id}
-                    className="bg-slate-800/60 backdrop-blur border border-slate-700 hover:border-pink-500/50 rounded-xl overflow-hidden hover:shadow-2xl hover:shadow-purple-500/30 transition-all cursor-pointer group sm:rounded-lg"
+                    className="relative w-full h-screen snap-start bg-black overflow-hidden"
                   >
-                    {/* Thumbnail - Improved Mobile */}
-                    <div className="relative w-full aspect-video bg-gradient-to-br from-purple-600 to-pink-600 overflow-hidden flex items-center justify-center bg-black">
+                    {/* Full-Screen Video Background */}
+                    <div className="absolute inset-0 w-full h-full bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center">
                       {!pitch.video_url || videoErrors[pitch.id] ? (
                         <div className="w-full h-full flex items-center justify-center">
-                          <AlertCircle className="w-8 h-8 text-slate-500" />
+                          <AlertCircle className="w-12 h-12 text-slate-500" />
                         </div>
                       ) : (
                         <>
                           <video
                             src={pitch.video_url}
-                            className="w-full h-full object-cover opacity-60 sm:opacity-50 group-hover:opacity-70 transition"
+                            className="w-full h-full object-cover"
                             crossOrigin="anonymous"
                             onError={(event) => handleVideoError(pitch.id, event)}
                             onLoadedMetadata={(event) => handleVideoLoadedMetadata(pitch.id, event)}
                           />
                           <button
                             onClick={() => setVideoPlayerPitch(pitch)}
-                            className="absolute inset-0 flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition hover:scale-110"
+                            className="absolute inset-0 flex items-center justify-center"
                           >
-                            <Play className="w-12 h-12 text-white fill-white drop-shadow-lg sm:w-16 sm:h-16" />
+                            <div className="w-20 h-20 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-110 transition-transform">
+                              <Play className="w-10 h-10 text-white fill-white ml-1" />
+                            </div>
                           </button>
                         </>
                       )}
-                      {pitch.has_ip && (
-                        <div className="absolute top-2 right-2 bg-blue-500/30 text-blue-300 px-2 py-1 rounded text-xs font-semibold">
-                          IP ✓
-                        </div>
-                      )}
                     </div>
 
-                    {/* Content */}
-                    <div className="p-4">
-                      {/* Title - HIDDEN ON MOBILE */}
-                      <h3 className="hidden sm:block text-base font-bold text-white mb-1 line-clamp-2 group-hover:text-pink-400 transition">
+                    {/* Right Side Action Buttons - TikTok Style */}
+                    <div className="absolute right-3 bottom-24 flex flex-col gap-4 z-10">
+                      {/* Like Button */}
+                      <button
+                        onClick={() => handleLike(pitch.id)}
+                        className="flex flex-col items-center gap-1"
+                        title="Like"
+                      >
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-md transition-all ${
+                          likedPitches.has(pitch.id)
+                            ? 'bg-red-500/80 scale-110'
+                            : 'bg-black/40 hover:bg-black/60'
+                        }`}>
+                          <Heart className={`w-6 h-6 ${likedPitches.has(pitch.id) ? 'text-white fill-white' : 'text-white'}`} />
+                        </div>
+                        <span className="text-white text-xs font-semibold drop-shadow-lg">{pitch.likes_count || 0}</span>
+                      </button>
+
+                      {/* Comment Button */}
+                      <button
+                        onClick={() => handleOpenComments(pitch.id)}
+                        className="flex flex-col items-center gap-1"
+                        title="Comment"
+                      >
+                        <div className="w-12 h-12 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center hover:bg-black/60 transition-all">
+                          <MessageCircle className="w-6 h-6 text-white" />
+                        </div>
+                        <span className="text-white text-xs font-semibold drop-shadow-lg">{pitch.comments_count || 0}</span>
+                      </button>
+
+                      {/* Share Button */}
+                      <button
+                        onClick={() => handleShare(pitch.id)}
+                        className="flex flex-col items-center gap-1"
+                        title="Share"
+                      >
+                        <div className="w-12 h-12 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center hover:bg-black/60 transition-all">
+                          <Share2 className="w-6 h-6 text-white" />
+                        </div>
+                        <span className="text-white text-xs font-semibold drop-shadow-lg">{pitch.shares_count || 1}</span>
+                      </button>
+
+                      {/* Invest Button - Highlighted */}
+                      <button
+                        onClick={() => handleSmartContractClick(pitch)}
+                        className="flex flex-col items-center gap-1"
+                        title="Invest"
+                      >
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center animate-pulse-slow shadow-lg shadow-yellow-500/50 hover:scale-110 transition-transform">
+                          <Zap className="w-6 h-6 text-white fill-white" />
+                        </div>
+                        <span className="text-yellow-300 text-xs font-bold drop-shadow-lg">Invest</span>
+                      </button>
+                    </div>
+
+                    {/* Bottom Info Section */}
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent px-4 pb-20 pt-8">
+                      {/* Creator Info */}
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                          <Building2 className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <p className="text-white font-semibold text-sm drop-shadow-lg">
+                            {pitch.business_profiles?.business_name || 'Business'}
+                          </p>
+                          <p className="text-gray-300 text-xs">{formatDate(pitch.created_at)}</p>
+                        </div>
+                      </div>
+
+                      {/* Title */}
+                      <h3 className="text-white font-bold text-lg mb-2 drop-shadow-lg line-clamp-2">
                         {pitch.title}
                       </h3>
-                      
-                      {/* Company - HIDDEN ON MOBILE */}
-                      <p className="hidden sm:block text-sm text-gray-400 mb-3">
-                        {pitch.business_profiles?.business_name || 'Unknown'}
-                      </p>
 
-                      {/* Description - HIDDEN ON MOBILE */}
-                      <p className="hidden sm:block text-xs text-slate-400 mb-3 line-clamp-2">
+                      {/* Description */}
+                      <p className="text-gray-200 text-sm mb-3 line-clamp-2 drop-shadow-lg">
                         {pitch.description}
                       </p>
 
-                      {/* Funding Info - COMMENTED OUT */}
-                      {/* <div className="grid grid-cols-3 gap-2 bg-slate-700/40 p-2 rounded-lg mb-3 text-center text-xs">
+                      {/* Funding Info - Compact */}
+                      <div className="flex gap-4 text-xs">
                         <div>
-                          <p className="text-slate-500">RAISED</p>
-                          <p className="text-white font-bold">{formatCurrency(pitch.raised_amount)}</p>
+                          <span className="text-gray-400">Target: </span>
+                          <span className="text-white font-bold">{formatCurrency(pitch.target_funding)}</span>
                         </div>
                         <div>
-                          <p className="text-slate-500">GOAL</p>
-                          <p className="text-white font-bold">{formatCurrency(pitch.target_funding)}</p>
+                          <span className="text-gray-400">Equity: </span>
+                          <span className="text-purple-300 font-bold">{pitch.equity_offering || 0}%</span>
                         </div>
-                        <div>
-                          <p className="text-slate-500">EQUITY</p>
-                          <p className="text-white font-bold">{pitch.equity_offering || 0}%</p>
-                        </div>
-                      </div> */}
-
-                      {/* Action Buttons with Icons */}
-                      <div className="flex gap-2">
-                        {/* Like Button */}
-                        <button
-                          onClick={() => handleLike(pitch.id)}
-                          className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-medium transition ${
-                            likedPitches.has(pitch.id)
-                              ? 'bg-red-500/40 hover:bg-red-500/50 text-red-300'
-                              : 'bg-slate-700/50 hover:bg-red-500/30 text-slate-300'
-                          }`}
-                          title="Like"
-                        >
-                          <Heart className="w-4 h-4" />
-                          <span>{pitch.likes_count || 0}</span>
-                        </button>
-
-                        {/* Comment Button */}
-                        <button
-                          onClick={() => handleOpenComments(pitch.id)}
-                          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 bg-slate-700/50 hover:bg-blue-500/30 text-slate-300 rounded-lg text-xs font-medium transition"
-                          title="Comment"
-                        >
-                          <MessageCircle className="w-4 h-4" />
-                          <span>{pitch.comments_count || 0}</span>
-                        </button>
-
-                        {/* Share Button */}
-                        <button
-                          onClick={() => handleShare(pitch.id)}
-                          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 bg-slate-700/50 hover:bg-green-500/30 text-slate-300 rounded-lg text-xs font-medium transition"
-                          title="Share"
-                        >
-                          <Share2 className="w-4 h-4" />
-                          <span>{pitch.shares_count || 0}</span>
-                        </button>
-
-                        {/* Invest Button */}
-                        <button
-                          onClick={() => handleSmartContractClick(pitch)}
-                          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 bg-gradient-to-r from-yellow-500/40 to-orange-500/40 hover:from-yellow-500/50 hover:to-orange-500/50 text-yellow-300 rounded-lg text-xs font-medium transition"
-                          title="Invest"
-                        >
-                          <Zap className="w-4 h-4" />
-                          <span>Invest</span>
-                        </button>
+                        {pitch.has_ip && (
+                          <div className="bg-blue-500/30 backdrop-blur-sm text-blue-300 px-2 py-0.5 rounded-full text-xs font-semibold border border-blue-400/30">
+                            IP ✓
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
