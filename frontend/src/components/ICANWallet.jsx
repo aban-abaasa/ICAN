@@ -2741,34 +2741,34 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
           </div>
 
           {/* Action Buttons */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-4 gap-2 sm:gap-3">
             <button 
               onClick={() => setActiveModal('send')}
-              className="bg-gradient-to-br from-blue-500/30 to-blue-600/30 border border-blue-400/50 hover:border-blue-400/80 rounded-lg py-3 px-4 flex flex-col items-center gap-2 transition-all"
+              className="bg-gradient-to-br from-blue-500/30 to-blue-600/30 border border-blue-400/50 hover:border-blue-400/80 rounded-lg py-2 sm:py-3 px-2 sm:px-4 flex flex-col items-center gap-1 sm:gap-2 transition-all"
             >
-              <Send className="w-5 h-5 text-blue-400" />
-              <span className="text-sm font-medium text-white">Send</span>
+              <Send className="w-4 sm:w-5 h-4 sm:h-5 text-blue-400" />
+              <span className="text-xs sm:text-sm font-medium text-white">Send</span>
             </button>
             <button 
               onClick={() => setActiveModal('receive')}
-              className="bg-gradient-to-br from-cyan-500/30 to-cyan-600/30 border border-cyan-400/50 hover:border-cyan-400/80 rounded-lg py-3 px-4 flex flex-col items-center gap-2 transition-all"
+              className="bg-gradient-to-br from-cyan-500/30 to-cyan-600/30 border border-cyan-400/50 hover:border-cyan-400/80 rounded-lg py-2 sm:py-3 px-2 sm:px-4 flex flex-col items-center gap-1 sm:gap-2 transition-all"
             >
-              <ArrowDownLeft className="w-5 h-5 text-cyan-400" />
-              <span className="text-sm font-medium text-white">Receive</span>
+              <ArrowDownLeft className="w-4 sm:w-5 h-4 sm:h-5 text-cyan-400" />
+              <span className="text-xs sm:text-sm font-medium text-white">Receive</span>
             </button>
             <button 
               onClick={() => setActiveModal('topup')}
-              className="bg-gradient-to-br from-green-500/30 to-green-600/30 border border-green-400/50 hover:border-green-400/80 rounded-lg py-3 px-4 flex flex-col items-center gap-2 transition-all"
+              className="bg-gradient-to-br from-green-500/30 to-green-600/30 border border-green-400/50 hover:border-green-400/80 rounded-lg py-2 sm:py-3 px-2 sm:px-4 flex flex-col items-center gap-1 sm:gap-2 transition-all"
             >
-              <Plus className="w-5 h-5 text-green-400" />
-              <span className="text-sm font-medium text-white">Top Up</span>
+              <Plus className="w-4 sm:w-5 h-4 sm:h-5 text-green-400" />
+              <span className="text-xs sm:text-sm font-medium text-white">Top Up</span>
             </button>
             <button 
               onClick={() => setShowTradeModal(true)}
-              className="bg-gradient-to-br from-orange-500/30 to-red-600/30 border border-orange-400/50 hover:border-orange-400/80 rounded-lg py-3 px-4 flex flex-col items-center gap-2 transition-all"
+              className="bg-gradient-to-br from-orange-500/30 to-red-600/30 border border-orange-400/50 hover:border-orange-400/80 rounded-lg py-2 sm:py-3 px-2 sm:px-4 flex flex-col items-center gap-1 sm:gap-2 transition-all"
             >
-              <TrendingUp className="w-5 h-5 text-orange-400" />
-              <span className="text-sm font-medium text-white">Trade</span>
+              <TrendingUp className="w-4 sm:w-5 h-4 sm:h-5 text-orange-400" />
+              <span className="text-xs sm:text-sm font-medium text-white">Trade</span>
             </button>
           </div>
         </div>
