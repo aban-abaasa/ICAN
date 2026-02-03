@@ -39,7 +39,10 @@ import {
   Activity,
   Upload,
   Search,
-  Play
+  Play,
+  Bell,
+  Check,
+  CheckCheck
 } from 'lucide-react';
 import SmartTransactionEntry from './SmartTransactionEntry';
 import { ProfilePage } from './auth/ProfilePage';
@@ -51,6 +54,16 @@ import { VelocityEngine } from '../utils/velocityEngine';
 import { supabase } from '../lib/supabase/client';
 import { walletAccountService } from '../services/walletAccountService';
 import { walletService } from '../services/walletService';
+import {
+  getUserNotifications,
+  getUnreadNotificationCount,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+  subscribeToUserNotifications,
+  getNotificationIcon,
+  getNotificationColor,
+  formatTimeAgo
+} from '../services/investmentNotificationsService';
 
 // Recent Transactions Collapsible Component
 const RecentTransactionsCollapsible = ({ transactions, formatCurrency }) => {
@@ -331,6 +344,11 @@ const MobileView = ({ userProfile }) => {
   const [showTrustPanel, setShowTrustPanel] = useState(false);
   const [showCmmsPanel, setShowCmmsPanel] = useState(false);
   
+  // Notifications State
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
+  
   // Account Edit State
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileFormData, setProfileFormData] = useState({
@@ -550,6 +568,54 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       setAiMessages([welcomeMessage]);
     }
   }, [showAIChat]);
+
+  // Load notifications when notifications detail opens
+  useEffect(() => {
+    const loadNotifications = async () => {
+      if (selectedDetail?.tab === 'security' && selectedDetail?.item === 'Notifications' && userProfile?.id) {
+        setLoadingNotifications(true);
+        try {
+          const { data } = await getUserNotifications(userProfile.id, { limit: 50 });
+          setNotifications(data || []);
+
+          const { count } = await getUnreadNotificationCount(userProfile.id);
+          setUnreadCount(count || 0);
+        } catch (error) {
+          console.error('Error loading notifications:', error);
+        } finally {
+          setLoadingNotifications(false);
+        }
+      }
+    };
+
+    loadNotifications();
+  }, [selectedDetail, userProfile?.id]);
+
+  // Real-time notifications subscription
+  useEffect(() => {
+    if (!userProfile?.id) return;
+
+    const unsubscribe = subscribeToUserNotifications(userProfile.id, (newNotification) => {
+      // Add new notification to top of list
+      setNotifications(prev => [newNotification, ...prev]);
+      setUnreadCount(prev => prev + 1);
+
+      // Show browser notification if permitted
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification(newNotification.title, {
+          body: newNotification.message,
+          icon: '/ican-logo.png',
+          badge: '/ican-logo.png',
+          tag: `notification-${newNotification.id}`,
+          requireInteraction: newNotification.priority === 'urgent'
+        });
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [userProfile?.id]);
 
   // Load VelocityEngine data on component mount
   useEffect(() => {
@@ -1133,18 +1199,18 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     security: {
       label: 'Security',
       icon: Shield,
-      items: ['Account', 'Privacy', 'Verification']
-    },
-    readiness: {
-      label: 'Readiness',
-      icon: CheckCircle,
-      items: ['KYC Status', 'Documents', 'Compliance']
-    },
-    growth: {
-      label: 'Growth',
-      icon: TrendingUp,
-      items: ['Investments', 'Analytics', 'Opportunities']
+      items: ['Notifications', 'Account', 'Privacy', 'Verification']
     }
+    // readiness: {
+    //   label: 'Readiness',
+    //   icon: CheckCircle,
+    //   items: ['KYC Status', 'Documents', 'Compliance']
+    // },
+    // growth: {
+    //   label: 'Growth',
+    //   icon: TrendingUp,
+    //   items: ['Investments', 'Analytics', 'Opportunities']
+    // }
   };
 
   const actionChips = [
@@ -1284,7 +1350,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 <div className="absolute right-0 top-full mt-2 bg-slate-900 border border-purple-500/30 rounded-lg shadow-2xl z-50 w-64 sm:w-72 overflow-hidden">
                   {/* Tab Navigation */}
                   <div className="flex border-b border-purple-500/20">
-                    {Object.entries(menuOptions).map(([key, option]) => {
+                    {Object.entries(menuOptions).filter(([key]) => menuOptions[key]).map(([key, option]) => {
                       const IconComponent = option.icon;
                       return (
                         <button
@@ -1305,7 +1371,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
                   {/* Menu Items - Collapsed, Click to View Full Page */}
                   <div className="p-2">
-                    {menuOptions[activeMenuTab].items.map((item, idx) => (
+                    {menuOptions[activeMenuTab]?.items.map((item, idx) => (
                       <button
                         key={idx}
                         onClick={() => {
@@ -1314,7 +1380,14 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         }}
                         className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-purple-500/20 hover:text-purple-300 rounded transition flex items-center justify-between"
                       >
-                        <span>🔒 {item}</span>
+                        <span className="flex items-center gap-2">
+                          {item === 'Notifications' ? '🔔' : '🔒'} {item}
+                          {item === 'Notifications' && unreadCount > 0 && (
+                            <span className="px-1.5 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] text-center">
+                              {unreadCount > 99 ? '99+' : unreadCount}
+                            </span>
+                          )}
+                        </span>
                         <span className="text-xs">→</span>
                       </button>
                     ))}
@@ -1342,6 +1415,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 {selectedDetail.tab === 'security' && selectedDetail.item === 'Account' && (
                   <p className="text-xs text-gray-400 mt-1">Treasury Guardian • Account security & privacy controls</p>
                 )}
+                {selectedDetail.tab === 'security' && selectedDetail.item === 'Notifications' && (
+                  <p className="text-xs text-gray-400 mt-1">Investment agreements, signatures & updates</p>
+                )}
               </div>
               <button
                 onClick={() => setSelectedDetail(null)}
@@ -1350,6 +1426,151 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 ✕
               </button>
             </div>
+
+            {/* SECURITY - NOTIFICATIONS */}
+            {selectedDetail.tab === 'security' && selectedDetail.item === 'Notifications' && (
+              <div className="space-y-4">
+                {/* Header Actions */}
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Bell className="w-5 h-5 text-purple-400" />
+                    <span className="text-white font-semibold">All Notifications</span>
+                    {unreadCount > 0 && (
+                      <span className="px-2 py-0.5 bg-red-500/20 text-red-300 text-xs rounded-full border border-red-500/30">
+                        {unreadCount} new
+                      </span>
+                    )}
+                  </div>
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={async () => {
+                        const result = await markAllNotificationsAsRead(userProfile?.id);
+                        if (result.success) {
+                          setUnreadCount(0);
+                          setNotifications(prev =>
+                            prev.map(n => ({
+                              ...n,
+                              is_read: true,
+                              read_at: new Date().toISOString()
+                            }))
+                          );
+                        }
+                      }}
+                      className="text-purple-400 hover:text-purple-300 text-xs flex items-center gap-1 transition-colors"
+                    >
+                      <CheckCheck className="w-3.5 h-3.5" />
+                      <span>Mark all read</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Notifications List */}
+                {loadingNotifications ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="w-8 h-8 border-3 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : notifications.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                    <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-3">
+                      <Bell className="w-8 h-8 text-white/30" />
+                    </div>
+                    <p className="text-white/50 text-sm">No notifications yet</p>
+                    <p className="text-white/30 text-xs mt-1">
+                      You'll see investment updates here
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {notifications.map((notification) => (
+                      <div
+                        key={notification.id}
+                        onClick={async () => {
+                          // Mark as read
+                          if (!notification.is_read) {
+                            await markNotificationAsRead(notification.id);
+                            setUnreadCount(prev => Math.max(0, prev - 1));
+                            setNotifications(prev =>
+                              prev.map(n =>
+                                n.id === notification.id
+                                  ? { ...n, is_read: true, read_at: new Date().toISOString() }
+                                  : n
+                              )
+                            );
+                          }
+                          // Navigate if has action
+                          if (notification.action_url) {
+                            // Handle navigation
+                            console.log('Navigate to:', notification.action_url);
+                          }
+                        }}
+                        className={`
+                          bg-slate-900/50 border rounded-lg p-4 cursor-pointer transition-all duration-200
+                          hover:bg-slate-800/50 hover:border-purple-500/50
+                          ${!notification.is_read 
+                            ? 'border-purple-500/30 bg-purple-500/5' 
+                            : 'border-slate-700/50'}
+                        `}
+                      >
+                        <div className="flex items-start gap-3">
+                          {/* Icon */}
+                          <div
+                            className={`
+                              flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center
+                              ${getNotificationColor(notification.priority)}
+                              border
+                            `}
+                          >
+                            <span className="text-lg">
+                              {getNotificationIcon(notification.notification_type)}
+                            </span>
+                          </div>
+
+                          {/* Content */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <h4 className={`
+                                text-sm font-medium
+                                ${!notification.is_read ? 'text-white' : 'text-white/70'}
+                              `}>
+                                {notification.title}
+                              </h4>
+                              {!notification.is_read && (
+                                <div className="flex-shrink-0 w-2 h-2 bg-blue-500 rounded-full mt-1" />
+                              )}
+                            </div>
+
+                            <p className="text-white/50 text-xs mt-1">
+                              {notification.message}
+                            </p>
+
+                            <div className="flex items-center justify-between mt-2">
+                              <span className="text-white/30 text-[10px]">
+                                {formatTimeAgo(notification.created_at)}
+                              </span>
+
+                              {notification.action_label && (
+                                <span className="text-purple-400 text-[10px] font-medium">
+                                  {notification.action_label} →
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Priority Badge */}
+                            {notification.priority === 'urgent' && (
+                              <div className="mt-2 inline-flex items-center gap-1 px-2 py-0.5 bg-red-500/20 border border-red-500/30 rounded-full">
+                                <span className="text-red-400 text-[10px] font-semibold">
+                                  URGENT
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Treasury Guardian Tabs */}
             {selectedDetail.tab === 'security' && selectedDetail.item === 'Account' && (
