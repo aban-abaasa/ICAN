@@ -1340,15 +1340,16 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                           <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
                             investedPitches.has(pitch.id)
                               ? 'bg-green-500/80 scale-110'
-                              : 'bg-gradient-to-br from-yellow-500/80 to-orange-500/80'
+                              : 'bg-white/10 hover:bg-white/20 backdrop-blur-sm'
                           }`}>
-                            <Zap className="w-4 h-4 text-white fill-white drop-shadow-lg" />
+                            <Briefcase className="w-4 h-4 text-white drop-shadow-lg" />
                           </div>
                           <span className={`text-[9px] font-bold drop-shadow-lg ${
-                            investedPitches.has(pitch.id) ? 'text-green-300' : 'text-yellow-300'
+                            investedPitches.has(pitch.id) ? 'text-green-300' : 'text-white'
                           }`}>
-                            {investedPitches.has(pitch.id) ? '✓' : 'Invest'}
+                            {pitch.invests_count || 0}
                           </span>
+                          <span className="text-white text-[7px] font-medium drop-shadow-lg">Invest</span>
                         </button>
 
                         {/* Create Button */}
@@ -1407,13 +1408,14 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                         {/* Invest */}
                         <button onClick={() => handleSmartContractClick(pitch)} className="flex flex-col items-center" title="Invest">
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                            investedPitches.has(pitch.id) ? 'bg-green-500/80' : 'bg-gradient-to-br from-yellow-500 to-orange-500'
+                            investedPitches.has(pitch.id) ? 'bg-green-500/80' : 'bg-white/10 hover:bg-white/20'
                           }`}>
-                            <Zap className="w-4 h-4 text-white fill-white" />
+                            <Briefcase className="w-4 h-4 text-white" />
                           </div>
-                          <span className={`text-[8px] font-bold ${investedPitches.has(pitch.id) ? 'text-green-300' : 'text-yellow-300'}`}>
-                            {investedPitches.has(pitch.id) ? '✓' : 'Invest'}
+                          <span className={`text-[8px] font-bold ${investedPitches.has(pitch.id) ? 'text-green-300' : 'text-white'}`}>
+                            {pitch.invests_count || 0}
                           </span>
+                          <span className="text-white text-[6px] font-medium">Invest</span>
                         </button>
 
                         {/* Create */}
@@ -1550,15 +1552,16 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                   <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
                     investedPitches.has((currentVisiblePitch || filteredPitches[0]).id)
                       ? 'bg-green-500 scale-110'
-                      : 'bg-gradient-to-br from-yellow-500 to-orange-500 group-hover:scale-105'
+                      : 'bg-white/10 hover:bg-white/20 group-hover:scale-105'
                   }`}>
-                    <Zap className="w-5 h-5 text-white fill-white" />
+                    <Briefcase className="w-5 h-5 text-white" />
                   </div>
                   <span className={`text-xs font-semibold ${
-                    investedPitches.has((currentVisiblePitch || filteredPitches[0]).id) ? 'text-green-300' : 'text-yellow-300'
+                    investedPitches.has((currentVisiblePitch || filteredPitches[0]).id) ? 'text-green-300' : 'text-white'
                   }`}>
-                    {investedPitches.has((currentVisiblePitch || filteredPitches[0]).id) ? '✓' : 'Invest'}
+                    {(currentVisiblePitch || filteredPitches[0]).invests_count || 0}
                   </span>
+                  <span className="text-white text-[10px] font-medium">Invest</span>
                 </button>
               </div>
 

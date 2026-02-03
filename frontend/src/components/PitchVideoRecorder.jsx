@@ -83,9 +83,8 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
       
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-          facingMode: facingMode
+          facingMode: facingMode,
+          aspectRatio: { ideal: 9/16 }
         },
         audio: true
       });
@@ -101,10 +100,11 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
         const ctx = canvas.getContext('2d');
         console.log('Canvas context obtained:', ctx);
         
-        // Set canvas dimensions to match video
-        canvas.width = 1280;
-        canvas.height = 720;
-        console.log('Canvas dimensions set to:', canvas.width, 'x', canvas.height);
+        // Set canvas dimensions to match actual video track settings
+        // This will be updated once we get the actual video dimensions
+        canvas.width = 1080;
+        canvas.height = 1920;
+        console.log('Canvas dimensions set to:', canvas.width, 'x', canvas.height, '(9:16 portrait)');
         
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
@@ -115,10 +115,23 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            // Try to draw video frame - drawImage handles not-ready videos gracefully
+            // Draw video maintaining aspect ratio (contain fit)
             try {
-              if (videoRef.current) {
-                ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+              if (videoRef.current && videoRef.current.readyState >= 2) {
+                const videoWidth = videoRef.current.videoWidth;
+                const videoHeight = videoRef.current.videoHeight;
+                
+                if (videoWidth && videoHeight) {
+                  // Update canvas to match video dimensions for 1:1 quality
+                  if (canvas.width !== videoWidth || canvas.height !== videoHeight) {
+                    canvas.width = videoWidth;
+                    canvas.height = videoHeight;
+                    console.log('Canvas resized to video dimensions:', videoWidth, 'x', videoHeight);
+                  }
+                  
+                  // Draw video at full size without distortion
+                  ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+                }
               }
             } catch (e) {
               // Silently handle drawImage errors when video isn't ready
@@ -670,8 +683,8 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
 
       <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 rounded-none p-0 border-0 h-full flex flex-col overflow-hidden flex-1 space-y-4">
 
-        {/* Video Container - Full screen on mobile */}
-        <div ref={fullscreenRef} className="flex-1 md:flex-shrink-0 md:mx-8 md:mb-8 relative w-full h-screen md:h-auto bg-black md:rounded-2xl md:border-2 md:border-purple-500/30 md:shadow-2xl md:shadow-purple-500/20 overflow-hidden">
+        {/* Video Container - Full screen on mobile, standard aspect ratio on desktop */}
+        <div ref={fullscreenRef} className="flex-1 md:flex-shrink-0 md:mx-8 md:mb-8 relative w-full h-screen md:h-auto bg-black md:rounded-2xl md:border-2 md:border-purple-500/30 md:shadow-2xl md:shadow-purple-500/20 overflow-hidden md:max-w-[540px] md:aspect-[9/16] md:mx-auto">
           
           {/* Workflow Status Indicator */}
           {workflowStatus && (
@@ -690,7 +703,7 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
             alignItems: 'center',
             justifyContent: 'center',
             overflow: 'hidden'
-          }} className="md:aspect-video">
+          }}>
             {!previewUrl ? (
               <>
                 {/* Hidden video element for stream capture */}
@@ -706,7 +719,6 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                 {/* Canvas for displaying video stream */}
                 <canvas
                   ref={canvasRef}
-                  className="md:object-contain"
                   style={{
                     position: 'absolute',
                     top: 0,
@@ -715,7 +727,7 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                     height: '100%',
                     display: 'block',
                     backgroundColor: '#000',
-                    objectFit: 'cover'
+                    objectFit: 'contain'
                   }}
                 />
 
