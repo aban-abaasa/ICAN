@@ -1264,25 +1264,21 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
 
                     {/* Overlay Container - All UI on top of video */}
                     <div className="absolute inset-0 z-20 pointer-events-none">
-                      {/* Tap to toggle sound - center */}
+                      {/* Tap to toggle sound - center - Transparent */}
                       <button
                         onClick={() => toggleVideoSound(pitch.id)}
                         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-auto"
                       >
-                        <div className={`px-4 py-2 rounded-full backdrop-blur-sm flex items-center gap-2 transition-all ${
-                          mutedVideos.has(pitch.id) 
-                            ? 'bg-green-500/60' 
-                            : 'bg-white/20 hover:bg-white/30'
-                        }`}>
+                        <div className="px-4 py-2 rounded-full bg-transparent flex items-center gap-2 transition-all">
                           {mutedVideos.has(pitch.id) ? (
                             <>
-                              <span className="text-base">🔊</span>
-                              <span className="text-white text-xs font-medium">Sound ON</span>
+                              <span className="text-2xl drop-shadow-lg">🔊</span>
+                              <span className="text-white text-sm font-semibold drop-shadow-lg">Sound ON</span>
                             </>
                           ) : (
                             <>
-                              <span className="text-base">🔇</span>
-                              <span className="text-white text-xs font-medium">Tap for sound</span>
+                              <span className="text-2xl drop-shadow-lg">🔇</span>
+                              <span className="text-white text-sm font-semibold drop-shadow-lg">Tap for sound</span>
                             </>
                           )}
                         </div>
