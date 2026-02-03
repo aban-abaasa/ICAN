@@ -745,17 +745,17 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
               </>
             )}
 
-            {/* Top Controls Row - Clean & Creative */}
-            <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-40">
-              {/* Left Side - Back Button + Recording/Upload Controls */}
-              <div className="flex gap-2 items-center">
+            {/* Top Controls Row - Clean & Creative - Responsive for Portrait/Landscape */}
+            <div className="absolute portrait:top-4 landscape:top-2 portrait:left-4 landscape:left-2 portrait:right-4 landscape:right-2 flex items-center justify-between z-40">
+              {/* Left Side - Back Button + Recording/Upload Controls - Responsive */}
+              <div className="flex portrait:flex-col landscape:flex-row gap-2 items-center">
                 {/* Back to Pitches Button */}
                 {onClose && (
                   <button
                     onClick={onClose}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-black/60 backdrop-blur-md border-2 border-white/30 hover:scale-105 text-white text-sm font-medium transition-all shadow-xl"
+                    className="flex items-center gap-1.5 portrait:px-2 portrait:py-1.5 landscape:px-3 landscape:py-2 rounded-full bg-black/60 backdrop-blur-md border-2 border-white/30 hover:scale-105 active:scale-95 text-white portrait:text-xs landscape:text-sm font-medium transition-all shadow-xl"
                   >
-                    <ArrowLeft className="w-4 h-4" />
+                    <ArrowLeft className="portrait:w-3 portrait:h-3 landscape:w-4 landscape:h-4" />
                     <span className="hidden sm:inline">Back</span>
                   </button>
                 )}
@@ -766,9 +766,9 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                     <button
                       onClick={startRecording}
                       disabled={isRecording}
-                      className="w-14 h-14 rounded-full bg-gradient-to-br from-red-500/90 to-pink-500/90 backdrop-blur-md border-2 border-white/30 hover:scale-110 disabled:opacity-50 text-white flex items-center justify-center transition-all shadow-xl"
+                      className="portrait:w-12 portrait:h-12 landscape:w-14 landscape:h-14 rounded-full bg-gradient-to-br from-red-500/90 to-pink-500/90 backdrop-blur-md border-2 border-white/30 hover:scale-110 active:scale-95 disabled:opacity-50 text-white flex items-center justify-center transition-all shadow-xl"
                     >
-                      <Camera className="w-6 h-6" />
+                      <Camera className="portrait:w-5 portrait:h-5 landscape:w-6 landscape:h-6" />
                       {isRecording && (
                         <span className="absolute inset-0 rounded-full border-2 border-white animate-pulse" />
                       )}
@@ -778,15 +778,15 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                     {isRecording && (
                       <button
                         onClick={stopRecording}
-                        className="w-14 h-14 rounded-full bg-black/60 backdrop-blur-md border-2 border-white/30 hover:scale-110 text-white flex items-center justify-center transition-all shadow-xl"
+                        className="portrait:w-12 portrait:h-12 landscape:w-14 landscape:h-14 rounded-full bg-black/60 backdrop-blur-md border-2 border-white/30 hover:scale-110 active:scale-95 text-white flex items-center justify-center transition-all shadow-xl"
                       >
-                        <Square className="w-6 h-6 fill-white" />
+                        <Square className="portrait:w-5 portrait:h-5 landscape:w-6 landscape:h-6 fill-white" />
                       </button>
                     )}
 
                     {/* Upload Video Button */}
-                    <label className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-500/90 to-cyan-500/90 backdrop-blur-md border-2 border-white/30 hover:scale-110 text-white flex items-center justify-center transition-all cursor-pointer shadow-xl">
-                      <Upload className="w-6 h-6" />
+                    <label className="portrait:w-12 portrait:h-12 landscape:w-14 landscape:h-14 rounded-full bg-gradient-to-br from-blue-500/90 to-cyan-500/90 backdrop-blur-md border-2 border-white/30 hover:scale-110 active:scale-95 text-white flex items-center justify-center transition-all cursor-pointer shadow-xl">
+                      <Upload className="portrait:w-5 portrait:h-5 landscape:w-6 landscape:h-6" />
                       <input
                         type="file"
                         accept="video/*"
@@ -799,35 +799,35 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                   <>
                     <button
                       onClick={() => setShowVideoClipper(true)}
-                      className="w-14 h-14 rounded-full bg-gradient-to-br from-orange-500/90 to-yellow-500/90 backdrop-blur-md border-2 border-white/30 hover:scale-110 text-white flex items-center justify-center transition-all shadow-xl"
+                      className="portrait:w-12 portrait:h-12 landscape:w-14 landscape:h-14 rounded-full bg-gradient-to-br from-orange-500/90 to-yellow-500/90 backdrop-blur-md border-2 border-white/30 hover:scale-110 active:scale-95 text-white flex items-center justify-center transition-all shadow-xl"
                     >
-                      <Scissors className="w-6 h-6" />
+                      <Scissors className="portrait:w-5 portrait:h-5 landscape:w-6 landscape:h-6" />
                     </button>
                     <button
                       onClick={() => setPreviewUrl(null)}
-                      className="w-14 h-14 rounded-full bg-black/60 backdrop-blur-md border-2 border-white/30 hover:scale-110 text-white flex items-center justify-center transition-all shadow-xl"
+                      className="portrait:w-12 portrait:h-12 landscape:w-14 landscape:h-14 rounded-full bg-black/60 backdrop-blur-md border-2 border-white/30 hover:scale-110 active:scale-95 text-white flex items-center justify-center transition-all shadow-xl"
                     >
-                      <RotateCcw className="w-6 h-6" />
+                      <RotateCcw className="portrait:w-5 portrait:h-5 landscape:w-6 landscape:h-6" />
                     </button>
                   </>
                 )}
               </div>
 
               {/* Right Side - Camera Controls */}
-              <div className="flex gap-2">
+              <div className="flex portrait:flex-col landscape:flex-row gap-2">
                 {/* Flip Camera - Always show on mobile */}
                 {!previewUrl && (
                   <button
                     onClick={toggleCamera}
                     disabled={!hasMultipleCameras}
-                    className={`w-14 h-14 rounded-full backdrop-blur-md border-2 border-white/30 text-white flex flex-col items-center justify-center transition-all shadow-xl ${
+                    className={`portrait:w-12 portrait:h-12 landscape:w-14 landscape:h-14 rounded-full backdrop-blur-md border-2 border-white/30 text-white flex flex-col items-center justify-center transition-all shadow-xl ${
                       hasMultipleCameras 
-                        ? 'bg-gradient-to-br from-purple-500/90 to-indigo-500/90 hover:scale-110' 
+                        ? 'bg-gradient-to-br from-purple-500/90 to-indigo-500/90 hover:scale-110 active:scale-95' 
                         : 'bg-black/30 opacity-50 cursor-not-allowed'
                     }`}
                   >
-                    <RotateCcw className="w-5 h-5 mb-0.5" />
-                    <span className="text-[7px] font-bold tracking-wider">{facingMode === 'user' ? 'FRONT' : 'BACK'}</span>
+                    <RotateCcw className="portrait:w-4 portrait:h-4 landscape:w-5 landscape:h-5 mb-0.5" />
+                    <span className="portrait:text-[6px] landscape:text-[7px] font-bold tracking-wider">{facingMode === 'user' ? 'FRONT' : 'BACK'}</span>
                   </button>
                 )}
 
@@ -835,9 +835,9 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                 {!previewUrl && (
                   <button
                     onClick={() => alert('🎨 Filters coming soon!')}
-                    className="w-14 h-14 rounded-full bg-gradient-to-br from-pink-500/90 to-rose-500/90 backdrop-blur-md border-2 border-white/30 hover:scale-110 text-white flex items-center justify-center transition-all shadow-xl"
+                    className="portrait:w-12 portrait:h-12 landscape:w-14 landscape:h-14 rounded-full bg-gradient-to-br from-pink-500/90 to-rose-500/90 backdrop-blur-md border-2 border-white/30 hover:scale-110 active:scale-95 text-white flex items-center justify-center transition-all shadow-xl"
                   >
-                    <Sparkles className="w-6 h-6" />
+                    <Sparkles className="portrait:w-5 portrait:h-5 landscape:w-6 landscape:h-6" />
                   </button>
                 )}
 
@@ -851,7 +851,7 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                       setIsFormExpanded(true); // Always open the form
                       setWorkflowStatus('📋 Please complete all document fields before video upload');
                     }}
-                    className="px-4 py-2 rounded-full backdrop-blur-md border-2 border-white/30 hover:scale-105 text-white font-bold text-sm flex items-center justify-center transition-all shadow-xl bg-gradient-to-br from-green-500/90 to-emerald-500/90"
+                    className="portrait:px-3 portrait:py-1.5 landscape:px-4 landscape:py-2 rounded-full backdrop-blur-md border-2 border-white/30 hover:scale-105 active:scale-95 text-white font-bold portrait:text-xs landscape:text-sm flex items-center justify-center transition-all shadow-xl bg-gradient-to-br from-green-500/90 to-emerald-500/90"
                   >
                     <span>Submit</span>
                   </button>
@@ -966,9 +966,9 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
 
             {/* Recording Time Display */}
             {isRecording && (
-              <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-40 bg-red-600/80 backdrop-blur-md text-white px-4 py-2 rounded-full flex items-center gap-2 shadow-lg">
+              <div className="absolute portrait:top-20 landscape:top-16 left-1/2 transform -translate-x-1/2 z-40 bg-red-600/80 backdrop-blur-md text-white portrait:px-3 portrait:py-1.5 landscape:px-4 landscape:py-2 rounded-full flex items-center gap-2 shadow-lg">
                 <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                <span className="text-sm font-bold">{Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, '0')}</span>
+                <span className="portrait:text-xs landscape:text-sm font-bold">{Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, '0')}</span>
               </div>
             )}
             {/* Pin icon button - Commented out */}
