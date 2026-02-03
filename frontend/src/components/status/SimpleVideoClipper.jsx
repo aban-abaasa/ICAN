@@ -16,14 +16,11 @@ export const VideoClipper = ({ videoFile, onClip, onCancel }) => {
     if (!videoFile) return;
     
     try {
-      // Create blob URL with proper type
       const url = URL.createObjectURL(new Blob([videoFile], { type: videoFile.type || 'video/mp4' }));
       setVideoUrl(url);
       setIsLoading(false);
       
-      return () => {
-        URL.revokeObjectURL(url);
-      };
+      return () => URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error creating video URL:', error);
       setIsLoading(false);
@@ -36,10 +33,7 @@ export const VideoClipper = ({ videoFile, onClip, onCancel }) => {
 
     const handleLoadedMetadata = () => {
       const dur = video.duration;
-      if (isNaN(dur) || dur === 0) {
-        console.warn('Invalid video duration');
-        return;
-      }
+      if (isNaN(dur) || dur === 0) return;
       
       setDuration(dur);
       setEndTime(dur);
@@ -59,27 +53,18 @@ export const VideoClipper = ({ videoFile, onClip, onCancel }) => {
 
     const handleTimeUpdate = () => {
       setCurrentTime(video.currentTime);
-      
-      // Auto-pause at end time
       if (video.currentTime >= endTime) {
         video.pause();
         setIsPlaying(false);
       }
     };
 
-    const handleError = (e) => {
-      console.error('Video error:', e);
-      console.error('Video error details:', video.error);
-    };
-
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
     video.addEventListener('timeupdate', handleTimeUpdate);
-    video.addEventListener('error', handleError);
 
     return () => {
       video.removeEventListener('loadedmetadata', handleLoadedMetadata);
       video.removeEventListener('timeupdate', handleTimeUpdate);
-      video.removeEventListener('error', handleError);
     };
   }, [endTime, videoUrl]);
 
@@ -90,19 +75,10 @@ export const VideoClipper = ({ videoFile, onClip, onCancel }) => {
     if (isPlaying) {
       video.pause();
     } else {
-      if (currentTime >= endTime) {
-        video.currentTime = startTime;
-      }
+      if (currentTime >= endTime) video.currentTime = startTime;
       video.play().catch(err => console.error('Play error:', err));
     }
     setIsPlaying(!isPlaying);
-  };
-
-  const handleSeek = (time) => {
-    if (videoRef.current) {
-      videoRef.current.currentTime = time;
-      setCurrentTime(time);
-    }
   };
 
   const toggleSegment = (index) => {
@@ -110,7 +86,6 @@ export const VideoClipper = ({ videoFile, onClip, onCancel }) => {
     newSegments[index].selected = !newSegments[index].selected;
     setSegments(newSegments);
 
-    // Update start/end times based on selected segments
     const selected = newSegments.filter(s => s.selected);
     if (selected.length > 0) {
       setStartTime(Math.min(...selected.map(s => s.start)));
@@ -130,11 +105,7 @@ export const VideoClipper = ({ videoFile, onClip, onCancel }) => {
 
   const handleClip = async () => {
     try {
-      // For now, just slice the blob at byte level (approximation)
       const selectedDuration = endTime - startTime;
-      const ratio = selectedDuration / duration;
-      
-      // Simple blob slicing (not perfect but works for demonstration)
       const start = Math.floor(videoFile.size * (startTime / duration));
       const end = Math.floor(videoFile.size * (endTime / duration));
       const clippedBlob = videoFile.slice(start, end, videoFile.type);
@@ -147,7 +118,6 @@ export const VideoClipper = ({ videoFile, onClip, onCancel }) => {
       });
     } catch (error) {
       console.error('Clip error:', error);
-      alert('Error clipping video. Using full video instead.');
       onClip({ blob: videoFile, start: 0, end: duration, duration });
     }
   };
@@ -159,120 +129,112 @@ export const VideoClipper = ({ videoFile, onClip, onCancel }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[9999] p-2">
-      <div className="bg-gradient-to-br from-slate-900 to-black rounded-2xl shadow-2xl w-full max-w-2xl border border-purple-500/30 max-h-[95vh] overflow-y-auto">
-        
-        {/* Header */}
-        <div className="sticky top-0 bg-gradient-to-r from-purple-900/95 to-pink-900/95 backdrop-blur-md border-b border-purple-500/30 px-4 py-3 rounded-t-2xl flex items-center justify-between z-10">
-          <div className="flex items-center gap-2">
-            <Scissors className="w-5 h-5 text-purple-300" />
-            <h3 className="text-lg font-bold text-white">Trim</h3>
-          </div>
-          <button onClick={onCancel} className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition">
-            <X className="w-4 h-4" />
-          </button>
+    <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-purple-600 to-pink-600 px-4 py-3 flex items-center justify-between shadow-lg">
+        <div className="flex items-center gap-2">
+          <Scissors className="w-5 h-5 text-white" />
+          <h3 className="text-lg font-bold text-white">Trim</h3>
         </div>
+        <button
+          onClick={onCancel}
+          className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
 
-        {/* Video Preview */}
-        <div className="p-4">
-          <div className="relative bg-black rounded-lg overflow-hidden aspect-video">
-            {isLoading ? (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-white">Loading...</div>
-              </div>
-            ) : (
-              <video
-                ref={videoRef}
-                src={videoUrl}
-                className="w-full h-full object-contain"
-                playsInline
-                preload="metadata"
+      {/* Full Screen Video */}
+      <div className="flex-1 bg-black relative">
+        {isLoading ? (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-white text-lg">Loading...</div>
+          </div>
+        ) : (
+          <video
+            ref={videoRef}
+            src={videoUrl}
+            className="w-full h-full object-contain"
+            playsInline
+            preload="metadata"
+          >
+            <source src={videoUrl} type={videoFile?.type || 'video/mp4'} />
+          </video>
+        )}
+
+        {/* Play Button Overlay */}
+        <button
+          onClick={togglePlayPause}
+          className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-full bg-purple-600/80 hover:bg-purple-600 backdrop-blur-sm text-white flex items-center justify-center transition-all hover:scale-110 active:scale-95 shadow-2xl"
+        >
+          {isPlaying ? <Pause className="w-8 h-8" /> : <Play className="w-8 h-8 ml-1" />}
+        </button>
+
+        {/* Time Display */}
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full text-white text-sm font-bold">
+          {formatTime(currentTime)} / {formatTime(duration)}
+        </div>
+      </div>
+
+      {/* Controls Panel */}
+      <div className="bg-gradient-to-br from-slate-900 to-black border-t border-purple-500/30">
+        {/* Segment Tabs */}
+        <div className="px-4 py-3">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-semibold text-purple-300">Segments</span>
+            <div className="flex gap-2">
+              <button
+                onClick={selectAll}
+                className="px-3 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-all"
               >
-                <source src={videoUrl} type={videoFile?.type || 'video/mp4'} />
-              </video>
-            )}
-          </div>
-
-          {/* Playback Controls */}
-          <div className="mt-4 flex items-center gap-3">
-            <button
-              onClick={togglePlayPause}
-              disabled={isLoading || duration === 0}
-              className="w-12 h-12 rounded-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white flex items-center justify-center transition"
-            >
-              {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
-            </button>
-            
-            <div className="flex-1">
-              <input
-                type="range"
-                min={0}
-                max={duration || 100}
-                step={0.1}
-                value={currentTime}
-                onChange={(e) => handleSeek(parseFloat(e.target.value))}
-                disabled={duration === 0}
-                className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
-                style={{
-                  background: `linear-gradient(to right, #8b5cf6 0%, #8b5cf6 ${(currentTime/(duration||1))*100}%, #334155 ${(currentTime/(duration||1))*100}%, #334155 100%)`
-                }}
-              />
-              <div className="flex justify-between text-xs text-slate-400 mt-1">
-                <span>{formatTime(currentTime)}</span>
-                <span>{formatTime(duration)}</span>
-              </div>
+                All
+              </button>
+              <button
+                onClick={clearAll}
+                className="px-3 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold transition-all"
+              >
+                Clear
+              </button>
             </div>
           </div>
 
-          {/* Segments */}
-          {segments.length > 0 && (
-            <div className="mt-6">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-semibold text-white">Segments</h4>
-                <div className="flex gap-2">
-                  <button onClick={selectAll} className="px-3 py-1 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition">
-                    All
-                  </button>
-                  <button onClick={clearAll} className="px-3 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition">
-                    Clear
-                  </button>
-                </div>
-              </div>
-            
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
-                {segments.map((seg, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => toggleSegment(idx)}
-                    className={`p-2 rounded-lg border-2 transition text-xs font-medium ${
-                      seg.selected
-                        ? 'bg-purple-600 border-purple-500 text-white'
-                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600'
-                    }`}
-                  >
-                    {formatTime(seg.start)}
-                  </button>
-                ))}
-              </div>
+          {/* Segment Grid - Simple Tabs */}
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            {segments.map((seg, idx) => (
+              <button
+                key={idx}
+                onClick={() => toggleSegment(idx)}
+                className={`px-3 py-2 rounded-lg font-bold text-sm transition-all ${
+                  seg.selected
+                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/50 scale-105'
+                    : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700 hover:text-white'
+                }`}
+              >
+                {formatTime(seg.start)}
+              </button>
+            ))}
+          </div>
 
-              <div className="mt-3 text-sm text-slate-400">
-                Selected: {formatTime(startTime)} - {formatTime(endTime)} ({formatTime(endTime - startTime)})
-              </div>
+          {/* Selection Info */}
+          <div className="bg-slate-800/50 rounded-lg px-4 py-2 mb-3">
+            <div className="text-xs text-slate-400">Selected:</div>
+            <div className="text-sm font-bold text-white">
+              {formatTime(startTime)} - {formatTime(endTime)} ({formatTime(endTime - startTime)})
             </div>
-          )}
+          </div>
 
-          {/* Action Buttons */}
-          <div className="mt-6 flex gap-3">
+          {/* Action Buttons - With bottom padding to avoid tab bar */}
+          <div className="grid grid-cols-2 gap-3 pb-20">
             <button
               onClick={onCancel}
-              className="flex-1 px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-lg transition"
+              className="py-3 rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-bold text-sm transition-all flex items-center justify-center gap-2"
             >
+              <X className="w-4 h-4" />
               Cancel
             </button>
             <button
               onClick={handleClip}
-              disabled={isLoading || duration === 0}
-              className="flex-1 px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 text-white font-semibold rounded-lg transition flex items-center justify-center gap-2"
+              className="py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-purple-500/50"
             >
               <Check className="w-4 h-4" />
               Done
