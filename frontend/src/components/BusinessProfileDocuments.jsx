@@ -54,21 +54,78 @@ const BusinessProfileDocuments = ({ businessProfile, onDocumentsComplete, onCanc
 
   // Check if all documents are complete and notify parent
   useEffect(() => {
-    // Only require content to be filled, not the checkbox
+    // Helper function to check if content has meaningful text (more lenient)
+    const hasMinimumContent = (text) => {
+      const trimmedText = text.trim();
+      // Accept content if it's longer than 10 characters and not completely empty placeholders
+      return trimmedText.length > 10 && 
+             !trimmedText.startsWith('[Enter ') && 
+             trimmedText !== '[amount]' && 
+             trimmedText !== '[percentage]' &&
+             trimmedText !== '[description]' &&
+             trimmedText !== '[details]' &&
+             trimmedText !== '[breakdown]';
+    };
+
+    // More lenient validation - allow most auto-populated content
+    const businessPlanValid = documents.businessPlan.content.trim().length > 20;
+    const financialProjectionValid = documents.financialProjection.content.trim().length > 20;
+    const valuePropositionWantsValid = documents.valueProposition.wants.trim().length > 10;
+    const valuePropositionFearsValid = documents.valueProposition.fears.trim().length > 10;
+    const valuePropositionNeedsValid = documents.valueProposition.needs.trim().length > 10;
+    const mouValid = documents.mou.content.trim().length > 20;
+    const shareAllocationSharesValid = documents.shareAllocation.shares !== '' && documents.shareAllocation.shares !== null;
+    const shareAllocationPriceValid = documents.shareAllocation.sharePrice !== '' && documents.shareAllocation.sharePrice !== null;
+    
     const allComplete = 
-      documents.businessPlan.content.trim() !== '' &&
-      documents.financialProjection.content.trim() !== '' &&
-      documents.valueProposition.wants.trim() !== '' &&
-      documents.valueProposition.fears.trim() !== '' &&
-      documents.valueProposition.needs.trim() !== '' &&
-      documents.mou.content.trim() !== '' &&
-      documents.shareAllocation.shares !== '' &&
-      documents.shareAllocation.shares !== null &&
-      documents.shareAllocation.sharePrice !== '' &&
-      documents.shareAllocation.sharePrice !== null;
+      businessPlanValid &&
+      financialProjectionValid &&
+      valuePropositionWantsValid &&
+      valuePropositionFearsValid &&
+      valuePropositionNeedsValid &&
+      mouValid &&
+      shareAllocationSharesValid &&
+      shareAllocationPriceValid;
+
+    // Debug logging to show which fields are missing
+    if (!allComplete) {
+      console.log('📋 Document validation status (lenient):');
+      console.log('Business Plan:', businessPlanValid ? '✅' : '❌', 'Length:', documents.businessPlan.content.length, '(need >20)');
+      console.log('Financial Projection:', financialProjectionValid ? '✅' : '❌', 'Length:', documents.financialProjection.content.length, '(need >20)');
+      console.log('Value Proposition - Wants:', valuePropositionWantsValid ? '✅' : '❌', 'Length:', documents.valueProposition.wants.length, '(need >10)');
+      console.log('Value Proposition - Fears:', valuePropositionFearsValid ? '✅' : '❌', 'Length:', documents.valueProposition.fears.length, '(need >10)');
+      console.log('Value Proposition - Needs:', valuePropositionNeedsValid ? '✅' : '❌', 'Length:', documents.valueProposition.needs.length, '(need >10)');
+      console.log('MOU:', mouValid ? '✅' : '❌', 'Length:', documents.mou.content.length, '(need >20)');
+      console.log('Share Allocation - Shares:', shareAllocationSharesValid ? '✅' : '❌', 'Value:', documents.shareAllocation.shares);
+      console.log('Share Allocation - Price:', shareAllocationPriceValid ? '✅' : '❌', 'Value:', documents.shareAllocation.sharePrice);
+    } else {
+      console.log('✅ All documents pass lenient validation!');
+    }
 
     if (onDocumentsComplete) {
-      onDocumentsComplete(allComplete);
+      if (allComplete) {
+        // Pass the actual documents data when complete
+        const documentsData = {
+          business_profile_id: businessProfile.id,
+          business_plan_content: documents.businessPlan.content,
+          business_plan_completed: documents.businessPlan.completed,
+          financial_projection_content: documents.financialProjection.content,
+          financial_projection_completed: documents.financialProjection.completed,
+          value_proposition_wants: documents.valueProposition.wants,
+          value_proposition_fears: documents.valueProposition.fears,
+          value_proposition_needs: documents.valueProposition.needs,
+          value_proposition_completed: documents.valueProposition.completed,
+          mou_content: documents.mou.content,
+          mou_completed: documents.mou.completed,
+          share_allocation_shares: documents.shareAllocation.shares,
+          share_allocation_share_price: documents.shareAllocation.sharePrice,
+          share_allocation_completed: documents.shareAllocation.completed,
+          all_documents_completed: allComplete
+        };
+        onDocumentsComplete(documentsData);
+      } else {
+        onDocumentsComplete(false);
+      }
     }
   }, [documents, onDocumentsComplete]);
 
@@ -117,6 +174,50 @@ const BusinessProfileDocuments = ({ businessProfile, onDocumentsComplete, onCanc
         });
         setNoDisclosure(data.no_disclosure_enabled || false);
         setDisclosureNotes(data.disclosure_notes || '');
+      } else {
+        // No existing documents - auto-populate from business profile
+        console.log('No existing documents found. Auto-populating from business profile:', businessProfile);
+        
+        const autoPopulatedDocs = {
+          businessPlan: {
+            content: businessProfile.business_description 
+              ? `Business Overview:\n${businessProfile.business_description}\n\nBusiness Type: ${businessProfile.business_type || 'Not specified'}\n\nTarget Market:\n[Please describe your target market and customer base]\n\nCompetitive Advantage:\n[Please describe what sets your business apart]\n\nGrowth Strategy:\n[Please outline your growth and expansion plans]`
+              : `Business Plan for ${businessProfile.business_name || 'Your Business'}\n\n[Please describe your business model, target market, and growth strategy]`,
+            file: null,
+            completed: false
+          },
+          financialProjection: {
+            content: businessProfile.current_revenue 
+              ? `Current Financial Status:\nRevenue: ${businessProfile.current_revenue}\nFunding Stage: ${businessProfile.funding_stage || 'Seed'}\n\nProjected Revenue:\nYear 1: [Enter projected revenue]\nYear 2: [Enter projected revenue]\nYear 3: [Enter projected revenue]\n\nKey Assumptions:\n[List your financial assumptions and projections]`
+              : 'Financial Projections:\n\nRevenue Projections:\nYear 1: $[amount]\nYear 2: $[amount]\nYear 3: $[amount]\n\nExpenses:\n- Personnel: $[amount]\n- Marketing: $[amount]\n- Operations: $[amount]\n- Other: $[amount]\n\nFunding Requirements:\nTotal needed: $[amount]\nUse of funds: [breakdown]',
+            file: null,
+            completed: false
+          },
+          valueProposition: {
+            content: '',
+            wants: businessProfile.value_proposition || '[What does your target customer want or desire?]',
+            fears: '[What problems or pain points does your customer face?]',
+            needs: '[What essential needs does your product/service fulfill?]',
+            file: null,
+            completed: false
+          },
+          mou: {
+            content: `Memorandum of Understanding\n\nBusiness: ${businessProfile.business_name || '[Business Name]'}\nContact: ${businessProfile.contact_person || '[Contact Person]'}\nEmail: ${businessProfile.email || '[Email Address]'}\n\nInvestment Terms:\n- Investment Amount: $[amount]\n- Equity Offered: [percentage]%\n- Use of Funds: [description]\n- Expected Returns: [details]\n\nKey Terms and Conditions:\n[Please outline the key terms of the investment agreement]`,
+            file: null,
+            completed: false
+          },
+          shareAllocation: {
+            content: '',
+            shares: '10', // Default 10% equity
+            sharePrice: '1.00', // Default $1 per share
+            totalAmount: '',
+            file: null,
+            completed: false
+          }
+        };
+        
+        setDocuments(autoPopulatedDocs);
+        console.log('✅ Auto-populated documents from business profile');
       }
     } catch (error) {
       console.log('No existing documents found', error);

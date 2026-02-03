@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, Mic, Square, Play, Upload, X, RotateCcw, Pin, Maximize, Minimize, Smartphone, Scissors, CheckCircle } from 'lucide-react';
-import { uploadVideo } from '../services/pitchingService';
+import { Camera, Mic, Square, Play, Upload, X, RotateCcw, Pin, Maximize, Minimize, Smartphone, Scissors, CheckCircle, SwitchCamera, Sparkles, ArrowLeft, Rocket } from 'lucide-react';
+import { uploadVideo, getSupabase } from '../services/pitchingService';
 import { VideoClipper } from './status/VideoClipper';
 import BusinessProfileDocuments from './BusinessProfileDocuments';
+import PitchDetailsForm from './PitchDetailsForm';
 
 const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', onPitchCreated, onClose, hideControls = false, onVideoRecorded, currentBusinessProfile }) => {
   const videoRef = useRef(null);
@@ -28,6 +29,10 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
   const [showTrimDialog, setShowTrimDialog] = useState(false);
   const [showReview, setShowReview] = useState(false);
   const [documentsComplete, setDocumentsComplete] = useState(false); // Track document completion
+  const [workflowPhase, setWorkflowPhase] = useState('documents'); // 'documents', 'video-details', 'ready'
+  const [completedDocumentsData, setCompletedDocumentsData] = useState(null); // Store completed document data
+  const [showPitchDetailsForm, setShowPitchDetailsForm] = useState(false); // Control PitchDetailsForm visibility
+  const [workflowStatus, setWorkflowStatus] = useState(''); // Show workflow status messages
   
   const [formData, setFormData] = useState({
     title: '',
@@ -343,13 +348,134 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
     });
   };
 
+  // Direct video submission after documents are completed - bypasses PitchDetailsForm
+  const handleDirectVideoSubmit = async (documentsData, businessProfile) => {
+    console.log('🚀 Starting direct video submission...');
+    console.log('📊 Documents data:', documentsData);
+    console.log('🏢 Business profile:', businessProfile);
+    console.log('🎥 Video blob:', videoBlob ? `${videoBlob.size} bytes` : 'missing');
+    
+    if (!videoBlob) {
+      throw new Error('No video blob found');
+    }
+    
+    if (!businessProfile) {
+      throw new Error('No business profile found');
+    }
+
+    // Auto-populate form fields from completed documents data and business profile
+    const autoFormData = {
+      title: businessProfile.business_name 
+        ? `${businessProfile.business_name} Investment Pitch` 
+        : 'Investment Pitch',
+      description: documentsData.value_proposition_wants 
+        ? documentsData.value_proposition_wants.length > 200 
+          ? `${documentsData.value_proposition_wants.substring(0, 200)}...`
+          : documentsData.value_proposition_wants
+        : businessProfile.business_description || 'Investment opportunity pitch',
+      creator: businessProfile.contact_person || businessProfile.business_name || 'Entrepreneur',
+      category: businessProfile.business_type || 'Technology',
+      raised: '$0',
+      goal: documentsData.financial_projection_content?.includes('$') 
+        ? documentsData.financial_projection_content.match(/\$[\d,]+/)?.[0] || '$500K'
+        : '$500K',
+      equity: documentsData.share_allocation_shares 
+        ? `${documentsData.share_allocation_shares}%` 
+        : '10%',
+      pitchType: 'Equity',
+      hasIP: documentsData.business_plan_content?.toLowerCase().includes('intellectual property') || false,
+      members: []
+    };
+
+    console.log('📝 Auto-populated form data:', autoFormData);
+    
+    // Update the workflow status
+    setWorkflowStatus('🚀 Uploading your pitch video...');
+    
+    // Call the submission function
+    await handleSubmitWithAutoData(autoFormData);
+  };
+
+  // Handle pitch details form submission - this will trigger video upload
+  const handlePitchDetailsSubmit = async (businessProfile) => {
+    if (!videoBlob || !completedDocumentsData) {
+      console.error('❌ Missing video or documents data');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setSubmitError(null);
+
+      // Auto-populate form fields from completed documents data and business profile
+      const autoFormData = {
+        title: completedDocumentsData.business_plan_content 
+          ? `${businessProfile.business_name || 'Business'} Pitch` 
+          : formData.title || `${businessProfile.business_name || 'Business'} Pitch`,
+        description: completedDocumentsData.value_proposition_wants 
+          ? `${completedDocumentsData.value_proposition_wants.substring(0, 200)}...` 
+          : formData.description || 'Investment opportunity pitch',
+        creator: businessProfile.contact_person || formData.creator || 'Entrepreneur',
+        category: businessProfile.business_type || formData.category || 'Technology',
+        raised: formData.raised,
+        goal: formData.goal,
+        equity: formData.equity,
+        pitchType: formData.pitchType,
+        hasIP: formData.hasIP,
+        members: formData.members
+      };
+
+      // Update form data with auto-populated values
+      setFormData(autoFormData);
+
+      // Use the completed documents data and trigger the main submit
+      console.log('🚀 Auto-submitting pitch with completed documents and video');
+      console.log('📊 Documents data:', completedDocumentsData);
+      console.log('🎥 Video blob size:', videoBlob.size);
+      console.log('📝 Auto-populated form:', autoFormData);
+
+      // Set workflow to ready
+      setWorkflowPhase('ready');
+      
+      // Update status
+      setWorkflowStatus('📤 Preparing video for upload...');
+      
+      // Close the pitch details form
+      setShowPitchDetailsForm(false);
+      
+      // Small delay to ensure form data is updated, then submit
+      setTimeout(async () => {
+        try {
+          setWorkflowStatus('🚀 Uploading your pitch video...');
+          await handleSubmitWithAutoData(autoFormData);
+        } catch (error) {
+          console.error('❌ Error in delayed submission:', error);
+          setSubmitError(error.message);
+          setWorkflowStatus('❌ Upload failed. Please try again.');
+          setIsSubmitting(false);
+        }
+      }, 100);
+      
+    } catch (error) {
+      console.error('❌ Error in pitch details submission:', error);
+      setSubmitError(error.message);
+      setIsSubmitting(false);
+    }
+  };
+
+  // Original handleSubmit - now calls handleSubmitWithAutoData
   const handleSubmit = async () => {
-    if (!videoBlob || !formData.title || !formData.description || !formData.creator) {
+    await handleSubmitWithAutoData(formData);
+  };
+
+  // Core submission logic
+  const handleSubmitWithAutoData = async (submitFormData) => {
+    if (!videoBlob || !submitFormData.title || !submitFormData.description || !submitFormData.creator) {
       const missingFields = [];
       if (!videoBlob) missingFields.push('video');
-      if (!formData.title) missingFields.push('title');
-      if (!formData.description) missingFields.push('description');
-      if (!formData.creator) missingFields.push('creator name');
+      if (!submitFormData.title) missingFields.push('title');
+      if (!submitFormData.description) missingFields.push('description');
+      if (!submitFormData.creator) missingFields.push('creator name');
       setSubmitError(`Missing required fields: ${missingFields.join(', ')}`);
       return;
     }
@@ -358,8 +484,17 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
       setIsSubmitting(true);
       setSubmitError(null);
 
+      console.log('📤 Starting video submission with data:', {
+        title: submitFormData.title,
+        description: submitFormData.description,
+        creator: submitFormData.creator,
+        hasVideo: !!videoBlob,
+        hasDocuments: !!completedDocumentsData
+      });
+
       // Check if documents are saved to Supabase BEFORE allowing video submission
-      if (currentBusinessProfile) {
+      // Skip validation if we already have completed documents data from the workflow
+      if (currentBusinessProfile && !completedDocumentsData) {
         try {
           const supabase = getSupabase();
           if (supabase) {
@@ -415,15 +550,15 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
       }
 
       console.log('🚀 Submitting pitch with data:', {
-        title: formData.title,
-        creator: formData.creator,
+        title: submitFormData.title,
+        creator: submitFormData.creator,
         videoBlob: videoBlob ? `${videoBlob.size} bytes` : 'missing'
       });
 
       const pitchData = {
-        ...formData,
+        ...submitFormData,
         videoBlob: videoBlob,
-        category: formData.category,
+        category: submitFormData.category,
         timestamp: 'just now'
       };
 
@@ -435,7 +570,13 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
       await onPitchCreated(pitchData);
       
       console.log('✅ Pitch created successfully');
+      setWorkflowStatus('✅ Pitch uploaded successfully! 🎉');
       setSubmitSuccess(true);
+      
+      // Clear status after 4 seconds
+      setTimeout(() => {
+        setWorkflowStatus('');
+      }, 4000);
       
       // Show success message for 3 seconds then close
       setTimeout(() => {
@@ -469,18 +610,7 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
   };
 
   return (
-    <div className="w-full h-full px-0 relative flex flex-col bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* Close Button - Hidden when using CreatorPage */}
-      {onClose && !hideControls && (
-        <button
-          onClick={onClose}
-          className="absolute top-4 left-4 md:top-6 md:left-6 w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white flex items-center justify-center transition z-50 focus:outline-none focus:ring-2 focus:ring-white/30 backdrop-blur-sm border border-white/10"
-          aria-label="Close"
-        >
-          <X className="w-5 h-5 md:w-6 md:h-6" />
-        </button>
-      )}
-
+    <div className="w-full h-screen md:h-full px-0 relative flex flex-col bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* Enhanced Header Section - COMMENTED OUT */}
       {/* 
       <div className="hidden md:block bg-gradient-to-r from-purple-900/80 via-pink-900/60 to-purple-900/80 backdrop-blur-sm border-b border-purple-500/20 px-8 py-8 space-y-6">
@@ -536,22 +666,21 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
       </div>
       */}
 
-      {/* Mobile Header */}
-      <div className="md:hidden bg-gradient-to-r from-purple-900 to-pink-900 px-4 py-4 space-y-3 border-b border-purple-500/20">
-        <div className="flex gap-2">
-          <button className="w-10 h-10 rounded-lg bg-pink-500 text-white flex items-center justify-center text-base">📱</button>
-          <button className="w-10 h-10 rounded-lg bg-slate-700/50 text-slate-300 flex items-center justify-center text-base">📸</button>
-          <button className="w-10 h-10 rounded-lg bg-slate-700/50 text-slate-300 flex items-center justify-center text-base">🎥</button>
-          <button className="w-10 h-10 rounded-lg bg-slate-700/50 text-slate-300 flex items-center justify-center text-base">📤</button>
-        </div>
-        <h1 className="text-2xl font-bold text-white">Create Your Pitch</h1>
-        <p className="text-sm text-purple-200">Share your vision, connect with investors</p>
-      </div>
+      {/* Mobile Header - Removed for full screen */}
 
       <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 rounded-none p-0 border-0 h-full flex flex-col overflow-hidden flex-1 space-y-4">
 
         {/* Video Container - Full screen on mobile */}
-        <div ref={fullscreenRef} className="flex-1 md:flex-shrink-0 md:mx-8 md:mb-8 relative w-full h-full md:h-auto bg-black md:rounded-2xl md:border-2 md:border-purple-500/30 md:shadow-2xl md:shadow-purple-500/20 overflow-hidden">
+        <div ref={fullscreenRef} className="flex-1 md:flex-shrink-0 md:mx-8 md:mb-8 relative w-full h-screen md:h-auto bg-black md:rounded-2xl md:border-2 md:border-purple-500/30 md:shadow-2xl md:shadow-purple-500/20 overflow-hidden">
+          
+          {/* Workflow Status Indicator */}
+          {workflowStatus && (
+            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 bg-green-600/90 backdrop-blur-md text-white px-4 py-2 rounded-full flex items-center gap-2 shadow-lg animate-pulse">
+              <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+              <span className="text-sm font-medium">{workflowStatus}</span>
+            </div>
+          )}
+          
           <div style={{
             backgroundColor: '#000',
             position: 'relative',
@@ -560,7 +689,6 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            borderRadius: '0.5rem',
             overflow: 'hidden'
           }} className="md:aspect-video">
             {!previewUrl ? (
@@ -578,6 +706,7 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                 {/* Canvas for displaying video stream */}
                 <canvas
                   ref={canvasRef}
+                  className="md:object-contain"
                   style={{
                     position: 'absolute',
                     top: 0,
@@ -585,7 +714,8 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                     width: '100%',
                     height: '100%',
                     display: 'block',
-                    backgroundColor: '#000'
+                    backgroundColor: '#000',
+                    objectFit: 'cover'
                   }}
                 />
 
@@ -598,14 +728,12 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                   controls
                   autoPlay
                   playsInline
+                  className="object-cover md:object-contain"
                   style={{
                     width: '100%',
                     height: '100%',
-                    objectFit: 'contain',
                     backgroundColor: '#000',
-                    display: 'block',
-                    maxWidth: '100%',
-                    maxHeight: '100%'
+                    display: 'block'
                   }}
                   onLoadedMetadata={(e) => {
                     console.log('Video loaded:', e.target.videoWidth, e.target.videoHeight);
@@ -617,50 +745,48 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
               </>
             )}
 
-            {/* Overlay Controls - Camera & Upload ALWAYS Visible - Bottom Left */}
-            <div className="absolute bottom-3 md:bottom-4 left-3 md:left-4 flex gap-3 z-40 flex-wrap">
-              {!previewUrl ? (
-                <>
-                  {/* Start Recording Button */}
-                  <div className="relative group">
+            {/* Top Controls Row - Clean & Creative */}
+            <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-40">
+              {/* Left Side - Back Button + Recording/Upload Controls */}
+              <div className="flex gap-2 items-center">
+                {/* Back to Pitches Button */}
+                {onClose && (
+                  <button
+                    onClick={onClose}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-black/60 backdrop-blur-md border-2 border-white/30 hover:scale-105 text-white text-sm font-medium transition-all shadow-xl"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span className="hidden sm:inline">Back</span>
+                  </button>
+                )}
+
+                {!previewUrl ? (
+                  <>
+                    {/* Start Recording Button */}
                     <button
                       onClick={startRecording}
                       disabled={isRecording}
-                      className="relative w-14 h-14 md:w-14 md:h-14 rounded-full bg-gradient-to-br from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 disabled:from-slate-600 disabled:to-slate-600 text-white flex items-center justify-center transition focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-slate-900 shadow-xl hover:shadow-red-500/50"
+                      className="w-14 h-14 rounded-full bg-gradient-to-br from-red-500/90 to-pink-500/90 backdrop-blur-md border-2 border-white/30 hover:scale-110 disabled:opacity-50 text-white flex items-center justify-center transition-all shadow-xl"
                     >
-                      <Camera className="w-6 h-6 md:w-6 md:h-6" />
+                      <Camera className="w-6 h-6" />
                       {isRecording && (
-                        <span className="absolute inset-0 rounded-full border-2 border-red-400 animate-pulse" />
+                        <span className="absolute inset-0 rounded-full border-2 border-white animate-pulse" />
                       )}
                     </button>
-                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none hidden md:block">
-                      <div className="bg-slate-900 border border-red-500/50 text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap font-semibold shadow-lg">
-                        {isRecording ? '⏹ Recording...' : '🔴 Record'}
-                      </div>
-                    </div>
-                  </div>
 
-                  {/* Stop Recording Button */}
-                  {isRecording && (
-                    <div className="relative group">
+                    {/* Stop Recording Button */}
+                    {isRecording && (
                       <button
                         onClick={stopRecording}
-                        className="w-14 h-14 md:w-14 md:h-14 rounded-full bg-gradient-to-br from-slate-700 to-slate-600 hover:from-slate-600 hover:to-slate-500 text-white flex items-center justify-center transition focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 focus:ring-offset-slate-900 shadow-xl"
+                        className="w-14 h-14 rounded-full bg-black/60 backdrop-blur-md border-2 border-white/30 hover:scale-110 text-white flex items-center justify-center transition-all shadow-xl"
                       >
-                        <Square className="w-6 h-6 md:w-6 md:h-6" />
+                        <Square className="w-6 h-6 fill-white" />
                       </button>
-                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none hidden md:block">
-                        <div className="bg-slate-900 border border-slate-500/50 text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap font-semibold shadow-lg">
-                          ⏹ Stop Recording
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Upload Video Button */}
-                  <div className="relative group">
-                    <label className="w-14 h-14 md:w-14 md:h-14 rounded-full bg-gradient-to-br from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white flex items-center justify-center transition cursor-pointer focus-within:outline-none focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-2 focus-within:ring-offset-slate-900 shadow-xl hover:shadow-blue-500/50">
-                      <Upload className="w-6 h-6 md:w-6 md:h-6" />
+                    {/* Upload Video Button */}
+                    <label className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-500/90 to-cyan-500/90 backdrop-blur-md border-2 border-white/30 hover:scale-110 text-white flex items-center justify-center transition-all cursor-pointer shadow-xl">
+                      <Upload className="w-6 h-6" />
                       <input
                         type="file"
                         accept="video/*"
@@ -668,129 +794,179 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                         className="hidden"
                       />
                     </label>
-                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none hidden md:block">
-                      <div className="bg-slate-900 border border-blue-500/50 text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap font-semibold shadow-lg">
-                        📤 Upload Video
-                      </div>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="relative group">
+                  </>
+                ) : (
+                  <>
                     <button
                       onClick={() => setShowVideoClipper(true)}
-                      className="w-12 h-12 md:w-12 md:h-12 rounded-full bg-gradient-to-br from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700 text-white flex items-center justify-center transition focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:ring-offset-slate-900 shadow-xl hover:shadow-orange-500/50"
+                      className="w-14 h-14 rounded-full bg-gradient-to-br from-orange-500/90 to-yellow-500/90 backdrop-blur-md border-2 border-white/30 hover:scale-110 text-white flex items-center justify-center transition-all shadow-xl"
                     >
-                      <Scissors className="w-6 h-6 md:w-6 md:h-6" />
+                      <Scissors className="w-6 h-6" />
                     </button>
-                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none hidden md:block">
-                      <div className="bg-slate-900 border border-orange-500/50 text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap font-semibold shadow-lg">
-                        ✂️ Clip Video
-                      </div>
-                    </div>
-                  </div>
-                  <div className="relative group">
                     <button
                       onClick={() => setPreviewUrl(null)}
-                      className="w-12 h-12 md:w-12 md:h-12 rounded-full bg-slate-700 hover:bg-slate-600 text-white flex items-center justify-center transition focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 focus:ring-offset-slate-900 shadow-xl"
+                      className="w-14 h-14 rounded-full bg-black/60 backdrop-blur-md border-2 border-white/30 hover:scale-110 text-white flex items-center justify-center transition-all shadow-xl"
                     >
-                      <RotateCcw className="w-6 h-6 md:w-6 md:h-6" />
+                      <RotateCcw className="w-6 h-6" />
                     </button>
-                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none hidden md:block">
-                    <div className="bg-slate-900 text-white text-xs px-3 py-1 rounded whitespace-nowrap border border-slate-700">
-                      Re-record
-                    </div>
-                  </div>
-                  </div>
-                </>
-              )}
+                  </>
+                )}
+              </div>
+
+              {/* Right Side - Camera Controls */}
+              <div className="flex gap-2">
+                {/* Flip Camera - Always show on mobile */}
+                {!previewUrl && (
+                  <button
+                    onClick={toggleCamera}
+                    disabled={!hasMultipleCameras}
+                    className={`w-14 h-14 rounded-full backdrop-blur-md border-2 border-white/30 text-white flex flex-col items-center justify-center transition-all shadow-xl ${
+                      hasMultipleCameras 
+                        ? 'bg-gradient-to-br from-purple-500/90 to-indigo-500/90 hover:scale-110' 
+                        : 'bg-black/30 opacity-50 cursor-not-allowed'
+                    }`}
+                  >
+                    <RotateCcw className="w-5 h-5 mb-0.5" />
+                    <span className="text-[7px] font-bold tracking-wider">{facingMode === 'user' ? 'FRONT' : 'BACK'}</span>
+                  </button>
+                )}
+
+                {/* Filters Button */}
+                {!previewUrl && (
+                  <button
+                    onClick={() => alert('🎨 Filters coming soon!')}
+                    className="w-14 h-14 rounded-full bg-gradient-to-br from-pink-500/90 to-rose-500/90 backdrop-blur-md border-2 border-white/30 hover:scale-110 text-white flex items-center justify-center transition-all shadow-xl"
+                  >
+                    <Sparkles className="w-6 h-6" />
+                  </button>
+                )}
+
+                {/* Submit Button - Show on recorded/uploaded videos */}
+                {previewUrl && (
+                  <button
+                    onClick={() => {
+                      // Always open the documents form as mandatory step
+                      console.log('📝 Submit clicked - Opening documents form (mandatory)');
+                      setWorkflowPhase('documents'); // Reset to documents phase
+                      setIsFormExpanded(true); // Always open the form
+                      setWorkflowStatus('📋 Please complete all document fields before video upload');
+                    }}
+                    className="px-4 py-2 rounded-full backdrop-blur-md border-2 border-white/30 hover:scale-105 text-white font-bold text-sm flex items-center justify-center transition-all shadow-xl bg-gradient-to-br from-green-500/90 to-emerald-500/90"
+                  >
+                    <span>Submit</span>
+                  </button>
+                )}
+              </div>
             </div>
 
-            {/* Review Controls - Small Icons on Video (Top Right) */}
-            {showReview && previewUrl && (
-              <div className="absolute top-4 right-4 flex gap-2 z-50 pointer-events-auto">
-                {/* Re-record Icon */}
+        {/* Pitch Details Modal Popup */}
+        {isFormExpanded && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 overflow-y-auto">
+            <div className="bg-gradient-to-br from-slate-900 via-purple-900/50 to-slate-900 rounded-2xl shadow-2xl w-full max-w-4xl border border-purple-500/30 my-8">
+              {/* Modal Header */}
+              <div className="sticky top-0 bg-gradient-to-r from-purple-900/95 via-pink-900/80 to-purple-900/95 backdrop-blur-md border-b border-purple-500/30 px-6 py-4 rounded-t-2xl flex items-center justify-between z-10">
+                <div>
+                  <h3 className="text-xl font-bold bg-gradient-to-r from-purple-300 to-pink-300 bg-clip-text text-transparent">
+                    ✨ Pitch Details Required
+                  </h3>
+                  <p className="text-sm text-slate-400 mt-1">Complete all document fields before your video can be uploaded</p>
+                </div>
                 <button
                   onClick={() => {
-                    setShowReview(false);
-                    setPreviewUrl(null);
-                    setVideoBlob(null);
-                    setRecordedChunks([]);
-                    setRecordingTime(0);
+                    setIsFormExpanded(false);
+                    setWorkflowStatus(''); // Clear any workflow status
                   }}
-                  title="Re-record"
-                  className="w-10 h-10 rounded-full bg-slate-900/90 hover:bg-slate-800 text-white flex items-center justify-center transition-all opacity-80 hover:opacity-100 backdrop-blur-md border border-slate-600 hover:border-slate-500 shadow-xl"
+                  className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition"
                 >
-                  <RotateCcw className="w-5 h-5" />
-                </button>
-
-                {/* Trim Icon */}
-                <button
-                  onClick={() => {
-                    setShowReview(false);
-                    setShowVideoClipper(true);
-                  }}
-                  title="Trim video"
-                  className="w-10 h-10 rounded-full bg-orange-700/90 hover:bg-orange-800 text-white flex items-center justify-center transition-all opacity-80 hover:opacity-100 backdrop-blur-md border border-orange-600 hover:border-orange-500 shadow-xl"
-                >
-                  <Scissors className="w-5 h-5" />
-                </button>
-
-                {/* Approve Icon */}
-                <button
-                  onClick={() => setShowReview(false)}
-                  title="Approve & Continue"
-                  className="w-10 h-10 rounded-full bg-green-700/90 hover:bg-green-800 text-white flex items-center justify-center transition-all opacity-80 hover:opacity-100 backdrop-blur-md border border-green-600 hover:border-green-500 shadow-xl"
-                >
-                  <CheckCircle className="w-5 h-5" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
-            )}
 
-            {/* Camera Toggle - Top Left (Mobile), Bottom Left (Desktop) */}
-            {hasMultipleCameras && !previewUrl && (
-              <div className="absolute top-4 left-4 md:bottom-4 md:left-4 md:top-auto z-40">
-                <button
-                  onClick={toggleCamera}
-                  className="relative group w-11 h-11 md:w-12 md:h-12 rounded-full bg-slate-700/80 hover:bg-slate-600 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-900 shadow-lg"
-                  title="Switch camera"
-                >
-                  <Smartphone className="w-6 h-6 md:w-6 md:h-6" />
-                  <div className="absolute bottom-full left-0 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none hidden md:block">
-                    <div className="bg-slate-900 text-white text-xs px-3 py-1 rounded whitespace-nowrap border border-slate-700">
-                      {facingMode === 'user' ? 'Back Camera' : 'Front Camera'}
-                    </div>
+              {/* Modal Content */}
+              <div className="p-6 max-h-[70vh] overflow-y-auto">
+                {currentBusinessProfile ? (
+                  <BusinessProfileDocuments
+                    businessProfile={currentBusinessProfile}
+                    onDocumentsComplete={(docs) => {
+                      console.log('Documents completed:', docs);
+                      
+                      if (docs && typeof docs === 'object') {
+                        // Documents are complete with data
+                        setCompletedDocumentsData(docs);
+                        setDocumentsComplete(true);
+                        setWorkflowPhase('ready');
+                        setWorkflowStatus('✅ Documents completed! Click "Finish & Submit" to upload video.');
+                        console.log('✅ Documents completed with data! Ready for manual video submission.');
+                      } else if (docs === false) {
+                        // Documents are incomplete
+                        setCompletedDocumentsData(null);
+                        setDocumentsComplete(false);
+                        setWorkflowPhase('documents');
+                        setWorkflowStatus('');
+                        console.log('📝 Documents incomplete. Please fill all required fields.');
+                      }
+                    }}
+                    onCancel={() => {
+                      setIsFormExpanded(false);
+                    }}
+                  />
+                ) : (
+                  <div className="bg-yellow-900/30 border border-yellow-600/50 rounded-lg p-4 text-yellow-300 text-sm">
+                    ⚠️ Please select or create a business profile first to document your pitch details.
                   </div>
-                </button>
+                )}
               </div>
-            )}
 
-            {/* Fullscreen Toggle - Top Right (Mobile), Bottom Right (Desktop) */}
-            {!previewUrl && (
-              <div className="absolute top-4 right-16 md:bottom-4 md:right-4 md:top-auto z-40">
+              {/* Modal Footer with Finish Button */}
+              <div className="sticky bottom-0 bg-gradient-to-r from-slate-900/95 via-purple-900/80 to-slate-900/95 backdrop-blur-md border-t border-purple-500/30 px-6 py-4 rounded-b-2xl">
                 <button
-                  onClick={toggleFullscreen}
-                  className="relative group w-11 h-11 md:w-12 md:h-12 rounded-full bg-slate-700/80 hover:bg-slate-600 text-yellow-400 hover:text-yellow-300 flex items-center justify-center transition focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 focus:ring-offset-slate-900 shadow-lg"
-                  title="Toggle fullscreen"
+                  onClick={async () => {
+                    // Check if documents are completed
+                    if (!completedDocumentsData || !documentsComplete) {
+                      setWorkflowStatus('❌ Please complete all document fields first');
+                      return;
+                    }
+                    
+                    // Close the modal first
+                    setIsFormExpanded(false);
+                    setWorkflowStatus('🚀 Uploading your pitch video...');
+                    
+                    try {
+                      // Use direct video submit with completed documents
+                      await handleDirectVideoSubmit(completedDocumentsData, currentBusinessProfile);
+                    } catch (error) {
+                      console.error('❌ Submit error:', error);
+                      setWorkflowStatus('❌ Upload failed. Please try again.');
+                      setIsSubmitting(false);
+                    }
+                  }}
+                  disabled={isSubmitting || !completedDocumentsData}
+                  className={`w-full py-3 px-6 rounded-xl font-bold text-lg transition shadow-xl flex items-center justify-center gap-2 ${
+                    isSubmitting || !completedDocumentsData
+                      ? 'bg-slate-600 cursor-not-allowed opacity-50 text-slate-300'
+                      : 'bg-gradient-to-r from-green-500 via-emerald-500 to-green-600 hover:from-green-600 hover:via-emerald-600 hover:to-green-700 text-white hover:shadow-2xl hover:shadow-green-500/50 transform hover:scale-105 cursor-pointer active:scale-95'
+                  }`}
                 >
-                  {isFullscreen ? (
-                    <Minimize className="w-6 h-6 md:w-6 md:h-6" />
+                  {isSubmitting ? (
+                    <>
+                      <Upload className="w-5 h-5 animate-spin" />
+                      <span>Processing Your Pitch...</span>
+                    </>
                   ) : (
-                    <Maximize className="w-6 h-6 md:w-6 md:h-6" />
+                    <>
+                      <Rocket className="w-5 h-5" />
+                      <span>Finish & Submit Pitch</span>
+                    </>
                   )}
-                  <div className="absolute bottom-full right-0 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none hidden md:block">
-                    <div className="bg-slate-900 text-white text-xs px-3 py-1 rounded whitespace-nowrap border border-slate-700">
-                      {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-                    </div>
-                  </div>
                 </button>
               </div>
-            )}
+            </div>
+          </div>
+        )}
 
             {/* Recording Time Display */}
             {isRecording && (
-              <div className="absolute top-4 left-1/2 transform -translate-x-1/2 md:top-auto md:bottom-4 z-40 bg-red-600/80 text-white px-4 py-2 rounded-full flex items-center gap-2 shadow-lg">
+              <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-40 bg-red-600/80 backdrop-blur-md text-white px-4 py-2 rounded-full flex items-center gap-2 shadow-lg">
                 <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
                 <span className="text-sm font-bold">{Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, '0')}</span>
               </div>
@@ -819,39 +995,33 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
             : 'hidden'
         }`}>
           <div className="space-y-3 md:space-y-4 px-0 md:px-0">
-            {/* Form Header - Commented out */}
-            {/* <div className="hidden md:block mb-4 pb-4 border-b border-purple-500/30">
+            {/* Form Header */}
+            <div className="hidden md:block mb-4 pb-4 border-b border-purple-500/30">
               <h3 className="text-lg font-bold bg-gradient-to-r from-purple-300 to-pink-300 bg-clip-text text-transparent">
                 ✨ Pitch Details
               </h3>
-              <p className="text-sm text-slate-400 mt-1">Document your business plan, financials, and share allocation</p>
-            </div> */}
+              <p className="text-sm text-slate-400 mt-1">Click the expand button to open detailed form</p>
+            </div>
 
-            {/* Business Profile Documents Component - Commented out */}
-            {/* {currentBusinessProfile ? (
-              <BusinessProfileDocuments
-                businessProfile={currentBusinessProfile}
-                onDocumentsComplete={(docs) => {
-                  console.log('Documents completed:', docs);
-                }}
-                onCancel={() => {
-                  setIsFormExpanded(false);
-                }}
-              />
-            ) : (
-              <div className="bg-yellow-900/30 border border-yellow-600/50 rounded-lg p-4 text-yellow-300 text-sm">
-                ⚠️ Please select or create a business profile first to document your pitch details.
-              </div>
-            )} */}
+            {/* Simplified message - Documents handled in modal */}
+            <div className="bg-purple-900/30 border border-purple-600/50 rounded-lg p-4 text-purple-300 text-sm text-center">
+              📋 Pitch documentation is available in the expanded modal view
+            </div>
 
             {/* Submit Button Area */}
             <div className="md:px-8 md:pb-8 space-y-3">
               <button
-                onClick={handleSubmit}
-                disabled={isSubmitting || !videoBlob || !formData.title || !formData.description || !formData.creator}
-                title={!videoBlob ? 'Please upload or record a video' : !formData.title ? 'Please enter a pitch title' : !formData.description ? 'Please enter a description' : !formData.creator ? 'Please enter creator name' : 'Click to go live'}
+                onClick={() => {
+                  // Always open the documents form as mandatory step
+                  console.log('📝 Form Submit clicked - Opening documents form (mandatory)');
+                  setWorkflowPhase('documents'); // Reset to documents phase
+                  setIsFormExpanded(true); // Always open the form
+                  setWorkflowStatus('📋 Please complete all document fields before video upload');
+                }}
+                disabled={isSubmitting || !videoBlob}
+                title={!videoBlob ? 'Please upload or record a video' : 'Click to open pitch details form'}
                 className={`w-full py-3 md:py-4 px-6 rounded-xl font-bold text-base md:text-lg transition shadow-xl flex items-center justify-center gap-2 ${
-                  isSubmitting || !videoBlob || !formData.title || !formData.description || !formData.creator
+                  isSubmitting || !videoBlob
                     ? 'bg-slate-600 cursor-not-allowed opacity-50 text-slate-300'
                     : 'bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 hover:from-pink-600 hover:via-purple-600 hover:to-indigo-600 text-white hover:shadow-2xl hover:shadow-pink-500/50 transform hover:scale-105 cursor-pointer active:scale-95'
                 }`}
@@ -863,9 +1033,8 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                   </>
                 ) : (
                   <>
-                    {/* Go Live button content - Commented out */}
-                    {/* <span>🚀</span>
-                    <span>Go Live</span> */}
+                    <span>📝</span>
+                    <span>Open Pitch Details</span>
                   </>
                 )}
               </button>
@@ -915,6 +1084,16 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
             videoFile={videoBlob}
             onClip={handleVideoClip}
             onCancel={() => setShowVideoClipper(false)}
+          />
+        )}
+
+        {/* Pitch Details Form - Auto-opens after documents completion */}
+        {showPitchDetailsForm && currentBusinessProfile && (
+          <PitchDetailsForm
+            isOpen={showPitchDetailsForm}
+            onClose={() => setShowPitchDetailsForm(false)}
+            onSubmit={handlePitchDetailsSubmit}
+            currentBusinessProfile={currentBusinessProfile}
           />
         )}
       </div>

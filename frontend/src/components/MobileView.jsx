@@ -3177,10 +3177,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       )}
 
       {/* ====== FIXED BOTTOM NAVIGATION - ALWAYS ON TOP ====== */}
-      <div className={`fixed bottom-0 left-0 right-0 z-50 backdrop-blur-md border-t border-purple-500/20 transition-all ${
+      <div className={`fixed bottom-0 left-0 right-0 z-50 transition-all ${
         showPitchinPanel 
           ? 'bg-transparent' 
-          : 'bg-gradient-to-t from-slate-950 via-slate-950/95 to-transparent'
+          : 'bg-transparent'
       }`}>
         <div className="flex items-center justify-between px-2 py-3">
           {/* Profile */}
@@ -3193,11 +3193,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               setShowCmmsPanel(false);
               setActiveBottomTab('profile'); 
             }}
-            className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 rounded-lg transition ${
-              activeBottomTab === 'profile'
-                ? 'bg-purple-600/30'
-                : showPitchinPanel ? 'hover:bg-white/10' : 'hover:bg-purple-600/10'
-            } ${showPitchinPanel ? 'opacity-40' : 'opacity-100'}`}
+            className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 transition ${
+              showPitchinPanel ? 'opacity-40' : 'opacity-100'
+            }`}
           >
             <User className={`w-6 h-6 ${showPitchinPanel ? 'text-gray-400/60' : 'text-purple-400'}`} />
             <span className={`text-xs font-medium ${showPitchinPanel ? 'text-gray-400/60' : 'text-gray-300'}`}>Profile</span>
@@ -3206,11 +3204,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           {/* Pitchin */}
           <button
             onClick={() => { setShowPitchinPanel(!showPitchinPanel); setActiveBottomTab('pitchin'); }}
-            className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 rounded-lg transition ${
-              activeBottomTab === 'pitchin'
-                ? 'bg-purple-600/30'
-                : showPitchinPanel ? 'hover:bg-white/10' : 'hover:bg-purple-600/10'
-            } ${showPitchinPanel ? 'opacity-80' : 'opacity-100'}`}
+            className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 transition ${
+              showPitchinPanel ? 'opacity-80' : 'opacity-100'
+            }`}
           >
             <Briefcase className={`w-6 h-6 ${showPitchinPanel ? 'text-purple-400/80' : 'text-purple-400'}`} />
             <span className={`text-xs font-medium ${showPitchinPanel ? 'text-purple-300/80' : 'text-gray-300'}`}>Pitchin</span>
@@ -3219,11 +3215,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           {/* Wallet */}
           <button
             onClick={() => { setShowWalletPanel(!showWalletPanel); setActiveBottomTab('wallet'); }}
-            className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 rounded-lg transition ${
-              activeBottomTab === 'wallet'
-                ? 'bg-purple-600/30'
-                : showPitchinPanel ? 'hover:bg-white/10' : 'hover:bg-purple-600/10'
-            } ${showPitchinPanel ? 'opacity-40' : 'opacity-100'}`}
+            className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 transition ${
+              showPitchinPanel ? 'opacity-40' : 'opacity-100'
+            }`}
           >
             <Wallet className={`w-6 h-6 ${showPitchinPanel ? 'text-gray-400/60' : 'text-purple-400'}`} />
             <span className={`text-xs font-medium ${showPitchinPanel ? 'text-gray-400/60' : 'text-gray-300'}`}>Wallet</span>
@@ -3232,11 +3226,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           {/* Trust */}
           <button
             onClick={() => { setShowTrustPanel(!showTrustPanel); setActiveBottomTab('trust'); }}
-            className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 rounded-lg transition ${
-              activeBottomTab === 'trust'
-                ? 'bg-purple-600/30'
-                : showPitchinPanel ? 'hover:bg-white/10' : 'hover:bg-purple-600/10'
-            } ${showPitchinPanel ? 'opacity-40' : 'opacity-100'}`}
+            className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 transition ${
+              showPitchinPanel ? 'opacity-40' : 'opacity-100'
+            }`}
           >
             <Lock className={`w-6 h-6 ${showPitchinPanel ? 'text-gray-400/60' : 'text-purple-400'}`} />
             <span className={`text-xs font-medium ${showPitchinPanel ? 'text-gray-400/60' : 'text-gray-300'}`}>Trust</span>
@@ -3245,11 +3237,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           {/* CMMS */}
           <button
             onClick={() => { setShowCmmsPanel(!showCmmsPanel); setActiveBottomTab('cmms'); }}
-            className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 rounded-lg transition ${
-              activeBottomTab === 'cmms'
-                ? 'bg-purple-600/30'
-                : showPitchinPanel ? 'hover:bg-white/10' : 'hover:bg-purple-600/10'
-            } ${showPitchinPanel ? 'opacity-40' : 'opacity-100'}`}
+            className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 transition ${
+              showPitchinPanel ? 'opacity-40' : 'opacity-100'
+            }`}
           >
             <Settings className={`w-6 h-6 ${showPitchinPanel ? 'text-gray-400/60' : 'text-purple-400'}`} />
             <span className={`text-xs font-medium ${showPitchinPanel ? 'text-gray-400/60' : 'text-gray-300'}`}>CMMS</span>

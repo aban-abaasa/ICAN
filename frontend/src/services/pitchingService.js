@@ -143,6 +143,34 @@ export const getAllPitches = async (limit = 20, offset = 0) => {
     console.log(`📥 Fetching pitches (limit: ${limit}, offset: ${offset})...`);
     const startTime = performance.now();
 
+    // First, let's see ALL pitches in the database (no filters)
+    const { data: allPitchesDebug, error: debugError } = await sb
+      .from('pitches')
+      .select('id, title, video_url, status, business_profile_id, created_at')
+      .order('created_at', { ascending: false });
+    
+    console.log('🔍 DEBUG: All pitches in database:', allPitchesDebug?.length || 0);
+    if (debugError) {
+      console.error('🔍 DEBUG: Error fetching all pitches:', debugError);
+    }
+    if (allPitchesDebug && allPitchesDebug.length > 0) {
+      console.log('🔍 DEBUG: Listing all pitches:');
+      allPitchesDebug.forEach((pitch, index) => {
+        const hasVideo = pitch.video_url && pitch.video_url.length > 0;
+        const isValidUrl = pitch.video_url?.startsWith('https://');
+        console.log(`  ${index + 1}. ID: ${pitch.id?.substring(0, 8)}...`);
+        console.log(`     Title: "${pitch.title}"`);
+        console.log(`     Status: ${pitch.status}`);
+        console.log(`     Business Profile: ${pitch.business_profile_id || 'NONE'}`);
+        console.log(`     Video URL: ${hasVideo ? (isValidUrl ? '✅ Valid HTTPS' : '⚠️ Invalid format') : '❌ MISSING'}`);
+        if (pitch.video_url) {
+          console.log(`     URL Preview: ${pitch.video_url.substring(0, 80)}...`);
+        }
+      });
+    } else {
+      console.log('🔍 DEBUG: No pitches found in database at all!');
+    }
+
     const { data, error } = await sb
       .from('pitches')
       .select(`
@@ -170,7 +198,7 @@ export const getAllPitches = async (limit = 20, offset = 0) => {
           business_co_owners(owner_name)
         )
       `, { count: 'exact' })
-      .eq('status', 'published')
+      .not('video_url', 'is', null)  // Only show pitches with videos
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
@@ -183,30 +211,44 @@ export const getAllPitches = async (limit = 20, offset = 0) => {
     
     // 🎥 Filter and validate video URLs
     if (data && data.length > 0) {
-      const validPitches = data.filter(pitch => {
+      console.log(`🔍 DEBUG: Query returned ${data.length} pitches, now validating...`);
+      
+      const validPitches = data.filter((pitch, index) => {
+        console.log(`  Validating ${index + 1}. "${pitch.title}"`);
+        
         if (!pitch.video_url) {
-          console.log(`ℹ️  Pitch "${pitch.title}" has no video (legacy pitch - skipping)`);
+          console.log(`    ❌ No video URL`);
           return false;
         }
 
         // ❌ Reject blob URLs (temporary, not playable)
         if (pitch.video_url.startsWith('blob:')) {
-          console.warn(`⚠️  Pitch "${pitch.title}" has blob URL (not saved to Supabase) - excluding from available`);
+          console.log(`    ❌ Blob URL: ${pitch.video_url.substring(0, 50)}...`);
           return false;
         }
 
-        // ❌ Reject invalid URLs (not from Supabase)
-        if (!pitch.video_url.includes('supabase') && !pitch.video_url.startsWith('https://')) {
-          console.warn(`⚠️  Pitch "${pitch.title}" has invalid URL format - excluding from available`);
-          return false;
+        // ✅ Accept all valid URLs (Supabase, HTTPS, etc)
+        if (pitch.video_url.startsWith('https://') || pitch.video_url.includes('supabase')) {
+          console.log(`    ✅ Valid URL: ${pitch.video_url.substring(0, 50)}...`);
+          return true;
         }
 
-        // ✅ Valid pitch
-        return true;
+        // ❌ Reject other invalid URL formats
+        console.log(`    ❌ Invalid URL format: ${pitch.video_url.substring(0, 50)}...`);
+        return false;
       });
 
-      console.log(`✅ Loaded ${validPitches.length}/${data.length} pitches in ${fetchTime}ms`);
-      return validPitches;
+      console.log(`✅ Loaded ${validPitches.length}/${data.length} pitches with valid videos in ${fetchTime}ms`);
+      
+      // Add status indicators to pitches for UI
+      const enrichedPitches = validPitches.map(pitch => ({
+        ...pitch,
+        isPublished: pitch.status === 'published',
+        isDraft: pitch.status === 'draft',
+        isPending: pitch.status === 'pending'
+      }));
+      
+      return enrichedPitches;
     }
     
     console.log(`✅ No pitches found (${fetchTime}ms)`);
@@ -307,13 +349,31 @@ export const updatePitch = async (pitchId, updates) => {
     const sb = getSupabase();
     if (!sb) return { success: false, error: 'Supabase not configured' };
     
+    console.log('🔄 updatePitch called with:');
+    console.log('  Pitch ID:', pitchId);
+    console.log('  Updates:', JSON.stringify(updates, null, 2));
+    
+    // Specifically log if we're updating video_url
+    if (updates.video_url) {
+      console.log('📹 Updating video_url to:', updates.video_url.substring(0, 100) + '...');
+    }
+    
     const { data, error } = await sb
       .from('pitches')
       .update(updates)
       .eq('id', pitchId)
       .select();
 
-    if (error) throw error;
+    if (error) {
+      console.error('❌ updatePitch ERROR:', error);
+      throw error;
+    }
+    
+    console.log('✅ updatePitch SUCCESS:', data);
+    if (data && data[0] && data[0].video_url) {
+      console.log('📹 Video URL after update:', data[0].video_url ? '✅ Saved' : '❌ Missing');
+    }
+    
     return { success: true, data: data[0] };
   } catch (error) {
     console.error('Error updating pitch:', error);

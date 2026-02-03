@@ -857,77 +857,126 @@ THIS IS A LEGALLY BINDING AGREEMENT
               )}
 
               {/* Custom Rules & Commitments */}
-              <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
-                <h3 className="font-semibold text-gray-900 mb-3">📋 Add Your Commitments & Rules</h3>
-                <p className="text-sm text-gray-600 mb-4">Define what you commit to and what rules others must follow.</p>
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-5 rounded-xl border-2 border-amber-200 shadow-sm">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-2xl">📋</span>
+                  <h3 className="font-bold text-lg text-gray-900">Add Your Commitments & Rules</h3>
+                </div>
+                <p className="text-sm text-gray-600 mb-5 ml-9">Define what you commit to and what rules others must follow.</p>
                 
-                <div className="space-y-3 mb-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Commitment Title</label>
-                    <input
-                      type="text"
-                      id="commitTitle"
-                      placeholder="e.g., Revenue Sharing, Quarterly Reports"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
-                    />
+                <div className="bg-white rounded-xl p-4 shadow-inner border border-amber-100 mb-4">
+                  <div className="space-y-4">
+                    {/* Commitment Title Field */}
+                    <div>
+                      <label className="flex items-center gap-2 text-sm font-semibold text-gray-800 mb-2">
+                        <span className="w-6 h-6 bg-amber-500 text-white rounded-full flex items-center justify-center text-xs font-bold">1</span>
+                        Commitment Title
+                      </label>
+                      <input
+                        type="text"
+                        id="commitTitle"
+                        placeholder="e.g., Revenue Sharing, Quarterly Reports, Investor Updates"
+                        className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 focus:bg-white transition-all text-gray-900 placeholder-gray-400"
+                      />
+                      <p className="text-xs text-gray-500 mt-1 ml-1">Give your commitment a clear, descriptive name</p>
+                    </div>
+                    
+                    {/* Description Field */}
+                    <div>
+                      <label className="flex items-center gap-2 text-sm font-semibold text-gray-800 mb-2">
+                        <span className="w-6 h-6 bg-amber-500 text-white rounded-full flex items-center justify-center text-xs font-bold">2</span>
+                        Description
+                      </label>
+                      <textarea
+                        id="commitDesc"
+                        placeholder="Describe this commitment in detail... What exactly are you promising? What are the terms?"
+                        rows="3"
+                        className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 focus:bg-white transition-all text-gray-900 placeholder-gray-400 resize-none"
+                      />
+                      <p className="text-xs text-gray-500 mt-1 ml-1">Be specific about what this commitment entails</p>
+                    </div>
+                    
+                    {/* Add Button */}
+                    <button
+                      onClick={() => {
+                        const title = document.getElementById('commitTitle')?.value || '';
+                        const desc = document.getElementById('commitDesc')?.value || '';
+                        if (title && desc) {
+                          addCommitment(title, desc);
+                          document.getElementById('commitTitle').value = '';
+                          document.getElementById('commitDesc').value = '';
+                        } else {
+                          alert('Please fill in both the title and description');
+                        }
+                      }}
+                      className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+                    >
+                      <span className="text-xl">➕</span>
+                      Add Commitment
+                    </button>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                    <textarea
-                      id="commitDesc"
-                      placeholder="Describe this commitment in detail..."
-                      rows="2"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
-                    />
-                  </div>
-                  <button
-                    onClick={() => {
-                      const title = document.getElementById('commitTitle')?.value || '';
-                      const desc = document.getElementById('commitDesc')?.value || '';
-                      if (title && desc) {
-                        addCommitment(title, desc);
-                        document.getElementById('commitTitle').value = '';
-                        document.getElementById('commitDesc').value = '';
-                      }
-                    }}
-                    className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition"
-                  >
-                    ➕ Add Commitment
-                  </button>
                 </div>
 
                 {/* Commitments List */}
                 {commitments.length > 0 && (
-                  <div className="space-y-2 bg-white p-3 rounded border border-amber-300">
-                    <p className="font-semibold text-gray-900 text-sm mb-2">Your Commitments ({commitments.length}):</p>
-                    {commitments.map(c => (
-                      <div key={c.id} className="flex justify-between items-start gap-2 p-2 bg-amber-100 rounded">
-                        <div>
-                          <p className="font-semibold text-sm text-gray-900">{c.title}</p>
-                          <p className="text-xs text-gray-600">{c.description}</p>
+                  <div className="bg-white rounded-xl p-4 border-2 border-amber-200 shadow-sm">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="font-bold text-gray-900 flex items-center gap-2">
+                        <span className="text-lg">✅</span>
+                        Your Commitments
+                        <span className="bg-amber-500 text-white text-xs font-bold px-2 py-1 rounded-full">{commitments.length}</span>
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      {commitments.map((c, index) => (
+                        <div key={c.id} className="flex justify-between items-start gap-3 p-3 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg border border-amber-200 hover:shadow-sm transition-all">
+                          <div className="flex gap-3">
+                            <span className="w-6 h-6 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
+                              {index + 1}
+                            </span>
+                            <div>
+                              <p className="font-semibold text-gray-900">{c.title}</p>
+                              <p className="text-sm text-gray-600 mt-1">{c.description}</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => removeCommitment(c.id)}
+                            className="w-7 h-7 bg-red-100 hover:bg-red-200 text-red-600 hover:text-red-700 rounded-full flex items-center justify-center transition-all flex-shrink-0"
+                            title="Remove commitment"
+                          >
+                            ✕
+                          </button>
                         </div>
-                        <button
-                          onClick={() => removeCommitment(c.id)}
-                          className="text-red-600 hover:text-red-800 font-bold"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
 
               {/* Additional Custom Rules */}
-              <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                <h3 className="font-semibold text-gray-900 mb-3">⚙️ Custom Terms (Optional)</h3>
-                <textarea
-                  value={customRules}
-                  onChange={(e) => setCustomRules(e.target.value)}
-                  placeholder="Add any additional terms, conditions, or rules for all signers to follow..."
-                  rows="4"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                />
+              <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-5 rounded-xl border-2 border-green-200 shadow-sm">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-2xl">⚙️</span>
+                  <h3 className="font-bold text-lg text-gray-900">Custom Terms</h3>
+                  <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">Optional</span>
+                </div>
+                <p className="text-sm text-gray-600 mb-4 ml-9">Add any additional terms, conditions, or rules for all signers.</p>
+                
+                <div className="bg-white rounded-xl p-4 shadow-inner border border-green-100">
+                  <textarea
+                    value={customRules}
+                    onChange={(e) => setCustomRules(e.target.value)}
+                    placeholder="Add any additional terms, conditions, or rules for all signers to follow...
+
+Example:
+• All parties agree to quarterly review meetings
+• Disputes will be resolved through arbitration
+• Terms are valid for 24 months from signing date"
+                    rows="5"
+                    className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 focus:bg-white transition-all text-gray-900 placeholder-gray-400 resize-none"
+                  />
+                  <p className="text-xs text-gray-500 mt-2">These terms will be included in the final agreement</p>
+                </div>
               </div>
 
               {/* Next Step Button */}

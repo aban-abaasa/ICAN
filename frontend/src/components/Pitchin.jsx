@@ -29,7 +29,14 @@ import {
   getPitchComments,
   addPitchComment,
   deleteComment,
-  hasUserLikedPitch
+  hasUserLikedPitch,
+  getUserLikedPitches,
+  getUserInvestedPitches,
+  recordShare,
+  recordInvestmentInterest,
+  hasUserInvestedInterest,
+  subscribeToAllPitchesMetrics,
+  getPitchMetrics
 } from '../services/pitchInteractionsService';
 
 const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
@@ -53,6 +60,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
   const [showWallet, setShowWallet] = useState(false);
   const [editingProfile, setEditingProfile] = useState(null);
   const [likedPitches, setLikedPitches] = useState(new Set());
+  const [investedPitches, setInvestedPitches] = useState(new Set()); // track pitches user showed interest in
   const [showComments, setShowComments] = useState(null); // pitch id for comments modal
   const [comments, setComments] = useState({});
   const [newComment, setNewComment] = useState('');
@@ -63,7 +71,11 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
   const [selectedMobilePitch, setSelectedMobilePitch] = useState(null); // selected pitch for mobile detail
   const [showSHAREHub, setShowSHAREHub] = useState(false); // show SHAREHub modal on mobile
   const [videoPlayerPitch, setVideoPlayerPitch] = useState(null); // pitch for fullscreen video player
+  const [mutedVideos, setMutedVideos] = useState(new Set()); // track which videos are unmuted (all start muted)
+  const [currentVisiblePitch, setCurrentVisiblePitch] = useState(null); // track currently visible pitch for web bottom nav
+  const videoRefs = useRef({}); // refs to video elements for controlling sound
   const videoScrollRef = useRef(null);
+  const metricsUnsubscribeRef = useRef(null); // ref to store real-time unsubscribe function
 
   // Initialize and load data
   useEffect(() => {
@@ -96,6 +108,20 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                   setBusinessProfiles(profiles);
                   if (profiles.length > 0) {
                     setCurrentBusinessProfile(profiles[0]);
+                  }
+                  
+                  // Load user's liked pitches
+                  const likedIds = await getUserLikedPitches(user.id);
+                  if (likedIds.length > 0) {
+                    setLikedPitches(new Set(likedIds));
+                    console.log('✅ Loaded', likedIds.length, 'liked pitches for user');
+                  }
+                  
+                  // Load user's invested pitches
+                  const investedIds = await getUserInvestedPitches(user.id);
+                  if (investedIds.length > 0) {
+                    setInvestedPitches(new Set(investedIds));
+                    console.log('✅ Loaded', investedIds.length, 'invested pitches for user');
                   }
                 } catch (profileError) {
                   console.warn('Error loading profiles:', profileError.message);
@@ -135,11 +161,84 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
       // Show only user's actual pitches (must have user_id that matches)
       setFilteredPitches(pitches.filter(p => p.business_profiles?.user_id === currentUser.id));
     } else if (activeTab === 'interested') {
-      // Show pitches user has liked (pending votes/interested)
-      const interestedPitches = pitches.filter(p => likedPitches.has(p.id));
-      setFilteredPitches(interestedPitches.length > 0 ? interestedPitches : pitches.slice(0, 0)); // Show empty if no likes
+      // Show pitches user has liked or invested in
+      const interestedPitches = pitches.filter(p => likedPitches.has(p.id) || investedPitches.has(p.id));
+      setFilteredPitches(interestedPitches.length > 0 ? interestedPitches : pitches.slice(0, 0)); // Show empty if none
     }
-  }, [activeTab, pitches, currentUser, likedPitches]);
+  }, [activeTab, pitches, currentUser, likedPitches, investedPitches]);
+
+  // Set up real-time metrics subscription
+  useEffect(() => {
+    // Subscribe to real-time updates for all pitches metrics
+    const unsubscribe = subscribeToAllPitchesMetrics((update) => {
+      console.log('📊 Real-time metric update:', update);
+      
+      setPitches(prev => prev.map(pitch => {
+        if (pitch.id === update.pitchId) {
+          switch (update.type) {
+            case 'likes':
+              return { ...pitch, likes_count: update.count };
+            case 'comments':
+              return { ...pitch, comments_count: update.count };
+            case 'shares':
+              return { ...pitch, shares_count: update.count };
+            case 'invests':
+              return { ...pitch, invests_count: update.count };
+            default:
+              return pitch;
+          }
+        }
+        return pitch;
+      }));
+      
+      // Also update filtered pitches
+      setFilteredPitches(prev => prev.map(pitch => {
+        if (pitch.id === update.pitchId) {
+          switch (update.type) {
+            case 'likes':
+              return { ...pitch, likes_count: update.count };
+            case 'comments':
+              return { ...pitch, comments_count: update.count };
+            case 'shares':
+              return { ...pitch, shares_count: update.count };
+            case 'invests':
+              return { ...pitch, invests_count: update.count };
+            default:
+              return pitch;
+          }
+        }
+        return pitch;
+      }));
+      
+      // Also update videoPlayerPitch if it's open and matches
+      setVideoPlayerPitch(prev => {
+        if (prev && prev.id === update.pitchId) {
+          switch (update.type) {
+            case 'likes':
+              return { ...prev, likes_count: update.count };
+            case 'comments':
+              return { ...prev, comments_count: update.count };
+            case 'shares':
+              return { ...prev, shares_count: update.count };
+            case 'invests':
+              return { ...prev, invests_count: update.count };
+            default:
+              return prev;
+          }
+        }
+        return prev;
+      });
+    });
+
+    metricsUnsubscribeRef.current = unsubscribe;
+
+    // Cleanup on unmount
+    return () => {
+      if (metricsUnsubscribeRef.current) {
+        metricsUnsubscribeRef.current();
+      }
+    };
+  }, []);
   // Handle external showPitchCreator trigger from parent
   useEffect(() => {
     console.log('Pitchin: showPitchCreator changed to:', showPitchCreator);
@@ -148,6 +247,47 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
       setShowRecorder(true);
     }
   }, [showPitchCreator]);
+
+  // Track currently visible pitch for web bottom navigation
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!videoScrollRef.current || filteredPitches.length === 0) return;
+      
+      const scrollContainer = videoScrollRef.current;
+      const containerTop = scrollContainer.scrollTop;
+      const containerHeight = scrollContainer.clientHeight;
+      const centerY = containerTop + containerHeight / 2;
+      
+      // Find which pitch is closest to center
+      let closestPitch = null;
+      let closestDistance = Infinity;
+      
+      filteredPitches.forEach((pitch, index) => {
+        const pitchTop = index * containerHeight;
+        const pitchCenter = pitchTop + containerHeight / 2;
+        const distance = Math.abs(centerY - pitchCenter);
+        
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestPitch = pitch;
+        }
+      });
+      
+      if (closestPitch && closestPitch.id !== currentVisiblePitch?.id) {
+        setCurrentVisiblePitch(closestPitch);
+      }
+    };
+    
+    const scrollContainer = videoScrollRef.current;
+    if (scrollContainer) {
+      scrollContainer.addEventListener('scroll', handleScroll);
+      // Set initial pitch
+      if (filteredPitches.length > 0 && !currentVisiblePitch) {
+        setCurrentVisiblePitch(filteredPitches[0]);
+      }
+      return () => scrollContainer.removeEventListener('scroll', handleScroll);
+    }
+  }, [filteredPitches, currentVisiblePitch]);
 
   const handleCreatePitch = async (pitchData) => {
     try {
@@ -294,13 +434,25 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
 
       // Upload video after pitch creation if provided
       if (pitchData.videoBlob && newPitchData?.id) {
-        console.log('Uploading video for pitch:', newPitchData.id);
+        console.log('📤 Uploading video for pitch:', newPitchData.id);
+        console.log('   Video blob size:', pitchData.videoBlob.size, 'bytes');
+        console.log('   Video blob type:', pitchData.videoBlob.type);
         try {
           const uploadResult = await uploadVideo(pitchData.videoBlob, newPitchData.id);
+          console.log('📤 Upload result:', JSON.stringify(uploadResult, null, 2));
+          
           if (uploadResult.success && uploadResult.url) {
             console.log('✅ Video uploaded successfully:', uploadResult.url);
             // Update pitch with video URL
-            await updatePitch(newPitchData.id, { video_url: uploadResult.url });
+            const updateResult = await updatePitch(newPitchData.id, { video_url: uploadResult.url });
+            console.log('📝 Pitch update result:', JSON.stringify(updateResult, null, 2));
+            
+            if (!updateResult.success) {
+              console.error('❌ Failed to update pitch with video URL:', updateResult.error);
+              alert('Warning: Video uploaded but failed to link to pitch. Please try refreshing.');
+            } else {
+              console.log('✅ Pitch successfully updated with video URL');
+            }
           } else {
             // Upload failed - show error and delete the pitch
             console.error('❌ Video upload failed:', uploadResult.error);
@@ -324,6 +476,8 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
         console.error('❌ Pitch created but no ID returned - cannot upload video');
         alert('❌ Error creating pitch - please try again');
         return;
+      } else {
+        console.log('⚠️ No video blob provided - pitch created without video');
       }
 
       // Reload pitches
@@ -416,18 +570,22 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
         url: shareUrl
       };
 
+      let platform = 'link';
+      
       // Try native share first (mobile)
       if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
         await navigator.share(shareData);
+        platform = 'native';
       } else {
         // Fallback: Copy to clipboard
         await navigator.clipboard.writeText(shareUrl);
         setCopiedPitchId(pitchId);
         setTimeout(() => setCopiedPitchId(null), 2000);
+        platform = 'clipboard';
       }
       
-      // Increment share count
-      const result = await sharePitch(pitchId);
+      // Record share in database with user tracking
+      const result = await recordShare(pitchId, currentUser?.id || null, platform);
       const newSharesCount = result.success && result.data ? result.data.shares_count : (pitch?.shares_count || 0) + 1;
       const updatedPitches = pitches.map(p =>
         p.id === pitchId ? { ...p, shares_count: newSharesCount } : p
@@ -506,6 +664,37 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
     } catch (error) {
       console.error('Error deleting pitch:', error);
       alert('Error deleting pitch');
+    }
+  };
+
+  // Toggle video sound on/off
+  const toggleVideoSound = (pitchId) => {
+    const videoEl = videoRefs.current[pitchId];
+    if (videoEl) {
+      const isCurrentlyMuted = videoEl.muted;
+      
+      // Mute all other videos first
+      Object.keys(videoRefs.current).forEach(id => {
+        if (id !== pitchId && videoRefs.current[id]) {
+          videoRefs.current[id].muted = true;
+        }
+      });
+      
+      // Toggle the clicked video
+      videoEl.muted = !isCurrentlyMuted;
+      
+      // Update state for UI
+      setMutedVideos(prev => {
+        const newSet = new Set();
+        if (!isCurrentlyMuted) {
+          // Video is now muted, remove from unmuted set
+          return newSet;
+        } else {
+          // Video is now unmuted, add to set
+          newSet.add(pitchId);
+          return newSet;
+        }
+      });
     }
   };
 
@@ -599,7 +788,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
     setShowRecorder(true);
   };
 
-  const handleSmartContractClick = (pitch) => {
+  const handleSmartContractClick = async (pitch) => {
     if (!currentUser) {
       alert('Please login to invest');
       return;
@@ -612,6 +801,28 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
       }
       return;
     }
+    
+    // Record investment interest in database
+    try {
+      const result = await recordInvestmentInterest(pitch.id, currentUser.id);
+      if (result.success) {
+        // Update local state to track interest
+        const newInvested = new Set(investedPitches);
+        newInvested.add(pitch.id);
+        setInvestedPitches(newInvested);
+        
+        // Update invests count in pitches
+        const newInvestsCount = result.data?.invests_count || (pitch.invests_count || 0) + 1;
+        const updatedPitches = pitches.map(p =>
+          p.id === pitch.id ? { ...p, invests_count: newInvestsCount } : p
+        );
+        setPitches(updatedPitches);
+        setFilteredPitches(updatedPitches);
+      }
+    } catch (error) {
+      console.error('Error recording investment interest:', error);
+    }
+    
     // Use ShareSigningFlow for investment
     setSelectedForInvestment(pitch);
   };
@@ -702,7 +913,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
       )}
 
       {/* Collapsed Header - Small Business Profile Icon */}
-      <div className="sticky top-0 z-40 bg-gradient-to-r from-purple-900/80 to-pink-900/80 backdrop-blur border-b border-purple-500/30">
+      <div className="sticky top-0 z-40">
         <div className="px-4 py-4 flex items-center justify-between">
           {/* Business Profile Icon - Left */}
           <button
@@ -722,30 +933,30 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setActiveTab('feed')}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
+              className={`px-3 py-1.5 text-xs font-medium transition ${
                 activeTab === 'feed'
-                  ? 'bg-pink-500 text-white'
-                  : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                  ? 'text-pink-300'
+                  : 'text-gray-400 hover:text-white'
               }`}
             >
               Available
             </button>
             <button
               onClick={() => setActiveTab('myPitches')}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
+              className={`px-3 py-1.5 text-xs font-medium transition ${
                 activeTab === 'myPitches'
-                  ? 'bg-purple-500 text-white'
-                  : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                  ? 'text-purple-300'
+                  : 'text-gray-400 hover:text-white'
               }`}
             >
               My Pitches
             </button>
             <button
               onClick={() => setActiveTab('interested')}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
+              className={`px-3 py-1.5 text-xs font-medium transition ${
                 activeTab === 'interested'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                  ? 'text-blue-300'
+                  : 'text-gray-400 hover:text-white'
               }`}
             >
               Pending Votes
@@ -755,47 +966,47 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
           {/* Action Icons - Right */}
           <div className="flex items-center gap-2">
             {/* Like Icon */}
-            <button
+            {/* <button
               title="Like"
               className="p-2 hover:bg-white/10 rounded-lg transition flex items-center justify-center"
               onClick={() => alert('❤️ Like functionality')}
             >
               <Heart className="w-5 h-5 text-red-400" />
-            </button>
+            </button> */}
 
             {/* Comment Icon */}
-            <button
+            {/* <button
               title="Comment"
               className="p-2 hover:bg-white/10 rounded-lg transition flex items-center justify-center"
               onClick={() => alert('💬 Comment functionality')}
             >
               <MessageCircle className="w-5 h-5 text-blue-400" />
-            </button>
+            </button> */}
 
             {/* Invest Icon */}
-            <button
+            {/* <button
               title="Invest"
               className="p-2 hover:bg-white/10 rounded-lg transition flex items-center justify-center"
               onClick={() => alert('💰 Invest functionality')}
             >
               <Zap className="w-5 h-5 text-yellow-400" />
-            </button>
+            </button> */}
 
             {/* Share Icon */}
-            <button
+            {/* <button
               title="Share"
               className="p-2 hover:bg-white/10 rounded-lg transition flex items-center justify-center"
               onClick={() => alert('🔗 Share functionality')}
             >
               <Share2 className="w-5 h-5 text-green-400" />
-            </button>
+            </button> */}
 
             {/* Create Button */}
             <button
               onClick={() => {
                 handleCreatePitchClick();
               }}
-              className="ml-2 px-4 py-2 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white rounded-lg font-semibold transition flex items-center gap-2"
+              className="ml-2 px-4 py-2 text-pink-300 hover:text-pink-200 rounded-lg font-semibold transition flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Create</span>
@@ -804,7 +1015,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
             {/* Profile Button */}
             <button
               onClick={() => setShowProfileSelector(true)}
-              className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-semibold transition flex items-center gap-2"
+              className="px-4 py-2 text-gray-300 hover:text-white rounded-lg font-semibold transition flex items-center gap-2"
             >
               <Building2 className="w-4 h-4" />
               <span className="hidden sm:inline">Profile</span>
@@ -893,10 +1104,10 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
       )}
       */}
 
-      {/* Main Content - Full screen on mobile */}
-      <div className="fixed inset-0 w-screen h-screen md:relative md:inset-auto md:w-full md:h-auto px-0 py-0 md:py-8 overflow-hidden md:overflow-visible bg-slate-900">
+      {/* Main Content - Full screen on mobile, centered phone-like on desktop */}
+      <div className="fixed inset-0 w-screen h-screen bg-gradient-to-br from-slate-900 via-purple-900/30 to-slate-900 md:pb-24">
         {showRecorder ? (
-          <div className="w-full h-full md:h-auto flex flex-col md:flex-row md:items-center md:justify-center px-4 md:px-8 py-4 md:py-8">
+          <div className="w-full h-full flex flex-col items-center justify-center px-4 py-4">
             <div className="w-full max-w-4xl">
               <button
                 onClick={() => {
@@ -920,7 +1131,9 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
         ) : (
           <>
             {/* Pitch Feed - Full-Screen TikTok-Style with Snap Scroll */}
-            <div className="h-full w-full overflow-y-auto snap-y snap-mandatory scroll-smooth" ref={videoScrollRef}>
+            {/* Mobile: full screen, Desktop: centered phone-like container */}
+            <div className="h-full w-full flex items-center justify-center">
+              <div className="relative w-full h-full md:w-[400px] md:h-[90vh] md:max-h-[800px] md:rounded-3xl md:overflow-hidden md:shadow-2xl md:shadow-purple-500/20 md:border md:border-purple-500/20 overflow-y-auto snap-y snap-mandatory scroll-smooth" ref={videoScrollRef}>
               {loading ? (
                 // Creative Full-Screen Loading Experience with Video Preview
                 <div className="fixed inset-0 z-50 bg-black flex items-center justify-center overflow-hidden">
@@ -1025,139 +1238,269 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                 filteredPitches.map((pitch) => (
                   <div
                     key={pitch.id}
-                    className="relative w-full h-screen snap-start bg-black overflow-hidden"
+                    className="relative w-full h-full min-h-screen snap-start bg-black"
                   >
                     {/* Full-Screen Video Background */}
-                    <div className="absolute inset-0 w-full h-full bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center">
+                    <div className="absolute inset-0 w-full h-full bg-gradient-to-br from-purple-600 to-pink-600">
                       {!pitch.video_url || videoErrors[pitch.id] ? (
                         <div className="w-full h-full flex items-center justify-center">
                           <AlertCircle className="w-12 h-12 text-slate-500" />
                         </div>
                       ) : (
-                        <>
-                          <video
-                            src={pitch.video_url}
-                            className="w-full h-full object-cover"
-                            crossOrigin="anonymous"
-                            onError={(event) => handleVideoError(pitch.id, event)}
-                            onLoadedMetadata={(event) => handleVideoLoadedMetadata(pitch.id, event)}
-                          />
-                          <button
-                            onClick={() => setVideoPlayerPitch(pitch)}
-                            className="absolute inset-0 flex items-center justify-center"
-                          >
-                            <div className="w-20 h-20 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-110 transition-transform">
-                              <Play className="w-10 h-10 text-white fill-white ml-1" />
-                            </div>
-                          </button>
-                        </>
+                        <video
+                          ref={el => { if (el) videoRefs.current[pitch.id] = el; }}
+                          src={pitch.video_url}
+                          className="w-full h-full object-cover"
+                          crossOrigin="anonymous"
+                          autoPlay
+                          muted
+                          loop
+                          playsInline
+                          onError={(event) => handleVideoError(pitch.id, event)}
+                          onLoadedMetadata={(event) => handleVideoLoadedMetadata(pitch.id, event)}
+                        />
                       )}
                     </div>
 
-                    {/* Right Side Action Buttons - TikTok Style */}
-                    <div className="absolute right-3 bottom-24 flex flex-col gap-4 z-10">
-                      {/* Like Button */}
+                    {/* Overlay Container - All UI on top of video */}
+                    <div className="absolute inset-0 z-20 pointer-events-none">
+                      {/* Tap to toggle sound - center */}
                       <button
-                        onClick={() => handleLike(pitch.id)}
-                        className="flex flex-col items-center gap-1"
-                        title="Like"
+                        onClick={() => toggleVideoSound(pitch.id)}
+                        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-auto"
                       >
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-md transition-all ${
-                          likedPitches.has(pitch.id)
-                            ? 'bg-red-500/80 scale-110'
-                            : 'bg-black/40 hover:bg-black/60'
+                        <div className={`px-4 py-2 rounded-full backdrop-blur-sm flex items-center gap-2 transition-all ${
+                          mutedVideos.has(pitch.id) 
+                            ? 'bg-green-500/60' 
+                            : 'bg-white/20 hover:bg-white/30'
                         }`}>
-                          <Heart className={`w-6 h-6 ${likedPitches.has(pitch.id) ? 'text-white fill-white' : 'text-white'}`} />
+                          {mutedVideos.has(pitch.id) ? (
+                            <>
+                              <span className="text-base">🔊</span>
+                              <span className="text-white text-xs font-medium">Sound ON</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-base">🔇</span>
+                              <span className="text-white text-xs font-medium">Tap for sound</span>
+                            </>
+                          )}
                         </div>
-                        <span className="text-white text-xs font-semibold drop-shadow-lg">{pitch.likes_count || 0}</span>
                       </button>
 
-                      {/* Comment Button */}
-                      <button
-                        onClick={() => handleOpenComments(pitch.id)}
-                        className="flex flex-col items-center gap-1"
-                        title="Comment"
-                      >
-                        <div className="w-12 h-12 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center hover:bg-black/60 transition-all">
-                          <MessageCircle className="w-6 h-6 text-white" />
-                        </div>
-                        <span className="text-white text-xs font-semibold drop-shadow-lg">{pitch.comments_count || 0}</span>
-                      </button>
+                      {/* Right Side Action Buttons - Transparent TikTok Style */}
+                      <div className="absolute right-3 bottom-24 flex flex-col gap-5 pointer-events-auto">
+                        {/* Like Button */}
+                        <button
+                          onClick={() => handleLike(pitch.id)}
+                          className="flex flex-col items-center gap-1"
+                          title="Like"
+                        >
+                          <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                            likedPitches.has(pitch.id)
+                              ? 'bg-red-500/80 scale-110'
+                              : 'bg-white/20 hover:bg-white/30 backdrop-blur-sm'
+                          }`}>
+                            <Heart className={`w-6 h-6 ${likedPitches.has(pitch.id) ? 'text-white fill-white' : 'text-white drop-shadow-lg'}`} />
+                          </div>
+                          <span className="text-white text-xs font-bold drop-shadow-lg">{pitch.likes_count || 0}</span>
+                        </button>
 
-                      {/* Share Button */}
-                      <button
-                        onClick={() => handleShare(pitch.id)}
-                        className="flex flex-col items-center gap-1"
-                        title="Share"
-                      >
-                        <div className="w-12 h-12 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center hover:bg-black/60 transition-all">
-                          <Share2 className="w-6 h-6 text-white" />
-                        </div>
-                        <span className="text-white text-xs font-semibold drop-shadow-lg">{pitch.shares_count || 1}</span>
-                      </button>
+                        {/* Comment Button */}
+                        <button
+                          onClick={() => handleOpenComments(pitch.id)}
+                          className="flex flex-col items-center gap-1"
+                          title="Comment"
+                        >
+                          <div className="w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm flex items-center justify-center transition-all">
+                            <MessageCircle className="w-6 h-6 text-white drop-shadow-lg" />
+                          </div>
+                          <span className="text-white text-xs font-bold drop-shadow-lg">{pitch.comments_count || 0}</span>
+                        </button>
 
-                      {/* Invest Button - Highlighted */}
-                      <button
-                        onClick={() => handleSmartContractClick(pitch)}
-                        className="flex flex-col items-center gap-1"
-                        title="Invest"
-                      >
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center animate-pulse-slow shadow-lg shadow-yellow-500/50 hover:scale-110 transition-transform">
-                          <Zap className="w-6 h-6 text-white fill-white" />
-                        </div>
-                        <span className="text-yellow-300 text-xs font-bold drop-shadow-lg">Invest</span>
-                      </button>
-                    </div>
+                        {/* Share Button */}
+                        <button
+                          onClick={() => handleShare(pitch.id)}
+                          className="flex flex-col items-center gap-1"
+                          title="Share"
+                        >
+                          <div className="w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm flex items-center justify-center transition-all">
+                            <Share2 className="w-6 h-6 text-white drop-shadow-lg" />
+                          </div>
+                          <span className="text-white text-xs font-bold drop-shadow-lg">{pitch.shares_count || 0}</span>
+                        </button>
 
-                    {/* Bottom Info Section */}
-                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent px-4 pb-20 pt-8">
-                      {/* Creator Info */}
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                          <Building2 className="w-5 h-5 text-white" />
-                        </div>
-                        <div>
-                          <p className="text-white font-semibold text-sm drop-shadow-lg">
-                            {pitch.business_profiles?.business_name || 'Business'}
-                          </p>
-                          <p className="text-gray-300 text-xs">{formatDate(pitch.created_at)}</p>
-                        </div>
+                        {/* Invest Button - Highlighted */}
+                        <button
+                          onClick={() => handleSmartContractClick(pitch)}
+                          className="flex flex-col items-center gap-1"
+                          title="Invest"
+                        >
+                          <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                            investedPitches.has(pitch.id)
+                              ? 'bg-green-500/80 scale-110'
+                              : 'bg-gradient-to-br from-yellow-500/80 to-orange-500/80 hover:from-yellow-500 hover:to-orange-500 animate-pulse'
+                          }`}>
+                            <Zap className="w-6 h-6 text-white fill-white drop-shadow-lg" />
+                          </div>
+                          <span className={`text-xs font-bold drop-shadow-lg ${
+                            investedPitches.has(pitch.id) ? 'text-green-300' : 'text-yellow-300'
+                          }`}>
+                            {investedPitches.has(pitch.id) ? 'Invested ✓' : 'Invest'}
+                          </span>
+                        </button>
                       </div>
 
-                      {/* Title */}
-                      <h3 className="text-white font-bold text-lg mb-2 drop-shadow-lg line-clamp-2">
-                        {pitch.title}
-                      </h3>
-
-                      {/* Description */}
-                      <p className="text-gray-200 text-sm mb-3 line-clamp-2 drop-shadow-lg">
-                        {pitch.description}
-                      </p>
-
-                      {/* Funding Info - Compact */}
-                      <div className="flex gap-4 text-xs">
-                        <div>
-                          <span className="text-gray-400">Target: </span>
-                          <span className="text-white font-bold">{formatCurrency(pitch.target_funding)}</span>
-                        </div>
-                        <div>
-                          <span className="text-gray-400">Equity: </span>
-                          <span className="text-purple-300 font-bold">{pitch.equity_offering || 0}%</span>
-                        </div>
-                        {pitch.has_ip && (
-                          <div className="bg-blue-500/30 backdrop-blur-sm text-blue-300 px-2 py-0.5 rounded-full text-xs font-semibold border border-blue-400/30">
-                            IP ✓
+                      {/* Bottom Info - Gradient overlay */}
+                      <div className="absolute bottom-0 left-0 right-16 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-4 pb-4 pt-16 pointer-events-auto">
+                        {/* Creator Info */}
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                            <Building2 className="w-4 h-4 text-white" />
                           </div>
-                        )}
+                          <div>
+                            <p className="text-white font-semibold text-sm drop-shadow-lg">
+                              {pitch.business_profiles?.business_name || 'Business'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Title */}
+                        <h3 className="text-white font-bold text-base mb-1 drop-shadow-lg line-clamp-1">
+                          {pitch.title}
+                        </h3>
+
+                        {/* Funding Info Row */}
+                        <div className="flex items-center flex-wrap gap-2 text-xs">
+                          <span className="text-white/90 font-semibold">{formatCurrency(pitch.target_funding)}</span>
+                          <span className="text-white/50">•</span>
+                          <span className="text-purple-300 font-semibold">{pitch.equity_offering || 0}% equity</span>
+                          {pitch.has_ip && (
+                            <>
+                              <span className="text-white/50">•</span>
+                              <span className="text-blue-300 font-semibold">IP ✓</span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
                 ))
               )}
+              </div>
             </div>
           </>
         )}
       </div>
+
+      {/* Bottom Action Bar - Web View Only */}
+      {!showRecorder && filteredPitches.length > 0 && (
+        <div className="hidden md:block fixed bottom-0 left-0 right-0 z-50 bg-gradient-to-t from-black via-black/95 to-transparent backdrop-blur-lg border-t border-white/10">
+          <div className="max-w-7xl mx-auto px-6 py-3">
+            <div className="flex items-center justify-between">
+              {/* Left - Pitch Info */}
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0">
+                  <Building2 className="w-5 h-5 text-white" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-white font-semibold text-sm truncate">
+                    {(currentVisiblePitch || filteredPitches[0]).title}
+                  </h3>
+                  <p className="text-gray-400 text-xs truncate">
+                    {(currentVisiblePitch || filteredPitches[0]).business_profiles?.business_name || 'Business'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Center - Action Icons */}
+              <div className="flex items-center gap-4 mx-6">
+                {/* Like */}
+                <button
+                  onClick={() => handleLike((currentVisiblePitch || filteredPitches[0]).id)}
+                  className="flex flex-col items-center gap-1 group"
+                  title="Like"
+                >
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                    likedPitches.has((currentVisiblePitch || filteredPitches[0]).id)
+                      ? 'bg-red-500 scale-110'
+                      : 'bg-white/10 hover:bg-white/20 group-hover:scale-105'
+                  }`}>
+                    <Heart className={`w-5 h-5 ${
+                      likedPitches.has((currentVisiblePitch || filteredPitches[0]).id) 
+                        ? 'text-white fill-white' 
+                        : 'text-white'
+                    }`} />
+                  </div>
+                  <span className="text-white text-xs font-semibold">{(currentVisiblePitch || filteredPitches[0]).likes_count || 0}</span>
+                </button>
+
+                {/* Comment */}
+                <button
+                  onClick={() => handleOpenComments((currentVisiblePitch || filteredPitches[0]).id)}
+                  className="flex flex-col items-center gap-1 group"
+                  title="Comment"
+                >
+                  <div className="w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all group-hover:scale-105">
+                    <MessageCircle className="w-5 h-5 text-white" />
+                  </div>
+                  <span className="text-white text-xs font-semibold">{(currentVisiblePitch || filteredPitches[0]).comments_count || 0}</span>
+                </button>
+
+                {/* Share */}
+                <button
+                  onClick={() => handleShare((currentVisiblePitch || filteredPitches[0]).id)}
+                  className="flex flex-col items-center gap-1 group"
+                  title="Share"
+                >
+                  <div className="w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all group-hover:scale-105">
+                    <Share2 className="w-5 h-5 text-white" />
+                  </div>
+                  <span className="text-white text-xs font-semibold">{(currentVisiblePitch || filteredPitches[0]).shares_count || 0}</span>
+                </button>
+
+                {/* Invest */}
+                <button
+                  onClick={() => handleSmartContractClick((currentVisiblePitch || filteredPitches[0]))}
+                  className="flex flex-col items-center gap-1 group"
+                  title="Invest"
+                >
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                    investedPitches.has((currentVisiblePitch || filteredPitches[0]).id)
+                      ? 'bg-green-500 scale-110'
+                      : 'bg-gradient-to-br from-yellow-500 to-orange-500 group-hover:scale-105'
+                  }`}>
+                    <Zap className="w-5 h-5 text-white fill-white" />
+                  </div>
+                  <span className={`text-xs font-semibold ${
+                    investedPitches.has((currentVisiblePitch || filteredPitches[0]).id) ? 'text-green-300' : 'text-yellow-300'
+                  }`}>
+                    {investedPitches.has((currentVisiblePitch || filteredPitches[0]).id) ? '✓' : 'Invest'}
+                  </span>
+                </button>
+              </div>
+
+              {/* Right - Create & Profile */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  onClick={handleCreatePitchClick}
+                  className="px-4 py-2 bg-pink-500 hover:bg-pink-600 text-white rounded-lg font-semibold transition flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Create</span>
+                </button>
+                <button
+                  onClick={() => setShowProfileSelector(true)}
+                  className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-semibold transition flex items-center gap-2"
+                >
+                  <Building2 className="w-4 h-4" />
+                  <span>Profile</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Smart Contract Modal */}
       {selectedForContract && (
@@ -1564,21 +1907,67 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                     key={pitch.id}
                     className="bg-slate-800/60 backdrop-blur border border-slate-700 hover:border-pink-500/50 rounded-lg overflow-hidden hover:shadow-2xl hover:shadow-purple-500/30 transition-all group"
                   >
-                    {/* Thumbnail */}
-                    <div className="relative w-full aspect-video bg-black flex items-center justify-center">
+                    {/* Thumbnail - Auto-playing Preview */}
+                    <div className="relative w-full aspect-video bg-black flex items-center justify-center overflow-hidden">
                       {!pitch.video_url || videoErrors[pitch.id] ? (
                         <AlertCircle className="w-8 h-8 text-slate-500" />
                       ) : (
                         <>
                           <video
+                            ref={el => { if (el) videoRefs.current[`grid-${pitch.id}`] = el; }}
                             src={pitch.video_url}
-                            className="w-full h-full object-cover opacity-50 group-hover:opacity-70 transition"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             crossOrigin="anonymous"
+                            autoPlay
+                            muted
+                            loop
+                            playsInline
                             onError={(event) => handleVideoError(pitch.id, event)}
                           />
-                          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
-                            <Play className="w-12 h-12 text-white fill-white" />
-                          </div>
+                          {/* Tap to toggle sound button */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const videoEl = videoRefs.current[`grid-${pitch.id}`];
+                              if (videoEl) {
+                                // Mute all other grid videos first
+                                Object.keys(videoRefs.current).forEach(id => {
+                                  if (id !== `grid-${pitch.id}` && videoRefs.current[id]) {
+                                    videoRefs.current[id].muted = true;
+                                  }
+                                });
+                                videoEl.muted = !videoEl.muted;
+                                setMutedVideos(prev => {
+                                  const newSet = new Set(prev);
+                                  if (videoEl.muted) {
+                                    newSet.delete(`grid-${pitch.id}`);
+                                  } else {
+                                    newSet.add(`grid-${pitch.id}`);
+                                  }
+                                  return newSet;
+                                });
+                              }
+                            }}
+                            className="absolute inset-0 flex items-center justify-center"
+                          >
+                            {/* Sound indicator badge */}
+                            <div className={`absolute top-2 left-2 px-2 py-1 rounded-full backdrop-blur-sm flex items-center gap-1 transition-all ${
+                              mutedVideos.has(`grid-${pitch.id}`) 
+                                ? 'bg-green-500/80' 
+                                : 'bg-black/60'
+                            }`}>
+                              <span className="text-white text-xs">
+                                {mutedVideos.has(`grid-${pitch.id}`) ? '🔊' : '🔇'}
+                              </span>
+                            </div>
+                            {/* Center tap hint - only show when muted */}
+                            {!mutedVideos.has(`grid-${pitch.id}`) && (
+                              <div className="px-3 py-2 rounded-full bg-black/70 backdrop-blur-sm flex items-center gap-2 opacity-0 group-hover:opacity-100 transition">
+                                <span className="text-lg">🔊</span>
+                                <span className="text-white text-xs font-medium">Tap for sound</span>
+                              </div>
+                            )}
+                          </button>
                         </>
                       )}
                       {pitch.has_ip && (
@@ -1593,6 +1982,28 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                       <h3 className="text-base font-bold text-white mb-1 line-clamp-2 group-hover:text-pink-400 transition">
                         {pitch.title}
                       </h3>
+                      
+                      {/* Status Indicator for Mobile */}
+                      <div className="mb-2">
+                        {pitch.status === 'published' ? (
+                          <span className="bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full text-xs font-semibold border border-green-400/30">
+                            ✓ Published
+                          </span>
+                        ) : pitch.status === 'draft' ? (
+                          <span className="bg-orange-500/20 text-orange-300 px-2 py-0.5 rounded-full text-xs font-semibold border border-orange-400/30">
+                            📝 Draft
+                          </span>
+                        ) : pitch.status === 'pending' ? (
+                          <span className="bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded-full text-xs font-semibold border border-blue-400/30">
+                            ⏳ Pending
+                          </span>
+                        ) : (
+                          <span className="bg-gray-500/20 text-gray-300 px-2 py-0.5 rounded-full text-xs font-semibold border border-gray-400/30">
+                            📹 Uploaded
+                          </span>
+                        )}
+                      </div>
+                      
                       <p className="text-sm text-gray-400 mb-3">
                         {pitch.business_profiles?.business_name || 'Unknown'}
                       </p>
@@ -1616,7 +2027,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                         </div>
                       </div>
 
-                      {/* Action Buttons with Icons */}
+                      {/* Action Buttons with Icons and Live Counts */}
                       <div className="flex gap-2">
                         {/* Like Button */}
                         <button
@@ -1628,7 +2039,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                           }`}
                           title="Like"
                         >
-                          <Heart className="w-4 h-4" />
+                          <Heart className={`w-4 h-4 ${likedPitches.has(pitch.id) ? 'fill-current' : ''}`} />
                           <span>{pitch.likes_count || 0}</span>
                         </button>
 
@@ -1642,14 +2053,41 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                           <span>{pitch.comments_count || 0}</span>
                         </button>
 
+                        {/* Share Button */}
+                        <button
+                          onClick={() => handleShare(pitch.id)}
+                          className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-medium transition-all ${
+                            copiedPitchId === pitch.id
+                              ? 'bg-green-500/40 text-green-300'
+                              : 'bg-slate-700/50 hover:bg-purple-500/30 text-slate-300'
+                          }`}
+                          title="Share"
+                        >
+                          {copiedPitchId === pitch.id ? (
+                            <>
+                              <Check className="w-4 h-4" />
+                              <span>Copied!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Share2 className="w-4 h-4" />
+                              <span>{pitch.shares_count || 0}</span>
+                            </>
+                          )}
+                        </button>
+
                         {/* Invest Button */}
                         <button
                           onClick={() => handleSmartContractClick(pitch)}
-                          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 bg-gradient-to-r from-yellow-500/40 to-orange-500/40 hover:from-yellow-500/50 hover:to-orange-500/50 text-yellow-300 rounded-lg text-xs font-medium transition-all"
+                          className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-medium transition-all ${
+                            investedPitches.has(pitch.id)
+                              ? 'bg-green-500/40 hover:bg-green-500/50 text-green-300'
+                              : 'bg-gradient-to-r from-yellow-500/40 to-orange-500/40 hover:from-yellow-500/50 hover:to-orange-500/50 text-yellow-300'
+                          }`}
                           title="Invest"
                         >
-                          <Zap className="w-4 h-4" />
-                          <span>Invest</span>
+                          <Zap className={`w-4 h-4 ${investedPitches.has(pitch.id) ? 'fill-current' : ''}`} />
+                          <span>{pitch.invests_count || 0}</span>
                         </button>
                       </div>
                     </div>
@@ -1681,6 +2119,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
               </div>
             ) : (
               <video
+                ref={el => { if (el) videoRefs.current[`player-${videoPlayerPitch.id}`] = el; }}
                 src={videoPlayerPitch.video_url}
                 className="w-full h-full object-cover"
                 controls
@@ -1693,25 +2132,111 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
             )}
           </div>
 
+          {/* Right Side Action Buttons - TikTok Style */}
+          <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-5 z-30">
+            {/* Like Button */}
+            <button
+              onClick={() => handleLike(videoPlayerPitch.id)}
+              className="flex flex-col items-center gap-1"
+              title="Like"
+            >
+              <div className={`w-14 h-14 rounded-full flex items-center justify-center backdrop-blur-md transition-all shadow-lg ${
+                likedPitches.has(videoPlayerPitch.id)
+                  ? 'bg-red-500/90 scale-110'
+                  : 'bg-black/50 hover:bg-black/70'
+              }`}>
+                <Heart className={`w-7 h-7 ${likedPitches.has(videoPlayerPitch.id) ? 'text-white fill-white' : 'text-white'}`} />
+              </div>
+              <span className="text-white text-sm font-bold drop-shadow-lg">{videoPlayerPitch.likes_count || 0}</span>
+            </button>
+
+            {/* Comment Button */}
+            <button
+              onClick={() => handleOpenComments(videoPlayerPitch.id)}
+              className="flex flex-col items-center gap-1"
+              title="Comment"
+            >
+              <div className="w-14 h-14 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center hover:bg-black/70 transition-all shadow-lg">
+                <MessageCircle className="w-7 h-7 text-white" />
+              </div>
+              <span className="text-white text-sm font-bold drop-shadow-lg">{videoPlayerPitch.comments_count || 0}</span>
+            </button>
+
+            {/* Share Button */}
+            <button
+              onClick={() => handleShare(videoPlayerPitch.id)}
+              className="flex flex-col items-center gap-1"
+              title="Share"
+            >
+              <div className={`w-14 h-14 rounded-full backdrop-blur-md flex items-center justify-center transition-all shadow-lg ${
+                copiedPitchId === videoPlayerPitch.id
+                  ? 'bg-green-500/90'
+                  : 'bg-black/50 hover:bg-black/70'
+              }`}>
+                {copiedPitchId === videoPlayerPitch.id ? (
+                  <Check className="w-7 h-7 text-white" />
+                ) : (
+                  <Share2 className="w-7 h-7 text-white" />
+                )}
+              </div>
+              <span className="text-white text-sm font-bold drop-shadow-lg">
+                {copiedPitchId === videoPlayerPitch.id ? 'Copied!' : (videoPlayerPitch.shares_count || 0)}
+              </span>
+            </button>
+
+            {/* Invest Button */}
+            <button
+              onClick={() => handleSmartContractClick(videoPlayerPitch)}
+              className="flex flex-col items-center gap-1"
+              title="Invest"
+            >
+              <div className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all ${
+                investedPitches.has(videoPlayerPitch.id)
+                  ? 'bg-green-500/90 scale-110'
+                  : 'bg-gradient-to-br from-yellow-500 to-orange-500 animate-pulse-slow hover:scale-110'
+              }`}>
+                <Zap className="w-7 h-7 text-white fill-white" />
+              </div>
+              <span className={`text-sm font-bold drop-shadow-lg ${
+                investedPitches.has(videoPlayerPitch.id) ? 'text-green-300' : 'text-yellow-300'
+              }`}>
+                {videoPlayerPitch.invests_count || 0}
+              </span>
+            </button>
+          </div>
+
           {/* Pitch Info Bottom Bar - Overlaid on Video */}
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/90 to-transparent p-4 sm:p-6 z-20 pointer-events-none">
-            <h3 className="text-base sm:text-lg font-bold text-white mb-1">{videoPlayerPitch.title}</h3>
-            <p className="text-xs sm:text-sm text-gray-300">{videoPlayerPitch.business_profiles?.business_name}</p>
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/90 to-transparent p-4 sm:p-6 z-20">
+            <div className="flex items-start gap-3 mb-2">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0">
+                <Building2 className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-lg sm:text-xl font-bold text-white">{videoPlayerPitch.title}</h3>
+                <p className="text-sm text-gray-300">{videoPlayerPitch.business_profiles?.business_name}</p>
+              </div>
+            </div>
             
-            {/* Quick Stats - Mobile Optimized */}
-            <div className="flex gap-3 mt-3 sm:mt-4 text-xs sm:text-sm">
-              <div className="flex items-center gap-1">
-                <span>👍</span>
-                <span className="text-gray-300">{videoPlayerPitch.likes_count || 0}</span>
+            {/* Description */}
+            <p className="text-sm text-gray-200 mb-3 line-clamp-2 ml-15">
+              {videoPlayerPitch.description}
+            </p>
+            
+            {/* Funding Info */}
+            <div className="flex gap-4 text-sm">
+              <div className="bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded-full">
+                <span className="text-gray-300">Target: </span>
+                <span className="text-white font-bold">{formatCurrency(videoPlayerPitch.target_funding)}</span>
               </div>
-              <div className="flex items-center gap-1">
-                <span>💬</span>
-                <span className="text-gray-300">{videoPlayerPitch.comments_count || 0}</span>
+              <div className="bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded-full">
+                <span className="text-gray-300">Equity: </span>
+                <span className="text-purple-300 font-bold">{videoPlayerPitch.equity_offering || 0}%</span>
               </div>
-              <div className="flex items-center gap-1">
-                <span>🔗</span>
-                <span className="text-gray-300">{videoPlayerPitch.shares_count || 0}</span>
-              </div>
+              {videoPlayerPitch.has_ip && (
+                <div className="bg-blue-500/30 px-3 py-1.5 rounded-full">
+                  <span className="text-blue-300 font-semibold">🛡️ IP Protected</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
