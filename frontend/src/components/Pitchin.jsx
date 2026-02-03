@@ -1288,97 +1288,179 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                         </div>
                       </button>
 
-                      {/* Right Side Action Buttons - Transparent TikTok Style */}
-                      <div className="absolute right-3 bottom-24 flex flex-col gap-5 pointer-events-auto">
+                      {/* Action Buttons - Portrait: vertical on right, Landscape: horizontal at bottom */}
+                      {/* Portrait Mode (vertical) */}
+                      <div className="absolute right-2 bottom-20 portrait:flex landscape:hidden flex-col gap-2 pointer-events-auto">
                         {/* Like Button */}
                         <button
                           onClick={() => handleLike(pitch.id)}
-                          className="flex flex-col items-center gap-1"
+                          className="flex flex-col items-center gap-0.5"
                           title="Like"
                         >
-                          <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                          <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
                             likedPitches.has(pitch.id)
                               ? 'bg-red-500/80 scale-110'
                               : 'bg-white/20 hover:bg-white/30 backdrop-blur-sm'
                           }`}>
-                            <Heart className={`w-6 h-6 ${likedPitches.has(pitch.id) ? 'text-white fill-white' : 'text-white drop-shadow-lg'}`} />
+                            <Heart className={`w-4 h-4 ${likedPitches.has(pitch.id) ? 'text-white fill-white' : 'text-white drop-shadow-lg'}`} />
                           </div>
-                          <span className="text-white text-xs font-bold drop-shadow-lg">{pitch.likes_count || 0}</span>
+                          <span className="text-white text-[9px] font-bold drop-shadow-lg">{pitch.likes_count || 0}</span>
                         </button>
 
                         {/* Comment Button */}
                         <button
                           onClick={() => handleOpenComments(pitch.id)}
-                          className="flex flex-col items-center gap-1"
+                          className="flex flex-col items-center gap-0.5"
                           title="Comment"
                         >
-                          <div className="w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm flex items-center justify-center transition-all">
-                            <MessageCircle className="w-6 h-6 text-white drop-shadow-lg" />
+                          <div className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm flex items-center justify-center transition-all">
+                            <MessageCircle className="w-4 h-4 text-white drop-shadow-lg" />
                           </div>
-                          <span className="text-white text-xs font-bold drop-shadow-lg">{pitch.comments_count || 0}</span>
+                          <span className="text-white text-[9px] font-bold drop-shadow-lg">{pitch.comments_count || 0}</span>
                         </button>
 
                         {/* Share Button */}
                         <button
                           onClick={() => handleShare(pitch.id)}
-                          className="flex flex-col items-center gap-1"
+                          className="flex flex-col items-center gap-0.5"
                           title="Share"
                         >
-                          <div className="w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm flex items-center justify-center transition-all">
-                            <Share2 className="w-6 h-6 text-white drop-shadow-lg" />
+                          <div className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm flex items-center justify-center transition-all">
+                            <Share2 className="w-4 h-4 text-white drop-shadow-lg" />
                           </div>
-                          <span className="text-white text-xs font-bold drop-shadow-lg">{pitch.shares_count || 0}</span>
+                          <span className="text-white text-[9px] font-bold drop-shadow-lg">{pitch.shares_count || 0}</span>
                         </button>
 
-                        {/* Invest Button - Highlighted */}
+                        {/* Invest Button */}
                         <button
                           onClick={() => handleSmartContractClick(pitch)}
-                          className="flex flex-col items-center gap-1"
+                          className="flex flex-col items-center gap-0.5"
                           title="Invest"
                         >
-                          <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                          <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
                             investedPitches.has(pitch.id)
                               ? 'bg-green-500/80 scale-110'
-                              : 'bg-gradient-to-br from-yellow-500/80 to-orange-500/80 hover:from-yellow-500 hover:to-orange-500 animate-pulse'
+                              : 'bg-gradient-to-br from-yellow-500/80 to-orange-500/80'
                           }`}>
-                            <Zap className="w-6 h-6 text-white fill-white drop-shadow-lg" />
+                            <Zap className="w-4 h-4 text-white fill-white drop-shadow-lg" />
                           </div>
-                          <span className={`text-xs font-bold drop-shadow-lg ${
+                          <span className={`text-[9px] font-bold drop-shadow-lg ${
                             investedPitches.has(pitch.id) ? 'text-green-300' : 'text-yellow-300'
                           }`}>
-                            {investedPitches.has(pitch.id) ? 'Invested ✓' : 'Invest'}
+                            {investedPitches.has(pitch.id) ? '✓' : 'Invest'}
                           </span>
+                        </button>
+
+                        {/* Create Button */}
+                        <button
+                          onClick={handleCreatePitchClick}
+                          className="flex flex-col items-center gap-0.5"
+                          title="Create"
+                        >
+                          <div className="w-9 h-9 rounded-full bg-pink-500/80 hover:bg-pink-500 flex items-center justify-center transition-all">
+                            <Plus className="w-4 h-4 text-white drop-shadow-lg" />
+                          </div>
+                          <span className="text-pink-300 text-[9px] font-bold drop-shadow-lg">Create</span>
+                        </button>
+
+                        {/* Profile Button */}
+                        <button
+                          onClick={() => setShowProfileSelector(true)}
+                          className="flex flex-col items-center gap-0.5"
+                          title="Profile"
+                        >
+                          <div className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm flex items-center justify-center transition-all">
+                            <Building2 className="w-4 h-4 text-white drop-shadow-lg" />
+                          </div>
+                          <span className="text-white text-[9px] font-bold drop-shadow-lg">Profile</span>
+                        </button>
+                      </div>
+
+                      {/* Landscape Mode (horizontal at bottom-right) */}
+                      <div className="absolute right-2 bottom-2 portrait:hidden landscape:flex flex-row gap-3 pointer-events-auto bg-black/40 backdrop-blur-sm rounded-full px-3 py-2">
+                        {/* Like */}
+                        <button onClick={() => handleLike(pitch.id)} className="flex flex-col items-center" title="Like">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                            likedPitches.has(pitch.id) ? 'bg-red-500/80' : 'bg-white/20'
+                          }`}>
+                            <Heart className={`w-4 h-4 ${likedPitches.has(pitch.id) ? 'text-white fill-white' : 'text-white'}`} />
+                          </div>
+                          <span className="text-white text-[8px] font-bold">{pitch.likes_count || 0}</span>
+                        </button>
+
+                        {/* Comment */}
+                        <button onClick={() => handleOpenComments(pitch.id)} className="flex flex-col items-center" title="Comment">
+                          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                            <MessageCircle className="w-4 h-4 text-white" />
+                          </div>
+                          <span className="text-white text-[8px] font-bold">{pitch.comments_count || 0}</span>
+                        </button>
+
+                        {/* Share */}
+                        <button onClick={() => handleShare(pitch.id)} className="flex flex-col items-center" title="Share">
+                          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                            <Share2 className="w-4 h-4 text-white" />
+                          </div>
+                          <span className="text-white text-[8px] font-bold">{pitch.shares_count || 0}</span>
+                        </button>
+
+                        {/* Invest */}
+                        <button onClick={() => handleSmartContractClick(pitch)} className="flex flex-col items-center" title="Invest">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                            investedPitches.has(pitch.id) ? 'bg-green-500/80' : 'bg-gradient-to-br from-yellow-500 to-orange-500'
+                          }`}>
+                            <Zap className="w-4 h-4 text-white fill-white" />
+                          </div>
+                          <span className={`text-[8px] font-bold ${investedPitches.has(pitch.id) ? 'text-green-300' : 'text-yellow-300'}`}>
+                            {investedPitches.has(pitch.id) ? '✓' : 'Invest'}
+                          </span>
+                        </button>
+
+                        {/* Create */}
+                        <button onClick={handleCreatePitchClick} className="flex flex-col items-center" title="Create">
+                          <div className="w-8 h-8 rounded-full bg-pink-500/80 flex items-center justify-center">
+                            <Plus className="w-4 h-4 text-white" />
+                          </div>
+                          <span className="text-pink-300 text-[8px] font-bold">Create</span>
+                        </button>
+
+                        {/* Profile */}
+                        <button onClick={() => setShowProfileSelector(true)} className="flex flex-col items-center" title="Profile">
+                          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                            <Building2 className="w-4 h-4 text-white" />
+                          </div>
+                          <span className="text-white text-[8px] font-bold">Profile</span>
                         </button>
                       </div>
 
                       {/* Bottom Info - Gradient overlay */}
-                      <div className="absolute bottom-0 left-0 right-16 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-4 pb-4 pt-16 pointer-events-auto">
+                      <div className="absolute bottom-0 left-0 portrait:right-12 landscape:right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-3 portrait:pb-2 landscape:pb-14 pt-8 pointer-events-auto">
                         {/* Creator Info */}
-                        <div className="flex items-center gap-2 mb-2">
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                            <Building2 className="w-4 h-4 text-white" />
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                            <Building2 className="w-3 h-3 text-white" />
                           </div>
                           <div>
-                            <p className="text-white font-semibold text-sm drop-shadow-lg">
+                            <p className="text-white font-semibold text-[11px] drop-shadow-lg">
                               {pitch.business_profiles?.business_name || 'Business'}
                             </p>
                           </div>
                         </div>
 
                         {/* Title */}
-                        <h3 className="text-white font-bold text-base mb-1 drop-shadow-lg line-clamp-1">
+                        <h3 className="text-white font-bold text-xs portrait:text-sm mb-0.5 drop-shadow-lg line-clamp-1">
                           {pitch.title}
                         </h3>
 
                         {/* Funding Info Row */}
-                        <div className="flex items-center flex-wrap gap-2 text-xs">
+                        <div className="flex items-center flex-wrap gap-1.5 text-[9px] portrait:text-[10px]">
                           <span className="text-white/90 font-semibold">{formatCurrency(pitch.target_funding)}</span>
                           <span className="text-white/50">•</span>
-                          <span className="text-purple-300 font-semibold">{pitch.equity_offering || 0}% equity</span>
+                          <span className="text-purple-300 font-semibold">{pitch.equity_offering || 0}%</span>
                           {pitch.has_ip && (
                             <>
                               <span className="text-white/50">•</span>
-                              <span className="text-blue-300 font-semibold">IP ✓</span>
+                              <span className="text-blue-300 font-semibold">IP</span>
                             </>
                           )}
                         </div>

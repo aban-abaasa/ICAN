@@ -174,3 +174,22 @@ body {
 .animation-delay-4000 {
   animation-delay: 4s;
 }
+
+/* Portrait and Landscape orientation utilities */
+@media (orientation: portrait) {
+  .portrait\:flex { display: flex !important; }
+  .portrait\:hidden { display: none !important; }
+  .portrait\:pb-2 { padding-bottom: 0.5rem !important; }
+  .portrait\:right-12 { right: 3rem !important; }
+  .portrait\:text-sm { font-size: 0.875rem !important; }
+  .portrait\:text-\[10px\] { font-size: 10px !important; }
+}
+
+@media (orientation: landscape) {
+  .landscape\:flex { display: flex !important; }
+  .landscape\:hidden { display: none !important; }
+  .landscape\:pb-14 { padding-bottom: 3.5rem !important; }
+  .landscape\:right-0 { right: 0 !important; }
+  .landscape\:text-xs { font-size: 0.75rem !important; }
+  .landscape\:text-\[9px\] { font-size: 9px !important; }
+}
