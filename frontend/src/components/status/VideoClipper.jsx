@@ -503,14 +503,14 @@ export const VideoClipper = ({ videoFile, onClip, onCancel }) => {
         </div>
 
         {/* Playback Controls */}
-        <div className="flex items-center justify-center gap-4 mb-6 bg-gray-800/50 rounded-xl p-4 backdrop-blur">
+        <div className="flex items-center justify-center gap-3 mb-4 bg-white/5 rounded-xl p-3 backdrop-blur">
           <button
             onClick={togglePlayPause}
-            className="glow-button p-3 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-500 hover:to-blue-500 transition transform hover:scale-110 active:scale-95"
+            className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition"
           >
-            {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
+            {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
           </button>
-          <span className="text-base font-mono text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 font-bold">
+          <span className="text-sm font-mono text-white">
             {formatTime(currentTime)} / {formatTime(duration)}
           </span>
           <button
@@ -521,36 +521,40 @@ export const VideoClipper = ({ videoFile, onClip, onCancel }) => {
                 setCurrentTime(startTime);
               }
             }}
-            className="p-3 rounded-full hover:bg-gray-700 transition transform hover:rotate-180 duration-500"
+            className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition"
           >
-            <RotateCcw className="w-5 h-5 text-gray-300" />
+            <RotateCcw className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Timeline/Scrubber with Advanced Design */}
-        <div className="mb-8">
-          <div className="relative h-16 bg-gradient-to-r from-gray-800 to-gray-700 rounded-xl mb-3 overflow-hidden shadow-inner">
-            {/* Background gradient */}
+        {/* Timeline */}
+        <div className="mb-6">
+          <div className="relative h-20 bg-gradient-to-r from-gray-900 to-gray-800 rounded-xl mb-3 overflow-hidden">
+            {/* Selected region */}
             <div
-              className="absolute h-full bg-gradient-to-r from-purple-600/40 via-pink-500/40 to-red-500/40 pointer-events-none transition-all duration-100"
+              className="absolute h-full bg-purple-500/30 pointer-events-none"
               style={{
                 left: `${startPercent}%`,
                 right: `${100 - endPercent}%`
               }}
             />
 
-            {/* Grid pattern */}
-            <div className="absolute inset-0 opacity-10 pointer-events-none" style={{
-              backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(255,255,255,.1) 2px, rgba(255,255,255,.1) 4px)',
-            }} />
+            {/* Segments (5 second markers) */}
+            {Array.from({ length: Math.floor(duration / 5) + 1 }).map((_, i) => (
+              <div
+                key={i}
+                className="absolute top-0 h-full w-px bg-white/10"
+                style={{ left: `${(i * 5 / duration) * 100}%` }}
+              />
+            ))}
 
-            {/* Progress indicator */}
+            {/* Current position */}
             <div
-              className="absolute top-0 h-full w-1 bg-gradient-to-b from-yellow-400 to-red-500 shadow-lg"
+              className="absolute top-0 h-full w-0.5 bg-yellow-400 z-10"
               style={{ left: `${currentPercent}%` }}
             />
 
-            {/* Timeline input */}
+            {/* Timeline scrubber */}
             <input
               type="range"
               min="0"
@@ -567,14 +571,14 @@ export const VideoClipper = ({ videoFile, onClip, onCancel }) => {
 
             {/* Start handle */}
             <div
-              className="absolute top-1/2 -translate-y-1/2 w-3 h-12 bg-gradient-to-r from-purple-500 to-blue-500 rounded cursor-col-resize shadow-lg hover:shadow-purple-500/50 hover:shadow-lg z-20"
-              style={{ left: `${startPercent}%`, marginLeft: '-6px' }}
+              className="absolute top-1/2 -translate-y-1/2 w-4 h-16 bg-purple-500 rounded cursor-col-resize z-20 flex items-center justify-center"
+              style={{ left: `${startPercent}%`, marginLeft: '-8px' }}
               onMouseDown={(e) => {
                 e.preventDefault();
                 const startX = e.clientX;
                 const startPos = startTime;
                 const handleMouseMove = (me) => {
-                  const delta = (me.clientX - startX) / (window.innerWidth * 0.3);
+                  const delta = (me.clientX - startX) / (e.currentTarget.parentElement.offsetWidth);
                   const newStart = Math.max(0, Math.min(startPos + delta * duration, endTime));
                   setStartTime(newStart);
                   const video = videoRef.current;
@@ -587,18 +591,38 @@ export const VideoClipper = ({ videoFile, onClip, onCancel }) => {
                 document.addEventListener('mousemove', handleMouseMove);
                 document.addEventListener('mouseup', handleMouseUp);
               }}
-            />
+              onTouchStart={(e) => {
+                e.preventDefault();
+                const startX = e.touches[0].clientX;
+                const startPos = startTime;
+                const handleTouchMove = (te) => {
+                  const delta = (te.touches[0].clientX - startX) / (e.currentTarget.parentElement.offsetWidth);
+                  const newStart = Math.max(0, Math.min(startPos + delta * duration, endTime));
+                  setStartTime(newStart);
+                  const video = videoRef.current;
+                  if (video) video.currentTime = newStart;
+                };
+                const handleTouchEnd = () => {
+                  document.removeEventListener('touchmove', handleTouchMove);
+                  document.removeEventListener('touchend', handleTouchEnd);
+                };
+                document.addEventListener('touchmove', handleTouchMove);
+                document.addEventListener('touchend', handleTouchEnd);
+              }}
+            >
+              <div className="w-1 h-8 bg-white/80 rounded" />
+            </div>
 
             {/* End handle */}
             <div
-              className="absolute top-1/2 -translate-y-1/2 w-3 h-12 bg-gradient-to-r from-red-500 to-pink-500 rounded cursor-col-resize shadow-lg hover:shadow-red-500/50 hover:shadow-lg z-20"
-              style={{ right: `${100 - endPercent}%`, marginRight: '-6px' }}
+              className="absolute top-1/2 -translate-y-1/2 w-4 h-16 bg-pink-500 rounded cursor-col-resize z-20 flex items-center justify-center"
+              style={{ right: `${100 - endPercent}%`, marginRight: '-8px' }}
               onMouseDown={(e) => {
                 e.preventDefault();
                 const startX = e.clientX;
                 const endPos = endTime;
                 const handleMouseMove = (me) => {
-                  const delta = (me.clientX - startX) / (window.innerWidth * 0.3);
+                  const delta = (me.clientX - startX) / (e.currentTarget.parentElement.offsetWidth);
                   const newEnd = Math.max(startTime, Math.min(endPos + delta * duration, duration));
                   setEndTime(newEnd);
                 };
@@ -609,7 +633,25 @@ export const VideoClipper = ({ videoFile, onClip, onCancel }) => {
                 document.addEventListener('mousemove', handleMouseMove);
                 document.addEventListener('mouseup', handleMouseUp);
               }}
-            />
+              onTouchStart={(e) => {
+                e.preventDefault();
+                const startX = e.touches[0].clientX;
+                const endPos = endTime;
+                const handleTouchMove = (te) => {
+                  const delta = (te.touches[0].clientX - startX) / (e.currentTarget.parentElement.offsetWidth);
+                  const newEnd = Math.max(startTime, Math.min(endPos + delta * duration, duration));
+                  setEndTime(newEnd);
+                };
+                const handleTouchEnd = () => {
+                  document.removeEventListener('touchmove', handleTouchMove);
+                  document.removeEventListener('touchend', handleTouchEnd);
+                };
+                document.addEventListener('touchmove', handleTouchMove);
+                document.addEventListener('touchend', handleTouchEnd);
+              }}
+            >
+              <div className="w-1 h-8 bg-white/80 rounded" />
+            </div>
           </div>
 
           {/* Time Inputs */}
@@ -659,76 +701,47 @@ export const VideoClipper = ({ videoFile, onClip, onCancel }) => {
             </div>
           </div>
 
-          {/* Duration Info Card */}
-          <div className="bg-gradient-to-r from-purple-900/40 to-pink-900/40 border border-purple-500/30 rounded-lg p-4 backdrop-blur">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-300 text-sm">CLIPPED DURATION</p>
-                <p className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
-                  {formatTime(clippedDuration)}
-                </p>
-              </div>
-              <div className="text-right">
-                {clippedDuration < 1 && (
-                  <span className="px-3 py-1 bg-red-500/20 border border-red-500/50 text-red-300 rounded-full text-xs font-bold">
-                    ⚠️ MIN 1s
-                  </span>
-                )}
-                {clippedDuration > 60 && (
-                  <span className="px-3 py-1 bg-red-500/20 border border-red-500/50 text-red-300 rounded-full text-xs font-bold">
-                    ⚠️ MAX 60s
-                  </span>
-                )}
-                {clippedDuration >= 1 && clippedDuration <= 60 && (
-                  <span className="px-3 py-1 bg-green-500/20 border border-green-500/50 text-green-300 rounded-full text-xs font-bold">
-                    ✓ PERFECT
-                  </span>
-                )}
-              </div>
-            </div>
+          {/* Duration Info */}
+          <div className="bg-purple-900/20 border border-purple-500/30 rounded-lg p-3 backdrop-blur text-center mb-4">
+            <p className="text-gray-400 text-xs">DURATION</p>
+            <p className="text-2xl font-bold text-purple-400">
+              {formatTime(clippedDuration)}
+            </p>
+            {(clippedDuration < 1 || clippedDuration > 60) && (
+              <span className="inline-block mt-1 px-2 py-0.5 bg-red-500/20 border border-red-500/50 text-red-300 rounded-full text-xs">
+                1-60s required
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex gap-3">
+        {/* Actions */}
+        <div className="flex gap-2">
           <button
             onClick={onCancel}
-            className="flex-1 px-4 py-3 rounded-lg bg-gray-700 hover:bg-gray-600 text-white font-bold transition hover:shadow-lg"
+            className="flex-1 px-4 py-3 rounded-lg bg-white/10 hover:bg-white/20 text-white font-bold transition"
           >
-            CANCEL
+            Cancel
           </button>
           <button
             onClick={handleClip}
             disabled={clipping || clippedDuration < 1 || clippedDuration > 60 || !ffmpegReady || ffmpegError}
-            className="flex-1 px-4 py-3 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold transition hover:shadow-lg hover:shadow-purple-500/50 flex items-center justify-center gap-2 disabled:hover:shadow-none"
-            title={
-              ffmpegError 
-                ? `FFmpeg Error: ${ffmpegError} - Try refreshing the page or checking your internet connection` 
-                : !ffmpegReady 
-                  ? 'Loading FFmpeg... This may take 10-30 seconds on first run. Subsequent loads are much faster (1-2s).'
-                  : clippedDuration < 1 || clippedDuration > 60
-                    ? 'Clip must be between 1 and 60 seconds'
-                    : 'Ready to clip! Select your trim times and click to continue'
-            }
+            className="flex-1 px-4 py-3 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold transition flex items-center justify-center gap-2"
           >
-            {ffmpegError ? (
+            {!ffmpegReady ? (
               <>
-                ❌ FFMPEG ERROR
-              </>
-            ) : !ffmpegReady ? (
-              <>
-                <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
-                LOADING FFMPEG...
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                Loading...
               </>
             ) : clipping ? (
               <>
-                <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
-                PROCESSING...
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                Trimming...
               </>
             ) : (
               <>
-                <Check className="w-5 h-5" />
-                CLIP & CONTINUE
+                <Check className="w-4 h-4" />
+                Done
               </>
             )}
           </button>

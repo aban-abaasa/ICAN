@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Camera, Mic, Square, Play, Upload, X, RotateCcw, Pin, Maximize, Minimize, Smartphone, Scissors, CheckCircle, SwitchCamera, Sparkles, ArrowLeft, Rocket } from 'lucide-react';
 import { uploadVideo, getSupabase } from '../services/pitchingService';
-import { VideoClipper } from './status/VideoClipper';
+import { VideoClipper } from './status/SimpleVideoClipper';
 import BusinessProfileDocuments from './BusinessProfileDocuments';
 import PitchDetailsForm from './PitchDetailsForm';
 
