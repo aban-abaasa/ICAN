@@ -132,48 +132,65 @@ const BusinessProfileDocuments = ({ businessProfile, onDocumentsComplete, onCanc
   const loadDocuments = async () => {
     try {
       const supabase = getSupabase();
+      console.log('📄 Loading documents for business profile:', businessProfile.id);
+      
+      if (!businessProfile?.id) {
+        console.warn('⚠️ Business profile ID is missing, cannot load documents');
+        return;
+      }
+
+      if (!supabase) {
+        console.warn('⚠️ Supabase not available');
+        return;
+      }
+
       const { data, error } = await supabase
         .from('business_documents')
         .select('*')
         .eq('business_profile_id', businessProfile.id)
-        .single();
+        .limit(1);  // Use limit instead of single() for better error handling
 
-      if (data) {
+      if (error) {
+        console.warn('⚠️ Load error:', error.message, error.code);
+      }
+
+      if (data && data.length > 0) {
+        console.log('✅ Documents loaded successfully:', data[0]);
         setDocuments({
           businessPlan: {
-            content: data.business_plan_content || '',
+            content: data[0].business_plan_content || '',
             file: null,
-            completed: data.business_plan_completed
+            completed: data[0].business_plan_completed
           },
           financialProjection: {
-            content: data.financial_projection_content || '',
+            content: data[0].financial_projection_content || '',
             file: null,
-            completed: data.financial_projection_completed
+            completed: data[0].financial_projection_completed
           },
           valueProposition: {
-            content: data.value_proposition_content || '',
-            wants: data.value_proposition_wants || '',
-            fears: data.value_proposition_fears || '',
-            needs: data.value_proposition_needs || '',
+            content: data[0].value_proposition_content || '',
+            wants: data[0].value_proposition_wants || '',
+            fears: data[0].value_proposition_fears || '',
+            needs: data[0].value_proposition_needs || '',
             file: null,
-            completed: data.value_proposition_completed
+            completed: data[0].value_proposition_completed
           },
           mou: {
-            content: data.mou_content || '',
+            content: data[0].mou_content || '',
             file: null,
-            completed: data.mou_completed
+            completed: data[0].mou_completed
           },
           shareAllocation: {
-            content: data.share_allocation_content || '',
-            shares: data.share_allocation_shares || '',
-            sharePrice: data.share_allocation_share_price || '',
-            totalAmount: data.share_allocation_total_amount || '',
+            content: data[0].share_allocation_content || '',
+            shares: data[0].share_allocation_shares || '',
+            sharePrice: data[0].share_allocation_share_price || '',
+            totalAmount: data[0].share_allocation_total_amount || '',
             file: null,
-            completed: data.share_allocation_completed
+            completed: data[0].share_allocation_completed
           }
         });
-        setNoDisclosure(data.no_disclosure_enabled || false);
-        setDisclosureNotes(data.disclosure_notes || '');
+        setNoDisclosure(data[0].no_disclosure_enabled || false);
+        setDisclosureNotes(data[0].disclosure_notes || '');
       } else {
         // No existing documents - auto-populate from business profile
         console.log('No existing documents found. Auto-populating from business profile:', businessProfile);
@@ -320,41 +337,67 @@ const BusinessProfileDocuments = ({ businessProfile, onDocumentsComplete, onCanc
 
       console.log('💾 Saving documents to database...');
       console.log('Business Profile ID:', businessProfile.id);
+      console.log('Document data being saved:', documentData);
+
+      if (!businessProfile?.id) {
+        throw new Error('Business Profile ID is missing!');
+      }
+
+      if (!supabase) {
+        throw new Error('Supabase connection not available!');
+      }
 
       // Check if document exists - use regular select, not single()
+      console.log('🔍 Checking if documents already exist...');
       const { data: existing, error: selectError } = await supabase
         .from('business_documents')
         .select('id')
         .eq('business_profile_id', businessProfile.id);
 
-      if (selectError && selectError.code !== 'PGRST116') {
-        throw selectError;
+      if (selectError) {
+        console.warn('Select error (may be normal if no records):', selectError);
+      } else {
+        console.log('✅ Query successful. Existing records:', existing?.length || 0);
       }
 
       let result;
       if (existing && existing.length > 0) {
         console.log('📝 Updating existing document...');
         // Update
-        result = await supabase
+        const updateResult = await supabase
           .from('business_documents')
           .update(documentData)
           .eq('business_profile_id', businessProfile.id)
           .select();
+        result = updateResult;
+        if (updateResult.error) {
+          console.error('❌ Update failed:', updateResult.error);
+        } else {
+          console.log('✅ Update successful:', updateResult.data);
+        }
       } else {
         console.log('✨ Creating new document...');
         // Insert
-        result = await supabase
+        const insertResult = await supabase
           .from('business_documents')
           .insert([documentData])
           .select();
+        result = insertResult;
+        if (insertResult.error) {
+          console.error('❌ Insert failed:', insertResult.error);
+        } else {
+          console.log('✅ Insert successful:', insertResult.data);
+        }
       }
 
-      if (result.error) {
-        console.error('Save error:', result.error);
+      if (result?.error) {
+        console.error('❌ Save error:', result.error);
+        console.error('Error message:', result.error.message);
+        console.error('Error code:', result.error.code);
         throw result.error;
       }
 
-      console.log('✅ Documents saved successfully to database!', result.data);
+      console.log('✅ Documents saved successfully to database!', result?.data);
       setSaveStatus('✅ Saved successfully! Documents stored in database.');
       setTimeout(() => setSaveStatus(''), 3000);
 

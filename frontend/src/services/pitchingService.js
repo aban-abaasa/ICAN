@@ -1048,6 +1048,71 @@ export const createDigitalSignature = async (signatureData) => {
  */
 
 // Create notification
+/**
+ * Create notification for investment agreements
+ * Writes to investment_notifications table
+ * Works for any recipient (not just current user)
+ */
+export const createInvestmentNotification = async (notificationData) => {
+  try {
+    const sb = getSupabase();
+    if (!sb) {
+      console.log('📱 Demo mode: investment notification created (local only)', notificationData.title);
+      return { success: true, data: { id: 'demo-' + Date.now(), ...notificationData } };
+    }
+
+    // Get current user for sender_id
+    const { data: { user }, error: userError } = await sb.auth.getUser();
+    if (userError) {
+      console.warn('⚠️  Could not get current user for sender_id:', userError.message);
+    }
+
+    // Validate required fields
+    if (!notificationData.recipient_id) {
+      console.warn('❌ Missing recipient_id in investment notification');
+      return { success: false, error: 'Missing recipient_id' };
+    }
+
+    if (!notificationData.notification_type) {
+      console.warn('❌ Missing notification_type in investment notification');
+      return { success: false, error: 'Missing notification_type' };
+    }
+
+    const { data, error } = await sb
+      .from('investment_notifications')
+      .insert([{
+        recipient_id: notificationData.recipient_id,
+        sender_id: user?.id || null,
+        notification_type: notificationData.notification_type,
+        title: notificationData.title || '',
+        message: notificationData.message || '',
+        agreement_id: notificationData.agreement_id || null,
+        pitch_id: notificationData.pitch_id || null,
+        business_profile_id: notificationData.business_profile_id || null,
+        priority: notificationData.priority || 'normal',
+        action_url: notificationData.action_url || null,
+        action_label: notificationData.action_label || null,
+        metadata: notificationData.metadata || {}
+      }])
+      .select();
+
+    if (error) {
+      console.warn(`⚠️  Could not create investment notification: ${error.message}`);
+      return { success: false, error: error.message };
+    }
+
+    const notif = data?.[0];
+    if (notif) {
+      console.log(`✅ Investment notification sent to ${notificationData.recipient_id.substring(0, 8)}... - ${notificationData.title}`);
+    }
+    return { success: true, data: notif };
+  } catch (error) {
+    console.error('❌ Error creating investment notification:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Legacy notification function - keeps existing behavior
 export const createNotification = async (notificationData) => {
   try {
     const sb = getSupabase();

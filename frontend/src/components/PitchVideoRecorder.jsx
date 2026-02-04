@@ -623,7 +623,7 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
   };
 
   return (
-    <div className="w-full h-screen md:h-full px-0 relative flex flex-col bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="w-full h-screen px-0 relative flex flex-col bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* Enhanced Header Section - COMMENTED OUT */}
       {/* 
       <div className="hidden md:block bg-gradient-to-r from-purple-900/80 via-pink-900/60 to-purple-900/80 backdrop-blur-sm border-b border-purple-500/20 px-8 py-8 space-y-6">
@@ -681,10 +681,10 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
 
       {/* Mobile Header - Removed for full screen */}
 
-      <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 rounded-none p-0 border-0 h-full flex flex-col overflow-hidden flex-1 space-y-4">
+      <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 rounded-none p-0 border-0 h-full flex flex-col overflow-y-auto flex-1 space-y-4">
 
         {/* Video Container - Full screen */}
-        <div ref={fullscreenRef} className="flex-1 relative w-full h-full bg-black overflow-hidden">
+        <div ref={fullscreenRef} className="relative w-full bg-black overflow-hidden" style={{ minHeight: '50vh' }}>
           
           {/* Workflow Status Indicator */}
           {workflowStatus && (
@@ -740,7 +740,7 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                   controls
                   autoPlay
                   playsInline
-                  className="object-cover md:object-contain"
+                  className="object-cover"
                   style={{
                     width: '100%',
                     height: '100%',
@@ -765,10 +765,10 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                 {onClose && (
                   <button
                     onClick={onClose}
-                    className="flex items-center gap-1.5 portrait:px-2 portrait:py-1.5 landscape:px-3 landscape:py-2 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border-2 border-white/20 hover:scale-105 active:scale-95 text-white portrait:text-xs landscape:text-sm font-medium transition-all shadow-xl"
+                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border-2 border-white/20 hover:scale-105 active:scale-95 text-white text-xs font-medium transition-all shadow-xl"
                   >
-                    <ArrowLeft className="portrait:w-3 portrait:h-3 landscape:w-4 landscape:h-4" />
-                    <span className="hidden sm:inline">Back</span>
+                    <ArrowLeft className="w-3 h-3" />
+                    <span>Back</span>
                   </button>
                 )}
 
@@ -1006,9 +1006,9 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
             ? 'flex flex-col flex-1 md:flex-none max-h-full opacity-100 px-3 md:px-0 py-4 md:py-0' 
             : 'hidden'
         }`}>
-          <div className="space-y-3 md:space-y-4 px-0 md:px-0">
+          <div className="space-y-3 px-0">
             {/* Form Header */}
-            <div className="hidden md:block mb-4 pb-4 border-b border-purple-500/30">
+            <div className="hidden mb-4 pb-4 border-b border-purple-500/30">
               <h3 className="text-lg font-bold bg-gradient-to-r from-purple-300 to-pink-300 bg-clip-text text-transparent">
                 ✨ Pitch Details
               </h3>

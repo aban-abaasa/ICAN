@@ -1,10 +1,10 @@
 /**
  * StatusUploader Component - Enhanced with Camera Capture
- * Creative modern UI for uploading statuses with image/video and camera capture
+ * Creative modern UI for uploading statuses with image/video
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, X, Eye, EyeOff, Heart, Send, Plus, CheckCircle, AlertCircle, Loader, Camera, Video, Sparkles, Zap, Square } from 'lucide-react';
+import { Upload, X, Eye, EyeOff, Heart, Send, Plus, CheckCircle, AlertCircle, Loader, Camera, Video, Sparkles, Zap } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { uploadStatusMedia, createStatus } from '../../services/statusService';
 
@@ -25,48 +25,27 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null }) => {
   const [stream, setStream] = useState(null);
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [fileToUpload, setFileToUpload] = useState(null);
-  const [isPhotoPreview, setIsPhotoPreview] = useState(false);
-  const [captureMode, setCaptureMode] = useState('photo');
-  const mediaRecorderRef = useRef(null);
-  const recordedChunksRef = useRef([]);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const [streamRef, setStreamRef] = useState(null);
 
-  // Camera access - exact copy from PitchVideoRecorder
+  // Camera access
   const startCamera = async () => {
     try {
       setError(null);
-      setShowCamera(true);
-      setIsCameraReady(false);
-      
-      const stream = await navigator.mediaDevices.getUserMedia({
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 1280 },
           height: { ideal: 720 },
           facingMode: 'user'
-        },
-        audio: false
+        }
       });
-
-      setStream(stream);
-
+      setStream(mediaStream);
       if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        
-        videoRef.current.onplay = () => {
-          setIsCameraReady(true);
-        };
-
-        videoRef.current.play().catch(err => {
-          console.error('Play error:', err);
-          setIsCameraReady(true);
-        });
+        videoRef.current.srcObject = mediaStream;
+        setTimeout(() => setIsCameraReady(true), 500);
       }
-    } catch (error) {
-      console.error('Error accessing camera:', error);
-      setError(`Unable to access camera: ${error.message}`);
-      setShowCamera(false);
+      setShowCamera(true);
+    } catch (err) {
+      setError('Unable to access camera. Please check permissions.');
+      console.error('Camera error:', err);
     }
   };
 
@@ -92,120 +71,10 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null }) => {
           setPreviewUrl(url);
           setFileToUpload(blob);
           stopCamera();
-          setIsPhotoPreview(true);
         }
       }, 'image/jpeg', 0.95);
     }
   };
-
-  const retakePhoto = () => {
-    setPreviewUrl(null);
-    setFileToUpload(null);
-    setIsPhotoPreview(false);
-    startCamera();
-  };
-
-  const confirmPhoto = () => {
-    setShowCamera(false);
-    setIsPhotoPreview(false);
-  };
-
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const startVideoRecording = async () => {
-    try {
-      setError(null);
-      setShowCamera(true);
-      
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          facingMode: 'user'
-        },
-        audio: true
-      });
-
-      setStreamRef(stream);
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        
-        videoRef.current.onplay = () => {
-          setIsRecording(true);
-          setRecordingTime(0);
-          
-          let mimeType = 'video/webm';
-          const supportedTypes = [
-            'video/mp4;codecs=h264',
-            'video/mp4;codecs=avc1',
-            'video/webm;codecs=vp8,opus',
-            'video/webm;codecs=vp9,opus',
-            'video/webm'
-          ];
-          
-          for (const type of supportedTypes) {
-            if (MediaRecorder.isTypeSupported(type)) {
-              mimeType = type;
-              break;
-            }
-          }
-          
-          const mediaRecorder = new MediaRecorder(stream, { mimeType });
-          const chunks = [];
-          recordedChunksRef.current = chunks;
-          
-          mediaRecorder.ondataavailable = (e) => {
-            if (e.data.size > 0) chunks.push(e.data);
-          };
-          
-          mediaRecorder.onstop = () => {
-            const blob = new Blob(chunks, { type: mimeType });
-            const url = URL.createObjectURL(blob);
-            setPreviewUrl(url);
-            setFileToUpload(blob);
-            setIsPhotoPreview(true);
-            stream.getTracks().forEach(track => track.stop());
-          };
-          
-          mediaRecorderRef.current = mediaRecorder;
-          mediaRecorder.start();
-        };
-
-        videoRef.current.play().catch(err => {
-          console.error('Play error:', err);
-          setIsRecording(true);
-        });
-      }
-    } catch (error) {
-      console.error('Error accessing camera:', error);
-      setError(`Unable to access camera: ${error.message}`);
-      setShowCamera(false);
-    }
-  };
-
-  const stopVideoRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      setRecordingTime(0);
-    }
-  };
-
-  // Recording timer effect
-  useEffect(() => {
-    let interval;
-    if (isRecording) {
-      interval = setInterval(() => {
-        setRecordingTime(t => t + 1);
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isRecording]);
 
   // Cleanup camera on unmount
   useEffect(() => {
@@ -309,216 +178,87 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null }) => {
 
   return (
     <div className="fixed inset-0 bg-gradient-to-br from-black/90 via-purple-900/50 to-black/90 backdrop-blur-xl flex items-center justify-center z-50 p-4">
-      {/* Camera Capture UI - Full Modal */}
-      {showCamera ? (
-        <div className="bg-gradient-to-br from-slate-900 via-purple-900/30 to-slate-900 border border-purple-500/30 rounded-3xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden shadow-2xl relative">
-          
-          {/* Header */}
-          <div className="relative flex items-center justify-between p-5 border-b border-purple-500/20 flex-shrink-0 bg-slate-900/50 backdrop-blur-md">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center">
-                <Camera className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h2 className="text-lg font-bold bg-gradient-to-r from-purple-300 to-pink-300 bg-clip-text text-transparent">Capture Photo</h2>
-                <p className="text-xs text-gray-400">{isPhotoPreview ? 'Review your media' : isRecording ? `Recording: ${formatTime(recordingTime)}` : captureMode === 'video' ? 'Record a video' : 'Point and shoot'}</p>
-              </div>
-            </div>
-            <button
-              onClick={() => {
-                stopCamera();
-                setShowCamera(false);
-                setIsPhotoPreview(false);
-                setPreviewUrl(null);
-                setFileToUpload(null);
-              }}
-              className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-all transform hover:scale-110"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Camera/Preview Area */}
-          <div className="flex-1 flex items-center justify-center p-6">
-            {isPhotoPreview ? (
-              <div className="relative rounded-2xl overflow-hidden bg-black w-full aspect-video border-2 border-purple-500/30">
-                <img
-                  src={previewUrl}
-                  alt="Captured media"
-                  className="w-full h-full object-cover"
-                />
-                <video
-                  src={previewUrl}
-                  className="w-full h-full object-cover"
-                  controls
-                  style={{ display: fileToUpload?.type?.startsWith('video') ? 'block' : 'none' }}
-                />
-                <div className="absolute inset-0 flex flex-col items-center justify-between p-4 bg-gradient-to-t from-black/60 via-transparent to-transparent">
-                  <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-full backdrop-blur-md border border-white/20">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    <span className="text-white text-sm font-medium">Perfect!</span>
-                  </div>
-                </div>
-              </div>
-            ) : isCameraReady || isRecording ? (
-              <div className="relative rounded-2xl overflow-hidden bg-black w-full aspect-video border-2 border-purple-500/30">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-full object-cover"
-                />
-                <canvas ref={canvasRef} className="hidden" />
-                
-                <div className="absolute inset-0 flex flex-col items-center justify-between p-4 bg-gradient-to-t from-black/60 via-transparent to-transparent">
-                  <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-full backdrop-blur-md border border-white/20">
-                    <div className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-red-500'}`}></div>
-                    <span className="text-white text-sm font-medium">
-                      {isRecording ? `Recording ${formatTime(recordingTime)}` : 'Live Camera'}
-                    </span>
-                  </div>
-
-                  {/* Mode Toggle (Photo/Video) */}
-                  {!isRecording && !isPhotoPreview && (
-                    <div className="flex gap-2 px-4 py-3 bg-black/50 rounded-full backdrop-blur-md border border-white/20">
-                      <button
-                        onClick={() => setCaptureMode('photo')}
-                        className={`px-4 py-2 rounded-full font-semibold transition-all ${
-                          captureMode === 'photo'
-                            ? 'bg-purple-500 text-white'
-                            : 'bg-white/10 text-gray-300 hover:bg-white/20'
-                        }`}
-                      >
-                        Photo
-                      </button>
-                      <button
-                        onClick={() => setCaptureMode('video')}
-                        className={`px-4 py-2 rounded-full font-semibold transition-all ${
-                          captureMode === 'video'
-                            ? 'bg-purple-500 text-white'
-                            : 'bg-white/10 text-gray-300 hover:bg-white/20'
-                        }`}
-                      >
-                        Video
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <Loader className="w-8 h-8 text-purple-400 mx-auto mb-2 animate-spin" />
-                <p className="text-gray-300">Initializing camera...</p>
-              </div>
-            )}
-          </div>
-
-          {/* Action Buttons */}
-          <div className="p-6 border-t border-purple-500/20 flex-shrink-0 bg-slate-900/50 backdrop-blur-md">
-            {isPhotoPreview ? (
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setIsPhotoPreview(false);
-                    if (captureMode === 'video') {
-                      startVideoRecording();
-                    }
-                  }}
-                  className="flex-1 py-3 px-4 rounded-lg bg-orange-500/90 hover:bg-orange-600 text-white font-semibold transition-all transform hover:scale-105 flex items-center justify-center gap-2"
-                >
-                  <Camera className="w-4 h-4" />
-                  Retake
-                </button>
-                <button
-                  onClick={confirmPhoto}
-                  className="flex-1 py-3 px-4 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-semibold transition-all transform hover:scale-105 flex items-center justify-center gap-2 shadow-lg"
-                >
-                  <CheckCircle className="w-4 h-4" />
-                  Use Media
-                </button>
-              </div>
-            ) : isRecording ? (
-              <button
-                onClick={stopVideoRecording}
-                className="w-full py-3 px-4 rounded-lg bg-red-500 hover:bg-red-600 text-white font-semibold transition-all transform hover:scale-105 flex items-center justify-center gap-2 shadow-lg"
-              >
-                <Square className="w-4 h-4" />
-                Stop Recording
-              </button>
-            ) : isCameraReady ? (
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    if (captureMode === 'video') startVideoRecording();
-                    else stopCamera(); setShowCamera(false);
-                  }}
-                  className={`flex-1 py-3 px-4 rounded-lg font-semibold transition-all ${
-                    captureMode === 'video'
-                      ? 'bg-red-500/20 hover:bg-red-500/30 text-red-200'
-                      : 'bg-red-500/20 hover:bg-red-500/30 text-red-200'
-                  }`}
-                >
-                  {captureMode === 'video' ? 'Exit' : 'Cancel'}
-                </button>
-                <button
-                  onClick={captureMode === 'photo' ? captureImage : startVideoRecording}
-                  className="flex-1 py-3 px-4 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold transition-all transform hover:scale-105 flex items-center justify-center gap-2 shadow-lg"
-                >
-                  {captureMode === 'video' ? (
-                    <>
-                      <Camera className="w-4 h-4" />
-                      Record
-                    </>
-                  ) : (
-                    <>
-                      <Camera className="w-4 h-4" />
-                      Capture
-                    </>
-                  )}
-                </button>
-              </div>
-            ) : null}
-          </div>
+      <div className="bg-gradient-to-br from-slate-900 via-purple-900/30 to-slate-900 border border-purple-500/30 rounded-3xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden shadow-2xl relative">
+        
+        {/* Animated Background Blur */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute top-0 left-0 w-40 h-40 bg-purple-600/20 rounded-full blur-3xl"></div>
+          <div className="absolute bottom-0 right-0 w-40 h-40 bg-pink-600/20 rounded-full blur-3xl"></div>
         </div>
-      ) : (
-        <div className="bg-gradient-to-br from-slate-900 via-purple-900/30 to-slate-900 border border-purple-500/30 rounded-3xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden shadow-2xl relative">
-          
-          {/* Animated Background Blur */}
-          <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute top-0 left-0 w-40 h-40 bg-purple-600/20 rounded-full blur-3xl"></div>
-            <div className="absolute bottom-0 right-0 w-40 h-40 bg-pink-600/20 rounded-full blur-3xl"></div>
-          </div>
 
-          {/* Header */}
-          <div className="relative flex items-center justify-between p-5 border-b border-purple-500/20 flex-shrink-0 bg-slate-900/50 backdrop-blur-md">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center">
-                <Sparkles className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h2 className="text-lg font-bold bg-gradient-to-r from-purple-300 to-pink-300 bg-clip-text text-transparent">Share a Story</h2>
-                <p className="text-xs text-gray-400">Create your moment</p>
+        {/* Header */}
+        <div className="relative flex items-center justify-between p-5 border-b border-purple-500/20 flex-shrink-0 bg-slate-900/50 backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center">
+              <Sparkles className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold bg-gradient-to-r from-purple-300 to-pink-300 bg-clip-text text-transparent">Share a Story</h2>
+              <p className="text-xs text-gray-400">Create your moment</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-all transform hover:scale-110"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Content - Scrollable */}
+        <div className="p-6 space-y-4 overflow-y-auto flex-1 pr-8 relative">
+          {/* Camera Preview */}
+          {showCamera && isCameraReady ? (
+            <div className="relative rounded-2xl overflow-hidden bg-black aspect-video border-2 border-purple-500/30">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                className="w-full h-full object-cover"
+              />
+              <canvas ref={canvasRef} className="hidden" />
+              
+              {/* Camera Controls Overlay */}
+              <div className="absolute inset-0 flex flex-col items-center justify-between p-4 bg-gradient-to-t from-black/60 via-transparent to-transparent">
+                <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-full backdrop-blur-md border border-white/20">
+                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                  <span className="text-white text-sm font-medium">Live Camera</span>
+                </div>
+                
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={captureImage}
+                    className="w-16 h-16 rounded-full bg-gradient-to-r from-white to-gray-100 hover:from-gray-50 hover:to-white text-black flex items-center justify-center transition-all transform hover:scale-110 shadow-2xl border-4 border-white"
+                    title="Capture"
+                  >
+                    <Camera className="w-7 h-7" />
+                  </button>
+                  <button
+                    onClick={stopCamera}
+                    className="w-12 h-12 rounded-full bg-red-500/90 hover:bg-red-600 text-white flex items-center justify-center transition-all transform hover:scale-110 shadow-lg border-2 border-red-400"
+                    title="Cancel"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-all transform hover:scale-110"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Content - Scrollable */}
-          <div className="p-6 space-y-4 overflow-y-auto flex-1 pr-8 relative">
-          {/* Camera Preview */}
-          {previewUrl && !showCamera ? (
+          ) : previewUrl ? (
             <div className="relative rounded-2xl overflow-hidden bg-black aspect-video border-2 border-purple-500/30">
               <img
                 src={previewUrl}
                 alt="Preview"
                 className="w-full h-full object-cover"
               />
+              <button
+                onClick={() => {
+                  setPreviewUrl(null);
+                  setFileToUpload(null);
+                }}
+                className="absolute top-3 right-3 p-2 bg-black/60 hover:bg-black/80 rounded-full text-white transition-all transform hover:scale-110 border border-white/20"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
           ) : (
             <div className="space-y-3">
@@ -673,44 +413,43 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null }) => {
               </div>
             </div>
           )}
-          </div>
-
-          {/* Floating Submit Button */}
-          {fileToUpload && !uploadSuccess && (
-            <button
-              onClick={handleUpload}
-              disabled={isUploading}
-              className={`absolute bottom-24 right-6 w-16 h-16 rounded-full flex items-center justify-center transition-all shadow-2xl hover:shadow-2xl hover:scale-110 disabled:scale-95 z-10 font-bold text-lg transform ${
-                isUploading 
-                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 animate-pulse' 
-                  : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 hover:shadow-purple-500/50'
-              } text-white border-2 border-white/30`}
-              title={isUploading ? 'Publishing...' : 'Publish Story'}
-            >
-              {isUploading ? (
-                <Loader className="w-6 h-6 animate-spin" />
-              ) : (
-                <Send className="w-6 h-6" />
-              )}
-            </button>
-          )}
-
-          {/* Cancel Button */}
-          {fileToUpload && (
-            <div className="p-4 border-t border-purple-500/20 flex-shrink-0 bg-slate-900/50 backdrop-blur-md">
-              <button
-                onClick={() => {
-                  setPreviewUrl(null);
-                  setFileToUpload(null);
-                }}
-                className="w-full px-4 py-2 text-gray-300 hover:text-white hover:bg-white/10 rounded-lg font-medium transition-all"
-              >
-                Cancel
-              </button>
-            </div>
-          )}
         </div>
-      )}
+
+        {/* Floating Submit Button */}
+        {fileToUpload && !uploadSuccess && (
+          <button
+            onClick={handleUpload}
+            disabled={isUploading}
+            className={`absolute bottom-24 right-6 w-16 h-16 rounded-full flex items-center justify-center transition-all shadow-2xl hover:shadow-2xl hover:scale-110 disabled:scale-95 z-10 font-bold text-lg transform ${
+              isUploading 
+                ? 'bg-gradient-to-r from-purple-600 to-pink-600 animate-pulse' 
+                : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 hover:shadow-purple-500/50'
+            } text-white border-2 border-white/30`}
+            title={isUploading ? 'Publishing...' : 'Publish Story'}
+          >
+            {isUploading ? (
+              <Loader className="w-6 h-6 animate-spin" />
+            ) : (
+              <Send className="w-6 h-6" />
+            )}
+          </button>
+        )}
+
+        {/* Cancel Button */}
+        {fileToUpload && (
+          <div className="p-4 border-t border-purple-500/20 flex-shrink-0 bg-slate-900/50 backdrop-blur-md">
+            <button
+              onClick={() => {
+                setPreviewUrl(null);
+                setFileToUpload(null);
+              }}
+              className="w-full px-4 py-2 text-gray-300 hover:text-white hover:bg-white/10 rounded-lg font-medium transition-all"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

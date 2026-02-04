@@ -143,8 +143,8 @@ export default function MainNavigation({ onTrustClick, onShareClick, onWalletCli
       </div> */}
 
       {/* Main Navigation */}
-      <nav className="bg-gradient-to-b from-slate-800 to-slate-900 border-b border-slate-700/50 backdrop-blur-md sticky top-0 z-50 md:block">
-        <div className="max-w-7xl mx-auto px-4 md:px-6 py-3 md:py-6 md:bg-gradient-to-b md:from-slate-800 md:to-slate-900">
+      <nav className="bg-gradient-to-b from-slate-800 to-slate-900 border-b border-slate-700/50 backdrop-blur-md sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 py-3 md:py-6">
           {/* Desktop: Logo and Title + Menu */}
           <div className="hidden md:block">
             {/* Logo and Title */}
@@ -153,8 +153,8 @@ export default function MainNavigation({ onTrustClick, onShareClick, onWalletCli
                 <Shield className="w-6 h-6 text-blue-400" />
               </div>
               <div>
-                <p className="text-white font-bold text-xl bg-gradient-to-r from-yellow-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">ICANera</p>
-                <p className="text-blue-300 text-sm">Financial Ecosystem & Wealth Platform</p>
+                <p className="text-white font-bold text-xl">ICAN Capital Engine</p>
+                <p className="text-blue-300 text-sm">From Volatility to Global Capital</p>
               </div>
             </div>
 
@@ -220,39 +220,94 @@ export default function MainNavigation({ onTrustClick, onShareClick, onWalletCli
             </div>
           </div>
 
-          {/* Mobile: Independent Icon Badges */}
-          <div className="md:hidden bg-transparent">
-            {/* Independent Badge Buttons */}
-            <div className="flex items-center justify-center gap-4 py-4">
-              {[
-                { id: 'dashboard', label: 'Profile', icon: Home, onClick: () => {} },
-                { id: 'share', label: 'Pitchin', icon: Heart, onClick: () => onShareClick?.() },
-                { id: 'wallet', label: 'Wallet', icon: Wallet, onClick: () => onWalletClick?.() },
-                { id: 'trust', label: 'Trust', icon: Banknote, onClick: () => onTrustClick?.() },
-                { id: 'settings', label: 'CMMS', icon: Settings, onClick: () => {} }
-              ].map((item) => {
-                const Icon = item.icon
-                const isActive = activeSection === item.id
-
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      setActiveSection(item.id)
-                      item.onClick()
-                    }}
-                    className={`flex flex-col items-center gap-2 px-4 py-3 rounded-2xl transition-all ${
-                      isActive
-                        ? 'bg-gradient-to-br from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/50'
-                        : 'bg-slate-800/80 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
-                    }`}
-                  >
-                    <Icon className="w-6 h-6" />
-                    <span className="text-xs font-semibold">{item.label}</span>
-                  </button>
-                )
-              })}
+          {/* Mobile: Hamburger Menu */}
+          <div className="md:hidden">
+            {/* Mobile Header */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-blue-500/30 border border-blue-400/50">
+                  <Shield className="w-5 h-5 text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-white font-bold text-lg">ICAN Engine</p>
+                  <p className="text-blue-300 text-xs">Global Capital</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="p-2 rounded-lg bg-slate-700/50 hover:bg-slate-700 text-slate-300 hover:text-white transition-all"
+              >
+                {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+              </button>
             </div>
+
+            {/* Mobile Menu */}
+            {mobileMenuOpen && (
+              <div className="space-y-2 pb-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                {menuItems.map((item) => {
+                  const Icon = item.icon
+                  const isActive = activeSection === item.id
+                  const isExpanded = expandedMobileMenu === item.id
+
+                  return (
+                    <div key={item.id}>
+                      <button
+                        onClick={() => {
+                          setActiveSection(item.id)
+                          if (item.id === 'trust') {
+                            if (onTrustClick) onTrustClick()
+                            setMobileMenuOpen(false)
+                          } else if (item.id === 'share') {
+                            if (onShareClick) onShareClick()
+                            setMobileMenuOpen(false)
+                          } else if (item.id === 'wallet') {
+                            if (onWalletClick) onWalletClick()
+                            setMobileMenuOpen(false)
+                          } else if (item.submenu) {
+                            setExpandedMobileMenu(isExpanded ? null : item.id)
+                          } else {
+                            setMobileMenuOpen(false)
+                          }
+                        }}
+                        className={`w-full px-4 py-3 rounded-lg font-medium text-sm flex items-center gap-2 transition-all border ${
+                          isActive
+                            ? 'bg-blue-500 text-white border-blue-400'
+                            : 'bg-slate-700/50 text-slate-300 border-slate-600'
+                        }`}
+                      >
+                        <Icon className="w-4 h-4 flex-shrink-0" />
+                        <span>{item.label}</span>
+                        {item.submenu && (
+                          <ChevronDown className={`w-4 h-4 ml-auto transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                        )}
+                      </button>
+
+                      {/* Mobile Submenu */}
+                      {item.submenu && isExpanded && (
+                        <div className="mt-1 ml-4 space-y-1 border-l border-slate-600 pl-2">
+                          {item.submenu.map((subitem) => {
+                            const SubIcon = subitem.icon
+                            return (
+                              <button
+                                key={subitem.path}
+                                onClick={() => {
+                                  setExpandedMobileMenu(null)
+                                  setMobileMenuOpen(false)
+                                }}
+                                className="w-full px-3 py-2 rounded-lg text-left text-slate-300 hover:text-white hover:bg-blue-500/30 transition-all flex items-center gap-2 text-xs"
+                              >
+                                <SubIcon className="w-4 h-4 flex-shrink-0" />
+                                {subitem.label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
       </nav>

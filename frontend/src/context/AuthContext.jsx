@@ -141,31 +141,20 @@ export const AuthProvider = ({ children }) => {
     const fileName = `${user.id}-${Date.now()}.${fileExt}`;
     const filePath = `avatars/${fileName}`;
 
-    console.log('🚀 Starting avatar upload:', { filePath, fileName, fileSize: file.size });
-
     // Upload to Supabase Storage
-    const { data, error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabase.storage
       .from('user-content')
       .upload(filePath, file, { upsert: true });
 
-    if (uploadError) {
-      console.error('❌ Upload error:', uploadError);
-      throw uploadError;
-    }
-
-    console.log('✅ File uploaded successfully:', data);
+    if (uploadError) throw uploadError;
 
     // Get public URL
     const { data: { publicUrl } } = supabase.storage
       .from('user-content')
       .getPublicUrl(filePath);
 
-    console.log('🔗 Public URL:', publicUrl);
-
     // Update profile with new avatar URL
     await updateProfile({ avatar_url: publicUrl });
-
-    console.log('💾 Profile updated with avatar URL');
 
     return publicUrl;
   };
@@ -205,50 +194,26 @@ export const AuthProvider = ({ children }) => {
       return;
     }
 
-    let isMounted = true;
-
-    const initializeAuth = async () => {
-      try {
-        // Add small delay to let Supabase settle
-        await new Promise(resolve => setTimeout(resolve, 50));
-
-        if (!isMounted) return;
-
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (!isMounted) return;
-
-        if (error && error.message !== 'signal is aborted') {
-          console.error('Auth initialization error:', error);
-        }
-
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          await loadProfile(session.user.id);
-        }
-        setLoading(false);
-        
-        // Clear hash after Supabase has processed it
-        if (window.location.hash && isMounted) {
-          window.history.replaceState(null, '', window.location.pathname);
-        }
-      } catch (err) {
-        // Silently ignore abort errors and only log other errors
-        if (isMounted && err.name !== 'AbortError' && !err.message?.includes('aborted')) {
-          console.error('Error getting session:', err);
-        }
-        if (isMounted) {
-          setLoading(false);
-        }
+    // Get initial session - Supabase will automatically process OAuth tokens from URL
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        loadProfile(session.user.id);
       }
-    };
-
-    initializeAuth();
+      setLoading(false);
+      
+      // Clear hash after Supabase has processed it
+      if (window.location.hash) {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+    }).catch((err) => {
+      console.error('Error getting session:', err);
+      setLoading(false);
+    });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        if (!isMounted) return;
         setUser(session?.user ?? null);
         if (session?.user) {
           loadProfile(session.user.id);
@@ -259,10 +224,7 @@ export const AuthProvider = ({ children }) => {
       }
     );
 
-    return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   // Sign up - exactly like FARM-AGENT
@@ -326,7 +288,7 @@ export const AuthProvider = ({ children }) => {
     return data;
   };
 
-  // Sign in with Google - with automatic country check
+  // Sign in with Google - exactly like FARM-AGENT
   const signInWithGoogle = async () => {
     const supabase = getSupabase();
     if (!supabase) throw new Error('Supabase not initialized');
@@ -348,31 +310,7 @@ export const AuthProvider = ({ children }) => {
     });
     
     if (error) throw error;
-    
-    // Note: After OAuth redirect and auth state updates, CountryCheckMiddleware 
-    // will automatically verify if user has country_code set in user_accounts
-    // If not set, it will force CountrySetup modal before app proceeds
     return data;
-  };
-  
-  // Helper: Check if user has country set in user_accounts
-  const checkUserCountry = async (userId) => {
-    const supabase = getSupabase();
-    if (!supabase) return false;
-    
-    try {
-      const { data, error } = await supabase
-        .from('user_accounts')
-        .select('country_code')
-        .eq('user_id', userId)
-        .single();
-      
-      if (error) return false;
-      return data?.country_code !== null && data?.country_code !== undefined;
-    } catch (error) {
-      console.error('Error checking country:', error);
-      return false;
-    }
   };
 
   const value = {
@@ -384,7 +322,6 @@ export const AuthProvider = ({ children }) => {
     signOut,
     resetPassword,
     signInWithGoogle,
-    checkUserCountry,
     loadProfile,
     updateProfile,
     uploadAvatar,

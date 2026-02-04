@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ThumbsUp, MessageCircle, Share2, Clock, Users, FileText, Zap, AlertCircle, Building2, Loader, Plus, Trash2, Lock, Unlock, X, Send, Copy, Check, Play, Home, BookMarked, Heart, Briefcase } from 'lucide-react';
+import { ThumbsUp, MessageCircle, Share2, Clock, Users, FileText, Zap, AlertCircle, Building2, Loader, Plus, Trash2, Lock, Unlock, X, Send, Copy, Check, Play, Home, BookMarked, Heart, Briefcase, Bell } from 'lucide-react';
 import PitchVideoRecorder from './PitchVideoRecorder';
 import SmartContractGenerator from './SmartContractGenerator';
 import ShareSigningFlow from './ShareSigningFlow';
@@ -38,6 +38,7 @@ import {
   subscribeToAllPitchesMetrics,
   getPitchMetrics
 } from '../services/pitchInteractionsService';
+import { getUserNotifications } from '../services/investmentNotificationsService';
 
 const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
   const [pitches, setPitches] = useState([]);
@@ -73,9 +74,69 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
   const [videoPlayerPitch, setVideoPlayerPitch] = useState(null); // pitch for fullscreen video player
   const [mutedVideos, setMutedVideos] = useState(new Set()); // track which videos are unmuted (all start muted)
   const [currentVisiblePitch, setCurrentVisiblePitch] = useState(null); // track currently visible pitch for web bottom nav
+  const [showPitchNotifications, setShowPitchNotifications] = useState(null); // pitch id for notifications panel
+  const [pitchNotifications, setPitchNotifications] = useState({}); // notifications by pitch id
   const videoRefs = useRef({}); // refs to video elements for controlling sound
   const videoScrollRef = useRef(null);
   const metricsUnsubscribeRef = useRef(null); // ref to store real-time unsubscribe function
+
+  // Fetch notifications for a specific pitch
+  const fetchPitchNotifications = async (pitchId) => {
+    if (!currentUser?.id || !pitchId) {
+      console.warn('❌ Cannot fetch notifications: missing user ID or pitch ID');
+      return;
+    }
+    
+    try {
+      const sb = getSupabase();
+      if (!sb) {
+        console.warn('⚠️  Supabase not available - demo mode');
+        setPitchNotifications(prev => ({
+          ...prev,
+          [pitchId]: []
+        }));
+        return;
+      }
+
+      // Fetch notifications directed to current user for this pitch
+      const { data, error } = await sb
+        .from('investment_notifications')
+        .select('*')
+        .eq('recipient_id', currentUser.id)
+        .eq('pitch_id', pitchId)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) {
+        console.warn(`⚠️  Error fetching notifications: ${error.message}`);
+        setPitchNotifications(prev => ({
+          ...prev,
+          [pitchId]: []
+        }));
+        return;
+      }
+
+      if (data && data.length > 0) {
+        console.log(`📬 Found ${data.length} notifications for pitch ${pitchId}`);
+        setPitchNotifications(prev => ({
+          ...prev,
+          [pitchId]: data
+        }));
+      } else {
+        console.log(`📭 No notifications for pitch ${pitchId}`);
+        setPitchNotifications(prev => ({
+          ...prev,
+          [pitchId]: []
+        }));
+      }
+    } catch (error) {
+      console.error('❌ Error fetching pitch notifications:', error);
+      setPitchNotifications(prev => ({
+        ...prev,
+        [pitchId]: []
+      }));
+    }
+  };
 
   // Initialize and load data
   useEffect(() => {
@@ -834,11 +895,26 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
         user_id: currentUser.id
       };
       
-      // Reload profiles from database (owned + co-owned)
+      // First, set the profile immediately with any co-owners it has
+      console.log('📌 Profile created/updated with business_co_owners:', profile?.business_co_owners?.length || 0);
+      
+      // Reload profiles from database (owned + co-owned) with a small delay to ensure DB is updated
       if (currentUser) {
+        // Wait 500ms for database to fully commit the changes
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
         const updatedProfiles = await getAllAccessibleBusinessProfiles(currentUser.id, currentUser.email);
         setBusinessProfiles(updatedProfiles);
-        if (updatedProfiles.length > 0) {
+        
+        // Find the profile we just created/updated and use it as current
+        const currentProfileId = profile?.id;
+        const refreshedProfile = updatedProfiles.find(p => p.id === currentProfileId);
+        
+        if (refreshedProfile) {
+          console.log('🔄 Refreshed profile from DB with', refreshedProfile?.business_co_owners?.length || 0, 'co-owners');
+          setCurrentBusinessProfile(refreshedProfile);
+        } else if (updatedProfiles.length > 0) {
+          console.log('⚠️ Could not find refreshed profile by ID, using first profile');
           setCurrentBusinessProfile(updatedProfiles[0]);
         }
       }
@@ -923,7 +999,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
             <div className="w-10 h-10 bg-gradient-to-br from-pink-500 to-purple-500 rounded-lg flex items-center justify-center shadow-lg">
               <Building2 className="w-5 h-5 text-white" />
             </div>
-            <div className="hidden sm:block text-left">
+            <div className="text-left">
               <h1 className="text-sm font-bold text-white">Pitchin</h1>
               <p className="text-xs text-gray-300">Share your vision</p>
             </div>
@@ -1009,7 +1085,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
               className="ml-2 px-4 py-2 text-pink-300 hover:text-pink-200 rounded-lg font-semibold transition flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Create</span>
+              <span>Create</span>
             </button>
 
             {/* Profile Button */}
@@ -1018,7 +1094,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
               className="px-4 py-2 text-gray-300 hover:text-white rounded-lg font-semibold transition flex items-center gap-2"
             >
               <Building2 className="w-4 h-4" />
-              <span className="hidden sm:inline">Profile</span>
+              <span>Profile</span>
             </button>
           </div>
         </div>
@@ -1067,7 +1143,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                 </div>
                 
                 {currentBusinessProfile ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4">
                     <BusinessProfileCard 
                       profile={currentBusinessProfile} 
                       onEdit={() => setShowProfileSelector(true)}
@@ -1104,20 +1180,20 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
       )}
       */}
 
-      {/* Main Content - Full screen on mobile, centered phone-like on desktop */}
-      <div className="fixed inset-0 w-screen h-screen bg-gradient-to-br from-slate-900 via-purple-900/30 to-slate-900 md:pb-24">
+      {/* Main Content - Full screen mobile UI on all devices */}
+      <div className="fixed inset-0 w-screen h-screen bg-gradient-to-br from-slate-900 via-purple-900/30 to-slate-900 overflow-hidden">
         {showRecorder ? (
-          <div className="w-full h-full flex flex-col items-center justify-center px-4 py-4">
-            <div className="w-full max-w-4xl">
-              <button
-                onClick={() => {
-                  setShowRecorder(false);
-                  if (onClosePitchCreator) onClosePitchCreator();
-                }}
-                className="text-slate-400 hover:text-slate-200 mb-6 font-medium flex items-center gap-2 text-lg"
-              >
-                ← Back to Pitches
-              </button>
+          <div className="w-full h-full flex flex-col items-center justify-start overflow-y-auto">
+            <button
+              onClick={() => {
+                setShowRecorder(false);
+                if (onClosePitchCreator) onClosePitchCreator();
+              }}
+              className="text-slate-400 hover:text-slate-200 mb-6 font-medium flex items-center gap-2 text-lg sticky top-0 z-10 p-4"
+            >
+              ← Back to Pitches
+            </button>
+            <div className="w-full">
               <PitchVideoRecorder 
                 onPitchCreated={handleCreatePitch} 
                 onClose={() => {
@@ -1131,9 +1207,9 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
         ) : (
           <>
             {/* Pitch Feed - Full-Screen TikTok-Style with Snap Scroll */}
-            {/* Mobile: full screen, Desktop: centered phone-like container */}
+            {/* Mobile UI for both mobile and web - no responsive changes */}
             <div className="h-full w-full flex items-center justify-center">
-              <div className="relative w-full h-full md:w-[400px] md:h-[90vh] md:max-h-[800px] md:rounded-3xl md:overflow-hidden md:shadow-2xl md:shadow-purple-500/20 md:border md:border-purple-500/20 overflow-y-auto snap-y snap-mandatory scroll-smooth" ref={videoScrollRef}>
+              <div className="relative w-full h-full overflow-y-auto snap-y snap-mandatory scroll-smooth" ref={videoScrollRef}>
               {loading ? (
                 // Creative Full-Screen Loading Experience with Video Preview
                 <div className="fixed inset-0 z-50 bg-black flex items-center justify-center overflow-hidden">
@@ -1284,9 +1360,8 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                         </div>
                       </button>
 
-                      {/* Action Buttons - Portrait: vertical on right, Landscape: horizontal at bottom */}
-                      {/* Portrait Mode (vertical) */}
-                      <div className="absolute right-2 bottom-20 portrait:flex landscape:hidden flex-col gap-2 pointer-events-auto">
+                      {/* Action Buttons - Vertical on right */}
+                      <div className="absolute right-2 bottom-20 flex flex-col gap-2 pointer-events-auto">
                         {/* Like Button */}
                         <button
                           onClick={() => handleLike(pitch.id)}
@@ -1302,6 +1377,71 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                           </div>
                           <span className="text-white text-[9px] font-bold drop-shadow-lg">{pitch.likes_count || 0}</span>
                         </button>
+
+                        {/* Notification Button */}
+                        <button
+                          onClick={() => {
+                            setShowPitchNotifications(showPitchNotifications === pitch.id ? null : pitch.id);
+                            if (showPitchNotifications !== pitch.id) {
+                              fetchPitchNotifications(pitch.id);
+                            }
+                          }}
+                          className="flex flex-col items-center gap-0.5"
+                          title="Notifications"
+                        >
+                          <div className="relative">
+                            <div className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm flex items-center justify-center transition-all">
+                              <Bell className="w-4 h-4 text-white drop-shadow-lg" />
+                            </div>
+                            {pitchNotifications[pitch.id]?.length > 0 && (
+                              <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
+                                <span className="text-white text-[7px] font-bold">{pitchNotifications[pitch.id].length}</span>
+                              </div>
+                            )}
+                          </div>
+                          <span className="text-white text-[9px] font-bold drop-shadow-lg">{pitchNotifications[pitch.id]?.length || 0}</span>
+                        </button>
+
+                        {/* Notifications Panel - Positioned near the button */}
+                        {showPitchNotifications === pitch.id && (
+                          <div className="absolute right-16 bottom-32 w-72 max-h-80 bg-black/90 backdrop-blur-md border border-white/20 rounded-lg p-3 pointer-events-auto z-30 overflow-y-auto">
+                            <div className="flex items-center justify-between mb-2">
+                              <h3 className="text-white font-semibold text-xs">Notifications</h3>
+                              <button
+                                onClick={() => setShowPitchNotifications(null)}
+                                className="text-white/60 hover:text-white"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                            
+                            {pitchNotifications[pitch.id]?.length === 0 ? (
+                              <p className="text-gray-400 text-[10px] text-center py-3">No notifications</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {pitchNotifications[pitch.id]?.map((notif) => (
+                                  <div key={notif.id} className="bg-white/5 border border-white/10 rounded p-1.5">
+                                    <div className="flex items-start gap-1.5">
+                                      <Bell className="w-3 h-3 text-blue-400 flex-shrink-0 mt-0.5" />
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-white text-[9px] font-semibold line-clamp-2">{notif.title}</p>
+                                        <p className="text-gray-400 text-[8px] mt-0.5 line-clamp-2">{notif.message}</p>
+                                        {notif.action_url && (
+                                          <button
+                                            onClick={() => window.location.href = notif.action_url}
+                                            className="text-blue-400 hover:text-blue-300 text-[8px] mt-1 font-semibold"
+                                          >
+                                            View →
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         {/* Comment Button */}
                         <button
@@ -1373,66 +1513,8 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                         </button>
                       </div>
 
-                      {/* Landscape Mode (horizontal at bottom-right) */}
-                      <div className="absolute right-2 bottom-2 portrait:hidden landscape:flex flex-row gap-3 pointer-events-auto bg-black/40 backdrop-blur-sm rounded-full px-3 py-2">
-                        {/* Like */}
-                        <button onClick={() => handleLike(pitch.id)} className="flex flex-col items-center" title="Like">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                            likedPitches.has(pitch.id) ? 'bg-red-500/80' : 'bg-white/20'
-                          }`}>
-                            <Heart className={`w-4 h-4 ${likedPitches.has(pitch.id) ? 'text-white fill-white' : 'text-white'}`} />
-                          </div>
-                          <span className="text-white text-[8px] font-bold">{pitch.likes_count || 0}</span>
-                        </button>
-
-                        {/* Comment */}
-                        <button onClick={() => handleOpenComments(pitch.id)} className="flex flex-col items-center" title="Comment">
-                          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-                            <MessageCircle className="w-4 h-4 text-white" />
-                          </div>
-                          <span className="text-white text-[8px] font-bold">{pitch.comments_count || 0}</span>
-                        </button>
-
-                        {/* Share */}
-                        <button onClick={() => handleShare(pitch.id)} className="flex flex-col items-center" title="Share">
-                          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-                            <Share2 className="w-4 h-4 text-white" />
-                          </div>
-                          <span className="text-white text-[8px] font-bold">{pitch.shares_count || 0}</span>
-                        </button>
-
-                        {/* Invest */}
-                        <button onClick={() => handleSmartContractClick(pitch)} className="flex flex-col items-center" title="Invest">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                            investedPitches.has(pitch.id) ? 'bg-green-500/80' : 'bg-white/10 hover:bg-white/20'
-                          }`}>
-                            <Briefcase className="w-4 h-4 text-white" />
-                          </div>
-                          <span className={`text-[8px] font-bold ${investedPitches.has(pitch.id) ? 'text-green-300' : 'text-white'}`}>
-                            {pitch.invests_count || 0}
-                          </span>
-                          <span className="text-white text-[6px] font-medium">Invest</span>
-                        </button>
-
-                        {/* Create */}
-                        <button onClick={handleCreatePitchClick} className="flex flex-col items-center" title="Create">
-                          <div className="w-8 h-8 rounded-full bg-pink-500/80 flex items-center justify-center">
-                            <Plus className="w-4 h-4 text-white" />
-                          </div>
-                          <span className="text-pink-300 text-[8px] font-bold">Create</span>
-                        </button>
-
-                        {/* Profile */}
-                        <button onClick={() => setShowProfileSelector(true)} className="flex flex-col items-center" title="Profile">
-                          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-                            <Building2 className="w-4 h-4 text-white" />
-                          </div>
-                          <span className="text-white text-[8px] font-bold">Profile</span>
-                        </button>
-                      </div>
-
                       {/* Bottom Info - Gradient overlay */}
-                      <div className="absolute bottom-0 left-0 portrait:right-12 landscape:right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-3 portrait:pb-2 landscape:pb-14 pt-8 pointer-events-auto">
+                      <div className="absolute bottom-0 left-0 right-12 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-3 pb-2 pt-8 pointer-events-auto">
                         {/* Creator Info */}
                         <div className="flex items-center gap-2 mb-1">
                           <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
@@ -1446,12 +1528,12 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                         </div>
 
                         {/* Title */}
-                        <h3 className="text-white font-bold text-xs portrait:text-sm mb-0.5 drop-shadow-lg line-clamp-1">
+                        <h3 className="text-white font-bold text-xs mb-0.5 drop-shadow-lg line-clamp-1">
                           {pitch.title}
                         </h3>
 
                         {/* Funding Info Row */}
-                        <div className="flex items-center flex-wrap gap-1.5 text-[9px] portrait:text-[10px]">
+                        <div className="flex items-center flex-wrap gap-1.5 text-[9px]">
                           <span className="text-white/90 font-semibold">{formatCurrency(pitch.target_funding)}</span>
                           <span className="text-white/50">•</span>
                           <span className="text-purple-300 font-semibold">{pitch.equity_offering || 0}%</span>
@@ -1474,9 +1556,8 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
       </div>
 
       {/* Bottom Action Bar - Web View Only */}
-      {!showRecorder && filteredPitches.length > 0 && (
-        <div className="hidden md:block fixed bottom-0 left-0 right-0 z-50 bg-gradient-to-t from-black via-black/95 to-transparent backdrop-blur-lg border-t border-white/10">
-          <div className="max-w-7xl mx-auto px-6 py-3">
+      {!showRecorder && filteredPitches.length > 0 && (currentVisiblePitch || filteredPitches[0]) && (
+        <div className="max-w-7xl mx-auto px-6 py-3">
             <div className="flex items-center justify-between">
               {/* Left - Pitch Info */}
               <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -1580,8 +1661,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Smart Contract Modal */}
       {selectedForContract && (
@@ -1732,7 +1812,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
 
       {/* Mobile Pitch Detail Modal - Shows SHAREHub-style UI */}
       {showMobilePitchDetail && selectedMobilePitch && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 md:hidden flex flex-col">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex flex-col">
           {/* Header */}
           <div className="flex items-center justify-between p-4 bg-slate-900/95 border-b border-slate-700">
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
@@ -1907,7 +1987,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
 
       {/* Mobile Pitch Detail Modal - Shows Full Web Pitchin UI */}
       {showMobilePitchDetail && (
-        <div className="fixed inset-0 bg-black/80 z-50 md:hidden flex flex-col">
+        <div className="fixed inset-0 bg-black/80 z-50 flex flex-col">
           {/* Header with Close Button */}
           <div className="sticky top-0 z-30 bg-gradient-to-r from-purple-900/95 to-pink-900/95 p-4 flex items-center justify-between">
             <div>
@@ -2186,17 +2266,17 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
           {/* Close Button */}
           <button
             onClick={() => setVideoPlayerPitch(null)}
-            className="absolute top-4 right-4 z-30 p-2 sm:p-3 bg-black/50 hover:bg-black/80 text-white rounded-lg transition"
+            className="absolute top-4 right-4 z-30 p-2 bg-black/50 hover:bg-black/80 text-white rounded-lg transition"
           >
-            <X className="w-6 h-6 sm:w-8 sm:h-8" />
+            <X className="w-6 h-6" />
           </button>
 
           {/* Video Container - True Fullscreen, No Flex */}
           <div className="absolute inset-0 w-screen h-screen bg-black">
             {!videoPlayerPitch.video_url || videoErrors[videoPlayerPitch.id] ? (
               <div className="w-full h-full flex flex-col items-center justify-center gap-4">
-                <AlertCircle className="w-16 h-16 sm:w-20 sm:h-20 text-slate-500" />
-                <p className="text-slate-400 text-lg sm:text-xl">Video unavailable</p>
+                <AlertCircle className="w-16 h-16 text-slate-500" />
+                <p className="text-slate-400 text-lg">Video unavailable</p>
               </div>
             ) : (
               <video
@@ -2287,13 +2367,13 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
           </div>
 
           {/* Pitch Info Bottom Bar - Overlaid on Video */}
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/90 to-transparent p-4 sm:p-6 z-20">
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/90 to-transparent p-4 z-20">
             <div className="flex items-start gap-3 mb-2">
               <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0">
                 <Building2 className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h3 className="text-lg sm:text-xl font-bold text-white">{videoPlayerPitch.title}</h3>
+                <h3 className="text-lg font-bold text-white">{videoPlayerPitch.title}</h3>
                 <p className="text-sm text-gray-300">{videoPlayerPitch.business_profiles?.business_name}</p>
               </div>
             </div>

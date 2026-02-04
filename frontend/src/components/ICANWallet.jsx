@@ -172,17 +172,20 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
   // Load candlestick data when trade modal opens
   useEffect(() => {
     if (showTradeModal) {
-      loadCandlestickData();
-      // Refresh candlestick data every 7 seconds
-      const interval = setInterval(loadCandlestickData, 7000);
+      loadCandlestickData(true); // Initial load with loading state
+      // Refresh candlestick data every 7 seconds (silently, no loading state)
+      const interval = setInterval(() => loadCandlestickData(false), 7000);
       return () => clearInterval(interval);
     }
   }, [showTradeModal]);
 
   // Load candlestick data from database
-  const loadCandlestickData = async () => {
+  const loadCandlestickData = async (showLoading = false) => {
     try {
-      setCandleLoading(true);
+      // Only show loading on initial load, not on refreshes
+      if (showLoading && candleData.length === 0) {
+        setCandleLoading(true);
+      }
       const supabase = getSupabaseClient();
       
       // Fetch latest 100 candlesticks
@@ -2601,11 +2604,11 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
           }
         }
       `}</style>{/* Header Card */}
-      <div className="glass-card p-4 md:p-6">
+      <div className="solid-card p-4 md:p-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
           <div className="flex items-center gap-4">
-            <div className="p-3 rounded-lg bg-gradient-to-br from-green-500/30 to-emerald-500/30 border border-green-400/50">
-              <Wallet className="w-6 h-6 text-green-400" />
+            <div className="p-3 rounded-lg bg-gradient-to-br from-green-600 to-emerald-700 border border-green-500/50 shadow-lg shadow-green-500/20">
+              <Wallet className="w-6 h-6 text-white" />
             </div>
             <div>
               <h2 className="text-2xl md:text-3xl font-bold text-white">ICAN Wallet</h2>
@@ -2621,7 +2624,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
             className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
               activeTab === 'overview'
                 ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg shadow-green-500/30'
-                : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
             }`}
           >
             <Wallet className="w-4 h-4" />
@@ -2632,7 +2635,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
             className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
               activeTab === 'transactions'
                 ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg shadow-blue-500/30'
-                : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
             }`}
           >
             <History className="w-4 h-4" />
@@ -2643,7 +2646,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
             className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
               activeTab === 'deposit'
                 ? 'bg-gradient-to-r from-emerald-600 to-green-600 text-white shadow-lg shadow-emerald-500/30'
-                : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
             }`}
           >
             <Download className="w-4 h-4" />
@@ -2654,7 +2657,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
             className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
               activeTab === 'withdraw'
                 ? 'bg-gradient-to-r from-red-600 to-pink-600 text-white shadow-lg shadow-red-500/30'
-                : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
             }`}
           >
             <Upload className="w-4 h-4" />
@@ -2667,7 +2670,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
               className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
                 activeTab === 'agent'
                   ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-500/30'
-                  : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                  : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
               }`}
             >
               <Store className="w-4 h-4" />
@@ -2677,7 +2680,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
             <button
               onClick={() => setActiveTab('agent')}
               title="Click to create an agent account"
-              className="px-4 py-2 rounded-lg flex items-center gap-2 bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+              className="px-4 py-2 rounded-lg flex items-center gap-2 bg-slate-700 text-gray-300 hover:bg-slate-600 hover:text-white transition-all cursor-pointer"
             >
               <Lock className="w-4 h-4" />
               🔒 Agent (Locked)
@@ -2688,7 +2691,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
             className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
               activeTab === 'cards'
                 ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/30'
-                : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
             }`}
           >
             <CreditCard className="w-4 h-4" />
@@ -2699,7 +2702,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
             className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
               activeTab === 'business'
                 ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/30'
-                : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
             }`}
           >
             <Store className="w-4 h-4" />
@@ -2710,7 +2713,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
             className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
               activeTab === 'settings'
                 ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg shadow-orange-500/30'
-                : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
             }`}
           >
             <Settings className="w-4 h-4" />
@@ -2723,7 +2726,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
       {activeTab === 'overview' && (
       <div className="space-y-6">
         {/* Balance Card */}
-        <div className="glass-card p-6 bg-gradient-to-br from-green-900/40 to-emerald-900/40 border border-green-500/30">
+        <div className="solid-card p-6 bg-gradient-to-br from-green-900 to-emerald-900 border border-green-500/30">
           <div className="mb-6">
             <p className="text-gray-300 mb-2 text-sm font-medium">Total Balance</p>
             <div className="flex items-center gap-4 mb-6">
@@ -2732,7 +2735,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
               </div>
               <button
                 onClick={() => setShowBalance(!showBalance)}
-                className="p-3 rounded-lg bg-white/10 hover:bg-white/20 transition-all border border-white/10"
+                className="p-3 rounded-lg bg-slate-700 hover:bg-slate-600 transition-all border border-slate-600"
               >
                 {showBalance ? <Eye className="w-5 h-5 text-gray-300" /> : <EyeOff className="w-5 h-5 text-gray-300" />}
               </button>
@@ -2744,30 +2747,30 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
           <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-4 gap-2 sm:gap-3">
             <button 
               onClick={() => setActiveModal('send')}
-              className="bg-gradient-to-br from-blue-500/30 to-blue-600/30 border border-blue-400/50 hover:border-blue-400/80 rounded-lg py-2 sm:py-3 px-2 sm:px-4 flex flex-col items-center gap-1 sm:gap-2 transition-all"
+              className="bg-gradient-to-br from-blue-600 to-blue-700 border border-blue-500 hover:border-blue-400 rounded-lg py-2 sm:py-3 px-2 sm:px-4 flex flex-col items-center gap-1 sm:gap-2 transition-all"
             >
-              <Send className="w-4 sm:w-5 h-4 sm:h-5 text-blue-400" />
+              <Send className="w-4 sm:w-5 h-4 sm:h-5 text-blue-200" />
               <span className="text-xs sm:text-sm font-medium text-white">Send</span>
             </button>
             <button 
               onClick={() => setActiveModal('receive')}
-              className="bg-gradient-to-br from-cyan-500/30 to-cyan-600/30 border border-cyan-400/50 hover:border-cyan-400/80 rounded-lg py-2 sm:py-3 px-2 sm:px-4 flex flex-col items-center gap-1 sm:gap-2 transition-all"
+              className="bg-gradient-to-br from-cyan-600 to-cyan-700 border border-cyan-500 hover:border-cyan-400 rounded-lg py-2 sm:py-3 px-2 sm:px-4 flex flex-col items-center gap-1 sm:gap-2 transition-all"
             >
-              <ArrowDownLeft className="w-4 sm:w-5 h-4 sm:h-5 text-cyan-400" />
+              <ArrowDownLeft className="w-4 sm:w-5 h-4 sm:h-5 text-cyan-200" />
               <span className="text-xs sm:text-sm font-medium text-white">Receive</span>
             </button>
             <button 
               onClick={() => setActiveModal('topup')}
-              className="bg-gradient-to-br from-green-500/30 to-green-600/30 border border-green-400/50 hover:border-green-400/80 rounded-lg py-2 sm:py-3 px-2 sm:px-4 flex flex-col items-center gap-1 sm:gap-2 transition-all"
+              className="bg-gradient-to-br from-green-600 to-green-700 border border-green-500 hover:border-green-400 rounded-lg py-2 sm:py-3 px-2 sm:px-4 flex flex-col items-center gap-1 sm:gap-2 transition-all"
             >
-              <Plus className="w-4 sm:w-5 h-4 sm:h-5 text-green-400" />
+              <Plus className="w-4 sm:w-5 h-4 sm:h-5 text-green-200" />
               <span className="text-xs sm:text-sm font-medium text-white">Top Up</span>
             </button>
             <button 
               onClick={() => setShowTradeModal(true)}
-              className="bg-gradient-to-br from-orange-500/30 to-red-600/30 border border-orange-400/50 hover:border-orange-400/80 rounded-lg py-2 sm:py-3 px-2 sm:px-4 flex flex-col items-center gap-1 sm:gap-2 transition-all"
+              className="bg-gradient-to-br from-orange-600 to-red-700 border border-orange-500 hover:border-orange-400 rounded-lg py-2 sm:py-3 px-2 sm:px-4 flex flex-col items-center gap-1 sm:gap-2 transition-all"
             >
-              <TrendingUp className="w-4 sm:w-5 h-4 sm:h-5 text-orange-400" />
+              <TrendingUp className="w-4 sm:w-5 h-4 sm:h-5 text-orange-200" />
               <span className="text-xs sm:text-sm font-medium text-white">Trade</span>
             </button>
           </div>
@@ -2775,7 +2778,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
 
         {/* 🎯 ACCOUNT INFO CARD */}
         {userAccount && (
-          <div className="glass-card p-6 border border-purple-500/30">
+          <div className="solid-card p-6 border border-purple-500/50">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                 💳 Account Information
@@ -2790,14 +2793,14 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
                   });
                   setShowAccountEdit(true);
                 }}
-                className="px-4 py-2 bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 rounded-lg text-sm font-medium transition-all border border-purple-500/30"
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-purple-100 rounded-lg text-sm font-medium transition-all border border-purple-400"
               >
                 ✏️ Edit
               </button>
             </div>
             <div className="space-y-3">
               {/* Account Number */}
-              <div className="bg-slate-700/50 rounded-lg p-4 border border-purple-500/20">
+              <div className="bg-slate-700 rounded-lg p-4 border border-purple-500/40">
                 <p className="text-gray-400 text-sm mb-1">Account Number</p>
                 <div className="flex items-center justify-between">
                   <p className="text-white font-mono text-lg font-bold">{userAccount.account_number}</p>
@@ -2806,7 +2809,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
                       navigator.clipboard.writeText(userAccount.account_number);
                       alert('Account number copied!');
                     }}
-                    className="px-3 py-1 bg-purple-500/30 hover:bg-purple-500/50 text-purple-300 rounded text-sm transition-all"
+                    className="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-purple-100 rounded text-sm transition-all"
                   >
                     📋 Copy
                   </button>
@@ -4940,30 +4943,42 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
 
       {/* TRADE MODAL - Tabbed Interface with Chart, Buy, Sell, History */}
       {showTradeModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="glass-card p-6 w-full max-w-6xl max-h-[90vh] overflow-y-auto">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                💰 ICAN Trading Center
-                <span className="text-sm text-gray-400">Real-time trading platform</span>
-              </h2>
-              <button
-                onClick={() => setShowTradeModal(false)}
-                className="px-4 py-2 bg-red-500/20 text-red-300 hover:bg-red-500/30 rounded-lg font-semibold transition-all"
-              >
-                ✕ Close
-              </button>
+        <div className="fixed inset-0 bg-slate-950/95 flex items-center justify-center z-50 p-2 md:p-4">
+          <div className={`solid-card border border-slate-600 w-full ${activeTradeTab === 'chart' ? 'max-w-[98vw] h-[96vh]' : 'max-w-6xl max-h-[90vh]'} overflow-hidden flex flex-col transition-all duration-300`}>
+            {/* Modal Header - Professional Trading Platform Style */}
+            <div className="flex items-center justify-between p-4 md:p-6 border-b border-slate-700 bg-gradient-to-r from-slate-800 to-slate-900">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/30">
+                  <span className="text-2xl">💰</span>
+                </div>
+                <div>
+                  <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight">ICAN Trading Center</h2>
+                  <p className="text-sm text-slate-400">Professional Trading Platform • Real-time Market Data</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                {/* Live Indicator */}
+                <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-green-500/20 border border-green-500/50 rounded-full">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span className="text-xs font-medium text-green-400">LIVE</span>
+                </div>
+                <button
+                  onClick={() => setShowTradeModal(false)}
+                  className="w-10 h-10 flex items-center justify-center bg-slate-700 hover:bg-red-600 text-slate-300 hover:text-white rounded-lg font-semibold transition-all"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
-            {/* Tab Navigation */}
-            <div className="flex gap-2 mb-6 border-b border-white/10 pb-4 flex-wrap">
+            {/* Tab Navigation - Premium Style */}
+            <div className="flex gap-1 md:gap-2 px-4 md:px-6 py-3 bg-slate-800/50 border-b border-slate-700 overflow-x-auto">
               <button
                 onClick={() => setActiveTradeTab('wallet')}
-                className={`px-4 py-2 rounded-t-lg font-semibold transition-all flex items-center gap-2 ${
+                className={`px-4 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
                   activeTradeTab === 'wallet'
-                    ? 'bg-gradient-to-r from-purple-500/40 to-purple-600/40 border border-purple-500/50 text-purple-300'
-                    : 'bg-white/10 text-gray-400 hover:text-gray-300'
+                    ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-lg shadow-purple-600/30'
+                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
                 }`}
               >
                 💎 My Wallet
@@ -4971,10 +4986,10 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
 
               <button
                 onClick={() => setActiveTradeTab('chart')}
-                className={`px-4 py-2 rounded-t-lg font-semibold transition-all flex items-center gap-2 ${
+                className={`px-4 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
                   activeTradeTab === 'chart'
-                    ? 'bg-gradient-to-r from-orange-500/40 to-orange-600/40 border border-orange-500/50 text-orange-300'
-                    : 'bg-white/10 text-gray-400 hover:text-gray-300'
+                    ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-lg shadow-amber-600/30'
+                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
                 }`}
               >
                 📊 Chart & Analysis
@@ -4982,10 +4997,10 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
               
               <button
                 onClick={() => setActiveTradeTab('buy')}
-                className={`px-4 py-2 rounded-t-lg font-semibold transition-all flex items-center gap-2 ${
+                className={`px-4 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
                   activeTradeTab === 'buy'
-                    ? 'bg-gradient-to-r from-green-500/40 to-green-600/40 border border-green-500/50 text-green-300'
-                    : 'bg-white/10 text-gray-400 hover:text-gray-300'
+                    ? 'bg-gradient-to-r from-emerald-600 to-green-600 text-white shadow-lg shadow-emerald-600/30'
+                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
                 }`}
               >
                 💳 Buy ICAN
@@ -4993,10 +5008,10 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
 
               <button
                 onClick={() => setActiveTradeTab('sell')}
-                className={`px-4 py-2 rounded-t-lg font-semibold transition-all flex items-center gap-2 ${
+                className={`px-4 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
                   activeTradeTab === 'sell'
-                    ? 'bg-gradient-to-r from-red-500/40 to-red-600/40 border border-red-500/50 text-red-300'
-                    : 'bg-white/10 text-gray-400 hover:text-gray-300'
+                    ? 'bg-gradient-to-r from-rose-600 to-red-600 text-white shadow-lg shadow-rose-600/30'
+                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
                 }`}
               >
                 💰 Sell ICAN
@@ -5004,19 +5019,19 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
 
               <button
                 onClick={() => setActiveTradeTab('history')}
-                className={`px-4 py-2 rounded-t-lg font-semibold transition-all flex items-center gap-2 ${
+                className={`px-4 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
                   activeTradeTab === 'history'
-                    ? 'bg-gradient-to-r from-blue-500/40 to-blue-600/40 border border-blue-500/50 text-blue-300'
-                    : 'bg-white/10 text-gray-400 hover:text-gray-300'
+                    ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg shadow-blue-600/30'
+                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
                 }`}
               >
                 📜 History
               </button>
             </div>
 
-            {/* Tab Content */}
-            <div className="min-h-96">
-              {/* Wallet Tab - Collapsed */}
+            {/* Tab Content - Scrollable */}
+            <div className="flex-1 overflow-y-auto p-4 md:p-6">
+              {/* Wallet Tab */}
               {activeTradeTab === 'wallet' && (
                 <div className="space-y-4">
                   {balanceLoading ? (
@@ -5024,7 +5039,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
                       <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
                     </div>
                   ) : (
-                    <div className="bg-gradient-to-br from-purple-900/40 to-purple-800/40 border border-purple-500/50 rounded-lg p-12 text-center">
+                    <div className="bg-gradient-to-br from-purple-900 to-purple-800 border border-purple-500/50 rounded-xl p-12 text-center shadow-2xl">
                       <p className="text-purple-300 text-sm font-medium mb-4">💎 Total ICAN Coins</p>
                       <h2 className="text-6xl font-bold text-white">{icanBalance.toFixed(2)}</h2>
                     </div>
@@ -5032,75 +5047,152 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
                 </div>
               )}
 
-              {/* Chart Tab */}
+              {/* 📊 CHART TAB - Professional Trading Interface */}
               {activeTradeTab === 'chart' && (
-                <div className="space-y-4">
-                  {/* Header */}
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                      📈 Real-Time Candlestick Chart - Updates every 7 seconds
-                    </h3>
-                    <button
-                      onClick={() => setShowColorSettings(!showColorSettings)}
-                      className="px-4 py-2 bg-gradient-to-r from-orange-500/30 to-red-500/30 border border-orange-500/50 text-orange-300 rounded-lg hover:from-orange-500/50 hover:to-red-500/50 transition-all font-semibold flex items-center gap-2"
-                    >
-                      🎨 Colors
-                    </button>
+                <div className="h-full flex flex-col gap-4">
+                  {/* Chart Header - Trading Desk Style */}
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-800 rounded-xl p-4 border border-slate-700">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
+                          <span className="text-xl">📈</span>
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-bold text-white">ICAN/USD</h3>
+                          <p className="text-xs text-slate-400">Candlestick Analysis</p>
+                        </div>
+                      </div>
+                      
+                      {/* Price Display */}
+                      {candleData && candleData.length > 0 && (
+                        <div className="hidden md:flex items-center gap-4 ml-6 pl-6 border-l border-slate-700">
+                          <div>
+                            <p className="text-xs text-slate-500 uppercase tracking-wider">Current Price</p>
+                            <p className="text-xl font-bold text-white">${parseFloat(candleData[candleData.length - 1]?.close || 0).toFixed(8)}</p>
+                          </div>
+                          <div className={`px-3 py-1.5 rounded-lg ${
+                            candleData[candleData.length - 1]?.close >= candleData[0]?.open
+                              ? 'bg-emerald-500/20 border border-emerald-500/50'
+                              : 'bg-rose-500/20 border border-rose-500/50'
+                          }`}>
+                            <span className={`text-sm font-semibold ${
+                              candleData[candleData.length - 1]?.close >= candleData[0]?.open
+                                ? 'text-emerald-400'
+                                : 'text-rose-400'
+                            }`}>
+                              {candleData[candleData.length - 1]?.close >= candleData[0]?.open ? '▲' : '▼'} 
+                              {Math.abs(((candleData[candleData.length - 1]?.close - candleData[0]?.open) / candleData[0]?.open) * 100).toFixed(2)}%
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Controls */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Timeframe Selection */}
+                      <div className="flex items-center bg-slate-900 rounded-lg border border-slate-700 overflow-hidden">
+                        {['7s', '1m', '5m', '15m'].map((tf) => (
+                          <button
+                            key={tf}
+                            onClick={() => setCandleSettings({...candleSettings, selectedTimeframe: tf})}
+                            className={`px-3 py-2 text-xs font-semibold transition-all ${
+                              candleSettings.selectedTimeframe === tf
+                                ? 'bg-amber-600 text-white'
+                                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                            }`}
+                          >
+                            {tf}
+                          </button>
+                        ))}
+                      </div>
+                      
+                      {/* Refresh Indicator */}
+                      {candleLoading && (
+                        <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                          <div className="w-2 h-2 bg-amber-500 rounded-full animate-ping"></div>
+                          <span className="text-xs text-amber-400 font-medium">Updating...</span>
+                        </div>
+                      )}
+                      
+                      {/* Color Settings Toggle */}
+                      <button
+                        onClick={() => setShowColorSettings(!showColorSettings)}
+                        className={`px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${
+                          showColorSettings
+                            ? 'bg-amber-600 text-white'
+                            : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                        }`}
+                      >
+                        🎨 <span className="hidden sm:inline">Customize</span>
+                      </button>
+                      
+                      {/* Refresh Button */}
+                      <button
+                        onClick={loadCandlestickData}
+                        disabled={candleLoading}
+                        className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white rounded-lg font-semibold transition-all flex items-center gap-2 disabled:opacity-50"
+                      >
+                        🔄 <span className="hidden sm:inline">Refresh</span>
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Color Settings */}
+                  {/* Color Settings Panel */}
                   {showColorSettings && (
-                    <div className="bg-white/5 border border-white/10 rounded-lg p-6 mb-6">
-                      <h4 className="text-lg font-bold text-white mb-4">Customize Chart Colors</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div>
-                          <label className="block text-sm text-gray-300 mb-2">Up Candle (Price ↑)</label>
+                    <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 animate-fadeIn">
+                      <h4 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                        🎨 Chart Customization
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="bg-slate-900 rounded-lg p-3 border border-slate-700">
+                          <label className="block text-xs text-slate-400 mb-2 font-medium uppercase tracking-wider">Bullish Candle</label>
                           <div className="flex items-center gap-2">
                             <input
                               type="color"
                               value={candleSettings.upColor}
                               onChange={(e) => setCandleSettings({...candleSettings, upColor: e.target.value})}
-                              className="w-12 h-10 rounded cursor-pointer border border-gray-500/50"
+                              className="w-10 h-10 rounded-lg cursor-pointer border-2 border-slate-600"
                             />
                             <input
                               type="text"
                               value={candleSettings.upColor}
                               onChange={(e) => setCandleSettings({...candleSettings, upColor: e.target.value})}
-                              className="flex-1 bg-white/10 border border-white/20 rounded px-2 py-1 text-white text-sm font-mono"
+                              className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm font-mono"
                             />
                           </div>
                         </div>
-                        <div>
-                          <label className="block text-sm text-gray-300 mb-2">Down Candle (Price ↓)</label>
+                        <div className="bg-slate-900 rounded-lg p-3 border border-slate-700">
+                          <label className="block text-xs text-slate-400 mb-2 font-medium uppercase tracking-wider">Bearish Candle</label>
                           <div className="flex items-center gap-2">
                             <input
                               type="color"
                               value={candleSettings.downColor}
                               onChange={(e) => setCandleSettings({...candleSettings, downColor: e.target.value})}
-                              className="w-12 h-10 rounded cursor-pointer border border-gray-500/50"
+                              className="w-10 h-10 rounded-lg cursor-pointer border-2 border-slate-600"
                             />
                             <input
                               type="text"
                               value={candleSettings.downColor}
                               onChange={(e) => setCandleSettings({...candleSettings, downColor: e.target.value})}
-                              className="flex-1 bg-white/10 border border-white/20 rounded px-2 py-1 text-white text-sm font-mono"
+                              className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm font-mono"
                             />
                           </div>
                         </div>
-                        <div>
-                          <label className="block text-sm text-gray-300 mb-2">Wick Color</label>
+                        <div className="bg-slate-900 rounded-lg p-3 border border-slate-700">
+                          <label className="block text-xs text-slate-400 mb-2 font-medium uppercase tracking-wider">Wick Color</label>
                           <div className="flex items-center gap-2">
                             <input
                               type="color"
                               value={candleSettings.wickColor}
                               onChange={(e) => setCandleSettings({...candleSettings, wickColor: e.target.value})}
-                              className="w-12 h-10 rounded cursor-pointer border border-gray-500/50"
+                              className="w-10 h-10 rounded-lg cursor-pointer border-2 border-slate-600"
                             />
                             <input
                               type="text"
                               value={candleSettings.wickColor}
                               onChange={(e) => setCandleSettings({...candleSettings, wickColor: e.target.value})}
-                              className="flex-1 bg-white/10 border border-white/20 rounded px-2 py-1 text-white text-sm font-mono"
+                              className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm font-mono"
                             />
                           </div>
                         </div>
@@ -5108,48 +5200,94 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
                     </div>
                   )}
 
-                  {/* Chart Container */}
-                  <div className="bg-white/5 rounded-lg p-6 border border-orange-500/30">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="text-lg font-bold text-orange-300">7-Second Candlesticks</h4>
-                      {candleLoading && <span className="text-xs text-yellow-400 animate-pulse">⏳ Updating...</span>}
-                    </div>
+                  {/* Main Chart Area - Expandable */}
+                  <div className="flex-1 min-h-[400px] bg-slate-900 rounded-xl border border-slate-700 overflow-hidden">
                     {candleData && candleData.length > 0 ? (
-                      <CandlestickChart 
-                        candleData={candleData}
-                        loading={candleLoading}
-                        settings={candleSettings}
-                      />
+                      <div className="h-full w-full">
+                        <CandlestickChart 
+                          candleData={candleData}
+                          loading={candleLoading}
+                          settings={candleSettings}
+                        />
+                      </div>
                     ) : (
-                      <div className="h-96 flex items-center justify-center text-gray-400 bg-white/5 rounded border border-white/10">
-                        <p className="text-center">
-                          <span className="text-5xl mb-4 block">📊</span>
-                          Loading candlestick chart...
-                        </p>
+                      <div className="h-full flex flex-col items-center justify-center text-slate-500 p-8">
+                        <div className="w-20 h-20 rounded-2xl bg-slate-800 flex items-center justify-center mb-4">
+                          <span className="text-4xl">📊</span>
+                        </div>
+                        <p className="text-lg font-semibold text-slate-400 mb-2">Loading Market Data</p>
+                        <p className="text-sm text-slate-500">Connecting to real-time price feed...</p>
+                        <div className="mt-6 flex items-center gap-2">
+                          <div className="w-2 h-2 bg-amber-500 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
+                          <div className="w-2 h-2 bg-amber-500 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
+                          <div className="w-2 h-2 bg-amber-500 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
+                        </div>
                       </div>
                     )}
                   </div>
 
-                  {/* Technical Analysis Info */}
-                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
-                    <p className="text-sm text-blue-300">
-                      💡 <strong>Tip:</strong> Watch the candlesticks and technical indicators to identify trading opportunities. 
-                      Green candles indicate price increases, red indicates decreases. Use the Support/Resistance levels to decide entry/exit points.
-                    </p>
+                  {/* Market Stats Bar */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                    {candleData && candleData.length > 0 && (
+                      <>
+                        <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
+                          <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">24h High</p>
+                          <p className="text-sm font-bold text-emerald-400">${Math.max(...candleData.map(c => parseFloat(c.high))).toFixed(8)}</p>
+                        </div>
+                        <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
+                          <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">24h Low</p>
+                          <p className="text-sm font-bold text-rose-400">${Math.min(...candleData.map(c => parseFloat(c.low))).toFixed(8)}</p>
+                        </div>
+                        <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
+                          <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Open</p>
+                          <p className="text-sm font-bold text-white">${parseFloat(candleData[0]?.open || 0).toFixed(8)}</p>
+                        </div>
+                        <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
+                          <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Close</p>
+                          <p className="text-sm font-bold text-white">${parseFloat(candleData[candleData.length - 1]?.close || 0).toFixed(8)}</p>
+                        </div>
+                        <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
+                          <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Volume</p>
+                          <p className="text-sm font-bold text-amber-400">{candleData.reduce((sum, c) => sum + parseFloat(c.volume || 0), 0).toFixed(2)}</p>
+                        </div>
+                        <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
+                          <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Data Points</p>
+                          <p className="text-sm font-bold text-blue-400">{candleData.length}</p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Trading Insight */}
+                  <div className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-xl p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+                        <span className="text-xl">💡</span>
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-amber-400 mb-1">Trading Insight</h4>
+                        <p className="text-sm text-slate-300">
+                          Monitor candlestick patterns and technical indicators to identify optimal entry/exit points. 
+                          <span className="text-emerald-400"> Green candles</span> indicate bullish momentum, 
+                          <span className="text-rose-400"> red candles</span> indicate bearish pressure. 
+                          Use support/resistance levels for strategic decisions.
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
 
               {/* Buy Tab */}
               {activeTradeTab === 'buy' && (
-                <div className="trade-tab-content">
+                <div className="trade-tab-content bg-slate-800/50 rounded-xl p-4 border border-slate-700">
                   <BuyIcan />
                 </div>
               )}
 
               {/* Sell Tab */}
               {activeTradeTab === 'sell' && (
-                <div className="trade-tab-content">
+                <div className="trade-tab-content bg-slate-800/50 rounded-xl p-4 border border-slate-700">
                   <SellIcan />
                 </div>
               )}
@@ -5157,67 +5295,77 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
               {/* History Tab */}
               {activeTradeTab === 'history' && (
                 <div className="space-y-4">
-                  <h3 className="text-xl font-bold text-white mb-4">📜 Your Trading History</h3>
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center">
+                      <span className="text-xl">📜</span>
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-white">Trading History</h3>
+                      <p className="text-sm text-slate-400">Your complete transaction record</p>
+                    </div>
+                  </div>
                   
                   {historyLoading ? (
-                    <div className="flex items-center justify-center py-12">
+                    <div className="flex items-center justify-center py-12 bg-slate-800 rounded-xl border border-slate-700">
                       <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
                     </div>
                   ) : tradeHistory.length === 0 ? (
-                    <div className="text-center py-12 bg-white/5 rounded-lg border border-white/10">
-                      <History className="w-16 h-16 text-gray-500 mx-auto mb-4" />
-                      <p className="text-gray-400 text-lg">No trading history yet</p>
-                      <p className="text-gray-500 text-sm mt-2">Start buying or selling ICAN to see your transactions here</p>
+                    <div className="text-center py-12 bg-slate-800 rounded-xl border border-slate-700">
+                      <div className="w-16 h-16 rounded-2xl bg-slate-700 flex items-center justify-center mx-auto mb-4">
+                        <History className="w-8 h-8 text-slate-500" />
+                      </div>
+                      <p className="text-slate-300 text-lg font-semibold">No Trading History Yet</p>
+                      <p className="text-slate-500 text-sm mt-2">Start buying or selling ICAN to see your transactions here</p>
                     </div>
                   ) : (
-                    <div className="space-y-3 max-h-96 overflow-y-auto">
+                    <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
                       {tradeHistory.map((transaction, idx) => (
                         <div
                           key={idx}
-                          className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg p-4 transition-all"
+                          className="bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-slate-600 rounded-xl p-4 transition-all"
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
                               {transaction.transaction_type === 'purchase' ? (
-                                <div className="w-10 h-10 bg-green-500/20 rounded-full flex items-center justify-center">
-                                  <ArrowDownLeft className="w-5 h-5 text-green-400" />
+                                <div className="w-12 h-12 bg-emerald-500/20 rounded-xl flex items-center justify-center border border-emerald-500/30">
+                                  <ArrowDownLeft className="w-6 h-6 text-emerald-400" />
                                 </div>
                               ) : (
-                                <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
-                                  <ArrowUpRight className="w-5 h-5 text-red-400" />
+                                <div className="w-12 h-12 bg-rose-500/20 rounded-xl flex items-center justify-center border border-rose-500/30">
+                                  <ArrowUpRight className="w-6 h-6 text-rose-400" />
                                 </div>
                               )}
                               <div>
                                 <p className="font-semibold text-white">
                                   {transaction.transaction_type === 'purchase' ? '💳 Bought ICAN' : '💰 Sold ICAN'}
                                 </p>
-                                <p className="text-xs text-gray-400">
-                                  {new Date(transaction.created_at).toLocaleDateString()} {new Date(transaction.created_at).toLocaleTimeString()}
+                                <p className="text-xs text-slate-400">
+                                  {new Date(transaction.created_at).toLocaleDateString()} • {new Date(transaction.created_at).toLocaleTimeString()}
                                 </p>
                               </div>
                             </div>
                             <div className="text-right">
-                              <p className={`font-bold text-lg ${transaction.transaction_type === 'purchase' ? 'text-green-400' : 'text-red-400'}`}>
+                              <p className={`font-bold text-xl ${transaction.transaction_type === 'purchase' ? 'text-emerald-400' : 'text-rose-400'}`}>
                                 {transaction.transaction_type === 'purchase' ? '+' : '-'}{Math.abs(transaction.amount).toFixed(2)}
                               </p>
-                              <p className="text-xs text-gray-400">
+                              <p className="text-xs text-slate-400">
                                 {transaction.metadata?.amount_usd ? `$${transaction.metadata.amount_usd.toFixed(2)}` : transaction.currency}
                               </p>
                             </div>
                           </div>
                           
                           {/* Status Badge */}
-                          <div className="mt-3 flex items-center justify-between">
-                            <span className={`text-xs px-2 py-1 rounded ${
+                          <div className="mt-3 pt-3 border-t border-slate-700 flex items-center justify-between">
+                            <span className={`text-xs px-3 py-1.5 rounded-lg font-semibold ${
                               transaction.status === 'completed' 
-                                ? 'bg-green-500/20 text-green-400' 
-                                : 'bg-yellow-500/20 text-yellow-400'
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                                : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                             }`}>
                               {transaction.status === 'completed' ? '✓ Completed' : '⏳ Pending'}
                             </span>
                             {transaction.metadata?.pricePerCoin && (
-                              <span className="text-xs text-gray-400">
-                                Price: {transaction.metadata.pricePerCoin.toLocaleString()} UGX/ICAN
+                              <span className="text-xs text-slate-400 bg-slate-700 px-2 py-1 rounded">
+                                Rate: {transaction.metadata.pricePerCoin.toLocaleString()} UGX/ICAN
                               </span>
                             )}
                           </div>
