@@ -101,9 +101,21 @@ export default function BuyIcan() {
       );
 
       if (result.success) {
-        setSuccess(
-          `✅ Successfully purchased ${result.icanAmount.toFixed(2)} ICAN coins for ${currencySymbol}${parseFloat(localAmount).toLocaleString()}!`
-        );
+        const transactionDetails = `
+          💚 ICAN Coin Purchase Successful!
+          
+          📋 Transaction Details:
+          • ICAN Coins Purchased: ${result.icanAmount.toFixed(8)}
+          • Amount Paid: ${currencySymbol}${parseFloat(localAmount).toLocaleString()}
+          • Rate: 1 ICAN = ${result.pricePerCoin.toLocaleString()} ${currency}
+          • Your New ICAN Balance: ${result.newIcanBalance.toFixed(8)} coins
+          • Wallet Updated: ${currencySymbol}${parseFloat(result.newWalletBalance).toLocaleString()} remaining
+          
+          ✅ Real money has been deducted from your account.
+          ✅ ICAN coins are now in your wallet and ready to invest!
+        `;
+        
+        setSuccess(transactionDetails);
         
         // Record blockchain transaction
         await icanCoinBlockchainService.recordBlockchainTransaction(

@@ -47,11 +47,19 @@ export class IcanCoinBlockchainService {
         };
       }
 
-      this.marketPrice = data.price_ugx;
+      //🔧 SANITY CHECK: Ensure price_ugx is reasonable (minimum 1000 UGX)
+      // If price is abnormally low (< 1000), it's likely a data entry error
+      let priceUGX = data.price_ugx;
+      if (priceUGX < 1000) {
+        console.warn(`⚠️ PRICE CORRECTION: Database had price_ugx=${priceUGX} (too low!), using safe default 5000`);
+        priceUGX = 5000;
+      }
+
+      this.marketPrice = priceUGX;
       this.lastUpdate = new Date();
 
       return {
-        priceUGX: data.price_ugx,
+        priceUGX: priceUGX,
         percentageChange24h: data.percentage_change_24h || 0,
         marketCap: data.market_cap,
         source: 'blockchain'

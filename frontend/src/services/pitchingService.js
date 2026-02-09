@@ -27,45 +27,119 @@ export const verifyICANUser = async (email) => {
       return { exists: true, user: { email } }; // Allow in demo
     }
 
-    // Check if user exists in profiles table (public accessible)
-    const { data, error } = await sb
-      .from('profiles')
-      .select('id, email')
-      .eq('email', email.toLowerCase())
-      .single();
-    
-    if (error) {
-      // User not found or table error
-      if (error.code === 'PGRST116') {
-        // No rows found - user doesn't exist
-        return { 
-          exists: false, 
-          error: `No ICAN account found for ${email}. They must sign up first.` 
+    const emailLower = email.toLowerCase();
+
+    // Priority 1: Check all_users table (consolidated)
+    try {
+      console.log('Verifying user in all_users:', email);
+      const { data, error } = await sb
+        .from('all_users')
+        .select('user_id, id, email, full_name, source_table')
+        .ilike('email', emailLower)
+        .single();
+
+      if (!error && data) {
+        console.log('User verified in all_users:', data);
+        return {
+          exists: true,
+          user: {
+            id: data.user_id || data.id,
+            email: data.email,
+            name: data.full_name,
+            source: data.source_table
+          }
         };
       }
-      console.warn('Could not verify user:', error.message);
-      return { exists: false, error: 'Could not verify user' };
+    } catch (err) {
+      console.log('all_users table not available, checking source tables...');
     }
 
-    if (!data) {
-      return { 
-        exists: false, 
-        error: `No ICAN account found for ${email}. They must sign up first.` 
-      };
-    }
+    // Fallback 1: Check ican_user_profiles
+    try {
+      console.log('Verifying user in ican_user_profiles:', email);
+      const { data, error } = await sb
+        .from('ican_user_profiles')
+        .select('id, email, full_name')
+        .ilike('email', emailLower)
+        .single();
 
-    return { 
-      exists: true, 
-      user: {
-        id: data.id,
-        email: data.email
+      if (!error && data) {
+        console.log('User verified in ican_user_profiles:', data);
+        return {
+          exists: true,
+          user: {
+            id: data.id,
+            email: data.email,
+            name: data.full_name,
+            source: 'ican_user_profiles'
+          }
+        };
       }
+    } catch (err) {
+      console.log('Not found in ican_user_profiles');
+    }
+
+    // Fallback 2: Check profiles table
+    try {
+      console.log('Verifying user in profiles:', email);
+      const { data, error } = await sb
+        .from('profiles')
+        .select('id, email, full_name')
+        .ilike('email', emailLower)
+        .single();
+
+      if (!error && data) {
+        console.log('User verified in profiles:', data);
+        return {
+          exists: true,
+          user: {
+            id: data.id,
+            email: data.email,
+            name: data.full_name,
+            source: 'profiles'
+          }
+        };
+      }
+    } catch (err) {
+      console.log('Not found in profiles');
+    }
+
+    // Fallback 3: Check business_co_owners
+    try {
+      console.log('Verifying user in business_co_owners:', email);
+      const { data, error } = await sb
+        .from('business_co_owners')
+        .select('id, owner_email, owner_name')
+        .ilike('owner_email', emailLower)
+        .single();
+
+      if (!error && data) {
+        console.log('User verified in business_co_owners:', data);
+        return {
+          exists: true,
+          user: {
+            id: data.id,
+            email: data.owner_email,
+            name: data.owner_name,
+            source: 'business_co_owners'
+          }
+        };
+      }
+    } catch (err) {
+      console.log('Not found in business_co_owners');
+    }
+
+    // No user found in any table
+    console.log('User not found in any source table:', email);
+    return {
+      exists: false,
+      error: `No ICAN account found for ${email}. They must sign up first.`
     };
   } catch (error) {
     console.error('Error verifying user:', error);
-    return { 
-      exists: false, 
-      error: 'Error verifying user account' 
+    return {
+      exists: false,
+      error: 'Error verifying user account'
     };
   }
 };
@@ -81,48 +155,169 @@ export const searchICANUsers = async (searchTerm) => {
       ];
     }
 
-    // Search for users by email OR name in profiles table
+    // Priority 1: Search all_users table (consolidated view)
     try {
+      console.log('Searching all_users for:', searchTerm);
       const { data, error } = await sb
-        .from('profiles')
-        .select('id, email, full_name, first_name, last_name')
-        .or(`email.ilike.%${searchTerm}%,full_name.ilike.%${searchTerm}%,first_name.ilike.%${searchTerm}%,last_name.ilike.%${searchTerm}%`)
+        .from('all_users')
+        .select('id, user_id, email, full_name')
+        .or(`email.ilike.%${searchTerm}%,full_name.ilike.%${searchTerm}%`)
         .limit(10);
 
-      if (error) throw error;
+      if (!error && data && data.length > 0) {
+        console.log('Found users in all_users:', data);
+        return data.map(profile => ({
+          id: profile.user_id || profile.id,
+          email: profile.email,
+          name: profile.full_name || profile.email?.split('@')[0] || 'Unknown'
+        }));
+      }
+    } catch (allUsersError) {
+      console.log('all_users table not found, trying source tables...');
+    }
 
-      return (data || []).map(profile => ({
-        id: profile.id,
-        email: profile.email,
-        name: profile.full_name || 
-              (profile.first_name && profile.last_name ? `${profile.first_name} ${profile.last_name}` : null) ||
-              profile.first_name || 
-              profile.email?.split('@')[0] || 'Unknown'
-      }));
-    } catch (profileError) {
-      // If the full query fails, try simpler email-only search
-      console.warn('Full search failed, trying email only:', profileError.message);
-      try {
-        const { data, error } = await sb
-          .from('profiles')
-          .select('id, email')
-          .ilike('email', `%${searchTerm}%`)
-          .limit(10);
+    // Fallback 1: Search ican_user_profiles table
+    try {
+      console.log('Searching ican_user_profiles for:', searchTerm);
+      const { data, error } = await sb
+        .from('ican_user_profiles')
+        .select('id, email, full_name')
+        .or(`email.ilike.%${searchTerm}%,full_name.ilike.%${searchTerm}%`)
+        .limit(10);
 
-        if (error) throw error;
-
-        return (data || []).map(profile => ({
+      if (!error && data && data.length > 0) {
+        console.log('Found users in ican_user_profiles:', data);
+        return data.map(profile => ({
           id: profile.id,
           email: profile.email,
-          name: profile.email?.split('@')[0] || 'Unknown'
+          name: profile.full_name || profile.email?.split('@')[0] || 'Unknown'
         }));
-      } catch (emailError) {
-        console.warn('Could not search profiles:', emailError.message);
-        return [];
       }
+    } catch (err) {
+      console.log('ican_user_profiles search failed');
     }
+
+    // Fallback 2: Search profiles table
+    try {
+      console.log('Searching profiles table for:', searchTerm);
+      const { data, error } = await sb
+        .from('profiles')
+        .select('id, email, full_name')
+        .or(`email.ilike.%${searchTerm}%,full_name.ilike.%${searchTerm}%`)
+        .limit(10);
+
+      if (!error && data && data.length > 0) {
+        console.log('Found users in profiles:', data);
+        return data.map(profile => ({
+          id: profile.id,
+          email: profile.email,
+          name: profile.full_name || profile.email?.split('@')[0] || 'Unknown'
+        }));
+      }
+    } catch (err) {
+      console.log('profiles search failed');
+    }
+
+    // Fallback 3: Search auth.users directly (for users not yet in profiles table)
+    try {
+      console.log('Searching auth.users for:', searchTerm);
+      // Note: This requires service_role key or proper RLS policies
+      const { data, error } = await sb
+        .from('all_users') // Try all_users first which should have auth.users data
+        .select('user_id, email, full_name')
+        .eq('source_table', 'auth.users')
+        .or(`email.ilike.%${searchTerm}%,full_name.ilike.%${searchTerm}%`)
+        .limit(10);
+
+      if (!error && data && data.length > 0) {
+        console.log('Found auth.users in all_users:', data);
+        return data.map(profile => ({
+          id: profile.user_id,
+          email: profile.email,
+          name: profile.full_name || profile.email?.split('@')[0] || 'Unknown'
+        }));
+      }
+    } catch (err) {
+      console.log('auth.users search failed:', err.message);
+    }
+
+    // Fallback 4: Email-only search in ican_user_profiles
+    try {
+      console.log('Trying email-only search in ican_user_profiles');
+      const { data: emailData, error: emailError } = await sb
+        .from('ican_user_profiles')
+        .select('id, email, full_name')
+        .ilike('email', `%${searchTerm}%`)
+        .limit(10);
+
+      if (!emailError && emailData && emailData.length > 0) {
+        console.log('Found by email in ican_user_profiles:', emailData);
+        return emailData.map(profile => ({
+          id: profile.id,
+          email: profile.email,
+          name: profile.full_name || profile.email?.split('@')[0] || 'Unknown'
+        }));
+      }
+    } catch (err) {
+      console.log('Email-only search failed');
+    }
+
+    // No results found
+    console.log('No users found matching:', searchTerm);
+    return [];
   } catch (error) {
-    console.error('Error searching users:', error);
+    console.error('Critical error in searchICANUsers:', error);
+    return [];
+  }
+};
+
+/**
+ * Fetch any users from Supabase
+ */
+export const fetchAnyUsers = async (limit = 20) => {
+  try {
+    const sb = getSupabase();
+    if (!sb) {
+      console.log('Demo mode: no Supabase connection');
+      return [];
+    }
+
+    // Try to fetch from ican_user_profiles
+    console.log('Fetching users from ican_user_profiles...');
+    const { data: icanUsers, error: icanError } = await sb
+      .from('ican_user_profiles')
+      .select('id, email, full_name')
+      .limit(limit);
+
+    if (!icanError && icanUsers && icanUsers.length > 0) {
+      console.log(`Found ${icanUsers.length} users in ican_user_profiles:`, icanUsers);
+      return icanUsers.map(user => ({
+        id: user.id,
+        email: user.email,
+        name: user.full_name || user.email?.split('@')[0] || 'Unknown'
+      }));
+    }
+
+    // Fallback: try profiles table
+    console.log('No users found in ican_user_profiles, trying profiles table...');
+    const { data: profileUsers, error: profileError } = await sb
+      .from('profiles')
+      .select('id, email, full_name')
+      .limit(limit);
+
+    if (!profileError && profileUsers && profileUsers.length > 0) {
+      console.log(`Found ${profileUsers.length} users in profiles:`, profileUsers);
+      return profileUsers.map(user => ({
+        id: user.id,
+        email: user.email,
+        name: user.full_name || user.email?.split('@')[0] || 'Unknown'
+      }));
+    }
+
+    console.log('No users found in any table');
+    return [];
+  } catch (error) {
+    console.error('Error fetching users:', error);
     return [];
   }
 };
@@ -190,12 +385,15 @@ export const getAllPitches = async (limit = 20, offset = 0) => {
         comments_count,
         shares_count,
         created_at,
+        business_profile_id,
         business_profiles(
           id,
           user_id,
           business_name,
           description,
-          business_co_owners(owner_name)
+          business_type,
+          founded_year,
+          total_capital
         )
       `, { count: 'exact' })
       .not('video_url', 'is', null)  // Only show pitches with videos
@@ -207,6 +405,21 @@ export const getAllPitches = async (limit = 20, offset = 0) => {
     if (error) {
       console.warn('Error fetching pitches:', error);
       return getDemoPitches();
+    }
+    
+    // 🔍 DEBUG: Check what business_profiles data is actually returned
+    if (data && data.length > 0) {
+      console.log(`🔍 CRITICAL: Checking business_profiles in ${data.length} returned pitches...`);
+      data.slice(0, 3).forEach((pitch, i) => {
+        console.log(`\n   Pitch ${i + 1}: "${pitch.title}"`);
+        console.log(`   - business_profile_id: ${pitch.business_profile_id || 'NULL'}`);
+        console.log(`   - business_profiles object: ${pitch.business_profiles ? 'EXISTS' : 'MISSING'}`);
+        if (pitch.business_profiles) {
+          console.log(`     └─ business_name: ${pitch.business_profiles.business_name || 'NULL'}`);
+          console.log(`     └─ user_id: ${pitch.business_profiles.user_id || 'NULL'}`);
+          console.log(`     └─ business_type: ${pitch.business_profiles.business_type || 'NULL'}`);
+        }
+      });
     }
     
     // 🎥 Filter and validate video URLs
@@ -938,15 +1151,15 @@ export const checkBusinessProfileEditPermission = async (profileId, userId, user
       return { 
         canEdit: false, 
         canAccess: false,
-        reason: 'You are not a co-owner of this profile' 
+        reason: 'You are not a shareholder of this profile' 
       };
     }
 
-    // If user is a co-owner, allow both access and edit
+    // If user is a shareholder, allow both access and edit
     return { 
       canEdit: true, 
       canAccess: true,
-      reason: `You are a co-owner with ${userCoOwner.ownership_share}% ownership share`,
+      reason: `You are a shareholder with ${userCoOwner.ownership_share}% equity share`,
       ownership_share: userCoOwner.ownership_share
     };
   } catch (error) {

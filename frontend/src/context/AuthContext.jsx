@@ -41,22 +41,13 @@ export const AuthProvider = ({ children }) => {
         .eq('id', userId)
         .single();
 
-      // If not found in profiles, fallback silently
-      if (error && error.code === 'PGRST116') {
-        setProfile(null);
-        return null;
-      } else if (error) {
-        console.error('Error fetching profile:', error);
-        setProfile(null);
-        return null;
-      }
-
+      // If profile exists, use it
       if (data) {
         setProfile(data);
         return data;
       }
 
-      // If no profile exists, create one from auth user metadata
+      // Profile doesn't exist - create one from auth user metadata
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (authUser) {
         const newProfile = {
@@ -66,6 +57,8 @@ export const AuthProvider = ({ children }) => {
           avatar_url: authUser.user_metadata?.avatar_url || authUser.user_metadata?.picture || null,
         };
 
+        console.log('📋 Profile not found for', authUser.email, '- Creating new profile...');
+
         // Try to insert into profiles table
         const { data: createdProfile, error: createError } = await supabase
           .from('profiles')
@@ -74,18 +67,21 @@ export const AuthProvider = ({ children }) => {
           .single();
 
         if (!createError && createdProfile) {
+          console.log('✅ Profile created successfully for', authUser.email);
           setProfile(createdProfile);
           return createdProfile;
+        } else if (createError) {
+          console.warn('⚠️ Could not create profile in database:', createError?.message);
         }
 
-        // Fall back to using auth metadata as profile
+        // Fall back to using auth metadata as profile if database creation fails
         setProfile(newProfile);
         return newProfile;
       }
 
       return null;
     } catch (err) {
-      console.warn('Error loading profile:', err);
+      console.warn('Error loading/creating profile:', err);
       // Use auth user metadata as fallback
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (authUser) {

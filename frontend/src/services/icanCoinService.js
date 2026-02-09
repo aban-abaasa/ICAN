@@ -318,25 +318,37 @@ export class IcanCoinService {
   }
 
   /**
-   * 🔄 Update ICAN Coin balance
+   * 🔄 Update ICAN Coin balance in ican_user_wallets table
    */
   async updateCoinBalance(userId, amount, operation = 'add') {
     try {
       const supabase = this.initSupabase();
 
-      // Get current balance
-      const currentBalance = await this.getIcanBalance(userId);
+      // Get current balance from ican_user_wallets
+      const { data: wallet, error: selectError } = await supabase
+        .from('ican_user_wallets')
+        .select('ican_balance')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (selectError) throw selectError;
+
+      const currentBalance = wallet?.ican_balance || 0;
       const newBalance = operation === 'add' 
         ? currentBalance + amount 
         : Math.max(0, currentBalance - amount);
 
-      // Update balance
-      const { error } = await supabase
-        .from('user_accounts')
-        .update({ ican_coin_balance: newBalance })
-        .eq('user_id', userId);
+      // Upsert balance in ican_user_wallets (create if doesn't exist)
+      const { error: upsertError } = await supabase
+        .from('ican_user_wallets')
+        .upsert({
+          user_id: userId,
+          ican_balance: newBalance,
+          total_spent: operation === 'add' ? (wallet?.total_spent || 0) : (wallet?.total_spent || 0) + amount,
+          purchase_count: operation === 'add' ? (wallet?.purchase_count || 0) + 1 : wallet?.purchase_count || 0
+        }, { onConflict: 'user_id' });
 
-      if (error) throw error;
+      if (upsertError) throw upsertError;
       return newBalance;
     } catch (error) {
       console.error('❌ Failed to update ICAN balance:', error);

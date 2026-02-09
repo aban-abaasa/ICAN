@@ -25,15 +25,21 @@ class WalletTransactionService {
 
     try {
       const { data: { user }, error } = await this.supabase.auth.getUser();
+      console.log('🔐 Auth check - Error:', error?.message, 'User:', user?.id);
+      
       if (error || !user) {
         console.warn('⚠️ User not authenticated');
+        console.warn('   Error:', error?.message);
+        console.warn('   User:', user);
         return false;
       }
       this.userId = user.id;
-      console.log('✅ Wallet Transaction Service initialized for user:', this.userId);
+      console.log('✅ Wallet Transaction Service initialized');
+      console.log('   User ID:', this.userId);
+      console.log('   User Email:', user.email);
       return true;
     } catch (error) {
-      console.error('❌ Failed to initialize wallet service:', error);
+      console.error('❌ Failed to initialize wallet service:', error.message);
       return false;
     }
   }
@@ -249,40 +255,56 @@ class WalletTransactionService {
   }
 
   /**
-   * 💵 Get wallet balance (sum of all transactions)
+   * 💵 Get wallet balance from user_wallets table
    * @returns {Promise<Object>} - Balance by currency
    */
   async getWalletBalance() {
     if (!this.userId) {
-      console.warn('⚠️ User not authenticated, cannot calculate balance');
+      console.warn('⚠️ User not authenticated, cannot get balance');
+      console.warn('   Current userId:', this.userId);
       return {};
     }
 
     try {
+      console.log('🔍 Fetching wallet balance for user:', this.userId);
+      
+      // Fetch all wallets for this user from user_wallets table
       const { data, error } = await this.supabase
-        .from('ican_transactions')
-        .select('amount, currency')
-        .eq('user_id', this.userId)
-        .eq('status', 'completed');
+        .from('user_wallets')
+        .select('balance, currency, status, account_type')
+        .eq('user_id', this.userId);
+
+      console.log('📊 Query results:');
+      console.log('   Error:', error ? error.message : 'None');
+      console.log('   Data received:', data);
+      console.log('   Data length:', data?.length || 0);
 
       if (error) {
-        console.error('❌ Failed to fetch transactions for balance:', error);
+        console.error('❌ Failed to fetch user wallets:', error.message);
         return {};
       }
 
-      // Calculate balance by currency
+      if (!data || data.length === 0) {
+        console.warn('⚠️ No wallets found for user - might be RLS or no data');
+        return {};
+      }
+
+      // Build balance object by currency
       const balances = {};
-      data?.forEach(transaction => {
-        if (!balances[transaction.currency]) {
-          balances[transaction.currency] = 0;
+      data.forEach(wallet => {
+        console.log(`   Processing wallet: ${wallet.currency} (status: ${wallet.status}, balance: ${wallet.balance})`);
+        if (wallet.currency && wallet.balance !== null && wallet.balance !== undefined) {
+          balances[wallet.currency] = parseFloat(wallet.balance);
         }
-        balances[transaction.currency] += transaction.amount;
       });
 
-      console.log('✅ Wallet balance calculated:', balances);
+      console.log('✅ Final balances:', balances);
+      console.log('   UGX Balance:', balances['UGX'] || 'Not found');
+      console.log('   ICAN Balance:', balances['ICAN'] || 'Not found');
       return balances;
     } catch (error) {
-      console.error('❌ Error calculating balance:', error);
+      console.error('❌ Error fetching wallet balance:', error.message);
+      console.error('   Stack:', error.stack);
       return {};
     }
   }

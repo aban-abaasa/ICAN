@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Users, Plus, X, Trash2, DollarSign, PieChart, Loader, Search, CheckCircle2, AlertCircle, Wallet, FileText } from 'lucide-react';
+import { Building2, Users, Plus, X, Trash2, DollarSign, PieChart, Loader, Search, CheckCircle2, AlertCircle, Wallet, FileText, Bell, Clock, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { createBusinessProfile, updateBusinessProfile, getSupabase, verifyICANUser, searchICANUsers, saveBusinessCoOwners } from '../services/pitchingService';
 import { walletAccountService } from '../services/walletAccountService';
+import { memberApprovalService } from '../services/memberApprovalService';
 import BusinessProfileDocuments from './BusinessProfileDocuments';
 
 const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfile }) => {
-  const [step, setStep] = useState('business'); // business, owners, documents, wallet, review
+  const [step, setStep] = useState('business'); // business, owners, documents, wallet, approvals, notifications, review
   const [loading, setLoading] = useState(false);
   const [searchingUsers, setSearchingUsers] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [emailSearchQuery, setEmailSearchQuery] = useState('');
   const [verificationStatus, setVerificationStatus] = useState({}); // Track verified emails
+  const [pendingEdits, setPendingEdits] = useState([]); // Pending approvals for the profile
+  const [loadingApprovals, setLoadingApprovals] = useState(false);
   const [businessData, setBusinessData] = useState({
     businessName: '',
     businessType: '',
@@ -36,12 +39,24 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
   const [walletCreated, setWalletCreated] = useState(false);
   const [walletAccountNumber, setWalletAccountNumber] = useState(null);
 
+  // 🔔 Notification Preferences
+  const [notificationSettings, setNotificationSettings] = useState({
+    notifyOnSharePurchase: true,
+    notifyOnPartnerInvestment: true,
+    notifyOnSupport: true,
+    notifyOnInvestmentSigned: true,
+    notifyViaEmail: true,
+    notifyViaPushNotification: true,
+    notifyViaInApp: true,
+    shareholderNotificationLevel: 'all' // 'all', 'majority', 'only_founders'
+  });
+
   const [newOwner, setNewOwner] = useState({
     name: '',
     email: '',
     phone: '',
     ownershipShare: 0,
-    role: 'Co-Founder',
+    role: 'Shareholder',
     verified: false
   });
 
@@ -77,6 +92,26 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
       }
     }
   }, [editingProfile]);
+
+  // Load pending approvals when viewing approvals step
+  useEffect(() => {
+    if (step === 'approvals' && editingProfile?.id) {
+      const loadPendingApprovals = async () => {
+        setLoadingApprovals(true);
+        try {
+          const edits = await memberApprovalService.getPendingEdits(editingProfile.id);
+          setPendingEdits(edits || []);
+        } catch (error) {
+          console.error('Error loading pending approvals:', error);
+          setPendingEdits([]);
+        } finally {
+          setLoadingApprovals(false);
+        }
+      };
+      
+      loadPendingApprovals();
+    }
+  }, [step, editingProfile?.id]);
 
   const handleSearchUsers = async (query) => {
     setEmailSearchQuery(query);
@@ -297,7 +332,16 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
         founded_year: businessData.foundedYear,
         total_capital: businessData.totalCapital ? parseInt(businessData.totalCapital) : 0,
         status: 'active',
-        verification_status: 'pending'
+        verification_status: 'pending',
+        // Notification Settings
+        notify_on_share_purchase: notificationSettings.notifyOnSharePurchase,
+        notify_on_partner_investment: notificationSettings.notifyOnPartnerInvestment,
+        notify_on_support: notificationSettings.notifyOnSupport,
+        notify_on_investment_signed: notificationSettings.notifyOnInvestmentSigned,
+        notify_via_email: notificationSettings.notifyViaEmail,
+        notify_via_push_notification: notificationSettings.notifyViaPushNotification,
+        notify_via_in_app: notificationSettings.notifyViaInApp,
+        shareholder_notification_level: notificationSettings.shareholderNotificationLevel
       };
 
       let result;
@@ -410,7 +454,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
         <div className="p-6">
           {/* Step Indicator */}
           <div className="flex gap-2 mb-8">
-            {['business', 'owners', 'documents', 'wallet', 'review'].map((s, idx) => (
+            {['business', 'owners', 'documents', 'wallet', 'approvals', 'notifications', 'review'].map((s, idx) => (
               <button
                 key={s}
                 onClick={() => setStep(s)}
@@ -420,7 +464,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                     : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                 }`}
               >
-                {idx + 1}. {['Business Info', 'Co-Owners', 'Documents', 'Wallet', 'Review'][idx]}
+                {idx + 1}. {['Business Info', 'Shareholders', 'Documents', 'Wallet', 'Approvals', 'Notifications', 'Review'][idx]}
               </button>
             ))}
           </div>
@@ -540,17 +584,17 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                 onClick={() => setStep('owners')}
                 className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white py-3 rounded-lg font-semibold transition"
               >
-                Next: Add Co-Owners
+                Next: Add Shareholders
               </button>
             </div>
           )}
 
-          {/* Step 2: Co-Owners */}
+          {/* Step 2: Shareholders */}
           {step === 'owners' && (
             <div className="space-y-6">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
                 <Users className="w-6 h-6" />
-                Co-Owners & Ownership Structure
+                Shareholders & Equity Distribution
               </h3>
 
               <div className="bg-blue-900/20 border border-blue-500/30 p-4 rounded-lg">
@@ -562,18 +606,18 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-blue-300 font-semibold">Co-Owners</p>
+                    <p className="text-blue-300 font-semibold">Shareholders</p>
                     <p className="text-blue-400 text-sm mt-1">{coOwners.length} / 5</p>
                   </div>
                 </div>
               </div>
 
-              {/* Current Co-Owners */}
+              {/* Current Shareholders */}
               <div className="space-y-3">
-                <h4 className="text-white font-semibold">Current Co-Owners</h4>
+                <h4 className="text-white font-semibold">Current Shareholders</h4>
                 {coOwners.length === 0 ? (
                   <div className="bg-slate-700/50 p-4 rounded-lg border border-slate-600 text-slate-400 text-center">
-                    No co-owners added yet. Use the form below to add them.
+                    No shareholders added yet. Use the form below to add them.
                   </div>
                 ) : (
                   coOwners.map((owner) => (
@@ -661,10 +705,10 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                 )}
               </div>
 
-              {/* Add New Co-Owner */}
+              {/* Add New Shareholder */}
               {coOwners.length < 5 && (
                 <div className="bg-slate-700/50 p-4 rounded-lg border border-slate-600">
-                  <h4 className="text-white font-semibold mb-4">Add New Co-Owner (Must have ICAN Account)</h4>
+                  <h4 className="text-white font-semibold mb-4">Add New Shareholder (Must have ICAN Account)</h4>
                   <div className="space-y-4 mb-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
@@ -794,6 +838,14 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                     </select>
 
                     <input
+                      type="tel"
+                      value={newOwner.phone}
+                      onChange={(e) => setNewOwner({...newOwner, phone: e.target.value})}
+                      placeholder="+1 (555) 000-0000"
+                      className="bg-slate-600 text-white rounded px-3 py-2 border border-slate-500 focus:border-blue-500 focus:outline-none text-sm"
+                    />
+
+                    <input
                       type="number"
                       min="1"
                       max="100"
@@ -807,15 +859,15 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                       onClick={addCoOwner}
                       disabled={!newOwner.name || !newOwner.email || !newOwner.ownershipShare}
                       title={
-                        !newOwner.name ? 'Enter co-owner name' :
+                        !newOwner.name ? 'Enter shareholder name' :
                         !newOwner.email ? 'Select or enter email' :
                         !newOwner.ownershipShare ? 'Enter ownership percentage' :
                         ''
                       }
-                      className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white rounded px-4 py-2 font-semibold transition flex items-center justify-center gap-2"
+                      className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white rounded px-4 py-2 font-semibold transition flex items-center justify-center gap-2 col-span-3"
                     >
                       <Plus className="w-4 h-4" />
-                      Add
+                      Add Shareholder
                     </button>
                   </div>
 
@@ -856,7 +908,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                     Document Management
                   </h3>
                   <p className="text-slate-400 text-sm mt-1">
-                    Complete required documents for {businessProfile?.business_name}
+                    Complete required documents for {businessData.businessName || editingProfile?.business_name}
                   </p>
                 </div>
               </div>
@@ -992,7 +1044,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                     Document Management
                   </h3>
                   <p className="text-slate-400 text-sm mt-1">
-                    Complete required documents for {businessProfile?.business_name}
+                    Complete required documents for {businessData.businessName || editingProfile?.business_name}
                   </p>
                 </div>
               </div>
@@ -1101,9 +1153,353 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                   Back
                 </button>
                 <button
-                  onClick={() => setStep('review')}
+                  onClick={() => setStep('approvals')}
                   disabled={!walletData.pin || walletData.pin !== walletData.confirmPin || !/^\d{4,6}$/.test(walletData.pin)}
                   className="flex-1 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 disabled:from-slate-600 disabled:to-slate-600 disabled:cursor-not-allowed text-white py-3 rounded-lg font-semibold transition"
+                >
+                  Next: Approvals
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 5: Approvals */}
+          {step === 'approvals' && (
+            <div className="space-y-6">
+              <div className="bg-gradient-to-br from-purple-900/30 to-pink-900/30 border border-purple-500/30 p-6 rounded-lg space-y-4">
+                <div className="flex items-start gap-3">
+                  <Clock className="w-5 h-5 text-purple-400 flex-shrink-0 mt-1" />
+                  <div>
+                    <h4 className="text-white font-semibold mb-1">⏳ Pending Approvals</h4>
+                    <p className="text-slate-300 text-sm">Any changes to shareholder roster or major decisions need unanimous approval from all shareholders. Review pending approvals below.</p>
+                  </div>
+                </div>
+              </div>
+
+              {loadingApprovals ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="flex items-center gap-3">
+                    <Loader className="w-5 h-5 text-blue-400 animate-spin" />
+                    <p className="text-slate-400">Loading pending approvals...</p>
+                  </div>
+                </div>
+              ) : pendingEdits.length === 0 ? (
+                <div className="bg-green-900/20 border border-green-500/30 p-6 rounded-lg text-center">
+                  <CheckCircle2 className="w-12 h-12 text-green-400 mx-auto mb-3" />
+                  <p className="text-green-300 font-semibold mb-2">✅ No Pending Approvals</p>
+                  <p className="text-slate-400 text-sm">All proposed changes have been approved or resolved.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <h4 className="text-white font-semibold text-lg">{pendingEdits.length} Pending Change{pendingEdits.length > 1 ? 's' : ''}</h4>
+                  {pendingEdits.map((edit) => {
+                    const approvedCount = edit.member_approvals?.filter(a => a.status === 'approved').length || 0;
+                    const totalMembers = edit.member_approvals?.length || 1;
+                    const approvalPercentage = Math.round((approvedCount / totalMembers) * 100);
+                    
+                    // Map edit_type to display label
+                    const editTypeLabel = {
+                      'add_member': '👤 Add Shareholder',
+                      'remove_member': '🚫 Remove Shareholder',
+                      'update_member': '✏️ Update Shareholder',
+                      'investment_signed': '💰 Investment Signed',
+                      'other': '📝 Change'
+                    }[edit.edit_type] || '📝 Change';
+                    
+                    return (
+                      <div key={edit.id} className="bg-slate-700/50 border border-slate-600 rounded-lg overflow-hidden hover:bg-slate-700/70 transition">
+                        <div className="p-4 space-y-3">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <p className="text-white font-semibold">{editTypeLabel}</p>
+                              {edit.edit_details?.name && (
+                                <p className="text-slate-300 text-sm mt-1">
+                                  {edit.edit_type === 'remove_member' 
+                                    ? `Remove: ${edit.edit_details.name}`
+                                    : edit.edit_type === 'add_member'
+                                    ? `Add: ${edit.edit_details.name}`
+                                    : edit.edit_details.name
+                                  }
+                                </p>
+                              )}
+                              {edit.edit_details?.email && (
+                                <p className="text-slate-400 text-xs">{edit.edit_details.email}</p>
+                              )}
+                            </div>
+                            <div className="text-right">
+                              <p className="text-slate-400 text-xs mb-1">
+                                {new Date(edit.created_at).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+                          
+                          {/* Approval Progress */}
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-xs">
+                              <p className="text-slate-400">Approval Progress</p>
+                              <p className="text-blue-400 font-semibold">{approvedCount}/{totalMembers}</p>
+                            </div>
+                            <div className="w-full bg-slate-600 rounded-full h-2">
+                              <div
+                                className="bg-gradient-to-r from-blue-500 to-cyan-500 h-2 rounded-full transition-all"
+                                style={{ width: `${approvalPercentage}%` }}
+                              ></div>
+                            </div>
+                          </div>
+
+                          {/* Member Votes */}
+                          <div className="space-y-2 pt-2 border-t border-slate-600">
+                            <p className="text-slate-300 text-xs font-semibold uppercase tracking-wide">Shareholder Votes</p>
+                            {edit.member_approvals && edit.member_approvals.length > 0 ? (
+                              <div className="space-y-1">
+                                {edit.member_approvals.map((approval) => (
+                                  <div key={approval.id} className="flex items-center justify-between text-sm py-1">
+                                    <span className="text-slate-400">{approval.member_email}</span>
+                                    <div className="flex items-center gap-1">
+                                      {approval.status === 'approved' ? (
+                                        <>
+                                          <ThumbsUp className="w-4 h-4 text-green-400" />
+                                          <span className="text-green-400 text-xs">Approved</span>
+                                        </>
+                                      ) : approval.status === 'rejected' ? (
+                                        <>
+                                          <ThumbsDown className="w-4 h-4 text-red-400" />
+                                          <span className="text-red-400 text-xs">Rejected</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Clock className="w-4 h-4 text-yellow-400" />
+                                          <span className="text-yellow-400 text-xs">Pending</span>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-slate-400 text-xs">Waiting for member votes...</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="bg-slate-700/50 border border-slate-600 p-4 rounded-lg">
+                <p className="text-slate-300 text-sm">
+                  <span className="text-blue-400 font-semibold">Note:</span> Changes to shareholder roster require unanimous approval from all current shareholders before they take effect.
+                </p>
+              </div>
+
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setStep('wallet')}
+                  className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-lg font-semibold transition"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={() => setStep('notifications')}
+                  className="flex-1 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white py-3 rounded-lg font-semibold transition"
+                >
+                  Next: Notifications
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 6: Shareholder Notifications */}
+          {step === 'notifications' && (
+            <div className="space-y-6">
+              <div className="bg-gradient-to-br from-blue-900/30 to-cyan-900/30 border border-blue-500/30 p-6 rounded-lg space-y-4">
+                <div className="flex items-start gap-3">
+                  <Bell className="w-5 h-5 text-blue-400 flex-shrink-0 mt-1" />
+                  <div>
+                    <h4 className="text-white font-semibold mb-1">🔔 Shareholder Notifications</h4>
+                    <p className="text-slate-300 text-sm">Configure how shareholders receive notifications about important business events and investments.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Notification Events */}
+              <div className="space-y-4">
+                <h4 className="text-white font-semibold text-lg">📢 Notification Events</h4>
+                
+                <label className="flex items-center gap-3 p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={notificationSettings.notifyOnSharePurchase}
+                    onChange={(e) => setNotificationSettings({...notificationSettings, notifyOnSharePurchase: e.target.checked})}
+                    className="w-5 h-5 rounded"
+                  />
+                  <div className="flex-1">
+                    <p className="text-white font-semibold">Investor Buys Shares</p>
+                    <p className="text-slate-400 text-sm">Notify shareholders when new investors purchase company shares</p>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={notificationSettings.notifyOnPartnerInvestment}
+                    onChange={(e) => setNotificationSettings({...notificationSettings, notifyOnPartnerInvestment: e.target.checked})}
+                    className="w-5 h-5 rounded"
+                  />
+                  <div className="flex-1">
+                    <p className="text-white font-semibold">Partner Investment</p>
+                    <p className="text-slate-400 text-sm">Notify shareholders when someone becomes a business partner with equity stake</p>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={notificationSettings.notifyOnSupport}
+                    onChange={(e) => setNotificationSettings({...notificationSettings, notifyOnSupport: e.target.checked})}
+                    className="w-5 h-5 rounded"
+                  />
+                  <div className="flex-1">
+                    <p className="text-white font-semibold">Supporter Contribution</p>
+                    <p className="text-slate-400 text-sm">Notify shareholders when someone provides financial support to the business</p>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={notificationSettings.notifyOnInvestmentSigned}
+                    onChange={(e) => setNotificationSettings({...notificationSettings, notifyOnInvestmentSigned: e.target.checked})}
+                    className="w-5 h-5 rounded"
+                  />
+                  <div className="flex-1">
+                    <p className="text-white font-semibold">Investment Agreement Signed</p>
+                    <p className="text-slate-400 text-sm">Notify shareholders when investment agreements have been signed and finalized</p>
+                  </div>
+                </label>
+              </div>
+
+              {/* Notification Channels */}
+              <div className="space-y-4">
+                <h4 className="text-white font-semibold text-lg">📱 Notification Channels</h4>
+                
+                <label className="flex items-center gap-3 p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={notificationSettings.notifyViaEmail}
+                    onChange={(e) => setNotificationSettings({...notificationSettings, notifyViaEmail: e.target.checked})}
+                    className="w-5 h-5 rounded"
+                  />
+                  <div className="flex-1">
+                    <p className="text-white font-semibold">Email Notifications</p>
+                    <p className="text-slate-400 text-sm">Send notifications via email to all shareholders</p>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={notificationSettings.notifyViaPushNotification}
+                    onChange={(e) => setNotificationSettings({...notificationSettings, notifyViaPushNotification: e.target.checked})}
+                    className="w-5 h-5 rounded"
+                  />
+                  <div className="flex-1">
+                    <p className="text-white font-semibold">Push Notifications</p>
+                    <p className="text-slate-400 text-sm">Send real-time push notifications to mobile devices</p>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={notificationSettings.notifyViaInApp}
+                    onChange={(e) => setNotificationSettings({...notificationSettings, notifyViaInApp: e.target.checked})}
+                    className="w-5 h-5 rounded"
+                  />
+                  <div className="flex-1">
+                    <p className="text-white font-semibold">In-App Notifications</p>
+                    <p className="text-slate-400 text-sm">Show notifications within the application dashboard</p>
+                  </div>
+                </label>
+              </div>
+
+              {/* Shareholder Notification Level */}
+              <div className="space-y-4">
+                <h4 className="text-white font-semibold text-lg">👥 Who Should Be Notified</h4>
+                
+                <div className="space-y-2">
+                  <label className="flex items-center gap-3 p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition cursor-pointer">
+                    <input
+                      type="radio"
+                      name="notificationLevel"
+                      checked={notificationSettings.shareholderNotificationLevel === 'all'}
+                      onChange={() => setNotificationSettings({...notificationSettings, shareholderNotificationLevel: 'all'})}
+                      className="w-5 h-5 rounded"
+                    />
+                    <div className="flex-1">
+                      <p className="text-white font-semibold">All Shareholders</p>
+                      <p className="text-slate-400 text-sm">Notify every shareholder regardless of ownership percentage</p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-3 p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition cursor-pointer">
+                    <input
+                      type="radio"
+                      name="notificationLevel"
+                      checked={notificationSettings.shareholderNotificationLevel === 'majority'}
+                      onChange={() => setNotificationSettings({...notificationSettings, shareholderNotificationLevel: 'majority'})}
+                      className="w-5 h-5 rounded"
+                    />
+                    <div className="flex-1">
+                      <p className="text-white font-semibold">Majority Shareholders (5%+)</p>
+                      <p className="text-slate-400 text-sm">Only notify shareholders with 5% or more ownership</p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-3 p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition cursor-pointer">
+                    <input
+                      type="radio"
+                      name="notificationLevel"
+                      checked={notificationSettings.shareholderNotificationLevel === 'only_founders'}
+                      onChange={() => setNotificationSettings({...notificationSettings, shareholderNotificationLevel: 'only_founders'})}
+                      className="w-5 h-5 rounded"
+                    />
+                    <div className="flex-1">
+                      <p className="text-white font-semibold">Founders & Co-Owners Only</p>
+                      <p className="text-slate-400 text-sm">Only notify primary founders and co-owners</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Summary */}
+              <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0 mt-1" />
+                  <div className="space-y-2">
+                    <p className="text-green-300 font-semibold">Notification Configuration Ready</p>
+                    <p className="text-slate-300 text-sm">Shareholders will receive notifications about:</p>
+                    <ul className="text-slate-400 text-sm list-disc list-inside ml-2">
+                      {notificationSettings.notifyOnSharePurchase && <li>New share purchases</li>}
+                      {notificationSettings.notifyOnPartnerInvestment && <li>Partner investments</li>}
+                      {notificationSettings.notifyOnSupport && <li>Support contributions</li>}
+                      {notificationSettings.notifyOnInvestmentSigned && <li>Signed investment agreements</li>}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setStep('approvals')}
+                  className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-lg font-semibold transition"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={() => setStep('review')}
+                  className="flex-1 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white py-3 rounded-lg font-semibold transition"
                 >
                   Review & Create
                 </button>
@@ -1111,7 +1507,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
             </div>
           )}
 
-          {/* Step 5: Review */}
+          {/* Step 6: Review */}
           {step === 'review' && (
             <div className="space-y-6">
               <h3 className="text-xl font-bold text-white">Review Your Business Profile</h3>
@@ -1154,11 +1550,11 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
               <div className="space-y-3">
                 <h4 className="text-white font-bold flex items-center gap-2">
                   <PieChart className="w-5 h-5 text-blue-400" />
-                  Ownership Structure ({totalShare}%)
+                  Equity Distribution ({totalShare}%)
                 </h4>
                 {coOwners.length === 0 ? (
                   <div className="bg-slate-700/50 p-4 rounded-lg border border-slate-600 text-slate-400 text-center">
-                    No co-owners added. You cannot save without at least one co-owner.
+                    No shareholders added. You cannot save without at least one shareholder.
                   </div>
                 ) : (
                   coOwners.map((owner) => (
@@ -1201,7 +1597,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
 
               <div className="flex gap-4">
                 <button
-                  onClick={() => setStep('wallet')}
+                  onClick={() => setStep('notifications')}
                   disabled={loading}
                   className="flex-1 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-700 text-white py-3 rounded-lg font-semibold transition"
                 >

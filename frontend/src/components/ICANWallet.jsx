@@ -85,6 +85,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
 
   // 🎯 WALLET ACCOUNT MANAGEMENT
   const [userAccount, setUserAccount] = useState(null);
+  const [registeredCurrencyFromDB, setRegisteredCurrencyFromDB] = useState('USD'); // 🔧 Registered currency from auth
   const [accountCheckLoading, setAccountCheckLoading] = useState(true);
   const [showAccountCreation, setShowAccountCreation] = useState(false);
   const [showAccountEdit, setShowAccountEdit] = useState(false);
@@ -493,7 +494,9 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
     }
   };
 
-  const currentWallet = walletData[selectedCurrency];
+  // 🔧 ALWAYS show user's registered country currency for balance (NOT selectable)
+  const registeredCurrency = registeredCurrencyFromDB || userAccount?.preferred_currency || 'USD';
+  const currentWallet = walletData[registeredCurrency];
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -521,6 +524,16 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
 
         // Store user ID for later use
         setCurrentUserId(user.id);
+
+        // 🔧 FETCH USER'S REGISTERED COUNTRY/CURRENCY FROM AUTH METADATA
+        const userMetadata = user.user_metadata || {};
+        const userCountry = userMetadata.country || 'UG'; // Default to Uganda
+        
+        // Get currency for registered country
+        const CountryService = (await import('../services/countryService')).CountryService;
+        const registeredCurrency = CountryService.getCurrencyCode(userCountry);
+        setRegisteredCurrencyFromDB(registeredCurrency);
+        console.log(`🌍 User's registered country: ${userCountry}, Currency: ${registeredCurrency}`);
 
         // Ensure wallet accounts exist for all currencies
         await walletAccountService.ensureWalletAccountsExist(user.id);
@@ -2851,127 +2864,12 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
                 </div>
               </div>
 
-              {/* Balances */}
-              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
-                <p className="text-green-400 font-semibold mb-3 text-sm">💰 Balances</p>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-300">USD</span>
-                    <span className="text-white font-semibold">${userAccount.usd_balance.toLocaleString()}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-300">UGX</span>
-                    <span className="text-white font-semibold">UGX {userAccount.ugx_balance.toLocaleString()}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-300">KES</span>
-                    <span className="text-white font-semibold">KES {userAccount.kes_balance.toLocaleString()}</span>
-                  </div>
-                </div>
-              </div>
+
             </div>
           </div>
         )}
 
-        {/* Currency Selector */}
-        <div className="glass-card p-6">
-          <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-            <Globe className="w-5 h-5" />
-            Select Currency
-          </h3>
-          <div className="relative" ref={dropdownRef}>
-            <button
-              onClick={() => setShowCurrencyDropdown(!showCurrencyDropdown)}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-white/5 border border-white/10 hover:border-white/20 text-white transition-all"
-            >
-              <span className="text-3xl">{currentWallet.flag}</span>
-              <div className="text-left flex-1">
-                <p className="font-semibold text-white">{selectedCurrency}</p>
-                <p className="text-sm text-gray-400">{currentWallet.country}</p>
-              </div>
-              <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${showCurrencyDropdown ? 'rotate-180' : ''}`} />
-            </button>
 
-            {/* Dropdown Menu */}
-            {showCurrencyDropdown && (
-              <div className="absolute top-full left-0 mt-2 w-full bg-gradient-to-br from-slate-900 to-slate-800 border border-white/10 rounded-xl shadow-2xl z-50 max-h-96 overflow-y-auto">
-                <div className="p-3 space-y-2">
-                  {/* East Africa */}
-                  <div>
-                    <p className="text-gray-400 text-xs font-semibold px-3 py-2 uppercase">East Africa</p>
-                    {['KES', 'UGX'].map((currency) => (
-                      <button
-                        key={currency}
-                        onClick={() => {
-                          setSelectedCurrency(currency);
-                          setShowCurrencyDropdown(false);
-                        }}
-                        className={`w-full px-3 py-3 rounded-lg flex items-center gap-3 transition-all ${
-                          selectedCurrency === currency
-                            ? 'bg-green-500/30 text-green-400 border border-green-400/50'
-                            : 'text-gray-300 hover:bg-white/5'
-                        }`}
-                      >
-                        <span className="text-2xl">{walletData[currency].flag}</span>
-                        <div className="text-left flex-1">
-                          <p className="font-semibold">{currency}</p>
-                          <p className="text-xs text-gray-400">{walletData[currency].country}</p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* North America */}
-                  <div>
-                    <p className="text-gray-400 text-xs font-semibold px-3 py-2 uppercase mt-2">North America</p>
-                    <button
-                      onClick={() => {
-                        setSelectedCurrency('USD');
-                        setShowCurrencyDropdown(false);
-                      }}
-                      className={`w-full px-3 py-3 rounded-lg flex items-center gap-3 transition-all ${
-                        selectedCurrency === 'USD'
-                          ? 'bg-green-500/30 text-green-400 border border-green-400/50'
-                          : 'text-gray-300 hover:bg-white/5'
-                      }`}
-                    >
-                      <span className="text-2xl">🇺🇸</span>
-                      <div className="text-left flex-1">
-                        <p className="font-semibold">USD</p>
-                        <p className="text-xs text-gray-400">United States</p>
-                      </div>
-                    </button>
-                  </div>
-
-                  {/* Europe */}
-                  <div>
-                    <p className="text-gray-400 text-xs font-semibold px-3 py-2 uppercase mt-2">Europe</p>
-                    {['GBP', 'EUR'].map((currency) => (
-                      <button
-                        key={currency}
-                        onClick={() => {
-                          setSelectedCurrency(currency);
-                          setShowCurrencyDropdown(false);
-                        }}
-                        className={`w-full px-3 py-3 rounded-lg flex items-center gap-3 transition-all ${
-                          selectedCurrency === currency
-                            ? 'bg-green-500/30 text-green-400 border border-green-400/50'
-                            : 'text-gray-300 hover:bg-white/5'
-                        }`}
-                      >
-                        <span className="text-2xl">{walletData[currency].flag}</span>
-                        <div className="text-left flex-1">
-                          <p className="font-semibold">{currency}</p>
-                          <p className="text-xs text-gray-400">{walletData[currency].country}</p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
       </div>
       )}
 

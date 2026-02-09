@@ -7,7 +7,12 @@
     "dev": "cd frontend && npm run dev",
     "preview": "cd frontend && npm run preview",
     "backend": "node backend/server.js",
-    "start": "node backend/server.js"
+    "start": "node backend/server.js",
+    "setup:business-members": "node setup-business-members.js",
+    "setup:members:windows": ".\\setup-business-members.ps1",
+    "setup:members:unix": "bash setup-business-members.sh",
+    "migrate:co-owners-to-members": "node -e \"require('./setup-business-members.js')\" --migrate",
+    "verify:business-members": "node -e \"console.log('✓ Setup verification required - run: npm run setup:business-members')\""
   },
   "workspaces": [
     "frontend"

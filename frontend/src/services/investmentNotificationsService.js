@@ -58,6 +58,16 @@ export const createInvestmentNotification = async ({
     console.log('✅ Notification created:', data);
     return { success: true, data };
   } catch (error) {
+    if (error?.message?.includes('row-level security') || error?.code === 'PGRST100') {
+      console.warn('⚠️ RLS: Cannot create notification via direct insert.');
+      console.warn('   → This is expected - shareholder notifications will be created via backup process');
+      return { 
+        success: false, 
+        error: error.message,
+        isRLSError: true,
+        gracefulDegradation: 'Notification will be handled during 60% approval process'
+      };
+    }
     console.error('❌ Error creating notification:', error);
     return { success: false, error: error.message };
   }

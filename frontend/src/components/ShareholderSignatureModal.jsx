@@ -356,91 +356,112 @@ const ShareholderSignatureModal = ({
 
           {/* Stage 1: PIN Entry */}
           {stage === 1 && !signed && (
-            <div className="space-y-4">
-              <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-                <h3 className="font-bold text-white mb-4 flex items-center gap-2">
-                  🔐 Signature PIN
+            <div className="space-y-6">
+              <div className="bg-gradient-to-br from-blue-900 to-slate-900 rounded-lg p-6 border border-blue-500/30">
+                <h3 className="font-bold text-2xl text-white mb-2 flex items-center gap-2">
+                  🔐 ICAN Wallet - Shareholder Signature
                 </h3>
-                <p className="text-slate-400 text-sm mb-4">
-                  Enter a PIN to electronically sign this agreement. Your PIN will be masked and stored securely.
+                <p className="text-blue-200/80 text-sm">
+                  Enter your ICAN Wallet PIN to electronically sign and approve this investment agreement
+                </p>
+              </div>
+
+              {/* Investment Summary */}
+              <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+                <h4 className="font-semibold text-white mb-3">📋 Investment Summary</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Pitch:</span>
+                    <span className="text-white font-semibold">{investmentDetails?.pitch_title || 'Unknown'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Business:</span>
+                    <span className="text-white font-semibold">{investmentDetails?.business_name || 'Unknown'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Investment Amount:</span>
+                    <span className="text-green-400 font-semibold">${investmentDetails?.investment_amount || '0.00'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Your Stake:</span>
+                    <span className="text-blue-400 font-semibold">{investmentDetails?.your_stake || 'TBD'}%</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* PIN Entry Section */}
+              <div className="bg-slate-800/50 rounded-lg p-6 border border-blue-500/20 space-y-4">
+                <p className="text-slate-300 text-sm font-semibold mb-4">
+                  🔑 Enter Your 6-Digit ICAN Wallet PIN
                 </p>
 
                 {error && (
-                  <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-4 flex items-start gap-2">
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
                     <span className="text-red-300 text-sm">{error}</span>
                   </div>
                 )}
 
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-semibold text-slate-300 mb-2">
-                      Enter PIN (4+ digits)
+                    <label className="block text-sm font-semibold text-slate-300 mb-3">
+                      PIN (6 digits)
                     </label>
                     <input
                       type="password"
                       value={pin}
-                      onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-                      maxLength="10"
-                      placeholder="Enter PIN"
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                      onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="••••••"
+                      maxLength="6"
+                      className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white text-center text-3xl tracking-widest placeholder-slate-500 focus:border-blue-500 focus:outline-none transition"
                     />
+                    <p className="text-xs text-slate-500 mt-2">{pin.length}/6 digits</p>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold text-slate-300 mb-2">
-                      Confirm PIN
+                    <label className="block text-sm font-semibold text-slate-300 mb-3">
+                      Confirm PIN (6 digits)
                     </label>
                     <input
                       type="password"
                       value={pinConfirm}
-                      onChange={(e) => setPinConfirm(e.target.value.replace(/\D/g, ''))}
-                      maxLength="10"
-                      placeholder="Confirm PIN"
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                      onChange={(e) => setPinConfirm(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="••••••"
+                      maxLength="6"
+                      className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white text-center text-3xl tracking-widest placeholder-slate-500 focus:border-blue-500 focus:outline-none transition"
                     />
+                    <p className="text-xs text-slate-500 mt-2">{pinConfirm.length}/6 digits</p>
                   </div>
                 </div>
 
-                {/* PIN Status */}
-                {pin.length > 0 && (
-                  <div className="mt-4 p-3 bg-slate-700/30 rounded-lg text-sm space-y-1">
-                    <div className={`flex items-center gap-2 ${pin.length >= 4 ? 'text-green-400' : 'text-amber-400'}`}>
-                      <span>{pin.length >= 4 ? '✓' : '◯'}</span>
-                      <span>PIN length: {pin.length} characters {pin.length < 4 ? '(minimum 4)' : ''}</span>
-                    </div>
-                    {pin && pinConfirm && pin === pinConfirm && (
-                      <div className="text-green-400 flex items-center gap-2">
-                        <span>✓</span>
-                        <span>PINs match</span>
-                      </div>
-                    )}
-                    {pin && pinConfirm && pin !== pinConfirm && (
-                      <div className="text-red-400 flex items-center gap-2">
-                        <span>✗</span>
-                        <span>PINs do not match</span>
-                      </div>
-                    )}
+                {pin && pinConfirm && pin === pinConfirm && pin.length === 6 && (
+                  <div className="p-3 bg-green-500/20 border border-green-500/50 rounded text-green-300 text-sm flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4" />
+                    <span>PIN verified! Ready to sign.</span>
                   </div>
                 )}
               </div>
 
+              {/* Security Notice */}
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                <p className="text-blue-300 text-xs flex gap-2">
+                  <span>🔐</span>
+                  <span>Your PIN is encrypted and stored securely. Never share your PIN with anyone. This signature is legally binding.</span>
+                </p>
+              </div>
+
+              {/* Action Buttons */}
               <div className="flex gap-3">
                 <button
-                  onClick={() => {
-                    setStage(0);
-                    setError('');
-                    setPin('');
-                    setPinConfirm('');
-                  }}
-                  className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 rounded-lg transition"
+                  onClick={() => setStage(0)}
+                  className="flex-1 px-6 py-3 border border-slate-600 hover:border-slate-400 text-slate-300 hover:text-white font-semibold rounded-lg transition"
                 >
                   ← Back
                 </button>
                 <button
                   onClick={handleSignAgreement}
-                  disabled={loading || pin.length < 4 || pin !== pinConfirm || timeRemaining?.expired}
-                  className="flex-1 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 disabled:from-slate-700 disabled:to-slate-600 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition flex items-center justify-center gap-2"
+                  disabled={loading || pin.length < 6 || pinConfirm.length < 6 || pin !== pinConfirm}
+                  className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition flex items-center justify-center gap-2"
                 >
                   {loading ? (
                     <>
@@ -449,8 +470,7 @@ const ShareholderSignatureModal = ({
                     </>
                   ) : (
                     <>
-                      <CheckCircle className="w-4 h-4" />
-                      Sign Agreement
+                      ✓ Sign Agreement
                     </>
                   )}
                 </button>
@@ -458,7 +478,7 @@ const ShareholderSignatureModal = ({
             </div>
           )}
 
-          {/* Stage 2: Confirmation */}
+          {/* Stage 2: Signature Confirmed */}          {/* Stage 2: Confirmation */}
           {stage === 2 && signed && (
             <div className="text-center space-y-4">
               <CheckCircle className="w-16 h-16 text-green-400 mx-auto animate-bounce" />

@@ -74,70 +74,9 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
   const [videoPlayerPitch, setVideoPlayerPitch] = useState(null); // pitch for fullscreen video player
   const [mutedVideos, setMutedVideos] = useState(new Set()); // track which videos are unmuted (all start muted)
   const [currentVisiblePitch, setCurrentVisiblePitch] = useState(null); // track currently visible pitch for web bottom nav
-  const [showPitchNotifications, setShowPitchNotifications] = useState(null); // pitch id for notifications panel
-  const [pitchNotifications, setPitchNotifications] = useState({}); // notifications by pitch id
   const videoRefs = useRef({}); // refs to video elements for controlling sound
   const videoScrollRef = useRef(null);
   const metricsUnsubscribeRef = useRef(null); // ref to store real-time unsubscribe function
-
-  // Fetch notifications for a specific pitch
-  const fetchPitchNotifications = async (pitchId) => {
-    if (!currentUser?.id || !pitchId) {
-      console.warn('❌ Cannot fetch notifications: missing user ID or pitch ID');
-      return;
-    }
-    
-    try {
-      const sb = getSupabase();
-      if (!sb) {
-        console.warn('⚠️  Supabase not available - demo mode');
-        setPitchNotifications(prev => ({
-          ...prev,
-          [pitchId]: []
-        }));
-        return;
-      }
-
-      // Fetch notifications directed to current user for this pitch
-      const { data, error } = await sb
-        .from('investment_notifications')
-        .select('*')
-        .eq('recipient_id', currentUser.id)
-        .eq('pitch_id', pitchId)
-        .order('created_at', { ascending: false })
-        .limit(50);
-
-      if (error) {
-        console.warn(`⚠️  Error fetching notifications: ${error.message}`);
-        setPitchNotifications(prev => ({
-          ...prev,
-          [pitchId]: []
-        }));
-        return;
-      }
-
-      if (data && data.length > 0) {
-        console.log(`📬 Found ${data.length} notifications for pitch ${pitchId}`);
-        setPitchNotifications(prev => ({
-          ...prev,
-          [pitchId]: data
-        }));
-      } else {
-        console.log(`📭 No notifications for pitch ${pitchId}`);
-        setPitchNotifications(prev => ({
-          ...prev,
-          [pitchId]: []
-        }));
-      }
-    } catch (error) {
-      console.error('❌ Error fetching pitch notifications:', error);
-      setPitchNotifications(prev => ({
-        ...prev,
-        [pitchId]: []
-      }));
-    }
-  };
-
   // Initialize and load data
   useEffect(() => {
     const initialize = async () => {
@@ -854,14 +793,9 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
       alert('Please login to invest');
       return;
     }
-    if (!currentBusinessProfile) {
-      if (businessProfiles.length > 0) {
-        setShowProfileSelector(true);
-      } else {
-        setShowBusinessForm(true);
-      }
-      return;
-    }
+    
+    // 📝 NOTE: Removed business profile requirement for investors
+    // Investors can now invest without having a business profile
     
     // Record investment interest in database
     try {
@@ -884,7 +818,13 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
       console.error('Error recording investment interest:', error);
     }
     
-    // Use ShareSigningFlow for investment
+    // Use ShareSigningFlow for investment (businessProfile can be null for investors)
+    console.log('🔍 INVEST BUTTON CLICKED - Pitch data being passed to ShareSigningFlow:');
+    console.log('   User has business profile:', currentBusinessProfile ? 'YES' : 'NO');
+    console.log('   pitch object keys:', Object.keys(pitch));
+    console.log('   pitch.business_profile_id:', pitch.business_profile_id);
+    console.log('   pitch.business_profiles (nested):', pitch.business_profiles);
+    console.log('   Full pitch object:', pitch);
     setSelectedForInvestment(pitch);
   };
 
@@ -1147,7 +1087,11 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                     <BusinessProfileCard 
                       profile={currentBusinessProfile} 
                       onEdit={() => setShowProfileSelector(true)}
-                      onSelect={() => {}} 
+                      onSelect={() => {}}
+                      isMember={true}
+                      currentUserId={currentUser?.id}
+                      currentUserEmail={currentUser?.email}
+                      onNotification={() => console.log('Member notification clicked')}
                     />
                     {businessProfiles.length > 1 && (
                       <button
@@ -1377,71 +1321,6 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                           </div>
                           <span className="text-white text-[9px] font-bold drop-shadow-lg">{pitch.likes_count || 0}</span>
                         </button>
-
-                        {/* Notification Button */}
-                        <button
-                          onClick={() => {
-                            setShowPitchNotifications(showPitchNotifications === pitch.id ? null : pitch.id);
-                            if (showPitchNotifications !== pitch.id) {
-                              fetchPitchNotifications(pitch.id);
-                            }
-                          }}
-                          className="flex flex-col items-center gap-0.5"
-                          title="Notifications"
-                        >
-                          <div className="relative">
-                            <div className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm flex items-center justify-center transition-all">
-                              <Bell className="w-4 h-4 text-white drop-shadow-lg" />
-                            </div>
-                            {pitchNotifications[pitch.id]?.length > 0 && (
-                              <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
-                                <span className="text-white text-[7px] font-bold">{pitchNotifications[pitch.id].length}</span>
-                              </div>
-                            )}
-                          </div>
-                          <span className="text-white text-[9px] font-bold drop-shadow-lg">{pitchNotifications[pitch.id]?.length || 0}</span>
-                        </button>
-
-                        {/* Notifications Panel - Positioned near the button */}
-                        {showPitchNotifications === pitch.id && (
-                          <div className="absolute right-16 bottom-32 w-72 max-h-80 bg-black/90 backdrop-blur-md border border-white/20 rounded-lg p-3 pointer-events-auto z-30 overflow-y-auto">
-                            <div className="flex items-center justify-between mb-2">
-                              <h3 className="text-white font-semibold text-xs">Notifications</h3>
-                              <button
-                                onClick={() => setShowPitchNotifications(null)}
-                                className="text-white/60 hover:text-white"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            </div>
-                            
-                            {pitchNotifications[pitch.id]?.length === 0 ? (
-                              <p className="text-gray-400 text-[10px] text-center py-3">No notifications</p>
-                            ) : (
-                              <div className="space-y-2">
-                                {pitchNotifications[pitch.id]?.map((notif) => (
-                                  <div key={notif.id} className="bg-white/5 border border-white/10 rounded p-1.5">
-                                    <div className="flex items-start gap-1.5">
-                                      <Bell className="w-3 h-3 text-blue-400 flex-shrink-0 mt-0.5" />
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-white text-[9px] font-semibold line-clamp-2">{notif.title}</p>
-                                        <p className="text-gray-400 text-[8px] mt-0.5 line-clamp-2">{notif.message}</p>
-                                        {notif.action_url && (
-                                          <button
-                                            onClick={() => window.location.href = notif.action_url}
-                                            className="text-blue-400 hover:text-blue-300 text-[8px] mt-1 font-semibold"
-                                          >
-                                            View →
-                                          </button>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
 
                         {/* Comment Button */}
                         <button

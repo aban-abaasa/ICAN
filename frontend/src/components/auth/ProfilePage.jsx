@@ -6,8 +6,9 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { User, Mail, Phone, Edit2, Save, X, Upload, Shield, Wallet, Key, LogOut, Plus, Camera, Trash2 } from 'lucide-react';
+import { User, Mail, Phone, Edit2, Save, X, Upload, Shield, Wallet, Key, LogOut, Plus, Camera, Trash2, Clock, Bell } from 'lucide-react';
 import { StatusUploader } from '../status/StatusUploader';
+import ShareholderApprovalsCenter from '../ShareholderApprovalsCenter';
 
 export const ProfilePage = ({ onClose = null, onLogout = null }) => {
   const { 
@@ -32,6 +33,8 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
   const [showAvatarView, setShowAvatarView] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
+  const [showApprovalsModal, setShowApprovalsModal] = useState(false);
   const fileInputRef = useRef(null);
 
   // Form state
@@ -55,6 +58,33 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
       });
     }
   }, [profile]);
+
+  // Load pending approvals count
+  useEffect(() => {
+    if (user?.id) {
+      loadPendingApprovalsCount();
+    }
+  }, [user?.id]);
+
+  const loadPendingApprovalsCount = async () => {
+    try {
+      const { getSupabase } = await import('../../services/pitchingService');
+      const supabase = getSupabase();
+
+      // Get pending shareholder investment approvals (where read_at is null)
+      const { data: pendingApprovals, error } = await supabase
+        .from('shareholder_notifications')
+        .select('id', { count: 'exact' })
+        .is('read_at', null);
+
+      if (!error && pendingApprovals) {
+        setPendingApprovalsCount(pendingApprovals.length);
+        console.log(`📊 Pending approvals: ${pendingApprovals.length}`);
+      }
+    } catch (error) {
+      console.error('Error loading pending approvals:', error);
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -254,30 +284,78 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                 </div>
               </div>
 
-              {/* Edit/Save Button */}
-              <button
-                onClick={() => {
-                  if (isEditing) {
-                    handleSave();
-                  } else {
-                    setIsEditing(true);
-                  }
-                }}
-                disabled={isSaving}
-                className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-600/50 text-white rounded-lg font-medium transition-colors"
-              >
-                {isEditing ? (
-                  <>
-                    <Save className="w-4 h-4" />
-                    <span>{isSaving ? 'Saving...' : 'Save'}</span>
-                  </>
-                ) : (
-                  <>
-                    <Edit2 className="w-4 h-4" />
-                    <span>Edit</span>
-                  </>
-                )}
-              </button>
+              {/* Button Group - Approval, Notifications, Wallet, Edit */}
+              <div className="flex items-center gap-2 flex-wrap justify-end">
+                {/* Approval Tab Button */}
+                <button
+                  onClick={() => setShowApprovalsModal(true)}
+                  className="relative flex items-center gap-2 px-3 py-2 bg-yellow-500 hover:bg-yellow-600 text-white transition rounded-lg font-semibold hover:shadow-lg shadow-yellow-500/20"
+                  title="⏳ Pending Approvals"
+                >
+                  <Clock className="w-4 h-4" />
+                  <span className="text-sm">Approve</span>
+                  {pendingApprovalsCount > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                      {pendingApprovalsCount > 9 ? '9+' : pendingApprovalsCount}
+                    </span>
+                  )}
+                </button>
+
+                {/* Notification Settings Icon */}
+                <div
+                  className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg transition cursor-help group/notif relative"
+                  title="🔔 Notification Settings"
+                >
+                  <Bell className="w-5 h-5" />
+                  {/* Notification Settings Tooltip */}
+                  <div className="hidden group-hover/notif:block absolute right-0 top-full mt-2 bg-slate-900 border border-slate-700 rounded-lg p-3 w-56 z-50 text-xs text-white shadow-lg">
+                    <p className="font-semibold mb-2 text-blue-300">📢 Profile Settings</p>
+                    <div className="space-y-1 text-slate-300">
+                      <div className="flex items-center gap-2">
+                        <span>Account notifications</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Wallet Icon Button */}
+                <button
+                  className="bg-green-600 hover:bg-green-700 text-white p-2 rounded-lg transition relative group/wallet"
+                  title="💰 My Wallet"
+                >
+                  <Wallet className="w-5 h-5" />
+                  {/* Wallet Tooltip */}
+                  <div className="hidden group-hover/wallet:block absolute right-0 top-full mt-2 bg-slate-900 border border-slate-700 rounded-lg p-2 w-48 z-50 text-xs text-white shadow-lg">
+                    <p className="font-semibold text-green-300 mb-1">💰 My Wallet</p>
+                    <p className="text-slate-400">View wallet and transaction history</p>
+                  </div>
+                </button>
+
+                {/* Edit/Save Button */}
+                <button
+                  onClick={() => {
+                    if (isEditing) {
+                      handleSave();
+                    } else {
+                      setIsEditing(true);
+                    }
+                  }}
+                  disabled={isSaving}
+                  className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-600/50 text-white rounded-lg font-medium transition-colors"
+                >
+                  {isEditing ? (
+                    <>
+                      <Save className="w-4 h-4" />
+                      <span>{isSaving ? 'Saving...' : 'Save'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Edit2 className="w-4 h-4" />
+                      <span>Edit</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
 
             {/* Verification Status */}
@@ -582,6 +660,16 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
               setShowStatusUploader(false);
               // Optionally refresh statuses or show notification
             }}
+          />
+        )}
+
+        {/* Pending Approvals - Investment & Member */}
+        {showApprovalsModal && (
+          <ShareholderApprovalsCenter 
+            businessProfileId={user?.id}
+            currentUserId={user?.id}
+            currentUserEmail={user?.email}
+            onClose={() => setShowApprovalsModal(false)}
           />
         )}
       </div>
