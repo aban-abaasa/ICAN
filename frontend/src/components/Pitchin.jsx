@@ -1156,7 +1156,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
               <div className="relative w-full h-full overflow-y-auto snap-y snap-mandatory scroll-smooth" ref={videoScrollRef}>
               {loading ? (
                 // Creative Full-Screen Loading Experience with Video Preview
-                <div className="fixed inset-0 z-50 bg-black flex items-center justify-center overflow-hidden">
+                <div className="fixed inset-0 z-[60] bg-black flex items-center justify-center overflow-hidden">
                   {/* Full-Screen Video Background */}
                   <div className="absolute inset-0 w-full h-full">
                     {/* Fallback animated gradient pattern - shows by default */}
@@ -1691,7 +1691,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
 
       {/* Mobile Pitch Detail Modal - Shows SHAREHub-style UI */}
       {showMobilePitchDetail && selectedMobilePitch && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex flex-col">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex flex-col">
           {/* Header */}
           <div className="flex items-center justify-between p-4 bg-slate-900/95 border-b border-slate-700">
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
@@ -1866,7 +1866,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
 
       {/* Mobile Pitch Detail Modal - Shows Full Web Pitchin UI */}
       {showMobilePitchDetail && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex flex-col">
+        <div className="fixed inset-0 bg-black/80 z-[60] flex flex-col">
           {/* Header with Close Button */}
           <div className="sticky top-0 z-30 bg-gradient-to-r from-purple-900/95 to-pink-900/95 p-4 flex items-center justify-between">
             <div>
@@ -1887,8 +1887,8 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
             </button>
           </div>
 
-          {/* Tab Filters */}
-          <div className="bg-slate-900/50 border-b border-slate-700 px-4 py-3 flex gap-2 overflow-x-auto">
+          {/* Tab Filters - Sticky */}
+          <div className="sticky top-[72px] z-10 bg-slate-900/50 border-b border-slate-700 px-4 py-3 flex gap-2 overflow-x-auto">
             <button
               onClick={() => setActiveTab('feed')}
               className={`flex-shrink-0 px-4 py-2 rounded-full font-semibold transition whitespace-nowrap ${
@@ -1922,7 +1922,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
           </div>
 
           {/* Content - Pitch Grid */}
-          <div className="flex-1 overflow-y-auto p-4">
+          <div className="flex-1 overflow-y-auto p-4 pb-20 sm:pb-12">
             <div className="grid grid-cols-1 gap-4">
               {loading ? (
                 <>
@@ -2141,7 +2141,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
 
       {/* Fullscreen Video Player Modal */}
       {videoPlayerPitch && (
-        <div className="fixed inset-0 bg-black z-50 w-screen h-screen overflow-hidden">
+        <div className="fixed inset-0 bg-black z-[60] w-screen h-screen overflow-hidden">
           {/* Close Button */}
           <button
             onClick={() => setVideoPlayerPitch(null)}
