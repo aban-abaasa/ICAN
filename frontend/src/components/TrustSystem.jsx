@@ -42,6 +42,9 @@ import {
   getVotingApplicationsForMember,
   getUserPendingApplications
 } from '../services/trustService';
+import { getCurrencySymbolByCode, getCurrencyInfo } from '../utils/currencyUtils';
+import CountryService from '../services/countryService';
+import icanCoinService from '../services/icanCoinService';
 
 const TrustSystem = ({ currentUser }) => {
   const [activeTab, setActiveTab] = useState('explore'); // 'explore', 'mygroups', 'create', 'dashboard', 'voting', 'applications', 'admin'
@@ -65,7 +68,7 @@ const TrustSystem = ({ currentUser }) => {
   });
   const [contributeForm, setContributeForm] = useState({
     amount: '',
-    paymentMethod: 'card'
+    paymentMethod: 'ican'
   });
   const [stats, setStats] = useState(null);
   const [message, setMessage] = useState({ type: '', text: '' });
@@ -77,6 +80,53 @@ const TrustSystem = ({ currentUser }) => {
     monthlyContribution: '',
     status: 'active'
   });
+  const [userCountry, setUserCountry] = useState(null);
+  const [userCountryCode, setUserCountryCode] = useState('US');
+  const [userCurrency, setUserCurrency] = useState('USD');
+  const [currencySymbol, setCurrencySymbol] = useState('$');
+
+  // Load user's country and currency
+  useEffect(() => {
+    const loadUserCountry = async () => {
+      try {
+        // Method 1: Get from user metadata (fastest)
+        let userCountryCodeValue = currentUser?.user_metadata?.country;
+        
+        // Method 2: Fallback to database if not in metadata
+        if (!userCountryCodeValue && currentUser?.id) {
+          const countryData = await icanCoinService.getUserCountry(currentUser.id);
+          userCountryCodeValue = countryData || 'US';
+        }
+
+        // Default fallback
+        if (!userCountryCodeValue) {
+          userCountryCodeValue = 'US';
+        }
+
+        // Get all country info
+        const countryInfo = CountryService.getCountry(userCountryCodeValue);
+        const currencyCode = CountryService.getCurrencyCode(userCountryCodeValue);
+        const currencySymbol = CountryService.getCurrencySymbol(userCountryCodeValue);
+        
+        setUserCountryCode(userCountryCodeValue);
+        setUserCountry(countryInfo?.name || 'United States');
+        setUserCurrency(currencyCode || 'USD');
+        setCurrencySymbol(currencySymbol || '$');
+        
+        console.log(`✅ TrustSystem - Country: ${userCountryCodeValue}, Currency: ${currencyCode}, Symbol: ${currencySymbol}`);
+      } catch (error) {
+        console.log('Could not detect country in TrustSystem, using default USD');
+        setUserCountryCode('US');
+        setUserCountry('United States');
+        setUserCurrency('USD');
+        setCurrencySymbol('$');
+      }
+    };
+
+    if (currentUser?.id) {
+      loadUserCountry();
+    }
+  }, [currentUser?.id]);
 
   useEffect(() => {
     loadGroups();
@@ -205,7 +255,7 @@ const TrustSystem = ({ currentUser }) => {
 
       if (result.success) {
         setMessage({ type: 'success', text: '✓ Contribution recorded and verified on blockchain!' });
-        setContributeForm({ amount: '', paymentMethod: 'card' });
+        setContributeForm({ amount: '', paymentMethod: 'ican' });
         setShowContributeModal(false);
         handleViewDetails(selectedGroup);
       } else {
@@ -525,7 +575,7 @@ const TrustSystem = ({ currentUser }) => {
                       </div>
                       <div className="flex items-center gap-2 text-slate-300 text-sm">
                         <DollarSign size={14} className="text-emerald-500 flex-shrink-0" />
-                        <span>${group.monthly_contribution} Monthly</span>
+                        <span>{getCurrencySymbolByCode(group.currency)}{group.monthly_contribution} Monthly</span>
                       </div>
                       <div className="flex items-center gap-2 text-slate-300 text-sm">
                         <Calendar size={14} className="text-blue-500 flex-shrink-0" />
@@ -595,7 +645,7 @@ const TrustSystem = ({ currentUser }) => {
                         <span className="text-slate-400">Members:</span> {group.member_count || 0}/{group.max_members}
                       </p>
                       <p className="text-slate-300">
-                        <span className="text-slate-400">Monthly:</span> ${group.monthly_contribution}
+                        <span className="text-slate-400">Monthly:</span> {getCurrencySymbolByCode(group.currency)}{group.monthly_contribution}
                       </p>
                       <p className="text-slate-300">
                         <span className="text-slate-400">Joined:</span> {new Date(group.created_at).toLocaleDateString()}
@@ -778,7 +828,7 @@ const TrustSystem = ({ currentUser }) => {
                   <DollarSign className="w-5 h-5 text-emerald-500" />
                 </div>
                 <p className="text-3xl font-bold text-emerald-400">
-                  ${groups.reduce((sum, g) => sum + (g.total_contributed || 0), 0).toFixed(2)}
+                  {currencySymbol}{groups.reduce((sum, g) => sum + (g.total_contributed || 0), 0).toFixed(2)}
                 </p>
                 <p className="text-slate-500 text-xs mt-2">Network total</p>
               </div>
@@ -810,10 +860,10 @@ const TrustSystem = ({ currentUser }) => {
                     <div key={group.id} className="flex items-center justify-between p-4 bg-slate-900/50 rounded-lg">
                       <div className="flex-1">
                         <p className="text-white font-semibold">{group.name}</p>
-                        <p className="text-slate-400 text-sm">{group.member_count || 0} members • ${group.monthly_contribution}/month</p>
+                        <p className="text-slate-400 text-sm">{group.member_count || 0} members • {getCurrencySymbolByCode(group.currency)}{group.monthly_contribution}/month</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-emerald-400 font-semibold">${(group.total_contributed || 0).toFixed(2)}</p>
+                        <p className="text-emerald-400 font-semibold">{getCurrencySymbolByCode(group.currency)}{(group.total_contributed || 0).toFixed(2)}</p>
                         <p className="text-slate-500 text-xs">contributed</p>
                       </div>
                     </div>
@@ -903,35 +953,58 @@ const TrustSystem = ({ currentUser }) => {
           </div>
         )}
 
-        {/* ADMIN PANEL TAB */}
+        {/* ADMIN PANEL TAB - Mobile Optimized */}
         {activeTab === 'admin' && (
-          <div className="py-6 sm:py-8">
-            <h2 className="text-2xl font-bold text-white mb-6">� Admin Panel</h2>
+          <div className="py-4 sm:py-8 px-0 sm:px-0">
+            <div className="px-3 sm:px-0">
+              <h2 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6 flex items-center gap-2">
+                <span>👑</span>
+                <span>Admin Panel</span>
+                {myGroups.filter(g => g.creator_id === currentUser?.id).length > 0 && (
+                  <span className="ml-auto px-3 py-1 bg-amber-500/20 border border-amber-500/50 rounded-full text-xs text-amber-300 font-semibold">
+                    {myGroups.filter(g => g.creator_id === currentUser?.id).length} group{myGroups.filter(g => g.creator_id === currentUser?.id).length !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </h2>
+            </div>
+
             {myGroups.filter(g => g.creator_id === currentUser?.id).length === 0 ? (
-              <div className="text-center py-12 bg-slate-800/50 rounded-lg border border-slate-700">
+              <div className="text-center py-12 bg-slate-800/50 rounded-lg border border-slate-700 mx-3 sm:mx-0">
                 <Shield className="w-12 h-12 text-gray-500 mx-auto mb-3" />
-                <p className="text-gray-400">You don't have any groups to manage</p>
+                <p className="text-gray-400 mb-4">You don't have any groups to manage</p>
+                <button
+                  onClick={() => setActiveTab('create')}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors font-medium text-sm"
+                >
+                  ✨ Create a Group
+                </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-4 sm:gap-6">
+              <div className="space-y-3 sm:space-y-4 px-3 sm:px-0">
                 {myGroups.filter(g => g.creator_id === currentUser?.id).map(group => (
-                  <div key={group.id} className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 sm:p-6">
-                    <div className="flex justify-between items-start mb-4 gap-2">
-                      <div>
-                        <h3 className="text-lg sm:text-xl font-bold text-white">{group.name}</h3>
-                        <p className="text-slate-400 text-sm">{group.member_count || 0} members</p>
+                  <div key={group.id} className="bg-gradient-to-br from-slate-800 to-slate-800/50 border border-slate-700 rounded-lg p-4 sm:p-5">
+                    <div className="flex justify-between items-start mb-3 gap-2">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-base sm:text-lg font-bold text-white truncate">{group.name}</h3>
+                        <div className="flex items-center gap-2 mt-2 text-xs sm:text-sm text-slate-400">
+                          <Users size={14} className="flex-shrink-0" />
+                          <span className="font-medium">{group.member_count || 0}/{group.max_members} members</span>
+                          <span className="ml-2 px-2 py-0.5 bg-slate-700 rounded-full text-xs">
+                            {group.status === 'active' ? '✓ Active' : group.status === 'paused' ? '⏸ Paused' : '🔒 Closed'}
+                          </span>
+                        </div>
                       </div>
                       <button
                         onClick={() => {
                           setSelectedGroup(group);
                           setShowManageModal(true);
                         }}
-                        className="px-3 sm:px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors text-xs sm:text-sm font-medium flex-shrink-0"
+                        className="px-4 py-2.5 bg-amber-600 hover:bg-amber-500 active:bg-amber-700 text-white rounded-lg transition-colors text-sm sm:text-base font-medium flex-shrink-0"
                       >
                         ⚙️ Manage
                       </button>
                     </div>
-                    <p className="text-slate-300 text-sm">{group.description}</p>
+                    <p className="text-slate-300 text-xs sm:text-sm line-clamp-2">{group.description}</p>
                   </div>
                 ))}
               </div>
@@ -960,11 +1033,11 @@ const TrustSystem = ({ currentUser }) => {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4">
                     <p className="text-slate-400 text-sm">Total Contributed</p>
-                    <p className="text-2xl font-bold text-emerald-400">${stats.totalContributed.toFixed(2)}</p>
+                    <p className="text-2xl font-bold text-emerald-400">{currencySymbol}{stats.totalContributed.toFixed(2)}</p>
                   </div>
                   <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4">
                     <p className="text-slate-400 text-sm">Total Payouts</p>
-                    <p className="text-2xl font-bold text-blue-400">${stats.totalPayouts.toFixed(2)}</p>
+                    <p className="text-2xl font-bold text-blue-400">{currencySymbol}{stats.totalPayouts.toFixed(2)}</p>
                   </div>
                   <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4">
                     <p className="text-slate-400 text-sm">Verified Transactions</p>
@@ -994,7 +1067,7 @@ const TrustSystem = ({ currentUser }) => {
                           <p className="text-slate-400 text-sm">{member.role}</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-emerald-400 text-sm">${member.total_contributed || 0}</p>
+                          <p className="text-emerald-400 text-sm">{getCurrencySymbolByCode(selectedGroup.currency)}{member.total_contributed || 0}</p>
                           <p className="text-slate-400 text-xs">contributed</p>
                         </div>
                       </div>
@@ -1020,52 +1093,52 @@ const TrustSystem = ({ currentUser }) => {
         </div>
       )}
 
-      {/* GROUP MANAGEMENT MODAL */}
+      {/* GROUP MANAGEMENT MODAL - Mobile Optimized */}
       {showManageModal && selectedGroup && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-slate-800 rounded-lg max-w-3xl w-full my-8">
-            <div className="sticky top-0 bg-slate-800 border-b border-slate-700 p-6 flex justify-between items-center">
-              <h2 className="text-2xl font-bold text-white">Manage: {selectedGroup.name}</h2>
-              <button onClick={() => setShowManageModal(false)} className="text-slate-400 hover:text-white">
+        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+          <div className="bg-slate-800 rounded-t-lg sm:rounded-lg max-w-3xl w-full max-h-[90vh] sm:max-h-96 overflow-y-auto sm:my-8">
+            <div className="sticky top-0 bg-slate-800 border-b border-slate-700 p-4 sm:p-6 flex justify-between items-center gap-2">
+              <h2 className="text-lg sm:text-2xl font-bold text-white truncate">Setup: {selectedGroup.name}</h2>
+              <button onClick={() => setShowManageModal(false)} className="text-slate-400 hover:text-white flex-shrink-0">
                 <X size={24} />
               </button>
             </div>
 
-            <div className="p-6 space-y-6 max-h-96 overflow-y-auto">
+            <div className="p-4 sm:p-6 space-y-6">
               {/* Edit Group Settings */}
               <div className="space-y-4">
-                <h3 className="font-bold text-white text-lg">Group Settings</h3>
+                <h3 className="font-bold text-white text-base sm:text-lg">Group Settings</h3>
                 
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-2">Group Name</label>
+                  <label className="block text-slate-300 font-semibold mb-2 text-sm">Group Name</label>
                   <input
                     type="text"
                     value={editGroupForm.name}
                     onChange={(e) => setEditGroupForm({ ...editGroupForm, name: e.target.value })}
-                    className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-amber-500"
+                    className="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-amber-500 text-base"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-2">Description</label>
+                  <label className="block text-slate-300 font-semibold mb-2 text-sm">Description</label>
                   <textarea
                     value={editGroupForm.description}
                     onChange={(e) => setEditGroupForm({ ...editGroupForm, description: e.target.value })}
                     rows={3}
-                    className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-amber-500 resize-none"
+                    className="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-amber-500 resize-none text-base"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-2">Monthly Contribution</label>
+                  <label className="block text-slate-300 font-semibold mb-2 text-sm">Monthly Contribution</label>
                   <div className="relative">
-                    <span className="absolute left-3 top-2 text-slate-400">$</span>
+                    <span className="absolute left-3 top-3 text-slate-400">{getCurrencySymbolByCode(selectedGroup.currency)}</span>
                     <input
                       type="number"
                       step="0.01"
                       value={editGroupForm.monthlyContribution}
                       onChange={(e) => setEditGroupForm({ ...editGroupForm, monthlyContribution: e.target.value })}
-                      className="w-full pl-8 pr-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-amber-500"
+                      className="w-full pl-8 pr-4 py-3 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-amber-500 text-base"
                     />
                   </div>
                 </div>
@@ -1073,7 +1146,7 @@ const TrustSystem = ({ currentUser }) => {
                 <button
                   onClick={handleSaveGroupSettings}
                   disabled={loading}
-                  className="w-full px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-700 text-white rounded-lg transition-colors font-medium"
+                  className="w-full px-4 py-3 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-700 text-white rounded-lg transition-colors font-medium text-base"
                 >
                   {loading ? 'Saving...' : '💾 Save Settings'}
                 </button>
@@ -1081,15 +1154,15 @@ const TrustSystem = ({ currentUser }) => {
 
               {/* Group Status */}
               <div className="border-t border-slate-700 pt-6 space-y-4">
-                <h3 className="font-bold text-white text-lg">Group Status</h3>
-                <p className="text-slate-300">Current Status: <span className="font-semibold text-amber-400">{selectedGroup.status}</span></p>
+                <h3 className="font-bold text-white text-base sm:text-lg">Group Status</h3>
+                <p className="text-slate-300 text-sm sm:text-base">Current Status: <span className="font-semibold text-amber-400">{selectedGroup.status}</span></p>
                 
-                <div className="flex gap-2 flex-wrap">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {selectedGroup.status === 'active' && (
                     <button
                       onClick={() => handleToggleGroupStatus('paused')}
                       disabled={loading}
-                      className="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 disabled:bg-slate-700 text-white rounded-lg transition-colors text-sm font-medium"
+                      className="px-4 py-3 bg-yellow-600 hover:bg-yellow-500 active:bg-yellow-700 disabled:bg-slate-700 text-white rounded-lg transition-colors text-sm sm:text-base font-medium"
                     >
                       ⏸️ Pause Group
                     </button>
@@ -1098,7 +1171,7 @@ const TrustSystem = ({ currentUser }) => {
                     <button
                       onClick={() => handleToggleGroupStatus('active')}
                       disabled={loading}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 text-white rounded-lg transition-colors text-sm font-medium"
+                      className="px-4 py-3 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:bg-slate-700 text-white rounded-lg transition-colors text-sm sm:text-base font-medium"
                     >
                       ▶️ Resume Group
                     </button>
@@ -1106,7 +1179,7 @@ const TrustSystem = ({ currentUser }) => {
                   <button
                     onClick={handleCloseGroup}
                     disabled={loading}
-                    className="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:bg-slate-700 text-white rounded-lg transition-colors text-sm font-medium"
+                    className="px-4 py-3 bg-red-600 hover:bg-red-500 active:bg-red-700 disabled:bg-slate-700 text-white rounded-lg transition-colors text-sm sm:text-base font-medium"
                   >
                     🔒 Close Group
                   </button>
@@ -1115,27 +1188,27 @@ const TrustSystem = ({ currentUser }) => {
 
               {/* Members Management */}
               <div className="border-t border-slate-700 pt-6 space-y-4">
-                <h3 className="font-bold text-white text-lg">Members Management</h3>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
+                <h3 className="font-bold text-white text-base sm:text-lg">Members ({selectedGroup.members?.length || 0})</h3>
+                <div className="space-y-2 max-h-64 sm:max-h-48 overflow-y-auto">
                   {selectedGroup.members && selectedGroup.members.map((member) => (
-                    <div key={member.id} className="p-3 bg-slate-900/50 border border-slate-700 rounded-lg flex justify-between items-center">
-                      <div className="flex-1">
-                        <p className="text-white font-medium">
+                    <div key={member.id} className="p-3 sm:p-4 bg-slate-900/50 border border-slate-700 rounded-lg flex justify-between items-start gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white text-sm sm:text-base font-medium">
                           Member #{member.member_number}
-                          <span className="ml-2 text-xs px-2 py-1 bg-blue-500/20 text-blue-300 rounded">
+                          <span className="ml-2 text-xs px-2 py-1 bg-blue-500/20 text-blue-300 rounded inline-block">
                             {member.role}
                           </span>
                         </p>
-                        <p className="text-slate-400 text-sm">${member.total_contributed || 0} contributed</p>
+                        <p className="text-slate-400 text-xs sm:text-sm">{getCurrencySymbolByCode(selectedGroup.currency)}{member.total_contributed || 0} contributed</p>
                       </div>
-                      <div className="flex gap-1">
+                      <div className="flex gap-1.5 flex-shrink-0">
                         {member.role !== 'creator' && (
                           <>
                             {member.role === 'member' ? (
                               <button
                                 onClick={() => handlePromoteToAdmin(member.user_id)}
                                 disabled={loading}
-                                className="px-2 py-1 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 text-white rounded text-xs font-medium"
+                                className="px-3 py-2 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:bg-slate-700 text-white rounded text-xs font-medium"
                                 title="Promote to Admin"
                               >
                                 📤
@@ -1144,7 +1217,7 @@ const TrustSystem = ({ currentUser }) => {
                               <button
                                 onClick={() => handleDemoteFromAdmin(member.user_id)}
                                 disabled={loading}
-                                className="px-2 py-1 bg-orange-600 hover:bg-orange-500 disabled:bg-slate-700 text-white rounded text-xs font-medium"
+                                className="px-3 py-2 bg-orange-600 hover:bg-orange-500 active:bg-orange-700 disabled:bg-slate-700 text-white rounded text-xs font-medium"
                                 title="Demote to Member"
                               >
                                 📥
@@ -1153,7 +1226,7 @@ const TrustSystem = ({ currentUser }) => {
                             <button
                               onClick={() => handleRemoveMember(member.user_id)}
                               disabled={loading}
-                              className="px-2 py-1 bg-red-600 hover:bg-red-500 disabled:bg-slate-700 text-white rounded text-xs font-medium"
+                              className="px-3 py-2 bg-red-600 hover:bg-red-500 active:bg-red-700 disabled:bg-slate-700 text-white rounded text-xs font-medium"
                               title="Remove Member"
                             >
                               ✕
@@ -1161,7 +1234,7 @@ const TrustSystem = ({ currentUser }) => {
                           </>
                         )}
                         {member.role === 'creator' && (
-                          <span className="text-amber-400 text-xs font-semibold">👑 Creator</span>
+                          <span className="text-amber-400 text-xs font-semibold px-2 py-1 bg-amber-500/10 rounded">👑 Creator</span>
                         )}
                       </div>
                     </div>
@@ -1187,13 +1260,13 @@ const TrustSystem = ({ currentUser }) => {
             <form onSubmit={handleContribute} className="p-6 space-y-4">
               <div>
                 <label className="block text-slate-300 font-semibold mb-2">Group: {selectedGroup.name}</label>
-                <p className="text-slate-400 text-sm">Monthly contribution: ${selectedGroup.monthly_contribution}</p>
+                <p className="text-slate-400 text-sm">Monthly contribution: ₿{selectedGroup.monthly_contribution} ICAN</p>
               </div>
 
               <div>
-                <label className="block text-slate-300 font-semibold mb-2">Contribution Amount ({selectedGroup.currency})</label>
+                <label className="block text-slate-300 font-semibold mb-2">Contribution Amount (ICAN)</label>
                 <div className="relative">
-                  <span className="absolute left-3 top-3 text-slate-400">$</span>
+                  <span className="absolute left-3 top-3 text-slate-400">₿</span>
                   <input
                     type="number"
                     required
@@ -1209,15 +1282,14 @@ const TrustSystem = ({ currentUser }) => {
 
               <div>
                 <label className="block text-slate-300 font-semibold mb-2">Payment Method</label>
-                <select
-                  value={contributeForm.paymentMethod}
-                  onChange={(e) => setContributeForm({ ...contributeForm, paymentMethod: e.target.value })}
-                  className="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-amber-500"
-                >
-                  <option value="card">Credit/Debit Card</option>
-                  <option value="bank">Bank Transfer</option>
-                  <option value="wallet">Crypto Wallet</option>
-                </select>
+                <div className="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-lg text-white">
+                  <div className="flex items-center gap-2">
+                    <span className="text-amber-500 font-semibold">₿</span>
+                    <span>ICAN Wallet</span>
+                  </div>
+                  <p className="text-slate-400 text-xs mt-1">Contributions are processed through your ICAN crypto wallet</p>
+                </div>
+                <input type="hidden" value="ican" />
               </div>
 
               <div className="bg-slate-900/50 border border-amber-500/20 rounded-lg p-4">

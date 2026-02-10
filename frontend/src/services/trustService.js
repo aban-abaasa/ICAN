@@ -1243,7 +1243,7 @@ export const getVotingApplicationsForMember = async (userId) => {
     const { data: userVotes, error: votesError } = await sb
       .from('membership_votes')
       .select('application_id')
-      .eq('member_id', userId);
+      .eq('voter_id', userId);
 
     if (!votesError && userVotes) {
       const votedApplicationIds = new Set(userVotes.map(v => v.application_id));
