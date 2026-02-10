@@ -38,7 +38,8 @@ CREATE TABLE IF NOT EXISTS investment_agreements (
   sealed_at TIMESTAMP WITH TIME ZONE,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   
-  CONSTRAINT valid_amounts CHECK (shares_amount > 0 AND total_investment > 0)
+  -- Note: shares_amount can be 0 for partner/support investments (non-equity)
+  CONSTRAINT valid_amounts CHECK (total_investment > 0)
 );
 
 -- Investment Signatures Table
@@ -138,13 +139,13 @@ ALTER TABLE investment_notifications ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users can view agreements they're involved in" ON investment_agreements;
 CREATE POLICY "Users can view agreements they're involved in" ON investment_agreements
   FOR SELECT USING (
-    auth.uid() = investor_id OR
-    auth.uid() IN (
-      SELECT user_id FROM business_profiles WHERE id = business_profile_id
-    ) OR
-    auth.uid() IN (
-      SELECT shareholder_id FROM investment_signatures WHERE agreement_id = id
-    )
+    auth.uid() = investor_id
+  );
+
+DROP POLICY IF EXISTS "Business owners can view business agreements" ON investment_agreements;
+CREATE POLICY "Business owners can view business agreements" ON investment_agreements
+  FOR SELECT USING (
+    auth.uid() IN (SELECT user_id FROM business_profiles WHERE id = business_profile_id)
   );
 
 DROP POLICY IF EXISTS "Investors can create agreements" ON investment_agreements;
@@ -157,12 +158,15 @@ CREATE POLICY "Investors can update their agreements" ON investment_agreements
 
 -- Investment Signatures Policies
 DROP POLICY IF EXISTS "Users can view signatures for their agreements" ON investment_signatures;
-CREATE POLICY "Users can view signatures for their agreements" ON investment_signatures
+CREATE POLICY "Shareholders can view their own signatures" ON investment_signatures
   FOR SELECT USING (
-    auth.uid() = shareholder_id OR
-    auth.uid() IN (
-      SELECT investor_id FROM investment_agreements WHERE id = agreement_id
-    )
+    auth.uid() = shareholder_id
+  );
+
+DROP POLICY IF EXISTS "Investors can view agreement signatures" ON investment_signatures;
+CREATE POLICY "Investors can view agreement signatures" ON investment_signatures
+  FOR SELECT USING (
+    auth.uid() IN (SELECT investor_id FROM investment_agreements WHERE id = agreement_id)
   );
 
 DROP POLICY IF EXISTS "Shareholders can sign agreements" ON investment_signatures;
@@ -181,6 +185,10 @@ CREATE POLICY "Users can update their own notifications" ON investment_notificat
 DROP POLICY IF EXISTS "System can create notifications" ON investment_notifications;
 CREATE POLICY "System can create notifications" ON investment_notifications
   FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Anyone can send notifications" ON investment_notifications;
+CREATE POLICY "Anyone can send notifications" ON investment_notifications
+  FOR INSERT WITH CHECK (recipient_id IS NOT NULL);
 
 -- =====================================================
 -- FUNCTIONS AND TRIGGERS
@@ -381,7 +389,7 @@ GROUP BY ia.id, ia.escrow_id, ia.status;
 -- Grant access to authenticated users
 GRANT SELECT, INSERT, UPDATE ON investment_agreements TO authenticated;
 GRANT SELECT, INSERT ON investment_signatures TO authenticated;
-GRANT SELECT, UPDATE ON investment_notifications TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON investment_notifications TO authenticated;
 
 GRANT SELECT ON agreement_signatures_progress TO authenticated;
 GRANT SELECT ON unread_notifications_count TO authenticated;

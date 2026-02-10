@@ -646,6 +646,30 @@ export const getTrustGroupDetails = async (groupId) => {
       .order('created_at', { ascending: false })
       .limit(20);
 
+    // Handle missing trust_transactions table gracefully
+    if (transError && transError.code === '42P01') {
+      console.warn('Trust transactions table not yet deployed:', transError.message);
+      return {
+        ...group,
+        members: members || [],
+        transactions: [],
+        _warning: 'Trust system not fully deployed. Run DEPLOY_TRUST_SYSTEM.sql',
+        _needsDeployment: true
+      };
+    }
+
+    if (transError && transError.code === '42P17') {
+      console.error('RLS Policy infinite recursion:', transError.message);
+      return {
+        ...group,
+        members: members || [],
+        transactions: [],
+        _error: 'rls_policy_recursion',
+        _message: 'RLS policies need fixing. Run: backend/db/FIX_RLS_INFINITE_RECURSION.sql',
+        _needsRLSFix: true
+      };
+    }
+
     if (transError) throw transError;
 
     return {
@@ -655,6 +679,21 @@ export const getTrustGroupDetails = async (groupId) => {
     };
   } catch (error) {
     console.error('Error fetching group details:', error);
+    // Return partial data instead of null
+    if (error?.code === '42P01') {
+      return {
+        _error: 'trust_system_not_deployed',
+        _message: 'Trust system tables not created. Please run: backend/db/DEPLOY_TRUST_SYSTEM.sql',
+        _needsDeployment: true
+      };
+    }
+    if (error?.code === '42P17') {
+      return {
+        _error: 'rls_policy_recursion',
+        _message: 'RLS policies need fixing. Run: backend/db/FIX_RLS_INFINITE_RECURSION.sql',
+        _needsRLSFix: true
+      };
+    }
     return null;
   }
 };
@@ -753,6 +792,33 @@ export const getGroupStatistics = async (groupId) => {
       .from('trust_transactions')
       .select('amount, transaction_type, is_verified');
 
+    // Handle missing trust_transactions table gracefully
+    if (error && error.code === '42P01') {
+      console.warn('Trust transactions table not yet deployed');
+      return {
+        totalContributed: 0,
+        totalPayouts: 0,
+        verifiedTransactions: 0,
+        totalTransactions: 0,
+        _warning: 'Trust system not fully deployed',
+        _needsDeployment: true
+      };
+    }
+
+    // Handle RLS policy infinite recursion
+    if (error && error.code === '42P17') {
+      console.error('RLS policy infinite recursion detected');
+      return {
+        totalContributed: 0,
+        totalPayouts: 0,
+        verifiedTransactions: 0,
+        totalTransactions: 0,
+        _error: 'rls_policy_recursion',
+        _message: 'RLS policies need fixing. Run: backend/db/FIX_RLS_INFINITE_RECURSION.sql',
+        _needsRLSFix: true
+      };
+    }
+
     if (error) throw error;
 
     const stats = {
@@ -776,6 +842,26 @@ export const getGroupStatistics = async (groupId) => {
     return stats;
   } catch (error) {
     console.error('Error fetching statistics:', error);
+    if (error?.code === '42P01') {
+      return {
+        totalContributed: 0,
+        totalPayouts: 0,
+        verifiedTransactions: 0,
+        totalTransactions: 0,
+        _error: 'trust_system_not_deployed',
+        _needsDeployment: true
+      };
+    }
+    if (error?.code === '42P17') {
+      return {
+        totalContributed: 0,
+        totalPayouts: 0,
+        verifiedTransactions: 0,
+        totalTransactions: 0,
+        _error: 'rls_policy_recursion',
+        _needsRLSFix: true
+      };
+    }
     return null;
   }
 };
@@ -1152,6 +1238,20 @@ export const getVotingApplicationsForMember = async (userId) => {
     const uniqueApps = Array.from(
       new Map(allApplications.map(app => [app.id, app])).values()
     );
+
+    // Filter out applications where the user has already voted
+    const { data: userVotes, error: votesError } = await sb
+      .from('membership_votes')
+      .select('application_id')
+      .eq('member_id', userId);
+
+    if (!votesError && userVotes) {
+      const votedApplicationIds = new Set(userVotes.map(v => v.application_id));
+      const pendingApps = uniqueApps.filter(app => !votedApplicationIds.has(app.id));
+      
+      console.log(`Fetched ${pendingApps.length} pending voting applications for member ${userId} (${uniqueApps.length} total - ${uniqueApps.length - pendingApps.length} already voted)`);
+      return pendingApps;
+    }
 
     console.log(`Fetched ${uniqueApps.length} voting applications for member ${userId} (${applicationsFromGroups.length} from groups + ${ownApplications?.length || 0} own applications)`);
     return uniqueApps;

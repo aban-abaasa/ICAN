@@ -1,32 +1,14 @@
 /**
- * LiveBoardroom - Group video meetings with Pitchin integration
- * Works like Zoom but integrated with group management
- * Members can present pitches, share ideas, and collaborate in real-time
+ * LiveBoardroom - Modern full-screen video meeting with transparent controls
+ * Inspired by professional pitching platforms - full screen, creative UI
  */
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getSupabase } from '../services/pitchingService';
 import {
-  X,
-  Video,
-  Mic,
-  MicOff,
-  VideoOff,
-  Phone,
-  Users,
-  Share2,
-  Settings,
-  MoreVertical,
-  Send,
-  Clock,
-  AlertCircle,
-  Play,
-  Upload,
-  Dot,
-  ChevronDown,
-  Bell,
-  Check
+  X, Video, Mic, MicOff, VideoOff, Phone, Users, Share2, Send,
+  MessageCircle, Eye
 } from 'lucide-react';
 
 const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) => {
@@ -34,378 +16,63 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
   const [isVideoOn, setIsVideoOn] = useState(false);
   const [isMicOn, setIsMicOn] = useState(true);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
-  const [showParticipants, setShowParticipants] = useState(true);
-  const [showControls, setShowControls] = useState(false);
-  const [showChat, setShowChat] = useState(true);
   const [meetingStarted, setMeetingStarted] = useState(false);
   const [isHost, setIsHost] = useState(false);
-  const [hasJoined, setHasJoined] = useState(false);
-  const [pendingInvite, setPendingInvite] = useState(null);
-  const [joinRequests, setJoinRequests] = useState([]);
-  const [activePresenter, setActivePresenter] = useState(null);
   const [meetingTime, setMeetingTime] = useState(0);
   const [chatMessages, setChatMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
-  const [showSettings, setShowSettings] = useState(false);
+  const [showChat, setShowChat] = useState(true);
+  const [hoveredControl, setHoveredControl] = useState(null);
   const videoRef = useRef(null);
   const meetingTimerRef = useRef(null);
+  const containerRef = useRef(null);
 
-  // Determine if current user is the group creator/host
   useEffect(() => {
-    if (user) {
-      let isUserCreator = false;
-      
-      // First, check if creatorId prop is provided
-      if (creatorId) {
-        isUserCreator = user?.id === creatorId;
-      }
-      
-      // If not, check members array
-      if (!isUserCreator && members && members.length > 0) {
-        const firstMember = members[0];
-        isUserCreator = 
-          user?.id === firstMember?.user_id || 
-          user?.id === firstMember?.id ||
-          user?.email === firstMember?.user_email || 
-          user?.email === firstMember?.email;
-      }
-      
-      // If no creatorId and empty members, assume current user is host
-      if (!isUserCreator && (!members || members.length === 0)) {
-        isUserCreator = true;
-      }
-      
-      // Set as host if user is the creator
-      setIsHost(isUserCreator);
-    }
+    if (user && creatorId === user?.id) setIsHost(true);
+    else if (!creatorId && (!members || members.length === 0)) setIsHost(true);
   }, [members, user, creatorId]);
 
-  // Initialize meeting timer
   useEffect(() => {
     if (meetingStarted) {
-      meetingTimerRef.current = setInterval(() => {
-        setMeetingTime(t => t + 1);
-      }, 1000);
+      meetingTimerRef.current = setInterval(() => setMeetingTime(t => t + 1), 1000);
     }
-
-    return () => {
-      if (meetingTimerRef.current) clearInterval(meetingTimerRef.current);
-    };
+    return () => { if (meetingTimerRef.current) clearInterval(meetingTimerRef.current); };
   }, [meetingStarted]);
 
-  // Initialize video stream when meeting starts
   useEffect(() => {
     if (meetingStarted && isVideoOn && videoRef.current) {
-      const timeoutId = setTimeout(() => {
-        console.warn('Camera access timeout - stopping video');
-        setIsVideoOn(false);
-      }, 5000);
-
       navigator.mediaDevices
-        .getUserMedia({ 
-          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: isMicOn 
-        })
-        .then((stream) => {
-          clearTimeout(timeoutId);
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream;
-          }
-        })
-        .catch((error) => {
-          clearTimeout(timeoutId);
-          console.error('Error accessing camera:', error.message);
-          
-          // Handle specific errors
-          if (error.name === 'NotAllowedError') {
-            console.error('Camera permission denied. Please allow camera access in browser settings.');
-          } else if (error.name === 'NotFoundError') {
-            console.error('No camera device found.');
-          } else if (error.name === 'AbortError') {
-            console.error('Camera request was aborted. Try closing other apps using the camera.');
-          }
-          
-          setIsVideoOn(false);
-        });
+        .getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: isMicOn })
+        .then((stream) => { if (videoRef.current) videoRef.current.srcObject = stream; })
+        .catch((error) => { console.error('Camera error:', error); setIsVideoOn(false); });
     }
-
     return () => {
       if (videoRef.current?.srcObject) {
-        try {
-          videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
-        } catch (e) {
-          console.error('Error stopping video tracks:', e);
-        }
+        videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
       }
     };
   }, [meetingStarted, isVideoOn, isMicOn]);
 
-  // Format meeting time
-  const formatMeetingTime = (seconds) => {
-    const hours = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  const formatTime = (seconds) => {
+    const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
+    const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
+    const s = (seconds % 60).toString().padStart(2, '0');
+    return `${h}:${m}:${s}`;
   };
 
-  // Start meeting
-  const startMeeting = async () => {
-    setIsHost(true);
+  const toggleVideo = () => {
+    if (isVideoOn && videoRef.current?.srcObject) {
+      videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
+    }
+    setIsVideoOn(!isVideoOn);
+  };
+
+  const startMeeting = () => {
     setMeetingStarted(true);
     setIsVideoOn(true);
-    setChatMessages([
-      {
-        id: Date.now(),
-        sender: 'System',
-        senderName: 'System',
-        message: `${user?.email || 'User'} started the meeting`,
-        timestamp: new Date(),
-        isSystem: true
-      }
-    ]);
-
-    // Save meeting state to database
-    if (groupId && user?.id) {
-      try {
-        const sb = getSupabase();
-        if (sb) {
-          // Store meeting state
-          const { data: meetingData } = await sb
-            .from('live_meetings')
-            .upsert({
-              group_id: groupId,
-              is_active: true,
-              started_at: new Date().toISOString(),
-              started_by: user?.id
-            }, { onConflict: 'group_id' })
-            .select()
-            .single();
-
-          // Create invites for all group members (excluding the host)
-          if (meetingData && members && members.length > 0) {
-            const invites = members
-              .filter(m => m.user_id !== user?.id && m.user_email !== user?.email)
-              .map(m => ({
-                meeting_id: meetingData.id,
-                group_id: groupId,
-                invited_user_id: m.user_id,
-                invited_by: user?.id,
-                status: 'pending'
-              }));
-
-            if (invites.length > 0) {
-              await sb.from('meeting_invites').insert(invites);
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error saving meeting state:', error);
-      }
-    }
+    setChatMessages([{ id: Date.now(), sender: 'System', message: `${user?.email || 'Host'} started the meeting`, timestamp: new Date(), isSystem: true }]);
   };
 
-  // Load meeting state and subscribe to changes
-  useEffect(() => {
-    if (!groupId) return;
-
-    const loadMeetingState = async () => {
-      try {
-        const sb = getSupabase();
-        if (sb) {
-          // Check if meeting is already active
-          const { data, error } = await sb
-            .from('live_meetings')
-            .select('*')
-            .eq('group_id', groupId)
-            .eq('is_active', true)
-            .single();
-
-          if (data && !error) {
-            setMeetingStarted(true);
-          }
-
-          // Subscribe to real-time changes
-          const channel = sb
-            .channel(`meeting:${groupId}`)
-            .on(
-              'postgres_changes',
-              {
-                event: '*',
-                schema: 'public',
-                table: 'live_meetings',
-                filter: `group_id=eq.${groupId}`
-              },
-              (payload) => {
-                if (payload.new?.is_active) {
-                  setMeetingStarted(true);
-                } else {
-                  setMeetingStarted(false);
-                }
-              }
-            )
-            .subscribe();
-
-          return () => {
-            channel.unsubscribe();
-          };
-        }
-      } catch (error) {
-        console.error('Error loading meeting state:', error);
-      }
-    };
-
-    loadMeetingState();
-  }, [groupId]);
-
-  // Request to join meeting
-  const requestJoin = () => {
-    if (!user) return;
-    const request = {
-      id: Date.now(),
-      userId: user.id,
-      userEmail: user.email,
-      userName: user.user_metadata?.full_name || user.email?.split('@')[0],
-      timestamp: new Date(),
-      status: 'pending'
-    };
-    setJoinRequests([...joinRequests, request]);
-    setChatMessages([
-      ...chatMessages,
-      {
-        id: Date.now(),
-        sender: 'System',
-        senderName: 'System',
-        message: `${request.userName} requested to join the meeting`,
-        timestamp: new Date(),
-        isSystem: true,
-        type: 'join-request'
-      }
-    ]);
-  };
-
-  // Approve join request
-  const approveJoin = (requestId) => {
-    const request = joinRequests.find(r => r.id === requestId);
-    if (request) {
-      setJoinRequests(joinRequests.map(r => 
-        r.id === requestId ? { ...r, status: 'approved' } : r
-      ));
-      setHasJoined(request.userId === user?.id);
-      setChatMessages([
-        ...chatMessages,
-        {
-          id: Date.now(),
-          sender: 'System',
-          senderName: 'System',
-          message: `${request.userName} joined the meeting`,
-          timestamp: new Date(),
-          isSystem: true
-        }
-      ]);
-    }
-  };
-
-  // Reject join request
-  const rejectJoin = (requestId) => {
-    const request = joinRequests.find(r => r.id === requestId);
-    if (request) {
-      setJoinRequests(joinRequests.filter(r => r.id !== requestId));
-      setChatMessages([
-        ...chatMessages,
-        {
-          id: Date.now(),
-          sender: 'System',
-          senderName: 'System',
-          message: `${request.userName}'s join request was declined`,
-          timestamp: new Date(),
-          isSystem: true
-        }
-      ]);
-    }
-  };
-
-  // Accept meeting invite
-  const acceptInvite = async () => {
-    if (!pendingInvite || !user?.id) return;
-
-    try {
-      const sb = getSupabase();
-      if (sb) {
-        // Update invite status
-        await sb
-          .from('meeting_invites')
-          .update({ status: 'accepted', responded_at: new Date().toISOString() })
-          .eq('id', pendingInvite.id);
-
-        // User joins the meeting
-        setHasJoined(true);
-        setPendingInvite(null);
-        setChatMessages([
-          ...chatMessages,
-          {
-            id: Date.now(),
-            sender: 'System',
-            senderName: 'System',
-            message: `${user?.email || 'A user'} joined the meeting`,
-            timestamp: new Date(),
-            isSystem: true
-          }
-        ]);
-      }
-    } catch (error) {
-      console.error('Error accepting invite:', error);
-    }
-  };
-
-  // Decline meeting invite
-  const declineInvite = async () => {
-    if (!pendingInvite || !user?.id) return;
-
-    try {
-      const sb = getSupabase();
-      if (sb) {
-        // Update invite status
-        await sb
-          .from('meeting_invites')
-          .update({ status: 'declined', responded_at: new Date().toISOString() })
-          .eq('id', pendingInvite.id);
-
-        setPendingInvite(null);
-      }
-    } catch (error) {
-      console.error('Error declining invite:', error);
-    }
-  };
-
-  // Load pending invite when meeting starts
-  useEffect(() => {
-    if (meetingStarted && !isHost && !hasJoined && user?.id && groupId) {
-      const loadInvite = async () => {
-        try {
-          const sb = getSupabase();
-          if (sb) {
-            const { data } = await sb
-              .from('meeting_invites')
-              .select('*')
-              .eq('group_id', groupId)
-              .eq('invited_user_id', user.id)
-              .eq('status', 'pending')
-              .single();
-
-            if (data) {
-              setPendingInvite(data);
-            }
-          }
-        } catch (error) {
-          console.error('Error loading invite:', error);
-        }
-      };
-
-      loadInvite();
-    }
-  }, [meetingStarted, isHost, hasJoined, user?.id, groupId]);
-
-  // End meeting
   const endMeeting = () => {
     if (videoRef.current?.srcObject) {
       videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
@@ -415,447 +82,255 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
     setMeetingTime(0);
   };
 
-  // Send chat message
-  const handleSendMessage = () => {
+  const sendMessage = () => {
     if (newMessage.trim()) {
-      setChatMessages([
-        ...chatMessages,
-        {
-          id: Date.now(),
-          sender: user?.email || 'Anonymous',
-          senderName: user?.user_metadata?.full_name || 'User',
-          message: newMessage,
-          timestamp: new Date()
-        }
-      ]);
+      setChatMessages([...chatMessages, { id: Date.now(), sender: user?.email?.split('@')[0] || 'You', message: newMessage, timestamp: new Date(), isThis: true }]);
       setNewMessage('');
     }
   };
 
-  // Toggle video
-  const toggleVideo = async () => {
-    if (isVideoOn) {
-      // Turn off video
-      if (videoRef.current?.srcObject) {
-        videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
-      }
-      setIsVideoOn(false);
-    } else {
-      // Turn on video
-      setIsVideoOn(true);
-      // The useEffect will handle starting the camera
-    }
-  };
-
-  // Toggle mic
-  const toggleMic = () => {
-    setIsMicOn(!isMicOn);
-  };
-
-  // Share screen
-  const toggleScreenShare = async () => {
-    if (!isScreenSharing) {
-      try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({
-          video: { cursor: 'always' },
-          audio: false
-        });
-        setIsScreenSharing(true);
-        setChatMessages([
-          ...chatMessages,
-          {
-            id: Date.now(),
-            sender: 'System',
-            senderName: 'System',
-            message: `${user?.email || 'A user'} started screen sharing`,
-            timestamp: new Date(),
-            isSystem: true
-          }
-        ]);
-      } catch (error) {
-        console.error('Screen share error:', error);
-      }
-    } else {
-      setIsScreenSharing(false);
-      setChatMessages([
-        ...chatMessages,
-        {
-          id: Date.now(),
-          sender: 'System',
-          senderName: 'System',
-          message: `${user?.email || 'A user'} stopped screen sharing`,
-          timestamp: new Date(),
-          isSystem: true
-        }
-      ]);
-    }
-  };
-
-  return (
-    <div className="w-full h-full flex flex-col bg-slate-900">
-      {/* Header */}
-      <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-slate-700 bg-slate-800/50">
-        <div className="flex items-center gap-3">
-          <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-          <div>
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <Video className="w-5 h-5 text-red-400" />
-              {groupName} - Live Meeting
-            </h3>
-            <p className="text-xs text-gray-400">
-              {members?.length || 0} members • {formatMeetingTime(meetingTime)}
-            </p>
-          </div>
+  // Pre-meeting screen
+  if (!meetingStarted) {
+    return (
+      <div className="w-full h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center p-4 pb-28 sm:pb-4 relative overflow-hidden">
+        <div className="absolute inset-0 opacity-20">
+          <div className="absolute top-0 -left-40 w-80 h-80 bg-blue-500 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute bottom-0 -right-40 w-80 h-80 bg-purple-500 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
         </div>
-        <button
-          onClick={() => setShowSettings(!showSettings)}
-          className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
-        >
-          <MoreVertical className="w-5 h-5 text-gray-400" />
-        </button>
-      </div>
-
-      {/* Main Content */}
-      <div className="flex-1 flex gap-4 p-4 overflow-hidden">
-        {/* Main Video Area */}
-        <div className="flex-1 flex flex-col gap-4">
-          {!meetingStarted ? (
-            // Pre-Meeting Screen
-            <div className="flex-1 bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg overflow-hidden border border-slate-700 flex items-center justify-center relative">
-              {/* Animated background */}
-              <div className="absolute inset-0 opacity-30">
-                <div className="absolute top-10 left-10 w-32 h-32 bg-blue-500 rounded-full blur-3xl opacity-20 animate-pulse"></div>
-                <div className="absolute bottom-10 right-10 w-40 h-40 bg-purple-500 rounded-full blur-3xl opacity-20 animate-pulse"></div>
-              </div>
-
-              <div className="text-center z-10">
-                {!isHost ? (
-                  /* Member pre-meeting waiting screen */
-                  <>
-                    <div className="w-20 h-20 bg-gradient-to-br from-slate-600 to-slate-700 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg animate-pulse">
-                      <Clock className="w-10 h-10 text-white" />
-                    </div>
-                    <h2 className="text-3xl font-bold text-white mb-2">{groupName}</h2>
-                    <p className="text-gray-300 text-lg mb-2">Live Boardroom</p>
-                    <p className="text-gray-400 mb-8">
-                      Waiting for {members?.[0]?.user_email?.split('@')[0] || 'host'} to start the meeting...
-                    </p>
-                    <div className="flex items-center justify-center gap-2">
-                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
-                      <span className="text-gray-400 text-sm">Ready to join</span>
-                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" style={{ animationDelay: '0.5s' }}></div>
-                    </div>
-                  </>
-                ) : (
-                  /* Host pre-meeting screen */
-                  <>
-                    <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
-                      <Play className="w-10 h-10 text-white" />
-                    </div>
-                    <h2 className="text-3xl font-bold text-white mb-2">{groupName}</h2>
-                    <p className="text-gray-300 text-lg mb-4">Live Boardroom</p>
-                    <p className="text-gray-400 mb-6">Ready to start the meeting?</p>
-                    <div className="flex items-center justify-center gap-3 mb-8">
-                      <div className="flex -space-x-2">
-                        {members?.slice(0, 3).map((member, idx) => (
-                          <div
-                            key={idx}
-                            className="w-10 h-10 bg-slate-600 rounded-full flex items-center justify-center border-2 border-slate-800 text-xs text-white font-semibold"
-                          >
-                            {member?.user_email?.charAt(0).toUpperCase()}
-                          </div>
-                        ))}
-                      </div>
-                      <p className="text-gray-400 text-sm">
-                        {members?.length || 0} members ready
-                      </p>
-                    </div>
-                    <button
-                      onClick={startMeeting}
-                      className="px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-lg font-bold transition-all flex items-center justify-center gap-3 mx-auto shadow-lg hover:shadow-xl"
-                    >
-                      <Play className="w-5 h-5" />
-                      Start Meeting
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-          ) : pendingInvite && !hasJoined ? (
-            // Meeting Invite Screen
-            <div className="flex-1 bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg overflow-hidden border border-slate-700 flex items-center justify-center relative">
-              {/* Animated background */}
-              <div className="absolute inset-0 opacity-30">
-                <div className="absolute top-10 left-10 w-32 h-32 bg-emerald-500 rounded-full blur-3xl opacity-20 animate-pulse"></div>
-                <div className="absolute bottom-10 right-10 w-40 h-40 bg-blue-500 rounded-full blur-3xl opacity-20 animate-pulse"></div>
-              </div>
-
-              <div className="text-center z-10 max-w-md">
-                <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg animate-bounce">
-                  <Bell className="w-10 h-10 text-white" />
-                </div>
-                <h2 className="text-3xl font-bold text-white mb-2">You're Invited!</h2>
-                <p className="text-gray-300 text-lg mb-2">{groupName}</p>
-                <p className="text-gray-400 mb-8">
-                  {members?.[0]?.user_email?.split('@')[0] || 'The host'} has started a live meeting and invited you to join.
-                </p>
-                
-                <div className="flex gap-4 justify-center">
-                  <button
-                    onClick={declineInvite}
-                    className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-bold transition-colors"
-                  >
-                    Decline
-                  </button>
-                  <button
-                    onClick={acceptInvite}
-                    className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white rounded-lg font-bold transition-all shadow-lg hover:shadow-xl flex items-center gap-2"
-                  >
-                    <Check className="w-5 h-5" />
-                    Accept & Join
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            /* Live Meeting Screen */
+        <div className="relative z-10 text-center max-w-md">
+          <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-8 shadow-2xl">
+            {isHost ? <Video className="w-12 h-12 text-white" /> : <Eye className="w-12 h-12 text-white" />}
+          </div>
+          <h2 className="text-4xl font-bold text-white mb-3">{groupName}</h2>
+          <p className="text-2xl text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 mb-6">Live Boardroom</p>
+          {isHost ? (
             <>
-              {/* Main Video Container */}
-              <div className="flex-1 bg-black rounded-lg overflow-hidden relative border border-slate-700 flex items-center justify-center">
-                {isVideoOn ? (
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-gradient-to-b from-slate-900 to-slate-950 flex items-center justify-center">
-                    <div className="text-center">
-                      <VideoOff className="w-24 h-24 text-red-500 mx-auto mb-4" />
-                      <p className="text-gray-300 text-lg font-semibold">Video is off</p>
-                      <p className="text-gray-500 text-sm mt-2">Turn on video to be visible to others</p>
-                      <button
-                        onClick={toggleVideo}
-                        className="mt-4 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors flex items-center gap-2 mx-auto"
-                      >
-                        <Video className="w-4 h-4" />
-                        Enable Camera
-                      </button>
+              <p className="text-gray-300 mb-8">Ready to start?</p>
+              <div className="flex gap-3 justify-center mb-6">
+                <div className="flex -space-x-3">
+                  {members?.slice(0, 3).map((m, i) => (
+                    <div key={i} className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center border-2 border-slate-900 text-xs text-white font-bold">
+                      {m?.user_email?.charAt(0).toUpperCase()}
                     </div>
-                  </div>
-                )}
-
-                {/* User Info Overlay */}
-                <div className="absolute bottom-4 left-4 bg-black/70 px-3 py-2 rounded">
-                  <p className="text-white text-sm font-semibold">{user?.email || 'You'}</p>
-                  <p className="text-gray-300 text-xs">Host</p>
+                  ))}
                 </div>
-
-                {/* Screen Share Indicator */}
-                {isScreenSharing && (
-                  <div className="absolute top-4 right-4 bg-emerald-500 text-white px-3 py-1 rounded-full flex items-center gap-2 text-sm font-semibold">
-                    <Share2 className="w-4 h-4" />
-                    Screen Sharing
-                  </div>
-                )}
-
-                {/* Floating Control Dots */}
-                <div className="absolute bottom-4 right-4 flex flex-col gap-2">
-                  <button
-                    onClick={() => setShowControls(!showControls)}
-                    className="w-12 h-12 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center shadow-lg transition-all"
-                    title="Toggle Controls"
-                  >
-                    <ChevronDown className={`w-5 h-5 transition-transform ${showControls ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  {showControls && (
-                    <div className="flex flex-col gap-2 bg-slate-800/90 p-3 rounded-lg border border-slate-700">
-                      <button
-                        onClick={toggleVideo}
-                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-                          isVideoOn
-                            ? 'bg-slate-700 hover:bg-slate-600 text-white'
-                            : 'bg-red-600/50 hover:bg-red-600 text-red-200'
-                        }`}
-                        title={isVideoOn ? 'Turn off video' : 'Turn on video'}
-                      >
-                        {isVideoOn ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
-                      </button>
-
-                      <button
-                        onClick={toggleMic}
-                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-                          isMicOn
-                            ? 'bg-slate-700 hover:bg-slate-600 text-white'
-                            : 'bg-red-600/50 hover:bg-red-600 text-red-200'
-                        }`}
-                        title={isMicOn ? 'Mute microphone' : 'Unmute microphone'}
-                      >
-                        {isMicOn ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
-                      </button>
-
-                      <button
-                        onClick={toggleScreenShare}
-                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-                          isScreenSharing
-                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                            : 'bg-slate-700 hover:bg-slate-600 text-white'
-                        }`}
-                        title={isScreenSharing ? 'Stop sharing' : 'Share screen'}
-                      >
-                        <Share2 className="w-5 h-5" />
-                      </button>
-
-                      <button
-                        className="w-10 h-10 bg-slate-700 hover:bg-slate-600 text-white rounded-full flex items-center justify-center transition-all"
-                        title="Share a pitch"
-                      >
-                        <Upload className="w-5 h-5" />
-                      </button>
-
-                      <button
-                        onClick={endMeeting}
-                        className="w-10 h-10 bg-red-600 hover:bg-red-700 text-white rounded-full flex items-center justify-center transition-all"
-                        title="End meeting"
-                      >
-                        <Phone className="w-5 h-5" />
-                      </button>
-                    </div>
-                  )}
-                </div>
+                <span className="text-gray-400">{members?.length || 0} members</span>
               </div>
-
-              {/* Participants Grid */}
-              {showParticipants && members && members.length > 0 && (
-                <>
-                  <div className="flex items-center gap-2 mb-2">
-                    <button
-                      onClick={() => setShowParticipants(!showParticipants)}
-                      className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded text-sm font-semibold flex items-center gap-2 transition-colors"
-                    >
-                      <Users className="w-4 h-4" />
-                      {members.length} Members
-                      <ChevronDown className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-[200px] overflow-y-auto">
-                    {members.map((member, idx) => (
-                      <div
-                        key={idx}
-                        className="bg-slate-800 rounded-lg overflow-hidden border border-slate-700 hover:border-slate-600 transition-colors cursor-pointer h-20 flex items-center justify-center relative group"
-                      >
-                        <div className="w-full h-full bg-gradient-to-b from-slate-800 to-slate-900 flex items-center justify-center">
-                          <div className="text-center">
-                            <Users className="w-6 h-6 text-gray-600 mx-auto mb-1" />
-                            <p className="text-gray-300 text-xs truncate px-2">
-                              {member?.user_email?.split('@')[0] || 'Member'}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="absolute top-2 right-2 flex gap-1">
-                          {member.has_mic && <Mic className="w-3 h-3 text-green-400" />}
-                          {!member.has_mic && <MicOff className="w-3 h-3 text-red-400" />}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
+              <button onClick={startMeeting} className="px-12 py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-2xl font-bold text-lg transition-all transform hover:scale-105 shadow-2xl flex items-center gap-3 mx-auto">
+                <Video className="w-6 h-6" />
+                Start Meeting
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-gray-400 mb-8">Waiting for host...</p>
+              <div className="flex gap-2 justify-center">
+                <div className="w-3 h-3 bg-blue-400 rounded-full animate-pulse"></div>
+                <div className="w-3 h-3 bg-blue-400 rounded-full animate-pulse" style={{ animationDelay: '0.3s' }}></div>
+                <div className="w-3 h-3 bg-blue-400 rounded-full animate-pulse" style={{ animationDelay: '0.6s' }}></div>
+              </div>
             </>
           )}
         </div>
+      </div>
+    );
+  }
 
-        {/* Right Sidebar - Chat (Collapsible) */}
-        {meetingStarted && (
-          showChat ? (
-            <div className="w-72 flex flex-col bg-slate-800/50 border border-slate-700 rounded-lg overflow-hidden">
-              {/* Chat Header with Collapse Button */}
-              <div className="flex-shrink-0 p-4 border-b border-slate-700 bg-slate-800 flex items-center justify-between">
-                <h4 className="text-white font-semibold flex items-center gap-2">
-                  <Send className="w-4 h-4" />
-                  Meeting Chat
-                </h4>
-                <button
-                  onClick={() => setShowChat(false)}
-                  className="p-1 hover:bg-slate-700 rounded transition-colors"
-                  title="Collapse chat"
-                >
-                  <ChevronDown className="w-4 h-4 text-gray-400 rotate-180" />
+  // Live meeting screen
+  return (
+    <div ref={containerRef} className="w-full h-full bg-black relative overflow-hidden group sm:pb-0 pb-24">
+      <div className="w-full h-full flex flex-col">
+        {/* Video Container - FULL SCREEN */}
+        <div className="flex-1 relative bg-black flex items-center justify-center overflow-hidden">
+          {isVideoOn ? (
+            <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-slate-900 to-black flex items-center justify-center p-4">
+              <div className="text-center">
+                <div className="w-20 h-20 sm:w-32 sm:h-32 bg-gradient-to-br from-slate-700 to-slate-800 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-6">
+                  <VideoOff className="w-10 h-10 sm:w-16 sm:h-16 text-red-500" />
+                </div>
+                <p className="text-lg sm:text-3xl text-white font-bold mb-2">Camera Disabled</p>
+                <p className="text-gray-400 text-sm sm:text-lg mb-4 sm:mb-6">Enable camera to be visible</p>
+                <button onClick={toggleVideo} className="px-4 sm:px-8 py-2 sm:py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl font-bold transition-all flex items-center gap-2 sm:gap-3 mx-auto text-sm sm:text-base">
+                  <Video className="w-4 h-4 sm:w-5 sm:h-5" />
+                  Enable Camera
                 </button>
               </div>
+            </div>
+          )}
 
-              {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {chatMessages.length === 0 ? (
-                  <div className="flex items-center justify-center h-full text-gray-500 text-sm">
-                    <p className="text-center">
-                      <AlertCircle className="w-4 h-4 mx-auto mb-2" />
-                      No messages yet
-                    </p>
-                  </div>
-                ) : (
-                  chatMessages.map((msg) => (
-                    <div key={msg.id} className={msg.isSystem ? 'text-center' : ''}>
-                      {msg.isSystem ? (
-                        <p className="text-xs text-gray-500 italic">{msg.message}</p>
-                      ) : (
-                        <div>
-                          <p className="text-xs text-gray-400">
-                            <span className="font-semibold text-gray-300">{msg.senderName}</span>
-                            {' '}
-                            <span className="text-gray-600">
-                              {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          </p>
-                          <p className="text-sm text-gray-200 mt-1">{msg.message}</p>
-                        </div>
-                      )}
-                    </div>
-                  ))
-                )}
+          {/* TOP CONTROLS - Transparent - Responsive for mobile */}
+          <div className="absolute top-0 left-0 right-0 h-16 sm:h-20 bg-gradient-to-b from-black/60 via-black/30 to-transparent flex items-center justify-between px-3 sm:px-6 transition-opacity duration-300 opacity-0 group-hover:opacity-100">
+            <div className="flex items-center gap-2 sm:gap-4">
+              <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1 sm:py-2 bg-black/40 backdrop-blur-md rounded-full">
+                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                <span className="text-white font-semibold text-xs sm:text-sm truncate max-w-xs">{groupName}</span>
               </div>
-
-              {/* Message Input */}
-              <div className="flex-shrink-0 p-4 border-t border-slate-700 bg-slate-800/50">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                    placeholder="Type a message..."
-                    className="flex-1 bg-slate-700 text-white text-sm px-3 py-2 rounded border border-slate-600 focus:outline-none focus:border-blue-500"
-                  />
-                  <button
-                    onClick={handleSendMessage}
-                    className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
-                  >
-                    <Send className="w-4 h-4" />
-                  </button>
-                </div>
+              <div className="px-2 sm:px-4 py-1 sm:py-2 bg-black/40 backdrop-blur-md rounded-full hidden sm:block">
+                <span className="text-white font-mono text-xs sm:text-sm">{formatTime(meetingTime)}</span>
               </div>
             </div>
-          ) : (
-            // Collapsed Chat Button
-            <button
-              onClick={() => setShowChat(true)}
-              className="w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center shadow-lg transition-all relative"
-              title="Expand chat"
-            >
-              <Send className="w-6 h-6" />
-              {chatMessages.length > 0 && (
-                <div className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
-                  {chatMessages.length > 9 ? '9+' : chatMessages.length}
+            <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1 sm:py-2 bg-black/40 backdrop-blur-md rounded-full">
+              <Users className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
+              <span className="text-white text-xs sm:text-sm font-medium">{members?.length || 1}</span>
+            </div>
+          </div>
+
+          {/* BOTTOM CONTROLS - Floating Bar with Transparent Icons - Hidden on mobile */}
+          <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex items-end justify-center pb-6 transition-opacity duration-300 opacity-0 group-hover:opacity-100 hidden sm:flex">
+            <div className="flex gap-4 items-center">
+              {/* Microphone Button */}
+              <div onMouseEnter={() => setHoveredControl('mic')} onMouseLeave={() => setHoveredControl(null)} className="relative">
+                <button onClick={() => setIsMicOn(!isMicOn)} className={`w-14 h-14 rounded-full flex items-center justify-center font-bold transition-all transform hover:scale-110 backdrop-blur-md ${isMicOn ? 'bg-green-500/60 hover:bg-green-600 text-white shadow-lg shadow-green-500/50' : 'bg-red-500/60 hover:bg-red-600 text-white shadow-lg shadow-red-500/50'}`} title={isMicOn ? 'Mute' : 'Unmute'}>
+                  {isMicOn ? <Mic className="w-6 h-6" /> : <MicOff className="w-6 h-6" />}
+                </button>
+                {hoveredControl === 'mic' && <div className="absolute bottom-full mb-3 bg-black/80 backdrop-blur-md text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap">{isMicOn ? 'Mute Microphone' : 'Unmute Microphone'}</div>}
+              </div>
+
+              {/* Camera Button */}
+              <div onMouseEnter={() => setHoveredControl('video')} onMouseLeave={() => setHoveredControl(null)} className="relative">
+                <button onClick={toggleVideo} className={`w-14 h-14 rounded-full flex items-center justify-center font-bold transition-all transform hover:scale-110 backdrop-blur-md ${isVideoOn ? 'bg-blue-500/60 hover:bg-blue-600 text-white shadow-lg shadow-blue-500/50' : 'bg-slate-600/60 hover:bg-slate-700 text-white shadow-lg shadow-slate-500/50'}`} title={isVideoOn ? 'Turn off Camera' : 'Turn on Camera'}>
+                  {isVideoOn ? <Video className="w-6 h-6" /> : <VideoOff className="w-6 h-6" />}
+                </button>
+                {hoveredControl === 'video' && <div className="absolute bottom-full mb-3 bg-black/80 backdrop-blur-md text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap">{isVideoOn ? 'Turn off Camera' : 'Turn on Camera'}</div>}
+              </div>
+
+              {/* Screen Share Button */}
+              <div onMouseEnter={() => setHoveredControl('share')} onMouseLeave={() => setHoveredControl(null)} className="relative">
+                <button onClick={() => setIsScreenSharing(!isScreenSharing)} className={`w-14 h-14 rounded-full flex items-center justify-center font-bold transition-all transform hover:scale-110 backdrop-blur-md ${isScreenSharing ? 'bg-emerald-500/60 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/50' : 'bg-slate-600/60 hover:bg-slate-700 text-white shadow-lg shadow-slate-500/50'}`} title={isScreenSharing ? 'Stop Sharing' : 'Share Screen'}>
+                  <Share2 className="w-6 h-6" />
+                </button>
+                {hoveredControl === 'share' && <div className="absolute bottom-full mb-3 bg-black/80 backdrop-blur-md text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap">{isScreenSharing ? 'Stop Sharing' : 'Share Screen'}</div>}
+              </div>
+
+              {/* Chat Button */}
+              <div onMouseEnter={() => setHoveredControl('chat')} onMouseLeave={() => setHoveredControl(null)} className="relative">
+                <button onClick={() => setShowChat(!showChat)} className={`w-14 h-14 rounded-full flex items-center justify-center font-bold transition-all transform hover:scale-110 backdrop-blur-md ${showChat ? 'bg-purple-500/60 hover:bg-purple-600 text-white shadow-lg shadow-purple-500/50' : 'bg-slate-600/60 hover:bg-slate-700 text-white shadow-lg shadow-slate-500/50'}`} title={showChat ? 'Hide Chat' : 'Show Chat'}>
+                  {showChat ? <MessageCircle className="w-6 h-6" /> : <MessageCircle className="w-6 h-6" />}
+                </button>
+                {hoveredControl === 'chat' && <div className="absolute bottom-full mb-3 bg-black/80 backdrop-blur-md text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap">{showChat ? 'Hide Chat' : 'Show Chat'}</div>}
+              </div>
+
+              {/* End Call Button */}
+              <button onClick={endMeeting} className="w-14 h-14 rounded-full flex items-center justify-center font-bold transition-all transform hover:scale-110 bg-red-600/60 hover:bg-red-700 text-white shadow-lg shadow-red-500/50 backdrop-blur-md" title="End Meeting">
+                <Phone className="w-6 h-6" />
+              </button>
+            </div>
+          </div>
+
+          {/* Mobile Controls - Floating bar at bottom right */}
+          <div className="absolute bottom-28 right-4 sm:hidden flex flex-col gap-2">
+            <div className="flex flex-col gap-2 bg-black/40 backdrop-blur-md p-2 rounded-full">
+              <button onClick={() => setIsMicOn(!isMicOn)} className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${isMicOn ? 'bg-green-500/60 text-white' : 'bg-red-500/60 text-white'}`} title={isMicOn ? 'Mute' : 'Unmute'}>
+                {isMicOn ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
+              </button>
+              <button onClick={toggleVideo} className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${isVideoOn ? 'bg-blue-500/60 text-white' : 'bg-slate-600/60 text-white'}`} title={isVideoOn ? 'Camera off' : 'Camera on'}>
+                {isVideoOn ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
+              </button>
+              <button onClick={() => setShowChat(!showChat)} className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${showChat ? 'bg-purple-500/60 text-white' : 'bg-slate-600/60 text-white'}`} title={showChat ? 'Hide chat' : 'Show chat'}>
+                <MessageCircle className="w-5 h-5" />
+              </button>
+              <button onClick={endMeeting} className="w-10 h-10 rounded-full flex items-center justify-center transition-all bg-red-600/60 text-white" title="End call">
+                <Phone className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Participants Sidebar - Right */}
+          <div className="absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-black/40 to-transparent flex flex-col py-6 gap-3 px-2 overflow-y-auto transition-opacity duration-300 opacity-0 group-hover:opacity-100">
+            {members?.slice(0, 5).map((member, idx) => (
+              <div key={idx} className="w-full aspect-square bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg hover:shadow-2xl transition-all cursor-pointer transform hover:scale-110 relative group/member">
+                <span className="text-white font-bold text-lg">{member?.user_email?.charAt(0).toUpperCase()}</span>
+                <div className="absolute inset-0 rounded-xl opacity-0 group-hover/member:opacity-100 transition-opacity">
+                  <div className="w-full h-full bg-black/60 backdrop-blur-sm rounded-xl flex items-center justify-center">
+                    <span className="text-white text-xs text-center px-2 font-semibold">{member?.user_email?.split('@')[0]}</span>
+                  </div>
                 </div>
-              )}
-            </button>
-          )
-        )}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
+
+      {/* Chat Sidebar - Enhanced UI - Responsive for mobile */}
+      {showChat && (
+        <div className="absolute right-0 top-0 bottom-0 w-full sm:w-96 bg-black/95 backdrop-blur-lg border-l border-purple-500/20 flex flex-col shadow-2xl z-50">
+          {/* Chat Header */}
+          <div className="flex-shrink-0 p-4 border-b border-purple-500/20 flex items-center justify-between bg-gradient-to-r from-slate-900 via-purple-900/20 to-black backdrop-blur-md">
+            <div className="flex items-center gap-3 flex-1">
+              <div className="p-2 bg-purple-500/20 rounded-lg">
+                <MessageCircle className="w-5 h-5 text-purple-400" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-white font-bold text-sm">Meeting Chat</h3>
+                <p className="text-xs text-gray-400">{chatMessages.length} messages</p>
+              </div>
+            </div>
+            <button onClick={() => setShowChat(false)} className="p-2 hover:bg-slate-800/50 rounded-lg transition-colors flex-shrink-0">
+              <X className="w-5 h-5 text-gray-400 hover:text-gray-300" />
+            </button>
+          </div>
+
+          {/* Messages Container */}
+          <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 bg-gradient-to-b from-black/50 to-black/30">
+            {chatMessages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-gray-500">
+                <MessageCircle className="w-8 h-8 sm:w-12 sm:h-12 text-gray-600 mb-2 opacity-50" />
+                <p className="text-xs sm:text-sm text-center">No messages yet<br/>Start the conversation!</p>
+              </div>
+            ) : (
+              chatMessages.map((msg) => (
+                <div key={msg.id} className="flex flex-col gap-1">
+                  {msg.isSystem ? (
+                    <div className="flex items-center gap-2 py-2 px-2 sm:px-3 bg-gradient-to-r from-slate-800/40 to-transparent rounded-lg border border-slate-700/30 backdrop-blur-sm">
+                      <div className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0"></div>
+                      <p className="text-xs text-gray-400 italic flex-1 break-words">{msg.message}</p>
+                    </div>
+                  ) : (
+                    <div className={`flex gap-2 ${msg.isThis ? 'flex-row-reverse' : ''}`}>
+                      <div className={`h-6 w-6 sm:h-7 sm:w-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${msg.isThis ? 'bg-blue-600' : 'bg-purple-600'}`}>
+                        {msg.sender.charAt(0).toUpperCase()}
+                      </div>
+                      <div className={`flex flex-col gap-0.5 ${msg.isThis ? 'items-end' : 'items-start'} flex-1`}>
+                        <p className="text-xs text-gray-400 px-2">{msg.sender.split('@')[0]}</p>
+                        <div className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-2xl max-w-sm sm:max-w-xs text-xs sm:text-sm break-words backdrop-blur-sm ${
+                          msg.isThis 
+                            ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-br-none shadow-lg shadow-blue-500/20' 
+                            : 'bg-slate-800/80 text-gray-100 rounded-bl-none border border-slate-700/50'
+                        }`}>
+                          {msg.message}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Message Input */}
+          <div className="flex-shrink-0 p-3 sm:p-4 border-t border-purple-500/20 bg-gradient-to-r from-black via-slate-900/20 to-black backdrop-blur-md">
+            <div className="flex gap-2">
+              <input 
+                type="text" 
+                value={newMessage} 
+                onChange={(e) => setNewMessage(e.target.value)} 
+                onKeyPress={(e) => e.key === 'Enter' && sendMessage()} 
+                placeholder="Type a message..." 
+                className="flex-1 bg-slate-800/60 hover:bg-slate-800/80 focus:bg-slate-800 text-white text-xs sm:text-sm px-3 sm:px-4 py-2 sm:py-2.5 rounded-full border border-slate-700/50 focus:border-purple-500/50 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-all placeholder-gray-500 backdrop-blur-sm" 
+              />
+              <button 
+                onClick={sendMessage} 
+                disabled={!newMessage.trim()}
+                className="p-2 sm:p-2.5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-slate-700 disabled:to-slate-700 text-white rounded-full transition-all transform hover:scale-105 disabled:scale-100 shadow-lg shadow-purple-500/20 disabled:shadow-none flex-shrink-0"
+              >
+                <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

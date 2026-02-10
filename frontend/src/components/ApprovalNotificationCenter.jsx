@@ -32,8 +32,15 @@ const ApprovalNotificationCenter = ({ businessProfileId, currentUserId, currentU
       loadApprovalNotifications();
     }
     
-    // Note: Real-time subscriptions would be added once subscribeToApprovalUpdates 
-    // is refactored to work with businessProfileId instead of pendingEditId
+    // Auto-refresh every 3 seconds to catch new approvals/rejections
+    const refreshInterval = setInterval(() => {
+      if (businessProfileId && currentUserId) {
+        console.log('🔄 Auto-refreshing approval notifications...');
+        loadApprovalNotifications();
+      }
+    }, 3000);
+
+    return () => clearInterval(refreshInterval);
     
   }, [businessProfileId, currentUserId]);
 

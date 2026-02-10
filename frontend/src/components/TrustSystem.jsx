@@ -17,7 +17,11 @@ import {
   X,
   Eye,
   EyeOff,
-  Video
+  Video,
+  Vote,
+  Inbox,
+  Building2,
+  MoreVertical
 } from 'lucide-react';
 import LiveBoardroom from './LiveBoardroom';
 import {
@@ -34,18 +38,24 @@ import {
   approveApplicationByAdmin,
   rejectApplicationByAdmin,
   voteOnMemberApplication,
-  getVotingResults
+  getVotingResults,
+  getVotingApplicationsForMember,
+  getUserPendingApplications
 } from '../services/trustService';
 
 const TrustSystem = ({ currentUser }) => {
-  const [activeTab, setActiveTab] = useState('explore'); // 'explore', 'mygroups', 'create', 'dashboard'
+  const [activeTab, setActiveTab] = useState('explore'); // 'explore', 'mygroups', 'create', 'dashboard', 'voting', 'applications', 'admin'
   const [groups, setGroups] = useState([]);
+  const [myGroups, setMyGroups] = useState([]);
+  const [votingApplications, setVotingApplications] = useState([]);
+  const [myApplications, setMyApplications] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [showContributeModal, setShowContributeModal] = useState(false);
   const [boardroomGroupId, setBoardroomGroupId] = useState(null);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [groupForm, setGroupForm] = useState({
     name: '',
     description: '',
@@ -70,6 +80,12 @@ const TrustSystem = ({ currentUser }) => {
 
   useEffect(() => {
     loadGroups();
+    if (activeTab === 'voting') {
+      loadVotingApplications();
+    }
+    if (activeTab === 'applications') {
+      loadMyApplications();
+    }
   }, [activeTab, currentUser?.id]);
 
   const loadGroups = async () => {
@@ -78,10 +94,15 @@ const TrustSystem = ({ currentUser }) => {
       let data;
       if (activeTab === 'explore') {
         data = await getPublicTrustGroups();
+        setGroups(data || []);
       } else if (activeTab === 'mygroups' && currentUser?.id) {
         data = await getUserTrustGroups(currentUser.id);
+        setGroups(data || []);
+        setMyGroups(data || []);
+      } else if (activeTab === 'admin' && currentUser?.id) {
+        data = await getUserTrustGroups(currentUser.id);
+        setMyGroups(data || []);
       }
-      setGroups(data || []);
     } catch (error) {
       console.error('Error loading groups:', error);
       setMessage({ type: 'error', text: 'Failed to load groups' });
@@ -342,16 +363,65 @@ const TrustSystem = ({ currentUser }) => {
     }
   };
 
+  const handleVoteOnApplication = async (applicationId, voteType) => {
+    if (!currentUser?.id) return;
+    
+    setLoading(true);
+    try {
+      const result = await voteOnMemberApplication(applicationId, currentUser.id, voteType);
+      
+      if (result.success) {
+        setMessage({ type: 'success', text: `✓ Vote recorded: ${voteType}` });
+        
+        // Immediately remove the voted application from the list (optimistic update)
+        setVotingApplications(votingApplications.filter(app => app.id !== applicationId));
+        
+        // Also refresh from server to ensure consistency
+        loadVotingApplications();
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Failed to record vote' });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Error recording vote' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadVotingApplications = async () => {
+    try {
+      if (currentUser?.id) {
+        const data = await getVotingApplicationsForMember(currentUser.id);
+        setVotingApplications(data || []);
+      }
+    } catch (error) {
+      console.error('Error loading voting applications:', error);
+      setVotingApplications([]);
+    }
+  };
+
+  const loadMyApplications = async () => {
+    try {
+      if (currentUser?.id) {
+        const data = await getUserPendingApplications(currentUser.id);
+        setMyApplications(data || []);
+      }
+    } catch (error) {
+      console.error('Error loading my applications:', error);
+      setMyApplications([]);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-8 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-4 sm:py-8 px-3 sm:px-4">
       {/* Header */}
-      <div className="max-w-7xl mx-auto mb-8">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <Shield className="w-10 h-10 text-amber-500" />
-            <div>
-              <h1 className="text-4xl font-bold text-white">Trust Management (SACCO)</h1>
-              <p className="text-amber-300 text-lg mt-1">Collaborate, contribute, and grow wealth together</p>
+      <div className="max-w-7xl mx-auto mb-6 sm:mb-8">
+        <div className="flex items-center justify-between mb-4 sm:mb-6 gap-2">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Shield className="w-7 h-7 sm:w-10 sm:h-10 text-amber-500 flex-shrink-0" />
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-4xl font-bold text-white truncate">🏦 SACCO HUB</h1>
+              <p className="text-xs sm:text-base text-amber-300 mt-0 sm:mt-1 truncate">Cooperative Savings Groups</p>
             </div>
           </div>
         </div>
@@ -373,42 +443,53 @@ const TrustSystem = ({ currentUser }) => {
           </div>
         )}
 
-        {/* Tabs */}
-        <div className="flex gap-4 border-b border-slate-700 overflow-x-auto">
-          {[
-            { id: 'mygroups', label: '👥 My Trusts', icon: Users },
-            { id: 'explore', label: '🔍 Explore', icon: Search },
-            { id: 'create', label: '✨ Create', icon: Plus },
-            { id: 'dashboard', label: '📊 Dashboard', icon: BarChart3 }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-6 py-4 font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
-                activeTab === tab.id
-                  ? 'text-amber-500 border-b-2 border-amber-500'
-                  : 'text-slate-400 hover:text-slate-300'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+        {/* Tabs - Desktop View */}
+        <div className="hidden sm:flex gap-4 border-b border-slate-700 py-0">
+          <button onClick={() => { setActiveTab('explore'); setShowMobileMenu(false); }} className={`px-6 py-4 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap relative ${activeTab === 'explore' ? 'text-amber-500 border-b-2 border-amber-500' : 'text-slate-400 hover:text-slate-300'}`}>🔍 Explore</button>
+          <button onClick={() => { setActiveTab('mygroups'); setShowMobileMenu(false); }} className={`px-6 py-4 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap relative ${activeTab === 'mygroups' ? 'text-amber-500 border-b-2 border-amber-500' : 'text-slate-400 hover:text-slate-300'}`}>👥 My Trusts</button>
+          <button onClick={() => { setActiveTab('voting'); setShowMobileMenu(false); }} className={`px-6 py-4 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap relative ${activeTab === 'voting' ? 'text-amber-500 border-b-2 border-amber-500' : 'text-slate-400 hover:text-slate-300'}`}>🗳️ Vote {votingApplications.length > 0 && <span className="ml-1 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full font-bold">{votingApplications.length}</span>}</button>
+          <button onClick={() => { setActiveTab('applications'); setShowMobileMenu(false); }} className={`px-6 py-4 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap relative ${activeTab === 'applications' ? 'text-amber-500 border-b-2 border-amber-500' : 'text-slate-400 hover:text-slate-300'}`}>📮 Applications {myApplications.length > 0 && <span className="ml-1 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full font-bold">{myApplications.length}</span>}</button>
+          <button onClick={() => { setActiveTab('create'); setShowMobileMenu(false); }} className={`px-6 py-4 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap relative ${activeTab === 'create' ? 'text-amber-500 border-b-2 border-amber-500' : 'text-slate-400 hover:text-slate-300'}`}>✨ Create</button>
+          <button onClick={() => { setActiveTab('admin'); setShowMobileMenu(false); }} className={`px-6 py-4 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap relative ${activeTab === 'admin' ? 'text-amber-500 border-b-2 border-amber-500' : 'text-slate-400 hover:text-slate-300'}`}>👑 Admin Panel</button>
         </div>
+
+        {/* Tabs - Mobile View with Dots Menu */}
+        <div className="sm:hidden flex items-center justify-between border-b border-slate-700 py-2 px-3 relative">
+          <div className="flex gap-2 flex-1">
+            <button onClick={() => { setActiveTab('explore'); setShowMobileMenu(false); }} className={`px-2 py-2 font-semibold text-sm transition-all flex items-center gap-1 whitespace-nowrap relative ${activeTab === 'explore' ? 'text-amber-500 border-b-2 border-amber-500' : 'text-slate-400 hover:text-slate-300'}`}>🔍</button>
+            <button onClick={() => { setActiveTab('mygroups'); setShowMobileMenu(false); }} className={`px-2 py-2 font-semibold text-sm transition-all flex items-center gap-1 whitespace-nowrap relative ${activeTab === 'mygroups' ? 'text-amber-500 border-b-2 border-amber-500' : 'text-slate-400 hover:text-slate-300'}`}>👥</button>
+          </div>
+          
+          <div className="relative">
+            <button onClick={() => setShowMobileMenu(!showMobileMenu)} className="p-2 hover:bg-slate-800/50 rounded-lg transition-colors text-slate-400 hover:text-white"><MoreVertical className="w-5 h-5" /></button>
+            {showMobileMenu && (
+              <div className="absolute right-0 top-full mt-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 min-w-max">
+                <button onClick={() => { setActiveTab('explore'); setShowMobileMenu(false); }} className={`w-full text-left px-4 py-3 font-medium transition-all flex items-center justify-between gap-3 ${activeTab === 'explore' ? 'bg-amber-600/20 text-amber-400' : 'text-slate-300 hover:bg-slate-700/50'}`}>🔍 Explore</button>
+                <button onClick={() => { setActiveTab('mygroups'); setShowMobileMenu(false); }} className={`w-full text-left px-4 py-3 font-medium transition-all flex items-center justify-between gap-3 ${activeTab === 'mygroups' ? 'bg-amber-600/20 text-amber-400' : 'text-slate-300 hover:bg-slate-700/50'}`}>👥 My Trusts</button>
+                <button onClick={() => { setActiveTab('voting'); setShowMobileMenu(false); }} className={`w-full text-left px-4 py-3 font-medium transition-all flex items-center justify-between gap-3 ${activeTab === 'voting' ? 'bg-amber-600/20 text-amber-400' : 'text-slate-300 hover:bg-slate-700/50'}`}>🗳️ Vote {votingApplications.length > 0 && <span className="ml-auto px-2 py-1 bg-red-500 text-white text-xs rounded-full font-bold flex-shrink-0">{votingApplications.length}</span>}</button>
+                <button onClick={() => { setActiveTab('applications'); setShowMobileMenu(false); }} className={`w-full text-left px-4 py-3 font-medium transition-all flex items-center justify-between gap-3 ${activeTab === 'applications' ? 'bg-amber-600/20 text-amber-400' : 'text-slate-300 hover:bg-slate-700/50'}`}>📮 Applications {myApplications.length > 0 && <span className="ml-auto px-2 py-1 bg-red-500 text-white text-xs rounded-full font-bold flex-shrink-0">{myApplications.length}</span>}</button>
+                <button onClick={() => { setActiveTab('create'); setShowMobileMenu(false); }} className={`w-full text-left px-4 py-3 font-medium transition-all flex items-center justify-between gap-3 ${activeTab === 'create' ? 'bg-amber-600/20 text-amber-400' : 'text-slate-300 hover:bg-slate-700/50'}`}>✨ Create</button>
+                <button onClick={() => { setActiveTab('admin'); setShowMobileMenu(false); }} className={`w-full text-left px-4 py-3 font-medium transition-all flex items-center justify-between gap-3 ${activeTab === 'admin' ? 'bg-amber-600/20 text-amber-400' : 'text-slate-300 hover:bg-slate-700/50'}`}>👑 Admin Panel</button>
+              </div>
+            )}
+          </div>
+        </div>
+
       </div>
 
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
         {/* EXPLORE GROUPS TAB */}
         {activeTab === 'explore' && (
           <div>
-            <div className="mb-6">
+            <div className="mb-4 sm:mb-6">
               <div className="relative">
-                <Search className="absolute left-3 top-3 text-slate-500" size={20} />
+                <Search className="absolute left-3 top-3 text-slate-500 w-4 h-4 sm:w-5 sm:h-5" />
                 <input
                   type="text"
-                  placeholder="Search groups by name or description..."
+                  placeholder="Search groups..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                  className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2 sm:py-3 bg-slate-800 border border-slate-700 rounded-lg text-sm sm:text-base text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
                 />
               </div>
             </div>
@@ -426,42 +507,42 @@ const TrustSystem = ({ currentUser }) => {
                 <p className="text-slate-400 text-lg">No groups found. Create one to get started!</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                 {filteredGroups.map(group => (
-                  <div key={group.id} className="bg-slate-800/50 border border-slate-700 rounded-lg p-6 hover:border-amber-500/30 transition-all">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <h3 className="text-xl font-bold text-white">{group.name}</h3>
-                        <p className="text-slate-400 text-sm mt-1">{group.description}</p>
+                  <div key={group.id} className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 sm:p-6 hover:border-amber-500/30 transition-all">
+                    <div className="flex justify-between items-start gap-2 mb-3 sm:mb-4">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-lg sm:text-xl font-bold text-white truncate">{group.name}</h3>
+                        <p className="text-slate-400 text-xs sm:text-sm mt-1 line-clamp-2">{group.description}</p>
                       </div>
-                      <Shield className="w-6 h-6 text-amber-500 flex-shrink-0" />
+                      <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-amber-500 flex-shrink-0" />
                     </div>
 
-                    <div className="space-y-3 mb-6">
-                      <div className="flex items-center gap-2 text-slate-300">
-                        <Users size={16} className="text-amber-500" />
+                    <div className="space-y-2 sm:space-y-3 mb-4 sm:mb-6">
+                      <div className="flex items-center gap-2 text-slate-300 text-sm">
+                        <Users size={14} className="text-amber-500 flex-shrink-0" />
                         <span>{group.member_count || 0}/{group.max_members} Members</span>
                       </div>
-                      <div className="flex items-center gap-2 text-slate-300">
-                        <DollarSign size={16} className="text-emerald-500" />
+                      <div className="flex items-center gap-2 text-slate-300 text-sm">
+                        <DollarSign size={14} className="text-emerald-500 flex-shrink-0" />
                         <span>${group.monthly_contribution} Monthly</span>
                       </div>
-                      <div className="flex items-center gap-2 text-slate-300">
-                        <Calendar size={16} className="text-blue-500" />
+                      <div className="flex items-center gap-2 text-slate-300 text-sm">
+                        <Calendar size={14} className="text-blue-500 flex-shrink-0" />
                         <span>{new Date(group.created_at).toLocaleDateString()}</span>
                       </div>
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-col sm:flex-row">
                       <button
                         onClick={() => handleViewDetails(group)}
-                        className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors text-sm font-medium"
+                        className="hidden sm:flex flex-1 px-3 sm:px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors text-xs sm:text-sm font-medium"
                       >
                         View Details
                       </button>
                       <button
                         onClick={() => handleJoinGroup(group.id)}
-                        className="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors text-sm font-medium"
+                        className="flex-1 px-3 sm:px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors text-xs sm:text-sm font-medium"
                       >
                         Join Group
                       </button>
@@ -743,6 +824,118 @@ const TrustSystem = ({ currentUser }) => {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* VOTING TAB */}
+        {activeTab === 'voting' && (
+          <div className="py-6 sm:py-8">
+            <h2 className="text-2xl font-bold text-white mb-6">�️ Vote on Applications</h2>
+            {votingApplications.length === 0 ? (
+              <div className="text-center py-12 bg-slate-800/50 rounded-lg border border-slate-700">
+                <CheckCircle className="w-12 h-12 text-gray-500 mx-auto mb-3" />
+                <p className="text-gray-400">No pending votes</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:gap-6">
+                {votingApplications.map(app => (
+                  <div key={app.id} className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 sm:p-6">
+                    <div className="flex justify-between items-start mb-3 sm:mb-4 gap-2">
+                      <div>
+                        <h3 className="text-lg sm:text-xl font-bold text-white">{app.applicant_email}</h3>
+                        <p className="text-slate-400 text-sm">for {app.group_name}</p>
+                      </div>
+                      <span className="px-2 sm:px-3 py-1 bg-blue-600 text-white text-xs rounded-full flex-shrink-0">Pending</span>
+                    </div>
+                    <p className="text-slate-300 text-sm mb-4 sm:mb-6">{app.application_text}</p>
+                    <div className="flex gap-2 sm:gap-3">
+                      <button
+                        onClick={() => handleVoteOnApplication(app.id, 'approve')}
+                        className="flex-1 px-3 sm:px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors text-xs sm:text-sm font-medium"
+                      >
+                        ✓ Approve
+                      </button>
+                      <button
+                        onClick={() => handleVoteOnApplication(app.id, 'reject')}
+                        className="flex-1 px-3 sm:px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors text-xs sm:text-sm font-medium"
+                      >
+                        ✕ Reject
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* APPLICATIONS TAB */}
+        {activeTab === 'applications' && (
+          <div className="py-6 sm:py-8">
+            <h2 className="text-2xl font-bold text-white mb-6">� My Applications</h2>
+            {myApplications.length === 0 ? (
+              <div className="text-center py-12 bg-slate-800/50 rounded-lg border border-slate-700">
+                <AlertCircle className="w-12 h-12 text-gray-500 mx-auto mb-3" />
+                <p className="text-gray-400">No applications yet</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:gap-6">
+                {myApplications.map(app => (
+                  <div key={app.id} className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 sm:p-6">
+                    <div className="flex justify-between items-start mb-3 sm:mb-4 gap-2">
+                      <div>
+                        <h3 className="text-lg sm:text-xl font-bold text-white">{app.group_name}</h3>
+                        <p className="text-slate-400 text-sm">{new Date(app.created_at).toLocaleDateString()}</p>
+                      </div>
+                      <span className={`px-2 sm:px-3 py-1 text-xs rounded-full font-semibold flex-shrink-0 ${
+                        app.status === 'pending' ? 'bg-yellow-600 text-white' :
+                        app.status === 'approved' ? 'bg-emerald-600 text-white' :
+                        'bg-red-600 text-white'
+                      }`}>
+                        {app.status.charAt(0).toUpperCase() + app.status.slice(1)}
+                      </span>
+                    </div>
+                    <p className="text-slate-300 text-sm">{app.application_text}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ADMIN PANEL TAB */}
+        {activeTab === 'admin' && (
+          <div className="py-6 sm:py-8">
+            <h2 className="text-2xl font-bold text-white mb-6">� Admin Panel</h2>
+            {myGroups.filter(g => g.creator_id === currentUser?.id).length === 0 ? (
+              <div className="text-center py-12 bg-slate-800/50 rounded-lg border border-slate-700">
+                <Shield className="w-12 h-12 text-gray-500 mx-auto mb-3" />
+                <p className="text-gray-400">You don't have any groups to manage</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:gap-6">
+                {myGroups.filter(g => g.creator_id === currentUser?.id).map(group => (
+                  <div key={group.id} className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 sm:p-6">
+                    <div className="flex justify-between items-start mb-4 gap-2">
+                      <div>
+                        <h3 className="text-lg sm:text-xl font-bold text-white">{group.name}</h3>
+                        <p className="text-slate-400 text-sm">{group.member_count || 0} members</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setSelectedGroup(group);
+                          setShowManageModal(true);
+                        }}
+                        className="px-3 sm:px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors text-xs sm:text-sm font-medium flex-shrink-0"
+                      >
+                        ⚙️ Manage
+                      </button>
+                    </div>
+                    <p className="text-slate-300 text-sm">{group.description}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

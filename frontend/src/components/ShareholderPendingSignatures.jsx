@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Clock } from 'lucide-react';
 
-const ShareholderPendingSignatures = () => {
+const ShareholderPendingSignatures = ({ onApprovalComplete }) => {
   const [pendingApprovals, setPendingApprovals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -49,13 +49,14 @@ const ShareholderPendingSignatures = () => {
         approvals = byId;
         fetchError = null;
       } else {
-        // Fallback: Query by shareholder_email
+        // Fallback: Query by shareholder_email (in case shareholder_id is NULL)
         console.log(`   ℹ️ No results by shareholder_id, trying by shareholder_email...`);
         const { data: byEmail, error: errorByEmail } = await supabase
           .from('shareholder_notifications')
           .select('*')
           .eq('shareholder_email', user.email)
           .is('read_at', null)
+          .is('shareholder_id', null)  // Only fetch if shareholder_id is NULL
           .order('created_at', { ascending: false });
 
         approvals = byEmail;
@@ -88,16 +89,18 @@ const ShareholderPendingSignatures = () => {
       console.log(`✅ Shareholder ${user.email} approved: ${notification.notification_title}`);
 
       // Mark notification as read (approved)
+      // IMPORTANT: Filter by both ID and shareholder_id to match RLS policy
       const { error: updateError } = await supabase
         .from('shareholder_notifications')
         .update({
           read_at: new Date().toISOString()
         })
-        .eq('id', notificationId);
+        .eq('id', notificationId)
+        .eq('shareholder_id', user.id);
 
       if (updateError) throw updateError;
 
-      // Get the count of other shareholders who have approved
+      // Get the count of shareholders who have approved (including current user)
       const { data: approvedApprovals, error: countError } = await supabase
         .from('shareholder_notifications')
         .select('id', { count: 'exact' })
@@ -113,7 +116,8 @@ const ShareholderPendingSignatures = () => {
           .in('status', ['active', null]);
 
         const totalCount = totalMembers?.length || 1;
-        const approvedCount = (approvedApprovals?.length || 0) + 1;
+        // Count is already correct - includes current user's approval from the UPDATE
+        const approvedCount = approvedApprovals?.length || 0;
         const approvalPercent = (approvedCount / totalCount) * 100;
 
         console.log(`📊 Approval Status: ${approvedCount}/${totalCount} shareholders (${approvalPercent.toFixed(0)}%)`);
@@ -133,6 +137,11 @@ const ShareholderPendingSignatures = () => {
       // Reload notifications
       await loadPendingApprovals();
       setApprovingId(null);
+      
+      // Notify parent component that approval is complete (so it can refresh)
+      if (onApprovalComplete) {
+        onApprovalComplete();
+      }
     } catch (err) {
       console.error('Error approving:', err);
       alert('❌ Error approving: ' + err?.message);

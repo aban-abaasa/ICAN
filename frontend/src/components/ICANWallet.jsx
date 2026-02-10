@@ -45,6 +45,7 @@ import SellIcan from './ICAN/SellIcan';
 const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
   const [showBalance, setShowBalance] = useState(true);
   const [selectedCurrency, setSelectedCurrency] = useState('USD');
+  const [userCountry, setUserCountry] = useState('UG');
   const [activeTab, setActiveTab] = useState('overview');
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false);
   const [activeModal, setActiveModal] = useState(null); // 'send', 'receive', 'topup'
@@ -147,6 +148,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
   });
   const [balancesLoading, setBalancesLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState(null);
+  const [userEmail, setUserEmail] = useState(null);
   
   // 📊 Candlestick Chart States
   const [showTradeModal, setShowTradeModal] = useState(false);
@@ -524,16 +526,20 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
 
         // Store user ID for later use
         setCurrentUserId(user.id);
+        setUserEmail(user.email);
+        setUserEmail(user.email);
 
         // 🔧 FETCH USER'S REGISTERED COUNTRY/CURRENCY FROM AUTH METADATA
         const userMetadata = user.user_metadata || {};
-        const userCountry = userMetadata.country || 'UG'; // Default to Uganda
+        const userCountryValue = userMetadata.country || 'UG'; // Local variable for use in this effect
+        setUserCountry(userCountryValue); // Set state for use in render
         
         // Get currency for registered country
         const CountryService = (await import('../services/countryService')).CountryService;
-        const registeredCurrency = CountryService.getCurrencyCode(userCountry);
+        const registeredCurrency = CountryService.getCurrencyCode(userCountryValue);
         setRegisteredCurrencyFromDB(registeredCurrency);
-        console.log(`🌍 User's registered country: ${userCountry}, Currency: ${registeredCurrency}`);
+        setSelectedCurrency(registeredCurrency); // Update form to show user's actual country currency
+        console.log(`🌍 User's registered country: ${userCountryValue}, Currency: ${registeredCurrency}`);
 
         // Ensure wallet accounts exist for all currencies
         await walletAccountService.ensureWalletAccountsExist(user.id);
@@ -550,8 +556,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
           console.log('✅ User wallet account found:', account.account_number);
         } else {
           setUserAccount(null);
-          console.log('⚠️ User has no wallet account yet');
-          setShowAccountCreation(true);
+          console.log('⚠️ User has no wallet account yet - User must click wallet icon to create one');
+          // ✅ Don't auto-trigger here - let user click wallet icon to manually create account
         }
         setAccountCheckLoading(false);
 
@@ -649,15 +655,15 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
       let lookupError = null;
       
       if (recipientIdentifier.toUpperCase().startsWith('ICAN-')) {
-        // Search by account number
+        // Search by account number (ICAN format) - case insensitive
         const { data, error } = await supabase
           .from('user_accounts')
           .select('user_id, account_holder_name, account_number')
-          .eq('account_number', recipientIdentifier.toUpperCase())
+          .ilike('account_number', recipientIdentifier)
           .single();
         recipientUser = data;
         lookupError = error;
-        console.log('Search by account number:', { recipientIdentifier: recipientIdentifier.toUpperCase(), data, error });
+        console.log('Search by account number:', { recipientIdentifier, data, error });
       } else if (recipientIdentifier.includes('@')) {
         // Search by email
         const { data, error } = await supabase
@@ -2789,8 +2795,29 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
           </div>
         </div>
 
-        {/* 🎯 ACCOUNT INFO CARD */}
-        {userAccount && (
+        {/* 🎯 ACCOUNT INFO CARD - OR CREATE ACCOUNT PROMPT */}
+        <div className="space-y-4">
+          {!userAccount ? (
+          // ✅ NO ACCOUNT - SHOW CREATE BUTTON
+          <div className="solid-card p-6 border-2 border-gradient-to-r from-cyan-400 to-blue-400 bg-gradient-to-br from-cyan-500/20 to-blue-500/10">
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="p-4 bg-cyan-500/30 rounded-full">
+                <Wallet className="w-8 h-8 text-cyan-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white mb-1">Create Your First Wallet Account</h3>
+                <p className="text-gray-300 text-sm">Set up your ICAN wallet to start sending, receiving, and managing money</p>
+              </div>
+              <button
+                onClick={() => setShowAccountCreation(true)}
+                className="w-full px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white font-bold rounded-lg transition-all border border-cyan-400 shadow-lg hover:shadow-cyan-500/50"
+              >
+                ✨ Create Wallet Account
+              </button>
+            </div>
+          </div>
+        ) : (
+          // ✅ ACCOUNT EXISTS - SHOW ACCOUNT INFO
           <div className="solid-card p-6 border border-purple-500/50">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-white flex items-center gap-2">
@@ -2867,8 +2894,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
 
             </div>
           </div>
-        )}
-
+          )}
+        </div>
 
       </div>
       )}
@@ -3891,13 +3918,18 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
             </h3>
 
             <form onSubmit={handleSendMoney} className="space-y-4">
+              <div className="bg-white/5 border border-white/10 rounded-lg p-3 mb-4">
+                <p className="text-xs text-gray-400">Your Country Currency</p>
+                <p className="text-lg font-semibold text-yellow-400">{userCountry} ({selectedCurrency})</p>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   👤 Recipient (ICAN Account, Phone, or Email)
                 </label>
                 <input
                   type="text"
-                  placeholder="ICAN-1234567890123456 | +256701234567 | user@example.com"
+                  placeholder="ICAN-20260210105243-ace25eb0 | +256701234567 | user@example.com"
                   value={sendForm.recipient}
                   onChange={(e) => setSendForm({ ...sendForm, recipient: e.target.value })}
                   className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none transition-all"
@@ -3908,7 +3940,9 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Amount ({selectedCurrency})</label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  💰 Amount ({selectedCurrency})
+                </label>
                 <input
                   type="number"
                   placeholder="500"
@@ -3916,6 +3950,9 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
                   onChange={(e) => setSendForm({ ...sendForm, amount: e.target.value })}
                   className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none transition-all"
                 />
+                <p className="text-xs text-gray-400 mt-1">
+                  Amount in {selectedCurrency} ({userCountry})
+                </p>
               </div>
 
               <div>
@@ -4820,6 +4857,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
         recipient={pendingTransaction?.recipientName}
         description={pendingTransaction?.description}
         userId={currentUserId}
+        userEmail={userEmail}
         recipientId={pendingTransaction?.recipientId}
         metadata={{
           recipient_id: pendingTransaction?.recipientId,
@@ -4834,8 +4872,19 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
           setApprovalError(null);
         }}
         isLoading={isApproving}
-        error={approvalError}
-        attemptsRemaining={3}
+        error={
+          approvalError
+            ? approvalError.split('Attempts remaining:')[0].trim()
+            : null
+        }
+        attemptsRemaining={
+          approvalError
+            ? (() => {
+                const match = approvalError.match(/Attempts remaining:\s*(\d+)/);
+                return match ? parseInt(match[1]) : 3;
+              })()
+            : 3
+        }
         supportsBiometric={true}
       />
 

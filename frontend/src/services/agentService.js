@@ -95,7 +95,7 @@ class AgentService {
       const { data: userAccount, error: lookupError } = await this.supabase
         .from('user_accounts')
         .select('user_id')
-        .eq('account_number', userAccountId)
+        .ilike('account_number', userAccountId)
         .single();
 
       if (lookupError || !userAccount) {
@@ -171,7 +171,7 @@ class AgentService {
       const { data: userAccount, error: lookupError } = await this.supabase
         .from('user_accounts')
         .select('user_id')
-        .eq('account_number', userAccountId)
+        .ilike('account_number', userAccountId)
         .single();
 
       if (lookupError || !userAccount) {
@@ -253,7 +253,7 @@ class AgentService {
       const { data: userAccount, error: lookupError } = await this.supabase
         .from('user_accounts')
         .select('user_id')
-        .eq('account_number', userAccountId)
+        .ilike('account_number', userAccountId)
         .single();
 
       if (lookupError || !userAccount) {
@@ -376,7 +376,7 @@ class AgentService {
       const { data: userAccount, error: accountError } = await this.supabase
         .from('user_accounts')
         .select('id, user_id')
-        .eq('account_number', userAccountId)
+        .ilike('account_number', userAccountId)
         .single();
 
       if (accountError || !userAccount) {
@@ -878,7 +878,7 @@ class AgentService {
       const { data: userAccount } = await this.supabase
         .from('user_accounts')
         .select('user_id')
-        .eq('account_number', userAccountId)
+        .ilike('account_number', userAccountId)
         .single();
 
       if (!userAccount) throw new Error('User account not found');
@@ -920,7 +920,7 @@ class AgentService {
       const { data: userAccount } = await this.supabase
         .from('user_accounts')
         .select('user_id')
-        .eq('account_number', userAccountId)
+        .ilike('account_number', userAccountId)
         .single();
 
       if (!userAccount) throw new Error('User account not found');
@@ -962,7 +962,7 @@ class AgentService {
       const { data: userAccount } = await this.supabase
         .from('user_accounts')
         .select('user_id')
-        .eq('account_number', userAccountId)
+        .ilike('account_number', userAccountId)
         .single();
 
       if (!userAccount) throw new Error('User account not found');

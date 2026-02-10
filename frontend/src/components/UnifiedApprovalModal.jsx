@@ -17,6 +17,7 @@ import {
   Shield,
 } from 'lucide-react';
 import universalTransactionService from '../services/universalTransactionService';
+import PINRecoveryModal from './PINRecoveryModal';
 import './UnifiedApprovalModal.css';
 
 /**
@@ -36,6 +37,7 @@ const UnifiedApprovalModal = ({
   recipient,
   description,
   userId,
+  userEmail,
   recipientId,
   metadata = {},
   onApprove,
@@ -48,10 +50,27 @@ const UnifiedApprovalModal = ({
   const [authMethod, setAuthMethod] = useState('pin'); // 'pin' or 'biometric'
   const [pin, setPin] = useState('');
   const [showPin, setShowPin] = useState(false);
+  const [rememberPin, setRememberPin] = useState(false);
   const [biometricAttempting, setBiometricAttempting] = useState(false);
   const [biometricStatus, setBiometricStatus] = useState(null);
   const [localError, setLocalError] = useState(error);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPINRecovery, setShowPINRecovery] = useState(false);
+  const isAccountLocked = error && error.toLowerCase().includes('account locked');
+
+  // Load saved PIN from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedPin = localStorage.getItem('ican_wallet_pin');
+      const savedRemember = localStorage.getItem('ican_wallet_remember_pin');
+      if (savedPin && savedRemember === 'true') {
+        setPin(savedPin);
+        setRememberPin(true);
+      }
+    } catch (err) {
+      console.warn('Could not load saved PIN:', err);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -135,6 +154,16 @@ const UnifiedApprovalModal = ({
 
     setIsSubmitting(true);
     try {
+      // Save PIN if user wants to remember it
+      if (rememberPin && method === 'pin') {
+        try {
+          localStorage.setItem('ican_wallet_pin', pin);
+          localStorage.setItem('ican_wallet_remember_pin', 'true');
+        } catch (err) {
+          console.warn('Could not save PIN:', err);
+        }
+      }
+
       // Call universal transaction service
       const result = await universalTransactionService.processTransaction({
         transactionType,
@@ -320,7 +349,27 @@ const UnifiedApprovalModal = ({
                 ⌫
               </button>
             </div>
+
+            {isAccountLocked && (
+              <button
+                onClick={() => setShowPINRecovery(true)}
+                className="mt-4 w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                <Lock size={18} />
+                Reset PIN - Unlock Account
+              </button>
+            )}
           </div>
+        )}
+
+        {/* PIN Recovery Modal */}
+        {isOpen && (
+          <PINRecoveryModal
+            isOpen={showPINRecovery}
+            onClose={() => setShowPINRecovery(false)}
+            userId={userId}
+            userEmail={userEmail}
+          />
         )}
 
         {/* Biometric Method */}

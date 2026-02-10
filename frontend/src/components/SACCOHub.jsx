@@ -429,21 +429,21 @@ const SACCOHub = ({ onClose }) => {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
       {/* Header */}
       <div className="bg-slate-900/80 border-b border-slate-800 sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-black text-white">🏦 SACCO HUB</h1>
-              <p className="text-sm text-gray-400">Cooperative Savings Groups</p>
+        <div className="max-w-6xl mx-auto px-3 sm:px-6 py-3 sm:py-4">
+          <div className="flex items-center justify-between gap-2 sm:gap-4">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xl sm:text-3xl font-black text-white truncate">🏦 SACCO HUB</h1>
+              <p className="text-xs sm:text-sm text-gray-400 truncate">Cooperative Savings Groups</p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               {user && (
-                <div className="text-right">
+                <div className="text-right hidden sm:block">
                   <p className="text-sm font-semibold text-gray-300">{user.email}</p>
                   <p className="text-xs text-gray-500">Member</p>
                 </div>
               )}
-              <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-lg transition-colors">
-                <X className="w-6 h-6 text-gray-400" />
+              <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-lg transition-colors flex-shrink-0">
+                <X className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400" />
               </button>
             </div>
           </div>
@@ -461,36 +461,38 @@ const SACCOHub = ({ onClose }) => {
       )}
 
       {/* Tabs */}
-      <div className="bg-slate-800/50 border-b border-slate-700 sticky top-16 z-10">
-        <div className="max-w-6xl mx-auto px-6 overflow-x-auto">
-          <div className="flex gap-2 py-3">
+      <div className="bg-slate-800/50 border-b border-slate-700 sticky top-14 sm:top-20 z-10">
+        <div className="max-w-6xl mx-auto px-3 sm:px-6 overflow-x-auto">
+          <div className="flex gap-1 sm:gap-2 py-2 sm:py-3">
             {tabs.map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2 rounded-lg font-semibold whitespace-nowrap transition-all flex items-center gap-2 ${
+                className={`px-2 sm:px-4 py-2 rounded-lg font-semibold text-xs sm:text-sm whitespace-nowrap transition-all flex items-center gap-1 sm:gap-2 flex-shrink-0 ${
                   activeTab === tab.id
                     ? 'bg-blue-600 text-white'
                     : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
                 }`}
               >
-                {tab.label}
-                {tab.count > 0 && <span className="ml-1 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full">{tab.count}</span>}
+                <span className="hidden sm:inline">{tab.label}</span>
+                <span className="sm:hidden">{tab.label.split(' ')[0]}</span>
+                {tab.count > 0 && <span className="ml-0 sm:ml-1 px-1.5 sm:px-2 py-0.5 bg-red-500 text-white text-xs rounded-full">{tab.count}</span>}
               </button>
             ))}
             <button
               onClick={() => setShowCreateForm(true)}
-              className="ml-auto px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg font-semibold flex items-center gap-2 transition-all"
+              className="ml-auto px-2 sm:px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg font-semibold text-xs sm:text-sm flex items-center gap-1 sm:gap-2 transition-all flex-shrink-0"
             >
-              <Plus className="w-5 h-5" />
-              Create Group
+              <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="hidden sm:inline">Create Group</span>
+              <span className="sm:hidden">New</span>
             </button>
           </div>
         </div>
       </div>
 
       {/* Content */}
-      <div className="max-w-6xl mx-auto px-6 py-8">
+      <div className="max-w-6xl mx-auto px-3 sm:px-6 py-6 sm:py-8">
         {loading && (
           <div className="text-center py-12">
             <div className="w-12 h-12 bg-blue-500 rounded-full animate-spin mx-auto"></div>
@@ -507,10 +509,10 @@ const SACCOHub = ({ onClose }) => {
 
       {/* Create Group Modal */}
       {showCreateForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 rounded-lg p-6 max-w-md w-full border border-slate-700">
-            <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
-              <Plus className="w-6 h-6" />
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4">
+          <div className="bg-slate-900 rounded-lg p-4 sm:p-6 max-w-md w-full max-h-[90vh] overflow-y-auto border border-slate-700">
+            <h2 className="text-xl sm:text-2xl font-bold text-white mb-4 flex items-center gap-2">
+              <Plus className="w-5 h-5 sm:w-6 sm:h-6" />
               Create Group
             </h2>
             <div className="space-y-4">
@@ -519,38 +521,38 @@ const SACCOHub = ({ onClose }) => {
                 placeholder="Group Name"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+                className="w-full px-3 sm:px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder-gray-500 focus:border-blue-500 focus:outline-none"
               />
               <textarea
                 placeholder="Description"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none h-24 resize-none"
+                className="w-full px-3 sm:px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder-gray-500 focus:border-blue-500 focus:outline-none h-24 resize-none"
               />
               <input
                 type="number"
                 placeholder="Monthly Contribution ($)"
                 value={formData.monthlyContribution}
                 onChange={(e) => setFormData({ ...formData, monthlyContribution: parseFloat(e.target.value) })}
-                className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+                className="w-full px-3 sm:px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder-gray-500 focus:border-blue-500 focus:outline-none"
               />
               <input
                 type="number"
                 placeholder="Max Members"
                 value={formData.maxMembers}
                 onChange={(e) => setFormData({ ...formData, maxMembers: parseInt(e.target.value) })}
-                className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+                className="w-full px-3 sm:px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder-gray-500 focus:border-blue-500 focus:outline-none"
               />
-              <div className="flex gap-3">
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                 <button
                   onClick={handleCreateGroup}
-                  className="flex-1 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-all"
+                  className="flex-1 py-2 bg-green-600 hover:bg-green-700 text-white text-sm sm:text-base rounded-lg font-semibold transition-all"
                 >
                   Create
                 </button>
                 <button
                   onClick={() => setShowCreateForm(false)}
-                  className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-semibold transition-all"
+                  className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm sm:text-base rounded-lg font-semibold transition-all"
                 >
                   Cancel
                 </button>
@@ -562,20 +564,20 @@ const SACCOHub = ({ onClose }) => {
 
       {/* Application Form Modal */}
       {showApplicationForm && selectedGroupForApplication && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 rounded-lg p-6 max-w-md w-full border border-slate-700">
-            <h2 className="text-2xl font-bold text-white mb-2">{selectedGroupForApplication.name}</h2>
-            <p className="text-gray-400 text-sm mb-4">Tell us why you want to join</p>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4">
+          <div className="bg-slate-900 rounded-lg p-4 sm:p-6 max-w-md w-full max-h-[90vh] overflow-y-auto border border-slate-700">
+            <h2 className="text-xl sm:text-2xl font-bold text-white mb-2">{selectedGroupForApplication.name}</h2>
+            <p className="text-gray-400 text-xs sm:text-sm mb-4">Tell us why you want to join</p>
             <textarea
               placeholder="Write your application..."
               value={applicationText}
               onChange={(e) => setApplicationText(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none h-32 resize-none mb-4"
+              className="w-full px-3 sm:px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder-gray-500 focus:border-blue-500 focus:outline-none h-32 resize-none mb-4"
             />
-            <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
               <button
                 onClick={handleSubmitApplication}
-                className="flex-1 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-all"
+                className="flex-1 py-2 bg-green-600 hover:bg-green-700 text-white text-sm sm:text-base rounded-lg font-semibold transition-all"
               >
                 Submit Application
               </button>
@@ -585,7 +587,7 @@ const SACCOHub = ({ onClose }) => {
                   setApplicationText('');
                   setSelectedGroupForApplication(null);
                 }}
-                className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-semibold transition-all"
+                className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm sm:text-base rounded-lg font-semibold transition-all"
               >
                 Cancel
               </button>

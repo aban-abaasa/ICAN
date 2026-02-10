@@ -21,16 +21,25 @@ const ShareholderApprovalsCenter = ({ businessProfileId, currentUserId, currentU
     try {
       const { getSupabase } = await import('../services/pitchingService');
       const supabase = getSupabase();
+      const { data: { user } } = await supabase.auth.getUser();
 
-      // Count shareholder notifications
-      const { data: shareholder, error: shErr } = await supabase
+      // Count shareholder notifications FOR CURRENT USER ONLY
+      // Handle both: shareholder_id = user.id OR (shareholder_id IS NULL AND email matches)
+      const { data: byId, error: err1 } = await supabase
         .from('shareholder_notifications')
-        .select('id', { count: 'exact' })
+        .select('id')
+        .eq('shareholder_id', user.id)
         .is('read_at', null);
+
+      const { data: byEmail, error: err2 } = await supabase
+        .from('shareholder_notifications')
+        .select('id')
+        .eq('shareholder_email', user.email)
+        .is('read_at', null)
+        .is('shareholder_id', null);
       
-      if (!shErr && shareholder) {
-        setShareholderCount(shareholder.length);
-      }
+      const totalCount = ((byId || []).length) + ((byEmail || []).length);
+      setShareholderCount(totalCount);
 
       // Count member approvals if businessProfileId is provided
       if (businessProfileId) {
@@ -128,7 +137,7 @@ const ShareholderApprovalsCenter = ({ businessProfileId, currentUserId, currentU
                     </p>
                     <p className="text-yellow-200 text-sm mt-2">Your approval is essential for funds to be transferred.</p>
                   </div>
-                  <ShareholderPendingSignatures />
+                  <ShareholderPendingSignatures onApprovalComplete={loadCounts} />
                 </div>
               )}
             </div>
