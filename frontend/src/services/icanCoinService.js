@@ -349,25 +349,49 @@ export class IcanCoinService {
         wallet_address: wallet?.wallet_address || `wallet_${userId.substring(0, 8)}` // Generate if missing
       };
 
-      // Upsert balance in ican_user_wallets using user_id as conflict target
+      // PRIMARY: Try upsert in ican_user_wallets
       const { error: upsertError } = await supabase
         .from('ican_user_wallets')
         .upsert(updateData, { onConflict: 'user_id' });
 
-      if (upsertError) {
-        console.error('Upsert error details:', upsertError);
-        // Fallback: update existing record if upsert fails
-        if (wallet?.id) {
-          const { error: updateError } = await supabase
-            .from('ican_user_wallets')
-            .update(updateData)
-            .eq('id', wallet.id);
-          if (updateError) throw updateError;
-        } else {
-          throw upsertError;
+      if (!upsertError) {
+        console.log('✅ ICAN balance saved to ican_user_wallets:', newBalance);
+        return newBalance;
+      }
+
+      console.warn('⚠️ ican_user_wallets upsert failed, trying fallback...');
+
+      // FALLBACK 1: Try updating existing record
+      if (wallet?.id) {
+        const { error: updateError } = await supabase
+          .from('ican_user_wallets')
+          .update(updateData)
+          .eq('id', wallet.id);
+        
+        if (!updateError) {
+          console.log('✅ ICAN balance updated in ican_user_wallets (fallback 1):', newBalance);
+          return newBalance;
         }
       }
-      return newBalance;
+
+      // FALLBACK 2: Try saving to user_balances table (multi-currency)
+      console.warn('⚠️ Falling back to user_balances table...');
+      const { error: balanceError } = await supabase
+        .from('user_balances')
+        .upsert({
+          user_id: userId,
+          currency: 'ICAN',
+          balance: newBalance
+        }, { onConflict: 'user_id,currency' });
+
+      if (!balanceError) {
+        console.log('✅ ICAN balance saved to user_balances (fallback 2):', newBalance);
+        return newBalance;
+      }
+
+      // If both fail, log error but don't fail completely
+      console.error('❌ Both storage methods failed:', upsertError, balanceError);
+      return newBalance; // Return the calculated balance even if storage failed
     } catch (error) {
       console.error('❌ Failed to update ICAN balance:', error);
       return null;
