@@ -13,18 +13,39 @@ SET session_replication_role = 'replica';
 
 -- Delete from dependent tables first (child tables first)
 -- Only delete from tables that exist
-DELETE FROM public.group_wallet_approvals WHERE TRUE;
-DELETE FROM public.group_wallet_transactions WHERE TRUE;
-DELETE FROM public.group_pin_changes WHERE TRUE;
-DELETE FROM public.group_wallet_settings WHERE TRUE;
-DELETE FROM public.group_accounts WHERE TRUE;
-DELETE FROM public.group_wallet_audit WHERE TRUE;
-
--- Delete trust group related data (only from existing tables)
-DELETE FROM public.membership_votes WHERE TRUE;
-DELETE FROM public.voting_applications WHERE TRUE;
-DELETE FROM public.group_members WHERE TRUE;
-DELETE FROM public.trust_groups WHERE TRUE;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'group_wallet_approvals') THEN
+    DELETE FROM public.group_wallet_approvals WHERE TRUE;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'group_wallet_transactions') THEN
+    DELETE FROM public.group_wallet_transactions WHERE TRUE;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'group_pin_changes') THEN
+    DELETE FROM public.group_pin_changes WHERE TRUE;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'group_wallet_settings') THEN
+    DELETE FROM public.group_wallet_settings WHERE TRUE;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'group_accounts') THEN
+    DELETE FROM public.group_accounts WHERE TRUE;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'group_wallet_audit') THEN
+    DELETE FROM public.group_wallet_audit WHERE TRUE;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'membership_votes') THEN
+    DELETE FROM public.membership_votes WHERE TRUE;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'voting_applications') THEN
+    DELETE FROM public.voting_applications WHERE TRUE;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'group_members') THEN
+    DELETE FROM public.group_members WHERE TRUE;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'trust_groups') THEN
+    DELETE FROM public.trust_groups WHERE TRUE;
+  END IF;
+END $$;
 
 -- Re-enable foreign key constraints
 SET session_replication_role = 'default';
@@ -46,7 +67,8 @@ SELECT 'Remaining group_wallet_transactions', COUNT(*) FROM public.group_wallet_
 UNION ALL
 SELECT 'Remaining group_members', COUNT(*) FROM public.group_members
 UNION ALL
-SELECT 'Remaining voting_applications', COUNT(*) FROM public.voting_applications;
+SELECT 'Remaining voting_applications', COUNT(*) FROM public.voting_applications
+WHERE EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'voting_applications');
 
 -- ============================================================================
 -- STEP 4: (Optional) Recreate sample test data
