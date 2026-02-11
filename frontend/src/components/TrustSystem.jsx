@@ -65,7 +65,7 @@ const TrustSystem = ({ currentUser }) => {
     description: '',
     maxMembers: 30,
     monthlyContribution: 100,
-    currency: 'USD',
+    currency: 'ICAN',
     groupWalletAddress: '',
     walletCreated: false
   });
@@ -124,10 +124,14 @@ const TrustSystem = ({ currentUser }) => {
         // Check if user has ICAN wallet
         if (currentUser?.id) {
           try {
-            const walletData = await icanCoinService.getUserWallet?.(currentUser.id);
-            setHasICANWallet(!!walletData);
+            console.log('Checking user wallet for:', currentUser.id);
+            const walletData = await icanCoinService.getUserWallet(currentUser.id);
+            console.log('Wallet data retrieved:', walletData);
+            const walletExists = walletData && (walletData.id || walletData.wallet_address || walletData.address);
+            setHasICANWallet(walletExists);
+            console.log('ICAN Wallet Status:', walletExists ? '✅ Wallet Found' : '❌ No Wallet');
           } catch (error) {
-            console.log('Could not verify ICAN wallet');
+            console.log('Wallet verification error:', error?.message);
             setHasICANWallet(false);
           }
         }
@@ -246,7 +250,7 @@ const TrustSystem = ({ currentUser }) => {
           description: '',
           maxMembers: 30,
           monthlyContribution: 100,
-          currency: 'USD',
+          currency: 'ICAN',
           groupWalletAddress: '',
           walletCreated: false
         });
@@ -303,12 +307,82 @@ const TrustSystem = ({ currentUser }) => {
     }
   };
 
+  const handleOpenContributeModal = async (group) => {
+    // Verify user has ICAN coins before opening contribution modal
+    if (!currentUser?.id) {
+      setMessage({ type: 'error', text: 'Please log in first' });
+      return;
+    }
+
+    try {
+      // Re-check wallet/coin status from service (real-time check)
+      console.log('Real-time wallet check for user:', currentUser.id);
+      let walletExists = false;
+      let walletData = null;
+      
+      try {
+        walletData = await icanCoinService.getUserWallet(currentUser.id);
+        // Check if user has coins or a wallet address
+        walletExists = walletData && (walletData.id || walletData.wallet_address || walletData.address || (walletData.balance && parseFloat(walletData.balance) > 0));
+        console.log('Wallet check result:', { walletExists, walletData });
+      } catch (walletError) {
+        console.log('Real-time wallet check error:', walletError?.message);
+        walletExists = false;
+      }
+
+      // Update state with real wallet status
+      setHasICANWallet(walletExists);
+      setSelectedGroup(group);
+      setShowContributeModal(true);
+
+      if (!walletExists) {
+        setMessage({ type: 'error', text: '❌ No ICAN coins found. Please create a wallet or buy ICAN coins in your profile to contribute.' });
+      }
+    } catch (error) {
+      console.error('Error opening contribute modal:', error);
+      setMessage({ type: 'error', text: '❌ Unable to verify wallet. Please try again.' });
+    }
+  };
+
   const handleContribute = async (e) => {
     e.preventDefault();
     if (!currentUser?.id || !selectedGroup?.id) return;
 
+    // Verify ICAN wallet exists before processing
+    if (!hasICANWallet) {
+      setMessage({ type: 'error', text: '❌ Please set up your ICAN wallet first to make contributions' });
+      return;
+    }
+
     setLoading(true);
     try {
+      // Double-check ICAN coins/wallet existence via service
+      let walletVerified = false;
+      let coinBalance = 0;
+      try {
+        const wallet = await icanCoinService.getUserWallet(currentUser.id);
+        walletVerified = wallet && (wallet.id || wallet.wallet_address || wallet.address || (wallet.balance && parseFloat(wallet.balance) > 0));
+        coinBalance = wallet?.balance || 0;
+        console.log('💰 Contribution check - ICAN balance:', coinBalance);
+      } catch (walletError) {
+        console.log('Wallet verification error:', walletError);
+        walletVerified = hasICANWallet;
+      }
+
+      if (!walletVerified) {
+        setMessage({ type: 'error', text: '❌ No ICAN coins found. Please buy ICAN coins in your profile before contributing.' });
+        setLoading(false);
+        return;
+      }
+
+      // Verify user has enough coins for contribution
+      const contributionAmount = parseFloat(contributeForm.amount);
+      if (coinBalance < contributionAmount) {
+        setMessage({ type: 'error', text: `❌ Insufficient ICAN coins. You have ${coinBalance} ICAN but need ${contributionAmount} ICAN.` });
+        setLoading(false);
+        return;
+      }
+
       const result = await recordTrustTransaction({
         groupId: selectedGroup.id,
         fromUserId: currentUser.id,
@@ -320,7 +394,7 @@ const TrustSystem = ({ currentUser }) => {
       });
 
       if (result.success) {
-        setMessage({ type: 'success', text: '✓ Contribution recorded and verified on blockchain!' });
+        setMessage({ type: 'success', text: '✓ Contribution recorded and verified on blockchain using your ICAN wallet!' });
         setContributeForm({ amount: '', paymentMethod: 'ican' });
         setShowContributeModal(false);
         handleViewDetails(selectedGroup);
@@ -577,7 +651,9 @@ const TrustSystem = ({ currentUser }) => {
           <button onClick={() => { setActiveTab('voting'); setShowMobileMenu(false); }} className={`px-6 py-4 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap relative ${activeTab === 'voting' ? 'text-amber-500 border-b-2 border-amber-500' : 'text-slate-400 hover:text-slate-300'}`}>🗳️ Vote {votingApplications.length > 0 && <span className="ml-1 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full font-bold">{votingApplications.length}</span>}</button>
           <button onClick={() => { setActiveTab('applications'); setShowMobileMenu(false); }} className={`px-6 py-4 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap relative ${activeTab === 'applications' ? 'text-amber-500 border-b-2 border-amber-500' : 'text-slate-400 hover:text-slate-300'}`}>📮 Applications {myApplications.length > 0 && <span className="ml-1 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full font-bold">{myApplications.length}</span>}</button>
           <button onClick={() => { setActiveTab('create'); setShowMobileMenu(false); }} className={`px-6 py-4 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap relative ${activeTab === 'create' ? 'text-amber-500 border-b-2 border-amber-500' : 'text-slate-400 hover:text-slate-300'}`}>✨ Create</button>
-          <button onClick={() => { setActiveTab('admin'); setShowMobileMenu(false); }} className={`px-6 py-4 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap relative ${activeTab === 'admin' ? 'text-amber-500 border-b-2 border-amber-500' : 'text-slate-400 hover:text-slate-300'}`}>👑 Admin Panel</button>
+          {myGroups.some(g => g.creator_id === currentUser?.id) && (
+            <button onClick={() => { setActiveTab('admin'); setShowMobileMenu(false); }} className={`px-6 py-4 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap relative ${activeTab === 'admin' ? 'text-amber-500 border-b-2 border-amber-500' : 'text-slate-400 hover:text-slate-300'}`}>👑 Admin Panel</button>
+          )}
         </div>
 
         {/* Tabs - Mobile View with Dots Menu */}
@@ -596,7 +672,9 @@ const TrustSystem = ({ currentUser }) => {
                 <button onClick={() => { setActiveTab('voting'); setShowMobileMenu(false); }} className={`w-full text-left px-4 py-3 font-medium transition-all flex items-center justify-between gap-3 ${activeTab === 'voting' ? 'bg-amber-600/20 text-amber-400' : 'text-slate-300 hover:bg-slate-700/50'}`}>🗳️ Vote {votingApplications.length > 0 && <span className="ml-auto px-2 py-1 bg-red-500 text-white text-xs rounded-full font-bold flex-shrink-0">{votingApplications.length}</span>}</button>
                 <button onClick={() => { setActiveTab('applications'); setShowMobileMenu(false); }} className={`w-full text-left px-4 py-3 font-medium transition-all flex items-center justify-between gap-3 ${activeTab === 'applications' ? 'bg-amber-600/20 text-amber-400' : 'text-slate-300 hover:bg-slate-700/50'}`}>📮 Applications {myApplications.length > 0 && <span className="ml-auto px-2 py-1 bg-red-500 text-white text-xs rounded-full font-bold flex-shrink-0">{myApplications.length}</span>}</button>
                 <button onClick={() => { setActiveTab('create'); setShowMobileMenu(false); }} className={`w-full text-left px-4 py-3 font-medium transition-all flex items-center justify-between gap-3 ${activeTab === 'create' ? 'bg-amber-600/20 text-amber-400' : 'text-slate-300 hover:bg-slate-700/50'}`}>✨ Create</button>
-                <button onClick={() => { setActiveTab('admin'); setShowMobileMenu(false); }} className={`w-full text-left px-4 py-3 font-medium transition-all flex items-center justify-between gap-3 ${activeTab === 'admin' ? 'bg-amber-600/20 text-amber-400' : 'text-slate-300 hover:bg-slate-700/50'}`}>👑 Admin Panel</button>
+                {myGroups.some(g => g.creator_id === currentUser?.id) && (
+                  <button onClick={() => { setActiveTab('admin'); setShowMobileMenu(false); }} className={`w-full text-left px-4 py-3 font-medium transition-all flex items-center justify-between gap-3 ${activeTab === 'admin' ? 'bg-amber-600/20 text-amber-400' : 'text-slate-300 hover:bg-slate-700/50'}`}>👑 Admin Panel</button>
+                )}
               </div>
             )}
           </div>
@@ -706,10 +784,7 @@ const TrustSystem = ({ currentUser }) => {
                         View Details
                       </button>
                       <button
-                        onClick={() => {
-                          setSelectedGroup(group);
-                          setShowContributeModal(true);
-                        }}
+                        onClick={() => handleOpenContributeModal(group)}
                         className="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors text-sm font-medium"
                       >
                         Contribute
@@ -777,36 +852,29 @@ const TrustSystem = ({ currentUser }) => {
                   </div>
 
                   <div>
-                    <label className="block text-slate-300 font-semibold mb-2">Currency</label>
-                    <select
-                      value={groupForm.currency}
-                      onChange={(e) => setGroupForm({ ...groupForm, currency: e.target.value })}
-                      className="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-amber-500"
-                    >
-                      <option value="USD">USD - US Dollar</option>
-                      <option value="EUR">EUR - Euro</option>
-                      <option value="GBP">GBP - British Pound</option>
-                      <option value="KES">KES - Kenyan Shilling</option>
-                    </select>
+                    <label className="block text-slate-300 font-semibold mb-2">Currency (ICAN Coins Only)</label>
+                    <div className="w-full px-4 py-3 bg-gradient-to-r from-amber-900/30 to-amber-900/10 border border-amber-600/50 rounded-lg text-amber-300 font-semibold">
+                      ₿ ICAN - ICAN Coins
+                    </div>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-2">Monthly Contribution Amount *</label>
-                  <div className="relative">
-                    <DollarSign className="absolute left-3 top-3 text-slate-500" size={20} />
-                    <input
-                      type="number"
-                      required
-                      min="1"
-                      step="0.01"
-                      value={groupForm.monthlyContribution}
-                      onChange={(e) => setGroupForm({ ...groupForm, monthlyContribution: parseFloat(e.target.value) })}
-                      placeholder="100"
-                      className="w-full pl-10 pr-4 py-3 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
-                    />
-                  </div>
-                  <p className="text-slate-400 text-sm mt-2">Each member contributes this amount monthly</p>
+                    <label className="block text-slate-300 font-semibold mb-2">Monthly Contribution Amount (ICAN Coins) *</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-3 text-amber-400 font-bold">₿</span>
+                      <input
+                        type="number"
+                        required
+                        min="1"
+                        step="0.01"
+                        value={groupForm.monthlyContribution}
+                        onChange={(e) => setGroupForm({ ...groupForm, monthlyContribution: parseFloat(e.target.value) })}
+                        placeholder="100"
+                        className="w-full pl-10 pr-4 py-3 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                    <p className="text-slate-400 text-sm mt-2">Each member contributes this amount in ICAN coins monthly</p>
                 </div>
 
                 {/* Group ICAN Wallet Setup */}
@@ -1087,15 +1155,17 @@ const TrustSystem = ({ currentUser }) => {
                             </span>
                           </div>
                         </div>
-                        <button
-                          onClick={() => {
-                            setSelectedGroup(group);
-                            setShowManageModal(true);
-                          }}
-                          className="px-4 py-2 bg-amber-600 hover:bg-amber-500 active:bg-amber-700 text-white rounded-lg transition-colors text-sm font-medium flex-shrink-0 whitespace-nowrap"
-                        >
-                          ⚙️ Manage
-                        </button>
+                        {currentUser?.id === group.creator_id && (
+                          <button
+                            onClick={() => {
+                              setSelectedGroup(group);
+                              setShowManageModal(true);
+                            }}
+                            className="px-4 py-2 bg-amber-600 hover:bg-amber-500 active:bg-amber-700 text-white rounded-lg transition-colors text-sm font-medium flex-shrink-0 whitespace-nowrap"
+                          >
+                            ⚙️ Manage
+                          </button>
+                        )}
                       </div>
 
                       {/* Group Description */}
@@ -1578,8 +1648,8 @@ const TrustSystem = ({ currentUser }) => {
 
       {/* CONTRIBUTE MODAL - Mobile Optimized */}
       {showContributeModal && selectedGroup && (
-        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-[60]">
-          <div className="bg-slate-800 rounded-t-lg sm:rounded-lg max-w-md w-full max-h-[90vh] sm:max-h-auto overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-[70] pb-24 sm:pb-0">
+          <div className="bg-slate-800 rounded-t-lg sm:rounded-lg max-w-md w-full max-h-[75vh] sm:max-h-auto overflow-y-auto">
             <div className="sticky top-0 bg-slate-800 border-b border-slate-700 p-4 sm:p-6 flex justify-between items-center gap-2">
               <h2 className="text-lg sm:text-xl font-bold text-white truncate">Make a Contribution</h2>
               <button onClick={() => setShowContributeModal(false)} className="text-slate-400 hover:text-white flex-shrink-0">
@@ -1629,10 +1699,18 @@ const TrustSystem = ({ currentUser }) => {
                 </p>
               </div>
 
-              {!hasICANWallet && (
-                <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-start gap-2">
-                  <AlertCircle size={18} className="text-red-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-red-300 text-xs sm:text-sm">You must set up your ICAN wallet to make contributions</p>
+              {!hasICANWallet ? (
+                <div className="p-4 bg-red-500/15 border border-red-500/40 rounded-lg flex items-start gap-3">
+                  <AlertCircle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-red-300 text-sm font-semibold mb-2">⚠️ Wallet Required</p>
+                    <p className="text-red-200 text-xs">You must set up your ICAN wallet to make contributions. Please go to your profile and create a wallet first.</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg flex items-start gap-2">
+                  <CheckCircle size={18} className="text-emerald-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-emerald-300 text-xs sm:text-sm">✓ Your ICAN wallet is verified and ready for contributions</p>
                 </div>
               )}
 

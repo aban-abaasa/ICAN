@@ -15,12 +15,12 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 export const saveTransaction = async (transaction, userId) => {
   try {
     const { data, error } = await supabase
-      .from('transactions')
+      .from('ican_transactions')
       .insert([
         {
           user_id: userId,
           amount: transaction.amount,
-          type: transaction.type,
+          transaction_type: transaction.type,
           category: transaction.category,
           sub_category: transaction.subCategory,
           description: transaction.description,
@@ -60,7 +60,7 @@ export const saveTransaction = async (transaction, userId) => {
 export const getTransactions = async (userId) => {
   try {
     const { data, error } = await supabase
-      .from('transactions')
+      .from('ican_transactions')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
@@ -88,11 +88,11 @@ export const getTransactions = async (userId) => {
 export const getTransactionsByDateRange = async (userId, startDate, endDate) => {
   try {
     const { data, error } = await supabase
-      .from('transactions')
+      .from('ican_transactions')
       .select('*')
       .eq('user_id', userId)
-      .gte('transaction_date', startDate)
-      .lte('transaction_date', endDate)
+      .gte('created_at', startDate)
+      .lte('created_at', endDate)
       .order('transaction_date', { ascending: false });
 
     if (error) {
@@ -116,10 +116,10 @@ export const getTransactionsByDateRange = async (userId, startDate, endDate) => 
 export const getTransactionsByType = async (userId, type) => {
   try {
     const { data, error } = await supabase
-      .from('transactions')
+      .from('ican_transactions')
       .select('*')
       .eq('user_id', userId)
-      .eq('type', type)
+      .eq('transaction_type', type)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -143,10 +143,9 @@ export const getTransactionsByType = async (userId, type) => {
 export const getTransactionsByCategory = async (userId, category) => {
   try {
     const { data, error } = await supabase
-      .from('transactions')
+      .from('ican_transactions')
       .select('*')
       .eq('user_id', userId)
-      .eq('category', category)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -170,7 +169,7 @@ export const getTransactionsByCategory = async (userId, category) => {
 export const getLargeTransactions = async (userId, threshold = 1000000) => {
   try {
     const { data, error } = await supabase
-      .from('transactions')
+      .from('ican_transactions')
       .select('*')
       .eq('user_id', userId)
       .gte('amount', threshold)
@@ -198,7 +197,7 @@ export const getLargeTransactions = async (userId, threshold = 1000000) => {
 export const updateTransaction = async (transactionId, updates) => {
   try {
     const { data, error } = await supabase
-      .from('transactions')
+      .from('ican_transactions')
       .update(updates)
       .eq('id', transactionId);
 
@@ -223,7 +222,7 @@ export const updateTransaction = async (transactionId, updates) => {
 export const deleteTransaction = async (transactionId) => {
   try {
     const { data, error } = await supabase
-      .from('transactions')
+      .from('ican_transactions')
       .delete()
       .eq('id', transactionId);
 
@@ -248,8 +247,8 @@ export const deleteTransaction = async (transactionId) => {
 export const getTransactionStats = async (userId) => {
   try {
     const { data, error } = await supabase
-      .from('transactions')
-      .select('type, amount');
+      .from('ican_transactions')
+      .select('transaction_type, amount')
 
     if (error) {
       console.error('Error fetching transaction stats:', error);

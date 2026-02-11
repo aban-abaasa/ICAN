@@ -327,28 +327,46 @@ export class IcanCoinService {
       // Get current balance from ican_user_wallets
       const { data: wallet, error: selectError } = await supabase
         .from('ican_user_wallets')
-        .select('ican_balance')
+        .select('id, ican_balance, total_spent, total_earned, purchase_count, sale_count, wallet_address')
         .eq('user_id', userId)
         .maybeSingle();
 
-      if (selectError) throw selectError;
+      if (selectError && selectError.code !== 'PGRST116') throw selectError;
 
       const currentBalance = wallet?.ican_balance || 0;
       const newBalance = operation === 'add' 
         ? currentBalance + amount 
         : Math.max(0, currentBalance - amount);
 
-      // Upsert balance in ican_user_wallets (create if doesn't exist)
+      // Prepare update data with all required fields
+      const updateData = {
+        user_id: userId,
+        ican_balance: newBalance,
+        total_spent: operation === 'add' ? (wallet?.total_spent || 0) : (wallet?.total_spent || 0) + amount,
+        total_earned: operation === 'add' ? (wallet?.total_earned || 0) + amount : (wallet?.total_earned || 0),
+        purchase_count: operation === 'add' ? (wallet?.purchase_count || 0) + 1 : (wallet?.purchase_count || 0),
+        sale_count: operation !== 'add' ? (wallet?.sale_count || 0) + 1 : (wallet?.sale_count || 0),
+        wallet_address: wallet?.wallet_address || `wallet_${userId.substring(0, 8)}` // Generate if missing
+      };
+
+      // Upsert balance in ican_user_wallets using user_id as conflict target
       const { error: upsertError } = await supabase
         .from('ican_user_wallets')
-        .upsert({
-          user_id: userId,
-          ican_balance: newBalance,
-          total_spent: operation === 'add' ? (wallet?.total_spent || 0) : (wallet?.total_spent || 0) + amount,
-          purchase_count: operation === 'add' ? (wallet?.purchase_count || 0) + 1 : wallet?.purchase_count || 0
-        }, { onConflict: 'user_id' });
+        .upsert(updateData, { onConflict: 'user_id' });
 
-      if (upsertError) throw upsertError;
+      if (upsertError) {
+        console.error('Upsert error details:', upsertError);
+        // Fallback: update existing record if upsert fails
+        if (wallet?.id) {
+          const { error: updateError } = await supabase
+            .from('ican_user_wallets')
+            .update(updateData)
+            .eq('id', wallet.id);
+          if (updateError) throw updateError;
+        } else {
+          throw upsertError;
+        }
+      }
       return newBalance;
     } catch (error) {
       console.error('❌ Failed to update ICAN balance:', error);
@@ -458,6 +476,55 @@ export class IcanCoinService {
       };
     } catch (error) {
       console.error('❌ Failed to get portfolio summary:', error);
+      return null;
+    }
+  }
+
+  /**
+   * 🏦 Get user's ICAN wallet information
+   */
+  async getUserWallet(userId) {
+    try {
+      const supabase = this.initSupabase();
+
+      console.log('💰 Checking ICAN coin balance for user:', userId);
+
+      // Check if user has ICAN coin balance in user_balances table
+      const { data: balanceData, error: balanceError } = await supabase
+        .from('user_balances')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('currency', 'ICAN')
+        .maybeSingle();
+
+      if (balanceData) {
+        console.log('✅ User has ICAN coins:', balanceData);
+        return {
+          id: balanceData.id,
+          user_id: userId,
+          balance: balanceData.balance,
+          currency: 'ICAN',
+          has_coins: parseFloat(balanceData.balance) > 0
+        };
+      }
+
+      // Fallback: check if user has wallet address in ican_wallets table
+      const { data: walletData, error: walletError } = await supabase
+        .from('ican_wallets')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('is_primary', true)
+        .maybeSingle();
+
+      if (walletData) {
+        console.log('✅ User has ICAN wallet:', walletData);
+        return walletData;
+      }
+
+      console.log('⚠️ No ICAN coins or wallet found for user:', userId);
+      return null;
+    } catch (error) {
+      console.error('❌ Error getting user wallet:', error);
       return null;
     }
   }

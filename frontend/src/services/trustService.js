@@ -232,7 +232,7 @@ export const createTrustGroup = async (groupData) => {
         creator_id: groupData.creatorId,
         max_members: groupData.maxMembers || 30,
         monthly_contribution: groupData.monthlyContribution,
-        currency: groupData.currency || 'USD',
+        currency: groupData.currency || 'ICAN',
         start_date: new Date().toISOString()
       }])
       .select();

@@ -101,15 +101,20 @@ export default function BuyIcan() {
       );
 
       if (result.success) {
+        const newBalance = result.newIcanBalance || 0;
+        const newWallet = result.newWalletBalance || 0;
+        const icanAmt = result.icanAmount || parseFloat(icanAmount);
+        const pricePerCoin = result.pricePerCoin || 0;
+        
         const transactionDetails = `
           💚 ICAN Coin Purchase Successful!
           
           📋 Transaction Details:
-          • ICAN Coins Purchased: ${result.icanAmount.toFixed(8)}
+          • ICAN Coins Purchased: ${icanAmt.toFixed(8)}
           • Amount Paid: ${currencySymbol}${parseFloat(localAmount).toLocaleString()}
-          • Rate: 1 ICAN = ${result.pricePerCoin.toLocaleString()} ${currency}
-          • Your New ICAN Balance: ${result.newIcanBalance.toFixed(8)} coins
-          • Wallet Updated: ${currencySymbol}${parseFloat(result.newWalletBalance).toLocaleString()} remaining
+          • Rate: 1 ICAN = ${pricePerCoin.toLocaleString()} ${currency}
+          • Your New ICAN Balance: ${newBalance.toFixed(8)} coins
+          • Wallet Updated: ${currencySymbol}${parseFloat(newWallet).toLocaleString()} remaining
           
           ✅ Real money has been deducted from your account.
           ✅ ICAN coins are now in your wallet and ready to invest!
@@ -117,14 +122,26 @@ export default function BuyIcan() {
         
         setSuccess(transactionDetails);
         
-        // Record blockchain transaction
-        await icanCoinBlockchainService.recordBlockchainTransaction(
-          user.id,
-          'purchase',
-          result.icanAmount,
-          result.pricePerCoin,
-          'completed'
-        );
+        // Record blockchain transaction (non-blocking)
+        if (icanAmt > 0 && pricePerCoin > 0) {
+          try {
+            const blockchainResult = await icanCoinBlockchainService.recordBlockchainTransaction(
+              user.id,
+              'purchase',
+              icanAmt,
+              pricePerCoin,
+              'completed'
+            );
+            if (blockchainResult.success) {
+              console.log('✅ Blockchain transaction recorded');
+            } else {
+              console.warn('⚠️ Blockchain recording failed (non-blocking):', blockchainResult.error);
+            }
+          } catch (blockchainError) {
+            // Log but don't fail the entire purchase if blockchain recording fails
+            console.warn('⚠️ Blockchain transaction error (non-blocking):', blockchainError);
+          }
+        }
 
         // Reset form
         setLocalAmount('');

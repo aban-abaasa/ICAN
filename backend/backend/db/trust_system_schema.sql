@@ -167,6 +167,7 @@ ALTER TABLE public.trust_disputes ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Anyone can view active trust groups" ON public.trust_groups;
 DROP POLICY IF EXISTS "Users can view their groups" ON public.trust_groups;
 DROP POLICY IF EXISTS "Users can create groups" ON public.trust_groups;
+DROP POLICY IF EXISTS "Creators can update their groups" ON public.trust_groups;
 
 CREATE POLICY "Anyone can view active trust groups" 
     ON public.trust_groups FOR SELECT 

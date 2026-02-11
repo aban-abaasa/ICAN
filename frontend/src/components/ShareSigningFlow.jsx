@@ -819,25 +819,38 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
           return;
         }
 
-        // Use EXACT same query that works in ICANWallet.jsx
-        const { data, error } = await supabase
-          .from('ican_user_wallets')
-          .select('ican_balance')
-          .eq('user_id', currentUserId)
-          .single();
+        console.log('💰 Fetching ICAN coin balance for user:', currentUserId);
 
-        if (error && error.code !== 'PGRST116') {
-          console.error('Error loading ICAN balance:', error);
-          setWalletBalance(0);
+        // PRIMARY: Try to get ICAN balance from user_balances (multi-currency tracking)
+        const { data: balanceData, error: balanceError } = await supabase
+          .from('user_balances')
+          .select('balance')
+          .eq('user_id', currentUserId)
+          .eq('currency', 'ICAN')
+          .maybeSingle();
+
+        if (balanceData && balanceData.balance) {
+          setWalletBalance(parseFloat(balanceData.balance) || 0);
+          console.log('✅ ICAN Balance loaded from user_balances:', balanceData.balance);
           return;
         }
 
-        if (data && data.ican_balance) {
-          setWalletBalance(parseFloat(data.ican_balance) || 0);
-          console.log('✅ ICAN Balance loaded:', data.ican_balance);
-        } else {
-          setWalletBalance(0);
+        // FALLBACK: Try ican_user_wallets table (legacy or primary wallet)
+        const { data: walletData, error: walletError } = await supabase
+          .from('ican_user_wallets')
+          .select('ican_balance')
+          .eq('user_id', currentUserId)
+          .maybeSingle();
+
+        if (walletData && walletData.ican_balance) {
+          setWalletBalance(parseFloat(walletData.ican_balance) || 0);
+          console.log('✅ ICAN Balance loaded from ican_user_wallets:', walletData.ican_balance);
+          return;
         }
+
+        // No balance found
+        console.log('⚠️ No ICAN coins found for user');
+        setWalletBalance(0);
       } catch (err) {
         console.error('Failed to load ICAN balance:', err);
         setWalletBalance(0);
@@ -850,6 +863,55 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
       fetchWalletBalance();
     }
   }, [currentUserId]);
+
+  // Function to manually refresh wallet balance when needed
+  const refreshWalletBalance = async () => {
+    try {
+      setLoadingWallet(true);
+      const supabase = getSupabase();
+      
+      if (!supabase || !currentUserId) {
+        setWalletBalance(0);
+        return;
+      }
+
+      console.log('🔄 Manually refreshing ICAN wallet balance...');
+
+      // PRIMARY: Try user_balances table (multi-currency)
+      const { data: balanceData } = await supabase
+        .from('user_balances')
+        .select('balance')
+        .eq('user_id', currentUserId)
+        .eq('currency', 'ICAN')
+        .maybeSingle();
+
+      if (balanceData && balanceData.balance) {
+        setWalletBalance(parseFloat(balanceData.balance) || 0);
+        console.log('✅ ICAN Balance refreshed:', balanceData.balance);
+        return;
+      }
+
+      // FALLBACK: Try ican_user_wallets
+      const { data: walletData } = await supabase
+        .from('ican_user_wallets')
+        .select('ican_balance')
+        .eq('user_id', currentUserId)
+        .maybeSingle();
+
+      if (walletData && walletData.ican_balance) {
+        setWalletBalance(parseFloat(walletData.ican_balance) || 0);
+        console.log('✅ ICAN Balance refreshed:', walletData.ican_balance);
+        return;
+      }
+
+      console.log('⚠️ No ICAN coins found after refresh');
+      setWalletBalance(0);
+    } catch (err) {
+      console.error('Error refreshing wallet balance:', err);
+    } finally {
+      setLoadingWallet(false);
+    }
+  };
 
   // Fetch seller's business profile from database using pitch.business_profile_id
   useEffect(() => {
@@ -2584,12 +2646,39 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                     {/* My Wallet Tab */}
                     {walletTab === 'wallet' && (
                       <div className="space-y-3">
-                        <div className="bg-slate-800/60 rounded-lg p-4 text-center">
-                          <p className="text-slate-400 text-sm">Current Balance</p>
-                          <div className="text-3xl font-bold text-yellow-400 mt-2">
-                            💎 {walletBalance.toFixed(8)}
+                        <div className="bg-slate-800/60 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <p className="text-slate-400 text-sm font-semibold">💰 Your ICAN Coin Balance</p>
+                            <button 
+                              onClick={refreshWalletBalance}
+                              disabled={loadingWallet}
+                              className="text-xs px-2 py-1 bg-blue-600/50 hover:bg-blue-600 disabled:bg-gray-600 text-white rounded transition"
+                              title="Refresh wallet balance"
+                            >
+                              {loadingWallet ? '⏳ Loading...' : '🔄 Refresh'}
+                            </button>
                           </div>
-                          <p className="text-slate-500 text-xs mt-2">Available for investment</p>
+                          
+                          {loadingWallet ? (
+                            <div className="text-center py-4">
+                              <p className="text-slate-400 text-sm">Loading wallet data...</p>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="text-center">
+                                <div className="text-3xl font-bold text-yellow-400 mt-2">
+                                  💎 {walletBalance.toFixed(8)}
+                                </div>
+                                <p className="text-slate-500 text-xs mt-2">Available for investment</p>
+                              </div>
+                              
+                              {walletBalance <= 0 && (
+                                <div className="mt-3 bg-red-500/10 border border-red-500/30 rounded p-2">
+                                  <p className="text-red-400 text-xs">⚠️ No ICAN coins. Go to ICAN Wallet to purchase coins.</p>
+                                </div>
+                              )}
+                            </>
+                          )}
                         </div>
                       </div>
                     )}

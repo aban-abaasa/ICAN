@@ -90,7 +90,7 @@ export class VelocityEngine {
       }
 
       const { data, error } = await this.supabase
-        .from('transactions')
+        .from('ican_transactions')
         .insert([
           {
             user_id: this.userId,
@@ -133,7 +133,7 @@ export class VelocityEngine {
 
       console.log(`🔍 VelocityEngine: Loading transactions for user ${this.userId}`);
       const { data, error } = await this.supabase
-        .from('transactions')
+        .from('ican_transactions')
         .select('*')
         .eq('user_id', this.userId)
         .order('created_at', { ascending: false });

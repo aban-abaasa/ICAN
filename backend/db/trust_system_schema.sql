@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS public.trust_groups (
     -- Group settings
     max_members INTEGER DEFAULT 30,
     monthly_contribution DECIMAL(15,2) NOT NULL,
-    currency VARCHAR(10) DEFAULT 'USD',
+    currency VARCHAR(10) DEFAULT 'ICAN',
     
     -- Status
     status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'paused', 'completed', 'archived')),
@@ -167,6 +167,7 @@ ALTER TABLE public.trust_disputes ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Anyone can view active trust groups" ON public.trust_groups;
 DROP POLICY IF EXISTS "Users can view their groups" ON public.trust_groups;
 DROP POLICY IF EXISTS "Users can create groups" ON public.trust_groups;
+DROP POLICY IF EXISTS "Creators can update their groups" ON public.trust_groups;
 
 CREATE POLICY "Anyone can view active trust groups" 
     ON public.trust_groups FOR SELECT 
