@@ -41,14 +41,32 @@ const VotingInterface = ({ applications: initialApps, onVoteComplete }) => {
     } else {
       loadVotingDetails();
     }
-    // Poll for updates every 10 seconds
+    // Poll for voting details updates every 5 seconds
     const interval = setInterval(() => {
-      if (initialApps) {
-        loadVotingDetails();
-      }
-    }, 10000);
+      console.log('🔄 Refreshing voting details...');
+      loadVotingDetails();
+    }, 5000);
     return () => clearInterval(interval);
   }, [initialApps, user?.id]);
+
+  // Also poll for new applications every 5 seconds
+  useEffect(() => {
+    if (!user?.id) return;
+    const applicationsInterval = setInterval(async () => {
+      try {
+        console.log('🔄 Checking for new voting applications...');
+        const apps = await getVotingApplicationsForMember(user.id);
+        if (apps && apps.length > applications.length) {
+          console.log('✅ New voting applications found');
+          setApplications(apps);
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('Error checking for new applications:', error);
+      }
+    }, 5000);
+    return () => clearInterval(applicationsInterval);
+  }, [user?.id]);
 
   const loadVotingDetails = async () => {
     if (!applications || applications.length === 0 || !user?.id) return;

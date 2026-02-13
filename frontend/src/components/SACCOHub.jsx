@@ -77,9 +77,94 @@ const SACCOHub = ({ onClose }) => {
   // Load all data on mount
   useEffect(() => {
     loadAllData();
-    const interval = setInterval(loadAllData, 30000); // Refresh every 30s (reduced from 15s to avoid constant flickering)
-    return () => clearInterval(interval);
   }, [user?.id]);
+
+  // Auto-refresh based on active tab
+  useEffect(() => {
+    let refreshInterval;
+
+    if (activeTab === 'voting') {
+      console.log('🔄 Starting voting tab auto-refresh (5s interval)');
+      refreshInterval = setInterval(() => {
+        console.log('🔄 Refreshing voting applications...');
+        loadVotingApplications();
+      }, 5000); // Refresh every 5 seconds
+    } else if (activeTab === 'admin') {
+      console.log('🔄 Starting admin tab auto-refresh (3s interval)');
+      refreshInterval = setInterval(() => {
+        console.log('🔄 Refreshing admin data...');
+        loadAdminData();
+      }, 3000); // Refresh every 3 seconds
+    } else if (activeTab === 'applications') {
+      console.log('🔄 Starting applications tab auto-refresh (3s interval)');
+      refreshInterval = setInterval(() => {
+        console.log('🔄 Refreshing my applications...');
+        loadMyApplicationsData();
+      }, 3000); // Refresh every 3 seconds
+    }
+
+    return () => {
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+      }
+    };
+  }, [activeTab, user?.id]);
+
+  // Separate function to load only voting applications
+  const loadVotingApplications = async () => {
+    if (!user?.id) return;
+    try {
+      const voting = await getVotingApplicationsForMember(user.id);
+      console.log(`✅ Loaded ${voting?.length || 0} voting applications`);
+      setVotingApplications(voting || []);
+    } catch (error) {
+      console.error('Error loading voting applications:', error);
+    }
+  };
+
+  // Separate function to load admin data
+  const loadAdminData = async () => {
+    if (!user?.id) return;
+    try {
+      // Load pending applications and voting for admin groups
+      const userGroups = await getUserTrustGroups(user.id);
+      const created = (userGroups || []).filter(g => g.creator_id === user.id);
+      
+      if (created.length > 0) {
+        const statsMap = {};
+        for (const group of created) {
+          try {
+            const [pending, voting] = await Promise.all([
+              getPendingApplicationsForAdmin(group.id),
+              getAllVotingApplications(group.id)
+            ]);
+            statsMap[group.id] = {
+              pending: pending?.length || 0,
+              voting: voting?.length || 0
+            };
+          } catch (err) {
+            console.error(`Error loading stats for group ${group.id}:`, err);
+            statsMap[group.id] = { pending: 0, voting: 0 };
+          }
+        }
+        setGroupAdminStats(statsMap);
+      }
+    } catch (error) {
+      console.error('Error loading admin data:', error);
+    }
+  };
+
+  // Separate function to load my applications
+  const loadMyApplicationsData = async () => {
+    if (!user?.id) return;
+    try {
+      const applications = await getUserPendingApplications(user.id);
+      console.log(`✅ Loaded ${applications?.length || 0} my applications`);
+      setMyApplications(applications || []);
+    } catch (error) {
+      console.error('Error loading applications:', error);
+    }
+  };
 
   const loadAllData = async (isInitialLoad = true) => {
     if (!user?.id) return;

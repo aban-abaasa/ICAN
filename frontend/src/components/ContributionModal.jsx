@@ -143,9 +143,9 @@ const ContributionModal = ({ group, onClose, onContributionSuccess }) => {
     }
   };
 
-  const quickAmounts = [50, 100, 250, 500];
+  const quickAmounts = [0.5, 1, 2.5, 5]; // ICAN coins
   const paymentMethods = [
-    { id: 'ican', label: 'ICAN Account', icon: '💳', description: 'Send from your ICAN Wallet' }
+    { id: 'ican', label: 'ICAN Account', icon: '💳', description: 'Send ICAN coins from your wallet' }
   ];
 
   return (
@@ -183,21 +183,21 @@ const ContributionModal = ({ group, onClose, onContributionSuccess }) => {
             {/* Group Card */}
             <div className="bg-gradient-to-br from-amber-600/20 to-amber-500/10 border border-amber-500/30 rounded-xl p-4">
               <p className="text-xs text-amber-300 font-semibold uppercase tracking-wider mb-1">📊 Group</p>
-              <h3 className="text-xl font-bold text-white mb-2">{group?.name || 'hfgd'}</h3>
-              <p className="text-sm text-amber-200/70">Monthly Target: <span className="font-semibold text-amber-300">{currencySymbol}{group?.monthly_contribution || '100'}</span></p>
+              <h3 className="text-xl font-bold text-white mb-2">{group?.name || 'Group'}</h3>
+              <p className="text-sm text-amber-200/70">Monthly Target: <span className="font-semibold text-amber-300">₿{group?.monthly_contribution || '1'} ICAN</span></p>
             </div>
 
-            {/* Country & Currency Card - Shows Actual Detected Country */}
-            <div className="bg-gradient-to-br from-cyan-600/20 to-blue-500/10 border border-cyan-500/30 rounded-xl p-4">
-              <p className="text-xs text-cyan-300 font-semibold uppercase tracking-wider mb-1">🔐 Registered Currency</p>
+            {/* ICAN Coin Card */}
+            <div className="bg-gradient-to-br from-orange-600/20 to-amber-500/10 border border-amber-500/30 rounded-xl p-4">
+              <p className="text-xs text-amber-300 font-semibold uppercase tracking-wider mb-1">� Cryptocurrency</p>
               <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-                <Globe className="w-5 h-5 text-cyan-400" />
-                {userCountry || '🔄 Detecting...'}
+                <span className="text-2xl">₿</span>
+                ICAN Coin
               </h3>
-              <p className="text-sm text-cyan-200/70">
-                <span className="font-semibold text-cyan-300 text-base">{userCurrency}</span> {currencySymbol}
+              <p className="text-sm text-amber-200/70">
+                <span className="font-semibold text-amber-300 text-base">1 ICAN</span> = ~5,000 UGX
               </p>
-              <p className="text-xs text-cyan-200/50 mt-2">Your account country: {userCountryCode}</p>
+              <p className="text-xs text-amber-200/50 mt-2">Your country: {userCountry || userCountryCode}</p>
             </div>
           </div>
 
@@ -222,18 +222,20 @@ const ContributionModal = ({ group, onClose, onContributionSuccess }) => {
           {/* Amount Input Section */}
           <div>
             <label className="text-sm font-bold text-gray-300 mb-3 block flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-purple-400" />
-              Contribution Amount ({userCurrency})
+              <TrendingUp className="w-4 h-4 text-amber-400" />
+              Contribution Amount (ICAN Coins)
             </label>
             <div className="relative mb-4">
-              <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-purple-400 text-2xl font-bold">{currencySymbol}</span>
+              <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-amber-400 text-2xl font-bold">₿</span>
               <input
                 type="number"
                 placeholder="0.00"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 disabled={loading}
-                className="w-full pl-12 pr-4 py-4 bg-slate-800/50 border-2 border-purple-500/30 rounded-xl text-white text-xl placeholder-gray-600 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20 disabled:opacity-50 transition-all"
+                min="0.1"
+                step="0.01"
+                className="w-full pl-12 pr-4 py-4 bg-slate-800/50 border-2 border-amber-500/30 rounded-xl text-white text-xl placeholder-gray-600 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20 disabled:opacity-50 transition-all"
               />
             </div>
 
@@ -244,9 +246,9 @@ const ContributionModal = ({ group, onClose, onContributionSuccess }) => {
                   key={amt}
                   onClick={() => setAmount(amt.toString())}
                   disabled={loading}
-                  className="py-3 bg-gradient-to-b from-purple-600/40 to-blue-600/40 hover:from-purple-600/60 hover:to-blue-600/60 border border-purple-400/30 text-white font-bold rounded-lg transition-all disabled:opacity-50 hover:border-purple-400/60"
+                  className="py-3 bg-gradient-to-b from-amber-600/40 to-amber-600/20 hover:from-amber-600/60 hover:to-amber-600/40 border border-amber-500/40 hover:border-amber-500/70 text-white font-bold rounded-lg transition-all disabled:opacity-50 text-sm"
                 >
-                  {currencySymbol}{amt}
+                  ₿{amt}
                 </button>
               ))}
             </div>
@@ -291,15 +293,15 @@ const ContributionModal = ({ group, onClose, onContributionSuccess }) => {
             <div className="bg-gradient-to-br from-slate-700/40 to-slate-800/40 border border-slate-600/30 rounded-xl p-5 space-y-3">
               <div className="flex justify-between items-center pb-3 border-b border-slate-600/30">
                 <span className="text-gray-400 flex items-center gap-2"><span className="text-lg">💰</span> Your Contribution</span>
-                <span className="font-bold text-white text-lg">{currencySymbol}{parseFloat(amount).toFixed(2)}</span>
+                <span className="font-bold text-white text-lg">₿{parseFloat(amount).toFixed(2)} ICAN</span>
               </div>
               <div className="flex justify-between items-center pb-3 border-b border-slate-600/30">
                 <span className="text-gray-400 flex items-center gap-2"><span className="text-lg">📈</span> Annual Interest (10%)</span>
-                <span className="font-bold text-emerald-300">{currencySymbol}{(parseFloat(amount) * 0.1).toFixed(2)}</span>
+                <span className="font-bold text-emerald-300">₿{(parseFloat(amount) * 0.1).toFixed(2)} ICAN</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-400 flex items-center gap-2"><span className="text-lg">📊</span> Daily Growth</span>
-                <span className="font-bold text-cyan-300">{currencySymbol}{(parseFloat(amount) * 0.1 / 365).toFixed(2)}/day</span>
+                <span className="font-bold text-cyan-300">₿{(parseFloat(amount) * 0.1 / 365).toFixed(4)} ICAN/day</span>
               </div>
             </div>
           )}

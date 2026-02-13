@@ -249,7 +249,11 @@ export const createTrustGroup = async (groupData) => {
         group_id: groupId,
         user_id: groupData.creatorId,
         member_number: 1,
-        role: 'creator'
+        role: 'creator',
+        total_contributed: 0,
+        total_received: 0,
+        payment_status: 'active',
+        is_active: true
       }]);
 
     if (memberError) throw memberError;
@@ -608,7 +612,7 @@ export const getUserPendingApplications = async (userId) => {
 /**
  * Get group details with members and transactions
  */
-export const getTrustGroupDetails = async (groupId) => {
+export const getTrustGroupDetails = async (groupId, currentUserId = null) => {
   try {
     const sb = getSupabase();
     if (!sb) return null;
@@ -621,7 +625,9 @@ export const getTrustGroupDetails = async (groupId) => {
 
     if (groupError) throw groupError;
 
-    const { data: members, error: membersError } = await sb
+    // Fetch members - first try with is_active filter, fallback to all if filter fails
+    let members = [];
+    const { data: membersData, error: membersError } = await sb
       .from('trust_group_members')
       .select(`
         id,
@@ -631,13 +637,67 @@ export const getTrustGroupDetails = async (groupId) => {
         total_contributed,
         total_received,
         payment_status,
-        joined_at
+        joined_at,
+        is_active
       `)
       .eq('group_id', groupId)
-      .eq('is_active', true)
       .order('member_number');
 
-    if (membersError) throw membersError;
+    console.log('🔍 Members fetch result:', {
+      error: membersError,
+      rawData: membersData,
+      dataLength: membersData?.length,
+      isArray: Array.isArray(membersData)
+    });
+
+    if (membersError) {
+      console.warn('⚠️ Error fetching members:', membersError);
+      // Don't throw - continue without members
+    } else if (membersData && Array.isArray(membersData)) {
+      // Show all members regardless of is_active for debugging
+      members = membersData;
+      console.log(`✅ Members loaded: ${members.length} members`);
+      members.forEach((m, idx) => {
+        console.log(`   [${idx}] Member #${m.member_number}:`, {
+          id: m.id,
+          user_id: m.user_id,
+          role: m.role,
+          total_contributed: m.total_contributed,
+          total_contributed_type: typeof m.total_contributed,
+          is_active: m.is_active
+        });
+      });
+    } else {
+      console.warn('⚠️ membersData is not an array:', membersData);
+      members = [];
+    }
+
+    // Fetch current user's available ICAN balance if currentUserId provided
+    let userAvailableBalance = 0;
+    if (currentUserId) {
+      console.log('💰 Fetching current user wallet balance for user:', currentUserId);
+      const { data: walletData, error: walletError } = await sb
+        .from('ican_user_wallets')
+        .select('id, ican_balance, wallet_address')
+        .eq('user_id', currentUserId)
+        .maybeSingle();
+      
+      if (walletError) {
+        console.warn('⚠️ Error fetching wallet balance:', walletError);
+      } else if (walletData) {
+        userAvailableBalance = parseFloat(walletData.ican_balance) || 0;
+        console.log(`✅ Found wallet - Current user available balance: ₿${userAvailableBalance.toFixed(8)} ICAN`, {
+          walletId: walletData.id,
+          address: walletData.wallet_address,
+          balance: userAvailableBalance
+        });
+      } else {
+        console.warn('⚠️ No wallet found for user:', currentUserId);
+        userAvailableBalance = 0;
+      }
+    } else {
+      console.log('ℹ️ No currentUserId provided, skipping wallet balance fetch');
+    }
 
     const { data: transactions, error: transError } = await sb
       .from('trust_transactions')
@@ -653,6 +713,7 @@ export const getTrustGroupDetails = async (groupId) => {
         ...group,
         members: members || [],
         transactions: [],
+        userAvailableBalance,
         _warning: 'Trust system not fully deployed. Run DEPLOY_TRUST_SYSTEM.sql',
         _needsDeployment: true
       };
@@ -664,6 +725,7 @@ export const getTrustGroupDetails = async (groupId) => {
         ...group,
         members: members || [],
         transactions: [],
+        userAvailableBalance,
         _error: 'rls_policy_recursion',
         _message: 'RLS policies need fixing. Run: backend/db/FIX_RLS_INFINITE_RECURSION.sql',
         _needsRLSFix: true
@@ -672,11 +734,22 @@ export const getTrustGroupDetails = async (groupId) => {
 
     if (transError) throw transError;
 
-    return {
+    const returnData = {
       ...group,
       members: members || [],
-      transactions: transactions || []
+      transactions: transactions || [],
+      userAvailableBalance
     };
+    
+    console.log(`✅ getTrustGroupDetails RETURNING:`, {
+      groupName: group.name,
+      memberCount: members.length,
+      membersArray: returnData.members,
+      totalContributed: returnData.members.reduce((sum, m) => sum + (parseFloat(m.total_contributed) || 0), 0),
+      userAvailableBalance: userAvailableBalance
+    });
+
+    return returnData;
   } catch (error) {
     console.error('Error fetching group details:', error);
     // Return partial data instead of null
@@ -729,7 +802,7 @@ export const generateBlockchainHash = (transactionData) => {
 };
 
 /**
- * Record a TRUST transaction
+ * Record a TRUST transaction and DEDUCT coins from user wallet
  */
 export const recordTrustTransaction = async (transactionData) => {
   try {
@@ -739,6 +812,66 @@ export const recordTrustTransaction = async (transactionData) => {
     // Generate blockchain hash
     const blockchainHash = generateBlockchainHash(transactionData);
 
+    // STEP 1: For contributions, DEDUCT coins from user's ICAN wallet (like Pitchin invest)
+    if (transactionData.type === 'contribution') {
+      console.log('💳 STEP 1: Verifying and deducting ICAN wallet balance...');
+      
+      // Get user's ICAN wallet
+      const { data: walletData, error: walletError } = await sb
+        .from('ican_user_wallets')
+        .select('id, ican_balance, total_spent')
+        .eq('user_id', transactionData.fromUserId)
+        .single();
+
+      if (walletError) {
+        console.error('❌ Wallet fetch error:', walletError);
+        return { success: false, error: 'Could not access ICAN wallet: ' + walletError.message };
+      }
+
+      if (!walletData) {
+        return { success: false, error: 'ICAN wallet not found for user' };
+      }
+
+      const currentBalance = parseFloat(walletData.ican_balance) || 0;
+      const contributionAmount = parseFloat(transactionData.amount);
+
+      console.log('💰 Wallet balance check:', {
+        currentBalance,
+        contributionAmount,
+        sufficient: currentBalance >= contributionAmount
+      });
+
+      // Check if user has enough balance
+      if (currentBalance < contributionAmount) {
+        return { 
+          success: false, 
+          error: `❌ Insufficient ICAN balance. You have ₿${currentBalance.toFixed(8)} but need ₿${contributionAmount.toFixed(8)}` 
+        };
+      }
+
+      // DEDUCT coins from wallet
+      const newBalance = currentBalance - contributionAmount;
+      const { error: updateError } = await sb
+        .from('ican_user_wallets')
+        .update({
+          ican_balance: newBalance,
+          total_spent: (parseFloat(walletData.total_spent) || 0) + contributionAmount,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', walletData.id);
+
+      if (updateError) {
+        console.error('❌ Failed to deduct coins:', updateError);
+        return { success: false, error: 'Failed to deduct coins from wallet: ' + updateError.message };
+      }
+
+      console.log('✅ ICAN coins DEDUCTED from wallet');
+      console.log(`   → Before: ₿${currentBalance.toFixed(8)}`);
+      console.log(`   → Contribution: ₿${contributionAmount.toFixed(8)}`);
+      console.log(`   → After: ₿${newBalance.toFixed(8)}`);
+    }
+
+    // STEP 2: Record the transaction in trust_transactions table
     const { data, error } = await sb
       .from('trust_transactions')
       .insert([{
@@ -757,19 +890,148 @@ export const recordTrustTransaction = async (transactionData) => {
 
     if (error) throw error;
 
-    // Update member totals
+    // STEP 3: Update member totals
     if (data && data[0]) {
       const transaction = data[0];
+      
       if (transaction.transaction_type === 'contribution') {
-        await sb
-          .from('trust_group_members')
-          .update({ total_contributed: `total_contributed + ${transaction.amount}` })
-          .eq('user_id', transaction.from_user_id);
+        try {
+          // Check if member exists
+          const { data: memberData } = await sb
+            .from('trust_group_members')
+            .select('id, total_contributed')
+            .eq('user_id', transaction.from_user_id)
+            .eq('group_id', transaction.group_id)
+            .maybeSingle();
+
+          if (!memberData) {
+            // CREATE new member record if doesn't exist
+            console.log('📝 Creating new member record for first contribution...');
+            
+            // GET next member_number for this group (use maybeSingle in case no members exist)
+            const { data: maxMemberData } = await sb
+              .from('trust_group_members')
+              .select('member_number')
+              .eq('group_id', transaction.group_id)
+              .order('member_number', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            
+            const nextMemberNumber = (maxMemberData?.member_number || 0) + 1;
+            console.log('🆔 Contribution Member #:', {
+              existingMax: maxMemberData?.member_number,
+              calculated: nextMemberNumber,
+              isFirstMember: nextMemberNumber === 1
+            });
+            
+            const { error: createError } = await sb
+              .from('trust_group_members')
+              .insert([{
+                group_id: transaction.group_id,
+                user_id: transaction.from_user_id,
+                member_number: nextMemberNumber,
+                role: 'member',
+                total_contributed: parseFloat(transaction.amount),
+                total_received: 0,
+                payment_status: 'active',
+                is_active: true
+              }]);
+            
+            if (createError) {
+              console.warn('⚠️ Could not create member record:', createError?.message);
+            } else {
+              console.log(`✅ New member created with contribution: ₿${transaction.amount} (Member #${nextMemberNumber})`);
+            }
+          } else {
+            // UPDATE existing member with accumulated contribution
+            const currentContributed = parseFloat(memberData.total_contributed || 0);
+            const newContributed = currentContributed + parseFloat(transaction.amount);
+
+            const { error: updateError } = await sb
+              .from('trust_group_members')
+              .update({ total_contributed: newContributed })
+              .eq('user_id', transaction.from_user_id)
+              .eq('group_id', transaction.group_id);
+            
+            if (updateError) {
+              console.warn('⚠️ Could not update member contribution total:', updateError?.message);
+            } else {
+              console.log(`✅ Updated member contribution: ${currentContributed} + ${transaction.amount} = ${newContributed}`);
+            }
+          }
+        } catch (memberError) {
+          console.warn('⚠️ Error managing member record:', memberError?.message);
+          // Don't fail the transaction - it was already recorded
+        }
       } else if (transaction.transaction_type === 'payout') {
-        await sb
-          .from('trust_group_members')
-          .update({ total_received: `total_received + ${transaction.amount}` })
-          .eq('user_id', transaction.to_user_id);
+        try {
+          // Check if member exists
+          const { data: memberData } = await sb
+            .from('trust_group_members')
+            .select('id, total_received')
+            .eq('user_id', transaction.to_user_id)
+            .eq('group_id', transaction.group_id)
+            .maybeSingle();
+
+          if (!memberData) {
+            // STEP 2A: CREATE new member record if doesn't exist
+            console.log('📝 Creating new member record for payout...');
+            
+            // GET next member_number for this group (use maybeSingle in case no members exist)
+            const { data: maxMemberData } = await sb
+              .from('trust_group_members')
+              .select('member_number')
+              .eq('group_id', transaction.group_id)
+              .order('member_number', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            
+            const nextMemberNumber = (maxMemberData?.member_number || 0) + 1;
+            console.log('🆔 Payout Member #:', {
+              existingMax: maxMemberData?.member_number,
+              calculated: nextMemberNumber,
+              isFirstMember: nextMemberNumber === 1
+            });
+            
+            const { error: createError } = await sb
+              .from('trust_group_members')
+              .insert([{
+                group_id: transaction.group_id,
+                user_id: transaction.to_user_id,
+                member_number: nextMemberNumber,
+                role: 'member',
+                total_contributed: 0,
+                total_received: parseFloat(transaction.amount),
+                payment_status: 'active',
+                is_active: true
+              }]);
+            
+            if (createError) {
+              console.warn('⚠️ Could not create member record:', createError?.message);
+            } else {
+              console.log(`✅ New member created with payout: ₿${transaction.amount} (Member #${nextMemberNumber})`);
+            }
+          } else {
+            // STEP 2B: UPDATE existing member with accumulated payout
+            const currentReceived = parseFloat(memberData.total_received || 0);
+            const newReceived = currentReceived + parseFloat(transaction.amount);
+
+            const { error: updateError } = await sb
+              .from('trust_group_members')
+              .update({ total_received: newReceived })
+              .eq('user_id', transaction.to_user_id)
+              .eq('group_id', transaction.group_id);
+            
+            if (updateError) {
+              console.warn('⚠️ Could not update member payout total:', updateError?.message);
+            } else {
+              console.log(`✅ Updated member payout: ${currentReceived} + ${transaction.amount} = ${newReceived}`);
+            }
+          }
+        } catch (memberError) {
+          console.warn('⚠️ Error managing member record:', memberError?.message);
+          // Don't fail the transaction - it was already recorded
+        }
       }
     }
 
@@ -1476,7 +1738,46 @@ export const adminApproveApplication = async (applicationId, groupId, adminId) =
       return { success: false, error: 'You do not have permission to manage this group' };
     }
 
-    // Update application
+    // Get the application to find the applicant
+    const { data: app, error: appError } = await sb
+      .from('membership_applications')
+      .select('user_id')
+      .eq('id', applicationId)
+      .eq('group_id', groupId)
+      .single();
+
+    if (appError || !app) {
+      return { success: false, error: 'Application not found' };
+    }
+
+    // Get the next member number
+    const { data: memberCount, error: countError } = await sb
+      .from('trust_group_members')
+      .select('member_number', { count: 'exact' })
+      .eq('group_id', groupId)
+      .order('member_number', { ascending: false })
+      .limit(1);
+
+    const nextMemberNumber = (memberCount && memberCount.length > 0) ? (memberCount[0].member_number + 1) : 1;
+
+    // Add applicant to group members so they can vote
+    const { data: memberData, error: memberError } = await sb
+      .from('trust_group_members')
+      .insert([{
+        group_id: groupId,
+        user_id: app.user_id,
+        member_number: nextMemberNumber,
+        role: 'member',
+        is_active: true
+      }])
+      .select();
+
+    if (memberError && !memberError.message.includes('duplicate')) {
+      console.error('Error adding member:', memberError);
+      return { success: false, error: `Failed to add member: ${memberError.message}` };
+    }
+
+    // Update application status
     const { data, error } = await sb
       .from('membership_applications')
       .update({

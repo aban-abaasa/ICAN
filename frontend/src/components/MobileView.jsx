@@ -294,6 +294,23 @@ const FeatureCardWithSlideshow = ({ card, onExplore }) => {
 };
 
 const MobileView = ({ userProfile }) => {
+  const [authUser, setAuthUser] = useState(null);
+  
+  // Get the actual Supabase auth user
+  useEffect(() => {
+    const fetchAuthUser = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          setAuthUser(user);
+        }
+      } catch (error) {
+        console.error('Error fetching auth user:', error);
+      }
+    };
+    
+    fetchAuthUser();
+  }, []);
   const [activeSlide, setActiveSlide] = useState(0);
   const [currentBalance, setCurrentBalance] = useState('156,002');
   const [activeBottomTab, setActiveBottomTab] = useState('wallet');
@@ -3338,7 +3355,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {showTrustPanel && (
         <div className="fixed inset-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto pb-32">
           <div>
-            <TrustSystem currentUser={userProfile} />
+            <TrustSystem currentUser={authUser || userProfile} />
           </div>
         </div>
       )}

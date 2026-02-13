@@ -513,7 +513,26 @@ export class IcanCoinService {
 
       console.log('💰 Checking ICAN coin balance for user:', userId);
 
-      // Check if user has ICAN coin balance in user_balances table
+      // Primary: check ican_user_wallets table (correct table)
+      const { data: icanUserWallet, error: icanUserError } = await supabase
+        .from('ican_user_wallets')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (icanUserWallet) {
+        console.log('✅ User has ICAN wallet:', icanUserWallet);
+        return {
+          id: icanUserWallet.id,
+          user_id: userId,
+          wallet_address: icanUserWallet.wallet_address,
+          ican_balance: icanUserWallet.ican_balance,
+          currency: 'ICAN',
+          has_coins: parseFloat(icanUserWallet.ican_balance) > 0
+        };
+      }
+
+      // Fallback 1: check if user has ICAN coin balance in user_balances table
       const { data: balanceData, error: balanceError } = await supabase
         .from('user_balances')
         .select('*')
@@ -522,7 +541,7 @@ export class IcanCoinService {
         .maybeSingle();
 
       if (balanceData) {
-        console.log('✅ User has ICAN coins:', balanceData);
+        console.log('✅ User has ICAN coins in user_balances:', balanceData);
         return {
           id: balanceData.id,
           user_id: userId,
@@ -532,7 +551,7 @@ export class IcanCoinService {
         };
       }
 
-      // Fallback: check if user has wallet address in ican_wallets table
+      // Fallback 2: check legacy ican_wallets table
       const { data: walletData, error: walletError } = await supabase
         .from('ican_wallets')
         .select('*')
@@ -541,7 +560,7 @@ export class IcanCoinService {
         .maybeSingle();
 
       if (walletData) {
-        console.log('✅ User has ICAN wallet:', walletData);
+        console.log('✅ User has ICAN wallet (legacy):', walletData);
         return walletData;
       }
 
@@ -549,6 +568,65 @@ export class IcanCoinService {
       return null;
     } catch (error) {
       console.error('❌ Error getting user wallet:', error);
+      return null;
+    }
+  }
+
+  // Auto-create wallet for new users if it doesn't exist
+  async ensureUserWallet(userId, userEmail = '') {
+    try {
+      const supabase = this.initSupabase();
+      
+      // First, check if wallet already exists
+      const existingWallet = await this.getUserWallet(userId);
+      if (existingWallet) {
+        console.log('✅ User wallet already exists:', existingWallet.id);
+        return existingWallet;
+      }
+
+      // Wallet doesn't exist, create one
+      console.log('📝 Creating new ICAN wallet for user:', userId);
+      
+      const walletAddress = `ican_${userId.substring(0, 8)}_${Date.now()}`;
+      
+      const { data: newWallet, error: createError } = await supabase
+        .from('ican_user_wallets')
+        .insert([{
+          user_id: userId,
+          wallet_address: walletAddress,
+          ican_balance: 0,
+          total_spent: 0,
+          total_earned: 0,
+          purchase_count: 0,
+          sale_count: 0,
+          is_verified: false,
+          status: 'active'
+        }])
+        .select()
+        .single();
+
+      if (createError) {
+        // Wallet creation might fail if user already had one created by another process
+        // Try fetching again
+        console.log('Wallet creation had error, retrying fetch:', createError.message);
+        const retryWallet = await this.getUserWallet(userId);
+        if (retryWallet) {
+          return retryWallet;
+        }
+        throw createError;
+      }
+
+      console.log('✅ New ICAN wallet created successfully:', newWallet.id);
+      return {
+        id: newWallet.id,
+        user_id: userId,
+        wallet_address: newWallet.wallet_address,
+        ican_balance: 0,
+        currency: 'ICAN',
+        has_coins: false
+      };
+    } catch (error) {
+      console.error('❌ Error ensuring user wallet:', error);
       return null;
     }
   }
