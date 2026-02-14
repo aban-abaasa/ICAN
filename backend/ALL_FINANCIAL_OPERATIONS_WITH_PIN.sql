@@ -61,17 +61,23 @@ BEGIN
   SET failed_pin_attempts = 0
   WHERE user_id = p_user_id;
 
-  -- Deduct from user wallet
+  -- Deduct from user wallet (customer gives physical cash to agent)
   UPDATE public.wallet_accounts
   SET balance = balance - p_amount,
       updated_at = now()
   WHERE user_id = p_user_id AND currency = p_curr AND balance >= p_amount;
 
+  -- Check if wallet deduction was successful
+  IF NOT FOUND THEN
+    RETURN QUERY SELECT false, 'Insufficient wallet balance', 0::numeric, 0::numeric;
+    RETURN;
+  END IF;
+
   -- Get new user balance
   SELECT balance INTO v_user_balance FROM public.wallet_accounts 
   WHERE user_id = p_user_id AND currency = p_curr;
 
-  -- Add to agent float
+  -- Add to agent float (agent receives the cash)
   UPDATE public.agent_floats
   SET current_balance = current_balance + p_amount,
       updated_at = now()
@@ -302,30 +308,41 @@ BEGIN
   v_commission := (p_amount * 2.5) / 100;
   v_net_amount := p_amount - v_commission;
 
-  -- Deduct from user wallet
+  -- Step 1: Deduct full amount from agent's float (agent gives cash to customer)
+  UPDATE public.agent_floats
+  SET current_balance = current_balance - p_amount, updated_at = now()
+  WHERE agent_id = p_agent_id AND currency = p_curr AND current_balance >= p_amount;
+
+  IF NOT FOUND THEN
+    RETURN QUERY SELECT false, 'Insufficient agent float balance', 0::numeric, 0::numeric;
+    RETURN;
+  END IF;
+
+  -- Step 2: Add full amount to customer wallet (customer receives cash)
   UPDATE public.wallet_accounts
-  SET balance = balance - v_net_amount, updated_at = now()
-  WHERE user_id = p_user_id AND currency = p_curr AND balance >= v_net_amount;
+  SET balance = balance + p_amount, updated_at = now()
+  WHERE user_id = p_user_id AND currency = p_curr;
+
+  IF NOT FOUND THEN
+    -- Wallet doesn't exist, create it
+    INSERT INTO public.wallet_accounts (user_id, currency, balance, created_at, updated_at)
+    VALUES (p_user_id, p_curr, p_amount, now(), now());
+  END IF;
 
   SELECT balance INTO v_user_balance FROM public.wallet_accounts 
   WHERE user_id = p_user_id AND currency = p_curr;
 
-  -- Add commission to agent
+  -- Step 3: Add commission back to agent (agent earns commission on the transaction)
   UPDATE public.agent_floats
   SET current_balance = current_balance + v_commission, updated_at = now()
   WHERE agent_id = p_agent_id AND currency = p_curr;
-
-  IF NOT FOUND THEN
-    INSERT INTO public.agent_floats (agent_id, currency, current_balance, created_at, updated_at)
-    VALUES (p_agent_id, p_curr, v_commission, now(), now());
-  END IF;
 
   SELECT current_balance INTO v_agent_balance FROM public.agent_floats 
   WHERE agent_id = p_agent_id AND currency = p_curr;
 
   INSERT INTO public.wallet_transactions (user_id, transaction_type, amount, currency, status, created_at, metadata)
-  VALUES (p_user_id, 'cashout', v_net_amount, p_curr, 'completed', now(), 
-    jsonb_build_object('commission', v_commission, 'gross_amount', p_amount));
+  VALUES (p_user_id, 'cashout', p_amount, p_curr, 'completed', now(), 
+    jsonb_build_object('commission', v_commission, 'gross_amount', p_amount, 'agent_id', p_agent_id));
 
   RETURN QUERY SELECT true, 'PIN verified. Cash-out completed', v_user_balance, v_agent_balance;
 

@@ -149,6 +149,13 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
   const [balancesLoading, setBalancesLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState(null);
   const [userEmail, setUserEmail] = useState(null);
+
+  // 📋 Pending Cash-In Requests from Agents (Withdraw tab)
+  const [pendingCashInRequests, setPendingCashInRequests] = useState([]);
+  const [loadingPendingRequests, setLoadingPendingRequests] = useState(false);
+  const [confirmingRequest, setConfirmingRequest] = useState(null);
+  const [requestConfirmationPin, setRequestConfirmationPin] = useState('');
+  const [requestConfirmationLoading, setRequestConfirmationLoading] = useState(false);
   
   // 📊 Candlestick Chart States
   const [showTradeModal, setShowTradeModal] = useState(false);
@@ -432,6 +439,49 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
     }
   };
 
+  // 📋 Load Pending Cash-In Requests (from agents, awaiting user confirmation)
+  const loadPendingCashInRequests = async (userId) => {
+    try {
+      setLoadingPendingRequests(true);
+      const supabase = getSupabaseClient();
+
+      // Get pending cash-in requests from pending_cash_in_requests table
+      const { data: requests, error } = await supabase
+        .from('pending_cash_in_requests')
+        .select('id, amount, currency, status, created_at, agent_id')
+        .eq('user_id', userId)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('❌ Error loading pending cash-in requests:', error);
+        setPendingCashInRequests([]);
+        return;
+      }
+
+      if (requests && requests.length > 0) {
+        // Format requests for display
+        const formattedRequests = requests.map(req => ({
+          id: req.id,
+          amount: parseFloat(req.amount),
+          currency: req.currency,
+          status: req.status,
+          created_at: req.created_at,
+          agent_id: req.agent_id
+        }));
+        setPendingCashInRequests(formattedRequests);
+        console.log('📋 Pending cash-in requests loaded:', formattedRequests.length);
+      } else {
+        setPendingCashInRequests([]);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching pending requests:', error);
+      setPendingCashInRequests([]);
+    } finally {
+      setLoadingPendingRequests(false)
+    }
+  };
+
   // Build wallet data with real balances from database
   const walletData = {
     USD: {
@@ -596,7 +646,14 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
     }
   }, [editingBusinessProfile]);
 
-  // 💳 SEND MONEY HANDLER - Support both ICAN users and MOMO
+  // � Load pending cash-in requests when withdraw tab is opened or user is loaded
+  useEffect(() => {
+    if (activeTab === 'withdraw' && currentUserId && pendingCashInRequests.length === 0) {
+      loadPendingCashInRequests(currentUserId);
+    }
+  }, [activeTab, currentUserId]);
+
+  // �💳 SEND MONEY HANDLER - Support both ICAN users and MOMO
   const handleSendMoney = async (e) => {
     e.preventDefault();
     if (!sendForm.recipient || !sendForm.amount) {
@@ -755,6 +812,18 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
     
     setIsApproving(true);
     try {
+      // Special handling for confirming pending cash-in requests
+      if (pendingTransaction.type === 'confirmCashIn') {
+        await handleConfirmPendingCashIn(pin);
+        return;
+      }
+
+      // Special handling for cash-in transactions from withdraw tab
+      if (pendingTransaction.type === 'cashIn') {
+        await handleWithdrawCashInConfirm(pin);
+        return;
+      }
+
       const supabase = getSupabaseClient();
 
       if (result && result.success) {
@@ -1911,6 +1980,234 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
         message: `Error: ${error.message}`
       });
       setTransactionInProgress(false);
+    }
+  };
+
+  /**
+   * Handle Cash-In Confirmation from Withdraw Tab
+   * User confirms receiving cash-in with their PIN
+   */
+  const handleWithdrawCashInConfirm = async (pin) => {
+    try {
+      if (!pendingTransaction || pendingTransaction.type !== 'cashIn') {
+        throw new Error('Invalid transaction type');
+      }
+
+      setIsApproving(true);
+      setApprovalError(null);
+
+      const supabase = getSupabaseClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      // User's account number should be available
+      if (!userAccount) {
+        // Try to check/create account
+        const account = await walletAccountService.checkUserAccount(user.id);
+        if (!account) {
+          throw new Error('Wallet account not found. Please create one first.');
+        }
+        setUserAccount(account);
+      }
+
+      // Call approveC ashInWithPin with user's PIN verification
+      // Note: we don't have a requestId from agent since they didn't create one,
+      // so we generate a UUID for this transaction
+      const transactionId = crypto.randomUUID ? crypto.randomUUID() : `cash-in-${Date.now()}`;
+
+      const result = await agentService.approveCashInWithPin({
+        requestId: transactionId,
+        userAccountId: userAccount?.account_number || '',
+        pin: pin,
+        amount: pendingTransaction.amount,
+        currency: pendingTransaction.currency
+      });
+
+      setIsApproving(false);
+
+      if (result.success && result.pinValid) {
+        // Success!
+        setShowApprovalModal(false);
+        setPendingTransaction(null);
+
+        // Show success notification
+        setTransactionResult({
+          type: 'withdraw_cashin',
+          success: true,
+          message: `✅ Cash-in confirmed! ${pendingTransaction.amount} ${pendingTransaction.currency} added to your wallet.`
+        });
+
+        // Reload wallet balances
+        if (currentUserId) {
+          await loadWalletBalances(currentUserId);
+        }
+
+        // Clear form
+        setWithdrawForm({ method: '', phoneAccount: '', amount: '', bankName: '' });
+
+        // Auto-close success after 3 seconds
+        setTimeout(() => {
+          setTransactionResult(null);
+        }, 3000);
+      } else {
+        setApprovalError(result.error || 'PIN verification failed. Please try again.');
+      }
+    } catch (error) {
+      setIsApproving(false);
+      setApprovalError(error.message || 'An error occurred. Please try again.');
+      console.error('❌ Cash-in confirmation failed:', error);
+    }
+  };
+
+  /**
+   * Handle Confirm Pending Cash-In with PIN
+   * Called from approval modal for pending cash-in requests
+   */
+  const handleConfirmPendingCashIn = async (pin) => {
+    try {
+      if (!pendingTransaction || pendingTransaction.type !== 'confirmCashIn') {
+        throw new Error('Invalid transaction type');
+      }
+
+      const supabase = getSupabaseClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      // Hash the PIN using the EXACT same algorithm as walletAccountService
+      const hashPIN = (pinValue) => {
+        let hash = 0;
+        const string = `pin-${pinValue}-salt-ican-hash`;
+        
+        for (let i = 0; i < string.length; i++) {
+          const char = string.charCodeAt(i);
+          hash = ((hash << 5) - hash) + char;
+          hash = hash & hash; // Convert to 32bit integer
+        }
+        
+        return btoa(`hash-${Math.abs(hash)}-${pinValue.length}`);
+      };
+
+      const pinHash = hashPIN(pin);
+
+      // Call confirm_pending_cash_in RPC
+      const { data, error } = await supabase.rpc('confirm_pending_cash_in', {
+        p_request_id: pendingTransaction.requestId,
+        p_pin_attempt: pinHash
+      });
+
+      setIsApproving(false);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (data && data[0]?.success) {
+        // Success!
+        setShowApprovalModal(false);
+        setPendingTransaction(null);
+
+        // Show success notification
+        setTransactionResult({
+          type: 'confirm_cashin',
+          success: true,
+          message: `✅ Cash-in confirmed! ${pendingTransaction.amount} ${pendingTransaction.currency} added to your wallet.`
+        });
+
+        // Reload wallet balances and pending requests
+        if (currentUserId) {
+          await loadWalletBalances(currentUserId);
+          await loadPendingCashInRequests(currentUserId);
+        }
+
+        // Auto-close success after 3 seconds
+        setTimeout(() => {
+          setTransactionResult(null);
+        }, 3000);
+      } else {
+        const errorMsg = data && data[0] ? data[0].message : 'Failed to confirm cash-in';
+        setApprovalError(errorMsg);
+      }
+    } catch (error) {
+      setIsApproving(false);
+      setApprovalError(error.message || 'An error occurred. Please try again.');
+      console.error('❌ Cash-in confirmation failed:', error);
+    }
+  };
+
+  /**
+    try {
+      setRequestConfirmationLoading(true);
+
+      const supabase = getSupabaseClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      // Get the request details
+      const request = pendingCashInRequests.find(r => r.id === requestId);
+      if (!request) {
+        throw new Error('Request not found');
+      }
+
+      // Get user's account number for approveCashInWithPin
+      const account = await walletAccountService.checkUserAccount(user.id);
+      if (!account) {
+        throw new Error('Wallet account not found');
+      }
+
+      // Call the approve function with PIN
+      const result = await agentService.approveCashInWithPin({
+        requestId: requestId,
+        userAccountId: account.account_number,
+        pin: pin,
+        amount: request.amount,
+        currency: request.currency
+      });
+
+      setRequestConfirmationLoading(false);
+
+      if (result.success && result.pinValid) {
+        // Request confirmed successfully
+        setPendingCashInRequests(prev => prev.filter(r => r.id !== requestId));
+        setConfirmingRequest(null);
+        setRequestConfirmationPin('');
+
+        setTransactionResult({
+          type: 'confirm_cashin',
+          success: true,
+          message: `✅ Cash-in confirmed! ${request.amount} ${request.currency} added to your wallet.`
+        });
+
+        // Reload balances and pending requests
+        await loadWalletBalances(user.id);
+        await loadPendingCashInRequests(user.id);
+
+        // Auto-close result after 3 seconds
+        setTimeout(() => {
+          setTransactionResult(null);
+        }, 3000);
+      } else {
+        setTransactionResult({
+          type: 'confirm_cashin',
+          success: false,
+          message: `❌ ${result.error || 'PIN verification failed'}`
+        });
+      }
+    } catch (error) {
+      setRequestConfirmationLoading(false);
+      setTransactionResult({
+        type: 'confirm_cashin',
+        success: false,
+        message: `❌ Error: ${error.message}`
+      });
     }
   };
 
@@ -3665,105 +3962,61 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
         <div className="glass-card p-6">
           <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
             <ArrowUpRight className="w-5 h-5 text-orange-400" />
-            Withdraw Money
+            Receive Cash-In
           </h3>
-          
-          {/* Withdrawal Tips */}
-          <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-4 mb-6">
-            <p className="text-sm text-orange-300">
-              ⚡ <strong>Fast withdrawals:</strong> Most methods process within 5-30 minutes
-            </p>
-          </div>
-          
-          <div className="space-y-4">
-            <p className="text-gray-400 mb-6">Choose your preferred withdrawal method:</p>
-            
-            {/* Agent Option - Withdraw to Agent */}
-            <button
-              onClick={() => {
-                setAgentTransactionType('withdraw');
-                setActiveModal('selectAgent');
-              }}
-              className="w-full p-4 bg-gradient-to-br from-purple-500/20 to-purple-600/20 border border-purple-400/50 hover:border-purple-400/80 rounded-lg transition-all text-left group"
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-purple-500/30 rounded-lg group-hover:bg-purple-500/50 transition-all">
-                  <Users className="w-5 h-5 text-purple-400" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-white group-hover:text-purple-300 transition-all">🏪 Agent</p>
-                  <p className="text-sm text-gray-400">Withdraw to any agent</p>
-                </div>
-                <div className="text-xs bg-purple-500/30 px-3 py-1 rounded-full text-purple-300">Fast</div>
-              </div>
-            </button>
-            
-            {/* Agent Cash-Out Option (Only for Agents) */}
-            {/* 
-            {isAgent && (
-              <button
-                onClick={() => setActiveTab('agent')}
-                className="w-full p-4 bg-gradient-to-br from-yellow-500/20 to-yellow-600/20 border border-yellow-400/50 hover:border-yellow-400/80 rounded-lg transition-all text-left group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="p-3 bg-yellow-500/30 rounded-lg group-hover:bg-yellow-500/50 transition-all">
-                    <Download className="w-5 h-5 text-yellow-400" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-white group-hover:text-yellow-300 transition-all">🏪 Agent Terminal</p>
-                    <p className="text-sm text-gray-400">Cash-out with 2.5% commission</p>
-                  </div>
-                  <div className="text-xs bg-yellow-500/30 px-3 py-1 rounded-full text-yellow-300">💰 Earn</div>
-                </div>
-              </button>
-            )}
-            */}
-            
-            <button
-              onClick={() => setActiveModal('withdraw')}
-              className="w-full p-4 bg-gradient-to-br from-orange-500/20 to-orange-600/20 border border-orange-400/50 hover:border-orange-400/80 rounded-lg transition-all text-left"
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-orange-500/30 rounded-lg">
-                  <Banknote className="w-5 h-5 text-orange-400" />
-                </div>
-                <div>
-                  <p className="font-semibold text-white">Mobile Money</p>
-                  <p className="text-sm text-gray-400">MTN, Airtel, Vodafone</p>
-                </div>
-              </div>
-            </button>
 
-            <button
-              onClick={() => setActiveModal('withdraw')}
-              className="w-full p-4 bg-gradient-to-br from-red-500/20 to-red-600/20 border border-red-400/50 hover:border-red-400/80 rounded-lg transition-all text-left"
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-red-500/30 rounded-lg">
-                  <Upload className="w-5 h-5 text-red-400" />
-                </div>
-                <div>
-                  <p className="font-semibold text-white">Bank Account</p>
-                  <p className="text-sm text-gray-400">Direct to your bank</p>
-                </div>
-              </div>
-            </button>
+          <p className="text-gray-400 text-sm mb-6">
+            🤝 Receive cash from agents. Confirm each pending request with your PIN.
+          </p>
 
-            <button
-              onClick={() => setActiveModal('withdraw')}
-              className="w-full p-4 bg-gradient-to-br from-pink-500/20 to-pink-600/20 border border-pink-400/50 hover:border-pink-400/80 rounded-lg transition-all text-left"
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-pink-500/30 rounded-lg">
-                  <Download className="w-5 h-5 text-pink-400" />
+          {/* PENDING CASH-IN REQUESTS */}
+          {pendingCashInRequests && pendingCashInRequests.length > 0 ? (
+            <div className="space-y-3">
+              {pendingCashInRequests.map((request) => (
+                <div
+                  key={request.id}
+                  className="p-4 bg-white/5 border border-orange-400/40 rounded-lg hover:bg-white/10 transition-all"
+                >
+                  <div className="flex items-baseline justify-between mb-3">
+                    <div>
+                      <p className="text-white font-semibold">
+                        {request.amount} {request.currency}
+                      </p>
+                      <p className="text-sm text-gray-400 mt-1">
+                        From Agent • Created {new Date(request.created_at).toLocaleString()}
+                      </p>
+                    </div>
+                    <span className="px-3 py-1 bg-orange-500/30 text-orange-300 rounded-full text-xs font-medium">
+                      Pending
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setPendingTransaction({
+                        type: 'confirmCashIn',
+                        requestId: request.id,
+                        amount: request.amount,
+                        currency: request.currency
+                      });
+                      setShowApprovalModal(true);
+                    }}
+                    className="w-full px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg font-medium hover:shadow-lg transition-all text-sm"
+                  >
+                    ✓ Confirm with PIN
+                  </button>
                 </div>
-                <div>
-                  <p className="font-semibold text-white">Cash Pickup</p>
-                  <p className="text-sm text-gray-400">Agent locations</p>
-                </div>
-              </div>
-            </button>
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <DollarSign className="w-12 h-12 text-orange-400/30 mx-auto mb-3" />
+              <p className="text-gray-400 mb-2">No pending cash-in requests</p>
+              <p className="text-gray-500 text-sm">
+                Ask an agent to initiate a cash-in transfer for you
+              </p>
+            </div>
+          )}
         </div>
       )}
 

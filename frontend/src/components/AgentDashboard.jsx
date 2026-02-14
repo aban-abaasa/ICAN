@@ -14,6 +14,7 @@ import {
   Lock
 } from 'lucide-react';
 import agentService from '../services/agentService';
+import { CountryService } from '../services/countryService';
 import PinResetFlow from './PinResetFlow';
 
 /**
@@ -30,12 +31,13 @@ const AgentDashboard = () => {
   const [ugxFloat, setUgxFloat] = useState(0);
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState(null);
+  const [localCurrency, setLocalCurrency] = useState('UGX'); // Default to UGX
 
   // Cash-In Form
   const [cashInForm, setCashInForm] = useState({
     userAccountId: '',
     amount: '',
-    currency: 'USD',
+    currency: 'UGX', // Will update with local currency
     description: ''
   });
 
@@ -43,7 +45,7 @@ const AgentDashboard = () => {
   const [cashOutForm, setCashOutForm] = useState({
     userAccountId: '',
     amount: '',
-    currency: 'USD',
+    currency: 'UGX', // Will update with local currency
     phoneNumber: ''
   });
 
@@ -90,6 +92,17 @@ const AgentDashboard = () => {
   // ============================================
   // LIFECYCLE
   // ============================================
+
+  useEffect(() => {
+    // Get user's country and set local currency
+    const savedCountry = localStorage.getItem('ican_country');
+    if (savedCountry) {
+      const currencyCode = CountryService.getCurrencyCode(savedCountry);
+      setLocalCurrency(currencyCode);
+      setCashInForm(prev => ({ ...prev, currency: currencyCode }));
+      setCashOutForm(prev => ({ ...prev, currency: currencyCode }));
+    }
+  }, []);
 
   useEffect(() => {
     initializeAgent();
@@ -187,54 +200,15 @@ const AgentDashboard = () => {
     setNotification(null);
 
     try {
-      // Validate PIN was entered
-      if (!confirmationPin || confirmationPin.length !== 4) {
-        setNotification({
-          type: 'error',
-          title: '❌ PIN Required',
-          message: 'Please enter your 4-digit PIN'
-        });
-        setLoading(false);
-        return;
-      }
-
-      // Look up the customer account to get their user_id
-      const { data: userAccount, error: userError } = await agentService.supabase
-        .from('user_accounts')
-        .select('user_id')
-        .eq('account_number', confirmationData.userAccountId)
-        .single();
-
-      if (userError || !userAccount) throw new Error('Customer account not found');
-
-      // Get agent's user_id for PIN verification from agents table
-      const { data: agentData, error: agentError } = await agentService.supabase
-        .from('agents')
-        .select('user_id')
-        .eq('id', agentService.agentId)
-        .single();
-
-      if (agentError || !agentData) throw new Error('Agent account not found');
-
-      // Use universal transaction service with PIN verification
-      // Verify AGENT's PIN, but process transaction for CUSTOMER
-      const universalTransactionService = (await import('../services/universalTransactionService')).default;
-      
       const amount = parseFloat(confirmationData.amount);
       const currency = confirmationData.currency;
-      
-      const result = await universalTransactionService.processTransaction({
-        transactionType: 'cashin',
-        userId: userAccount.user_id,  // CUSTOMER's account
-        pin_user_id: agentData.user_id,  // Verify AGENT's PIN
-        agentId: agentService.agentId,
-        pin: confirmationPin,
-        currency: currency,
+
+      // Create cash-in request (user must approve with PIN on their side)
+      const result = await agentService.processCashIn({
+        userAccountId: confirmationData.userAccountId,
         amount: amount,
-        metadata: {
-          agent_name: agentData?.agent_name || 'Agent',
-          description: confirmationData.description || 'Cash-in transaction'
-        }
+        currency: currency,
+        description: confirmationData.description || 'Cash-in transaction'
       });
 
       setLoading(false);
@@ -244,17 +218,17 @@ const AgentDashboard = () => {
       if (result.success) {
         setNotification({
           type: 'success',
-          title: '✅ Cash-In Successful',
-          message: `${amount} ${currency} received from ${confirmationData.customerName}. New agent float: ${result.agent_balance}`
+          title: '📋 Cash-In Request Created',
+          message: `Request created for ${amount} ${currency} to ${confirmationData.customerName}. User must confirm with their PIN to complete.`
         });
-        setCashInForm({ userAccountId: '', amount: '', currency: 'USD', description: '' });
+        setCashInForm({ userAccountId: '', amount: '', currency: localCurrency, description: '' });
         await refreshFloatBalances();
         await refreshRecentTransactions();
       } else {
         setNotification({
           type: 'error',
-          title: '❌ Cash-In Failed',
-          message: result.message || 'Transaction failed'
+          title: '❌ Request Failed',
+          message: result.error || 'Failed to create cash-in request'
         });
       }
     } catch (error) {
@@ -329,44 +303,15 @@ const AgentDashboard = () => {
         return;
       }
 
-      // Look up the customer account to get their user_id
-      const { data: userAccount, error: userError } = await agentService.supabase
-        .from('user_accounts')
-        .select('user_id, account_holder_name')
-        .eq('account_number', confirmationData.userAccountId)
-        .single();
-
-      if (userError || !userAccount) throw new Error('Customer account not found');
-
-      // Get agent's user_id for PIN verification from agents table
-      const { data: agentData, error: agentError } = await agentService.supabase
-        .from('agents')
-        .select('user_id')
-        .eq('id', agentService.agentId)
-        .single();
-
-      if (agentError || !agentData) throw new Error('Agent account not found');
-
-      // Use universal transaction service with PIN verification
-      // Verify AGENT's PIN, but process transaction for CUSTOMER
-      const universalTransactionService = (await import('../services/universalTransactionService')).default;
-      
       const amount = parseFloat(confirmationData.amount);
       const currency = confirmationData.currency;
-      
-      const result = await universalTransactionService.processTransaction({
-        transactionType: 'cashout',
-        userId: userAccount.user_id,  // CUSTOMER's account
-        pin_user_id: agentData.user_id,  // Verify AGENT's PIN
-        agentId: agentService.agentId,
-        pin: confirmationPin,
-        currency: currency,
+
+      // Process cash-out with PIN verification using agent service
+      const result = await agentService.processCashOutWithPin({
+        userAccountId: confirmationData.userAccountId,
         amount: amount,
-        metadata: {
-          commission_rate: 2.5,
-          recipient_name: userAccount.account_holder_name,
-          description: 'Cash-out transaction'
-        }
+        currency: currency,
+        pin: confirmationPin
       });
 
       setLoading(false);
@@ -374,19 +319,20 @@ const AgentDashboard = () => {
       setConfirmationPin('');
 
       if (result.success) {
+        const commission = parseFloat(result.commission_earned || ((amount * 2.5) / 100));
         setNotification({
           type: 'success',
-          title: '✅ Payment Sent to Wallet',
-          message: `${amount} ${currency} sent to customer wallet. Commission earned: ${((amount * 2.5) / 100).toFixed(2)} ${currency}`
+          title: '✅ Cash-Out Successful',
+          message: `${amount} ${currency} sent to ${confirmationData.customerName}. Commission earned: ${commission.toFixed(2)} ${currency}`
         });
-        setCashOutForm({ userAccountId: '', amount: '', currency: 'USD', phoneNumber: '' });
+        setCashOutForm({ userAccountId: '', amount: '', currency: localCurrency, phoneNumber: '' });
         await refreshFloatBalances();
         await refreshRecentTransactions();
       } else {
         setNotification({
           type: 'error',
           title: '❌ Cash-Out Failed',
-          message: result.message || 'Transaction failed'
+          message: result.error || 'Transaction failed'
         });
       }
     } catch (error) {
@@ -395,7 +341,7 @@ const AgentDashboard = () => {
       setNotification({
         type: 'error',
         title: '❌ Error',
-        message: error.message
+        message: error.message || 'An unexpected error occurred'
       });
     }
   };
@@ -560,79 +506,112 @@ const AgentDashboard = () => {
     const actionButtonText = isCashIn ? '✅ Confirm Cash-In' : '✅ Confirm Cash-Out';
 
     return (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-purple-500/30 rounded-lg p-8 max-w-md w-full">
-          {/* Header */}
-          <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-            {isCashIn ? '💰' : '📤'} {title}
-          </h2>
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
+        {/* Modal Container - Responsive with scroll handling */}
+        <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-purple-500/30 rounded-lg w-full max-w-md max-h-[90vh] sm:max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+          
+          {/* Fixed Header */}
+          <div className="flex-shrink-0 bg-gradient-to-r from-slate-800 to-slate-700 border-b border-purple-500/20 px-6 sm:px-8 py-4 sm:py-5">
+            <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
+              {isCashIn ? '💰' : '📤'} <span>{title}</span>
+            </h2>
+          </div>
 
-          {/* Confirmation Details */}
-          <div className="space-y-4 mb-6">
-            <div className="bg-white/10 border border-white/20 rounded-lg p-4">
-              <p className="text-gray-400 text-sm mb-1">Transaction Type</p>
-              <p className="text-white font-semibold text-lg">
+          {/* Scrollable Content Area */}
+          <div className="flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6 py-4 sm:py-6 space-y-3 sm:space-y-4">
+            
+            {/* Transaction Type */}
+            <div className="bg-white/10 border border-white/20 rounded-lg p-3 sm:p-4">
+              <p className="text-gray-400 text-xs sm:text-sm mb-1">Transaction Type</p>
+              <p className="text-white font-semibold text-base sm:text-lg">
                 {isCashIn ? 'Cash-In (Transfer to User)' : 'Cash-Out (User Withdrawal)'}
               </p>
             </div>
 
+            {/* Customer Name */}
             {confirmationData.customerName && (
-              <div className="bg-blue-500/10 border border-blue-400/30 rounded-lg p-4">
-                <p className="text-gray-400 text-sm mb-1">Customer Name</p>
-                <p className="text-white font-semibold text-lg">
+              <div className="bg-blue-500/10 border border-blue-400/30 rounded-lg p-3 sm:p-4">
+                <p className="text-gray-400 text-xs sm:text-sm mb-1">Customer Name</p>
+                <p className="text-white font-semibold text-base sm:text-lg">
                   👤 {confirmationData.customerName}
                 </p>
               </div>
             )}
 
-            <div className="bg-white/10 border border-white/20 rounded-lg p-4">
-              <p className="text-gray-400 text-sm mb-1">Amount</p>
-              <p className="text-white font-bold text-2xl">
+            {/* Amount - Prominent Display */}
+            <div className="bg-white/10 border border-white/20 rounded-lg p-3 sm:p-4 shadow-lg">
+              <p className="text-gray-400 text-xs sm:text-sm mb-2">Amount</p>
+              <p className="text-white font-bold text-2xl sm:text-3xl">
                 {confirmationData.currency} {parseFloat(confirmationData.amount).toLocaleString()}
               </p>
             </div>
 
-            <div className="bg-white/10 border border-white/20 rounded-lg p-4">
-              <p className="text-gray-400 text-sm mb-1">User Account ID</p>
-              <p className="text-white font-mono text-sm break-all">
+            {/* User Account ID */}
+            <div className="bg-white/10 border border-white/20 rounded-lg p-3 sm:p-4">
+              <p className="text-gray-400 text-xs sm:text-sm mb-1">User Account ID</p>
+              <p className="text-white font-mono text-xs sm:text-sm break-all bg-slate-700/50 p-2 rounded mt-2">
                 {confirmationData.userAccountId}
               </p>
             </div>
 
+            {/* Description if available */}
             {confirmationData.description && (
-              <div className="bg-white/10 border border-white/20 rounded-lg p-4">
-                <p className="text-gray-400 text-sm mb-1">Description</p>
+              <div className="bg-white/10 border border-white/20 rounded-lg p-3 sm:p-4">
+                <p className="text-gray-400 text-xs sm:text-sm mb-1">Description</p>
                 <p className="text-white text-sm">{confirmationData.description}</p>
               </div>
             )}
 
+            {/* Commission Note for Cash-Out */}
             {!isCashIn && (
-              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
-                <p className="text-yellow-300 text-sm">
+              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 sm:p-4">
+                <p className="text-yellow-300 text-xs sm:text-sm">
                   <strong>💡 Note:</strong> You will earn 2.5% commission on this transaction
                 </p>
               </div>
             )}
 
-            {/* PIN INPUT - REQUIRED FOR APPROVAL */}
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
-              <label className="block text-blue-300 text-sm font-semibold mb-2">
-                🔐 Enter Your PIN to Approve
-              </label>
-              <input
-                type="password"
-                placeholder="••••"
-                maxLength="4"
-                value={confirmationPin}
-                onChange={(e) => setConfirmationPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                className="w-full px-4 py-2 bg-white/10 border border-blue-400/50 rounded-lg text-white placeholder-gray-500 text-center tracking-widest focus:outline-none focus:border-blue-400 transition-all"
-              />
-              <p className="text-xs text-gray-400 mt-1">Your 4-digit transaction PIN</p>
-            </div>
+            {/* PIN INPUT SECTION - Only for Cash-Out */}
+            {!isCashIn && (
+              <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 border-2 border-blue-400/50 rounded-xl p-4 sm:p-5 mt-4 sm:mt-6">
+                <label className="block text-blue-300 text-base sm:text-lg font-bold mb-3 flex items-center gap-2">
+                  🔐 Enter Your PIN
+                </label>
+                <input
+                  type="password"
+                  placeholder="• • • •"
+                  maxLength="4"
+                  value={confirmationPin}
+                  onChange={(e) => setConfirmationPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-white/10 border-2 border-blue-400/50 rounded-lg text-white placeholder-gray-500 text-center text-2xl sm:text-3xl tracking-widest font-bold focus:outline-none focus:border-blue-300 focus:bg-white/20 transition-all"
+                  inputMode="numeric"
+                />
+                <p className="text-xs sm:text-sm text-gray-400 mt-2 text-center">Your 4-digit transaction PIN</p>
+                {confirmationPin.length === 4 && (
+                  <p className="text-xs sm:text-sm text-green-400 mt-2 text-center font-semibold">✓ PIN ready for approval</p>
+                )}
+              </div>
+            )}
+
+            {/* INFO for Cash-In */}
+            {isCashIn && (
+              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 sm:p-4 mt-4 sm:mt-6">
+                <p className="text-green-300 text-xs sm:text-sm">
+                  <strong>ℹ️ Note:</strong> User must confirm this cash-in request with their PIN to complete the transaction.
+                </p>
+              </div>
+            )}
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-3">
+          {/* Fixed Footer - Action Buttons */}
+          <div className="flex-shrink-0 border-t border-slate-700/50 bg-slate-800/50 px-4 sm:px-6 py-4 space-y-2 sm:space-y-3">
+            <button
+              onClick={isCashIn ? processCashInConfirmed : processCashOutConfirmed}
+              disabled={loading || (!isCashIn && confirmationPin.length !== 4)}
+              className={`w-full px-4 sm:px-5 py-3 sm:py-4 bg-gradient-to-r ${actionColor} text-white rounded-lg font-bold text-base sm:text-lg hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              {loading ? '⏳ Processing...' : actionButtonText}
+            </button>
             <button
               onClick={() => {
                 setShowConfirmation(false);
@@ -641,16 +620,9 @@ const AgentDashboard = () => {
                 setConfirmationPin('');
               }}
               disabled={loading}
-              className="flex-1 px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all font-medium disabled:opacity-50"
+              className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-all disabled:opacity-50 text-base sm:text-lg"
             >
               ❌ Cancel
-            </button>
-            <button
-              onClick={isCashIn ? processCashInConfirmed : processCashOutConfirmed}
-              disabled={loading || confirmationPin.length !== 4}
-              className={`flex-1 px-4 py-3 bg-gradient-to-r ${actionColor} text-white rounded-lg font-medium hover:shadow-lg transition-all disabled:opacity-50`}
-            >
-              {loading ? '⏳ Processing...' : actionButtonText}
             </button>
           </div>
         </div>

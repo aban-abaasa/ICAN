@@ -5,6 +5,20 @@
 
 import { getSupabaseClient } from '../lib/supabase/client';
 
+// Hash PIN using the same method as walletAccountService & universalTransactionService
+const hashPIN = (pin) => {
+  let hash = 0;
+  const string = `pin-${pin}-salt-ican-hash`;
+  
+  for (let i = 0; i < string.length; i++) {
+    const char = string.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  
+  return btoa(`hash-${Math.abs(hash)}-${pin.length}`);
+};
+
 class AgentService {
   constructor() {
     this.supabase = null;
@@ -105,48 +119,44 @@ class AgentService {
       const userId = userAccount.user_id;
 
       // ============================================
-      // Step 1: REQUEST CASH-IN (Create pending request)
+      // CREATE PENDING CASH-IN REQUEST
       // ============================================
-      console.log('📋 Step 1: Creating cash-in request for user approval...');
-      const { data: requestData, error: requestError } = await this.supabase
-        .rpc('request_cash_in', {
-          p_user_id: userId,
-          p_agent_id: this.agentId,
-          p_curr: currency,
-          p_amount: parseFloat(amount)
-        });
-
-      if (requestError) {
-        console.error('❌ Failed to create cash-in request:', requestError);
-        throw new Error(`Request creation failed: ${requestError.message}`);
-      }
-
-      const requestId = requestData && requestData.length > 0 ? requestData[0].request_id : null;
+      // Call RPC to create pending request - user will see it in withdraw tab
       
-      if (!requestId) {
-        throw new Error('No request ID returned');
+      const { data, error } = await this.supabase.rpc('create_pending_cash_in', {
+        p_user_id: userId,
+        p_agent_id: this.agentId,
+        p_curr: currency,
+        p_amount: parseFloat(amount)
+      });
+
+      if (error) {
+        throw new Error(`Failed to create pending cash-in: ${error.message}`);
       }
 
-      console.log('✅ Cash-in request created:', {
+      const requestId = data?.[0]?.request_id;
+
+      console.log('✅ Pending cash-in created:', {
         requestId: requestId,
-        status: 'pending',
         userAccount: userAccountId,
         amount: amount,
-        currency: currency
+        currency: currency,
+        agentId: this.agentId
       });
 
       return {
         success: true,
+        status: 'pending_user_confirmation',
         requestId: requestId,
-        status: 'pending',
         userAccount: userAccountId,
         amount: amount,
         currency: currency,
-        message: '📋 Cash-in request created! User must approve to continue.'
+        agentId: this.agentId,
+        message: '✅ Pending cash-in created! User will see it and must confirm with their PIN.'
       };
 
     } catch (error) {
-      console.error('❌ Cash-in request failed:', error);
+      console.error('❌ Cash-in initiation failed:', error);
       return { success: false, error: error.message };
     }
   }
@@ -266,12 +276,13 @@ class AgentService {
       // Step 2: APPROVE WITH PIN VERIFICATION
       // ============================================
       console.log('🔐 Step 2: Verifying PIN and processing cash-in...');
+      const hashedPin = hashPIN(pin); // Hash PIN before sending to backend
       const { data: approvalData, error: approvalError } = await this.supabase
         .rpc('approve_cash_in_with_pin', {
           p_request_id: requestId,
           p_user_id: userId,
           p_agent_id: this.agentId,
-          p_pin_attempt: pin,
+          p_pin_attempt: hashedPin,
           p_curr: currency,
           p_amount: parseFloat(amount)
         });
@@ -967,10 +978,11 @@ class AgentService {
 
       if (!userAccount) throw new Error('User account not found');
 
+      const hashedPin = hashPIN(pin); // Hash PIN before sending to backend
       const { data: result, error } = await this.supabase.rpc('process_cashout_with_pin', {
         p_user_id: userAccount.user_id,
         p_agent_id: this.agentId,
-        p_pin_attempt: pin,
+        p_pin_attempt: hashedPin,
         p_curr: currency,
         p_amount: parseFloat(amount)
       });
