@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseClient } from '../lib/supabase/client';
 import { ProfileIcon, ProfilePage } from './auth';
 import { Header } from './Header';
 import { StatusPage } from './StatusPage';
@@ -76,27 +76,6 @@ import {
   Plus,
   Edit2
 } from 'lucide-react';
-
-// ============================================
-// SUPABASE INITIALIZATION
-// ============================================
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-let supabase = null;
-
-// Initialize Supabase safely
-if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-  try {
-    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    console.log('✅ Supabase initialized successfully');
-  } catch (error) {
-    console.error('❌ Supabase initialization failed:', error);
-    supabase = null;
-  }
-} else {
-  console.warn('⚠️ Missing Supabase environment variables: VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY');
-}
 
 // AI Spending Advice Modal
 const AIAdviceModal = ({ isOpen, advice, transaction, onConfirm, onCancel }) => {
@@ -7641,6 +7620,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
       const userId = 'demo-user';
 
       // Try loading from Supabase first
+      const supabase = getSupabaseClient();
       if (supabase) {
         console.log('📊 Loading transactions from Supabase...');
         const { data, error } = await supabase
@@ -7698,8 +7678,13 @@ Data Freshness: ${reportData.metadata.dataFreshness}
     localStorage.setItem('ican_goals', JSON.stringify(goals));
 
     // Also sync to Supabase if available
-    if (supabase && transactions.length > 0) {
+    if (transactions.length > 0) {
       try {
+        const supabase = getSupabaseClient();
+        if (!supabase) {
+          console.warn('⚠️ Supabase client not available for sync');
+          return;
+        }
         const { user } = useAuth();
         const userId = user?.uid || 'demo-user';
 

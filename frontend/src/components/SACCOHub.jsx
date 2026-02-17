@@ -649,8 +649,8 @@ const SACCOHub = ({ onClose }) => {
 
       {/* Application Form Modal */}
       {showApplicationForm && selectedGroupForApplication && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4">
-          <div className="bg-slate-900 rounded-lg p-4 sm:p-6 max-w-md w-full max-h-[90vh] overflow-y-auto border border-slate-700">
+        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-3 sm:p-4 pb-24 sm:pb-0">
+          <div className="bg-slate-900 rounded-t-lg sm:rounded-lg p-4 sm:p-6 max-w-md w-full max-h-[90vh] overflow-y-auto border border-slate-700">
             <h2 className="text-xl sm:text-2xl font-bold text-white mb-2">{selectedGroupForApplication.name}</h2>
             <p className="text-gray-400 text-xs sm:text-sm mb-4">Tell us why you want to join</p>
             <textarea

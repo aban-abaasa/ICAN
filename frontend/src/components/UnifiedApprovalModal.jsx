@@ -164,7 +164,15 @@ const UnifiedApprovalModal = ({
         }
       }
 
-      // Call universal transaction service
+      // Special handling for confirmCashIn - bypass universal service
+      if (transactionType === 'confirmCashIn') {
+        // Call parent's onApprove directly without universal service processing
+        await onApprove(pin, method, { success: true, message: 'Ready to confirm' });
+        setPin('');
+        return;
+      }
+
+      // Call universal transaction service for other types
       const result = await universalTransactionService.processTransaction({
         transactionType,
         userId,
@@ -200,7 +208,7 @@ const UnifiedApprovalModal = ({
   return (
     <div className="unified-approval-overlay">
       <div className="unified-approval-container">
-        {/* Header */}
+        {/* Header - Fixed */}
         <div className="approval-header">
           <button
             className="close-btn"
@@ -281,7 +289,7 @@ const UnifiedApprovalModal = ({
           )}
         </div>
 
-        {/* PIN Entry Method */}
+        {/* Scrollable Content Area - PIN Entry Method */}
         {authMethod === 'pin' && (
           <div className="pin-entry-section">
             {/* PIN Display */}
@@ -310,12 +318,14 @@ const UnifiedApprovalModal = ({
             {(localError || error) && (
               <div className="error-message">
                 <AlertCircle size={16} />
-                <p>{localError || error}</p>
-                {attemptsRemaining && (
-                  <p className="attempts-info">
-                    Attempts remaining: {attemptsRemaining}
-                  </p>
-                )}
+                <div>
+                  <p>{localError || error}</p>
+                  {attemptsRemaining && (
+                    <p className="attempts-info">
+                      Attempts remaining: {attemptsRemaining}
+                    </p>
+                  )}
+                </div>
               </div>
             )}
 
@@ -359,6 +369,12 @@ const UnifiedApprovalModal = ({
                 Reset PIN - Unlock Account
               </button>
             )}
+
+            {/* Security Info */}
+            <div className="security-info">
+              <Lock size={14} />
+              <span>Your transaction is protected with end-to-end encryption</span>
+            </div>
           </div>
         )}
 
@@ -372,7 +388,7 @@ const UnifiedApprovalModal = ({
           />
         )}
 
-        {/* Biometric Method */}
+        {/* Scrollable Content Area - Biometric Method */}
         {authMethod === 'biometric' && supportsBiometric && (
           <div className="biometric-section">
             {biometricStatus === 'scanning' && (
@@ -420,10 +436,16 @@ const UnifiedApprovalModal = ({
                 </button>
               </div>
             )}
+
+            {/* Security Info */}
+            <div className="security-info">
+              <Lock size={14} />
+              <span>Your transaction is protected with end-to-end encryption</span>
+            </div>
           </div>
         )}
 
-        {/* Action Buttons */}
+        {/* Action Buttons - Fixed at bottom */}
         <div className="approval-actions">
           <button
             className="btn-cancel"
@@ -449,12 +471,6 @@ const UnifiedApprovalModal = ({
               )}
             </button>
           )}
-        </div>
-
-        {/* Security Info */}
-        <div className="security-info">
-          <Lock size={14} />
-          <span>Your transaction is protected with end-to-end encryption</span>
         </div>
       </div>
     </div>

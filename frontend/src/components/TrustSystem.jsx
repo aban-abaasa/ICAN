@@ -2277,7 +2277,7 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
 
       {/* JOIN APPLICATION MODAL */}
       {showJoinApplicationModal && groupForJoinApplication && (
-        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-[100]">
+        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-[100] pb-24 sm:pb-0">
           <div className="bg-slate-800 rounded-t-lg sm:rounded-lg max-w-2xl w-full max-h-[85vh] sm:max-h-[90vh] overflow-hidden sm:my-8 flex flex-col border border-slate-700">
             {/* Header - Sticky */}
             <div className="sticky top-0 bg-slate-800 border-b border-slate-700 p-4 sm:p-6 flex justify-between items-start gap-2 z-10">
