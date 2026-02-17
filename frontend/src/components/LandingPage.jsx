@@ -974,8 +974,9 @@ const LandingPage = ({ onGetStarted }) => {
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 lg:gap-8 mb-4 md:mb-8">
             <div>
-              <h3 className="text-lg md:text-xl font-bold text-purple-400 mb-2 md:mb-4">ICAN</h3>
-              <p className="text-gray-400 text-xs md:text-sm">Transform Volatility to Global Capital</p>
+              <h3 className="text-lg md:text-xl font-bold bg-gradient-to-r from-yellow-400 via-purple-400 to-pink-400 bg-clip-text text-transparent mb-2 md:mb-4">ICANera</h3>
+              <p className="text-gray-400 text-xs md:text-sm font-medium">Transform Volatility to Global Capital</p>
+              <p className="text-purple-300 text-xs md:text-sm mt-2 font-semibold">@icaneraera</p>
             </div>
             <div>
               <h4 className="font-bold text-sm md:text-base mb-2 md:mb-4">Product</h4>
@@ -1005,7 +1006,10 @@ const LandingPage = ({ onGetStarted }) => {
           <div className="border-t border-purple-500/10 pt-4 md:pt-6 lg:pt-8 flex flex-col md:flex-row justify-between items-center text-gray-400 text-xs md:text-sm gap-3">
             <p>&copy; 2024 ICANera. All rights reserved.</p>
             <div className="flex space-x-4 md:space-x-6">
-              <a href="#" className="hover:text-purple-400 transition">Twitter</a>
+              <a href="https://twitter.com/icaneraera" target="_blank" rel="noopener noreferrer" className="hover:text-purple-400 transition flex items-center space-x-1">
+                <span>𝕏</span>
+                <span>@icaneraera</span>
+              </a>
               <a href="#" className="hover:text-purple-400 transition">LinkedIn</a>
               <a href="#" className="hover:text-purple-400 transition">Discord</a>
             </div>
