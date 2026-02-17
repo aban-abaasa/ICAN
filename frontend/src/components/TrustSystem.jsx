@@ -22,7 +22,8 @@ import {
   Inbox,
   Building2,
   MoreVertical,
-  Zap
+  Zap,
+  FileText
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import LiveBoardroom from './LiveBoardroom';
@@ -1030,25 +1031,65 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
                       </p>
                     </div>
 
+                    {/* Action Buttons - Responsive */}
                     <div className="flex gap-2">
+                      {/* Desktop: Full text buttons | Mobile: Icon buttons with tooltips */}
+                      {/* View Details Button */}
                       <button
                         onClick={() => handleViewDetails(group)}
-                        className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors text-sm font-medium"
+                        title="View Details"
+                        className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors text-sm font-medium hidden sm:flex items-center justify-center gap-1"
                       >
                         View Details
                       </button>
                       <button
+                        onClick={() => handleViewDetails(group)}
+                        title="View Details"
+                        className="flex-1 sm:hidden px-2 py-2 bg-slate-700 hover:bg-slate-600 active:bg-slate-500 text-white rounded-lg transition-colors flex items-center justify-center gap-1 relative group"
+                      >
+                        <FileText size={16} className="text-slate-300" />
+                        <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-active:opacity-100 transition-opacity pointer-events-none">
+                          View Details
+                        </span>
+                      </button>
+
+                      {/* Contribute Button */}
+                      <button
                         onClick={() => handleOpenContributeModal(group)}
-                        className="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors text-sm font-medium"
+                        title="Contribute"
+                        className="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors text-sm font-medium hidden sm:flex items-center justify-center gap-1"
                       >
                         Contribute
                       </button>
                       <button
+                        onClick={() => handleOpenContributeModal(group)}
+                        title="Contribute"
+                        className="flex-1 sm:hidden px-2 py-2 bg-amber-600 hover:bg-amber-500 active:bg-amber-700 text-white rounded-lg transition-colors flex items-center justify-center gap-1 relative group"
+                      >
+                        <DollarSign size={16} className="text-amber-100" />
+                        <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-active:opacity-100 transition-opacity pointer-events-none">
+                          Contribute
+                        </span>
+                      </button>
+
+                      {/* Boardroom Button */}
+                      <button
                         onClick={() => setBoardroomGroupId(group.id)}
-                        className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-1"
+                        title="Join Boardroom"
+                        className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors text-sm font-medium hidden sm:flex items-center justify-center gap-1"
                       >
                         <Video size={16} />
                         Boardroom
+                      </button>
+                      <button
+                        onClick={() => setBoardroomGroupId(group.id)}
+                        title="Join Boardroom"
+                        className="flex-1 sm:hidden px-2 py-2 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white rounded-lg transition-colors flex items-center justify-center gap-1 relative group"
+                      >
+                        <Video size={16} className="text-blue-100" />
+                        <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-active:opacity-100 transition-opacity pointer-events-none">
+                          Boardroom
+                        </span>
                       </button>
                     </div>
                   </div>
