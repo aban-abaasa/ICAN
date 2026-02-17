@@ -1010,7 +1010,14 @@ const LandingPage = ({ onGetStarted }) => {
                 <span>𝕏</span>
                 <span>@icaneraera</span>
               </a>
-              <a href="#" className="hover:text-purple-400 transition">LinkedIn</a>
+              <a href="https://instagram.com/icaneraera" target="_blank" rel="noopener noreferrer" className="hover:text-purple-400 transition flex items-center space-x-1">
+                <span>📷</span>
+                <span>@icaneraera</span>
+              </a>
+              <a href="mailto:icaneraera@gmail.com" className="hover:text-purple-400 transition flex items-center space-x-1">
+                <span>✉️</span>
+                <span>Email</span>
+              </a>
               <a href="#" className="hover:text-purple-400 transition">Discord</a>
             </div>
           </div>
