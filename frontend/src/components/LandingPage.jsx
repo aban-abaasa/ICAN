@@ -586,8 +586,8 @@ const LandingPage = ({ onGetStarted }) => {
                     </button>
                   </div>
 
-                  {/* Mini Slide Indicators */}
-                  <div className="flex gap-1 justify-center mt-3 flex-wrap">
+                  {/* Mini Slide Indicators - Hidden on Mobile */}
+                  <div className="hidden md:flex gap-1 justify-center mt-3 flex-wrap">
                     {heroSlides.map((_, index) => (
                       <button
                         key={index}
@@ -694,8 +694,8 @@ const LandingPage = ({ onGetStarted }) => {
                       </p>
                     </div>
 
-                    {/* Badge Indicators */}
-                    <div className="flex gap-1 justify-center mt-4 flex-wrap">
+                    {/* Badge Indicators - Hidden on Mobile */}
+                    <div className="hidden md:flex gap-1 justify-center mt-4 flex-wrap">
                       {badgeInfo.map((_, index) => (
                         <button
                           key={index}
@@ -753,8 +753,8 @@ const LandingPage = ({ onGetStarted }) => {
                   <ChevronRight className="w-5 h-5 md:w-6 md:h-6 group-hover:translate-x-1 transition" />
                 </button>
 
-                {/* Slide indicators - Enhanced with Golden Theme */}
-                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2 z-20 bg-slate-950/80 px-4 py-3 rounded-full backdrop-blur-md border border-yellow-500/30 shadow-lg shadow-yellow-500/20">
+                {/* Slide indicators - Hidden on Mobile, Visible on Desktop */}
+                <div className="hidden md:flex absolute bottom-4 left-1/2 transform -translate-x-1/2 gap-2 z-20 bg-slate-950/80 px-4 py-3 rounded-full backdrop-blur-md border border-yellow-500/30 shadow-lg shadow-yellow-500/20">
                   {slides.map((_, index) => (
                     <button
                       key={index}
@@ -897,8 +897,8 @@ const LandingPage = ({ onGetStarted }) => {
                 </div>
               </div>
 
-              {/* Indicators - Below */}
-              <div className="flex gap-1 justify-center mt-3 flex-wrap relative z-10">
+              {/* Indicators - Hidden on Mobile, Visible on Desktop */}
+              <div className="hidden md:flex gap-1 justify-center mt-3 flex-wrap relative z-10">
                 {testimonials.map((_, index) => (
                   <button
                     key={index}
