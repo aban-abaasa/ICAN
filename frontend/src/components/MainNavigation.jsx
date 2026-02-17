@@ -229,7 +229,7 @@ export default function MainNavigation({ onTrustClick, onShareClick, onWalletCli
                   <Shield className="w-5 h-5 text-blue-400" />
                 </div>
                 <div>
-                  <p className="text-white font-bold text-lg">ICAN Engine</p>
+                  <p className="text-white font-bold text-lg">ICANera</p>
                   <p className="text-blue-300 text-xs">Global Capital</p>
                 </div>
               </div>
