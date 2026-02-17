@@ -9,6 +9,68 @@ const LandingPage = ({ onGetStarted }) => {
   const [currentTestimonial, setCurrentTestimonial] = useState(0);
   const [scrollPosition, setScrollPosition] = useState(0);
   const [isHeroExpanded, setIsHeroExpanded] = useState(false);
+  const [expandedFooterSection, setExpandedFooterSection] = useState(null);
+  const [expandedFooterItem, setExpandedFooterItem] = useState(null);
+
+  // Handle email click
+  const handleEmailClick = (e) => {
+    e.preventDefault();
+    // Open Gmail compose page with pre-filled recipient
+    window.open('https://mail.google.com/mail/?view=cm&fs=1&to=icaneraera@gmail.com', '_blank');
+  };
+
+  // Footer section data with nested dropdown content
+  const footerSections = {
+    about: {
+      title: 'About ICANera',
+      content: 'ICANera is a revolutionary financial ecosystem designed to transform volatility into global capital. We empower individuals and communities to build generational wealth through democratic savings groups, secure transactions, and innovative financial tools. Our mission is to provide accessible, transparent, and transformative financial solutions.',
+      description: 'Learn more about our mission'
+    },
+    blog: {
+      title: 'Blog & Resources',
+      content: 'Discover latest insights on financial growth, investment strategies, SACCO management, and wealth building. Our blog features expert tips, success stories, and practical guides to help you maximize your financial potential on ICANera.',
+      links: [
+        { title: 'Building Wealth Through Community', content: 'Learn how democratic savings groups empower communities to build generational wealth together. Discover strategies for managing group finances, building trust, and maximizing collective growth potential.' },
+        { title: 'Digital Wallet Security Guide', content: 'Master the security features of your ICANera wallet. Understand encryption, two-factor authentication, PIN management, and best practices to keep your funds protected at all times.' },
+        { title: 'Investment Tips for Beginners', content: 'Start your investment journey with confidence. Learn fundamental investment principles, risk management, portfolio diversification, and how to grow your wealth through smart financial decisions.' },
+        { title: 'SACCO Group Best Practices', content: 'Optimize your SACCO group operations with proven strategies. From member recruitment to fund management, transparency protocols, and conflict resolution—everything you need for group success.' }
+      ],
+      description: 'Read our latest articles'
+    },
+    careers: {
+      title: 'Careers at ICANera',
+      content: 'Join our growing team and be part of the financial revolution. We\'re seeking passionate individuals across engineering, product, design, and business development to help transform how people manage their wealth.',
+      links: [
+        { title: 'Engineering Opportunities', content: 'Help us build the future of fintech. We\'re looking for backend engineers, frontend developers, mobile engineers, and DevOps specialists who are passionate about creating transformative financial technology.' },
+        { title: 'Product & Design Roles', content: 'Shape the user experience that millions depend on. Join our product and design teams to build intuitive interfaces, define product strategy, and create delightful user experiences.' },
+        { title: 'Sales & Business Development', content: 'Drive growth and expand our market reach. We need visionary sales professionals and business development experts to partner with enterprises and grow our ecosystem.' },
+        { title: 'Customer Support Team', content: 'Be the voice of ICANera. Help our users succeed with exceptional support, relationship building, and community engagement across all channels.' }
+      ],
+      description: 'View open positions'
+    },
+    privacy: {
+      title: 'Privacy Policy',
+      content: 'At ICANera, your data privacy and security is paramount. We employ industry-leading encryption, transparent data practices, and strict compliance with global privacy regulations to protect your personal and financial information.',
+      links: [
+        { title: 'Data Protection Standards', content: 'We employ military-grade encryption (AES-256) for all data at rest and TLS 1.2+ for data in transit. Our infrastructure is compliant with ISO 27001 and regularly audited by third-party security firms.' },
+        { title: 'User Privacy Rights', content: 'You have the right to access, modify, or delete your personal data at any time. We never sell or share your data with third parties without explicit consent. Your financial information remains exclusively yours.' },
+        { title: 'Cookie Policy', content: 'We use essential cookies to provide secure authentication and functional cookies to improve user experience. You can manage cookie preferences in your account settings. No tracking cookies are used without consent.' },
+        { title: 'GDPR Compliance', content: 'ICANera fully complies with GDPR regulations for European users. We have established Data Processing Agreements with all partners and ensure your right to be forgotten is respected.' }
+      ],
+      description: 'Your privacy matters to us'
+    },
+    terms: {
+      title: 'Terms of Service',
+      content: 'Our comprehensive terms of service outline the rights and responsibilities of users interacting with the ICANera platform. By using ICANera, you agree to our terms and commit to responsible financial engagement.',
+      links: [
+        { title: 'User Responsibilities', content: 'Users must provide accurate information, protect their credentials, comply with applicable laws, and use the platform responsibly. You are responsible for all activities under your account and must notify us of unauthorized access immediately.' },
+        { title: 'Platform Limitations', content: 'ICANera provides the platform "as is" without warranties. We are not liable for third-party services, user content, or losses from unauthorized access. Service interruptions may occur for maintenance, security, or regulatory compliance.' },
+        { title: 'Dispute Resolution', content: 'We encourage users to contact our support team first. Unresolved disputes will be handled through binding arbitration rather than court proceedings. Both parties agree to good-faith negotiation before pursuing legal action.' },
+        { title: 'Intellectual Property', content: 'All ICANera content, code, and brand elements are protected intellectual property. Users receive a personal, non-exclusive license to use the platform. Unauthorized reproduction, modification, or distribution is prohibited.' }
+      ],
+      description: 'Terms apply to all users'
+    }
+  };
 
   // Image slides with descriptions (using all 20 images from public/images)
   const slides = [
@@ -972,39 +1034,168 @@ const LandingPage = ({ onGetStarted }) => {
       {/* Footer */}
       <footer className="relative border-t border-purple-500/10 py-6 md:py-10 lg:py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 lg:gap-8 mb-4 md:mb-8">
-            <div>
-              <h3 className="text-lg md:text-xl font-bold bg-gradient-to-r from-yellow-400 via-purple-400 to-pink-400 bg-clip-text text-transparent mb-2 md:mb-4">ICANera</h3>
-              <p className="text-gray-400 text-xs md:text-sm font-medium">Transform Volatility to Global Capital</p>
-              <p className="text-purple-300 text-xs md:text-sm mt-2 font-semibold">@icaneraera</p>
+          {/* Footer Navigation - Simple List */}
+          <div className="flex flex-wrap gap-3 md:gap-6 mb-8 md:mb-12 justify-center md:justify-start">
+            {/* About */}
+            <div className="group">
+              <button
+                onClick={() => setExpandedFooterSection(expandedFooterSection === 'about' ? null : 'about')}
+                className="flex items-center gap-2 text-purple-300 hover:text-purple-200 transition font-medium text-sm md:text-base"
+              >
+                About
+                <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${expandedFooterSection === 'about' ? 'rotate-180' : ''}`} />
+              </button>
+              {expandedFooterSection === 'about' && (
+                <div className="mt-2 bg-gradient-to-br from-slate-900/50 to-slate-950/50 border border-purple-500/20 rounded-lg p-3 md:p-4 animate-fadeIn w-80 md:absolute md:left-0 md:z-50">
+                  <p className="text-gray-400 text-xs md:text-sm leading-relaxed">{footerSections.about.content}</p>
+                </div>
+              )}
             </div>
-            <div>
-              <h4 className="font-bold text-sm md:text-base mb-2 md:mb-4">Product</h4>
-              <ul className="space-y-1 md:space-y-2 text-gray-400 text-xs md:text-sm">
-                <li><a href="#" className="hover:text-purple-400 transition">Features</a></li>
-                <li><a href="#" className="hover:text-purple-400 transition">Pricing</a></li>
-                <li><a href="#" className="hover:text-purple-400 transition">Security</a></li>
-              </ul>
+
+            {/* Blog */}
+            <div className="group">
+              <button
+                onClick={() => setExpandedFooterSection(expandedFooterSection === 'blog' ? null : 'blog')}
+                className="flex items-center gap-2 text-purple-300 hover:text-purple-200 transition font-medium text-sm md:text-base"
+              >
+                Blog
+                <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${expandedFooterSection === 'blog' ? 'rotate-180' : ''}`} />
+              </button>
+              {expandedFooterSection === 'blog' && (
+                <div className="mt-2 bg-gradient-to-br from-slate-900/50 to-slate-950/50 border border-purple-500/20 rounded-lg p-3 md:p-4 animate-fadeIn w-80 md:absolute md:left-32 md:z-50 space-y-2">
+                  <p className="text-gray-400 text-xs md:text-sm leading-relaxed mb-2">{footerSections.blog.content}</p>
+                  <ul className="space-y-1">
+                    {footerSections.blog.links.map((link, i) => (
+                      <li key={i}>
+                        <button
+                          onClick={() => setExpandedFooterItem(expandedFooterItem === `blog-${i}` ? null : `blog-${i}`)}
+                          className="w-full text-left px-2 py-1 rounded hover:bg-purple-500/20 transition group/item flex items-center justify-between"
+                        >
+                          <span className="text-purple-300 text-xs font-medium hover:text-purple-200">→ {link.title}</span>
+                          <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${expandedFooterItem === `blog-${i}` ? 'rotate-180' : ''}`} />
+                        </button>
+                        {expandedFooterItem === `blog-${i}` && (
+                          <div className="mt-1 ml-2 pl-2 border-l border-purple-500/40 text-gray-400 text-xs leading-relaxed animate-fadeIn">
+                            {link.content}
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
-            <div>
-              <h4 className="font-bold text-sm md:text-base mb-2 md:mb-4">Company</h4>
-              <ul className="space-y-1 md:space-y-2 text-gray-400 text-xs md:text-sm">
-                <li><a href="#" className="hover:text-purple-400 transition">About</a></li>
-                <li><a href="#" className="hover:text-purple-400 transition">Blog</a></li>
-                <li><a href="#" className="hover:text-purple-400 transition">Careers</a></li>
-              </ul>
+
+            {/* Careers */}
+            <div className="group">
+              <button
+                onClick={() => setExpandedFooterSection(expandedFooterSection === 'careers' ? null : 'careers')}
+                className="flex items-center gap-2 text-purple-300 hover:text-purple-200 transition font-medium text-sm md:text-base"
+              >
+                Careers
+                <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${expandedFooterSection === 'careers' ? 'rotate-180' : ''}`} />
+              </button>
+              {expandedFooterSection === 'careers' && (
+                <div className="mt-2 bg-gradient-to-br from-slate-900/50 to-slate-950/50 border border-purple-500/20 rounded-lg p-3 md:p-4 animate-fadeIn w-80 md:absolute md:left-48 md:z-50 space-y-2">
+                  <p className="text-gray-400 text-xs md:text-sm leading-relaxed mb-2">{footerSections.careers.content}</p>
+                  <ul className="space-y-1">
+                    {footerSections.careers.links.map((link, i) => (
+                      <li key={i}>
+                        <button
+                          onClick={() => setExpandedFooterItem(expandedFooterItem === `careers-${i}` ? null : `careers-${i}`)}
+                          className="w-full text-left px-2 py-1 rounded hover:bg-purple-500/20 transition group/item flex items-center justify-between"
+                        >
+                          <span className="text-purple-300 text-xs font-medium hover:text-purple-200">→ {link.title}</span>
+                          <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${expandedFooterItem === `careers-${i}` ? 'rotate-180' : ''}`} />
+                        </button>
+                        {expandedFooterItem === `careers-${i}` && (
+                          <div className="mt-1 ml-2 pl-2 border-l border-purple-500/40 text-gray-400 text-xs leading-relaxed animate-fadeIn">
+                            {link.content}
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
-            <div>
-              <h4 className="font-bold text-sm md:text-base mb-2 md:mb-4">Legal</h4>
-              <ul className="space-y-1 md:space-y-2 text-gray-400 text-xs md:text-sm">
-                <li><a href="#" className="hover:text-purple-400 transition">Privacy</a></li>
-                <li><a href="#" className="hover:text-purple-400 transition">Terms</a></li>
-                <li><a href="#" className="hover:text-purple-400 transition">Contact</a></li>
-              </ul>
+
+            {/* Privacy */}
+            <div className="group">
+              <button
+                onClick={() => setExpandedFooterSection(expandedFooterSection === 'privacy' ? null : 'privacy')}
+                className="flex items-center gap-2 text-purple-300 hover:text-purple-200 transition font-medium text-sm md:text-base"
+              >
+                Privacy
+                <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${expandedFooterSection === 'privacy' ? 'rotate-180' : ''}`} />
+              </button>
+              {expandedFooterSection === 'privacy' && (
+                <div className="mt-2 bg-gradient-to-br from-slate-900/50 to-slate-950/50 border border-purple-500/20 rounded-lg p-3 md:p-4 animate-fadeIn w-80 md:absolute md:left-64 md:z-50 space-y-2">
+                  <p className="text-gray-400 text-xs md:text-sm leading-relaxed mb-2">{footerSections.privacy.content}</p>
+                  <ul className="space-y-1">
+                    {footerSections.privacy.links.map((link, i) => (
+                      <li key={i}>
+                        <button
+                          onClick={() => setExpandedFooterItem(expandedFooterItem === `privacy-${i}` ? null : `privacy-${i}`)}
+                          className="w-full text-left px-2 py-1 rounded hover:bg-purple-500/20 transition group/item flex items-center justify-between"
+                        >
+                          <span className="text-purple-300 text-xs font-medium hover:text-purple-200">→ {link.title}</span>
+                          <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${expandedFooterItem === `privacy-${i}` ? 'rotate-180' : ''}`} />
+                        </button>
+                        {expandedFooterItem === `privacy-${i}` && (
+                          <div className="mt-1 ml-2 pl-2 border-l border-purple-500/40 text-gray-400 text-xs leading-relaxed animate-fadeIn">
+                            {link.content}
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            {/* Terms */}
+            <div className="group">
+              <button
+                onClick={() => setExpandedFooterSection(expandedFooterSection === 'terms' ? null : 'terms')}
+                className="flex items-center gap-2 text-purple-300 hover:text-purple-200 transition font-medium text-sm md:text-base"
+              >
+                Terms
+                <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${expandedFooterSection === 'terms' ? 'rotate-180' : ''}`} />
+              </button>
+              {expandedFooterSection === 'terms' && (
+                <div className="mt-2 bg-gradient-to-br from-slate-900/50 to-slate-950/50 border border-purple-500/20 rounded-lg p-3 md:p-4 animate-fadeIn w-80 md:absolute md:right-0 md:z-50 space-y-2">
+                  <p className="text-gray-400 text-xs md:text-sm leading-relaxed mb-2">{footerSections.terms.content}</p>
+                  <ul className="space-y-1">
+                    {footerSections.terms.links.map((link, i) => (
+                      <li key={i}>
+                        <button
+                          onClick={() => setExpandedFooterItem(expandedFooterItem === `terms-${i}` ? null : `terms-${i}`)}
+                          className="w-full text-left px-2 py-1 rounded hover:bg-purple-500/20 transition group/item flex items-center justify-between"
+                        >
+                          <span className="text-purple-300 text-xs font-medium hover:text-purple-200">→ {link.title}</span>
+                          <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${expandedFooterItem === `terms-${i}` ? 'rotate-180' : ''}`} />
+                        </button>
+                        {expandedFooterItem === `terms-${i}` && (
+                          <div className="mt-1 ml-2 pl-2 border-l border-purple-500/40 text-gray-400 text-xs leading-relaxed animate-fadeIn">
+                            {link.content}
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           </div>
+
+          {/* Bottom Footer */}
           <div className="border-t border-purple-500/10 pt-4 md:pt-6 lg:pt-8 flex flex-col md:flex-row justify-between items-center text-gray-400 text-xs md:text-sm gap-3">
-            <p>&copy; 2024 ICANera. All rights reserved.</p>
+            <div className="text-center md:text-left">
+              <p className="font-bold bg-gradient-to-r from-yellow-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">ICANera</p>
+              <p className="text-gray-400 text-xs">Transform Volatility to Global Capital</p>
+              <p>&copy; 2026 ICANera. All rights reserved.</p>
+            </div>
             <div className="flex space-x-4 md:space-x-6">
               <a href="https://twitter.com/icaneraera" target="_blank" rel="noopener noreferrer" className="hover:text-purple-400 transition flex items-center space-x-1">
                 <span>𝕏</span>
@@ -1014,10 +1205,16 @@ const LandingPage = ({ onGetStarted }) => {
                 <span>📷</span>
                 <span>@icaneraera</span>
               </a>
-              <a href="mailto:icaneraera@gmail.com" className="hover:text-purple-400 transition flex items-center space-x-1">
-                <span>✉️</span>
-                <span>Email</span>
-              </a>
+              <div className="relative">
+                <button
+                  onClick={handleEmailClick}
+                  className="hover:text-purple-400 transition flex items-center space-x-1 cursor-pointer"
+                  title="Click to open Gmail"
+                >
+                  <span>✉️</span>
+                  <span>Email</span>
+                </button>
+              </div>
               <a href="#" className="hover:text-purple-400 transition">Discord</a>
             </div>
           </div>
