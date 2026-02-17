@@ -360,6 +360,7 @@ const MobileView = ({ userProfile }) => {
   }
   const [showTrustPanel, setShowTrustPanel] = useState(false);
   const [showCmmsPanel, setShowCmmsPanel] = useState(false);
+  const [showRecordPanel, setShowRecordPanel] = useState(false);
   
   // Notifications State
   const [notifications, setNotifications] = useState([]);
@@ -3318,7 +3319,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               } else if (title === 'Trust') {
                 setShowTrustPanel(true);
               } else if (title === 'CMMS') {
-                setShowCMMSPanel(true);
+                setShowCmmsPanel(true);
+              } else if (title === 'Expense & Income') {
+                setShowRecordPanel(true);
+                setShowTransactionEntry(true);
+                setActiveBottomTab('transactions');
               }
             }}
           />
@@ -3553,6 +3558,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         transactionType={transactionType}
         onClose={() => {
           setShowTransactionEntry(false);
+          setShowRecordPanel(false);
           setTransactionType(null);
         }}
         onSubmit={(transaction) => {
