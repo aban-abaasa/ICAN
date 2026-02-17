@@ -17,6 +17,7 @@ const LandingPage = ({ onGetStarted }) => {
       title: 'Expense & Income Tracker',
       subtitle: 'Smart Financial Management',
       description: 'Track every transaction with precision. Smart categorization, real-time insights, and predictive analytics for complete financial control',
+      whyJoin: 'Take control of every shilling—track, analyze, grow',
       features: ['Real-time tracking', 'Smart categorization', 'Expense reports', 'Budget forecasting', 'AI-powered insights'],
       highlight: true
     },
@@ -25,6 +26,7 @@ const LandingPage = ({ onGetStarted }) => {
       title: 'Financial Dashboard',
       subtitle: 'Advanced Analytics',
       description: 'Comprehensive financial overview with real-time analytics and performance metrics',
+      whyJoin: 'See your complete financial picture at a glance',
       features: ['Real-time analytics', 'Performance tracking', 'Financial reports']
     },
     {
@@ -32,6 +34,7 @@ const LandingPage = ({ onGetStarted }) => {
       title: 'Digital Wallet',
       subtitle: 'Secure Management',
       description: 'Manage your accounts, balances & transactions with secure digital wallet management',
+      whyJoin: 'Secure, fast, and simple money management',
       features: ['Account management', 'Balance tracking', 'Secure transactions']
     },
     {
@@ -39,6 +42,7 @@ const LandingPage = ({ onGetStarted }) => {
       title: 'Smart Wallet',
       subtitle: 'Secure & Fast',
       description: 'Advanced wallet features with multi-currency support and instant transactions',
+      whyJoin: 'Instant transfers, zero hassles, total peace of mind',
       features: ['Multi-currency', 'Instant transfers', 'Security verified']
     },
     {
@@ -46,6 +50,7 @@ const LandingPage = ({ onGetStarted }) => {
       title: 'Pitchin',
       subtitle: 'Investment Hub',
       description: 'Share your vision, connect with investors and build your business dreams',
+      whyJoin: 'Your idea + our platform = your next big breakthrough',
       features: ['Business pitches', 'Investor connections', 'Growth opportunities']
     },
     {
@@ -53,6 +58,7 @@ const LandingPage = ({ onGetStarted }) => {
       title: 'Pitchin Pro',
       subtitle: 'Professional Platform',
       description: 'Professional platform for sharing and funding innovative business ideas',
+      whyJoin: 'Connect with investors who believe in your vision',
       features: ['Pitch templates', 'Investor network', 'Funding support']
     },
     {
@@ -60,6 +66,7 @@ const LandingPage = ({ onGetStarted }) => {
       title: 'Pitchin Advanced',
       subtitle: 'Smart Matching',
       description: 'AI-powered investor matching and business growth acceleration',
+      whyJoin: 'AI finds the perfect investor match for your dreams',
       features: ['Smart matching', 'Growth tools', 'Investor support']
     },
     {
@@ -67,6 +74,7 @@ const LandingPage = ({ onGetStarted }) => {
       title: 'Treasury Guardian',
       subtitle: 'Security Platform',
       description: 'Account security & privacy controls with enterprise-level protection',
+      whyJoin: 'Enterprise security protecting everything you own',
       features: ['Security controls', 'Privacy protection', 'Account verification']
     },
     {
@@ -74,6 +82,7 @@ const LandingPage = ({ onGetStarted }) => {
       title: 'CMMS Platform',
       subtitle: 'Management System',
       description: 'Comprehensive management system for operations and resources',
+      whyJoin: 'Organize, optimize, and scale your operations',
       features: ['Resource mgmt', 'Operations tracking', 'Team coordination']
     },
     {
@@ -81,6 +90,7 @@ const LandingPage = ({ onGetStarted }) => {
       title: 'CMMS Pro',
       subtitle: 'Enterprise Edition',
       description: 'Enterprise-grade management and operational excellence',
+      whyJoin: 'Enterprise power at your fingertips, simply executed',
       features: ['Enterprise tools', 'Analytics', 'Automation']
     },
     {
@@ -88,6 +98,7 @@ const LandingPage = ({ onGetStarted }) => {
       title: 'Trust Management',
       subtitle: 'Community Wealth',
       description: 'Collaborate, contribute, and grow wealth together in SACCO groups',
+      whyJoin: 'Build wealth faster with your trusted circle',
       features: ['Group collaboration', 'Wealth growth', 'Community benefits']
     },
     {
@@ -95,6 +106,7 @@ const LandingPage = ({ onGetStarted }) => {
       title: 'SACCO Groups',
       subtitle: 'Community Finance',
       description: 'Democratic savings groups with transparent fund management and rapid growth',
+      whyJoin: 'Together we save more, grow faster, achieve more',
       features: ['Group savings', 'Transparent mgmt', 'Rapid growth']
     },
     {
@@ -102,6 +114,7 @@ const LandingPage = ({ onGetStarted }) => {
       title: 'ICAN Opportunities',
       subtitle: 'Global Access',
       description: 'Your readiness for global opportunities with comprehensive assessment',
+      whyJoin: 'Unlock global opportunities with your ICAN Opportunity Rating',
       features: ['Opportunity assessment', 'Readiness evaluation', 'Global access']
     },
     {
@@ -109,6 +122,7 @@ const LandingPage = ({ onGetStarted }) => {
       title: 'Trust Platform',
       subtitle: 'Verified & Secure',
       description: 'Blockchain-verified trust management with complete transparency',
+      whyJoin: 'Blockchain-backed trust that never lies, always protects',
       features: ['Blockchain verified', 'Full transparency', 'Secure transfers']
     },
     {
@@ -116,6 +130,7 @@ const LandingPage = ({ onGetStarted }) => {
       title: 'Trust Pro',
       subtitle: 'Advanced Features',
       description: 'Advanced trust management with smart contracts and automation',
+      whyJoin: 'Smart contracts automate trust—no middleman needed',
       features: ['Smart contracts', 'Automation', 'Advanced controls']
     },
     {
@@ -123,6 +138,7 @@ const LandingPage = ({ onGetStarted }) => {
       title: 'ICAN Ecosystem',
       subtitle: 'All-in-One Platform',
       description: 'Complete financial ecosystem with all tools integrated seamlessly',
+      whyJoin: 'Everything you need—one powerful, integrated platform',
       features: ['Integrated platform', 'All features', 'Unified experience']
     },
     {
@@ -130,6 +146,7 @@ const LandingPage = ({ onGetStarted }) => {
       title: 'ICAN Premium',
       subtitle: 'Elite Features',
       description: 'Premium features for power users and enterprise clients',
+      whyJoin: 'Premium power for ambitious financial champions',
       features: ['Premium tools', 'Priority support', 'Advanced analytics']
     },
     {
@@ -137,6 +154,7 @@ const LandingPage = ({ onGetStarted }) => {
       title: 'Tithe Management',
       subtitle: 'Spiritual Giving',
       description: 'Give back to your faith community with smart tithe calculations and automatic contributions',
+      whyJoin: 'Align your faith with your finances—giving made sacred',
       features: ['Tithe calculation', 'Auto-giving', 'Faith tracking', 'Community giving', 'Receipt records'],
       highlight: true
     },
@@ -145,6 +163,7 @@ const LandingPage = ({ onGetStarted }) => {
       title: 'Tithe Pro',
       subtitle: 'Advanced Giving',
       description: 'Professional tithe management with offerings, donations, and spiritual accountability',
+      whyJoin: 'Spiritual accountability through transparent, purposeful giving',
       features: ['Multiple giving types', 'Donation tracking', 'Spiritual accountability', 'Community support', 'Impact reports']
     },
     {
@@ -152,6 +171,7 @@ const LandingPage = ({ onGetStarted }) => {
       title: 'ICAN Core',
       subtitle: 'Foundation Platform',
       description: 'The core foundation enabling all ICAN financial services and integrations',
+      whyJoin: 'The powerful foundation building your financial future',
       features: ['Foundation', 'Integration hub', 'Core services']
     }
   ];
@@ -730,6 +750,18 @@ const LandingPage = ({ onGetStarted }) => {
                       e.target.style.display = 'none';
                     }}
                   />
+
+                  {/* Text Overlay - "Why Join" Message */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/40 to-slate-950/20 flex flex-col items-center justify-center p-4 md:p-8">
+                    <div className="text-center space-y-3 md:space-y-4 animate-fadeIn max-w-2xl">
+                      <p className="text-xl md:text-2xl lg:text-4xl font-bold bg-gradient-to-r from-yellow-300 via-purple-300 to-pink-300 bg-clip-text text-transparent leading-tight">
+                        {slides[currentSlide].whyJoin}
+                      </p>
+                      <p className="text-xs md:text-sm lg:text-base text-purple-200 font-medium opacity-90">
+                        Join ICANera Today
+                      </p>
+                    </div>
+                  </div>
 
                   {/* Featured badge for Expense & Income Tracker */}
                   {slides[currentSlide].highlight && (
