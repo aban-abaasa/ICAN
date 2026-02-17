@@ -41,6 +41,8 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
   const audioServiceRef = useRef(null);
   const previousMembersRef = useRef([]);
   const touchStartX = useRef(0);
+  const callChannelRef = useRef(null);
+  const localStreamRef = useRef(null);
 
   const supabase = getSupabaseClient();
 
@@ -242,6 +244,59 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
     };
   }, [groupId, supabase, meetingStarted, user]);
 
+  // Set up call broadcast channel for incoming/outgoing call notifications
+  // This must run immediately and persist for the entire session
+  useEffect(() => {
+    if (!supabase || !groupId || !user) return;
+
+    console.log('🔌 [CALL CHANNEL] Initializing call channel for group:', groupId);
+
+    try {
+      const callBroadcast = supabase.channel(`boardroom-calls:${groupId}`, {
+        config: { broadcast: { self: true } }
+      });
+
+      callBroadcast
+        .on('broadcast', { event: 'call-started' }, ({ payload }) => {
+          console.log('📞 [CALL RECEIVED] CALL STARTED broadcast received:', payload);
+          console.log('📞 [CALL RECEIVED] Current user ID:', user?.id, 'Is this my call?:', payload.hostId === user?.id);
+          
+          // Only show incoming call if this is NOT our call (we're not the host)
+          if (payload.hostId !== user?.id) {
+            console.log('✅ [CALL RECEIVED] This call is for me! Setting incoming call state...');
+            setIncomingCall(payload);
+            
+            // Play ringtone
+            if (audioServiceRef.current) {
+              console.log('🔊 [CALL RECEIVED] Playing incoming call ringtone...');
+              audioServiceRef.current.playRingtone('incomingCall', 3);
+            }
+          } else {
+            console.log('⚠️  [CALL RECEIVED] Ignoring - I am the initiator of this call');
+          }
+        })
+        .on('broadcast', { event: 'call-ended' }, ({ payload }) => {
+          console.log('📞 [CALL ENDED] Call ended:', payload);
+          setIncomingCall(null);
+        })
+        .subscribe((status) => {
+          console.log('🔌 [CALL CHANNEL] Channel status changed to:', status);
+        });
+
+      callChannelRef.current = callBroadcast;
+      console.log('✅ [CALL CHANNEL] Call channel initialized and subscribed');
+    } catch (err) {
+      console.error('❌ [CALL CHANNEL] Error setting up call channel:', err);
+    }
+
+    return () => {
+      console.log('🔌 [CALL CHANNEL] Cleaning up call channel');
+      if (callChannelRef.current) {
+        callChannelRef.current.unsubscribe();
+      }
+    };
+  }, [groupId, supabase, user]);
+
   // Monitor for incoming calls from host
   useEffect(() => {
     if (!meetingStarted && isHost === false && presenceRef.current) {
@@ -390,6 +445,27 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
   const startMeeting = async () => {
     setMeetingStarted(true);
     
+    console.log('🎬 Host starting meeting, broadcasting call...');
+    
+    // Broadcast call started to all members
+    if (callChannelRef.current && isHost) {
+      try {
+        await callChannelRef.current.send({
+          type: 'broadcast',
+          event: 'call-started',
+          payload: {
+            hostId: user?.id,
+            hostEmail: user?.email,
+            groupId: groupId,
+            timestamp: new Date().toISOString()
+          }
+        });
+        console.log('✅ Call broadcast sent to all members');
+      } catch (err) {
+        console.warn('Error broadcasting call:', err);
+      }
+    }
+    
     // Notify other members of incoming call
     if (supabase && groupId && isHost) {
       try {
@@ -407,6 +483,7 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
   };
 
   const acceptCall = async () => {
+    console.log('✅ [ACCEPT CALL] User accepted the call');
     setCallAccepted(true);
     setMeetingStarted(true);
     setIsVideoOn(true);
@@ -429,12 +506,33 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
   };
 
   const rejectCall = () => {
+    console.log('❌ [REJECT CALL] User declined the call');
     setIncomingCall(null);
   };
 
   const endMeeting = async () => {
     if (videoRef.current?.srcObject) {
       videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
+    }
+    
+    console.log('🔴 Ending meeting, broadcasting call-ended...');
+    
+    // Broadcast call ended to all members
+    if (callChannelRef.current) {
+      try {
+        await callChannelRef.current.send({
+          type: 'broadcast',
+          event: 'call-ended',
+          payload: {
+            hostId: user?.id,
+            groupId: groupId,
+            timestamp: new Date().toISOString()
+          }
+        });
+        console.log('✅ Call-ended broadcast sent');
+      } catch (err) {
+        console.warn('Error broadcasting call-ended:', err);
+      }
     }
     
     // Play call ended sound
@@ -446,6 +544,7 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
     setIsVideoOn(false);
     setMeetingTime(0);
     setConnectedMembers([]);
+    setIncomingCall(null);
 
     // Log meeting end
     if (supabase) {
@@ -484,7 +583,8 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
   };
 
   // Incoming call screen
-  if (incomingCall && !meetingStarted && !isHost) {
+  if (incomingCall && !isHost && !callAccepted) {
+    console.log('🔔 [INCOMING CALL] Rendering incoming call screen - incomingCall:', !!incomingCall, 'isHost:', isHost, 'callAccepted:', callAccepted);
     return (
       <div className="w-full h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
         <div className="absolute inset-0 opacity-30">
@@ -498,7 +598,8 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
           </div>
           
           <h2 className="text-4xl font-bold text-white mb-2">{groupName}</h2>
-          <p className="text-xl text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-orange-400 mb-8">Incoming Call...</p>
+          <p className="text-xl text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-orange-400 mb-2">{typeof incomingCall === 'object' ? `${incomingCall.hostEmail || 'Host'} is calling` : 'Incoming Call...'}</p>
+          <p className="text-gray-400 mb-8">Group Call</p>
           
           <div className="flex gap-4 justify-center mt-12">
             <button
@@ -519,6 +620,8 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
         </div>
       </div>
     );
+  } else if (incomingCall && (!isHost === false || callAccepted === true)) {
+    console.log('🔔 [INCOMING CALL] Not showing screen - isHost:', isHost, 'callAccepted:', callAccepted, 'incomingCall:', !!incomingCall);
   }
 
   // Pre-meeting screen
