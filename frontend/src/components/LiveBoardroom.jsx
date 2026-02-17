@@ -30,6 +30,8 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [soundVolume, setSoundVolume] = useState(0.7);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [incomingCall, setIncomingCall] = useState(null);
+  const [callAccepted, setCallAccepted] = useState(false);
 
   const videoRef = useRef(null);
   const meetingTimerRef = useRef(null);
@@ -240,6 +242,24 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
     };
   }, [groupId, supabase, meetingStarted, user]);
 
+  // Monitor for incoming calls from host
+  useEffect(() => {
+    if (!meetingStarted && isHost === false && presenceRef.current) {
+      // Check if any host is in the room
+      const state = presenceRef.current.presenceState();
+      const hasHost = Object.values(state).some(presence => 
+        presence && presence.length > 0 && presence[0]?.isHost
+      );
+      
+      if (hasHost && !incomingCall) {
+        setIncomingCall('Incoming call...');
+        if (audioServiceRef.current) {
+          audioServiceRef.current.playRingtone('incomingCall', 3);
+        }
+      }
+    }
+  }, [meetingStarted, isHost, incomingCall, presenceRef.current?.presenceState()]);
+
   // Set up presence tracking
   useEffect(() => {
     const setupPresence = async () => {
@@ -294,6 +314,7 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
                 email: user.email,
                 videoOn: isVideoOn,
                 micOn: isMicOn,
+                isHost: isHost,
                 status: 'online'
               });
             }
@@ -368,27 +389,47 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
 
   const startMeeting = async () => {
     setMeetingStarted(true);
-    setIsVideoOn(true);
     
-    // Play incoming call sound (meeting started)
-    if (audioServiceRef.current && isHost) {
-      audioServiceRef.current.playSound('incomingCall');
-    }
-    
-    // Log meeting start to chat
-    if (supabase) {
+    // Notify other members of incoming call
+    if (supabase && groupId && isHost) {
       try {
         await supabase.from('boarding_room_chat').insert({
           group_id: groupId,
           user_id: user?.id,
           user_email: user?.email,
-          message: `${user?.email || 'Host'} started the meeting`,
+          message: `${user?.email || 'Host'} started the call`,
           is_system: true
         });
       } catch (err) {
         console.warn('Error logging meeting start:', err);
       }
     }
+  };
+
+  const acceptCall = async () => {
+    setCallAccepted(true);
+    setMeetingStarted(true);
+    setIsVideoOn(true);
+    setIncomingCall(null);
+    
+    // Log call acceptance
+    if (supabase) {
+      try {
+        await supabase.from('boarding_room_chat').insert({
+          group_id: groupId,
+          user_id: user?.id,
+          user_email: user?.email,
+          message: `${user?.email || 'Member'} accepted the call`,
+          is_system: true
+        });
+      } catch (err) {
+        console.warn('Error logging call acceptance:', err);
+      }
+    }
+  };
+
+  const rejectCall = () => {
+    setIncomingCall(null);
   };
 
   const endMeeting = async () => {
@@ -441,6 +482,44 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
       console.error('Error sending message:', err);
     }
   };
+
+  // Incoming call screen
+  if (incomingCall && !meetingStarted && !isHost) {
+    return (
+      <div className="w-full h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+        <div className="absolute inset-0 opacity-30">
+          <div className="absolute top-0 -left-40 w-80 h-80 bg-red-500 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute bottom-0 -right-40 w-80 h-80 bg-orange-500 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+        </div>
+        
+        <div className="relative z-10 text-center max-w-md">
+          <div className="w-32 h-32 bg-gradient-to-br from-red-500 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-8 shadow-2xl animate-pulse">
+            <Phone className="w-16 h-16 text-white" />
+          </div>
+          
+          <h2 className="text-4xl font-bold text-white mb-2">{groupName}</h2>
+          <p className="text-xl text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-orange-400 mb-8">Incoming Call...</p>
+          
+          <div className="flex gap-4 justify-center mt-12">
+            <button
+              onClick={() => acceptCall()}
+              className="px-8 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-2xl font-bold transition-all transform hover:scale-105 active:scale-95 shadow-2xl flex items-center gap-2"
+            >
+              <Phone className="w-5 h-5" />
+              Accept
+            </button>
+            <button
+              onClick={() => rejectCall()}
+              className="px-8 py-3 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white rounded-2xl font-bold transition-all transform hover:scale-105 active:scale-95 shadow-2xl flex items-center gap-2"
+            >
+              <X className="w-5 h-5" />
+              Decline
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Pre-meeting screen
   if (!meetingStarted) {
@@ -502,38 +581,76 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
   return (
     <div ref={containerRef} className="w-full h-full bg-black relative overflow-hidden group sm:pb-0 pb-24">
       <div className="w-full h-full flex flex-col">
-        {/* Video Container - FULL SCREEN - Improved for mobile */}
-        <div className="flex-1 relative bg-black flex items-center justify-center overflow-hidden">
-          {/* Mobile Status Bar - Top */}
-          <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/70 to-transparent p-2 sm:p-3 z-30 sm:hidden flex items-center justify-between">
-            <div className="flex items-center gap-2 text-xs text-white">
-              <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-              <span>{formatTime(meetingTime)}</span>
+        {/* Video Gallery Container */}
+        <div className="flex-1 relative bg-black flex flex-col overflow-hidden">
+          {/* Main Video Area - Local User or First Participant */}
+          <div className="flex-1 relative bg-gradient-to-br from-slate-900 to-black flex items-center justify-center overflow-hidden">
+            {isVideoOn ? (
+              <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center p-4">
+                <div className="text-center">
+                  <div className="w-16 h-16 sm:w-32 sm:h-32 bg-gradient-to-br from-slate-700 to-slate-800 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-6">
+                    <VideoOff className="w-8 h-8 sm:w-16 sm:h-16 text-red-500" />
+                  </div>
+                  <p className="text-lg sm:text-3xl text-white font-bold mb-2">Camera Disabled</p>
+                  <p className="text-gray-400 text-sm sm:text-lg mb-4 sm:mb-6">Enable camera to be visible</p>
+                  <button 
+                    onClick={toggleVideo} 
+                    className="px-6 sm:px-8 py-2 sm:py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg sm:rounded-xl font-bold transition-all flex items-center gap-2 sm:gap-3 mx-auto text-sm sm:text-base"
+                  >
+                    <Video className="w-4 h-4 sm:w-5 sm:h-5" />
+                    Enable Camera
+                  </button>
+                </div>
+              </div>
+            )}
+            
+            {/* Local User Badge */}
+            <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-lg flex items-center gap-2 border border-white/20">
+              <div className="w-2 h-2 rounded-full bg-green-500"></div>
+              <span className="text-xs sm:text-sm text-white font-semibold">You</span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <Users className="w-4 h-4 text-blue-300" />
-              <span className="text-xs text-blue-300 font-semibold">{connectedMembers.length || 1}</span>
+
+            {/* Mobile Status Bar - Top */}
+            <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/70 to-transparent p-2 sm:p-3 z-30 sm:hidden flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs text-white">
+                <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+                <span>{formatTime(meetingTime)}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Users className="w-4 h-4 text-blue-300" />
+                <span className="text-xs text-blue-300 font-semibold">{(connectedMembers.length || 0) + 1}</span>
+              </div>
             </div>
           </div>
 
-          {isVideoOn ? (
-            <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full bg-gradient-to-br from-slate-900 to-black flex items-center justify-center p-4">
-              <div className="text-center">
-                <div className="w-16 h-16 sm:w-32 sm:h-32 bg-gradient-to-br from-slate-700 to-slate-800 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-6">
-                  <VideoOff className="w-8 h-8 sm:w-16 sm:h-16 text-red-500" />
-                </div>
-                <p className="text-lg sm:text-3xl text-white font-bold mb-2">Camera Disabled</p>
-                <p className="text-gray-400 text-sm sm:text-lg mb-4 sm:mb-6">Enable camera to be visible</p>
-                <button 
-                  onClick={toggleVideo} 
-                  className="px-6 sm:px-8 py-2 sm:py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg sm:rounded-xl font-bold transition-all flex items-center gap-2 sm:gap-3 mx-auto text-sm sm:text-base"
+          {/* Participants Gallery - Grid of other connected members */}
+          {connectedMembers && connectedMembers.length > 0 && (
+            <div className="h-24 sm:h-32 bg-black/80 border-t border-slate-700/50 overflow-x-auto flex gap-2 p-2 backdrop-blur-sm">
+              {connectedMembers.map((member, idx) => (
+                <div
+                  key={idx}
+                  className="flex-shrink-0 w-20 h-20 sm:w-28 sm:h-28 bg-gradient-to-br from-purple-600 to-blue-600 rounded-lg relative flex items-center justify-center overflow-hidden shadow-lg hover:shadow-2xl transition-all border border-purple-400/30 group/member"
                 >
-                  <Video className="w-4 h-4 sm:w-5 sm:h-5" />
-                  Enable Camera
-                </button>
-              </div>
+                  <span className="text-white font-bold text-lg sm:text-2xl">{member?.email?.charAt(0).toUpperCase()}</span>
+                  
+                  {/* Member Status Indicators */}
+                  <div className="absolute top-1 right-1 flex gap-0.5">
+                    {member.videoOn && (
+                      <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full shadow-lg"></div>
+                    )}
+                    {member.micOn && (
+                      <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-blue-500 rounded-full shadow-lg"></div>
+                    )}
+                  </div>
+
+                  {/* Member Name */}
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-1.5 py-1 text-center">
+                    <p className="text-white text-xs font-semibold truncate">{member?.email?.split('@')[0]}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
