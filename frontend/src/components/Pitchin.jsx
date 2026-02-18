@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ThumbsUp, MessageCircle, Share2, Clock, Users, FileText, Zap, AlertCircle, Building2, Loader, Plus, Trash2, Lock, Unlock, X, Send, Copy, Check, Play, Home, BookMarked, Heart, Briefcase, Bell } from 'lucide-react';
+import { ThumbsUp, MessageCircle, Share2, Clock, Users, FileText, Zap, AlertCircle, Building2, Loader, Plus, Trash2, Lock, Unlock, X, Send, Copy, Check, Play, Home, BookMarked, Heart, Briefcase, Bell, Search } from 'lucide-react';
 import PitchVideoRecorder from './PitchVideoRecorder';
 import SmartContractGenerator from './SmartContractGenerator';
 import ShareSigningFlow from './ShareSigningFlow';
@@ -46,6 +46,14 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
   const [supabaseReady, setSupabaseReady] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [minFunding, setMinFunding] = useState('0');
+  const [maxFunding, setMaxFunding] = useState('10000000');
+  const [minEquity, setMinEquity] = useState('0');
+  const [maxEquity, setMaxEquity] = useState('100');
+  const [hasIPOnly, setHasIPOnly] = useState(false);
+  const [sortBy, setSortBy] = useState('relevance');
 
   const [showRecorder, setShowRecorder] = useState(false);
   const [currentPitch, setCurrentPitch] = useState(null);
@@ -152,20 +160,84 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
     initialize();
   }, []);
 
-  // Handle tab changes
+  // Handle tab changes and smart search with relevance scoring
   useEffect(() => {
+    let filtered = [];
+    
     if (activeTab === 'feed') {
       // Show ALL published pitches in feed - free to view for everyone
-      setFilteredPitches(pitches);
+      filtered = pitches;
     } else if (activeTab === 'myPitches' && currentUser) {
       // Show only user's actual pitches (must have user_id that matches)
-      setFilteredPitches(pitches.filter(p => p.business_profiles?.user_id === currentUser.id));
+      filtered = pitches.filter(p => p.business_profiles?.user_id === currentUser.id);
     } else if (activeTab === 'interested') {
       // Show pitches user has liked or invested in
-      const interestedPitches = pitches.filter(p => likedPitches.has(p.id) || investedPitches.has(p.id));
-      setFilteredPitches(interestedPitches.length > 0 ? interestedPitches : pitches.slice(0, 0)); // Show empty if none
+      filtered = pitches.filter(p => likedPitches.has(p.id) || investedPitches.has(p.id));
+      if (filtered.length === 0) filtered = []; // Show empty if none
+    } else if (activeTab === 'search') {
+      // Smart search with relevance scoring and advanced filters
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const minFund = parseInt(minFunding) || 0;
+        const maxFund = parseInt(maxFunding) || 10000000;
+        const minEq = parseInt(minEquity) || 0;
+        const maxEq = parseInt(maxEquity) || 100;
+        
+        // Calculate relevance score for each pitch
+        const scoredPitches = pitches.map(p => {
+          const title = p.title?.toLowerCase() || '';
+          const description = p.description?.toLowerCase() || '';
+          const category = p.category?.toLowerCase() || '';
+          const businessName = p.business_profiles?.business_name?.toLowerCase() || '';
+          const funding = p.target_funding || 0;
+          const equity = p.equity_offering || 0;
+          
+          let score = 0;
+          
+          // Text relevance scoring
+          if (title.includes(query)) score += 100;
+          if (title.startsWith(query)) score += 50;
+          if (category.includes(query)) score += 50;
+          if (businessName.includes(query)) score += 25;
+          if (description.includes(query)) score += 10;
+          
+          // Engagement scoring (likes, comments, shares)
+          score += (p.likes_count || 0) * 0.5;
+          score += (p.comments_count || 0) * 0.3;
+          
+          return { 
+            pitch: p, 
+            score,
+            funding,
+            equity
+          };
+        });
+        
+        // Apply all filters together
+        filtered = scoredPitches
+          .filter(item => item.score > 0) // Must match search
+          .filter(item => selectedCategory === 'all' || item.pitch.category === selectedCategory) // Category
+          .filter(item => item.funding >= minFund && item.funding <= maxFund) // Funding range
+          .filter(item => item.equity >= minEq && item.equity <= maxEq) // Equity range
+          .filter(item => !hasIPOnly || item.pitch.has_ip) // IP filter
+          .sort((a, b) => {
+            // Sort by selected criteria
+            if (sortBy === 'relevance') return b.score - a.score;
+            if (sortBy === 'funding-high') return b.funding - a.funding;
+            if (sortBy === 'funding-low') return a.funding - b.funding;
+            if (sortBy === 'equity-high') return b.equity - a.equity;
+            if (sortBy === 'equity-low') return a.equity - b.equity;
+            if (sortBy === 'trending') return (b.pitch.likes_count || 0) - (a.pitch.likes_count || 0);
+            return b.score - a.score;
+          })
+          .map(item => item.pitch);
+      } else {
+        filtered = []; // Empty search query shows no results
+      }
     }
-  }, [activeTab, pitches, currentUser, likedPitches, investedPitches]);
+    
+    setFilteredPitches(filtered);
+  }, [activeTab, pitches, currentUser, likedPitches, investedPitches, searchQuery, selectedCategory, minFunding, maxFunding, minEquity, maxEquity, hasIPOnly, sortBy]);
 
   // Set up real-time metrics subscription
   useEffect(() => {
@@ -928,116 +1000,248 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
         </div>
       )}
 
-      {/* Collapsed Header - Small Business Profile Icon */}
-      <div className="sticky top-0 z-40">
-        <div className="px-4 py-4 flex items-center justify-between">
-          {/* Business Profile Icon - Left */}
-          <button
-            onClick={() => setShowProfileSelector(true)}
-            className="flex items-center gap-3 hover:bg-white/10 px-3 py-2 rounded-lg transition"
-          >
-            <div className="w-10 h-10 bg-gradient-to-br from-pink-500 to-purple-500 rounded-lg flex items-center justify-center shadow-lg">
-              <Building2 className="w-5 h-5 text-white" />
-            </div>
-            <div className="text-left">
-              <h1 className="text-sm font-bold text-white">Pitchin</h1>
-              <p className="text-xs text-gray-300">Share your vision</p>
-            </div>
-          </button>
+      {/* Show Recording Page OR Feed */}
+      {showRecorder ? (
+        // Recording Page - No header, full focus on recording
+        <PitchVideoRecorder
+          onClose={() => {
+            setShowRecorder(false);
+            setCurrentPitch(null);
+          }}
+        />
+      ) : (
+        // Feed Page - With header and navigation
+        <>
+      {/* Clean Header - Pure Text Transparent */}
+      <div className="sticky top-0 z-40 bg-transparent">
+        {/* Top Row - Branding & Search */}
+        <div className="px-4 py-3 flex items-center justify-between gap-4">
+          {/* Left - Pitchin Branding (Text Only) */}
+          <h1 className="text-lg font-bold text-white whitespace-nowrap">Pitchin</h1>
 
-          {/* Tab Buttons - Center */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setActiveTab('feed')}
-              className={`px-3 py-1.5 text-xs font-medium transition ${
-                activeTab === 'feed'
-                  ? 'text-pink-300'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              Available
-            </button>
-            <button
-              onClick={() => setActiveTab('myPitches')}
-              className={`px-3 py-1.5 text-xs font-medium transition ${
-                activeTab === 'myPitches'
-                  ? 'text-purple-300'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              My Pitches
-            </button>
-            <button
-              onClick={() => setActiveTab('interested')}
-              className={`px-3 py-1.5 text-xs font-medium transition ${
-                activeTab === 'interested'
-                  ? 'text-blue-300'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              Pending Votes
-            </button>
+          {/* Center - Search with Category Filter */}
+          <div className="flex-1 max-w-2xl flex items-center gap-2">
+            {/* Search Input - Transparent */}
+            <div className="flex-1 relative">
+              <input
+                type="text"
+                placeholder="Search by title, category, or business..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  if (e.target.value.trim()) {
+                    setActiveTab('search');
+                  }
+                }}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && searchQuery.trim()) {
+                    setActiveTab('search');
+                  }
+                }}
+                className="w-full px-0 py-1 bg-transparent border-0 border-b border-gray-600 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-gray-400 focus:ring-0"
+              />
+              <Search className="absolute right-0 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+            </div>
+
+            {/* Category Filter - Transparent */}
+            {searchQuery.trim() && (
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="px-1 py-1 bg-transparent border-0 border-b border-gray-600 text-sm text-white focus:outline-none focus:border-gray-400 focus:ring-0 whitespace-nowrap appearance-none cursor-pointer"
+                style={{
+                  backgroundColor: 'transparent',
+                  backgroundImage: 'none',
+                  color: 'white'
+                }}
+              >
+                <option value="all" style={{ backgroundColor: '#1e293b', color: 'white', padding: '4px' }}>All Categories</option>
+                <option value="Technology" style={{ backgroundColor: '#1e293b', color: 'white', padding: '4px' }}>Technology</option>
+                <option value="Finance" style={{ backgroundColor: '#1e293b', color: 'white', padding: '4px' }}>Finance</option>
+                <option value="Healthcare" style={{ backgroundColor: '#1e293b', color: 'white', padding: '4px' }}>Healthcare</option>
+                <option value="E-commerce" style={{ backgroundColor: '#1e293b', color: 'white', padding: '4px' }}>E-commerce</option>
+                <option value="Education" style={{ backgroundColor: '#1e293b', color: 'white', padding: '4px' }}>Education</option>
+                <option value="Real Estate" style={{ backgroundColor: '#1e293b', color: 'white', padding: '4px' }}>Real Estate</option>
+              </select>
+            )}
+
+            {/* Advanced Filters - Show when searching */}
+            {searchQuery.trim() && (
+              <div className="flex items-center gap-2">
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="px-1 py-1 bg-transparent border-0 border-b border-gray-600 text-sm text-white focus:outline-none focus:border-gray-400 focus:ring-0 whitespace-nowrap appearance-none cursor-pointer"
+                  style={{ backgroundColor: 'transparent', backgroundImage: 'none', color: 'white' }}
+                >
+                  <option value="relevance" style={{ backgroundColor: '#1e293b', color: 'white' }}>Relevance</option>
+                  <option value="trending" style={{ backgroundColor: '#1e293b', color: 'white' }}>Trending</option>
+                  <option value="funding-high" style={{ backgroundColor: '#1e293b', color: 'white' }}>Funding ↓</option>
+                  <option value="funding-low" style={{ backgroundColor: '#1e293b', color: 'white' }}>Funding ↑</option>
+                  <option value="equity-high" style={{ backgroundColor: '#1e293b', color: 'white' }}>Equity ↓</option>
+                  <option value="equity-low" style={{ backgroundColor: '#1e293b', color: 'white' }}>Equity ↑</option>
+                </select>
+
+                <label className="flex items-center gap-1 text-white text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={hasIPOnly}
+                    onChange={(e) => setHasIPOnly(e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                  Has IP
+                </label>
+              </div>
+            )}
           </div>
 
-          {/* Action Icons - Right */}
-          <div className="flex items-center gap-2">
-            {/* Like Icon */}
-            {/* <button
-              title="Like"
-              className="p-2 hover:bg-white/10 rounded-lg transition flex items-center justify-center"
-              onClick={() => alert('❤️ Like functionality')}
-            >
-              <Heart className="w-5 h-5 text-red-400" />
-            </button> */}
-
-            {/* Comment Icon */}
-            {/* <button
-              title="Comment"
-              className="p-2 hover:bg-white/10 rounded-lg transition flex items-center justify-center"
-              onClick={() => alert('💬 Comment functionality')}
-            >
-              <MessageCircle className="w-5 h-5 text-blue-400" />
-            </button> */}
-
-            {/* Invest Icon */}
-            {/* <button
-              title="Invest"
-              className="p-2 hover:bg-white/10 rounded-lg transition flex items-center justify-center"
-              onClick={() => alert('💰 Invest functionality')}
-            >
-              <Zap className="w-5 h-5 text-yellow-400" />
-            </button> */}
-
-            {/* Share Icon */}
-            {/* <button
-              title="Share"
-              className="p-2 hover:bg-white/10 rounded-lg transition flex items-center justify-center"
-              onClick={() => alert('🔗 Share functionality')}
-            >
-              <Share2 className="w-5 h-5 text-green-400" />
-            </button> */}
-
-            {/* Create Button */}
+          {/* Right - Create & Profile */}
+          <div className="flex items-center gap-4 min-w-max">
             <button
               onClick={() => {
                 handleCreatePitchClick();
               }}
-              className="ml-2 px-4 py-2 text-pink-300 hover:text-pink-200 rounded-lg font-semibold transition flex items-center gap-2"
+              className="text-white text-sm font-semibold flex items-center gap-2 hover:text-pink-400 transition-colors whitespace-nowrap"
             >
               <Plus className="w-4 h-4" />
-              <span>Create</span>
+              Create
             </button>
 
-            {/* Profile Button */}
             <button
               onClick={() => setShowProfileSelector(true)}
-              className="px-4 py-2 text-gray-300 hover:text-white rounded-lg font-semibold transition flex items-center gap-2"
+              title="Business Profiles"
+              className="text-gray-400 hover:text-white transition-colors"
             >
-              <Building2 className="w-4 h-4" />
-              <span>Profile</span>
+              <Building2 className="w-5 h-5" />
             </button>
           </div>
         </div>
+
+        {/* Tab Row - Pure Text */}
+        <div className="px-4 py-3 flex items-center gap-6 overflow-x-auto">
+          <button
+            onClick={() => {
+              setActiveTab('feed');
+              setSelectedCategory('all');
+            }}
+            className={`text-sm font-medium whitespace-nowrap ${
+              activeTab === 'feed'
+                ? 'text-white border-b-2 border-pink-500 pb-1'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            For You
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('myPitches');
+              setSelectedCategory('all');
+            }}
+            className={`text-sm font-medium whitespace-nowrap ${
+              activeTab === 'myPitches'
+                ? 'text-white border-b-2 border-purple-500 pb-1'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            My Pitches
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('interested');
+              setSelectedCategory('all');
+            }}
+            className={`text-sm font-medium whitespace-nowrap ${
+              activeTab === 'interested'
+                ? 'text-white border-b-2 border-blue-500 pb-1'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Pending Votes
+          </button>
+          {searchQuery.trim() && (
+            <button
+              onClick={() => setActiveTab('search')}
+              className={`text-sm font-medium whitespace-nowrap ${
+                activeTab === 'search'
+                  ? 'text-white border-b-2 border-green-500 pb-1'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Search Results
+            </button>
+          )}
+        </div>
+
+        {/* Advanced Filters Row - Funding & Equity Range */}
+        {searchQuery.trim() && activeTab === 'search' && (
+          <div className="px-4 py-2 flex items-center gap-4 border-t border-gray-700/30 text-sm">
+            <span className="text-slate-500 text-xs">Filters:</span>
+            
+            {/* Funding Range */}
+            <div className="flex items-center gap-2">
+              <label className="text-slate-400 text-xs whitespace-nowrap">Funding:</label>
+              <input
+                type="number"
+                min="0"
+                max="10000000"
+                value={minFunding}
+                onChange={(e) => setMinFunding(e.target.value)}
+                placeholder="Min"
+                className="w-16 px-1 py-0.5 bg-transparent border-0 border-b border-gray-600 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-gray-400"
+              />
+              <span className="text-slate-500">-</span>
+              <input
+                type="number"
+                min="0"
+                max="10000000"
+                value={maxFunding}
+                onChange={(e) => setMaxFunding(e.target.value)}
+                placeholder="Max"
+                className="w-16 px-1 py-0.5 bg-transparent border-0 border-b border-gray-600 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-gray-400"
+              />
+            </div>
+
+            {/* Equity Range */}
+            <div className="flex items-center gap-2">
+              <label className="text-slate-400 text-xs whitespace-nowrap">Equity:</label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={minEquity}
+                onChange={(e) => setMinEquity(e.target.value)}
+                placeholder="Min"
+                className="w-12 px-1 py-0.5 bg-transparent border-0 border-b border-gray-600 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-gray-400"
+              />
+              <span className="text-slate-500">-</span>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={maxEquity}
+                onChange={(e) => setMaxEquity(e.target.value)}
+                placeholder="Max"
+                className="w-12 px-1 py-0.5 bg-transparent border-0 border-b border-gray-600 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-gray-400"
+              />
+              <span className="text-slate-400 text-xs">%</span>
+            </div>
+
+            {/* Reset Filters */}
+            <button
+              onClick={() => {
+                setMinFunding('0');
+                setMaxFunding('10000000');
+                setMinEquity('0');
+                setMaxEquity('100');
+                setHasIPOnly(false);
+                setSortBy('relevance');
+              }}
+              className="ml-auto text-slate-500 hover:text-slate-300 text-xs underline"
+            >
+              Reset
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Business Profile Section - Minimal Collapsed View - HIDDEN */}
@@ -2297,6 +2501,8 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
           animation: shimmer 2s infinite;
         }
       `}</style>
+        </>
+      )}
     </div>
   );
 };

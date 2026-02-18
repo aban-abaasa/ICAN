@@ -170,7 +170,12 @@ export const createAdminUser = async (cmmsCompanyId, userData) => {
     if (error) throw error;
 
     // Assign Admin role (role_id = 1 for CMMS_Admin)
-    await assignUserRole(cmmsCompanyId, data.id, 1);
+    const { error: roleError } = await assignUserRole(cmmsCompanyId, data.id, 1);
+    
+    if (roleError) {
+      console.error('❌ Failed to assign admin role:', roleError);
+      throw roleError;
+    }
 
     console.log('✅ CMMS Admin user created:', data);
     return { data, error: null };

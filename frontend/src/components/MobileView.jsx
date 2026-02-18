@@ -361,6 +361,7 @@ const MobileView = ({ userProfile }) => {
   const [showTrustPanel, setShowTrustPanel] = useState(false);
   const [showCmmsPanel, setShowCmmsPanel] = useState(false);
   const [showRecordPanel, setShowRecordPanel] = useState(false);
+  const [showExpenseIncomePanel, setShowExpenseIncomePanel] = useState(false);
   
   // Notifications State
   const [notifications, setNotifications] = useState([]);
@@ -3318,12 +3319,22 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 setActiveBottomTab('wallet');
               } else if (title === 'Trust') {
                 setShowTrustPanel(true);
+                setActiveBottomTab('trust');
               } else if (title === 'CMMS') {
                 setShowCmmsPanel(true);
+                setActiveBottomTab('cmms');
               } else if (title === 'Expense & Income') {
-                setShowRecordPanel(true);
+                setShowExpenseIncomePanel(true);
                 setShowTransactionEntry(true);
-                setActiveBottomTab('transactions');
+                setTransactionType('personal');
+                setActiveBottomTab('expenses');
+              } else if (title === 'Trade') {
+                // Trade is accessed via Wallet panel
+                setShowWalletPanel(true);
+                setActiveBottomTab('wallet');
+              } else if (title === 'Tithe') {
+                // Tithe uses the tithing calculator from action icons
+                setShowTithingCalculator(true);
               }
             }}
           />

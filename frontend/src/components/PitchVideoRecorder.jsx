@@ -74,162 +74,98 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
 
   const startRecording = async () => {
     try {
-      console.log('Requesting camera permissions...');
+      console.log(`📹 Starting recording - Camera mode: ${facingMode === 'user' ? 'Front' : 'Back'}`);
       
       // Check for available cameras
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter(device => device.kind === 'videoinput');
+      console.log(`Found ${videoDevices.length} camera(s)`);
       setHasMultipleCameras(videoDevices.length > 1);
       
-      const stream = await navigator.mediaDevices.getUserMedia({
+      // Determine which camera to use based on facingMode
+      const constraints = {
         video: {
           facingMode: facingMode,
-          aspectRatio: { ideal: 9/16 }
+          aspectRatio: { ideal: 9/16 },
+          width: { ideal: 1080 },
+          height: { ideal: 1920 }
         },
-        audio: true
-      });
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      };
+      
+      console.log('Requesting camera with constraints:', constraints);
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
-      console.log('Camera stream obtained:', stream);
-      console.log('Video tracks:', stream.getVideoTracks());
+      console.log('✅ Camera stream obtained');
+      console.log('Video tracks:', stream.getVideoTracks().map(t => ({
+        label: t.label,
+        facingMode: t.getSettings().facingMode
+      })));
 
       streamRef.current = stream;
 
-      // Set up canvas rendering as fallback
-      if (canvasRef.current) {
+      // Set up canvas rendering
+      if (canvasRef.current && videoRef.current) {
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
-        console.log('Canvas context obtained:', ctx);
         
-        // Set canvas dimensions to match actual video track settings
-        // This will be updated once we get the actual video dimensions
+        // Set initial canvas dimensions (9:16 portrait)
         canvas.width = 1080;
         canvas.height = 1920;
-        console.log('Canvas dimensions set to:', canvas.width, 'x', canvas.height, '(9:16 portrait)');
+        console.log('Canvas initialized: 1080x1920');
         
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
+        videoRef.current.srcObject = stream;
+        
+        // Draw video frames to canvas
+        const drawFrame = () => {
+          // Clear canvas
+          ctx.fillStyle = '#000';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
           
-          // Draw video frames to canvas
-          const drawFrame = () => {
-            // Clear canvas first
-            ctx.fillStyle = '#000';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // Draw video maintaining aspect ratio (contain fit)
-            try {
-              if (videoRef.current && videoRef.current.readyState >= 2) {
-                const videoWidth = videoRef.current.videoWidth;
-                const videoHeight = videoRef.current.videoHeight;
-                
-                if (videoWidth && videoHeight) {
-                  // Update canvas to match video dimensions for 1:1 quality
-                  if (canvas.width !== videoWidth || canvas.height !== videoHeight) {
-                    canvas.width = videoWidth;
-                    canvas.height = videoHeight;
-                    console.log('Canvas resized to video dimensions:', videoWidth, 'x', videoHeight);
-                  }
-                  
-                  // Draw video at full size without distortion
-                  ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+          try {
+            if (videoRef.current && videoRef.current.readyState >= 2) {
+              const videoWidth = videoRef.current.videoWidth;
+              const videoHeight = videoRef.current.videoHeight;
+              
+              if (videoWidth && videoHeight) {
+                // Update canvas to match video dimensions
+                if (canvas.width !== videoWidth || canvas.height !== videoHeight) {
+                  canvas.width = videoWidth;
+                  canvas.height = videoHeight;
                 }
+                
+                // Draw video frame
+                ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
               }
-            } catch (e) {
-              // Silently handle drawImage errors when video isn't ready
             }
-            animationFrameRef.current = requestAnimationFrame(drawFrame);
-          };
-          
-          videoRef.current.onplay = () => {
-            console.log('Video element play event fired');
-            // Canvas dimensions already set above, just start drawing
-            if (videoRef.current) {
-              drawFrame();
-              setIsRecording(true);
-              setRecordingTime(0);
-            }
-          };
-
-          videoRef.current.onerror = (e) => {
-            console.error('Video element error:', e);
-          };
-
-          // Try to play
-          videoRef.current.play().catch(err => {
-            console.error('Play error:', err);
-            // Still try to record if play fails
-            setIsRecording(true);
-          });
-        }
+          } catch (e) {
+            // Handle drawImage errors silently
+          }
+          animationFrameRef.current = requestAnimationFrame(drawFrame);
+        };
+        
+        videoRef.current.onplay = () => {
+          console.log('✅ Video play event - starting frame drawing');
+          drawFrame();
+          setIsRecording(true);
+          setRecordingTime(0);
+        };
+        
+        videoRef.current.onerror = (error) => {
+          console.error('❌ Video error:', error);
+        };
       }
-
-      // Use a MIME type with better browser support
-      // Try MP4 first, then WebM as fallback
-      let mimeType = 'video/webm';
-      const supportedTypes = [
-        'video/mp4;codecs=h264',
-        'video/mp4;codecs=avc1',
-        'video/webm;codecs=vp8,opus',
-        'video/webm;codecs=vp9,opus',
-        'video/webm'
-      ];
-      
-      for (const type of supportedTypes) {
-        if (MediaRecorder.isTypeSupported(type)) {
-          mimeType = type;
-          break;
-        }
-      }
-      
-      console.log('🎥 Using MIME type:', mimeType);
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
-
-      const chunks = [];
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunks.push(e.data);
-        }
-      };
-      
-      mediaRecorder.onstop = () => {
-        console.log('MediaRecorder stopped, creating blob...');
-        const blob = new Blob(chunks, { type: mimeType });
-        console.log('Blob created:', blob.size, 'bytes');
-        const url = URL.createObjectURL(blob);
-        console.log('Preview URL created:', url);
-        console.log('Preview URL is valid:', url && url.startsWith('blob:'));
-        setVideoBlob(blob);
-        setPreviewUrl(url);
-        setRecordedChunks(chunks);
-        setShowReview(true); // Show review dialog for recorded videos
-        console.log('Review mode enabled, previewUrl:', url);
-        console.log('Preview state updated');
-        
-        // Notify parent of video blob (not URL) so it persists
-        if (onVideoRecorded) {
-          onVideoRecorded(blob);
-        }
-        
-        // Stop animation frame
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current);
-          console.log('Animation frame cancelled');
-        }
-        
-        // Stop all tracks
-        stream.getTracks().forEach(track => {
-          track.stop();
-          console.log('Track stopped:', track.kind);
-        });
-      };
-
-      mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start();
-      console.log('Recording started');
     } catch (error) {
-      console.error('Error accessing camera:', error);
-      console.error('Error name:', error.name);
-      console.error('Error message:', error.message);
-      alert(`Unable to access camera: ${error.message}. Please check permissions and try again.`);
+      console.error('❌ Error starting recording:', error);
+      if (error.name === 'NotAllowedError') {
+        alert('Camera access denied. Please allow camera permissions.');
+      } else if (error.name === 'NotFoundError') {
+        alert(`${facingMode === 'user' ? 'Front' : 'Back'} camera not found.`);
+      }
     }
   };
 
@@ -241,21 +177,47 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
   };
 
   const toggleCamera = async () => {
-    if (!hasMultipleCameras) return;
-    
-    // Stop current stream
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
+    if (!hasMultipleCameras) {
+      console.warn('Only one camera available');
+      return;
     }
     
-    // Switch camera
-    const newFacingMode = facingMode === 'user' ? 'environment' : 'user';
-    setFacingMode(newFacingMode);
-    
-    // Restart recording with new camera
-    setTimeout(() => {
-      startRecording();
-    }, 500);
+    try {
+      // Stop current stream and recording
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => {
+          track.stop();
+          console.log('Stopped track:', track.kind);
+        });
+        streamRef.current = null;
+      }
+      
+      if (isRecording) {
+        setIsRecording(false);
+        if (mediaRecorderRef.current) {
+          mediaRecorderRef.current.stop();
+        }
+      }
+      
+      // Switch camera mode
+      const newFacingMode = facingMode === 'user' ? 'environment' : 'user';
+      console.log(`Switching camera: ${facingMode} → ${newFacingMode}`);
+      setFacingMode(newFacingMode);
+      
+      // Wait for state update then request new stream
+      setTimeout(async () => {
+        try {
+          console.log('Requesting new stream with facing mode:', newFacingMode);
+          await startRecording();
+          console.log('✅ Camera switched successfully');
+        } catch (error) {
+          console.error('❌ Error getting camera stream:', error);
+          setFacingMode(facingMode); // Revert on error
+        }
+      }, 300);
+    } catch (error) {
+      console.error('❌ Camera toggle error:', error);
+    }
   };
 
   const toggleFullscreen = () => {
@@ -681,10 +643,10 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
 
       {/* Mobile Header - Removed for full screen */}
 
-      <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 rounded-none p-0 border-0 h-full flex flex-col overflow-y-auto flex-1 space-y-4">
+      <div className="bg-black rounded-none p-0 border-0 h-screen flex flex-col overflow-hidden flex-1">
 
-        {/* Video Container - Full screen */}
-        <div ref={fullscreenRef} className="relative w-full bg-black overflow-hidden" style={{ minHeight: '50vh' }}>
+        {/* Full-Screen Video Container */}
+        <div ref={fullscreenRef} className="relative w-full h-full bg-black overflow-hidden flex-1">
           
           {/* Workflow Status Indicator */}
           {workflowStatus && (
@@ -694,6 +656,7 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
             </div>
           )}
           
+          {/* Main Video Display */}
           <div style={{
             backgroundColor: '#000',
             position: 'relative',
@@ -716,7 +679,7 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                   playsInline
                   muted
                 />
-                {/* Canvas for displaying video stream */}
+                {/* Canvas for displaying video stream - Full screen */}
                 <canvas
                   ref={canvasRef}
                   style={{
@@ -731,13 +694,20 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                   }}
                 />
 
+                {/* Fallback - No camera message */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-white z-10">
+                  <div className="w-20 h-20 rounded-full bg-slate-700 flex items-center justify-center mb-4">
+                    <Camera className="w-10 h-10 text-slate-400" />
+                  </div>
+                  <p className="text-lg font-semibold">Tap to start recording</p>
+                </div>
               </>
             ) : (
               <>
+                {/* Preview Video - Full screen, same layout as recording */}
                 <video
                   key={previewUrl}
                   src={previewUrl}
-                  controls
                   autoPlay
                   playsInline
                   className="object-cover"
@@ -748,128 +718,159 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                     display: 'block'
                   }}
                   onLoadedMetadata={(e) => {
-                    console.log('Video loaded:', e.target.videoWidth, e.target.videoHeight);
+                    console.log('✅ Preview video loaded:', e.target.videoWidth, 'x', e.target.videoHeight);
                   }}
                   onError={(e) => {
-                    console.error('Video load error:', e);
+                    console.error('❌ Preview video error:', e);
                   }}
                 />
+
+                {/* Video Controls Overlay in Preview */}
+                <div className="absolute bottom-4 left-4 right-4 flex items-center justify-center gap-3 z-40">
+                  <button
+                    onClick={() => videoRef.current?.play()}
+                    className="w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white flex items-center justify-center transition-all"
+                  >
+                    <Play className="w-6 h-6 fill-white" />
+                  </button>
+                </div>
               </>
             )}
 
-            {/* Top Controls Row - Clean & Creative - Responsive for Portrait/Landscape */}
-            <div className="absolute portrait:top-4 landscape:top-2 portrait:left-4 landscape:left-2 portrait:right-4 landscape:right-2 flex items-center justify-between z-40">
-              {/* Left Side - Back Button + Recording/Upload Controls - Responsive */}
-              <div className="flex portrait:flex-col landscape:flex-row gap-2 items-center">
-                {/* Back to Pitches Button */}
-                {onClose && (
-                  <button
-                    onClick={onClose}
-                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border-2 border-white/20 hover:scale-105 active:scale-95 text-white text-xs font-medium transition-all shadow-xl"
-                  >
-                    <ArrowLeft className="w-3 h-3" />
-                    <span>Back</span>
-                  </button>
-                )}
+            {/* Top Right - Camera Mode Indicator */}
+            <div className="absolute top-4 right-4 flex items-center gap-2 px-3 py-2 rounded-full bg-blue-500/20 backdrop-blur-md border border-blue-500/50 z-40">
+              <span className="text-blue-300 text-xs font-semibold whitespace-nowrap">
+                {facingMode === 'user' ? '📱 Front' : '🔄 Back'}
+              </span>
+            </div>
 
+            {/* Left Side Controls - Vertical Stack */}
+            <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-3 z-40">
+              {/* Back Button */}
+              {onClose && (
+                <button
+                  onClick={onClose}
+                  className="flex items-center justify-center w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border-2 border-white/20 text-white transition-all hover:scale-105 active:scale-95 shadow-lg"
+                  title="Back"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+              )}
+
+              {/* Upload Video Button */}
+              <label className="w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border-2 border-white/20 text-white flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-lg"
+                title="Upload Video">
+                <Upload className="w-5 h-5" />
+                <input
+                  type="file"
+                  accept="video/*"
+                  onChange={handleUploadVideo}
+                  className="hidden"
+                />
+              </label>
+            </div>
+
+            {/* Right Side Controls - Vertical Stack */}
+            <div className="absolute right-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-3 z-40">
+              {/* Camera Toggle Button */}
+              <button
+                onClick={toggleCamera}
+                disabled={!hasMultipleCameras}
+                title={hasMultipleCameras ? `Switch to ${facingMode === 'user' ? 'Back' : 'Front'} Camera` : 'Only one camera available'}
+                className={`w-12 h-12 rounded-full backdrop-blur-md border-2 flex items-center justify-center transition-all shadow-lg ${
+                  hasMultipleCameras
+                    ? 'bg-blue-500/20 hover:bg-blue-500/40 border-blue-400/50 text-blue-300 hover:scale-105 active:scale-95'
+                    : 'bg-white/5 border-white/10 text-white/30 cursor-not-allowed opacity-50'
+                }`}
+              >
+                <SwitchCamera className="w-5 h-5" />
+              </button>
+
+              {/* Fullscreen Toggle */}
+              <button
+                onClick={toggleFullscreen}
+                className="w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border-2 border-white/20 text-white flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow-lg"
+                title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+              >
+                {isFullscreen ? (
+                  <Minimize className="w-5 h-5" />
+                ) : (
+                  <Maximize className="w-5 h-5" />
+                )}
+              </button>
+
+              {/* Recording Timer - Vertical */}
+              {isRecording && (
+                <div className="flex flex-col items-center justify-center px-3 py-2 rounded-full bg-red-500/20 border border-red-500/50 backdrop-blur-md">
+                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                  <span className="text-white font-semibold text-xs mt-1 whitespace-nowrap">
+                    {Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, '0')}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Bottom Controls Row - Center Record Button Only */}
+            <div className="absolute bottom-20 left-0 right-0 flex items-center justify-center z-40">
+              <div className="flex items-center justify-center">
                 {!previewUrl ? (
                   <>
-                    {/* Start Recording Button */}
+                    {/* Record/Stop Button - Large & Central */}
                     <button
-                      onClick={startRecording}
-                      disabled={isRecording}
-                      className="portrait:w-12 portrait:h-12 landscape:w-14 landscape:h-14 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border-2 border-white/20 hover:scale-110 active:scale-95 disabled:opacity-50 text-white flex items-center justify-center transition-all shadow-xl"
+                      onClick={isRecording ? stopRecording : startRecording}
+                      disabled={!isRecording && false}
+                      className={`w-20 h-20 rounded-full flex items-center justify-center transition-all shadow-2xl hover:scale-110 active:scale-95 border-2 ${
+                        isRecording
+                          ? 'bg-red-500 border-red-400 hover:bg-red-600'
+                          : 'bg-gradient-to-r from-purple-500 to-pink-500 border-pink-400 hover:from-purple-600 hover:to-pink-600'
+                      }`}
                     >
-                      <Camera className="portrait:w-5 portrait:h-5 landscape:w-6 landscape:h-6" />
-                      {isRecording && (
-                        <span className="absolute inset-0 rounded-full border-2 border-white animate-pulse" />
+                      {isRecording ? (
+                        <Square className="w-10 h-10 text-white fill-white" />
+                      ) : (
+                        <Camera className="w-10 h-10 text-white" />
                       )}
                     </button>
-
-                    {/* Stop Recording Button */}
-                    {isRecording && (
-                      <button
-                        onClick={stopRecording}
-                        className="portrait:w-12 portrait:h-12 landscape:w-14 landscape:h-14 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border-2 border-white/20 hover:scale-110 active:scale-95 text-white flex items-center justify-center transition-all shadow-xl"
-                      >
-                        <Square className="portrait:w-5 portrait:h-5 landscape:w-6 landscape:h-6 fill-white" />
-                      </button>
-                    )}
-
-                    {/* Upload Video Button */}
-                    <label className="portrait:w-12 portrait:h-12 landscape:w-14 landscape:h-14 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border-2 border-white/20 hover:scale-110 active:scale-95 text-white flex items-center justify-center transition-all cursor-pointer shadow-xl">
-                      <Upload className="portrait:w-5 portrait:h-5 landscape:w-6 landscape:h-6" />
-                      <input
-                        type="file"
-                        accept="video/*"
-                        onChange={handleUploadVideo}
-                        className="hidden"
-                      />
-                    </label>
                   </>
                 ) : (
                   <>
+                    {/* Edit/Trim Button */}
                     <button
                       onClick={() => setShowVideoClipper(true)}
-                      className="portrait:w-12 portrait:h-12 landscape:w-14 landscape:h-14 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border-2 border-white/20 hover:scale-110 active:scale-95 text-white flex items-center justify-center transition-all shadow-xl"
+                      className="px-6 py-3 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border-2 border-white/20 text-white font-medium transition-all hover:scale-105 active:scale-95 flex items-center gap-2 shadow-lg"
                     >
-                      <Scissors className="portrait:w-5 portrait:h-5 landscape:w-6 landscape:h-6" />
+                      <Scissors className="w-5 h-5" />
+                      <span>Edit</span>
                     </button>
+
+                    {/* Retake Button */}
                     <button
                       onClick={() => setPreviewUrl(null)}
-                      className="portrait:w-12 portrait:h-12 landscape:w-14 landscape:h-14 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border-2 border-white/20 hover:scale-110 active:scale-95 text-white flex items-center justify-center transition-all shadow-xl"
+                      className="px-6 py-3 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border-2 border-white/20 text-white font-medium transition-all hover:scale-105 active:scale-95 flex items-center gap-2 shadow-lg"
                     >
-                      <RotateCcw className="portrait:w-5 portrait:h-5 landscape:w-6 landscape:h-6" />
+                      <RotateCcw className="w-5 h-5" />
+                      <span>Retake</span>
+                    </button>
+
+                    {/* Submit Button - Large & Prominent */}
+                    <button
+                      onClick={() => {
+                        console.log('📝 Submit clicked - Opening documents form (mandatory)');
+                        setWorkflowPhase('documents');
+                        setIsFormExpanded(true);
+                        setWorkflowStatus('📋 Complete all documents to publish');
+                      }}
+                      className="px-8 py-3 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 border-2 border-green-400 text-white font-bold transition-all hover:scale-105 active:scale-95 flex items-center gap-2 shadow-xl"
+                    >
+                      <CheckCircle className="w-6 h-6" />
+                      <span>Next</span>
                     </button>
                   </>
                 )}
               </div>
-
-              {/* Right Side - Camera Controls */}
-              <div className="flex portrait:flex-col landscape:flex-row gap-2">
-                {/* Flip Camera - Always show on mobile */}
-                {!previewUrl && (
-                  <button
-                    onClick={toggleCamera}
-                    disabled={!hasMultipleCameras}
-                    className={`portrait:w-12 portrait:h-12 landscape:w-14 landscape:h-14 rounded-full backdrop-blur-md border-2 border-white/20 text-white flex flex-col items-center justify-center transition-all shadow-xl ${
-                      hasMultipleCameras 
-                        ? 'bg-white/10 hover:bg-white/20 hover:scale-110 active:scale-95' 
-                        : 'bg-white/5 opacity-50 cursor-not-allowed'
-                    }`}
-                  >
-                    <RotateCcw className="portrait:w-4 portrait:h-4 landscape:w-5 landscape:h-5 mb-0.5" />
-                    <span className="portrait:text-[6px] landscape:text-[7px] font-bold tracking-wider">{facingMode === 'user' ? 'FRONT' : 'BACK'}</span>
-                  </button>
-                )}
-
-                {/* Filters Button */}
-                {!previewUrl && (
-                  <button
-                    onClick={() => alert('🎨 Filters coming soon!')}
-                    className="portrait:w-12 portrait:h-12 landscape:w-14 landscape:h-14 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border-2 border-white/20 hover:scale-110 active:scale-95 text-white flex items-center justify-center transition-all shadow-xl"
-                  >
-                    <Sparkles className="portrait:w-5 portrait:h-5 landscape:w-6 landscape:h-6" />
-                  </button>
-                )}
-
-                {/* Submit Button - Show on recorded/uploaded videos */}
-                {previewUrl && (
-                  <button
-                    onClick={() => {
-                      // Always open the documents form as mandatory step
-                      console.log('📝 Submit clicked - Opening documents form (mandatory)');
-                      setWorkflowPhase('documents'); // Reset to documents phase
-                      setIsFormExpanded(true); // Always open the form
-                      setWorkflowStatus('📋 Please complete all document fields before video upload');
-                    }}
-                    className="portrait:px-3 portrait:py-1.5 landscape:px-4 landscape:py-2 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border-2 border-white/20 hover:scale-105 active:scale-95 text-white font-bold portrait:text-xs landscape:text-sm flex items-center justify-center transition-all shadow-xl"
-                  >
-                    <span>Submit</span>
-                  </button>
-                )}
-              </div>
             </div>
+          </div>
+          </div>
 
         {/* Pitch Details Modal Popup */}
         {isFormExpanded && (
@@ -970,120 +971,6 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                       <span>Finish & Submit Pitch</span>
                     </>
                   )}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-            {/* Recording Time Display */}
-            {isRecording && (
-              <div className="absolute portrait:top-20 landscape:top-16 left-1/2 transform -translate-x-1/2 z-40 bg-red-600/80 backdrop-blur-md text-white portrait:px-3 portrait:py-1.5 landscape:px-4 landscape:py-2 rounded-full flex items-center gap-2 shadow-lg">
-                <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                <span className="portrait:text-xs landscape:text-sm font-bold">{Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, '0')}</span>
-              </div>
-            )}
-            {/* Pin icon button - Commented out */}
-            {/* <div className="absolute top-14 md:top-4 right-4 md:right-4 z-40">
-              <button
-                onClick={() => setIsFormExpanded(!isFormExpanded)}
-                className="relative group w-11 h-11 md:w-12 md:h-12 rounded-full bg-slate-700/80 hover:bg-slate-600 text-purple-400 hover:text-purple-300 flex items-center justify-center transition focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-slate-900 shadow-lg"
-              >
-                <Pin className={`w-6 h-6 md:w-6 md:h-6 transition-transform ${isFormExpanded ? 'rotate-45' : ''}`} />
-                <div className="absolute bottom-full right-0 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none hidden md:block">
-                  <div className="bg-slate-900 text-white text-xs px-3 py-1 rounded whitespace-nowrap border border-slate-700">
-                    {isFormExpanded ? 'Collapse form' : 'Expand form'}
-                  </div>
-                </div>
-              </button>
-            </div> */}
-          </div>
-        </div>
-
-        {/* Form Fields - Completely hidden until pin clicked */}
-        <div className={`transition-all duration-300 overflow-y-auto md:flex-none md:space-y-4 ${
-          isFormExpanded 
-            ? 'flex flex-col flex-1 md:flex-none max-h-full opacity-100 px-3 md:px-0 py-4 md:py-0' 
-            : 'hidden'
-        }`}>
-          <div className="space-y-3 px-0">
-            {/* Form Header */}
-            <div className="hidden mb-4 pb-4 border-b border-purple-500/30">
-              <h3 className="text-lg font-bold bg-gradient-to-r from-purple-300 to-pink-300 bg-clip-text text-transparent">
-                ✨ Pitch Details
-              </h3>
-              <p className="text-sm text-slate-400 mt-1">Click the expand button to open detailed form</p>
-            </div>
-
-            {/* Simplified message - Documents handled in modal */}
-            <div className="bg-purple-900/30 border border-purple-600/50 rounded-lg p-4 text-purple-300 text-sm text-center">
-              📋 Pitch documentation is available in the expanded modal view
-            </div>
-
-            {/* Submit Button Area */}
-            <div className="md:px-8 md:pb-8 space-y-3">
-              <button
-                onClick={() => {
-                  // Always open the documents form as mandatory step
-                  console.log('📝 Form Submit clicked - Opening documents form (mandatory)');
-                  setWorkflowPhase('documents'); // Reset to documents phase
-                  setIsFormExpanded(true); // Always open the form
-                  setWorkflowStatus('📋 Please complete all document fields before video upload');
-                }}
-                disabled={isSubmitting || !videoBlob}
-                title={!videoBlob ? 'Please upload or record a video' : 'Click to open pitch details form'}
-                className={`w-full py-3 md:py-4 px-6 rounded-xl font-bold text-base md:text-lg transition shadow-xl flex items-center justify-center gap-2 ${
-                  isSubmitting || !videoBlob
-                    ? 'bg-slate-600 cursor-not-allowed opacity-50 text-slate-300'
-                    : 'bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 hover:from-pink-600 hover:via-purple-600 hover:to-indigo-600 text-white hover:shadow-2xl hover:shadow-pink-500/50 transform hover:scale-105 cursor-pointer active:scale-95'
-                }`}
-              >
-                {isSubmitting ? (
-                  <>
-                    <Upload className="w-5 h-5 animate-spin" />
-                    <span>Processing Your Pitch...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>📝</span>
-                    <span>Open Pitch Details</span>
-                  </>
-                )}
-              </button>
-              {/* Helper text - Commented out */}
-              {/* <p className="text-center text-slate-400 text-xs md:text-sm">
-                {isSubmitting ? 'Please wait while we process your pitch...' : 'Fill all fields and record/upload a video to proceed'}
-              </p> */}
-            </div>
-          </div>
-        </div>
-
-        {/* Trim Dialog Modal */}
-        {showTrimDialog && (
-          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[9999] p-4">
-            <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-black rounded-2xl shadow-2xl p-6 max-w-md w-full border border-purple-500/30">
-              <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                <Scissors className="w-5 h-5 text-purple-400" />
-                Trim Your Video?
-              </h3>
-              
-              <p className="text-gray-300 mb-6 text-sm">
-                You can optionally trim your video to cut out unwanted parts, or upload it as is. Trimming is optional!
-              </p>
-              
-              <div className="flex gap-3">
-                <button
-                  onClick={handleSkipTrim}
-                  className="flex-1 px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition-colors"
-                >
-                  📤 Skip & Upload
-                </button>
-                
-                <button
-                  onClick={handleOpenTrimmer}
-                  className="flex-1 px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold rounded-lg transition-all hover:shadow-lg hover:shadow-purple-500/50"
-                >
-                  ✂️ Trim Video
                 </button>
               </div>
             </div>

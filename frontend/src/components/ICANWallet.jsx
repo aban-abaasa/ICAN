@@ -23,7 +23,8 @@ import {
   AlertCircle,
   Users,
   Phone,
-  MapPin
+  MapPin,
+  Menu
 } from 'lucide-react';
 import momoService from '../services/momoService';
 import airtelMoneyService from '../services/airtelMoneyService';
@@ -2934,7 +2935,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap items-center">
           <button
             onClick={() => setActiveTab('overview')}
             className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
@@ -2946,95 +2947,121 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
             <Wallet className="w-4 h-4" />
             Overview
           </button>
-          <button
-            onClick={() => setActiveTab('transactions')}
-            className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
-              activeTab === 'transactions'
-                ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg shadow-blue-500/30'
-                : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
-            }`}
-          >
-            <History className="w-4 h-4" />
-            Transactions
-          </button>
-          <button
-            onClick={() => setActiveTab('deposit')}
-            className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
-              activeTab === 'deposit'
-                ? 'bg-gradient-to-r from-emerald-600 to-green-600 text-white shadow-lg shadow-emerald-500/30'
-                : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
-            }`}
-          >
-            <Download className="w-4 h-4" />
-            Deposit
-          </button>
-          <button
-            onClick={() => setActiveTab('withdraw')}
-            className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
-              activeTab === 'withdraw'
-                ? 'bg-gradient-to-r from-red-600 to-pink-600 text-white shadow-lg shadow-red-500/30'
-                : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
-            }`}
-          >
-            <Upload className="w-4 h-4" />
-            Withdraw
-          </button>
-          {/* AGENT TERMINAL TAB - Only if user is an agent */}
-          {!agentCheckLoading && isAgent ? (
+
+          {/* Others Dropdown Menu */}
+          <div className="relative group">
             <button
-              onClick={() => setActiveTab('agent')}
               className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
-                activeTab === 'agent'
-                  ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-500/30'
+                ['transactions', 'withdraw', 'agent', 'cards', 'business', 'settings'].includes(activeTab)
+                  ? 'bg-gradient-to-r from-slate-600 to-slate-700 text-white shadow-lg shadow-slate-500/30'
                   : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
               }`}
             >
-              <Store className="w-4 h-4" />
-              🏪 Agent Terminal
+              <Menu className="w-4 h-4" />
+              Others
+              <ChevronDown className="w-4 h-4" />
             </button>
-          ) : !agentCheckLoading && !isAgent ? (
-            <button
-              onClick={() => setActiveTab('agent')}
-              title="Click to create an agent account"
-              className="px-4 py-2 rounded-lg flex items-center gap-2 bg-slate-700 text-gray-300 hover:bg-slate-600 hover:text-white transition-all cursor-pointer"
-            >
-              <Lock className="w-4 h-4" />
-              🔒 Agent (Locked)
-            </button>
-          ) : null}
-          <button
-            onClick={() => setActiveTab('cards')}
-            className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
-              activeTab === 'cards'
-                ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/30'
-                : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
-            }`}
-          >
-            <CreditCard className="w-4 h-4" />
-            Cards
-          </button>
-          <button
-            onClick={() => setActiveTab('business')}
-            className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
-              activeTab === 'business'
-                ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/30'
-                : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
-            }`}
-          >
-            <Store className="w-4 h-4" />
-            Business Accounts
-          </button>
-          <button
-            onClick={() => setActiveTab('settings')}
-            className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
-              activeTab === 'settings'
-                ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg shadow-orange-500/30'
-                : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
-            }`}
-          >
-            <Settings className="w-4 h-4" />
-            Settings
-          </button>
+
+            {/* Dropdown Menu */}
+            <div className="absolute left-0 mt-1 w-48 bg-slate-800 border border-slate-600 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+              <button
+                onClick={() => setActiveTab('transactions')}
+                className={`w-full px-4 py-2 text-left flex items-center gap-2 transition-all ${
+                  activeTab === 'transactions'
+                    ? 'bg-blue-500/30 text-blue-300'
+                    : 'text-gray-300 hover:bg-slate-700'
+                }`}
+              >
+                <History className="w-4 h-4" />
+                Transactions
+              </button>
+
+              {/* COMMENTED OUT DEPOSIT TAB */}
+              {/* <button
+                onClick={() => setActiveTab('deposit')}
+                className={`w-full px-4 py-2 text-left flex items-center gap-2 transition-all ${
+                  activeTab === 'deposit'
+                    ? 'bg-emerald-500/30 text-emerald-300'
+                    : 'text-gray-300 hover:bg-slate-700'
+                }`}
+              >
+                <Download className="w-4 h-4" />
+                Deposit
+              </button> */}
+
+              <button
+                onClick={() => setActiveTab('withdraw')}
+                className={`w-full px-4 py-2 text-left flex items-center gap-2 transition-all ${
+                  activeTab === 'withdraw'
+                    ? 'bg-red-500/30 text-red-300'
+                    : 'text-gray-300 hover:bg-slate-700'
+                }`}
+              >
+                <Upload className="w-4 h-4" />
+                Withdraw
+              </button>
+
+              {/* AGENT TERMINAL TAB - Only if user is an agent */}
+              {!agentCheckLoading && isAgent ? (
+                <button
+                  onClick={() => setActiveTab('agent')}
+                  className={`w-full px-4 py-2 text-left flex items-center gap-2 transition-all ${
+                    activeTab === 'agent'
+                      ? 'bg-purple-500/30 text-purple-300'
+                      : 'text-gray-300 hover:bg-slate-700'
+                  }`}
+                >
+                  <Store className="w-4 h-4" />
+                  🏪 Agent Terminal
+                </button>
+              ) : !agentCheckLoading && !isAgent ? (
+                <button
+                  onClick={() => setActiveTab('agent')}
+                  title="Click to create an agent account"
+                  className="w-full px-4 py-2 text-left flex items-center gap-2 text-gray-400 hover:bg-slate-700 transition-all cursor-pointer"
+                >
+                  <Lock className="w-4 h-4" />
+                  🔒 Agent (Locked)
+                </button>
+              ) : null}
+
+              <button
+                onClick={() => setActiveTab('cards')}
+                className={`w-full px-4 py-2 text-left flex items-center gap-2 transition-all ${
+                  activeTab === 'cards'
+                    ? 'bg-purple-500/30 text-purple-300'
+                    : 'text-gray-300 hover:bg-slate-700'
+                }`}
+              >
+                <CreditCard className="w-4 h-4" />
+                Cards
+              </button>
+
+              <button
+                onClick={() => setActiveTab('business')}
+                className={`w-full px-4 py-2 text-left flex items-center gap-2 transition-all ${
+                  activeTab === 'business'
+                    ? 'bg-cyan-500/30 text-cyan-300'
+                    : 'text-gray-300 hover:bg-slate-700'
+                }`}
+              >
+                <Store className="w-4 h-4" />
+                Business Accounts
+              </button>
+
+              <button
+                onClick={() => setActiveTab('settings')}
+                className={`w-full px-4 py-2 text-left flex items-center gap-2 transition-all ${
+                  activeTab === 'settings'
+                    ? 'bg-orange-500/30 text-orange-300'
+                    : 'text-gray-300 hover:bg-slate-700'
+                }`}
+              >
+                <Settings className="w-4 h-4" />
+                Settings
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 

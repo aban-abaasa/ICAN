@@ -209,41 +209,67 @@ const CMMSModule = ({
           setUserCompanyId(cmmsUser.cmms_company_id);
           setNotificationCompanyId(cmmsUser.cmms_company_id);  // For welcome page notifications
 
-          // Step 2: Get user's roles separately (better reliability)
-          const { data: userRoles, error: rolesError } = await supabase
-            .from('cmms_user_roles')
-            .select('cmms_role_id, cmms_roles(role_name)')
-            .eq('cmms_user_id', cmmsUser.id)
-            .eq('is_active', true);
+          // Step 2: Query cmms_users_with_roles view which has built-in creator detection
+          const { data: userWithRole, error: viewError } = await supabase
+            .from('cmms_users_with_roles')
+            .select('effective_role, role_labels')
+            .eq('id', cmmsUser.id)
+            .single();
 
-          if (rolesError) {
-            console.error('Error fetching user roles:', rolesError);
-          }
-
-          if (userRoles && userRoles.length > 0) {
-            const roleNames = userRoles
-              .map(ur => ur.cmms_roles?.role_name)
-              .filter(Boolean);
+          if (!viewError && userWithRole) {
+            // Use effective_role from the view (already checks if creator in DB)
+            const effectiveRole = userWithRole.effective_role?.toLowerCase() || 'viewer';
             
-            const primaryRole = roleNames[0] || 'viewer';
+            console.log(`📋 User effective role from view:`, effectiveRole);
+            console.log(`✅ User authorized with effective role: ${effectiveRole}`);
             
-            console.log(`📋 User roles found:`, roleNames);
-            console.log(`✅ User authorized with primary role: ${primaryRole}`);
-            
-            localStorage.setItem('cmms_user_role', primaryRole);
-            setUserRole(primaryRole);
-            setHasBusinessProfile(true);  // ✅ SET THIS SO DASHBOARD LOADS
+            localStorage.setItem('cmms_user_role', effectiveRole);
+            setUserRole(effectiveRole);
+            setHasBusinessProfile(true);
             setIsAuthorized(true);
             setAccessDeniedReason('');
             console.log('🔓 hasBusinessProfile set to TRUE - should load dashboard');
           } else {
-            console.log('⚠️ User in CMMS but no active roles assigned - assigning viewer role');
-            localStorage.setItem('cmms_user_role', 'viewer');
-            setUserRole('viewer');
-            setHasBusinessProfile(true);  // ✅ SET THIS SO DASHBOARD LOADS
-            setIsAuthorized(true);
-            setAccessDeniedReason('');
-            console.log('🔓 hasBusinessProfile set to TRUE (viewer) - should load dashboard');
+            // Fallback: Check user roles the old way
+            const { data: userRoles, error: rolesError } = await supabase
+              .from('cmms_user_roles')
+              .select('cmms_role_id, cmms_roles(role_name)')
+              .eq('cmms_user_id', cmmsUser.id)
+              .eq('is_active', true);
+
+            if (userRoles && userRoles.length > 0) {
+              const roleNames = userRoles
+                .map(ur => ur.cmms_roles?.role_name)
+                .filter(Boolean);
+              
+              const primaryRole = roleNames[0] || 'viewer';
+              
+              console.log(`📋 User roles found (fallback):`, roleNames);
+              console.log(`✅ User authorized with primary role: ${primaryRole}`);
+              
+              localStorage.setItem('cmms_user_role', primaryRole);
+              setUserRole(primaryRole);
+              setHasBusinessProfile(true);
+              setIsAuthorized(true);
+              setAccessDeniedReason('');
+              console.log('🔓 hasBusinessProfile set to TRUE - should load dashboard');
+            } else {
+              console.log('⚠️ User in CMMS but no active roles assigned');
+              
+              // Check if user is the company creator (owner) via localStorage as final fallback
+              const cachedOwnerEmail = localStorage.getItem('cmms_company_owner_email');
+              const isCreator = cachedOwnerEmail && user?.email && user.email.toLowerCase() === cachedOwnerEmail.toLowerCase();
+              
+              const defaultRole = isCreator ? 'admin' : 'viewer';
+              
+              console.log(`🔑 Assigning default role: ${defaultRole} (creator: ${isCreator}, user: ${user?.email}, owner: ${cachedOwnerEmail})`);
+              localStorage.setItem('cmms_user_role', defaultRole);
+              setUserRole(defaultRole);
+              setHasBusinessProfile(true);
+              setIsAuthorized(true);
+              setAccessDeniedReason('');
+              console.log('🔓 hasBusinessProfile set to TRUE - should load dashboard');
+            }
           }
 
           // Load company data
@@ -2038,11 +2064,25 @@ const CMMSModule = ({
 
         console.log('✅ Admin user created:', adminUserData);
 
+        // Get the current auth user's email
+        let ownerEmail = profileFormData.ownerEmail || profileFormData.email;
+        
+        // If no ownerEmail in form, try to get from auth
+        if (!ownerEmail) {
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          ownerEmail = authUser?.email;
+        }
+
+        console.log('✅ Owner email for CMMS:', ownerEmail);
+
         // Step 3: Store auth state in localStorage (Supabase is source of truth for profile data)
         localStorage.setItem('cmms_user_profile', 'true');
         localStorage.setItem('cmms_user_role', 'admin');
         localStorage.setItem('cmms_company_id', companyData.id);
-        localStorage.setItem('cmms_company_owner', adminUserData.id);
+        if (ownerEmail) {
+          localStorage.setItem('cmms_company_owner_email', ownerEmail);
+        }
+        localStorage.setItem('cmms_company_owner_id', adminUserData.id);
 
         // Step 4: Update component state with Supabase data
         setCmmsData(prev => ({
