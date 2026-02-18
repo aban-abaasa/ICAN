@@ -985,15 +985,19 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
               )}
             </div>
 
-            {/* Bottom Controls Row - Stop Recording (When Active) */}
+            {/* Stop Recording Button - Center of Video (Works in all views: portrait, wide, fullscreen) */}
             {isRecording && (
-            <div className="absolute bottom-4 left-0 right-0 flex items-center justify-center z-40">
+            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-40 flex items-center justify-center">
+              {/* Subtle background glow for fullscreen visibility */}
+              <div className="absolute w-20 h-20 rounded-full bg-red-500/20 blur-xl"></div>
+              
+              {/* Stop Button */}
               <button
                 onClick={stopRecording}
-                className="w-20 h-20 rounded-full bg-red-500 border-2 border-red-400 hover:bg-red-600 flex items-center justify-center transition-all shadow-2xl hover:scale-110 active:scale-95"
+                className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-red-500 border-2 border-red-400 hover:bg-red-600 flex items-center justify-center transition-all shadow-lg hover:scale-110 active:scale-95"
                 title="Stop recording"
               >
-                <Square className="w-10 h-10 text-white fill-white" />
+                <Square className="w-6 h-6 sm:w-7 sm:h-7 text-white fill-white" />
               </button>
             </div>
             )}
