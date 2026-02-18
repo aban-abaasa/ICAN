@@ -42,6 +42,7 @@ const CMMSModule = ({
   // ACCESS CONTROL & AUTHORIZATION
   // ============================================
   const [userRole, setUserRole] = useState(null);
+  const [isCreator, setIsCreator] = useState(false);  // Track if user is company creator
   const [hasBusinessProfile, setHasBusinessProfile] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [accessDeniedReason, setAccessDeniedReason] = useState('');
@@ -78,14 +79,14 @@ const CMMSModule = ({
     },
     coordinator: {
       canViewCompany: true,
-      canEditCompany: false,
-      canManageUsers: false,
-      canAssignRoles: false,
+      canEditCompany: true,  // Allow coordinator to edit company details (they manage operations)
+      canManageUsers: true,  // Allow coordinator to manage users (add storeman & service providers)
+      canAssignRoles: true,  // Allow coordinator to assign roles
       canViewInventory: true,
       canEditInventory: false,
       canDeleteUsers: false,
       canViewFinancials: false,
-      canManageServiceProviders: false,
+      canManageServiceProviders: true,  // Allow managing service providers
       canCreateWorkOrders: true,
       canViewAllData: false,
       level: 5
@@ -218,7 +219,34 @@ const CMMSModule = ({
 
           if (!viewError && userWithRole) {
             // Use effective_role from the view (already checks if creator in DB)
-            const effectiveRole = userWithRole.effective_role?.toLowerCase() || 'viewer';
+            let effectiveRole = userWithRole.effective_role?.toLowerCase() || 'viewer';
+            
+            // Additional check: If effective role is 'viewer', verify if this user is the company creator
+            if (effectiveRole === 'viewer') {
+              const cachedOwnerEmail = localStorage.getItem('cmms_company_owner_email');
+              const currentUserEmail = user?.email?.toLowerCase();
+              const ownerEmailLower = cachedOwnerEmail?.toLowerCase();
+              const isCreator = cachedOwnerEmail && currentUserEmail && currentUserEmail === ownerEmailLower;
+              
+              console.log('🔍 Creator detection check:', {
+                cachedOwnerEmail,
+                currentUserEmail,
+                isCreator,
+                dbRole: userWithRole.effective_role
+              });
+              
+              if (isCreator) {
+                console.log('🔑 User IS company creator - upgrading from viewer to admin');
+                effectiveRole = 'admin';
+                setIsCreator(true);  // Mark user as creator for permission checks
+              } else {
+                console.log('ℹ️ User is NOT company creator (or no owner email cached)', {
+                  userEmail: user?.email,
+                  ownerEmail: cachedOwnerEmail
+                });
+                setIsCreator(false);
+              }
+            }
             
             console.log(`📋 User effective role from view:`, effectiveRole);
             console.log(`✅ User authorized with effective role: ${effectiveRole}`);
@@ -276,10 +304,60 @@ const CMMSModule = ({
           console.log('📂 Loading company data for company_id:', cmmsUser.cmms_company_id);
           await loadCompanyData(cmmsUser.cmms_company_id);  // Pass company ID directly
           return;
+        } else if (user?.email) {
+          // User not found in cmms_users table - check if they're a company creator
+          console.log('⚠️ User not found in CMMS users table - checking if they are a company creator');
+          
+          const cachedOwnerEmail = localStorage.getItem('cmms_company_owner_email');
+          const currentUserEmail = user.email.toLowerCase();
+          const ownerEmailLower = cachedOwnerEmail?.toLowerCase();
+          const isCreator = cachedOwnerEmail && currentUserEmail === ownerEmailLower;
+          
+          console.log('🔍 Creator check (not in cmms_users):', {
+            cachedOwnerEmail,
+            currentUserEmail,
+            ownerEmailLower,
+            isCreator,
+            companyId: cachedCompanyId
+          });
+          
+          if (isCreator && cachedCompanyId) {
+            console.log('🔑 User IS company creator (not in cmms_users) - granting admin access');
+            localStorage.setItem('cmms_user_role', 'admin');
+            localStorage.setItem('cmms_company_id', cachedCompanyId);
+            setUserRole('admin');
+            setIsCreator(true);  // Mark as creator for permission checks
+            setUserCompanyId(cachedCompanyId);
+            setHasBusinessProfile(true);
+            setIsAuthorized(true);
+            setAccessDeniedReason('');
+            await loadCompanyData(cachedCompanyId);
+            return;
+          }
         }
       }
 
       // Fallback to cached data if user not in database
+      // First: Check if user is a company creator
+      const cachedOwnerEmail = localStorage.getItem('cmms_company_owner_email');
+      if (user?.email && cachedOwnerEmail && user.email.toLowerCase() === cachedOwnerEmail.toLowerCase()) {
+        // User is the company creator
+        console.log('🔑 User is company creator - using admin role');
+        localStorage.setItem('cmms_user_role', 'admin');
+        setUserRole('admin');
+        setIsCreator(true);  // Mark as creator for permission checks
+        setHasBusinessProfile(true);
+        setIsAuthorized(true);
+        setAccessDeniedReason('');
+        if (cachedCompanyId) {
+          setUserCompanyId(cachedCompanyId);
+          await loadCompanyData(cachedCompanyId);
+        } else {
+          await loadCompanyData();
+        }
+        return;
+      }
+      
       const assignedRole = user?.assignedCmmsRole || cachedRole;
       
       // Normalize CMMS role names: CMMS_Admin -> admin, CMMS_Coordinator -> coordinator, etc.
@@ -404,6 +482,23 @@ const CMMSModule = ({
           ...prev,
           users: formattedUsers
         }));
+        
+        // Check if current user is the company creator (first admin user)
+        if (user?.email && userRole === 'viewer') {
+          const firstAdminUser = users.find(u => {
+            const roles = u.role_labels ? u.role_labels.split(', ') : [];
+            return roles[0]?.toLowerCase() === 'admin';
+          });
+          
+          if (firstAdminUser && firstAdminUser.email.toLowerCase() === user.email.toLowerCase()) {
+            console.log('🔑 Current user is the company creator (first admin) - upgrading to admin');
+            localStorage.setItem('cmms_user_role', 'admin');
+            localStorage.setItem('cmms_company_owner_email', user.email);
+            setUserRole('admin');
+            setIsCreator(true);  // Mark as creator for permission checks
+          }
+        }
+        
         console.log('📊 Updated cmmsData.users with', formattedUsers.length, 'users');
       } else {
         console.log('ℹ️ No users found in company');
@@ -418,6 +513,14 @@ const CMMSModule = ({
   // ============================================
   const hasPermission = (permission) => {
     if (!isAuthorized || !userRole) return false;
+    
+    // Creators get special permissions: can edit company and manage users
+    if (isCreator) {
+      if (permission === 'canEditCompany') return true;  // Creators can always edit company
+      if (permission === 'canManageUsers') return true;  // Creators can manage users
+      if (permission === 'canAssignRoles') return true;  // Creators can assign roles
+    }
+    
     return rolePermissions[userRole]?.[permission] || false;
   };
 
@@ -1331,7 +1434,7 @@ const CMMSModule = ({
       setEmailSearchQuery('');
     };
 
-    const roles = [
+    const allRoles = [
       { id: 'admin', label: 'Admin', color: 'from-red-500 to-pink-600', icon: '👑' },
       { id: 'coordinator', label: 'Department Coordinator', color: 'from-blue-500 to-cyan-600', icon: '📋' },
       { id: 'supervisor', label: 'Supervisor', color: 'from-purple-500 to-indigo-600', icon: '👔' },
@@ -1340,6 +1443,16 @@ const CMMSModule = ({
       { id: 'finance', label: 'Financial Officer', color: 'from-teal-500 to-cyan-600', icon: '💰' },
       { id: 'service-provider', label: 'Service Provider', color: 'from-violet-500 to-purple-600', icon: '🏢' }
     ];
+
+    // Filter roles based on current user's role
+    let roles = allRoles;
+    if (userRole === 'coordinator') {
+      // Coordinators can only assign Storeman and Service Provider roles
+      roles = allRoles.filter(r => ['storeman', 'service-provider'].includes(r.id));
+    } else if (userRole !== 'admin') {
+      // Non-admin, non-coordinator users shouldn't reach here due to permission check
+      roles = [];
+    }
 
     const handleAddUser = async () => {
       // User selection from dropdown is required
@@ -2064,23 +2177,56 @@ const CMMSModule = ({
 
         console.log('✅ Admin user created:', adminUserData);
 
-        // Get the current auth user's email
-        let ownerEmail = profileFormData.ownerEmail || profileFormData.email;
+        // Get the OWNER email - should be the current logged-in user, not the company email
+        let ownerEmail = profileFormData.ownerEmail; // explicit owner email if provided
         
-        // If no ownerEmail in form, try to get from auth
+        // If no explicit owner email, get from currently logged-in user
+        if (!ownerEmail && user?.email) {
+          ownerEmail = user.email;
+          console.log('✅ Using current logged-in user email as owner:', ownerEmail);
+        }
+        
+        // Fallback: try to get from auth
         if (!ownerEmail) {
           const { data: { user: authUser } } = await supabase.auth.getUser();
           ownerEmail = authUser?.email;
+          console.log('✅ Using auth user email as owner:', ownerEmail);
+        }
+        
+        // Last resort: use company email
+        if (!ownerEmail) {
+          ownerEmail = profileFormData.email;
+          console.log('⚠️ No owner email found, using company email:', ownerEmail);
         }
 
-        console.log('✅ Owner email for CMMS:', ownerEmail);
+        console.log('✅ Owner email for CMMS storage:', ownerEmail);
+        console.log('✅ Current logged-in user:', user?.email);
 
-        // Step 3: Store auth state in localStorage (Supabase is source of truth for profile data)
+        // Step 3: Mark this user as the company creator in the database
+        // This ensures the cmms_users_with_roles view returns admin role for this user
+        if (adminUserData?.id) {
+          console.log('🔑 Marking user as company creator in database...');
+          const { error: creatorError } = await cmmsService.markCompanyCreator(
+            companyData.id,
+            adminUserData.id,
+            ownerEmail
+          );
+          
+          if (creatorError) {
+            console.warn('⚠️ Failed to mark creator in database, continuing anyway:', creatorError);
+            // Don't throw - this is not critical, UI will still work with localStorage
+          } else {
+            console.log('✅ Creator marked in database successfully');
+          }
+        }
+
+        // Step 4: Store auth state in localStorage (Supabase is source of truth for profile data)
         localStorage.setItem('cmms_user_profile', 'true');
         localStorage.setItem('cmms_user_role', 'admin');
         localStorage.setItem('cmms_company_id', companyData.id);
         if (ownerEmail) {
           localStorage.setItem('cmms_company_owner_email', ownerEmail);
+          console.log('💾 Stored owner email in localStorage:', ownerEmail);
         }
         localStorage.setItem('cmms_company_owner_id', adminUserData.id);
 
@@ -2094,10 +2240,11 @@ const CMMSModule = ({
         setUserCompanyId(companyData.id);
         setHasBusinessProfile(true);
         setUserRole('admin');
+        setIsCreator(true);  // Mark new company creator for permission checks
         setIsAuthorized(true);
         setActiveTab('company');
         
-        console.log('✅ Profile created successfully, user is now admin');
+        console.log('✅ Profile created successfully, user is now admin with creator permissions');
         alert('🎉 Company profile created! You are now the Administrator.');
       } catch (error) {
         console.error('❌ Error creating profile:', error);
@@ -2254,35 +2401,16 @@ const CMMSModule = ({
               </div>
               <div className="flex gap-3 mt-4">
                 <button
-                  onClick={() => {
-                    // Call the existing profile creation handler
-                    if (profileFormData.companyName && profileFormData.phone && profileFormData.email) {
-                      setCmmsData(prev => ({
-                        ...prev,
-                        companyProfile: {
-                          companyName: profileFormData.companyName,
-                          companyRegistration: profileFormData.companyRegistration,
-                          location: profileFormData.location,
-                          industry: profileFormData.industry,
-                          phone: profileFormData.phone,
-                          email: profileFormData.email,
-                          createdAt: new Date(),
-                          createdBy: user?.email || 'admin'
-                        }
-                      }));
-                      setShowCompanyForm(false);
-                      alert('✅ Company profile created successfully!');
-                    } else {
-                      alert('❌ Please fill in all required fields (Company Name, Phone, Email)');
-                    }
-                  }}
-                  className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-green-600 transition-all text-sm"
+                  onClick={handleCreateProfileAsGuest}
+                  disabled={isCreatingProfile}
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-green-600 transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  ✓ Create Profile
+                  {isCreatingProfile ? '⏳ Creating...' : '✓ Create Profile'}
                 </button>
                 <button
                   onClick={() => setShowCompanyForm(false)}
-                  className="px-4 py-2 bg-gray-500 bg-opacity-30 text-gray-300 rounded-lg font-semibold hover:bg-opacity-50 transition-all text-sm"
+                  disabled={isCreatingProfile}
+                  className="px-4 py-2 bg-gray-500 bg-opacity-30 text-gray-300 rounded-lg font-semibold hover:bg-opacity-50 transition-all text-sm disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -2381,15 +2509,15 @@ const CMMSModule = ({
   // MAIN CMMS INTERFACE FOR AUTHORIZED USERS
   // ============================================
   return (
-    <div className="glass-card p-6">
-      {/* Compact Header with Icon */}
-      <div className="flex items-center justify-between mb-8 pb-6 border-b border-white border-opacity-20">
-        <div className="flex items-center gap-4">
+    <div className="glass-card p-4 md:p-6 lg:p-8">
+      {/* Responsive Header with Icon */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 md:mb-8 pb-4 md:pb-6 border-b border-white border-opacity-20 gap-4">
+        <div className="flex items-center gap-2 sm:gap-4 flex-1">
           <button
             onClick={() => setShowCompanyDetails(!showCompanyDetails)}
             className={`
-              flex flex-col items-center justify-center w-20 h-20 rounded-lg 
-              transition-all transform hover:scale-110 shadow-lg
+              flex flex-col items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-lg 
+              transition-all transform hover:scale-110 shadow-lg flex-shrink-0
               ${showCompanyDetails
                 ? 'bg-gradient-to-br from-indigo-600 to-indigo-800 ring-2 ring-indigo-400 scale-105'
                 : 'bg-gradient-to-br from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800'
@@ -2397,16 +2525,16 @@ const CMMSModule = ({
             `}
             title="Company Details"
           >
-            <Building className="w-10 h-10 text-white mb-2" />
-            <span className="text-xs text-white font-bold text-center">Company</span>
+            <Building className="w-7 h-7 sm:w-10 sm:h-10 text-white mb-1" />
+            <span className="text-xs text-white font-bold text-center leading-tight">Company</span>
           </button>
-          <div>
-            <h2 className="text-2xl font-bold text-white">CMMS</h2>
-            <p className="text-gray-300 text-sm mt-1">Management System</p>
+          <div className="min-w-0">
+            <h2 className="text-xl sm:text-2xl font-bold text-white truncate">CMMS</h2>
+            <p className="text-gray-300 text-xs sm:text-sm mt-1">Management System</p>
           </div>
         </div>
         
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4 flex-wrap justify-end w-full sm:w-auto">
           {/* Notifications Bell */}
           {userCompanyId && (
             <NotificationsPanel 
@@ -2419,7 +2547,7 @@ const CMMSModule = ({
             />
           )}
           
-          <span className="bg-blue-500 bg-opacity-30 text-blue-200 px-4 py-2 rounded-full text-xs font-semibold">
+          <span className="bg-blue-500 bg-opacity-30 text-blue-200 px-3 md:px-4 py-1.5 md:py-2 rounded-full text-xs font-semibold whitespace-nowrap">
             🔑 {userRole?.toUpperCase()}
           </span>
         </div>

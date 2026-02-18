@@ -496,6 +496,38 @@ export const getMaintenancePlans = async (companyId) => {
   }
 };
 
+/**
+ * Mark a user as the company creator/owner
+ * This ensures they get admin role detection in views
+ * @param {string} companyId - Company UUID
+ * @param {string} userId - User UUID
+ * @param {string} creatorEmail - Creator email
+ * @returns {Object} Result of function call or error
+ */
+export const markCompanyCreator = async (companyId, userId, creatorEmail) => {
+  try {
+    console.log('🔑 Marking company creator:', { companyId, userId, creatorEmail });
+    
+    const { data, error } = await supabase
+      .rpc('mark_company_creator', {
+        p_company_id: companyId,
+        p_user_id: userId,
+        p_creator_email: creatorEmail
+      });
+
+    if (error) {
+      console.error('❌ Error marking creator:', error);
+      return { data: null, error };
+    }
+
+    console.log('✅ Company creator marked successfully');
+    return { data, error: null };
+  } catch (error) {
+    console.error('❌ Exception marking company creator:', error);
+    return { data: null, error };
+  }
+};
+
 export default {
   createCompanyProfile,
   getCompanyProfile,
@@ -511,5 +543,6 @@ export default {
   getInventoryTransactions,
   getCompanyBudget,
   getCompanyEquipment,
-  getMaintenancePlans
+  getMaintenancePlans,
+  markCompanyCreator
 };
