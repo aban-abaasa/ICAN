@@ -1525,7 +1525,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                         >
                           <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
                             likedPitches.has(pitch.id)
-                              ? 'bg-red-500/80 scale-110'
+                              ? 'bg-red-500/80'
                               : 'bg-white/20 hover:bg-white/30 backdrop-blur-sm'
                           }`}>
                             <Heart className={`w-4 h-4 ${likedPitches.has(pitch.id) ? 'text-white fill-white' : 'text-white drop-shadow-lg'}`} />
@@ -1565,7 +1565,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                         >
                           <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
                             investedPitches.has(pitch.id)
-                              ? 'bg-green-500/80 scale-110'
+                              ? 'bg-green-500/80'
                               : 'bg-white/10 hover:bg-white/20 backdrop-blur-sm'
                           }`}>
                             <Briefcase className="w-4 h-4 text-white drop-shadow-lg" />
@@ -1614,9 +1614,9 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
         )}
       </div>
 
-      {/* Bottom Action Bar - Web View Only */}
+      {/* Bottom Action Bar - Web View Only - Hidden on Mobile */}
       {!showRecorder && filteredPitches.length > 0 && (currentVisiblePitch || filteredPitches[0]) && (
-        <div className="max-w-7xl mx-auto px-6 py-3">
+        <div className="hidden sm:block max-w-7xl mx-auto px-6 py-3">
             <div className="flex items-center justify-between">
               {/* Left - Pitch Info */}
               <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -2362,7 +2362,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
             >
               <div className={`w-14 h-14 rounded-full flex items-center justify-center backdrop-blur-md transition-all shadow-lg ${
                 likedPitches.has(videoPlayerPitch.id)
-                  ? 'bg-red-500/90 scale-110'
+                  ? 'bg-red-500/90'
                   : 'bg-black/50 hover:bg-black/70'
               }`}>
                 <Heart className={`w-7 h-7 ${likedPitches.has(videoPlayerPitch.id) ? 'text-white fill-white' : 'text-white'}`} />
@@ -2412,7 +2412,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
             >
               <div className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all ${
                 investedPitches.has(videoPlayerPitch.id)
-                  ? 'bg-green-500/90 scale-110'
+                  ? 'bg-green-500/90'
                   : 'bg-gradient-to-br from-yellow-500 to-orange-500 animate-pulse-slow hover:scale-110'
               }`}>
                 <Zap className="w-7 h-7 text-white fill-white" />
