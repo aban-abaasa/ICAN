@@ -773,7 +773,8 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            overflow: 'hidden'
+            overflow: 'auto',
+            padding: '0'
           }}>
             {!previewUrl ? (
               <>
@@ -787,18 +788,17 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                   playsInline
                   muted
                 />
-                {/* Canvas for displaying video stream - Full screen */}
+                {/* Canvas for displaying video stream - Normal view without zoom */}
                 <canvas
                   ref={canvasRef}
                   style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: '100%',
+                    maxWidth: '100%',
+                    maxHeight: '100%',
+                    width: 'auto',
+                    height: 'auto',
                     display: 'block',
                     backgroundColor: '#000',
-                    objectFit: 'cover'
+                    objectFit: 'contain'
                   }}
                 />
 
@@ -816,17 +816,19 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
               </>
             ) : (
               <>
-                {/* Preview Video - Full screen with proper styling */}
+                {/* Preview Video - Normal view without zoom, wide display */}
                 <div className="absolute inset-0">
                   <video
                     ref={el => { if (el) videoRefs.current['preview'] = el; }}
                     key={previewUrl}
                     src={previewUrl}
                     playsInline
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain"
                     style={{
                       backgroundColor: '#000',
-                      display: 'block'
+                      display: 'block',
+                      maxWidth: '100%',
+                      maxHeight: '100%'
                     }}
                     onLoadedMetadata={(e) => {
                       console.log('✅ Preview video loaded:', e.target.videoWidth, 'x', e.target.videoHeight);
