@@ -14,6 +14,7 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
   const streamRef = useRef(null);
   const fullscreenRef = useRef(null);
   const videoRefs = useRef({});
+  const recordedChunksRef = useRef([]);
   
   const [isRecording, setIsRecording] = useState(false);
   const [recordedChunks, setRecordedChunks] = useState([]);
@@ -85,6 +86,10 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
     try {
       console.log(`📹 Starting recording - Camera mode: ${facingMode === 'user' ? 'Front' : 'Back'}`);
       
+      // Reset chunks at start of recording
+      recordedChunksRef.current = [];
+      setRecordedChunks([]);
+      
       // Check for available cameras
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter(device => device.kind === 'videoinput');
@@ -129,6 +134,64 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
         
         videoRef.current.srcObject = stream;
         
+        // Play the video to display on canvas
+        videoRef.current.play().catch(err => {
+          console.error('❌ Play error:', err);
+        });
+        
+        // Set up MediaRecorder to capture canvas stream
+        try {
+          const canvasStream = canvasRef.current.captureStream(30); // 30 FPS
+          const audioTracks = stream.getAudioTracks();
+          
+          // Add audio tracks to canvas stream if available
+          if (audioTracks.length > 0) {
+            audioTracks.forEach(track => {
+              canvasStream.addTrack(track);
+            });
+          }
+          
+          // Create MediaRecorder
+          const mimeType = 'video/webm;codecs=vp9,opus';
+          const options = {
+            mimeType: mimeType,
+            videoBitsPerSecond: 2500000 // 2.5 Mbps
+          };
+          
+          mediaRecorderRef.current = new MediaRecorder(canvasStream, options);
+          
+          // Handle data chunks
+          mediaRecorderRef.current.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+              recordedChunksRef.current.push(event.data);
+              console.log('📦 Data chunk received:', event.data.size);
+            }
+          };
+          
+          // Handle recording stop
+          mediaRecorderRef.current.onstop = () => {
+            console.log('⏹️ Recording stopped');
+            const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+            setPreviewUrl(url);
+            setVideoBlob(blob);
+            setRecordedChunks(recordedChunksRef.current);
+            
+            // Notify parent
+            if (onVideoRecorded) {
+              onVideoRecorded(blob);
+            }
+          };
+          
+          mediaRecorderRef.current.onerror = (event) => {
+            console.error('❌ MediaRecorder error:', event.error);
+          };
+          
+          console.log('✅ MediaRecorder set up successfully');
+        } catch (err) {
+          console.error('❌ MediaRecorder setup failed:', err);
+        }
+        
         // Draw video frames to canvas
         const drawFrame = () => {
           // Clear canvas
@@ -160,8 +223,15 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
         videoRef.current.onplay = () => {
           console.log('✅ Video play event - starting frame drawing');
           drawFrame();
-          setIsRecording(true);
-          setRecordingTime(0);
+          // Start recording after stream is ready
+          setTimeout(() => {
+            if (mediaRecorderRef.current) {
+              mediaRecorderRef.current.start();
+              setIsRecording(true);
+              setRecordingTime(0);
+              console.log('🔴 Recording started');
+            }
+          }, 100);
         };
         
         videoRef.current.onerror = (error) => {
@@ -179,9 +249,31 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
+    console.log('⏹️ Stop recording requested');
+    
+    if (isRecording) {
       setIsRecording(false);
+      
+      // Stop MediaRecorder
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+      
+      // Stop stream tracks
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => {
+          track.stop();
+          console.log('Stopped track:', track.kind);
+        });
+        streamRef.current = null;
+      }
+      
+      // Stop animation frame
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      
+      setRecordingTime(0);
     }
   };
 
@@ -710,13 +802,17 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                   }}
                 />
 
-                {/* Fallback - No camera message */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-white z-10">
-                  <div className="w-20 h-20 rounded-full bg-slate-700 flex items-center justify-center mb-4">
+                {/* Fallback - Clickable Camera Button to Start Recording */}
+                <button
+                  onClick={startRecording}
+                  className="absolute inset-0 flex flex-col items-center justify-center text-white z-10 hover:bg-black/20 transition-all active:bg-black/40 rounded-lg"
+                  title="Click to start recording"
+                >
+                  <div className="w-20 h-20 rounded-full bg-slate-700 hover:bg-slate-600 flex items-center justify-center mb-4 transition-all hover:scale-110 active:scale-95 shadow-lg">
                     <Camera className="w-10 h-10 text-slate-400" />
                   </div>
                   <p className="text-lg font-semibold">Tap to start recording</p>
-                </div>
+                </button>
               </>
             ) : (
               <>
@@ -821,8 +917,7 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
             </button>
             )}
 
-            {/* Left Side Controls - Vertical Stack - Recording Mode Only */}
-            {!previewUrl && (
+            {/* Left Side Controls - Vertical Stack */}
             <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-3 z-40">
               {/* Back Button */}
               {onClose && (
@@ -847,10 +942,8 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                 />
               </label>
             </div>
-            )}
 
-            {/* Right Side Controls - Vertical Stack - Recording Mode Only */}
-            {!previewUrl && (
+            {/* Right Side Controls - Vertical Stack */}
             <div className="absolute right-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-3 z-40">
               {/* Camera Toggle Button */}
               <button
@@ -889,33 +982,19 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                 </div>
               )}
             </div>
-            )}
 
-            {/* Bottom Controls Row - Center Record Button Only */}
+            {/* Bottom Controls Row - Stop Recording (When Active) */}
+            {isRecording && (
             <div className="absolute bottom-4 left-0 right-0 flex items-center justify-center z-40">
-              <div className="flex items-center justify-center gap-4 flex-wrap">
-                {!previewUrl ? (
-                  <>
-                    {/* Record/Stop Button - Large & Central */}
-                    <button
-                      onClick={isRecording ? stopRecording : startRecording}
-                      disabled={!isRecording && false}
-                      className={`w-20 h-20 rounded-full flex items-center justify-center transition-all shadow-2xl hover:scale-110 active:scale-95 border-2 ${
-                        isRecording
-                          ? 'bg-red-500 border-red-400 hover:bg-red-600'
-                          : 'bg-gradient-to-r from-purple-500 to-pink-500 border-pink-400 hover:from-purple-600 hover:to-pink-600'
-                      }`}
-                    >
-                      {isRecording ? (
-                        <Square className="w-10 h-10 text-white fill-white" />
-                      ) : (
-                        <Camera className="w-10 h-10 text-white" />
-                      )}
-                    </button>
-                  </>
-                ) : null}
-              </div>
+              <button
+                onClick={stopRecording}
+                className="w-20 h-20 rounded-full bg-red-500 border-2 border-red-400 hover:bg-red-600 flex items-center justify-center transition-all shadow-2xl hover:scale-110 active:scale-95"
+                title="Stop recording"
+              >
+                <Square className="w-10 h-10 text-white fill-white" />
+              </button>
             </div>
+            )}
 
             {/* Preview Action Buttons - Right Side Vertical Stack (Only during Preview) */}
             {previewUrl && (
