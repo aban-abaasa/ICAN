@@ -4,14 +4,16 @@ import { uploadVideo, getSupabase } from '../services/pitchingService';
 import { VideoClipper } from './status/SimpleVideoClipper';
 import BusinessProfileDocuments from './BusinessProfileDocuments';
 import PitchDetailsForm from './PitchDetailsForm';
+import BusinessProfileSelector from './BusinessProfileSelector';
 
-const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', onPitchCreated, onClose, hideControls = false, onVideoRecorded, currentBusinessProfile }) => {
+const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', onPitchCreated, onClose, hideControls = false, onVideoRecorded, currentBusinessProfile, businessProfiles = [], onSelectProfile, onShowProfileSelector }) => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const animationFrameRef = useRef(null);
   const streamRef = useRef(null);
   const fullscreenRef = useRef(null);
+  const videoRefs = useRef({});
   
   const [isRecording, setIsRecording] = useState(false);
   const [recordedChunks, setRecordedChunks] = useState([]);
@@ -28,6 +30,8 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
   const [showVideoClipper, setShowVideoClipper] = useState(false);
   const [showTrimDialog, setShowTrimDialog] = useState(false);
   const [showReview, setShowReview] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [selectedProfile, setSelectedProfile] = useState(currentBusinessProfile);
   const [documentsComplete, setDocumentsComplete] = useState(false); // Track document completion
   const [workflowPhase, setWorkflowPhase] = useState('documents'); // 'documents', 'video-details', 'ready'
   const [completedDocumentsData, setCompletedDocumentsData] = useState(null); // Store completed document data
@@ -60,6 +64,11 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
       setIsRecording(false);
     }
   }, [cameraMode]);
+
+  // Sync selected profile with prop
+  useEffect(() => {
+    setSelectedProfile(currentBusinessProfile);
+  }, [currentBusinessProfile]);
 
   // Recording timer effect
   useEffect(() => {
@@ -251,10 +260,17 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
         console.warn(`⚠️ Warning: Video is ${fileSizeMB.toFixed(2)}MB, exceeds recommended 50MB. Upload will take several minutes.`);
       }
       
-      // Show trim dialog for uploaded videos
+      // Show real preview immediately for uploaded videos (skip trim dialog)
       if (file.type.startsWith('video')) {
+        const url = URL.createObjectURL(file);
+        setPreviewUrl(url);
         setVideoBlob(file);
-        setShowTrimDialog(true);
+        setRecordedChunks([file]);
+        
+        // Notify parent of video blob so it persists
+        if (onVideoRecorded) {
+          onVideoRecorded(file);
+        }
         return;
       }
       
@@ -469,14 +485,14 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
 
       // Check if documents are saved to Supabase BEFORE allowing video submission
       // Skip validation if we already have completed documents data from the workflow
-      if (currentBusinessProfile && !completedDocumentsData) {
+      if (selectedProfile && !completedDocumentsData) {
         try {
           const supabase = getSupabase();
           if (supabase) {
             const { data: docs, error } = await supabase
               .from('business_documents')
               .select('*')
-              .eq('business_profile_id', currentBusinessProfile.id)
+              .eq('business_profile_id', selectedProfile.id)
               .single();
 
             if (error || !docs) {
@@ -704,47 +720,109 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
               </>
             ) : (
               <>
-                {/* Preview Video - Full screen, same layout as recording */}
-                <video
-                  key={previewUrl}
-                  src={previewUrl}
-                  autoPlay
-                  playsInline
-                  className="object-cover"
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    backgroundColor: '#000',
-                    display: 'block'
-                  }}
-                  onLoadedMetadata={(e) => {
-                    console.log('✅ Preview video loaded:', e.target.videoWidth, 'x', e.target.videoHeight);
-                  }}
-                  onError={(e) => {
-                    console.error('❌ Preview video error:', e);
-                  }}
-                />
+                {/* Preview Video - Full screen with proper styling */}
+                <div className="absolute inset-0">
+                  <video
+                    ref={el => { if (el) videoRefs.current['preview'] = el; }}
+                    key={previewUrl}
+                    src={previewUrl}
+                    playsInline
+                    className="w-full h-full object-cover"
+                    style={{
+                      backgroundColor: '#000',
+                      display: 'block'
+                    }}
+                    onLoadedMetadata={(e) => {
+                      console.log('✅ Preview video loaded:', e.target.videoWidth, 'x', e.target.videoHeight);
+                    }}
+                    onError={(e) => {
+                      console.error('❌ Preview video error:', e);
+                    }}
+                  />
+                </div>
 
-                {/* Video Controls Overlay in Preview */}
-                <div className="absolute bottom-4 left-4 right-4 flex items-center justify-center gap-3 z-40">
+                {/* Video Controls Overlay in Preview - Bottom Center */}
+                <div className="absolute bottom-32 left-0 right-0 flex items-center justify-center gap-4 z-40">
+                  {/* Play/Pause Button */}
                   <button
-                    onClick={() => videoRef.current?.play()}
-                    className="w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white flex items-center justify-center transition-all"
+                    onClick={() => {
+                      const video = videoRefs.current['preview'];
+                      if (video) {
+                        if (video.paused) {
+                          video.play();
+                        } else {
+                          video.pause();
+                        }
+                      }
+                    }}
+                    className="w-14 h-14 rounded-full bg-blue-500/80 hover:bg-blue-500 backdrop-blur-md border-2 border-blue-400 text-white flex items-center justify-center transition-all shadow-xl hover:scale-110"
+                    title="Play/Pause"
                   >
-                    <Play className="w-6 h-6 fill-white" />
+                    <Play className="w-7 h-7 fill-white" />
                   </button>
+
+                  {/* Volume Toggle */}
+                  <button
+                    onClick={() => {
+                      const video = videoRefs.current['preview'];
+                      if (video) {
+                        video.muted = !video.muted;
+                      }
+                    }}
+                    className="w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white flex items-center justify-center transition-all"
+                    title="Toggle Sound"
+                  >
+                    <span className="text-lg">🔊</span>
+                  </button>
+
+                  {/* Fullscreen Toggle */}
+                  <button
+                    onClick={() => {
+                      const video = videoRefs.current['preview'];
+                      if (video?.requestFullscreen) {
+                        video.requestFullscreen();
+                      }
+                    }}
+                    className="w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white flex items-center justify-center transition-all"
+                    title="Fullscreen"
+                  >
+                    <Maximize className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Preview Info Indicator */}
+                <div className="absolute top-4 left-4 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full border border-white/30 z-40">
+                  <p className="text-white font-semibold text-sm flex items-center gap-2">
+                    <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                    Preview
+                  </p>
                 </div>
               </>
             )}
 
-            {/* Top Right - Camera Mode Indicator */}
+            {/* Top Right - Camera Mode Indicator - Recording Only */}
+            {!previewUrl && (
             <div className="absolute top-4 right-4 flex items-center gap-2 px-3 py-2 rounded-full bg-blue-500/20 backdrop-blur-md border border-blue-500/50 z-40">
               <span className="text-blue-300 text-xs font-semibold whitespace-nowrap">
                 {facingMode === 'user' ? '📱 Front' : '🔄 Back'}
               </span>
             </div>
+            )}
 
-            {/* Left Side Controls - Vertical Stack */}
+            {/* Top Left - Back Button - Preview Only */}
+            {previewUrl && onClose && (
+            <button
+              onClick={onClose}
+              className="absolute top-4 left-4 flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white text-sm font-medium transition-all hover:scale-105 active:scale-95 z-40"
+              title="Close preview"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back</span>
+            </button>
+            )}
+
+            {/* Left Side Controls - Vertical Stack - Recording Mode Only */}
+            {!previewUrl && (
             <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-3 z-40">
               {/* Back Button */}
               {onClose && (
@@ -769,8 +847,10 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                 />
               </label>
             </div>
+            )}
 
-            {/* Right Side Controls - Vertical Stack */}
+            {/* Right Side Controls - Vertical Stack - Recording Mode Only */}
+            {!previewUrl && (
             <div className="absolute right-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-3 z-40">
               {/* Camera Toggle Button */}
               <button
@@ -809,10 +889,11 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                 </div>
               )}
             </div>
+            )}
 
             {/* Bottom Controls Row - Center Record Button Only */}
-            <div className="absolute bottom-20 left-0 right-0 flex items-center justify-center z-40">
-              <div className="flex items-center justify-center">
+            <div className="absolute bottom-4 left-0 right-0 flex items-center justify-center z-40">
+              <div className="flex items-center justify-center gap-4 flex-wrap">
                 {!previewUrl ? (
                   <>
                     {/* Record/Stop Button - Large & Central */}
@@ -832,43 +913,59 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                       )}
                     </button>
                   </>
-                ) : (
-                  <>
-                    {/* Edit/Trim Button */}
-                    <button
-                      onClick={() => setShowVideoClipper(true)}
-                      className="px-6 py-3 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border-2 border-white/20 text-white font-medium transition-all hover:scale-105 active:scale-95 flex items-center gap-2 shadow-lg"
-                    >
-                      <Scissors className="w-5 h-5" />
-                      <span>Edit</span>
-                    </button>
-
-                    {/* Retake Button */}
-                    <button
-                      onClick={() => setPreviewUrl(null)}
-                      className="px-6 py-3 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border-2 border-white/20 text-white font-medium transition-all hover:scale-105 active:scale-95 flex items-center gap-2 shadow-lg"
-                    >
-                      <RotateCcw className="w-5 h-5" />
-                      <span>Retake</span>
-                    </button>
-
-                    {/* Submit Button - Large & Prominent */}
-                    <button
-                      onClick={() => {
-                        console.log('📝 Submit clicked - Opening documents form (mandatory)');
-                        setWorkflowPhase('documents');
-                        setIsFormExpanded(true);
-                        setWorkflowStatus('📋 Complete all documents to publish');
-                      }}
-                      className="px-8 py-3 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 border-2 border-green-400 text-white font-bold transition-all hover:scale-105 active:scale-95 flex items-center gap-2 shadow-xl"
-                    >
-                      <CheckCircle className="w-6 h-6" />
-                      <span>Next</span>
-                    </button>
-                  </>
-                )}
+                ) : null}
               </div>
             </div>
+
+            {/* Preview Action Buttons - Right Side Vertical Stack (Only during Preview) */}
+            {previewUrl && (
+            <div className="absolute right-4 bottom-24 flex flex-col items-center gap-3 z-40">
+              {/* Retake Button */}
+              <button
+                onClick={() => setPreviewUrl(null)}
+                className="px-5 py-2 rounded-full bg-orange-500/90 hover:bg-orange-600 backdrop-blur-md border-2 border-orange-400 text-white font-semibold transition-all hover:scale-110 active:scale-95 flex items-center gap-2 shadow-lg"
+                title="Record again"
+              >
+                <RotateCcw className="w-5 h-5" />
+                <span className="hidden sm:inline">Retake</span>
+              </button>
+
+              {/* Edit/Trim Button */}
+              <button
+                onClick={() => setShowVideoClipper(true)}
+                className="px-5 py-2 rounded-full bg-blue-500/90 hover:bg-blue-600 backdrop-blur-md border-2 border-blue-400 text-white font-semibold transition-all hover:scale-110 active:scale-95 flex items-center gap-2 shadow-lg"
+                title="Trim or edit video"
+              >
+                <Scissors className="w-5 h-5" />
+                <span className="hidden sm:inline">Edit</span>
+              </button>
+
+              {/* Next Button */}
+              <button
+                onClick={() => {
+                  console.log('📝 Next clicked - Checking business profile...');
+                  
+                  // If no profile selected, show profile selector first
+                  if (!selectedProfile) {
+                    console.log('⚠️ No business profile selected - showing selector');
+                    setShowProfileModal(true);
+                    return;
+                  }
+                  
+                  // Profile is selected, open documents form
+                  console.log('✅ Opening documents form with profile:', selectedProfile.name);
+                  setWorkflowPhase('documents');
+                  setIsFormExpanded(true);
+                  setWorkflowStatus('📋 Complete all documents to publish');
+                }}
+                className="px-5 py-2 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 border-2 border-green-400 text-white font-bold transition-all hover:scale-110 active:scale-95 flex items-center gap-2 shadow-xl"
+                title="Proceed to document upload"
+              >
+                <CheckCircle className="w-5 h-5" />
+                <span className="hidden sm:inline">Next</span>
+              </button>
+            </div>
+            )}
           </div>
           </div>
 
@@ -897,9 +994,9 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
 
               {/* Modal Content */}
               <div className="p-6 max-h-[70vh] overflow-y-auto">
-                {currentBusinessProfile ? (
+                {selectedProfile ? (
                   <BusinessProfileDocuments
-                    businessProfile={currentBusinessProfile}
+                    businessProfile={selectedProfile}
                     onDocumentsComplete={(docs) => {
                       console.log('Documents completed:', docs);
                       
@@ -946,7 +1043,7 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                     
                     try {
                       // Use direct video submit with completed documents
-                      await handleDirectVideoSubmit(completedDocumentsData, currentBusinessProfile);
+                      await handleDirectVideoSubmit(completedDocumentsData, selectedProfile);
                     } catch (error) {
                       console.error('❌ Submit error:', error);
                       setWorkflowStatus('❌ Upload failed. Please try again.');
@@ -986,13 +1083,39 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
           />
         )}
 
+        {/* Business Profile Selector Modal */}
+        {showProfileModal && (
+          <BusinessProfileSelector
+            profiles={businessProfiles}
+            currentProfile={selectedProfile}
+            onSelectProfile={(profile) => {
+              setSelectedProfile(profile);
+              setShowProfileModal(false);
+              // Auto-open documents form after profile selection
+              setTimeout(() => {
+                setWorkflowPhase('documents');
+                setIsFormExpanded(true);
+                setWorkflowStatus('📋 Complete all documents to publish');
+              }, 300);
+            }}
+            onCreateNew={() => {
+              setShowProfileModal(false);
+              // Note: Parent component handles showing the profile creation form
+              if (onShowProfileSelector) {
+                onShowProfileSelector();
+              }
+            }}
+            onCancel={() => setShowProfileModal(false)}
+          />
+        )}
+
         {/* Pitch Details Form - Auto-opens after documents completion */}
-        {showPitchDetailsForm && currentBusinessProfile && (
+        {showPitchDetailsForm && selectedProfile && (
           <PitchDetailsForm
             isOpen={showPitchDetailsForm}
             onClose={() => setShowPitchDetailsForm(false)}
             onSubmit={handlePitchDetailsSubmit}
-            currentBusinessProfile={currentBusinessProfile}
+            currentBusinessProfile={selectedProfile}
           />
         )}
       </div>

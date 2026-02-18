@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Users, Plus, X, Check, Edit2, Lock, Crown, UserCheck, Wallet, Clock, Trash2 } from 'lucide-react';
+import { Building2, Users, Plus, X, Check, Edit2, Lock, Crown, UserCheck, Wallet, Clock, Trash2, MoreVertical } from 'lucide-react';
 import ShareholderApprovalsCenter from './ShareholderApprovalsCenter';
 
 const BusinessProfileSelector = ({ profiles, currentProfile, onSelectProfile, onCreateNew, onEdit, onDelete, currentUserId, currentUserEmail, onWalletClick }) => {
@@ -9,6 +9,7 @@ const BusinessProfileSelector = ({ profiles, currentProfile, onSelectProfile, on
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [profileToDelete, setProfileToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState(null);
 
   // Load pending approvals count on component mount
   useEffect(() => {
@@ -107,29 +108,30 @@ const BusinessProfileSelector = ({ profiles, currentProfile, onSelectProfile, on
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur flex items-center justify-center z-50 p-4">
       <div className="bg-slate-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-slate-700">
-        {/* Header */}
-        <div className="sticky top-0 bg-slate-900 border-b border-slate-700 p-6 flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-white flex items-center gap-3">
-            <Building2 className="w-6 h-6 text-blue-400" />
-            Business Profiles
+        {/* Header - Responsive */}
+        <div className="sticky top-0 bg-slate-900 border-b border-slate-700 p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
+          <h2 className="text-lg sm:text-2xl font-bold text-white flex items-center gap-2 sm:gap-3">
+            <Building2 className="w-5 h-5 sm:w-6 sm:h-6 text-blue-400" />
+            <span>Business Profiles</span>
           </h2>
           <button
             onClick={onCreateNew}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition flex items-center gap-2 font-semibold"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition flex items-center justify-center gap-2 font-semibold text-sm sm:text-base"
           >
-            <Plus className="w-5 h-5" />
-            New Profile
+            <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span>New</span>
+            <span className="hidden sm:inline">Profile</span>
           </button>
         </div>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {profiles && profiles.length > 0 ? (
             <div className="space-y-4">
               {profiles.map((profile) => (
                 <div
                   key={profile.id}
                   onClick={() => handleSelectProfileWithAccessCheck(profile)}
-                  className={`p-6 rounded-lg border-2 cursor-pointer transition ${
+                  className={`p-4 sm:p-6 rounded-lg border-2 cursor-pointer transition ${
                     currentProfile?.id === profile.id
                       ? 'bg-blue-900/30 border-blue-500 shadow-lg shadow-blue-500/20'
                       : 'bg-slate-700/50 border-slate-600 hover:bg-slate-700 hover:border-slate-500'
@@ -138,7 +140,7 @@ const BusinessProfileSelector = ({ profiles, currentProfile, onSelectProfile, on
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
                         <h3 className="text-xl font-bold text-white">{profile.business_name || profile.businessName}</h3>
                         {currentProfile?.id === profile.id && (
                           <Check className="w-5 h-5 text-green-400" />
@@ -160,18 +162,20 @@ const BusinessProfileSelector = ({ profiles, currentProfile, onSelectProfile, on
                       </div>
                       <p className="text-slate-400 text-sm">{profile.business_type || profile.businessType}</p>
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      {/* Approval Tab Button */}
+
+                    {/* Action Buttons - Desktop: Horizontal, Mobile: 3-dot menu */}
+                    <div className="flex items-center gap-2 flex-shrink-0 relative">
+                      {/* Approve Button - Always Visible */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           setShowApprovalsModal(true);
                         }}
-                        className="relative flex items-center gap-2 px-3 py-2 bg-yellow-500 hover:bg-yellow-600 text-white transition rounded-lg font-semibold hover:shadow-lg shadow-yellow-500/20"
+                        className="relative flex items-center gap-2 px-3 py-2 bg-yellow-500 hover:bg-yellow-600 text-white transition rounded-lg font-semibold hover:shadow-lg shadow-yellow-500/20 text-sm"
                         title="⏳ Pending Approvals - Shareholder votes"
                       >
                         <Clock className="w-4 h-4" />
-                        <span className="text-sm">Approve</span>
+                        <span className="hidden sm:inline">Approve</span>
                         {pendingApprovalsCount > 0 && (
                           <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
                             {pendingApprovalsCount > 9 ? '9+' : pendingApprovalsCount}
@@ -179,77 +183,146 @@ const BusinessProfileSelector = ({ profiles, currentProfile, onSelectProfile, on
                         )}
                       </button>
 
-                      {/* Edit Button */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEditProfileWithAccessCheck(profile);
-                        }}
-                        disabled={!canEdit(profile, currentUserEmail)}
-                        className={`transition p-2 ${
-                          canEdit(profile, currentUserEmail)
-                            ? 'text-blue-400 hover:text-blue-300 cursor-pointer'
-                            : 'text-slate-600 cursor-not-allowed'
-                        }`}
-                        title={isCreator(profile) ? "Edit profile" : canEdit(profile, currentUserEmail) ? "Edit as shareholder" : "❌ Not authorized to edit"}
-                      >
-                        <Edit2 className="w-5 h-5" />
-                      </button>
-                      
-                      {/* Wallet Button */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onWalletClick?.({ profileId: profile.id, profileName: profile.business_name || profile.businessName });
-                        }}
-                        className="text-emerald-400 hover:text-emerald-300 transition p-2"
-                        title="View business wallet account"
-                      >
-                        <Wallet className="w-5 h-5" />
-                      </button>
-
-                      {/* Delete Button - Only for creator */}
-                      {isCreator(profile) && (
+                      {/* Desktop: Show buttons directly, Mobile: 3-dot menu */}
+                      <div className="hidden sm:flex items-center gap-2">
+                        {/* Edit Button - Desktop Only */}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            setProfileToDelete(profile);
-                            setShowDeleteConfirm(true);
+                            handleEditProfileWithAccessCheck(profile);
                           }}
-                          className="text-red-400 hover:text-red-300 transition p-2"
-                          title="Delete profile permanently"
+                          disabled={!canEdit(profile, currentUserEmail)}
+                          className={`transition p-2 ${
+                            canEdit(profile, currentUserEmail)
+                              ? 'text-blue-400 hover:text-blue-300 cursor-pointer'
+                              : 'text-slate-600 cursor-not-allowed'
+                          }`}
+                          title={isCreator(profile) ? "Edit profile" : canEdit(profile, currentUserEmail) ? "Edit as shareholder" : "❌ Not authorized to edit"}
                         >
-                          <Trash2 className="w-5 h-5" />
+                          <Edit2 className="w-5 h-5" />
                         </button>
-                      )}
+                        
+                        {/* Wallet Button - Desktop Only */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onWalletClick?.({ profileId: profile.id, profileName: profile.business_name || profile.businessName });
+                          }}
+                          className="text-emerald-400 hover:text-emerald-300 transition p-2"
+                          title="View business wallet account"
+                        >
+                          <Wallet className="w-5 h-5" />
+                        </button>
+
+                        {/* Delete Button - Desktop Only */}
+                        {isCreator(profile) && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setProfileToDelete(profile);
+                              setShowDeleteConfirm(true);
+                            }}
+                            className="text-red-400 hover:text-red-300 transition p-2"
+                            title="Delete profile permanently"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Mobile: 3-dot Menu */}
+                      <div className="sm:hidden relative">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenMenuId(openMenuId === profile.id ? null : profile.id);
+                          }}
+                          className="p-2 text-slate-300 hover:text-white hover:bg-slate-600/50 rounded-lg transition"
+                          title="More options"
+                        >
+                          <MoreVertical className="w-5 h-5" />
+                        </button>
+
+                        {/* Dropdown Menu - Mobile */}
+                        {openMenuId === profile.id && (
+                          <div className="absolute right-0 top-full mt-2 bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-10 min-w-52">
+                            {/* Edit Option */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditProfileWithAccessCheck(profile);
+                                setOpenMenuId(null);
+                              }}
+                              disabled={!canEdit(profile, currentUserEmail)}
+                              className={`w-full flex items-center gap-3 px-4 py-3 text-left transition border-b border-slate-600 ${
+                                canEdit(profile, currentUserEmail)
+                                  ? 'text-blue-400 hover:bg-slate-600/50'
+                                  : 'text-slate-500 cursor-not-allowed opacity-50'
+                              }`}
+                            >
+                              <Edit2 className="w-4 h-4" />
+                              <span className="text-sm font-medium">Edit Profile</span>
+                            </button>
+
+                            {/* Wallet Option */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onWalletClick?.({ profileId: profile.id, profileName: profile.business_name || profile.businessName });
+                                setOpenMenuId(null);
+                              }}
+                              className="w-full flex items-center gap-3 px-4 py-3 text-left text-emerald-400 hover:bg-slate-600/50 transition border-b border-slate-600"
+                            >
+                              <Wallet className="w-4 h-4" />
+                              <span className="text-sm font-medium">View Wallet</span>
+                            </button>
+
+                            {/* Delete Option - Creator Only */}
+                            {isCreator(profile) && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setProfileToDelete(profile);
+                                  setShowDeleteConfirm(true);
+                                  setOpenMenuId(null);
+                                }}
+                                className="w-full flex items-center gap-3 px-4 py-3 text-left text-red-400 hover:bg-slate-600/50 transition"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                <span className="text-sm font-medium">Delete Profile</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm mb-4">
                     <div>
-                      <p className="text-slate-400">Founded</p>
-                      <p className="text-white font-semibold">{profile.founded_year || profile.foundedYear || 'N/A'}</p>
+                      <p className="text-slate-400 text-xs sm:text-sm">Founded</p>
+                      <p className="text-white font-semibold text-sm sm:text-base">{profile.founded_year || profile.foundedYear || 'N/A'}</p>
                     </div>
                     <div>
-                      <p className="text-slate-400">Total Capital</p>
-                      <p className="text-white font-semibold">${profile.total_capital || profile.totalCapital || 'N/A'}</p>
+                      <p className="text-slate-400 text-xs sm:text-sm">Total Capital</p>
+                      <p className="text-white font-semibold text-sm sm:text-base">${profile.total_capital || profile.totalCapital || 'N/A'}</p>
                     </div>
                   </div>
 
                   <div>
-                    <p className="text-slate-400 text-sm mb-2 flex items-center gap-2">
+                    <p className="text-slate-400 text-xs sm:text-sm mb-2 flex items-center gap-2">
                       <Users className="w-4 h-4" />
                       Shareholders ({(profile.business_co_owners || profile.coOwners)?.length || 0})
                     </p>
                     <div className="flex flex-wrap gap-2">
                       {(profile.business_co_owners || profile.coOwners)?.slice(0, 3).map((owner, idx) => (
-                        <div key={idx} className="bg-slate-800 px-3 py-1 rounded-full text-xs">
+                        <div key={idx} className="bg-slate-800 px-2.5 py-1 rounded-full text-xs">
                           <span className="text-slate-300">{owner.owner_name || owner.name}</span>
                           <span className="text-blue-400 ml-1 font-semibold">{owner.ownership_share || owner.ownershipShare}%</span>
                         </div>
                       ))}
                       {(profile.business_co_owners || profile.coOwners)?.length > 3 && (
-                        <div className="bg-slate-800 px-3 py-1 rounded-full text-xs text-slate-400">
+                        <div className="bg-slate-800 px-2.5 py-1 rounded-full text-xs text-slate-400">
                           +{(profile.business_co_owners || profile.coOwners).length - 3} more
                         </div>
                       )}
@@ -263,14 +336,14 @@ const BusinessProfileSelector = ({ profiles, currentProfile, onSelectProfile, on
               ))}
             </div>
           ) : (
-            <div className="text-center py-12">
-              <Building2 className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-              <p className="text-slate-400 text-lg mb-4">No business profiles yet</p>
+            <div className="text-center py-8 sm:py-12">
+              <Building2 className="w-12 h-12 sm:w-16 sm:h-16 text-slate-600 mx-auto mb-4" />
+              <p className="text-slate-400 text-base sm:text-lg mb-4">No business profiles yet</p>
               <button
                 onClick={onCreateNew}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition flex items-center gap-2 font-semibold mx-auto"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition flex items-center gap-2 font-semibold mx-auto text-sm sm:text-base"
               >
-                <Plus className="w-5 h-5" />
+                <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
                 Create Your First Profile
               </button>
             </div>

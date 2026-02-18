@@ -1008,6 +1008,13 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
             setShowRecorder(false);
             setCurrentPitch(null);
           }}
+          currentBusinessProfile={currentBusinessProfile}
+          businessProfiles={businessProfiles}
+          onSelectProfile={(profile) => {
+            setCurrentBusinessProfile(profile);
+            setShowProfileSelector(false);
+          }}
+          onShowProfileSelector={() => setShowProfileSelector(true)}
         />
       ) : (
         // Feed Page - With header and navigation
@@ -1596,38 +1603,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                         </button>
                       </div>
 
-                      {/* Bottom Info - Gradient overlay */}
-                      <div className="absolute bottom-0 left-0 right-12 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-3 pb-2 pt-8 pointer-events-auto">
-                        {/* Creator Info */}
-                        <div className="flex items-center gap-2 mb-1">
-                          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                            <Building2 className="w-3 h-3 text-white" />
-                          </div>
-                          <div>
-                            <p className="text-white font-semibold text-[11px] drop-shadow-lg">
-                              {pitch.business_profiles?.business_name || 'Business'}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Title */}
-                        <h3 className="text-white font-bold text-xs mb-0.5 drop-shadow-lg line-clamp-1">
-                          {pitch.title}
-                        </h3>
-
-                        {/* Funding Info Row */}
-                        <div className="flex items-center flex-wrap gap-1.5 text-[9px]">
-                          <span className="text-white/90 font-semibold">{formatCurrency(pitch.target_funding)}</span>
-                          <span className="text-white/50">•</span>
-                          <span className="text-purple-300 font-semibold">{pitch.equity_offering || 0}%</span>
-                          {pitch.has_ip && (
-                            <>
-                              <span className="text-white/50">•</span>
-                              <span className="text-blue-300 font-semibold">IP</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
+                      {/* Bottom Info - Removed to declutter video overlay */}
                     </div>
                   </div>
                 ))
@@ -2449,40 +2425,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
             </button>
           </div>
 
-          {/* Pitch Info Bottom Bar - Overlaid on Video */}
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/90 to-transparent p-4 z-20">
-            <div className="flex items-start gap-3 mb-2">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0">
-                <Building2 className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-white">{videoPlayerPitch.title}</h3>
-                <p className="text-sm text-gray-300">{videoPlayerPitch.business_profiles?.business_name}</p>
-              </div>
-            </div>
-            
-            {/* Description */}
-            <p className="text-sm text-gray-200 mb-3 line-clamp-2 ml-15">
-              {videoPlayerPitch.description}
-            </p>
-            
-            {/* Funding Info */}
-            <div className="flex gap-4 text-sm">
-              <div className="bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded-full">
-                <span className="text-gray-300">Target: </span>
-                <span className="text-white font-bold">{formatCurrency(videoPlayerPitch.target_funding)}</span>
-              </div>
-              <div className="bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded-full">
-                <span className="text-gray-300">Equity: </span>
-                <span className="text-purple-300 font-bold">{videoPlayerPitch.equity_offering || 0}%</span>
-              </div>
-              {videoPlayerPitch.has_ip && (
-                <div className="bg-blue-500/30 px-3 py-1.5 rounded-full">
-                  <span className="text-blue-300 font-semibold">🛡️ IP Protected</span>
-                </div>
-              )}
-            </div>
-          </div>
+          {/* Pitch Info Bottom Bar - Removed to streamline video view */}
         </div>
       )}
 
