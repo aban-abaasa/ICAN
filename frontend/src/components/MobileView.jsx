@@ -43,6 +43,7 @@ import {
   Bell,
   Check,
   CheckCheck,
+  Plus,
   Globe,
   Target,
   Clock
@@ -54,7 +55,6 @@ import ICANWallet from './ICANWallet';
 import TrustSystem from './TrustSystem';
 import CMMSModule from './CMSSModule';
 import { StatusPage } from './StatusPage';
-import { StatusCarousel } from './status/StatusCarousel';
 import { StatusUploader } from './status/StatusUploader';
 import { VelocityEngine } from '../utils/velocityEngine';
 import { supabase } from '../lib/supabase/client';
@@ -1908,10 +1908,6 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     { id: 'security', label: 'Security', icon: Shield },
     { id: 'readiness', label: 'Readiness', icon: Globe },
     { id: 'growth', label: 'Growth', icon: TrendingUp },
-    { id: 'pitchin', label: 'Pitchin', icon: Briefcase },
-    { id: 'wallet', label: 'Wallet', icon: Wallet },
-    { id: 'trust', label: 'Trust', icon: Lock },
-    { id: 'cmms', label: 'CMMS', icon: Building },
     { id: 'settings', label: 'Settings', icon: Settings }
   ];
 
@@ -1984,7 +1980,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
   return (
     <div className={`min-h-screen text-white overflow-x-hidden ${
       isWebDashboard
-        ? `bg-gradient-to-br from-slate-950 via-violet-950 to-slate-950 pb-32 ${showDashboardHeader ? 'pt-44 md:pt-48' : ''}`
+        ? `bg-gradient-to-br from-slate-950 via-violet-950 to-slate-950 pb-32 ${showDashboardHeader ? 'pt-36 md:pt-40' : ''}`
         : 'bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 pb-28'
     }`}>
       {/* ====== HEADER ====== */}
@@ -1995,13 +1991,14 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           : 'bg-gradient-to-b from-slate-950/95 to-purple-950/80 backdrop-blur-md border-purple-500/20'
       }`}>
         <div className={`px-3 py-2.5 sm:px-4 sm:py-3 relative ${isWebDashboard ? 'max-w-7xl mx-auto' : ''}`}>
+          <div className={isWebDashboard ? 'rounded-2xl border border-purple-400/25 bg-slate-900/55 px-3 py-2 shadow-[0_10px_28px_rgba(16,10,34,0.4)]' : ''}>
           {/* Header Row - Recording Input, Branding & Settings */}
-          <div className="flex items-center w-full gap-1.5 sm:gap-2">
+          <div className={`flex items-center w-full gap-1.5 sm:gap-2 ${isWebDashboard ? 'min-h-[54px]' : ''}`}>
             {/* Recording Input Badge - CLICKABLE - Mobile optimized */}
             <button
               onClick={() => setShowRecordTypeModal(true)}
               className={`flex items-center gap-1.5 sm:gap-2 bg-gradient-to-r from-purple-600 to-purple-500 border border-purple-400/50 hover:border-purple-300/80 rounded-full px-3 sm:px-4 py-1.5 sm:py-2.5 hover:bg-gradient-to-r hover:from-purple-500 hover:to-purple-400 transition-all active:scale-95 flex-shrink-0 shadow-lg shadow-purple-500/30 whitespace-nowrap ${
-                isWebDashboard ? 'md:px-5 md:py-3 md:shadow-purple-500/40' : ''
+                isWebDashboard ? 'md:min-w-[220px] md:justify-start md:rounded-xl md:px-4 md:py-2 md:shadow-purple-500/40' : ''
               }`}
             >
               <Mic className="w-4 sm:w-5 h-4 sm:h-5 text-white flex-shrink-0" />
@@ -2010,13 +2007,31 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             </button>
 
             {/* IcanEra Branding - Responsive sizing */}
-            <h1 className={`${isWebDashboard ? 'text-3xl md:text-5xl xl:text-6xl' : 'text-2xl sm:text-3xl md:text-4xl lg:text-5xl'} font-serif font-bold text-transparent bg-gradient-to-r from-amber-200 via-yellow-100 to-amber-300 bg-clip-text tracking-wide sm:tracking-wider flex-1 text-center px-1 sm:px-2 leading-tight`}>
+            <h1 className={`${isWebDashboard ? 'text-3xl md:text-4xl' : 'text-2xl sm:text-3xl md:text-4xl lg:text-5xl'} font-serif font-bold text-transparent bg-gradient-to-r from-amber-200 via-yellow-100 to-amber-300 bg-clip-text tracking-wide sm:tracking-wider flex-1 text-center px-1 sm:px-2 leading-tight`}>
               IcanEra
             </h1>
 
             {/* Header Actions - ABSOLUTE RIGHT */}
-            <div className="absolute right-2 sm:right-3 top-2 sm:top-3 flex items-center gap-1">
-              {!isWebDashboard && (
+            {isWebDashboard ? (
+              <div className="absolute right-2 sm:right-3 top-2 sm:top-3 flex items-center gap-2">
+                <button
+                  onClick={() => setShowStatusPage(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-purple-300/40 bg-purple-500/20 hover:bg-purple-500/30 text-purple-100 text-xs font-semibold transition"
+                  title="Open status viewer"
+                >
+                  <Eye className="w-4 h-4" />
+                  Status
+                </button>
+                <button
+                  onClick={() => setShowStatusUploader(true)}
+                  className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-indigo-300/40 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-100 transition"
+                  title="Add status"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="absolute right-2 sm:right-3 top-2 sm:top-3 flex items-center gap-1">
                 <button
                   onClick={() => setShowStatusPage(true)}
                   className="p-1.5 sm:p-2 hover:bg-purple-500/20 rounded-lg transition active:scale-95"
@@ -2024,7 +2039,6 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 >
                   <Eye className="w-5 sm:w-6 h-5 sm:h-6 text-purple-300" />
                 </button>
-              )}
               <div className="relative">
               <button 
                 onClick={() => setShowMenuDropdown(!showMenuDropdown)}
@@ -2131,32 +2145,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               )}
               </div>
             </div>
+            )}
           </div>
 
           {isWebDashboard && (
-            <div className="mt-2.5 space-y-2.5">
-              <div className="flex items-center gap-2">
-                <div className="flex-1 min-w-0 rounded-xl border border-purple-400/25 bg-slate-900/55 px-2 py-1">
-                  <StatusCarousel onStatusClick={() => setShowStatusPage(true)} />
-                </div>
-                <button
-                  onClick={() => setShowStatusPage(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 text-purple-100 text-xs font-semibold border border-purple-400/30 transition"
-                  title="Open status viewer"
-                >
-                  <Eye className="w-4 h-4" />
-                  Viewer
-                </button>
-                <button
-                  onClick={() => setShowStatusUploader(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-100 text-xs font-semibold border border-indigo-400/30 transition"
-                  title="Add status"
-                >
-                  <Upload className="w-4 h-4" />
-                  Add
-                </button>
-              </div>
-
+            <div className="mt-2">
               <div className="flex items-center gap-2 overflow-x-auto pb-1">
                 {headerNavTabs.map((tab) => {
                   const isActive = activeHeaderTab === tab.id;
@@ -2164,13 +2157,12 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     <button
                       key={tab.id}
                       onClick={() => handleHeaderTabClick(tab.id)}
-                      className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap border transition ${
+                      className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap border transition ${
                         isActive
                           ? 'bg-purple-500/30 text-white border-purple-300/60 shadow-[0_0_12px_rgba(168,85,247,0.35)]'
                           : 'bg-slate-900/50 text-gray-300 border-slate-700 hover:text-white hover:border-purple-400/50'
                       }`}
                     >
-                      <tab.icon className="w-4 h-4" />
                       {tab.label}
                     </button>
                   );
@@ -2178,6 +2170,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               </div>
             </div>
           )}
+          </div>
         </div>
       </div>
       )}
