@@ -18,6 +18,7 @@ const momoRoutes = require('./routes/momoRoutes');
 const p2pTransferRoutes = require('./routes/p2pTransferRoutes');
 const paymentsRoutes = require('./routes/paymentsRoutes');
 const withdrawalRoutes = require('./routes/withdrawalRoutes');
+const accountRoutes = require('./routes/accountRoutes');
 
 // ES6 module imports for pinReset and email routes
 let pinResetRoutes;
@@ -104,6 +105,9 @@ app.use('/api/payments', paymentsRoutes);
 
 // Withdrawal Routes
 app.use('/api/withdrawals', withdrawalRoutes);
+
+// Account Routes (danger zone account deletion)
+app.use('/api/account', accountRoutes);
 
 // ==========================================
 // API Routes (ES6 modules - loaded dynamically)

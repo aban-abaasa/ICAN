@@ -189,43 +189,43 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
   }, [avatarUrl]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 p-4 md:p-8">
-      <div className="max-w-2xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4 md:p-8 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+      <div className="max-w-2xl mx-auto w-full">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold text-white">My Profile</h1>
+        <div className="flex items-center justify-between mb-4 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl font-bold text-white">My Profile</h1>
           {onClose && (
             <button
               onClick={onClose}
-              className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+              className="p-1.5 sm:p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
             >
-              <X className="w-6 h-6" />
+              <X className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
           )}
         </div>
 
         {/* Alerts */}
         {error && (
-          <div className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200">
+          <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-sm sm:text-base">
             {error}
           </div>
         )}
         {success && (
-          <div className="mb-6 p-4 bg-green-500/20 border border-green-500/50 rounded-lg text-green-200">
+          <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-green-500/20 border border-green-500/50 rounded-lg text-green-200 text-sm sm:text-base">
             {success}
           </div>
         )}
 
         {/* Main Profile Card */}
-        <div className="bg-slate-800/50 border border-slate-700 rounded-2xl overflow-hidden mb-6">
+        <div className="bg-slate-800/50 border border-slate-700 rounded-xl sm:rounded-2xl overflow-hidden mb-4 sm:mb-6">
           {/* Profile Header Background */}
-          <div className="h-32 bg-gradient-to-r from-purple-600/30 via-blue-600/20 to-pink-600/30"></div>
+          <div className="h-24 sm:h-32 bg-gradient-to-r from-purple-600/30 via-blue-600/20 to-pink-600/30"></div>
 
           {/* Profile Content */}
-          <div className="relative px-6 pb-6 pt-0">
+          <div className="relative px-4 sm:px-6 pb-5 sm:pb-6 pt-0">
             {/* Avatar */}
-            <div className="flex items-end justify-between mb-6 -mt-16">
-              <div className="flex items-end gap-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-5 sm:mb-6 -mt-12 sm:-mt-16">
+              <div className="flex items-end gap-3 sm:gap-4">
                 <div className="relative">
                   <div
                     onClick={handleAvatarClick}
@@ -235,7 +235,7 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                       <img
                         src={avatarUrl}
                         alt={getDisplayName()}
-                        className="w-32 h-32 rounded-full object-cover ring-4 ring-slate-800 hover:ring-purple-500/50 transition-all"
+                        className="w-24 h-24 sm:w-32 sm:h-32 rounded-full object-cover ring-4 ring-slate-800 hover:ring-purple-500/50 transition-all"
                         onError={(e) => {
                           console.error('❌ Image failed to load:', avatarUrl, e);
                           setImageError(true);
@@ -243,14 +243,14 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                         onLoad={() => console.log('✅ Image loaded successfully:', avatarUrl)}
                       />
                     ) : (
-                      <div className="w-32 h-32 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center ring-4 ring-slate-800 text-white text-4xl font-bold">
+                      <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center ring-4 ring-slate-800 text-white text-3xl sm:text-4xl font-bold">
                         {profile?.first_name?.charAt(0) || ''}
                         {profile?.last_name?.charAt(0) || 'U'}
                       </div>
                     )}
                     {isEditing && (
-                      <div className="absolute bottom-0 right-0 bg-purple-600 rounded-full p-2 hover:bg-purple-700 transition-colors">
-                        <Upload className="w-5 h-5 text-white" />
+                      <div className="absolute bottom-0 right-0 bg-purple-600 rounded-full p-1.5 sm:p-2 hover:bg-purple-700 transition-colors">
+                        <Upload className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                       </div>
                     )}
                   </div>
@@ -258,14 +258,14 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                   {/* Status Upload Button */}
                   <button
                     onClick={() => setShowStatusUploader(true)}
-                    className="absolute -bottom-2 -right-2 bg-gradient-to-r from-purple-600 to-pink-600 rounded-full p-2.5 hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg text-white"
+                    className="absolute -bottom-2 -right-2 bg-gradient-to-r from-purple-600 to-pink-600 rounded-full p-2 sm:p-2.5 hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg text-white"
                     title="Add status"
                   >
-                    <Plus className="w-4 h-4" />
+                    <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   </button>
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   {isEditing ? (
                     <input
                       type="text"
@@ -273,27 +273,27 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                       placeholder="Full name"
                       value={formData.full_name}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-1 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-gray-400"
+                      className="w-full px-3 py-1.5 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-gray-400 text-sm sm:text-base"
                     />
                   ) : (
                     <div>
-                      <h2 className="text-2xl font-bold text-white">{getDisplayName()}</h2>
-                      <p className="text-gray-400 text-sm">{user?.email}</p>
+                      <h2 className="text-xl sm:text-2xl font-bold text-white break-words">{getDisplayName()}</h2>
+                      <p className="text-gray-400 text-xs sm:text-sm break-all">{user?.email}</p>
                     </div>
                   )}
                 </div>
               </div>
 
               {/* Button Group - Approval, Notifications, Wallet, Edit */}
-              <div className="flex items-center gap-2 flex-wrap justify-end">
+              <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center sm:flex-wrap sm:justify-end">
                 {/* Approval Tab Button */}
                 <button
                   onClick={() => setShowApprovalsModal(true)}
-                  className="relative flex items-center gap-2 px-3 py-2 bg-yellow-500 hover:bg-yellow-600 text-white transition rounded-lg font-semibold hover:shadow-lg shadow-yellow-500/20"
+                  className="relative flex items-center justify-center sm:justify-start gap-2 px-2.5 sm:px-3 py-2 bg-yellow-500 hover:bg-yellow-600 text-white transition rounded-lg font-semibold hover:shadow-lg shadow-yellow-500/20"
                   title="⏳ Pending Approvals"
                 >
                   <Clock className="w-4 h-4" />
-                  <span className="text-sm">Approve</span>
+                  <span className="text-xs sm:text-sm">Approve</span>
                   {pendingApprovalsCount > 0 && (
                     <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
                       {pendingApprovalsCount > 9 ? '9+' : pendingApprovalsCount}
@@ -303,12 +303,12 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
 
                 {/* Notification Settings Icon */}
                 <div
-                  className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg transition cursor-help group/notif relative"
+                  className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg transition cursor-help group/notif relative flex items-center justify-center"
                   title="🔔 Notification Settings"
                 >
                   <Bell className="w-5 h-5" />
                   {/* Notification Settings Tooltip */}
-                  <div className="hidden group-hover/notif:block absolute right-0 top-full mt-2 bg-slate-900 border border-slate-700 rounded-lg p-3 w-56 z-50 text-xs text-white shadow-lg">
+                  <div className="hidden sm:block group-hover/notif:block absolute right-0 top-full mt-2 bg-slate-900 border border-slate-700 rounded-lg p-3 w-56 z-50 text-xs text-white shadow-lg">
                     <p className="font-semibold mb-2 text-blue-300">📢 Profile Settings</p>
                     <div className="space-y-1 text-slate-300">
                       <div className="flex items-center gap-2">
@@ -320,12 +320,12 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
 
                 {/* Wallet Icon Button */}
                 <button
-                  className="bg-green-600 hover:bg-green-700 text-white p-2 rounded-lg transition relative group/wallet"
+                  className="bg-green-600 hover:bg-green-700 text-white p-2 rounded-lg transition relative group/wallet flex items-center justify-center"
                   title="💰 My Wallet"
                 >
                   <Wallet className="w-5 h-5" />
                   {/* Wallet Tooltip */}
-                  <div className="hidden group-hover/wallet:block absolute right-0 top-full mt-2 bg-slate-900 border border-slate-700 rounded-lg p-2 w-48 z-50 text-xs text-white shadow-lg">
+                  <div className="hidden sm:block group-hover/wallet:block absolute right-0 top-full mt-2 bg-slate-900 border border-slate-700 rounded-lg p-2 w-48 z-50 text-xs text-white shadow-lg">
                     <p className="font-semibold text-green-300 mb-1">💰 My Wallet</p>
                     <p className="text-slate-400">View wallet and transaction history</p>
                   </div>
@@ -341,17 +341,17 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                     }
                   }}
                   disabled={isSaving}
-                  className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-600/50 text-white rounded-lg font-medium transition-colors"
+                  className="flex items-center justify-center sm:justify-start gap-2 px-3 sm:px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-600/50 text-white rounded-lg font-medium transition-colors"
                 >
                   {isEditing ? (
                     <>
                       <Save className="w-4 h-4" />
-                      <span>{isSaving ? 'Saving...' : 'Save'}</span>
+                      <span className="text-xs sm:text-sm">{isSaving ? 'Saving...' : 'Save'}</span>
                     </>
                   ) : (
                     <>
                       <Edit2 className="w-4 h-4" />
-                      <span>Edit</span>
+                      <span className="text-xs sm:text-sm">Edit</span>
                     </>
                   )}
                 </button>
@@ -369,16 +369,16 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
             {/* Profile Details */}
             <div className="space-y-4">
               {/* Email */}
-              <div className="flex items-center gap-3 p-3 bg-slate-700/50 rounded-lg">
+              <div className="flex items-center gap-3 p-2.5 sm:p-3 bg-slate-700/50 rounded-lg">
                 <Mail className="w-5 h-5 text-purple-400" />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-gray-400">Email</p>
-                  <p className="text-white truncate">{user?.email}</p>
+                  <p className="text-white text-sm sm:text-base break-all">{user?.email}</p>
                 </div>
               </div>
 
               {/* Phone */}
-              <div className="flex items-center gap-3 p-3 bg-slate-700/50 rounded-lg">
+              <div className="flex items-center gap-3 p-2.5 sm:p-3 bg-slate-700/50 rounded-lg">
                 <Phone className="w-5 h-5 text-blue-400" />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-gray-400">Phone</p>
@@ -392,13 +392,13 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                       className="w-full px-2 py-1 bg-slate-600 border border-slate-500 rounded text-white placeholder-gray-400"
                     />
                   ) : (
-                    <p className="text-white">{formData.phone || 'Not provided'}</p>
+                    <p className="text-white text-sm sm:text-base">{formData.phone || 'Not provided'}</p>
                   )}
                 </div>
               </div>
 
               {/* Income Level */}
-              <div className="flex items-center gap-3 p-3 bg-slate-700/50 rounded-lg">
+              <div className="flex items-center gap-3 p-2.5 sm:p-3 bg-slate-700/50 rounded-lg">
                 <Wallet className="w-5 h-5 text-green-400" />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-gray-400">Income Level</p>
@@ -416,13 +416,13 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                       <option value="very_high">Very High ({">"} 5M UGX/month)</option>
                     </select>
                   ) : (
-                    <p className="text-white">{formData.income_level || 'Not provided'}</p>
+                    <p className="text-white text-sm sm:text-base">{formData.income_level || 'Not provided'}</p>
                   )}
                 </div>
               </div>
 
               {/* Financial Goal */}
-              <div className="flex items-start gap-3 p-3 bg-slate-700/50 rounded-lg">
+              <div className="flex items-start gap-3 p-2.5 sm:p-3 bg-slate-700/50 rounded-lg">
                 <Key className="w-5 h-5 text-orange-400 mt-1" />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-gray-400">Primary Financial Goal</p>
@@ -443,13 +443,13 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                       <option value="build_wealth">Build Long-term Wealth</option>
                     </select>
                   ) : (
-                    <p className="text-white">{formData.financial_goal || 'Not provided'}</p>
+                    <p className="text-white text-sm sm:text-base">{formData.financial_goal || 'Not provided'}</p>
                   )}
                 </div>
               </div>
 
               {/* Risk Tolerance */}
-              <div className="flex items-center gap-3 p-3 bg-slate-700/50 rounded-lg">
+              <div className="flex items-center gap-3 p-2.5 sm:p-3 bg-slate-700/50 rounded-lg">
                 <Shield className="w-5 h-5 text-cyan-400" />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-gray-400">Risk Tolerance</p>
@@ -465,7 +465,7 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                       <option value="high">Aggressive (High Risk)</option>
                     </select>
                   ) : (
-                    <p className="text-white capitalize">{formData.risk_tolerance || 'Not specified'}</p>
+                    <p className="text-white text-sm sm:text-base capitalize">{formData.risk_tolerance || 'Not specified'}</p>
                   )}
                 </div>
               </div>
@@ -495,8 +495,8 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
         </div>
 
         {/* Additional Info */}
-        <div className="mt-8 p-4 bg-slate-800/50 border border-slate-700 rounded-lg text-center">
-          <p className="text-sm text-gray-400">
+        <div className="mt-5 sm:mt-8 p-3 sm:p-4 bg-slate-800/50 border border-slate-700 rounded-lg text-left sm:text-center">
+          <p className="text-xs sm:text-sm text-gray-400">
             Account ID: <span className="font-mono text-gray-300 break-all">{user?.id}</span>
           </p>
           <p className="text-xs text-gray-500 mt-2">
@@ -507,10 +507,10 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
         {/* Avatar Change Modal */}
         {showAvatarModal && (
           <div className="fixed inset-0 bg-black/50 flex items-end z-50">
-            <div className="w-full bg-gradient-to-t from-slate-900 via-slate-850 to-slate-800 rounded-t-2xl p-6 max-h-96 overflow-y-auto animate-in slide-in-from-bottom">
+            <div className="w-full bg-gradient-to-t from-slate-900 via-slate-850 to-slate-800 rounded-t-2xl p-4 sm:p-6 max-h-[85vh] sm:max-h-96 overflow-y-auto animate-in slide-in-from-bottom">
               {/* Header */}
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-white">Change Profile Picture</h2>
+                <h2 className="text-xl sm:text-2xl font-bold text-white">Change Profile Picture</h2>
                 <button
                   onClick={() => setShowAvatarModal(false)}
                   className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
@@ -528,7 +528,7 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                       <img
                         src={previewUrl}
                         alt="Preview"
-                        className="w-32 h-32 rounded-full object-cover ring-4 ring-green-500/50"
+                        className="w-24 h-24 sm:w-32 sm:h-32 rounded-full object-cover ring-4 ring-green-500/50"
                       />
                     </div>
                   </div>
@@ -599,9 +599,9 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
               {/* Close Button */}
               <button
                 onClick={() => setShowAvatarView(false)}
-                className="absolute -top-10 right-0 p-2 text-gray-400 hover:text-white transition-colors"
+                className="absolute -top-10 sm:-top-12 right-0 p-2 text-gray-400 hover:text-white transition-colors"
               >
-                <X className="w-8 h-8" />
+                <X className="w-7 h-7 sm:w-8 sm:h-8" />
               </button>
 
               {/* Avatar Container */}
@@ -612,10 +612,10 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                     <img
                       src={avatarUrl}
                       alt={getDisplayName()}
-                      className="w-96 h-96 object-cover"
+                      className="w-72 h-72 sm:w-96 sm:h-96 object-cover"
                     />
                   ) : (
-                    <div className="w-96 h-96 bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-7xl font-bold">
+                    <div className="w-72 h-72 sm:w-96 sm:h-96 bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-5xl sm:text-7xl font-bold">
                       {profile?.first_name?.charAt(0) || ''}
                       {profile?.last_name?.charAt(0) || 'U'}
                     </div>
@@ -624,25 +624,25 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
 
                 {/* Name Below Avatar */}
                 <div className="text-center">
-                  <h2 className="text-3xl font-bold text-white">{getDisplayName()}</h2>
-                  <p className="text-gray-400 text-sm mt-2">{user?.email}</p>
+                  <h2 className="text-2xl sm:text-3xl font-bold text-white break-words">{getDisplayName()}</h2>
+                  <p className="text-gray-400 text-xs sm:text-sm mt-2 break-all">{user?.email}</p>
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex gap-3 mt-4">
+                <div className="flex flex-col sm:flex-row gap-3 mt-4 w-full sm:w-auto">
                   <button
                     onClick={() => {
                       setShowAvatarView(false);
                       setIsEditing(true);
                     }}
-                    className="flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
                   >
                     <Edit2 className="w-4 h-4" />
                     Edit Profile
                   </button>
                   <button
                     onClick={() => setShowAvatarView(false)}
-                    className="flex items-center gap-2 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors"
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors"
                   >
                     Close
                   </button>

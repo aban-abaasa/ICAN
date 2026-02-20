@@ -1015,12 +1015,12 @@ const CMMSModule = ({
 
     if (!canViewReports) {
       return (
-        <div className="glass-card p-6 bg-orange-500 bg-opacity-10 border-l-4 border-orange-500">
-          <div className="flex items-center gap-3">
-            <AlertTriangle className="w-6 h-6 text-orange-400" />
-            <div>
-              <p className="text-orange-300 font-semibold">🔒 Reports Access Restricted</p>
-              <p className="text-gray-400 text-sm mt-1">Your role: <span className="text-blue-300 font-bold uppercase">{userRole}</span> does not have report access.</p>
+        <div className="glass-card p-4 md:p-6 bg-orange-500 bg-opacity-10 border-l-4 border-orange-500">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-orange-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-orange-300 font-semibold text-sm md:text-base">🔒 Reports Access Restricted</p>
+              <p className="text-gray-400 text-xs md:text-sm mt-1">Your role: <span className="text-blue-300 font-bold uppercase">{userRole}</span> does not have report access.</p>
             </div>
           </div>
         </div>
@@ -1062,74 +1062,74 @@ const CMMSModule = ({
     const requisitionReport = generateRequisitionReport();
 
     return (
-      <div className="space-y-6">
+      <div className="space-y-4 md:space-y-6">
         {/* Inventory Report */}
-        <div className="glass-card p-6">
-          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-            <Package className="w-6 h-6 text-blue-400" />
+        <div className="glass-card p-4 md:p-6">
+          <h3 className="text-lg md:text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <Package className="w-5 h-5 md:w-6 md:h-6 text-blue-400" />
             {inventoryReport.title}
           </h3>
-          <div className="grid md:grid-cols-4 gap-4">
-            <div className="bg-white bg-opacity-5 p-4 rounded-lg">
-              <div className="text-gray-400 text-sm">Total Items</div>
-              <div className="text-3xl font-bold text-blue-300 mt-2">{inventoryReport.totalItems}</div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
+            <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded-lg">
+              <div className="text-gray-400 text-xs md:text-sm">Total Items</div>
+              <div className="text-2xl md:text-3xl font-bold text-blue-300 mt-2">{inventoryReport.totalItems}</div>
             </div>
-            <div className="bg-white bg-opacity-5 p-4 rounded-lg">
-              <div className="text-gray-400 text-sm">Low Stock Alerts</div>
-              <div className="text-3xl font-bold text-orange-300 mt-2">{inventoryReport.lowStockAlerts}</div>
+            <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded-lg">
+              <div className="text-gray-400 text-xs md:text-sm">Low Stock Alerts</div>
+              <div className="text-2xl md:text-3xl font-bold text-orange-300 mt-2">{inventoryReport.lowStockAlerts}</div>
             </div>
-            <div className="bg-white bg-opacity-5 p-4 rounded-lg">
-              <div className="text-gray-400 text-sm">Total Inventory Value</div>
-              <div className="text-2xl font-bold text-green-300 mt-2">UGX {(inventoryReport.totalValue / 1000000).toFixed(1)}M</div>
+            <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded-lg">
+              <div className="text-gray-400 text-xs md:text-sm">Total Inventory Value</div>
+              <div className="text-xl md:text-2xl font-bold text-green-300 mt-2">UGX {(inventoryReport.totalValue / 1000000).toFixed(1)}M</div>
             </div>
-            <div className="bg-white bg-opacity-5 p-4 rounded-lg">
-              <div className="text-gray-400 text-sm">Average Item Cost</div>
-              <div className="text-2xl font-bold text-purple-300 mt-2">UGX {(inventoryReport.averageCost / 1000).toFixed(0)}K</div>
+            <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded-lg">
+              <div className="text-gray-400 text-xs md:text-sm">Average Item Cost</div>
+              <div className="text-xl md:text-2xl font-bold text-purple-300 mt-2">UGX {(inventoryReport.averageCost / 1000).toFixed(0)}K</div>
             </div>
           </div>
         </div>
 
         {/* Requisition Report */}
-        <div className="glass-card p-6">
-          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-            <Wrench className="w-6 h-6 text-purple-400" />
+        <div className="glass-card p-4 md:p-6">
+          <h3 className="text-lg md:text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <Wrench className="w-5 h-5 md:w-6 md:h-6 text-purple-400" />
             {requisitionReport.title}
           </h3>
-          <div className="grid md:grid-cols-5 gap-4">
-            <div className="bg-white bg-opacity-5 p-4 rounded-lg">
-              <div className="text-gray-400 text-sm">Total</div>
-              <div className="text-3xl font-bold text-blue-300 mt-2">{requisitionReport.totalRequisitions}</div>
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 md:gap-4">
+            <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded-lg">
+              <div className="text-gray-400 text-xs md:text-sm">Total</div>
+              <div className="text-2xl md:text-3xl font-bold text-blue-300 mt-2">{requisitionReport.totalRequisitions}</div>
             </div>
-            <div className="bg-white bg-opacity-5 p-4 rounded-lg">
-              <div className="text-gray-400 text-sm">Pending</div>
-              <div className="text-3xl font-bold text-yellow-300 mt-2">{requisitionReport.pending}</div>
+            <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded-lg">
+              <div className="text-gray-400 text-xs md:text-sm">Pending</div>
+              <div className="text-2xl md:text-3xl font-bold text-yellow-300 mt-2">{requisitionReport.pending}</div>
             </div>
-            <div className="bg-white bg-opacity-5 p-4 rounded-lg">
-              <div className="text-gray-400 text-sm">Approved</div>
-              <div className="text-3xl font-bold text-green-300 mt-2">{requisitionReport.approved}</div>
+            <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded-lg">
+              <div className="text-gray-400 text-xs md:text-sm">Approved</div>
+              <div className="text-2xl md:text-3xl font-bold text-green-300 mt-2">{requisitionReport.approved}</div>
             </div>
-            <div className="bg-white bg-opacity-5 p-4 rounded-lg">
-              <div className="text-gray-400 text-sm">Completed</div>
-              <div className="text-3xl font-bold text-green-400 mt-2">{requisitionReport.completed}</div>
+            <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded-lg">
+              <div className="text-gray-400 text-xs md:text-sm">Completed</div>
+              <div className="text-2xl md:text-3xl font-bold text-green-400 mt-2">{requisitionReport.completed}</div>
             </div>
-            <div className="bg-white bg-opacity-5 p-4 rounded-lg">
-              <div className="text-gray-400 text-sm">Total Est. Cost</div>
-              <div className="text-2xl font-bold text-green-300 mt-2">UGX {(requisitionReport.totalEstimatedCost / 1000000).toFixed(1)}M</div>
+            <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded-lg">
+              <div className="text-gray-400 text-xs md:text-sm">Total Est. Cost</div>
+              <div className="text-xl md:text-2xl font-bold text-green-300 mt-2">UGX {(requisitionReport.totalEstimatedCost / 1000000).toFixed(1)}M</div>
             </div>
           </div>
         </div>
 
         {/* Export Reports */}
-        <div className="glass-card p-6">
-          <h3 className="text-lg font-bold text-white mb-4">Export Reports</h3>
-          <div className="flex gap-3 flex-wrap">
-            <button className="px-4 py-2 bg-blue-500 bg-opacity-30 text-blue-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold">
+        <div className="glass-card p-4 md:p-6">
+          <h3 className="text-base md:text-lg font-bold text-white mb-4">Export Reports</h3>
+          <div className="flex gap-2 md:gap-3 flex-wrap">
+            <button className="px-3 md:px-4 py-2 bg-blue-500 bg-opacity-30 text-blue-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold text-xs md:text-sm">
               📄 Download Inventory Report (PDF)
             </button>
-            <button className="px-4 py-2 bg-purple-500 bg-opacity-30 text-purple-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold">
+            <button className="px-3 md:px-4 py-2 bg-purple-500 bg-opacity-30 text-purple-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold text-xs md:text-sm">
               📄 Download Requisition Report (PDF)
             </button>
-            <button className="px-4 py-2 bg-green-500 bg-opacity-30 text-green-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold">
+            <button className="px-3 md:px-4 py-2 bg-green-500 bg-opacity-30 text-green-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold text-xs md:text-sm">
               📊 Export to Excel
             </button>
           </div>
@@ -1157,12 +1157,12 @@ const CMMSModule = ({
     // Strict: Only Admin can manage company profile
     if (!hasPermission('canEditCompany')) {
       return (
-        <div className="glass-card p-6 bg-orange-500 bg-opacity-10 border-l-4 border-orange-500">
-          <div className="flex items-center gap-3">
-            <AlertTriangle className="w-6 h-6 text-orange-400" />
-            <div>
-              <p className="text-orange-300 font-semibold">🔒 Access Restricted</p>
-              <p className="text-gray-400 text-sm mt-1">Only Administrators can manage company profiles. Your role: <span className="text-blue-300 font-bold uppercase">{userRole}</span></p>
+        <div className="glass-card p-4 md:p-6 bg-orange-500 bg-opacity-10 border-l-4 border-orange-500">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-orange-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-orange-300 font-semibold text-sm md:text-base">🔒 Access Restricted</p>
+              <p className="text-gray-400 text-xs md:text-sm mt-1">Only Administrators can manage company profiles. Your role: <span className="text-blue-300 font-bold uppercase">{userRole}</span></p>
             </div>
           </div>
         </div>
@@ -1181,13 +1181,13 @@ const CMMSModule = ({
       return (
         <div className="space-y-4">
           {/* Collapsed Icon Row */}
-          <div className="flex gap-3 items-center justify-start">
+          <div className="flex gap-2 md:gap-3 items-center justify-start overflow-x-auto pb-2">
             {/* Create Company Profile Icon */}
             <button
               onClick={() => setShowProfileForm(!showProfileForm)}
               className={`
-                flex flex-col items-center justify-center w-20 h-20 rounded-lg
-                transition-all duration-300 transform hover:scale-110
+                flex flex-col items-center justify-center w-16 h-16 md:w-20 md:h-20 rounded-lg
+                transition-all duration-300 transform hover:scale-110 flex-shrink-0
                 ${showProfileForm 
                   ? 'bg-gradient-to-br from-blue-600 to-blue-800 ring-2 ring-blue-400' 
                   : 'bg-gradient-to-br from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800'
@@ -1195,23 +1195,23 @@ const CMMSModule = ({
               `}
               title="Create Company Profile"
             >
-              <Building className="w-8 h-8 text-white mb-1" />
-              <span className="text-xs text-white font-bold text-center">Company</span>
+              <Building className="w-7 h-7 md:w-8 md:h-8 text-white mb-0.5 md:mb-1" />
+              <span className="text-xs text-white font-bold text-center leading-tight">Company</span>
             </button>
 
             {/* Newly Added Users Icon */}
             <div 
               className={`
-                flex flex-col items-center justify-center w-20 h-20 rounded-lg
+                flex flex-col items-center justify-center w-16 h-16 md:w-20 md:h-20 rounded-lg
                 bg-gradient-to-br from-green-500 to-green-700 hover:from-green-600 hover:to-green-800
-                transition-all duration-300 transform hover:scale-110 relative
+                transition-all duration-300 transform hover:scale-110 relative flex-shrink-0
               `}
               title="Newly Added Users"
             >
-              <User className="w-8 h-8 text-white mb-1" />
-              <span className="text-xs text-white font-bold text-center">New Users</span>
+              <User className="w-7 h-7 md:w-8 md:h-8 text-white mb-0.5 md:mb-1" />
+              <span className="text-xs text-white font-bold text-center leading-tight">New Users</span>
               {newlyAddedUserId && (
-                <span className="absolute -top-2 -right-2 w-6 h-6 bg-yellow-400 text-gray-900 rounded-full text-xs font-bold flex items-center justify-center animate-pulse">
+                <span className="absolute -top-2 -right-2 w-5 h-5 md:w-6 md:h-6 bg-yellow-400 text-gray-900 rounded-full text-xs font-bold flex items-center justify-center animate-pulse">
                   1
                 </span>
               )}
@@ -1220,52 +1220,52 @@ const CMMSModule = ({
 
           {/* Expandable Form */}
           {showProfileForm && (
-            <div className="glass-card p-6 space-y-4 animate-in fade-in slide-in-from-top-4 duration-300">
-              <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                <Building className="w-6 h-6 text-blue-400" />
+            <div className="glass-card p-4 md:p-6 space-y-4 animate-in fade-in slide-in-from-top-4 duration-300">
+              <h3 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
+                <Building className="w-5 h-5 md:w-6 md:h-6 text-blue-400" />
                 Create Company Profile
               </h3>
 
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
             <input
               type="text"
               placeholder="Company Name"
               value={formData.companyName}
               onChange={(e) => setFormData({...formData, companyName: e.target.value})}
-              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400"
+              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm"
             />
             <input
               type="text"
               placeholder="Registration Number"
               value={formData.companyRegistration}
               onChange={(e) => setFormData({...formData, companyRegistration: e.target.value})}
-              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400"
+              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm"
             />
             <input
               type="text"
               placeholder="Location"
               value={formData.location}
               onChange={(e) => setFormData({...formData, location: e.target.value})}
-              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400"
+              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm"
             />
             <input
               type="tel"
               placeholder="Phone"
               value={formData.phone}
               onChange={(e) => setFormData({...formData, phone: e.target.value})}
-              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400"
+              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm"
             />
             <input
               type="email"
               placeholder="Email"
               value={formData.email}
               onChange={(e) => setFormData({...formData, email: e.target.value})}
-              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400"
+              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm"
             />
             <select
               value={formData.industry}
               onChange={(e) => setFormData({...formData, industry: e.target.value})}
-              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white"
+              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm"
             >
               <option value="Manufacturing">Manufacturing</option>
               <option value="Healthcare">Healthcare</option>
@@ -1277,16 +1277,16 @@ const CMMSModule = ({
             </select>
               </div>
 
-              <div className="flex gap-3">
+              <div className="flex flex-col sm:flex-row gap-2 md:gap-3">
                 <button
                   onClick={handleSaveProfile}
-                  className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-green-600 transition-all"
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-green-600 transition-all text-sm"
                 >
                   ✓ Create Profile & Get Access Code
                 </button>
                 <button
                   onClick={() => setShowProfileForm(false)}
-                  className="px-4 py-2 bg-gray-500 bg-opacity-30 text-gray-300 rounded-lg font-semibold hover:bg-opacity-50 transition-all"
+                  className="px-4 py-2 bg-gray-500 bg-opacity-30 text-gray-300 rounded-lg font-semibold hover:bg-opacity-50 transition-all text-sm"
                 >
                   Cancel
                 </button>
@@ -1298,29 +1298,29 @@ const CMMSModule = ({
     }
 
     return (
-      <div className="glass-card p-6">
-        <h3 className="text-xl font-bold text-white mb-4">Company Profile</h3>
-        <div className="grid md:grid-cols-2 gap-4 mb-6">
-          <div className="bg-white bg-opacity-5 p-4 rounded">
-            <div className="text-gray-400 text-sm">Company Name</div>
-            <div className="text-white font-bold">{cmmsData.companyProfile.companyName}</div>
+      <div className="glass-card p-4 md:p-6">
+        <h3 className="text-lg md:text-xl font-bold text-white mb-4">Company Profile</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mb-6">
+          <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded">
+            <div className="text-gray-400 text-xs md:text-sm">Company Name</div>
+            <div className="text-white font-bold text-sm md:text-base">{cmmsData.companyProfile.companyName}</div>
           </div>
-          <div className="bg-white bg-opacity-5 p-4 rounded">
-            <div className="text-gray-400 text-sm">Registration</div>
-            <div className="text-white font-bold">{cmmsData.companyProfile.companyRegistration}</div>
+          <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded">
+            <div className="text-gray-400 text-xs md:text-sm">Registration</div>
+            <div className="text-white font-bold text-sm md:text-base">{cmmsData.companyProfile.companyRegistration}</div>
           </div>
-          <div className="bg-white bg-opacity-5 p-4 rounded">
-            <div className="text-gray-400 text-sm">Location</div>
-            <div className="text-white font-bold">{cmmsData.companyProfile.location}</div>
+          <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded">
+            <div className="text-gray-400 text-xs md:text-sm">Location</div>
+            <div className="text-white font-bold text-sm md:text-base">{cmmsData.companyProfile.location}</div>
           </div>
-          <div className="bg-white bg-opacity-5 p-4 rounded">
-            <div className="text-gray-400 text-sm">Email</div>
-            <div className="text-white font-bold">{cmmsData.companyProfile.email}</div>
+          <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded">
+            <div className="text-gray-400 text-xs md:text-sm">Email</div>
+            <div className="text-white font-bold text-sm md:text-base break-all">{cmmsData.companyProfile.email}</div>
           </div>
         </div>
         <button
           onClick={() => setCmmsData(prev => ({...prev, companyProfile: null}))}
-          className="px-4 py-2 bg-orange-500 bg-opacity-30 text-orange-300 rounded-lg hover:bg-opacity-40 transition-all"
+          className="w-full md:w-auto px-4 py-2 bg-orange-500 bg-opacity-30 text-orange-300 rounded-lg hover:bg-opacity-40 transition-all text-sm"
         >
           Edit Profile
         </button>
@@ -1336,34 +1336,34 @@ const CMMSModule = ({
     if (!hasPermission('canManageUsers') || !hasPermission('canAssignRoles')) {
       return (
         <div className="space-y-4">
-          <div className="glass-card p-6 bg-orange-500 bg-opacity-10 border-l-4 border-orange-500">
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="w-6 h-6 text-orange-400" />
-              <div>
-                <p className="text-orange-300 font-semibold">🔒 User Management Restricted</p>
-                <p className="text-gray-400 text-sm mt-1">Only Administrators can manage users and assign roles. Your role: <span className="text-blue-300 font-bold uppercase">{userRole}</span></p>
+          <div className="glass-card p-4 md:p-6 bg-orange-500 bg-opacity-10 border-l-4 border-orange-500">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+              <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-orange-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-orange-300 font-semibold text-sm md:text-base">🔒 User Management Restricted</p>
+                <p className="text-gray-400 text-xs md:text-sm mt-1">Only Administrators can manage users and assign roles. Your role: <span className="text-blue-300 font-bold uppercase">{userRole}</span></p>
               </div>
             </div>
           </div>
           
           {/* View-only user list for authorized roles */}
           {hasPermission('canViewCompany') && (
-            <div className="glass-card p-6">
-              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                <Users className="w-5 h-5 text-blue-400" />
+            <div className="glass-card p-4 md:p-6">
+              <h3 className="text-base md:text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <Users className="w-4 h-4 md:w-5 md:h-5 text-blue-400" />
                 Team Members (View Only)
               </h3>
-              <div className="space-y-3">
+              <div className="space-y-2 md:space-y-3">
                 {cmmsData.users.length === 0 ? (
-                  <p className="text-gray-400">No team members assigned yet</p>
+                  <p className="text-gray-400 text-sm">No team members assigned yet</p>
                 ) : (
                   cmmsData.users.map(user => (
-                    <div key={user.id} className="bg-white bg-opacity-5 p-3 rounded flex justify-between items-center">
-                      <div>
-                        <p className="text-white font-semibold">{user.name}</p>
-                        <p className="text-gray-400 text-sm">{user.email}</p>
+                    <div key={user.id} className="bg-white bg-opacity-5 p-2 md:p-3 rounded flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white font-semibold text-sm break-words">{user.name}</p>
+                        <p className="text-gray-400 text-xs break-all">{user.email}</p>
                       </div>
-                      <span className="px-3 py-1 bg-blue-500 bg-opacity-30 text-blue-300 rounded text-sm font-semibold uppercase">{user.role}</span>
+                      <span className="px-2 md:px-3 py-1 bg-blue-500 bg-opacity-30 text-blue-300 rounded text-xs md:text-sm font-semibold uppercase whitespace-nowrap">{user.role}</span>
                     </div>
                   ))
                 )}
@@ -1938,12 +1938,12 @@ const CMMSModule = ({
 
     if (!canViewInventory) {
       return (
-        <div className="glass-card p-6 bg-red-500 bg-opacity-10 border-l-4 border-red-500">
-          <div className="flex items-center gap-3">
-            <AlertTriangle className="w-6 h-6 text-red-400" />
-            <div>
-              <p className="text-red-300 font-semibold">🔒 Inventory Access Denied</p>
-              <p className="text-gray-400 text-sm mt-1">Your role (<span className="text-blue-300 font-bold uppercase">{userRole}</span>) does not have access to inventory data.</p>
+        <div className="glass-card p-4 md:p-6 bg-red-500 bg-opacity-10 border-l-4 border-red-500">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-red-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-red-300 font-semibold text-sm md:text-base">🔒 Inventory Access Denied</p>
+              <p className="text-gray-400 text-xs md:text-sm mt-1">Your role (<span className="text-blue-300 font-bold uppercase">{userRole}</span>) does not have access to inventory data.</p>
             </div>
           </div>
         </div>
@@ -1995,34 +1995,34 @@ const CMMSModule = ({
     const totalInventoryValue = cmmsData.inventory.reduce((sum, item) => sum + (item.quantity * item.cost), 0);
 
     return (
-      <div className="space-y-6">
+      <div className="space-y-4 md:space-y-6">
         {/* Permission Badge */}
         {!canEditInventory && (
-          <div className="glass-card p-4 bg-blue-500 bg-opacity-10 border-l-4 border-blue-500">
-            <p className="text-blue-300 text-sm">👁️ <span className="font-semibold">View-Only Mode</span> - You can see inventory but cannot make changes. Only Storeman and Admin can edit.</p>
+          <div className="glass-card p-3 md:p-4 bg-blue-500 bg-opacity-10 border-l-4 border-blue-500">
+            <p className="text-blue-300 text-xs md:text-sm">👁️ <span className="font-semibold">View-Only Mode</span> - You can see inventory but cannot make changes. Only Storeman and Admin can edit.</p>
           </div>
         )}
 
         {/* Add Inventory Item */}
         {canEditInventory && (
-          <div className="glass-card p-6">
-            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-              <Package className="w-6 h-6 text-blue-400" />
+          <div className="glass-card p-4 md:p-6">
+            <h3 className="text-lg md:text-xl font-bold text-white mb-4 flex items-center gap-2">
+              <Package className="w-5 h-5 md:w-6 md:h-6 text-blue-400" />
               Add Inventory Item
             </h3>
 
-            <div className="grid md:grid-cols-3 gap-4 mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4 mb-4">
               <input
                 type="text"
                 placeholder="Item Name"
               value={newItem.name}
               onChange={(e) => setNewItem({...newItem, name: e.target.value})}
-              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400"
+              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm"
             />
             <select
               value={newItem.category}
               onChange={(e) => setNewItem({...newItem, category: e.target.value})}
-              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white"
+              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm"
             >
               <option value="Spare Parts">Spare Parts</option>
               <option value="Tools">Tools</option>
@@ -2035,14 +2035,14 @@ const CMMSModule = ({
               placeholder="Quantity"
               value={newItem.quantity}
               onChange={(e) => setNewItem({...newItem, quantity: parseInt(e.target.value) || 0})}
-              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400"
+              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm"
             />
             <input
               type="number"
               placeholder="Min Stock Level"
               value={newItem.minStock}
               onChange={(e) => setNewItem({...newItem, minStock: parseInt(e.target.value) || 0})}
-              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400"
+              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm"
             />
             <input
               type="number"
@@ -2601,8 +2601,8 @@ const CMMSModule = ({
       )}
       */}
 
-      {/* Tabs - Role-Based */}
-      <div className="flex gap-2 mb-6 border-b border-white border-opacity-10 overflow-x-auto">
+      {/* Tabs - Role-Based & Mobile-Friendly */}
+      <div className="flex gap-1 md:gap-2 mb-6 border-b border-white border-opacity-10 overflow-x-auto -mx-4 md:-mx-6 lg:-mx-8 px-4 md:px-6 lg:px-8">
         {[
           { id: 'company', label: '🏢 Company', icon: Building },
           { id: 'users', label: '👥 Users & Roles', icon: Users },
@@ -2615,7 +2615,7 @@ const CMMSModule = ({
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-3 font-semibold transition-all whitespace-nowrap border-b-2 ${
+              className={`px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm font-semibold transition-all whitespace-nowrap border-b-2 ${
                 activeTab === tab.id
                   ? 'text-blue-300 border-blue-500'
                   : 'text-gray-400 border-transparent hover:text-white'
