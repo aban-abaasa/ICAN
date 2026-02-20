@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { getActiveStatuses, recordStatusView } from '../../services/statusService';
-import { ChevronLeft, ChevronRight, Eye, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 
 export const StatusCarousel = ({ onStatusClick = null }) => {
   const { user } = useAuth();
@@ -23,13 +23,24 @@ export const StatusCarousel = ({ onStatusClick = null }) => {
 
   const loadStatuses = async () => {
     try {
-      if (!user?.id) return;
-      const activeStatuses = await getActiveStatuses();
-      console.log('StatusCarousel - Loaded statuses:', activeStatuses?.length || 0, activeStatuses);
-      setStatuses(activeStatuses || []);
+      if (!user?.id) {
+        setStatuses([]);
+        setLoading(false);
+        return;
+      }
+
+      const { statuses: activeStatuses = [], error } = await getActiveStatuses();
+      if (error) {
+        console.warn('StatusCarousel - getActiveStatuses warning:', error.message || error);
+      }
+
+      console.log('StatusCarousel - Loaded statuses:', activeStatuses.length, { statuses: activeStatuses, error });
+      setStatuses(activeStatuses);
+      setCurrentIndex((prev) => (activeStatuses.length === 0 ? 0 : Math.min(prev, activeStatuses.length - 1)));
       setLoading(false);
     } catch (error) {
       console.error('Failed to load statuses:', error);
+      setStatuses([]);
       setLoading(false);
     }
   };

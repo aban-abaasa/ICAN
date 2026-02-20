@@ -31,11 +31,16 @@ export const StatusViewerUI = ({ onOpenStatusUploader = null, onOpenProfileEdit 
 
   const loadStatuses = async () => {
     try {
-      const activeStatuses = await getActiveStatuses();
-      console.log('Loaded statuses:', activeStatuses?.length || 0);
-      setStatuses(activeStatuses || []);
+      const { statuses: activeStatuses = [], error } = await getActiveStatuses();
+      if (error) {
+        console.warn('StatusViewerUI - getActiveStatuses warning:', error.message || error);
+      }
+      console.log('Loaded statuses:', activeStatuses.length);
+      setStatuses(activeStatuses);
+      setCurrentStatusIndex((prev) => (activeStatuses.length === 0 ? 0 : Math.min(prev, activeStatuses.length - 1)));
     } catch (error) {
       console.error('Failed to load statuses:', error);
+      setStatuses([]);
     }
   };
 

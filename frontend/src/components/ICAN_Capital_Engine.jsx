@@ -9320,7 +9320,15 @@ Data Freshness: ${reportData.metadata.dataFreshness}
 
           {/* Status Carousel in Top-Right (WhatsApp style) */}
           <div className="flex gap-2 items-center flex-nowrap min-w-0 ml-auto">
-            <StatusCarousel />
+            <StatusCarousel onStatusClick={() => setShowStatusPage(true)} />
+            <button
+              onClick={() => setShowStatusPage(true)}
+              className="hidden md:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs text-gray-200 transition"
+              title="Open Status Viewer"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              Viewer
+            </button>
             <div className="hidden xl:block text-right">
               <p className="text-sm font-semibold text-white truncate max-w-[180px]">{dashboardDisplayName}</p>
               <p className="text-xs text-gray-300 capitalize">{activeTab}</p>

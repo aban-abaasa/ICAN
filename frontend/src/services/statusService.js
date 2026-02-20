@@ -7,6 +7,20 @@
 import { supabase } from '../lib/supabase';
 import { calculateFileHash, registerStatusOnBlockchain } from './blockchainService';
 
+const MIME_TO_EXTENSION = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
+  'video/webm': 'webm'
+};
+
+const inferExtensionFromMime = (mimeType = '') => MIME_TO_EXTENSION[mimeType] || 'bin';
+
+const buildStorageMimeErrorMessage = (mimeType) =>
+  `Storage rejected file type "${mimeType || 'unknown'}". Add video/mp4, video/quicktime, and video/webm to the "user-content" bucket allowed MIME types in Supabase Storage.`;
+
 /**
  * Upload status media to Supabase Storage
  * @param {string} userId - User ID
@@ -18,8 +32,19 @@ export const uploadStatusMedia = async (userId, file, options = {}) => {
   try {
     const {
       maxSizeMB = 50,
-      allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/quicktime']
+      allowedTypes = [
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+        'video/mp4',
+        'video/quicktime',
+        'video/webm'
+      ]
     } = options;
+
+    if (!file) {
+      throw new Error('No file selected for upload');
+    }
 
     // Validate file size
     if (file.size > maxSizeMB * 1024 * 1024) {
@@ -37,18 +62,47 @@ export const uploadStatusMedia = async (userId, file, options = {}) => {
     console.log(`✓ File hash: ${fileHash}`);
 
     // Generate filename
-    const fileExt = file.name.split('.').pop().toLowerCase();
+    const fileName = typeof file.name === 'string' ? file.name : '';
+    const fileExt =
+      (fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '') ||
+      inferExtensionFromMime(file.type);
     const timestamp = Date.now();
     const random = Math.random().toString(36).substring(2, 8);
     const filename = `${userId}-${timestamp}-${random}.${fileExt}`;
     const filePath = `statuses/${userId}/${filename}`;
 
-    // Upload to storage
-    const { data, error: uploadError } = await supabase.storage
-      .from('user-content')
-      .upload(filePath, file, { upsert: false });
+    // Upload to storage with fallback for restrictive MIME policies
+    const uploadWithMime = async (contentType) =>
+      supabase.storage
+        .from('user-content')
+        .upload(filePath, file, {
+          upsert: false,
+          contentType
+        });
 
-    if (uploadError) throw uploadError;
+    let { error: uploadError } = await uploadWithMime(file.type || 'application/octet-stream');
+
+    if (uploadError && String(uploadError.message || '').toLowerCase().includes('mime type')) {
+      const mimeFallbacks = ['application/octet-stream', 'video/quicktime', 'video/webm'];
+      for (const fallbackMime of mimeFallbacks) {
+        if (!fallbackMime || fallbackMime === file.type) {
+          continue;
+        }
+
+        const retry = await uploadWithMime(fallbackMime);
+        uploadError = retry.error;
+        if (!uploadError) {
+          break;
+        }
+      }
+    }
+
+    if (uploadError) {
+      if (String(uploadError.message || '').toLowerCase().includes('mime type')) {
+        throw new Error(buildStorageMimeErrorMessage(file.type));
+      }
+      throw uploadError;
+    }
 
     // Get signed URL (24-hour expiry) - works even with restrictive RLS
     const { data: signedData, error: urlError } = await supabase.storage
@@ -159,11 +213,11 @@ export const getActiveStatuses = async (userId = null) => {
     
     if (authError || !authUser) {
       console.warn('⚠️ getActiveStatuses: User not authenticated. Cannot query statuses.');
-      return [];
+      return { statuses: [], error: new Error('User not authenticated') };
     }
     
-    // Use authenticated user ID for the query
-    const queryUserId = userId || authUser.id;
+    // When userId is not passed, return global public statuses + current user's statuses
+    const queryUserId = userId || null;
 
     let query = supabase
       .from('ican_statuses')
@@ -173,6 +227,8 @@ export const getActiveStatuses = async (userId = null) => {
 
     if (queryUserId) {
       query = query.eq('user_id', queryUserId);
+    } else {
+      query = query.or(`visibility.eq.public,user_id.eq.${authUser.id}`);
     }
 
     const { data, error } = await query;

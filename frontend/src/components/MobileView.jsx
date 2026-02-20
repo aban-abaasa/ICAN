@@ -53,6 +53,9 @@ import Pitchin from './Pitchin';
 import ICANWallet from './ICANWallet';
 import TrustSystem from './TrustSystem';
 import CMMSModule from './CMSSModule';
+import { StatusPage } from './StatusPage';
+import { StatusCarousel } from './status/StatusCarousel';
+import { StatusUploader } from './status/StatusUploader';
 import { VelocityEngine } from '../utils/velocityEngine';
 import { supabase } from '../lib/supabase/client';
 import { walletAccountService } from '../services/walletAccountService';
@@ -550,6 +553,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [profileError, setProfileError] = useState(null);
   const [profileSuccess, setProfileSuccess] = useState(null);
   const [imageError, setImageError] = useState(false);
+  const [showStatusPage, setShowStatusPage] = useState(false);
   const [showStatusUploader, setShowStatusUploader] = useState(false);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [showAvatarView, setShowAvatarView] = useState(false);
@@ -1899,11 +1903,88 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     showCmmsPanel;
 
   const showDashboardHeader = !isWebDashboard || !isOverlayPanelOpen;
+  const headerNavTabs = [
+    { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
+    { id: 'security', label: 'Security', icon: Shield },
+    { id: 'readiness', label: 'Readiness', icon: Globe },
+    { id: 'growth', label: 'Growth', icon: TrendingUp },
+    { id: 'pitchin', label: 'Pitchin', icon: Briefcase },
+    { id: 'wallet', label: 'Wallet', icon: Wallet },
+    { id: 'trust', label: 'Trust', icon: Lock },
+    { id: 'cmms', label: 'CMMS', icon: Building },
+    { id: 'settings', label: 'Settings', icon: Settings }
+  ];
+
+  const activeHeaderTab =
+    showPitchinPanel ? 'pitchin' :
+    showWalletPanel ? 'wallet' :
+    showTrustPanel ? 'trust' :
+    showCmmsPanel ? 'cmms' :
+    selectedDetail?.tab === 'security' ? 'security' :
+    selectedDetail?.tab === 'readiness' ? 'readiness' :
+    selectedDetail?.tab === 'growth' ? 'growth' :
+    selectedDetail?.tab === 'settings' ? 'settings' :
+    'dashboard';
+
+  const closeHeaderPanels = () => {
+    setShowProfilePanel(false);
+    setShowPitchinPanel(false);
+    setShowWalletPanel(false);
+    setShowTrustPanel(false);
+    setShowCmmsPanel(false);
+  };
+
+  const openHeaderPanel = (panelId) => {
+    setShowPitchinPanel(panelId === 'pitchin');
+    setShowWalletPanel(panelId === 'wallet');
+    setShowTrustPanel(panelId === 'trust');
+    setShowCmmsPanel(panelId === 'cmms');
+    setActiveBottomTab(panelId);
+  };
+
+  const handleHeaderTabClick = (tabId) => {
+    setShowMenuDropdown(false);
+
+    if (tabId === 'dashboard') {
+      closeHeaderPanels();
+      setSelectedDetail(null);
+      setActiveBottomTab('home');
+      return;
+    }
+
+    if (tabId === 'pitchin' || tabId === 'wallet' || tabId === 'trust' || tabId === 'cmms') {
+      setSelectedDetail(null);
+      setShowProfilePanel(false);
+      openHeaderPanel(tabId);
+      return;
+    }
+
+    closeHeaderPanels();
+
+    if (tabId === 'security') {
+      setSelectedDetail({ tab: 'security', item: 'Security' });
+      return;
+    }
+
+    if (tabId === 'readiness') {
+      setSelectedDetail({ tab: 'readiness', item: 'Readiness' });
+      return;
+    }
+
+    if (tabId === 'growth') {
+      setSelectedDetail({ tab: 'growth', item: 'Growth' });
+      return;
+    }
+
+    if (tabId === 'settings') {
+      setSelectedDetail({ tab: 'settings', item: 'Readiness Pillars' });
+    }
+  };
 
   return (
     <div className={`min-h-screen text-white overflow-x-hidden ${
       isWebDashboard
-        ? `bg-gradient-to-br from-slate-950 via-violet-950 to-slate-950 pb-32 ${showDashboardHeader ? 'pt-20 md:pt-24' : ''}`
+        ? `bg-gradient-to-br from-slate-950 via-violet-950 to-slate-950 pb-32 ${showDashboardHeader ? 'pt-44 md:pt-48' : ''}`
         : 'bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 pb-28'
     }`}>
       {/* ====== HEADER ====== */}
@@ -1933,8 +2014,18 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               IcanEra
             </h1>
 
-            {/* Settings Menu - ABSOLUTE RIGHT */}
-            <div className="absolute right-2 sm:right-3 top-2 sm:top-3">
+            {/* Header Actions - ABSOLUTE RIGHT */}
+            <div className="absolute right-2 sm:right-3 top-2 sm:top-3 flex items-center gap-1">
+              {!isWebDashboard && (
+                <button
+                  onClick={() => setShowStatusPage(true)}
+                  className="p-1.5 sm:p-2 hover:bg-purple-500/20 rounded-lg transition active:scale-95"
+                  title="Open status viewer"
+                >
+                  <Eye className="w-5 sm:w-6 h-5 sm:h-6 text-purple-300" />
+                </button>
+              )}
+              <div className="relative">
               <button 
                 onClick={() => setShowMenuDropdown(!showMenuDropdown)}
                 className="p-1.5 sm:p-2 hover:bg-purple-500/20 rounded-lg transition active:scale-95"
@@ -2038,8 +2129,55 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   </div>
                 </div>
               )}
+              </div>
             </div>
           </div>
+
+          {isWebDashboard && (
+            <div className="mt-2.5 space-y-2.5">
+              <div className="flex items-center gap-2">
+                <div className="flex-1 min-w-0 rounded-xl border border-purple-400/25 bg-slate-900/55 px-2 py-1">
+                  <StatusCarousel onStatusClick={() => setShowStatusPage(true)} />
+                </div>
+                <button
+                  onClick={() => setShowStatusPage(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 text-purple-100 text-xs font-semibold border border-purple-400/30 transition"
+                  title="Open status viewer"
+                >
+                  <Eye className="w-4 h-4" />
+                  Viewer
+                </button>
+                <button
+                  onClick={() => setShowStatusUploader(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-100 text-xs font-semibold border border-indigo-400/30 transition"
+                  title="Add status"
+                >
+                  <Upload className="w-4 h-4" />
+                  Add
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                {headerNavTabs.map((tab) => {
+                  const isActive = activeHeaderTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => handleHeaderTabClick(tab.id)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap border transition ${
+                        isActive
+                          ? 'bg-purple-500/30 text-white border-purple-300/60 shadow-[0_0_12px_rgba(168,85,247,0.35)]'
+                          : 'bg-slate-900/50 text-gray-300 border-slate-700 hover:text-white hover:border-purple-400/50'
+                      }`}
+                    >
+                      <tab.icon className="w-4 h-4" />
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
       )}
@@ -4919,6 +5057,23 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           </button>
         </div>
       </div>
+
+      {/* Status Feed Page */}
+      {showStatusPage && (
+        <div className="fixed inset-0 z-[130]" onClick={() => setShowStatusPage(false)}>
+          <div className="fixed inset-0 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <StatusPage onGoBack={() => setShowStatusPage(false)} />
+          </div>
+        </div>
+      )}
+
+      {/* Status Uploader Modal */}
+      {showStatusUploader && (
+        <StatusUploader
+          onClose={() => setShowStatusUploader(false)}
+          onStatusCreated={() => setShowStatusUploader(false)}
+        />
+      )}
 
       {/* Record Type Selection Modal */}
       {showRecordTypeModal && (

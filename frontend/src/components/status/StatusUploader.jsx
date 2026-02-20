@@ -25,6 +25,23 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null }) => {
   const [stream, setStream] = useState(null);
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [fileToUpload, setFileToUpload] = useState(null);
+  const [previewMediaKind, setPreviewMediaKind] = useState(null);
+
+  const releasePreviewUrl = () => {
+    if (previewUrl && previewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(previewUrl);
+    }
+  };
+
+  const resetSelectedMedia = () => {
+    releasePreviewUrl();
+    setPreviewUrl(null);
+    setFileToUpload(null);
+    setPreviewMediaKind(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const getMediaKind = (file) => (file?.type?.startsWith('video') ? 'video' : 'image');
 
   // Camera access
   const startCamera = async () => {
@@ -67,9 +84,12 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null }) => {
       
       canvasRef.current.toBlob((blob) => {
         if (blob) {
-          const url = URL.createObjectURL(blob);
+          const capturedFile = new File([blob], `status-capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
+          const url = URL.createObjectURL(capturedFile);
+          releasePreviewUrl();
           setPreviewUrl(url);
-          setFileToUpload(blob);
+          setFileToUpload(capturedFile);
+          setPreviewMediaKind('image');
           stopCamera();
         }
       }, 'image/jpeg', 0.95);
@@ -82,23 +102,43 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null }) => {
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
       }
+      if (previewUrl?.startsWith('blob:')) {
+        URL.revokeObjectURL(previewUrl);
+      }
     };
-  }, [stream]);
+  }, [stream, previewUrl]);
 
   const handleFileSelect = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setError(null);
+    const mediaKind = getMediaKind(file);
+    const maxSizeMB = mediaKind === 'video' ? 100 : 20;
+    const allowedTypes = [
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+      'video/mp4',
+      'video/quicktime',
+      'video/webm'
+    ];
 
-    // Preview
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setPreviewUrl(event.target?.result);
-    };
-    reader.readAsDataURL(file);
+    if (!allowedTypes.includes(file.type)) {
+      setError('Unsupported file format. Use JPEG, PNG, WebP, MP4, MOV, or WebM.');
+      return;
+    }
 
-    // Prepare for upload
+    if (file.size > maxSizeMB * 1024 * 1024) {
+      setError(`${mediaKind === 'video' ? 'Video' : 'Image'} is too large. Max ${maxSizeMB}MB.`);
+      return;
+    }
+
+    // Preview (object URL supports both image and video)
+    const nextPreviewUrl = URL.createObjectURL(file);
+    releasePreviewUrl();
+    setPreviewUrl(nextPreviewUrl);
+    setPreviewMediaKind(mediaKind);
     setFileToUpload(file);
   };
 
@@ -134,16 +174,30 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null }) => {
       setError('Please select an image or video');
       return;
     }
+    if (!user?.id) {
+      setError('Please sign in again before uploading a status.');
+      return;
+    }
 
     setIsUploading(true);
     setError(null);
 
     try {
       // Determine media type
-      const mediaType = fileToUpload.type.startsWith('video') ? 'video' : 'image';
+      const mediaType = previewMediaKind || getMediaKind(fileToUpload);
 
       // Upload to storage
-      const { url, error: uploadError } = await uploadStatusMedia(user.id, fileToUpload);
+      const { url, error: uploadError } = await uploadStatusMedia(user.id, fileToUpload, {
+        maxSizeMB: mediaType === 'video' ? 100 : 20,
+        allowedTypes: [
+          'image/jpeg',
+          'image/png',
+          'image/webp',
+          'video/mp4',
+          'video/quicktime',
+          'video/webm'
+        ]
+      });
       if (uploadError) throw uploadError;
 
       // Create status record
@@ -160,17 +214,21 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null }) => {
       // Show success state
       setUploadProgress(100);
       setUploadSuccess(true);
+      setIsUploading(false);
 
       // Reset form
-      setPreviewUrl(null);
+      resetSelectedMedia();
       setCaption('');
       setVisibility('public');
-      setFileToUpload(null);
-      if (fileInputRef.current) fileInputRef.current.value = '';
 
       onStatusCreated?.(status);
     } catch (err) {
-      setError(err.message || 'Upload failed');
+      const message = String(err?.message || 'Upload failed');
+      if (message.toLowerCase().includes('mime type')) {
+        setError('Video upload is blocked by storage MIME policy. Please allow video/mp4, video/quicktime, and video/webm in Supabase bucket "user-content".');
+      } else {
+        setError(message);
+      }
       console.error('Upload error:', err);
       setIsUploading(false);
     }
@@ -245,16 +303,22 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null }) => {
             </div>
           ) : previewUrl ? (
             <div className="relative rounded-2xl overflow-hidden bg-black aspect-video border-2 border-purple-500/30">
-              <img
-                src={previewUrl}
-                alt="Preview"
-                className="w-full h-full object-cover"
-              />
+              {previewMediaKind === 'video' ? (
+                <video
+                  src={previewUrl}
+                  controls
+                  playsInline
+                  className="w-full h-full object-contain bg-black"
+                />
+              ) : (
+                <img
+                  src={previewUrl}
+                  alt="Preview"
+                  className="w-full h-full object-cover"
+                />
+              )}
               <button
-                onClick={() => {
-                  setPreviewUrl(null);
-                  setFileToUpload(null);
-                }}
+                onClick={resetSelectedMedia}
                 className="absolute top-3 right-3 p-2 bg-black/60 hover:bg-black/80 rounded-full text-white transition-all transform hover:scale-110 border border-white/20"
               >
                 <X className="w-4 h-4" />
@@ -292,7 +356,7 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null }) => {
                     <Upload className="w-6 h-6 text-white" />
                   </div>
                   <p className="text-sm font-bold bg-gradient-to-r from-blue-300 to-cyan-300 bg-clip-text text-transparent">Upload Media</p>
-                  <p className="text-xs text-blue-200/70">JPEG, PNG, WebP, MP4 • Max 10MB</p>
+                  <p className="text-xs text-blue-200/70">JPEG/PNG/WebP up to 20MB, MP4/MOV/WebM up to 100MB</p>
                 </div>
               </button>
 
@@ -439,10 +503,7 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null }) => {
         {fileToUpload && (
           <div className="p-4 border-t border-purple-500/20 flex-shrink-0 bg-slate-900/50 backdrop-blur-md">
             <button
-              onClick={() => {
-                setPreviewUrl(null);
-                setFileToUpload(null);
-              }}
+              onClick={resetSelectedMedia}
               className="w-full px-4 py-2 text-gray-300 hover:text-white hover:bg-white/10 rounded-lg font-medium transition-all"
             >
               Cancel
