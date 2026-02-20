@@ -1892,14 +1892,23 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     }
   };
 
+  const isOverlayPanelOpen =
+    showPitchinPanel ||
+    showWalletPanel ||
+    showTrustPanel ||
+    showCmmsPanel;
+
+  const showDashboardHeader = !isWebDashboard || !isOverlayPanelOpen;
+
   return (
     <div className={`min-h-screen text-white overflow-x-hidden ${
       isWebDashboard
-        ? 'bg-gradient-to-br from-slate-950 via-violet-950 to-slate-950 pb-32'
+        ? `bg-gradient-to-br from-slate-950 via-violet-950 to-slate-950 pb-32 ${showDashboardHeader ? 'pt-20 md:pt-24' : ''}`
         : 'bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 pb-28'
     }`}>
       {/* ====== HEADER ====== */}
-      <div className={`sticky top-0 z-40 border-b ${
+      {showDashboardHeader && (
+      <div className={`${isWebDashboard ? 'fixed top-0 left-0 right-0 z-[70]' : 'sticky top-0 z-40'} border-b ${
         isWebDashboard
           ? 'bg-gradient-to-r from-slate-950/95 via-purple-900/80 to-slate-950/95 backdrop-blur-xl border-purple-400/30 shadow-[0_12px_30px_rgba(8,6,24,0.45)]'
           : 'bg-gradient-to-b from-slate-950/95 to-purple-950/80 backdrop-blur-md border-purple-500/20'
@@ -2033,6 +2042,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           </div>
         </div>
       </div>
+      )}
 
       {/* ====== DETAIL PAGE - SETTINGS ONLY ====== */}
       {selectedDetail && (
