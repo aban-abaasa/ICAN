@@ -12,6 +12,7 @@ import SACCOHub from './SACCOHub';
 import SHAREHub from './SHAREHub';
 import CMMSModule from './CMSSModule';
 import ICANWallet from './ICANWallet';
+import MobileView from './MobileView';
 import { 
   Shield, 
   Globe, 
@@ -9251,14 +9252,24 @@ Data Freshness: ${reportData.metadata.dataFreshness}
     );
   };
 
+  const dashboardUserProfile = profile || user || {};
+  const dashboardDisplayName =
+    profile?.full_name ||
+    profile?.name ||
+    user?.user_metadata?.full_name ||
+    user?.email ||
+    'GANTA ELON';
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900">
       {/* Main Navigation & Header */}
-      <MainNavigation 
-        onTrustClick={() => setShowTRUST(true)} 
-        onShareClick={() => setShowSHARE(true)}
-        onWalletClick={() => setShowWallet(true)}
-      />
+      {activeTab !== 'dashboard' && (
+        <MainNavigation 
+          onTrustClick={() => setShowTRUST(true)} 
+          onShareClick={() => setShowSHARE(true)}
+          onWalletClick={() => setShowWallet(true)}
+        />
+      )}
 
       {/* TRUST Section - Show when TRUST is activated */}
       {showTRUST && (
@@ -9275,7 +9286,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
 
       {/* SHARE Section - Show when SHARE is activated */}
       {showSHARE && (
-        <div className="fixed inset-0 z-[1000] overflow-y-auto">
+        <div className="fixed inset-0 z-[1000]">
           <SHAREHub onClose={() => setShowSHARE(false)} />
         </div>
       )}
@@ -9294,19 +9305,26 @@ Data Freshness: ${reportData.metadata.dataFreshness}
       )}
 
       {/* Navigation */}
+      {activeTab !== 'dashboard' && (
       <nav className="glass-card mx-4 mt-4 p-4 overflow-visible" style={{ overflow: 'visible' }}>
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Shield className="w-8 h-8 text-blue-400" />
-            <div>
-              <h1 className="text-xl font-bold gradient-text">ICAN Capital Engine - Dashboard</h1>
-              <p className="text-xs text-gray-300">From Volatility to Global Capital</p>
+        <div className={`flex items-center gap-4 ${activeTab === 'dashboard' ? 'justify-end' : 'justify-between'}`}>
+          {activeTab !== 'dashboard' && (
+            <div className="flex items-center gap-3">
+              <Shield className="w-8 h-8 text-blue-400" />
+              <div>
+                <h1 className="text-xl font-bold gradient-text">ICAN Capital Engine - Dashboard</h1>
+                <p className="text-xs text-gray-300">From Volatility to Global Capital</p>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Status Carousel in Top-Right (WhatsApp style) */}
-          <div className="hidden md:flex gap-2 items-center flex-nowrap min-w-0">
+          <div className="flex gap-2 items-center flex-nowrap min-w-0 ml-auto">
             <StatusCarousel />
+            <div className="hidden xl:block text-right">
+              <p className="text-sm font-semibold text-white truncate max-w-[180px]">{dashboardDisplayName}</p>
+              <p className="text-xs text-gray-300 capitalize">{activeTab}</p>
+            </div>
             {/* Profile Picture with Edit & Status Buttons */}
             <div className="relative group flex-shrink-0">
               {/* Avatar */}
@@ -9377,10 +9395,15 @@ Data Freshness: ${reportData.metadata.dataFreshness}
           ))}
         </div>
       </nav>
+      )}
 
       {/* Main Content */}
-      <main className="p-4">
-        {activeTab === 'dashboard' && renderDashboard()}
+      <main className={activeTab === 'dashboard' ? 'p-0' : 'p-4'}>
+        {activeTab === 'dashboard' && (
+          <section className="w-full min-h-screen overflow-y-auto">
+            <MobileView userProfile={dashboardUserProfile} isWebDashboard />
+          </section>
+        )}
         {activeTab === 'security' && renderSecurityMandate()}
         {activeTab === 'readiness' && renderReadinessMandate()}
         {activeTab === 'growth' && renderGrowthMandate()}

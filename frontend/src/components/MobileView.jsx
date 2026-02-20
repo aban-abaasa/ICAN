@@ -67,6 +67,51 @@ import {
   getNotificationColor,
   formatTimeAgo
 } from '../services/investmentNotificationsService';
+import { getUserTrustGroups } from '../services/trustService';
+import { CountryService } from '../services/countryService';
+
+const PROFILE_CONFIG_STORAGE_PREFIX = 'ican_profile_configuration';
+const DEFAULT_PROFILE_LEGAL_DISCLAIMER = 'NOT LEGAL OR FINANCIAL ADVICE: The ICAN Capital Engine is a risk assessment and organizational tool. All analysis, recommendations, and scores are for informational purposes only. Consult qualified professionals before making legal, financial, or business decisions.';
+
+const buildProfileConfigStorageKey = (userId, email) =>
+  `${PROFILE_CONFIG_STORAGE_PREFIX}_${userId || email || 'guest'}`;
+
+const normalizeTargetNetWorthValue = (value) => {
+  const digits = String(value ?? '').replace(/[^\d]/g, '');
+  return digits || '0';
+};
+
+const formatTargetNetWorth = (value) => {
+  const normalized = normalizeTargetNetWorthValue(value);
+  const numericValue = Number(normalized);
+  return Number.isFinite(numericValue) ? numericValue.toLocaleString() : '0';
+};
+
+const parseStoredProfileConfig = (rawValue) => {
+  if (!rawValue) return null;
+  try {
+    const parsed = JSON.parse(rawValue);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const getWalletTabKey = (tabName = '') => {
+  const normalized = String(tabName).toLowerCase().trim();
+  if (normalized.includes('ican')) return 'ican';
+  if (normalized === 'personal') return 'personal';
+  if (normalized === 'agent') return 'agent';
+  if (normalized === 'business') return 'business';
+  if (normalized === 'trust') return 'trust';
+  return normalized.replace(/\s+/g, '');
+};
+
+const getWalletTabLabel = (tabName = '') => {
+  const key = getWalletTabKey(tabName);
+  if (key === 'ican') return 'ICAN';
+  return tabName;
+};
 
 // Recent Transactions Collapsible Component
 const RecentTransactionsCollapsible = ({ transactions, formatCurrency }) => {
@@ -296,7 +341,7 @@ const FeatureCardWithSlideshow = ({ card, onExplore }) => {
   );
 };
 
-const MobileView = ({ userProfile }) => {
+const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [authUser, setAuthUser] = useState(null);
   
   // Get the actual Supabase auth user
@@ -316,7 +361,7 @@ const MobileView = ({ userProfile }) => {
   }, []);
   const [activeSlide, setActiveSlide] = useState(0);
   const [currentBalance, setCurrentBalance] = useState('156,002');
-  const [activeBottomTab, setActiveBottomTab] = useState('wallet');
+  const [activeBottomTab, setActiveBottomTab] = useState('home');
   const [showTransactionEntry, setShowTransactionEntry] = useState(false);
   const [transactionType, setTransactionType] = useState(null); // 'business' or 'personal'
   const [showRecordTypeModal, setShowRecordTypeModal] = useState(false);
@@ -468,7 +513,7 @@ const MobileView = ({ userProfile }) => {
     personal: { balance: 0, currency: 'UGX', loading: true, exists: false },
     agent: { balance: 0, currency: 'USD', loading: true, exists: false },
     business: { balance: 0, currency: 'UGX', loading: true, exists: false },
-    trust: { balance: 0, currency: 'USD', loading: true, exists: false }
+    trust: { balance: 0, currency: 'ICAN', loading: true, exists: false, localCurrency: 'UGX', localSymbol: 'Sh', localValue: 0, groupCount: 0, memberCount: 0, scope: 'personal' }
   });
   const [activeWalletTab, setActiveWalletTab] = useState('ican');
   const [walletAccountsLoading, setWalletAccountsLoading] = useState(true);
@@ -521,6 +566,16 @@ const MobileView = ({ userProfile }) => {
   const [deleteAccountError, setDeleteAccountError] = useState('');
   const [deleteAccountSuccess, setDeleteAccountSuccess] = useState('');
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [profileConfigFormData, setProfileConfigFormData] = useState({
+    fullName: userProfile?.full_name || userProfile?.name || 'GANTA ELON',
+    email: userProfile?.email || 'gantaelon@gmail.com',
+    targetNetWorth: '1000000',
+    timelineYears: '5',
+    legalDisclaimer: DEFAULT_PROFILE_LEGAL_DISCLAIMER
+  });
+  const [isSavingProfileConfig, setIsSavingProfileConfig] = useState(false);
+  const [profileConfigError, setProfileConfigError] = useState('');
+  const [profileConfigSuccess, setProfileConfigSuccess] = useState('');
 
   // Advanced Reporting System state
   const [selectedReportType, setSelectedReportType] = useState('financial-summary');
@@ -648,6 +703,95 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       setDeleteAccountPassword('');
       setDeleteAccountError('');
       setDeleteAccountSuccess('');
+    }
+  }, [selectedDetail]);
+
+  // Load/sync profile configuration form data (Supabase + local storage)
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadProfileConfiguration = async () => {
+      const fallbackName =
+        userProfile?.full_name ||
+        userProfile?.name ||
+        authUser?.user_metadata?.full_name ||
+        'GANTA ELON';
+      const fallbackEmail = userProfile?.email || authUser?.email || 'gantaelon@gmail.com';
+      const effectiveUserId = authUser?.id || userProfile?.id;
+
+      const baseState = {
+        fullName: fallbackName,
+        email: fallbackEmail,
+        targetNetWorth: normalizeTargetNetWorthValue(authUser?.user_metadata?.target_net_worth || '1000000'),
+        timelineYears: String(authUser?.user_metadata?.target_timeline_years || '5'),
+        legalDisclaimer: authUser?.user_metadata?.legal_disclaimer || DEFAULT_PROFILE_LEGAL_DISCLAIMER
+      };
+
+      const storageKey = buildProfileConfigStorageKey(effectiveUserId, fallbackEmail);
+      const storedConfig =
+        typeof window !== 'undefined'
+          ? parseStoredProfileConfig(window.localStorage.getItem(storageKey))
+          : null;
+
+      const mergedFromStorage = storedConfig
+        ? {
+            ...baseState,
+            ...storedConfig,
+            targetNetWorth: normalizeTargetNetWorthValue(storedConfig.targetNetWorth ?? baseState.targetNetWorth),
+            timelineYears: String(storedConfig.timelineYears ?? baseState.timelineYears),
+            legalDisclaimer: storedConfig.legalDisclaimer || baseState.legalDisclaimer
+          }
+        : baseState;
+
+      let nextState = mergedFromStorage;
+
+      if (effectiveUserId && supabase) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('full_name, email')
+          .eq('id', effectiveUserId)
+          .maybeSingle();
+
+        if (!error && data) {
+          nextState = {
+            ...nextState,
+            fullName: data.full_name || nextState.fullName,
+            email: data.email || nextState.email
+          };
+        }
+      }
+
+      if (isMounted) {
+        setProfileConfigFormData((prev) => ({
+          ...prev,
+          ...nextState
+        }));
+      }
+    };
+
+    loadProfileConfiguration();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    authUser?.id,
+    authUser?.email,
+    authUser?.user_metadata?.full_name,
+    authUser?.user_metadata?.target_net_worth,
+    authUser?.user_metadata?.target_timeline_years,
+    authUser?.user_metadata?.legal_disclaimer,
+    userProfile?.id,
+    userProfile?.full_name,
+    userProfile?.name,
+    userProfile?.email
+  ]);
+
+  // Reset profile configuration feedback when profile settings panel opens
+  useEffect(() => {
+    if (selectedDetail?.tab === 'settings' && (selectedDetail?.item === 'Profile Configuration' || selectedDetail?.item === 'Target Net Worth')) {
+      setProfileConfigError('');
+      setProfileConfigSuccess('');
     }
   }, [selectedDetail]);
 
@@ -1118,6 +1262,111 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     }
   };
 
+  const handleProfileConfigFieldChange = (field, value) => {
+    setProfileConfigFormData((prev) => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleSaveProfileConfiguration = async (saveMode = 'full') => {
+    setProfileConfigError('');
+    setProfileConfigSuccess('');
+
+    const fullName = profileConfigFormData.fullName.trim();
+    const email = profileConfigFormData.email.trim();
+    const targetNetWorth = normalizeTargetNetWorthValue(profileConfigFormData.targetNetWorth);
+    const timelineYears = String(profileConfigFormData.timelineYears || '5').replace(/[^\d]/g, '') || '5';
+    const legalDisclaimer = (profileConfigFormData.legalDisclaimer || '').trim() || DEFAULT_PROFILE_LEGAL_DISCLAIMER;
+
+    if (!fullName) {
+      setProfileConfigError('Full name is required.');
+      return;
+    }
+
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailPattern.test(email)) {
+      setProfileConfigError('Please enter a valid email address.');
+      return;
+    }
+
+    if (Number(targetNetWorth) <= 0) {
+      setProfileConfigError('Target net worth must be greater than zero.');
+      return;
+    }
+
+    setIsSavingProfileConfig(true);
+
+    try {
+      let activeAuthUser = authUser;
+
+      if (!activeAuthUser && supabase) {
+        const { data: { user: fetchedUser } } = await supabase.auth.getUser();
+        if (fetchedUser) {
+          activeAuthUser = fetchedUser;
+          setAuthUser(fetchedUser);
+        }
+      }
+
+      const effectiveUserId = activeAuthUser?.id || userProfile?.id;
+      if (!effectiveUserId) {
+        throw new Error('No active user found. Please sign in again.');
+      }
+
+      const nextConfig = {
+        fullName,
+        email,
+        targetNetWorth,
+        timelineYears,
+        legalDisclaimer
+      };
+
+      if (supabase) {
+        const { error: profileSaveError } = await supabase
+          .from('profiles')
+          .upsert(
+            {
+              id: effectiveUserId,
+              full_name: nextConfig.fullName,
+              email: nextConfig.email,
+              updated_at: new Date().toISOString()
+            },
+            { onConflict: 'id' }
+          );
+
+        if (profileSaveError) {
+          throw new Error(profileSaveError.message || 'Unable to save profile details.');
+        }
+
+        const { error: metadataError } = await supabase.auth.updateUser({
+          data: {
+            full_name: nextConfig.fullName,
+            target_net_worth: Number(nextConfig.targetNetWorth),
+            target_timeline_years: Number(nextConfig.timelineYears),
+            legal_disclaimer: nextConfig.legalDisclaimer
+          }
+        });
+
+        if (metadataError) {
+          console.warn('Profile metadata update warning:', metadataError);
+        }
+      }
+
+      if (typeof window !== 'undefined') {
+        const storageKey = buildProfileConfigStorageKey(effectiveUserId, nextConfig.email);
+        window.localStorage.setItem(storageKey, JSON.stringify(nextConfig));
+      }
+
+      setProfileConfigFormData(nextConfig);
+      setProfileConfigSuccess(saveMode === 'target' ? 'Target net worth saved successfully.' : 'Profile configuration saved successfully.');
+    } catch (error) {
+      console.error('Profile configuration save error:', error);
+      setProfileConfigError(error.message || 'Unable to save profile configuration right now.');
+    } finally {
+      setIsSavingProfileConfig(false);
+    }
+  };
+
   // Danger Zone - Delete account with password confirmation
   const handleDeleteAccount = async () => {
     setDeleteAccountError('');
@@ -1132,6 +1381,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     setIsDeletingAccount(true);
 
     try {
+      if (!supabase) {
+        throw new Error('Supabase client is not ready. Please reload and try again.');
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user?.email) {
         throw new Error('No active user found. Please sign in again.');
@@ -1142,19 +1395,53 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         throw new Error('Session verification failed. Please sign in again.');
       }
 
-      const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-      const response = await fetch(`${apiBaseUrl}/account/delete`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({ password })
+      const { data, error } = await supabase.functions.invoke('delete-account', {
+        body: { password }
       });
 
-      const result = await response.json();
-      if (!response.ok || !result?.success) {
-        throw new Error(result?.message || 'Failed to delete account.');
+      if (error) {
+        let message = error.message || 'Failed to delete account.';
+        const context = error.context;
+
+        if (context) {
+          try {
+            if (typeof context.json === 'function') {
+              const details = await context.json();
+              if (details?.message) {
+                message = details.message;
+              }
+            } else if (typeof context.text === 'function') {
+              const rawText = await context.text();
+              try {
+                const parsed = JSON.parse(rawText);
+                if (parsed?.message) {
+                  message = parsed.message;
+                } else if (rawText) {
+                  message = rawText;
+                }
+              } catch {
+                if (rawText) {
+                  message = rawText;
+                }
+              }
+            } else if (typeof context === 'string') {
+              message = context;
+            } else if (typeof context === 'object' && context.message) {
+              message = context.message;
+            }
+          } catch (parseError) {
+            console.warn('Could not parse delete-account function error:', parseError);
+          }
+        }
+
+        if (message.includes('Failed to send a request to the Edge Function')) {
+          message = 'Delete-account function is unreachable. Deploy it with --no-verify-jwt, then try again.';
+        }
+        throw new Error(message);
+      }
+
+      if (!data?.success) {
+        throw new Error(data?.message || 'Failed to delete account.');
       }
 
       setDeleteAccountSuccess('Account deleted successfully. Signing you out...');
@@ -1193,8 +1480,16 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         personal: { balance: 0, currency: 'UGX', loading: false, exists: false },
         agent: { balance: 0, currency: 'USD', loading: false, exists: false },
         business: { balance: 0, currency: 'UGX', loading: false, exists: false },
-        trust: { balance: 0, currency: 'USD', loading: false, exists: false }
+        trust: { balance: 0, currency: 'ICAN', loading: false, exists: false, localCurrency: 'UGX', localSymbol: 'Sh', localValue: 0, groupCount: 0, memberCount: 0, scope: 'personal' }
       };
+
+      const localCountryCode =
+        authUser?.user_metadata?.country ||
+        userProfile?.country ||
+        userProfile?.country_code ||
+        'UG';
+      accounts.trust.localCurrency = CountryService.getCurrencyCode(localCountryCode);
+      accounts.trust.localSymbol = CountryService.getCurrencySymbol(localCountryCode);
 
       // Check if user has agent account - Table doesn't exist yet, commenting out
       // const { data: agentData, error: agentError } = await supabase
@@ -1207,19 +1502,117 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       //   accounts.agent.exists = true;
       // }
 
-      // Check if user has business profiles
-      const { data: businessData, error: businessError } = await supabase
-        .from('business_profiles')
-        .select('id')
-        .eq('user_id', userId)
-        .limit(1);
+      const normalizedEmail = (authUser?.email || userProfile?.email || '').trim().toLowerCase();
 
-      if (!businessError && businessData && businessData.length > 0) {
-        accounts.business.exists = true;
+      // Check if user has owned/co-owned business profiles
+      const [
+        ownedBusinessByUserIdResult,
+        ownedBusinessByEmailResult,
+        coOwnedByUserIdResult,
+        coOwnedByOwnerIdResult,
+        coOwnedByEmailResult
+      ] = await Promise.all([
+        supabase.from('business_profiles').select('id').eq('user_id', userId).limit(1),
+        normalizedEmail
+          ? supabase.from('business_profiles').select('id').ilike('owner_email', normalizedEmail).limit(1)
+          : Promise.resolve({ data: [], error: null }),
+        supabase.from('business_co_owners').select('business_profile_id').eq('user_id', userId).limit(1),
+        supabase.from('business_co_owners').select('business_profile_id').eq('owner_id', userId).limit(1),
+        normalizedEmail
+          ? supabase.from('business_co_owners').select('business_profile_id').ilike('owner_email', normalizedEmail).limit(1)
+          : Promise.resolve({ data: [], error: null })
+      ]);
+
+      const hasOwnedBusinessByUserId = !ownedBusinessByUserIdResult.error && (ownedBusinessByUserIdResult.data?.length || 0) > 0;
+      const hasOwnedBusinessByEmail = !ownedBusinessByEmailResult.error && (ownedBusinessByEmailResult.data?.length || 0) > 0;
+      const hasCoOwnedBusinessByUserId = !coOwnedByUserIdResult.error && (coOwnedByUserIdResult.data?.length || 0) > 0;
+      const hasCoOwnedBusinessByOwnerId = !coOwnedByOwnerIdResult.error && (coOwnedByOwnerIdResult.data?.length || 0) > 0;
+      const hasCoOwnedBusinessByEmail = !coOwnedByEmailResult.error && (coOwnedByEmailResult.data?.length || 0) > 0;
+      accounts.business.exists = (
+        hasOwnedBusinessByUserId ||
+        hasOwnedBusinessByEmail ||
+        hasCoOwnedBusinessByUserId ||
+        hasCoOwnedBusinessByOwnerId ||
+        hasCoOwnedBusinessByEmail
+      );
+
+      // Trust account only appears when user is in at least one trust group
+      let hasTrustGroup = false;
+      let userTrustGroups = [];
+      try {
+        userTrustGroups = await getUserTrustGroups(userId);
+        hasTrustGroup = Array.isArray(userTrustGroups) && userTrustGroups.length > 0;
+      } catch (trustGroupError) {
+        console.warn('Could not verify trust group membership:', trustGroupError);
       }
+      accounts.trust.exists = hasTrustGroup;
+      accounts.trust.groupCount = hasTrustGroup ? userTrustGroups.length : 0;
 
-      // Check if user has trust account (assuming all users have trust potential)
-      accounts.trust.exists = true;
+      if (hasTrustGroup) {
+        try {
+          const trustGroupIds = new Set((userTrustGroups || []).map((group) => group.id).filter(Boolean));
+          const { data: trustMemberRows, error: trustMemberError } = await supabase
+            .from('trust_group_members')
+            .select('group_id, total_contributed, is_active, role')
+            .eq('user_id', userId);
+
+          if (trustMemberError) {
+            throw trustMemberError;
+          }
+
+          const activeMemberRows = (trustMemberRows || []).filter((row) => {
+            const isActive = row?.is_active !== false;
+            const belongsToKnownTrustGroup = trustGroupIds.size === 0 || trustGroupIds.has(row?.group_id);
+            return isActive && belongsToKnownTrustGroup;
+          });
+
+          const adminGroupIds = new Set();
+          (userTrustGroups || []).forEach((group) => {
+            if (group?.id && group?.creator_id === userId) {
+              adminGroupIds.add(group.id);
+            }
+          });
+          activeMemberRows.forEach((row) => {
+            const normalizedRole = String(row?.role || '').toLowerCase();
+            if ((normalizedRole === 'creator' || normalizedRole === 'admin') && row?.group_id) {
+              adminGroupIds.add(row.group_id);
+            }
+          });
+
+          if (adminGroupIds.size > 0) {
+            const { data: adminGroupMembers, error: adminGroupMembersError } = await supabase
+              .from('trust_group_members')
+              .select('group_id, total_contributed, is_active')
+              .in('group_id', Array.from(adminGroupIds));
+
+            if (adminGroupMembersError) {
+              throw adminGroupMembersError;
+            }
+
+            const activeAdminGroupMembers = (adminGroupMembers || []).filter((row) => row?.is_active !== false);
+            accounts.trust.balance = activeAdminGroupMembers.reduce(
+              (sum, row) => sum + (parseFloat(row?.total_contributed) || 0),
+              0
+            );
+            accounts.trust.memberCount = activeAdminGroupMembers.length;
+            accounts.trust.groupCount = adminGroupIds.size;
+            accounts.trust.scope = 'admin';
+          } else {
+            accounts.trust.balance = activeMemberRows.reduce(
+              (sum, row) => sum + (parseFloat(row?.total_contributed) || 0),
+              0
+            );
+            accounts.trust.memberCount = activeMemberRows.length;
+            accounts.trust.scope = 'personal';
+          }
+        } catch (trustBalanceError) {
+          console.warn('Could not load trust contribution balances:', trustBalanceError);
+          accounts.trust.balance = 0;
+          accounts.trust.memberCount = 0;
+          accounts.trust.scope = 'personal';
+        }
+      }
+      accounts.trust.localValue = CountryService.icanToLocal(accounts.trust.balance, localCountryCode);
 
       // Personal account exists for all users
       accounts.personal.exists = true;
@@ -1238,13 +1631,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             accounts.personal.currency = currency;
             accounts.personal.exists = true;
           } else if (currency === 'USD') {
-            // Default to trust wallet for USD (agent account check disabled)
-            accounts.trust.balance = balance;
-            accounts.trust.currency = currency;
-            accounts.trust.exists = true;
-            accounts.trust.balance = balance;
-            accounts.trust.currency = currency;
-            accounts.trust.exists = true;
+            // Keep USD wallet mapped to agent balance (if/when agent account is enabled)
+            accounts.agent.balance = balance;
+            accounts.agent.currency = currency;
           }
         });
       }
@@ -1272,7 +1661,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       
       // Filter available wallet tabs based on existing accounts
       const availableTabs = walletTabs.filter(tab => {
-        const tabKey = tab.name.toLowerCase().replace(' ', '');
+        const tabKey = getWalletTabKey(tab.name);
         return accounts[tabKey]?.exists;
       });
       
@@ -1280,7 +1669,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       
       // Set active tab to first available account
       if (availableTabs.length > 0) {
-        const firstAvailable = availableTabs[0].name.toLowerCase().replace(' ', '');
+        const firstAvailable = getWalletTabKey(availableTabs[0].name);
         setActiveWalletTab(firstAvailable);
       }
       
@@ -1328,6 +1717,22 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
     if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
     return value.toFixed(0);
+  };
+
+  const formatExactIcanBalance = (value) =>
+    (Number(value) || 0).toLocaleString('en-US', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 8
+    });
+
+  const formatWalletBalanceByTab = (tabKey, value) => {
+    if (tabKey === 'trust') {
+      return formatExactIcanBalance(value);
+    }
+    return (Number(value) || 0).toLocaleString('en-US', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2
+    });
   };
 
   const formatSavingsRate = (income, expenses) => {
@@ -1383,6 +1788,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       items: ['Readiness Pillars', 'Profile Configuration', 'Target Net Worth', 'Preferences']
     }
   };
+
+  const formattedTargetNetWorth = formatTargetNetWorth(profileConfigFormData.targetNetWorth);
 
   const actionChips = [
     { label: 'Progress', icon: Building, color: 'bg-gradient-to-br from-blue-500 to-blue-600' },
@@ -1486,16 +1893,26 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 text-white pb-28 overflow-x-hidden">
+    <div className={`min-h-screen text-white overflow-x-hidden ${
+      isWebDashboard
+        ? 'bg-gradient-to-br from-slate-950 via-violet-950 to-slate-950 pb-32'
+        : 'bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 pb-28'
+    }`}>
       {/* ====== HEADER ====== */}
-      <div className="sticky top-0 z-40 bg-gradient-to-b from-slate-950/95 to-purple-950/80 backdrop-blur-md border-b border-purple-500/20">
-        <div className="px-3 py-2.5 sm:px-4 sm:py-3 relative">
+      <div className={`sticky top-0 z-40 border-b ${
+        isWebDashboard
+          ? 'bg-gradient-to-r from-slate-950/95 via-purple-900/80 to-slate-950/95 backdrop-blur-xl border-purple-400/30 shadow-[0_12px_30px_rgba(8,6,24,0.45)]'
+          : 'bg-gradient-to-b from-slate-950/95 to-purple-950/80 backdrop-blur-md border-purple-500/20'
+      }`}>
+        <div className={`px-3 py-2.5 sm:px-4 sm:py-3 relative ${isWebDashboard ? 'max-w-7xl mx-auto' : ''}`}>
           {/* Header Row - Recording Input, Branding & Settings */}
           <div className="flex items-center w-full gap-1.5 sm:gap-2">
             {/* Recording Input Badge - CLICKABLE - Mobile optimized */}
             <button
               onClick={() => setShowRecordTypeModal(true)}
-              className="flex items-center gap-1.5 sm:gap-2 bg-gradient-to-r from-purple-600 to-purple-500 border border-purple-400/50 hover:border-purple-300/80 rounded-full px-3 sm:px-4 py-1.5 sm:py-2.5 hover:bg-gradient-to-r hover:from-purple-500 hover:to-purple-400 transition-all active:scale-95 flex-shrink-0 shadow-lg shadow-purple-500/30 whitespace-nowrap"
+              className={`flex items-center gap-1.5 sm:gap-2 bg-gradient-to-r from-purple-600 to-purple-500 border border-purple-400/50 hover:border-purple-300/80 rounded-full px-3 sm:px-4 py-1.5 sm:py-2.5 hover:bg-gradient-to-r hover:from-purple-500 hover:to-purple-400 transition-all active:scale-95 flex-shrink-0 shadow-lg shadow-purple-500/30 whitespace-nowrap ${
+                isWebDashboard ? 'md:px-5 md:py-3 md:shadow-purple-500/40' : ''
+              }`}
             >
               <Mic className="w-4 sm:w-5 h-4 sm:h-5 text-white flex-shrink-0" />
               <span className="text-xs sm:text-sm font-semibold text-white">Record</span>
@@ -1503,7 +1920,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             </button>
 
             {/* IcanEra Branding - Responsive sizing */}
-            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-serif font-bold text-transparent bg-gradient-to-r from-amber-200 via-yellow-100 to-amber-300 bg-clip-text tracking-wide sm:tracking-wider flex-1 text-center px-1 sm:px-2 leading-tight">
+            <h1 className={`${isWebDashboard ? 'text-3xl md:text-5xl xl:text-6xl' : 'text-2xl sm:text-3xl md:text-4xl lg:text-5xl'} font-serif font-bold text-transparent bg-gradient-to-r from-amber-200 via-yellow-100 to-amber-300 bg-clip-text tracking-wide sm:tracking-wider flex-1 text-center px-1 sm:px-2 leading-tight`}>
               IcanEra
             </h1>
 
@@ -1991,19 +2408,33 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               )}
 
               {/* SETTINGS - PROFILE CONFIGURATION */}
-              {selectedDetail.item === 'Profile Configuration' && (
+              {selectedDetail.tab === 'settings' && selectedDetail.item === 'Profile Configuration' && (
                 <div className="space-y-4">
                   <div className="bg-slate-900/50 border border-purple-500/30 rounded-lg p-4">
                     <div className="space-y-3">
                       <div>
                         <label className="text-xs font-medium text-gray-300 block mb-2">Full Name</label>
-                        <input type="text" defaultValue="GANTA ELON" className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm" />
+                        <input
+                          type="text"
+                          value={profileConfigFormData.fullName}
+                          onChange={(e) => handleProfileConfigFieldChange('fullName', e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
+                        />
                       </div>
                       <div>
                         <label className="text-xs font-medium text-gray-300 block mb-2">Email</label>
-                        <input type="email" defaultValue="gantaelon@gmail.com" className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm" />
+                        <input
+                          type="email"
+                          value={profileConfigFormData.email}
+                          onChange={(e) => handleProfileConfigFieldChange('email', e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
+                        />
                       </div>
-                      <button className="w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg transition font-medium text-sm">
+                      <button
+                        onClick={() => handleSaveProfileConfiguration('full')}
+                        disabled={isSavingProfileConfig}
+                        className="w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-60 text-white rounded-lg transition font-medium text-sm"
+                      >
                         💾 Save Changes
                       </button>
                     </div>
@@ -2012,19 +2443,33 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               )}
 
               {/* SETTINGS - TARGET NET WORTH */}
-              {selectedDetail.item === 'Target Net Worth' && (
+              {selectedDetail.tab === 'settings' && selectedDetail.item === 'Target Net Worth' && (
                 <div className="space-y-4">
                   <div className="bg-slate-900/50 border border-purple-500/30 rounded-lg p-4">
                     <div className="space-y-3">
                       <div>
                         <label className="text-xs font-medium text-gray-300 block mb-2">Target Net Worth (UGX)</label>
-                        <input type="number" defaultValue="1000000" className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm" />
+                        <input
+                          type="text"
+                          value={profileConfigFormData.targetNetWorth}
+                          onChange={(e) => handleProfileConfigFieldChange('targetNetWorth', normalizeTargetNetWorthValue(e.target.value))}
+                          className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
+                        />
                       </div>
                       <div>
                         <label className="text-xs font-medium text-gray-300 block mb-2">Timeline (Years)</label>
-                        <input type="number" defaultValue="5" className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm" />
+                        <input
+                          type="text"
+                          value={profileConfigFormData.timelineYears}
+                          onChange={(e) => handleProfileConfigFieldChange('timelineYears', e.target.value.replace(/[^\d]/g, ''))}
+                          className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
+                        />
                       </div>
-                      <button className="w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg transition font-medium text-sm">
+                      <button
+                        onClick={() => handleSaveProfileConfiguration('target')}
+                        disabled={isSavingProfileConfig}
+                        className="w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-60 text-white rounded-lg transition font-medium text-sm"
+                      >
                         💾 Save Target
                       </button>
                     </div>
@@ -2977,12 +3422,35 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     <div className="space-y-3">
                       <div className="bg-slate-900/50 p-3 rounded">
                         <p className="text-xs text-gray-400">Target Net Worth (UGX)</p>
-                        <p className="text-white font-semibold">1,000,000</p>
+                        <input
+                          type="text"
+                          value={profileConfigFormData.targetNetWorth}
+                          onChange={(e) => handleProfileConfigFieldChange('targetNetWorth', normalizeTargetNetWorthValue(e.target.value))}
+                          className="mt-2 w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
+                        />
+                        <p className="text-xs text-purple-300 mt-2">UGX {formattedTargetNetWorth}</p>
+                        <button
+                          onClick={() => handleSaveProfileConfiguration('target')}
+                          disabled={isSavingProfileConfig}
+                          className="mt-3 w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-60 text-white rounded-lg transition font-medium text-sm"
+                        >
+                          {isSavingProfileConfig ? 'Saving Target...' : 'Save Target Net Worth'}
+                        </button>
                       </div>
                       <div className="bg-slate-900/50 p-3 rounded">
                         <p className="text-xs text-gray-400">Legal Disclaimer</p>
-                        <p className="text-xs text-gray-300 mt-2">NOT LEGAL OR FINANCIAL ADVICE: The ICAN Capital Engine is a risk assessment and organizational tool. All analysis, recommendations, and scores are for informational purposes only. Consult qualified professionals before making legal, financial, or business decisions.</p>
+                        <p className="text-xs text-gray-300 mt-2">{profileConfigFormData.legalDisclaimer}</p>
                       </div>
+                      {profileConfigError && (
+                        <div className="p-2 bg-red-500/20 border border-red-500/40 rounded text-xs text-red-200">
+                          {profileConfigError}
+                        </div>
+                      )}
+                      {profileConfigSuccess && (
+                        <div className="p-2 bg-green-500/20 border border-green-500/40 rounded text-xs text-green-200">
+                          {profileConfigSuccess}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -3454,27 +3922,27 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 {availableWalletTabs.map((tab, idx) => (
                   <button
                     key={idx}
-                    onClick={() => setActiveWalletTab(tab.name.toLowerCase().replace(' ', ''))}
+                    onClick={() => setActiveWalletTab(getWalletTabKey(tab.name))}
                     className={`flex items-center gap-2 px-4 py-2 rounded-lg whitespace-nowrap transition-all transform hover:scale-105 active:scale-95 ${
-                      activeWalletTab === tab.name.toLowerCase().replace(' ', '')
+                      activeWalletTab === getWalletTabKey(tab.name)
                         ? 'bg-gradient-to-r from-teal-500/30 to-teal-600/30 text-teal-300 border border-teal-400/50 shadow-lg shadow-teal-500/20'
                         : 'bg-slate-800/50 text-gray-300 hover:bg-slate-700/50 hover:text-white border border-transparent'
                     }`}
                   >
                     <tab.icon className={`w-5 h-5 transition-all ${
-                      activeWalletTab === tab.name.toLowerCase().replace(' ', '')
+                      activeWalletTab === getWalletTabKey(tab.name)
                         ? 'text-teal-300 animate-pulse'
                         : 'text-gray-400 group-hover:text-white'
                     }`} />
-                    <span className="text-sm font-medium">{tab.name}</span>
+                    <span className="text-sm font-medium">{getWalletTabLabel(tab.name)}</span>
                     
                     {/* Account status indicator */}
                     <div className={`w-2 h-2 rounded-full ${
-                      walletAccounts[tab.name.toLowerCase().replace(' ', '')]?.exists 
+                      walletAccounts[getWalletTabKey(tab.name)]?.exists 
                         ? 'bg-green-400' 
                         : 'bg-red-400'
                     }`} 
-                    title={walletAccounts[tab.name.toLowerCase().replace(' ', '')]?.exists 
+                    title={walletAccounts[getWalletTabKey(tab.name)]?.exists 
                       ? 'Active Account' 
                       : 'No Account'
                     }/>
@@ -3488,7 +3956,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               <p className="text-xs text-gray-400 mb-2 uppercase tracking-wide">Quick Access</p>
               <div className="flex justify-center gap-4">
                 {availableWalletTabs.map((tab, idx) => {
-                  const tabKey = tab.name.toLowerCase().replace(' ', '');
+                  const tabKey = getWalletTabKey(tab.name);
                   const account = walletAccounts[tabKey];
                   const balance = account?.balance || 0;
                   const currency = account?.currency || 'UGX';
@@ -3517,10 +3985,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                             ? 'text-white'
                             : 'text-gray-300 group-hover:text-white'
                         }`}>
-                          {balance.toLocaleString('en-US', {
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 2
-                          })}
+                          {formatWalletBalanceByTab(tabKey, balance)}
                         </div>
                         
                         {/* Currency */}
@@ -3579,9 +4044,24 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         {walletAccounts[activeWalletTab]?.loading ? (
                           <span className="animate-pulse">Loading...</span>
                         ) : (
-                          `${formatCurrency(walletAccounts[activeWalletTab]?.balance || 0)} ${walletAccounts[activeWalletTab]?.currency}`
+                          `${
+                            activeWalletTab === 'trust'
+                              ? formatExactIcanBalance(walletAccounts[activeWalletTab]?.balance || 0)
+                              : formatCurrency(walletAccounts[activeWalletTab]?.balance || 0)
+                          } ${walletAccounts[activeWalletTab]?.currency}`
                         )}
                       </p>
+                      {activeWalletTab === 'trust' && (
+                        <p className="text-[11px] text-purple-200 mt-1">
+                          {walletAccounts.trust?.scope === 'admin' ? 'All members total • ' : ''}
+                          ≈ {walletAccounts.trust?.localSymbol}
+                          {(Number(walletAccounts.trust?.localValue) || 0).toLocaleString('en-US', {
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 2
+                          })}{' '}
+                          {walletAccounts.trust?.localCurrency}
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -3614,6 +4094,33 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         <p className="text-gray-400">Last Updated</p>
                         <p className="text-white font-medium">Just now</p>
                       </div>
+                      {activeWalletTab === 'trust' && (
+                        <div>
+                          <p className="text-gray-400">
+                            {walletAccounts.trust?.scope === 'admin' ? 'Managed Trust Groups' : 'Trust Groups'}
+                          </p>
+                          <p className="text-white font-medium">{walletAccounts.trust?.groupCount || 0}</p>
+                        </div>
+                      )}
+                      {activeWalletTab === 'trust' && (
+                        <div>
+                          <p className="text-gray-400">Members Counted</p>
+                          <p className="text-white font-medium">{walletAccounts.trust?.memberCount || 0}</p>
+                        </div>
+                      )}
+                      {activeWalletTab === 'trust' && (
+                        <div>
+                          <p className="text-gray-400">Local Equivalent</p>
+                          <p className="text-white font-medium">
+                            {walletAccounts.trust?.localSymbol}
+                            {(Number(walletAccounts.trust?.localValue) || 0).toLocaleString('en-US', {
+                              minimumFractionDigits: 0,
+                              maximumFractionDigits: 2
+                            })}{' '}
+                            {walletAccounts.trust?.localCurrency}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -3625,7 +4132,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         <div key={type} className="flex justify-between">
                           <span className="text-gray-400 capitalize">{type}:</span>
                           <span className="text-white font-medium">
-                            {account.loading ? '...' : `${formatCurrency(account.balance)} ${account.currency}`}
+                            {account.loading
+                              ? '...'
+                              : `${type === 'trust' ? formatExactIcanBalance(account.balance) : formatCurrency(account.balance)} ${account.currency}`}
                           </span>
                         </div>
                       ))}
@@ -4149,38 +4658,44 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       <div className="px-4 py-4 bg-purple-900/20 border-y border-purple-500/20">
         <div className="mb-3">
           <p className="text-xs text-gray-400 mb-2">WALLET ACCOUNTS</p>
-          <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+          <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
             {availableWalletTabs.map((tab, idx) => {
-              const tabKey = tab.name.toLowerCase().replace(' ', '');
+              const tabKey = getWalletTabKey(tab.name);
               const account = walletAccounts[tabKey];
               const balance = account?.balance || 0;
               const currency = account?.currency || 'UGX';
+              const tabLabel = getWalletTabLabel(tab.name);
+              const themedBackground = tabKey === 'personal'
+                ? 'from-blue-500/25 to-indigo-500/25'
+                : tabKey === 'trust'
+                  ? 'from-violet-500/25 to-purple-500/25'
+                  : 'from-slate-500/20 to-slate-400/20';
               
               return (
                 <button
                   key={idx}
                   onClick={() => {
                     setActiveWalletTab(tabKey);
-                    setCurrentBalance(balance.toLocaleString('en-US', {
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 2
-                    }));
+                    setCurrentBalance(formatWalletBalanceByTab(tabKey, balance));
                   }}
-                  className={`px-3 py-2 rounded-full border transition flex flex-col items-center gap-1 min-w-[70px] ${
+                  className={`relative min-w-[84px] h-[92px] px-3 py-2 rounded-[30px] border transition-all duration-200 flex flex-col items-center justify-center gap-1 bg-gradient-to-br ${themedBackground} ${
                     activeWalletTab === tabKey
-                      ? 'border-purple-400 bg-purple-600/50 text-purple-100'
-                      : 'border-purple-500/40 bg-purple-900/30 hover:bg-purple-900/50 text-purple-300'
+                      ? 'border-purple-300/90 ring-2 ring-purple-300/50 text-purple-100 shadow-lg shadow-purple-900/40 scale-[1.03]'
+                      : 'border-purple-500/40 hover:border-purple-400/70 text-purple-200 hover:text-purple-100'
                   }`}
                 >
                   <tab.icon className="w-4 h-4" />
-                  <span className="text-xs font-medium whitespace-nowrap">{tab.name}</span>
+                  <span className="text-xs font-semibold whitespace-nowrap">{tabLabel}</span>
                   <span className="text-[10px] font-semibold">
-                    {balance.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    {formatWalletBalanceByTab(tabKey, balance)}
                   </span>
-                  <span className="text-[9px] text-gray-400">{currency}</span>
+                  <span className={`text-[9px] ${activeWalletTab === tabKey ? 'text-purple-200' : 'text-gray-400'}`}>{currency}</span>
                 </button>
               );
             })}
+            {availableWalletTabs.length === 0 && (
+              <div className="text-xs text-gray-400 py-2">No wallet accounts available yet.</div>
+            )}
           </div>
         </div>
 
@@ -4327,8 +4842,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           ? 'bg-transparent' 
           : 'bg-transparent'
       }`}>
-        <div className="flex items-center justify-between px-2 py-3">
-          {/* Profile */}
+        <div className={isWebDashboard
+          ? 'flex items-center justify-between py-3 px-4 sm:px-6 max-w-3xl mx-auto mb-4 rounded-2xl border border-purple-400/30 bg-slate-900/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(36,18,58,0.45)]'
+          : 'flex items-center justify-between px-2 py-3'
+        }>
+          {/* Home */}
           <button
             onClick={() => { 
               setShowProfilePanel(false); 
@@ -4336,14 +4854,14 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               setShowWalletPanel(false);
               setShowTrustPanel(false);
               setShowCmmsPanel(false);
-              setActiveBottomTab('profile'); 
+              setActiveBottomTab('home'); 
             }}
             className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 transition ${
               showPitchinPanel ? 'opacity-40' : 'opacity-100'
             }`}
           >
-            <User className={`w-6 h-6 ${showPitchinPanel ? 'text-gray-400/60' : 'text-purple-400'}`} />
-            <span className={`text-xs font-medium ${showPitchinPanel ? 'text-gray-400/60' : 'text-gray-300'}`}>Profile</span>
+            <Home className={`w-6 h-6 ${showPitchinPanel ? 'text-gray-400/60' : 'text-purple-400'}`} />
+            <span className={`text-xs font-medium ${showPitchinPanel ? 'text-gray-400/60' : 'text-gray-300'}`}>Home</span>
           </button>
 
           {/* Pitchin */}

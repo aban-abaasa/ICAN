@@ -84,21 +84,34 @@ export const getPublicTrustGroups = async () => {
         monthly_contribution,
         currency,
         status,
-        created_at,
-        trust_group_members(count)
+        created_at
       `)
       .eq('status', 'active')
-      .eq('trust_group_members.is_active', true)
       .order('created_at', { ascending: false })
       .limit(50);
 
     if (error) throw error;
-    
-    // Transform data to add member_count
-    return (data || []).map(group => ({
+
+    const groups = data || [];
+    if (groups.length === 0) return [];
+
+    const groupIds = groups.map(group => group.id);
+    const { data: activeMembers, error: activeMembersError } = await sb
+      .from('trust_group_members')
+      .select('group_id')
+      .in('group_id', groupIds)
+      .eq('is_active', true);
+
+    if (activeMembersError) throw activeMembersError;
+
+    const memberCounts = (activeMembers || []).reduce((acc, member) => {
+      acc[member.group_id] = (acc[member.group_id] || 0) + 1;
+      return acc;
+    }, {});
+
+    return groups.map(group => ({
       ...group,
-      member_count: group.trust_group_members?.length || 0,
-      trust_group_members: undefined
+      member_count: memberCounts[group.id] || 0
     }));
   } catch (error) {
     console.error('Error fetching public TRUST groups:', {

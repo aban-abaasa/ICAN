@@ -37,6 +37,8 @@ import agentService from '../services/agentService';
 import { walletAccountService } from '../services/walletAccountService';
 import universalTransactionService from '../services/universalTransactionService';
 import { getSupabaseClient } from '../lib/supabase/client';
+import { getUserTrustGroups } from '../services/trustService';
+import { CountryService } from '../services/countryService';
 import AgentDashboard from './AgentDashboard';
 import UnifiedApprovalModal from './UnifiedApprovalModal';
 import CandlestickChart from './CandlestickChart';
@@ -150,6 +152,17 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
   const [balancesLoading, setBalancesLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState(null);
   const [userEmail, setUserEmail] = useState(null);
+  const [trustAccountSummary, setTrustAccountSummary] = useState({
+    loading: false,
+    exists: false,
+    scope: 'personal',
+    groupsCount: 0,
+    memberCount: 0,
+    contributedIcan: 0,
+    localCurrency: 'UGX',
+    localSymbol: 'Sh',
+    localValue: 0
+  });
 
   // 📋 Pending Cash-In Requests from Agents (Withdraw tab)
   const [pendingCashInRequests, setPendingCashInRequests] = useState([]);
@@ -440,6 +453,128 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
     }
   };
 
+  // 💎 Load trust account summary (exact contributed ICAN + local equivalent)
+  const loadTrustAccountSummary = async (userId, countryCode = 'UG') => {
+    const normalizedCountryCode = countryCode || 'UG';
+    const localCurrency = CountryService.getCurrencyCode(normalizedCountryCode);
+    const localSymbol = CountryService.getCurrencySymbol(normalizedCountryCode);
+
+    try {
+      setTrustAccountSummary((prev) => ({
+        ...prev,
+        loading: true,
+        localCurrency,
+        localSymbol
+      }));
+
+      const userGroups = await getUserTrustGroups(userId);
+      const trustGroupIds = new Set((userGroups || []).map((group) => group.id).filter(Boolean));
+      const hasTrustMembership = trustGroupIds.size > 0;
+
+      if (!hasTrustMembership) {
+        setTrustAccountSummary({
+          loading: false,
+          exists: false,
+          scope: 'personal',
+          groupsCount: 0,
+          memberCount: 0,
+          contributedIcan: 0,
+          localCurrency,
+          localSymbol,
+          localValue: 0
+        });
+        return;
+      }
+
+      const supabase = getSupabaseClient();
+      const { data: memberRows, error: memberError } = await supabase
+        .from('trust_group_members')
+        .select('group_id, total_contributed, is_active, role')
+        .eq('user_id', userId);
+
+      if (memberError) {
+        throw memberError;
+      }
+
+      const activeRows = (memberRows || []).filter((row) => {
+        const isActive = row?.is_active !== false;
+        const belongsToKnownGroup = trustGroupIds.size === 0 || trustGroupIds.has(row?.group_id);
+        return isActive && belongsToKnownGroup;
+      });
+
+      const adminGroupIds = new Set();
+      (userGroups || []).forEach((group) => {
+        if (group?.id && group?.creator_id === userId) {
+          adminGroupIds.add(group.id);
+        }
+      });
+      activeRows.forEach((row) => {
+        const normalizedRole = String(row?.role || '').toLowerCase();
+        if ((normalizedRole === 'creator' || normalizedRole === 'admin') && row?.group_id) {
+          adminGroupIds.add(row.group_id);
+        }
+      });
+
+      let contributedIcan = 0;
+      let memberCount = 0;
+      let groupsCount = trustGroupIds.size;
+      let scope = 'personal';
+
+      if (adminGroupIds.size > 0) {
+        const { data: adminGroupMembers, error: adminGroupMembersError } = await supabase
+          .from('trust_group_members')
+          .select('group_id, total_contributed, is_active')
+          .in('group_id', Array.from(adminGroupIds));
+
+        if (adminGroupMembersError) {
+          throw adminGroupMembersError;
+        }
+
+        const activeAdminGroupMembers = (adminGroupMembers || []).filter((row) => row?.is_active !== false);
+        contributedIcan = activeAdminGroupMembers.reduce(
+          (sum, row) => sum + (parseFloat(row?.total_contributed) || 0),
+          0
+        );
+        memberCount = activeAdminGroupMembers.length;
+        groupsCount = adminGroupIds.size;
+        scope = 'admin';
+      } else {
+        contributedIcan = activeRows.reduce(
+          (sum, row) => sum + (parseFloat(row?.total_contributed) || 0),
+          0
+        );
+        memberCount = activeRows.length;
+      }
+
+      const localValue = CountryService.icanToLocal(contributedIcan, normalizedCountryCode);
+
+      setTrustAccountSummary({
+        loading: false,
+        exists: true,
+        scope,
+        groupsCount,
+        memberCount,
+        contributedIcan,
+        localCurrency,
+        localSymbol,
+        localValue
+      });
+    } catch (error) {
+      console.error('❌ Error loading trust account summary:', error);
+      setTrustAccountSummary({
+        loading: false,
+        exists: false,
+        scope: 'personal',
+        groupsCount: 0,
+        memberCount: 0,
+        contributedIcan: 0,
+        localCurrency,
+        localSymbol,
+        localValue: 0
+      });
+    }
+  };
+
   // 📋 Load Pending Cash-In Requests (from agents, awaiting user confirmation)
   const loadPendingCashInRequests = async (userId) => {
     try {
@@ -551,6 +686,12 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
   const registeredCurrency = registeredCurrencyFromDB || userAccount?.preferred_currency || 'USD';
   const currentWallet = walletData[registeredCurrency];
 
+  const formatIcanValue = (amount) =>
+    (Number(amount) || 0).toLocaleString('en-US', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 8
+    });
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -586,7 +727,6 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
         setUserCountry(userCountryValue); // Set state for use in render
         
         // Get currency for registered country
-        const CountryService = (await import('../services/countryService')).CountryService;
         const registeredCurrency = CountryService.getCurrencyCode(userCountryValue);
         setRegisteredCurrencyFromDB(registeredCurrency);
         setSelectedCurrency(registeredCurrency); // Update form to show user's actual country currency
@@ -597,6 +737,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
 
         // Load wallet balances
         await loadWalletBalances(user.id);
+        await loadTrustAccountSummary(user.id, userCountryValue);
 
         // Check for wallet account
         setAccountCheckLoading(true);
@@ -630,6 +771,11 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (!currentUserId) return;
+    loadTrustAccountSummary(currentUserId, userCountry || 'UG');
+  }, [currentUserId, userCountry]);
 
   // 🏢 Auto-fill business account creation form
   useEffect(() => {
@@ -2952,7 +3098,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
           <div className="relative group">
             <button
               className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
-                ['transactions', 'withdraw', 'agent', 'cards', 'business', 'settings'].includes(activeTab)
+                ['transactions', 'withdraw', 'agent', 'cards', 'business', 'trust', 'settings'].includes(activeTab)
                   ? 'bg-gradient-to-r from-slate-600 to-slate-700 text-white shadow-lg shadow-slate-500/30'
                   : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
               }`}
@@ -3047,6 +3193,18 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
               >
                 <Store className="w-4 h-4" />
                 Business Accounts
+              </button>
+
+              <button
+                onClick={() => setActiveTab('trust')}
+                className={`w-full px-4 py-2 text-left flex items-center gap-2 transition-all ${
+                  activeTab === 'trust'
+                    ? 'bg-violet-500/30 text-violet-300'
+                    : 'text-gray-300 hover:bg-slate-700'
+                }`}
+              >
+                <Lock className="w-4 h-4" />
+                Trust Account
               </button>
 
               <button
@@ -3601,6 +3759,74 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
                 <DollarSign className="w-12 h-12 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">No business accounts available</p>
                 <p className="text-xs text-gray-500 mt-1">Create a business profile to add a business account</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Trust Account Tab */}
+      {activeTab === 'trust' && (
+        <div className="space-y-4">
+          <div className="glass-card p-6 border border-violet-500/30 bg-gradient-to-br from-violet-900/20 to-slate-900/20">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 rounded-lg bg-violet-500/30">
+                <Lock className="w-6 h-6 text-violet-300" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-white">Trust Account</h3>
+                <p className="text-gray-400 text-sm">
+                  {trustAccountSummary.scope === 'admin'
+                    ? 'Exact ICAN total for all members in groups you manage'
+                    : 'Exact ICAN contribution value with local currency equivalent'}
+                </p>
+              </div>
+            </div>
+
+            {trustAccountSummary.loading ? (
+              <div className="text-center py-10">
+                <div className="animate-spin w-8 h-8 border-2 border-violet-400 border-t-transparent rounded-full mx-auto mb-3"></div>
+                <p className="text-sm text-gray-400">Loading trust account...</p>
+              </div>
+            ) : !trustAccountSummary.exists ? (
+              <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-5 text-center">
+                <p className="text-sm text-gray-300">No trust group membership found.</p>
+                <p className="text-xs text-gray-500 mt-1">Join or create a trust group in the Trust module to activate this account.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-slate-800/60 border border-violet-500/30 rounded-lg p-4">
+                    <p className="text-xs text-gray-400 mb-1">
+                      {trustAccountSummary.scope === 'admin' ? 'Total Trust Balance (All Members)' : 'Available Contribution'}
+                    </p>
+                    <p className="text-2xl font-bold text-violet-200">₿ {formatIcanValue(trustAccountSummary.contributedIcan)} ICAN</p>
+                  </div>
+                  <div className="bg-slate-800/60 border border-violet-500/30 rounded-lg p-4">
+                    <p className="text-xs text-gray-400 mb-1">Local Equivalent</p>
+                    <p className="text-2xl font-bold text-emerald-300">
+                      {trustAccountSummary.localSymbol}
+                      {(Number(trustAccountSummary.localValue) || 0).toLocaleString('en-US', {
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 2
+                      })}{' '}
+                      {trustAccountSummary.localCurrency}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-slate-800/40 border border-slate-700 rounded-lg p-4 flex items-center justify-between">
+                    <span className="text-sm text-gray-400">
+                      {trustAccountSummary.scope === 'admin' ? 'Managed Trust Groups' : 'Active Trust Groups'}
+                    </span>
+                    <span className="text-lg font-bold text-white">{trustAccountSummary.groupsCount}</span>
+                  </div>
+                  <div className="bg-slate-800/40 border border-slate-700 rounded-lg p-4 flex items-center justify-between">
+                    <span className="text-sm text-gray-400">Members Counted</span>
+                    <span className="text-lg font-bold text-white">{trustAccountSummary.memberCount}</span>
+                  </div>
+                </div>
               </div>
             )}
           </div>

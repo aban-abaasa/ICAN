@@ -80,6 +80,9 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
   const [selectedMobilePitch, setSelectedMobilePitch] = useState(null); // selected pitch for mobile detail
   const [showSHAREHub, setShowSHAREHub] = useState(false); // show SHAREHub modal on mobile
   const [videoPlayerPitch, setVideoPlayerPitch] = useState(null); // pitch for fullscreen video player
+  const [isDesktopView, setIsDesktopView] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 1024 : false
+  );
   const [mutedVideos, setMutedVideos] = useState(new Set()); // track which videos are unmuted (all start muted)
   const [currentVisiblePitch, setCurrentVisiblePitch] = useState(null); // track currently visible pitch for web bottom nav
   const videoRefs = useRef({}); // refs to video elements for controlling sound
@@ -158,6 +161,24 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
     };
 
     initialize();
+  }, []);
+
+  // Keep desktop/mobile layout in sync with viewport width
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const mediaQuery = window.matchMedia('(min-width: 1024px)');
+    const handleViewportChange = (event) => setIsDesktopView(event.matches);
+
+    setIsDesktopView(mediaQuery.matches);
+
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handleViewportChange);
+      return () => mediaQuery.removeEventListener('change', handleViewportChange);
+    }
+
+    mediaQuery.addListener(handleViewportChange);
+    return () => mediaQuery.removeListener(handleViewportChange);
   }, []);
 
   // Handle tab changes and smart search with relevance scoring
@@ -983,6 +1004,231 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
     return date.toLocaleDateString();
   };
 
+  const renderPitchVideoFeed = (desktopMode = false) => {
+    const feedOuterClass = desktopMode
+      ? 'h-[calc(100vh-10.5rem)] w-full px-4 sm:px-6 lg:px-8 pb-6'
+      : 'h-full w-full flex items-center justify-center';
+    const feedFrameClass = desktopMode
+      ? 'mx-auto h-full w-full max-w-[460px] rounded-[28px] border border-white/10 bg-black/80 shadow-[0_0_40px_rgba(0,0,0,0.45)] overflow-hidden'
+      : 'w-full h-full';
+    const pitchSectionClass = desktopMode
+      ? 'relative w-full h-full min-h-full snap-start bg-black'
+      : 'relative w-full h-full min-h-screen snap-start bg-black';
+
+    return (
+      <div className={feedOuterClass}>
+        <div className={feedFrameClass}>
+          <div className="relative w-full h-full overflow-y-auto snap-y snap-mandatory scroll-smooth" ref={videoScrollRef}>
+            {loading ? (
+              <div className={`${desktopMode ? 'absolute' : 'fixed'} inset-0 z-[60] bg-black flex items-center justify-center overflow-hidden`}>
+                <div className="absolute inset-0 w-full h-full">
+                  <div className="w-full h-full bg-gradient-to-br from-purple-900 via-black to-pink-900">
+                    <div className="absolute top-0 left-0 w-96 h-96 bg-purple-500/30 rounded-full blur-3xl animate-blob"></div>
+                    <div className="absolute top-0 right-0 w-96 h-96 bg-pink-500/30 rounded-full blur-3xl animate-blob animation-delay-2000"></div>
+                    <div className="absolute bottom-0 left-1/2 w-96 h-96 bg-orange-500/30 rounded-full blur-3xl animate-blob animation-delay-4000"></div>
+                  </div>
+                  <div className="absolute inset-0 bg-black/40"></div>
+                </div>
+
+                <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                  <div className="absolute top-20 left-10 animate-float" style={{ animationDelay: '0s' }}>
+                    <Briefcase className="w-16 h-16 text-white/20 drop-shadow-lg" />
+                  </div>
+                  <div className="absolute top-40 right-20 animate-float" style={{ animationDelay: '0.5s' }}>
+                    <Users className="w-20 h-20 text-white/20 drop-shadow-lg" />
+                  </div>
+                  <div className="absolute bottom-32 left-20 animate-float" style={{ animationDelay: '1s' }}>
+                    <Zap className="w-14 h-14 text-white/20 drop-shadow-lg" />
+                  </div>
+                  <div className="absolute bottom-20 right-32 animate-float" style={{ animationDelay: '1.5s' }}>
+                    <Share2 className="w-12 h-12 text-white/20 drop-shadow-lg" />
+                  </div>
+                  <div className="absolute top-1/3 left-1/4 animate-float" style={{ animationDelay: '2s' }}>
+                    <Heart className="w-18 h-18 text-white/20 drop-shadow-lg" />
+                  </div>
+                  <div className="absolute top-1/2 right-1/4 animate-float" style={{ animationDelay: '2.5s' }}>
+                    <Play className="w-16 h-16 text-white/20 drop-shadow-lg" />
+                  </div>
+                </div>
+
+                <div className="relative z-10 text-center space-y-6 px-4">
+                  <div className="flex justify-center mb-6">
+                    <div className="relative">
+                      <Briefcase className="w-24 h-24 text-white animate-pulse-slow drop-shadow-2xl" />
+                      <div className="absolute inset-0 bg-purple-500/50 blur-3xl animate-pulse"></div>
+                    </div>
+                  </div>
+                  <h1 className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-orange-400 animate-gradient-x">
+                    Pitchin
+                  </h1>
+                  <p className="text-xl text-gray-300 font-light tracking-wide animate-fade-in">
+                    Where Ideas Meet Investment
+                  </p>
+                  <div className="flex items-center justify-center gap-2 pt-4">
+                    <div className="w-3 h-3 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
+                    <div className="w-3 h-3 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                    <div className="w-3 h-3 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                  </div>
+                  <p className="text-sm text-gray-400 animate-pulse">
+                    Loading amazing pitches...
+                  </p>
+                  <div className="grid grid-cols-3 gap-4 mt-8 max-w-md mx-auto">
+                    <div className="bg-white/5 backdrop-blur-sm rounded-lg p-3 border border-white/10 animate-fade-in" style={{ animationDelay: '0.3s' }}>
+                      <div className="text-2xl font-bold text-purple-400">100+</div>
+                      <div className="text-xs text-gray-400">Pitches</div>
+                    </div>
+                    <div className="bg-white/5 backdrop-blur-sm rounded-lg p-3 border border-white/10 animate-fade-in" style={{ animationDelay: '0.6s' }}>
+                      <div className="text-2xl font-bold text-pink-400">50+</div>
+                      <div className="text-xs text-gray-400">Investors</div>
+                    </div>
+                    <div className="bg-white/5 backdrop-blur-sm rounded-lg p-3 border border-white/10 animate-fade-in" style={{ animationDelay: '0.9s' }}>
+                      <div className="text-2xl font-bold text-orange-400">$1M+</div>
+                      <div className="text-xs text-gray-400">Funded</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black to-transparent"></div>
+              </div>
+            ) : filteredPitches.length === 0 ? (
+              <div className="col-span-full text-center py-12">
+                <Zap className="w-12 h-12 text-slate-500 mx-auto mb-4" />
+                <p className="text-slate-400">No pitches available yet</p>
+              </div>
+            ) : (
+              filteredPitches.map((pitch) => (
+                <div key={pitch.id} className={pitchSectionClass}>
+                  <div className="absolute inset-0 w-full h-full bg-gradient-to-br from-purple-600 to-pink-600">
+                    {!pitch.video_url || videoErrors[pitch.id] ? (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <AlertCircle className="w-12 h-12 text-slate-500" />
+                      </div>
+                    ) : (
+                      <video
+                        ref={el => { if (el) videoRefs.current[pitch.id] = el; }}
+                        src={pitch.video_url}
+                        className={desktopMode ? 'w-full h-full object-contain bg-black' : 'w-full h-full object-cover'}
+                        crossOrigin="anonymous"
+                        autoPlay
+                        muted
+                        loop
+                        playsInline
+                        onError={(event) => handleVideoError(pitch.id, event)}
+                        onLoadedMetadata={(event) => handleVideoLoadedMetadata(pitch.id, event)}
+                      />
+                    )}
+                  </div>
+
+                  <div className="absolute inset-0 z-20 pointer-events-none">
+                    <button
+                      onClick={() => toggleVideoSound(pitch.id)}
+                      className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-auto"
+                    >
+                      <div className="px-4 py-2 rounded-full bg-transparent flex items-center gap-2 transition-all">
+                        {mutedVideos.has(pitch.id) ? (
+                          <>
+                            <span className="text-2xl drop-shadow-lg">🔊</span>
+                            <span className="text-white text-sm font-semibold drop-shadow-lg">Sound ON</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-2xl drop-shadow-lg">🔇</span>
+                            <span className="text-white text-sm font-semibold drop-shadow-lg">Tap for sound</span>
+                          </>
+                        )}
+                      </div>
+                    </button>
+
+                    <div className="absolute right-2 bottom-20 flex flex-col gap-2 pointer-events-auto">
+                      <button
+                        onClick={() => handleLike(pitch.id)}
+                        className="flex flex-col items-center gap-0.5"
+                        title="Like"
+                      >
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
+                          likedPitches.has(pitch.id)
+                            ? 'bg-red-500/80'
+                            : 'bg-white/20 hover:bg-white/30 backdrop-blur-sm'
+                        }`}>
+                          <Heart className={`w-4 h-4 ${likedPitches.has(pitch.id) ? 'text-white fill-white' : 'text-white drop-shadow-lg'}`} />
+                        </div>
+                        <span className="text-white text-[9px] font-bold drop-shadow-lg">{pitch.likes_count || 0}</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleOpenComments(pitch.id)}
+                        className="flex flex-col items-center gap-0.5"
+                        title="Comment"
+                      >
+                        <div className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm flex items-center justify-center transition-all">
+                          <MessageCircle className="w-4 h-4 text-white drop-shadow-lg" />
+                        </div>
+                        <span className="text-white text-[9px] font-bold drop-shadow-lg">{pitch.comments_count || 0}</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleShare(pitch.id)}
+                        className="flex flex-col items-center gap-0.5"
+                        title="Share"
+                      >
+                        <div className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm flex items-center justify-center transition-all">
+                          <Share2 className="w-4 h-4 text-white drop-shadow-lg" />
+                        </div>
+                        <span className="text-white text-[9px] font-bold drop-shadow-lg">{pitch.shares_count || 0}</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleSmartContractClick(pitch)}
+                        className="flex flex-col items-center gap-0.5"
+                        title="Invest"
+                      >
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
+                          investedPitches.has(pitch.id)
+                            ? 'bg-green-500/80'
+                            : 'bg-white/10 hover:bg-white/20 backdrop-blur-sm'
+                        }`}>
+                          <Briefcase className="w-4 h-4 text-white drop-shadow-lg" />
+                        </div>
+                        <span className={`text-[9px] font-bold drop-shadow-lg ${
+                          investedPitches.has(pitch.id) ? 'text-green-300' : 'text-white'
+                        }`}>
+                          {pitch.invests_count || 0}
+                        </span>
+                        <span className="text-white text-[7px] font-medium drop-shadow-lg">Invest</span>
+                      </button>
+
+                      <button
+                        onClick={handleCreatePitchClick}
+                        className="flex flex-col items-center gap-0.5"
+                        title="Create"
+                      >
+                        <div className="w-9 h-9 rounded-full bg-pink-500/80 hover:bg-pink-500 flex items-center justify-center transition-all">
+                          <Plus className="w-4 h-4 text-white drop-shadow-lg" />
+                        </div>
+                        <span className="text-pink-300 text-[9px] font-bold drop-shadow-lg">Create</span>
+                      </button>
+
+                      <button
+                        onClick={() => setShowProfileSelector(true)}
+                        className="flex flex-col items-center gap-0.5"
+                        title="Profile"
+                      >
+                        <div className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm flex items-center justify-center transition-all">
+                          <Building2 className="w-4 h-4 text-white drop-shadow-lg" />
+                        </div>
+                        <span className="text-white text-[9px] font-bold drop-shadow-lg">Profile</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-hidden">
       {/* Demo Mode Banner */}
@@ -1335,8 +1581,8 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
       )}
       */}
 
-      {/* Main Content - Full screen mobile UI on all devices */}
-      <div className="fixed inset-0 w-screen h-screen bg-gradient-to-br from-slate-900 via-purple-900/30 to-slate-900 overflow-hidden">
+      {/* Main Content */}
+      <div className={isDesktopView ? "w-full" : "fixed inset-0 w-screen h-screen bg-gradient-to-br from-slate-900 via-purple-900/30 to-slate-900 overflow-hidden"}>
         {showRecorder ? (
           <div className="w-full h-full flex flex-col items-center justify-start overflow-y-auto">
             <button
@@ -1361,10 +1607,11 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
           </div>
         ) : (
           <>
-            {/* Pitch Feed - Full-Screen TikTok-Style with Snap Scroll */}
-            {/* Mobile UI for both mobile and web - no responsive changes */}
-            <div className="h-full w-full flex items-center justify-center">
-              <div className="relative w-full h-full overflow-y-auto snap-y snap-mandatory scroll-smooth" ref={videoScrollRef}>
+            {isDesktopView ? renderPitchVideoFeed(true) : (
+              <>
+                {/* Pitch Feed - Full-Screen TikTok-Style with Snap Scroll */}
+                <div className="h-full w-full flex items-center justify-center">
+                  <div className="relative w-full h-full overflow-y-auto snap-y snap-mandatory scroll-smooth" ref={videoScrollRef}>
               {loading ? (
                 // Creative Full-Screen Loading Experience with Video Preview
                 <div className="fixed inset-0 z-[60] bg-black flex items-center justify-center overflow-hidden">
@@ -1608,14 +1855,16 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                   </div>
                 ))
               )}
-              </div>
-            </div>
+                  </div>
+                </div>
+              </>
+            )}
           </>
         )}
       </div>
 
       {/* Bottom Action Bar - Web View Only - Hidden on Mobile */}
-      {!showRecorder && filteredPitches.length > 0 && (currentVisiblePitch || filteredPitches[0]) && (
+      {!showRecorder && !isDesktopView && filteredPitches.length > 0 && (currentVisiblePitch || filteredPitches[0]) && (
         <div className="hidden sm:block max-w-7xl mx-auto px-6 py-3">
             <div className="flex items-center justify-between">
               {/* Left - Pitch Info */}
@@ -2341,7 +2590,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
               <video
                 ref={el => { if (el) videoRefs.current[`player-${videoPlayerPitch.id}`] = el; }}
                 src={videoPlayerPitch.video_url}
-                className="w-full h-full object-cover"
+                className={isDesktopView ? 'w-full h-full object-contain bg-black' : 'w-full h-full object-cover'}
                 controls
                 autoPlay
                 crossOrigin="anonymous"

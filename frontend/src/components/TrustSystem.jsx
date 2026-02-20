@@ -945,7 +945,7 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
                         Group Members
                       </p>
                       <p className="text-blue-400 font-bold text-lg mt-1">{group.member_count || 0}/{group.max_members}</p>
-                      <p className="text-blue-300/60 text-xs mt-1">{group.max_members - (group.member_count || 0)} spots available</p>
+                      <p className="text-blue-300/60 text-xs mt-1">{Math.max(0, group.max_members - (group.member_count || 0))} spots available</p>
                     </div>
 
                     {/* Monthly Contribution & Total Saved */}
@@ -1172,16 +1172,16 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
                     <p className="text-slate-400 text-sm mt-2">Each member contributes this amount in ICAN coins monthly</p>
                 </div>
 
-                {/* Group ICAN Wallet Setup */}
+                {/* Trust ICAN Wallet Setup */}
                 <div className="border-2 border-amber-500/30 rounded-lg p-4 bg-amber-900/10">
                   <h3 className="text-white font-bold mb-3 flex items-center gap-2">
                     <Wallet size={20} className="text-amber-400" />
-                    Group ICAN Wallet Setup (Required)
+                    Trust ICAN Wallet Setup (Required)
                   </h3>
                   
                   {!groupForm.walletCreated ? (
                     <div className="space-y-3">
-                      <p className="text-slate-300 text-sm">Every group needs a dedicated ICAN wallet for member transactions and withdrawals.</p>
+                      <p className="text-slate-300 text-sm">Every trust group needs a dedicated ICAN wallet for member transactions and withdrawals.</p>
                       <button
                         type="button"
                         onClick={() => {
@@ -1194,7 +1194,7 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
                         }}
                         className="w-full px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors font-medium text-sm"
                       >
-                        + Create Group ICAN Wallet
+                        + Create Trust ICAN Wallet
                       </button>
                     </div>
                   ) : (
@@ -1224,7 +1224,7 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
                   {!groupForm.walletCreated ? (
                     <>
                       <Wallet size={20} />
-                      Setup Group Wallet First
+                      Setup Trust Wallet First
                     </>
                   ) : loading ? (
                     <>
@@ -1499,7 +1499,7 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
                             <div className="mb-4 p-3 border border-emerald-500/40 bg-emerald-500/10 rounded-lg">
                               <p className="text-emerald-400 text-xs sm:text-sm font-semibold flex items-center gap-2">
                                 <span>✅</span>
-                                <span>Group ICAN Wallet Active</span>
+                                <span>Trust ICAN Wallet Active</span>
                               </p>
                               <div className="mt-2 space-y-1.5 text-xs text-emerald-300/80">
                                 <p className="flex items-start gap-2">
@@ -1520,12 +1520,12 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
                             <div className="mb-4 p-3 border border-amber-500/40 bg-amber-500/10 rounded-lg animate-pulse">
                               <p className="text-amber-400 text-xs sm:text-sm font-semibold flex items-center gap-2">
                                 <span>⏳</span>
-                                <span>Setting Up Group ICAN Wallet...</span>
+                                <span>Setting Up Trust ICAN Wallet...</span>
                               </p>
                               <div className="mt-2 space-y-1.5 text-xs text-amber-300/80">
                                 <p className="flex items-start gap-2">
                                   <span>•</span>
-                                  <span>Creating secure group wallet</span>
+                                  <span>Creating secure trust wallet</span>
                                 </p>
                                 <p className="flex items-start gap-2">
                                   <span>•</span>
@@ -1642,7 +1642,7 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
                     <span>👥</span> Group Size
                   </p>
                   <p className="text-2xl sm:text-3xl font-bold text-blue-400 mt-2">{selectedGroup.member_count || 0}/{selectedGroup.max_members}</p>
-                  <p className="text-blue-300/60 text-xs mt-1">{selectedGroup.max_members - (selectedGroup.member_count || 0)} spots available</p>
+                  <p className="text-blue-300/60 text-xs mt-1">{Math.max(0, selectedGroup.max_members - (selectedGroup.member_count || 0))} spots available</p>
                 </div>
 
                 {/* YOUR CONTRIBUTION CARD - Collapsible Personal Savings */}
@@ -1856,7 +1856,7 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
                     : 'text-slate-400 hover:text-slate-300'
                 }`}
               >
-                💰 Group Account
+                💰 Trust Account
               </button>
               <button
                 onClick={() => setManageModalTab('members')}
@@ -1934,7 +1934,7 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
               {manageModalTab === 'account' && (
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
-                    <h3 className="font-bold text-white text-base sm:text-lg">💰 Group ICAN Account</h3>
+                    <h3 className="font-bold text-white text-base sm:text-lg">💰 Trust ICAN Account</h3>
                     <button
                       onClick={async () => {
                         console.log('🔄 Manually refreshing group data from database...');
@@ -2076,7 +2076,7 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
                     <div className="bg-emerald-500/10 border border-emerald-500/40 rounded-lg p-4">
                       <p className="text-emerald-400 text-sm font-semibold flex items-center gap-2 mb-3">
                         <span>✅</span>
-                        <span>Group ICAN Wallet Active</span>
+                        <span>Trust ICAN Wallet Active</span>
                       </p>
                       <div className="space-y-2 text-xs sm:text-sm text-emerald-300/80">
                         <p className="flex items-start gap-2">
@@ -2093,7 +2093,7 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
                     <div className="bg-amber-500/10 border border-amber-500/40 rounded-lg p-4 animate-pulse">
                       <p className="text-amber-400 text-sm font-semibold flex items-center gap-2">
                         <span>⏳</span>
-                        <span>Creating Group ICAN Wallet...</span>
+                        <span>Creating Trust ICAN Wallet...</span>
                       </p>
                     </div>
                   )}
@@ -2153,7 +2153,7 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
                   )}
 
                   <p className="text-slate-400 text-xs sm:text-sm p-3 bg-slate-900/30 border border-slate-700 rounded-lg">
-                    💡 Full account management available in ICAN Wallet app. This group account auto-receives all member contributions.
+                    💡 Full account management available in ICAN Wallet app. This trust account auto-receives all member contributions.
                   </p>
                 </div>
               )}
@@ -2344,7 +2344,7 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
                   </p>
                   <p className="flex justify-between">
                     <span className="text-slate-400">Available Spots:</span>
-                    <span className="font-semibold text-blue-400">{groupForJoinApplication.max_members - (groupForJoinApplication.member_count || 0)}/{groupForJoinApplication.max_members}</span>
+                    <span className="font-semibold text-blue-400">{Math.max(0, groupForJoinApplication.max_members - (groupForJoinApplication.member_count || 0))}/{groupForJoinApplication.max_members}</span>
                   </p>
                 </div>
               </div>
@@ -2675,3 +2675,4 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
 };
 
 export default TrustSystem;
+
