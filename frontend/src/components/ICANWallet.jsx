@@ -186,12 +186,20 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
   
   // 📑 Trade Modal Tabs
   const [activeTradeTab, setActiveTradeTab] = useState('wallet'); // 'wallet', 'chart', 'buy', 'sell', 'history'
+  const [showMobileTradeMenu, setShowMobileTradeMenu] = useState(false);
   const [tradeHistory, setTradeHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [icanBalance, setIcanBalance] = useState(0);
   const [balanceLoading, setBalanceLoading] = useState(false);
 
   const dropdownRef = useRef(null);
+
+  // Close mobile menu when modal closes
+  useEffect(() => {
+    if (!showTradeModal) {
+      setShowMobileTradeMenu(false);
+    }
+  }, [showTradeModal]);
 
   // Load candlestick data when trade modal opens
   useEffect(() => {
@@ -3058,6 +3066,55 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
         }
 
         @media (max-width: 768px) {
+          .trade-tab-content .trading-header {
+            padding-bottom: 12px;
+            margin-bottom: 14px;
+          }
+
+          .trade-tab-content .trading-header h2 {
+            font-size: 18px;
+          }
+
+          .trade-tab-content .balance-display,
+          .trade-tab-content .market-info {
+            grid-template-columns: 1fr;
+            gap: 12px;
+          }
+
+          .trade-tab-content .conversion-display {
+            flex-direction: column;
+            gap: 10px;
+            padding: 14px;
+          }
+
+          .trade-tab-content .conversion-arrow {
+            transform: rotate(90deg);
+          }
+
+          .trade-tab-content .gain-loss-display {
+            gap: 10px;
+            padding: 12px;
+          }
+
+          .trade-tab-content .transaction-summary {
+            padding: 12px;
+          }
+
+          .trade-tab-content .summary-row {
+            font-size: 13px;
+            padding: 7px 0;
+          }
+
+          .trade-tab-content .info-box,
+          .trade-tab-content .price-history {
+            padding: 12px;
+          }
+
+          .trade-tab-content .btn-primary {
+            padding: 11px 16px;
+            font-size: 13px;
+          }
+
           .wallet-info-grid {
             grid-template-columns: 1fr;
           }
@@ -5396,20 +5453,20 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
 
       {/* TRADE MODAL - Tabbed Interface with Chart, Buy, Sell, History */}
       {showTradeModal && (
-        <div className="fixed inset-0 bg-slate-950/95 flex items-center justify-center z-50 p-2 md:p-4">
-          <div className={`solid-card border border-slate-600 w-full ${activeTradeTab === 'chart' ? 'max-w-[98vw] h-[96vh]' : 'max-w-6xl max-h-[90vh]'} overflow-hidden flex flex-col transition-all duration-300`}>
-            {/* Modal Header - Professional Trading Platform Style */}
-            <div className="flex items-center justify-between p-4 md:p-6 border-b border-slate-700 bg-gradient-to-r from-slate-800 to-slate-900">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/30">
-                  <span className="text-2xl">💰</span>
+        <div className="fixed inset-0 bg-slate-950/95 flex items-center justify-center z-50 p-0 sm:p-2 md:p-4">
+          <div className={`solid-card border border-slate-600 w-full h-[100dvh] sm:h-[96vh] ${activeTradeTab === 'chart' ? 'sm:max-w-[98vw]' : 'sm:max-w-6xl'} overflow-hidden flex flex-col transition-all duration-300`}>
+            {/* Modal Header - Professional Trading Platform Style with Mobile Optimization */}
+            <div className="flex items-center justify-between p-3 sm:p-4 md:p-6 border-b border-slate-700 bg-gradient-to-r from-slate-800 to-slate-900">
+              <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
+                <div className="w-10 sm:w-12 h-10 sm:h-12 rounded-lg sm:rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/30 flex-shrink-0">
+                  <span className="text-lg sm:text-2xl">💰</span>
                 </div>
-                <div>
-                  <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight">ICAN Trading Center</h2>
-                  <p className="text-sm text-slate-400">Professional Trading Platform • Real-time Market Data</p>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-base sm:text-lg md:text-2xl font-bold text-white tracking-tight break-words">ICAN Trading Center</h2>
+                  <p className="text-xs sm:text-sm text-slate-400 hidden sm:block truncate">Professional Trading Platform • Real-time Market Data</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3 ml-2 flex-shrink-0">
                 {/* Live Indicator */}
                 <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-green-500/20 border border-green-500/50 rounded-full">
                   <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
@@ -5417,69 +5474,165 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
                 </div>
                 <button
                   onClick={() => setShowTradeModal(false)}
-                  className="w-10 h-10 flex items-center justify-center bg-slate-700 hover:bg-red-600 text-slate-300 hover:text-white rounded-lg font-semibold transition-all"
+                  className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-slate-700 hover:bg-red-600 text-slate-300 hover:text-white rounded-lg font-semibold transition-all flex-shrink-0"
+                  title="Close trading center"
                 >
                   ✕
                 </button>
               </div>
             </div>
 
-            {/* Tab Navigation - Premium Style */}
-            <div className="flex gap-1 md:gap-2 px-4 md:px-6 py-3 bg-slate-800/50 border-b border-slate-700 overflow-x-auto">
-              <button
-                onClick={() => setActiveTradeTab('wallet')}
-                className={`px-4 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
-                  activeTradeTab === 'wallet'
-                    ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-lg shadow-purple-600/30'
-                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
-                }`}
-              >
-                💎 My Wallet
-              </button>
+            {/* Tab Navigation - Premium Style with Mobile Menu */}
+            <div className="relative flex items-center justify-between px-3 md:px-6 py-3 bg-slate-800/50 border-b border-slate-700">
+              {/* Desktop View - Full Navigation */}
+              <div className="hidden md:flex gap-2 overflow-x-auto flex-1">
+                <button
+                  onClick={() => setActiveTradeTab('wallet')}
+                  className={`px-4 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
+                    activeTradeTab === 'wallet'
+                      ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-lg shadow-purple-600/30'
+                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
+                  }`}
+                >
+                  💎 My Wallet
+                </button>
 
-              <button
-                onClick={() => setActiveTradeTab('chart')}
-                className={`px-4 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
-                  activeTradeTab === 'chart'
-                    ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-lg shadow-amber-600/30'
-                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
-                }`}
-              >
-                📊 Chart & Analysis
-              </button>
-              
-              <button
-                onClick={() => setActiveTradeTab('buy')}
-                className={`px-4 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
-                  activeTradeTab === 'buy'
-                    ? 'bg-gradient-to-r from-emerald-600 to-green-600 text-white shadow-lg shadow-emerald-600/30'
-                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
-                }`}
-              >
-                💳 Buy ICAN
-              </button>
+                <button
+                  onClick={() => setActiveTradeTab('chart')}
+                  className={`px-4 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
+                    activeTradeTab === 'chart'
+                      ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-lg shadow-amber-600/30'
+                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
+                  }`}
+                >
+                  📊 Chart & Analysis
+                </button>
+                
+                <button
+                  onClick={() => setActiveTradeTab('buy')}
+                  className={`px-4 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
+                    activeTradeTab === 'buy'
+                      ? 'bg-gradient-to-r from-emerald-600 to-green-600 text-white shadow-lg shadow-emerald-600/30'
+                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
+                  }`}
+                >
+                  💳 Buy ICAN
+                </button>
 
-              <button
-                onClick={() => setActiveTradeTab('sell')}
-                className={`px-4 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
-                  activeTradeTab === 'sell'
-                    ? 'bg-gradient-to-r from-rose-600 to-red-600 text-white shadow-lg shadow-rose-600/30'
-                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
-                }`}
-              >
-                💰 Sell ICAN
-              </button>
+                <button
+                  onClick={() => setActiveTradeTab('sell')}
+                  className={`px-4 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
+                    activeTradeTab === 'sell'
+                      ? 'bg-gradient-to-r from-rose-600 to-red-600 text-white shadow-lg shadow-rose-600/30'
+                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
+                  }`}
+                >
+                  💰 Sell ICAN
+                </button>
 
-              <button
-                onClick={() => setActiveTradeTab('history')}
-                className={`px-4 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
-                  activeTradeTab === 'history'
-                    ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg shadow-blue-600/30'
-                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
-                }`}
-              >
-                📜 History
-              </button>
+                <button
+                  onClick={() => setActiveTradeTab('history')}
+                  className={`px-4 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
+                    activeTradeTab === 'history'
+                      ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg shadow-blue-600/30'
+                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
+                  }`}
+                >
+                  📜 History
+                </button>
+              </div>
+
+              {/* Mobile View - Current Tab + Menu Button */}
+              <div className="flex md:hidden items-center justify-between w-full">
+                {/* Current Tab Display */}
+                <div className="flex-1 px-3 py-2 bg-slate-700 rounded-lg text-white font-medium text-sm">
+                  {activeTradeTab === 'wallet' && '💎 My Wallet'}
+                  {activeTradeTab === 'chart' && '📊 Chart'}
+                  {activeTradeTab === 'buy' && '💳 Buy ICAN'}
+                  {activeTradeTab === 'sell' && '💰 Sell ICAN'}
+                  {activeTradeTab === 'history' && '📜 History'}
+                </div>
+
+                {/* Three Dots Menu Button */}
+                <button
+                  onClick={() => setShowMobileTradeMenu(!showMobileTradeMenu)}
+                  className="ml-2 w-10 h-10 flex items-center justify-center bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white rounded-lg transition-all"
+                  title="More options"
+                >
+                  <span className="text-xl leading-none">⋯</span>
+                </button>
+
+                {/* Mobile Dropdown Menu */}
+                {showMobileTradeMenu && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-2xl z-50">
+                    <button
+                      onClick={() => {
+                        setActiveTradeTab('wallet');
+                        setShowMobileTradeMenu(false);
+                      }}
+                      className={`w-full px-4 py-3 text-left font-medium transition-colors flex items-center gap-2 border-b border-slate-600 ${
+                        activeTradeTab === 'wallet'
+                          ? 'bg-purple-600/30 text-purple-300'
+                          : 'text-slate-300 hover:bg-slate-600 hover:text-white'
+                      }`}
+                    >
+                      💎 My Wallet
+                    </button>
+                    <button
+                      onClick={() => {
+                        setActiveTradeTab('chart');
+                        setShowMobileTradeMenu(false);
+                      }}
+                      className={`w-full px-4 py-3 text-left font-medium transition-colors flex items-center gap-2 border-b border-slate-600 ${
+                        activeTradeTab === 'chart'
+                          ? 'bg-amber-600/30 text-amber-300'
+                          : 'text-slate-300 hover:bg-slate-600 hover:text-white'
+                      }`}
+                    >
+                      📊 Chart & Analysis
+                    </button>
+                    <button
+                      onClick={() => {
+                        setActiveTradeTab('buy');
+                        setShowMobileTradeMenu(false);
+                      }}
+                      className={`w-full px-4 py-3 text-left font-medium transition-colors flex items-center gap-2 border-b border-slate-600 ${
+                        activeTradeTab === 'buy'
+                          ? 'bg-emerald-600/30 text-emerald-300'
+                          : 'text-slate-300 hover:bg-slate-600 hover:text-white'
+                      }`}
+                    >
+                      💳 Buy ICAN
+                    </button>
+                    <button
+                      onClick={() => {
+                        setActiveTradeTab('sell');
+                        setShowMobileTradeMenu(false);
+                      }}
+                      className={`w-full px-4 py-3 text-left font-medium transition-colors flex items-center gap-2 border-b border-slate-600 ${
+                        activeTradeTab === 'sell'
+                          ? 'bg-rose-600/30 text-rose-300'
+                          : 'text-slate-300 hover:bg-slate-600 hover:text-white'
+                      }`}
+                    >
+                      💰 Sell ICAN
+                    </button>
+                    <button
+                      onClick={() => {
+                        setActiveTradeTab('history');
+                        setShowMobileTradeMenu(false);
+                      }}
+                      className={`w-full px-4 py-3 text-left font-medium transition-colors flex items-center gap-2 ${
+                        activeTradeTab === 'history'
+                          ? 'bg-blue-600/30 text-blue-300'
+                          : 'text-slate-300 hover:bg-slate-600 hover:text-white'
+                      }`}
+                    >
+                      📜 History
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Tab Content - Scrollable */}

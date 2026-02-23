@@ -188,12 +188,33 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
     }
   }, [avatarUrl]);
 
+  const toTitleCase = (value = '') =>
+    String(value)
+      .replace(/_/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/\b\w/g, (match) => match.toUpperCase());
+
+  const profileCompletionCount = [formData.phone, formData.income_level, formData.financial_goal, formData.risk_tolerance]
+    .filter((value) => String(value || '').trim().length > 0)
+    .length;
+  const profileCompletionPercent = Math.round((profileCompletionCount / 4) * 100);
+  const normalizedRiskTolerance = String(formData.risk_tolerance || '').toLowerCase();
+  const riskToneClass = normalizedRiskTolerance === 'high'
+    ? 'bg-red-500/20 text-red-300 border-red-400/40'
+    : normalizedRiskTolerance === 'medium' || normalizedRiskTolerance === 'moderate'
+      ? 'bg-yellow-500/20 text-yellow-200 border-yellow-400/40'
+      : 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40';
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4 md:p-8 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-      <div className="max-w-2xl mx-auto w-full">
+      <div className="max-w-5xl mx-auto w-full">
         {/* Header */}
         <div className="flex items-center justify-between mb-4 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold text-white">My Profile</h1>
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-white">My Profile</h1>
+            <p className="text-sm text-slate-300 mt-1">Manage your account, settings, and financial profile.</p>
+          </div>
           {onClose && (
             <button
               onClick={onClose}
@@ -217,9 +238,9 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
         )}
 
         {/* Main Profile Card */}
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl sm:rounded-2xl overflow-hidden mb-4 sm:mb-6">
+        <div className="bg-slate-800/60 border border-slate-700/80 rounded-xl sm:rounded-2xl overflow-hidden mb-4 sm:mb-6 shadow-[0_12px_38px_rgba(8,12,32,0.45)]">
           {/* Profile Header Background */}
-          <div className="h-24 sm:h-32 bg-gradient-to-r from-purple-600/30 via-blue-600/20 to-pink-600/30"></div>
+          <div className="h-24 sm:h-32 bg-gradient-to-r from-purple-600/35 via-blue-600/25 to-pink-600/35"></div>
 
           {/* Profile Content */}
           <div className="relative px-4 sm:px-6 pb-5 sm:pb-6 pt-0">
@@ -285,15 +306,16 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
               </div>
 
               {/* Button Group - Approval, Notifications, Wallet, Edit */}
-              <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center sm:flex-wrap sm:justify-end">
+              <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:min-w-[360px]">
                 {/* Approval Tab Button */}
                 <button
                   onClick={() => setShowApprovalsModal(true)}
-                  className="relative flex items-center justify-center sm:justify-start gap-2 px-2.5 sm:px-3 py-2 bg-yellow-500 hover:bg-yellow-600 text-white transition rounded-lg font-semibold hover:shadow-lg shadow-yellow-500/20"
-                  title="⏳ Pending Approvals"
+                  className="relative px-2.5 sm:px-3 py-2 bg-yellow-500/25 hover:bg-yellow-500/35 border border-yellow-400/40 text-white transition rounded-lg font-semibold"
+                  title="Pending Approvals"
                 >
                   <Clock className="w-4 h-4" />
                   <span className="text-xs sm:text-sm">Approve</span>
+                  <span className="hidden sm:block text-[10px] text-yellow-100/85 ml-auto">Pending requests</span>
                   {pendingApprovalsCount > 0 && (
                     <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
                       {pendingApprovalsCount > 9 ? '9+' : pendingApprovalsCount}
@@ -303,12 +325,14 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
 
                 {/* Notification Settings Icon */}
                 <div
-                  className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg transition cursor-help group/notif relative flex items-center justify-center"
-                  title="🔔 Notification Settings"
+                  className="bg-blue-500/25 border border-blue-400/40 text-white p-2 rounded-lg transition relative flex flex-col items-start justify-start"
+                  title="Notification Settings"
                 >
-                  <Bell className="w-5 h-5" />
+                  <Bell className="w-4 h-4 text-blue-200" />
+                  <span className="text-xs sm:text-sm font-semibold mt-1">Profile Settings</span>
+                  <span className="text-[10px] sm:text-[11px] text-blue-100/85">Account notifications</span>
                   {/* Notification Settings Tooltip */}
-                  <div className="hidden sm:block group-hover/notif:block absolute right-0 top-full mt-2 bg-slate-900 border border-slate-700 rounded-lg p-3 w-56 z-50 text-xs text-white shadow-lg">
+                  <div className="hidden">
                     <p className="font-semibold mb-2 text-blue-300">📢 Profile Settings</p>
                     <div className="space-y-1 text-slate-300">
                       <div className="flex items-center gap-2">
@@ -320,12 +344,14 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
 
                 {/* Wallet Icon Button */}
                 <button
-                  className="bg-green-600 hover:bg-green-700 text-white p-2 rounded-lg transition relative group/wallet flex items-center justify-center"
-                  title="💰 My Wallet"
+                  className="bg-green-500/25 border border-green-400/40 text-white p-2 rounded-lg transition relative flex flex-col items-start justify-start"
+                  title="My Wallet"
                 >
-                  <Wallet className="w-5 h-5" />
+                  <Wallet className="w-4 h-4 text-green-200" />
+                  <span className="text-xs sm:text-sm font-semibold mt-1">My Wallet</span>
+                  <span className="text-[10px] sm:text-[11px] text-green-100/85">View wallet and transactions</span>
                   {/* Wallet Tooltip */}
-                  <div className="hidden sm:block group-hover/wallet:block absolute right-0 top-full mt-2 bg-slate-900 border border-slate-700 rounded-lg p-2 w-48 z-50 text-xs text-white shadow-lg">
+                  <div className="hidden">
                     <p className="font-semibold text-green-300 mb-1">💰 My Wallet</p>
                     <p className="text-slate-400">View wallet and transaction history</p>
                   </div>
@@ -341,33 +367,41 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                     }
                   }}
                   disabled={isSaving}
-                  className="flex items-center justify-center sm:justify-start gap-2 px-3 sm:px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-600/50 text-white rounded-lg font-medium transition-colors"
+                  className="flex flex-col items-start justify-start gap-1 px-3 sm:px-4 py-2 bg-purple-500/25 hover:bg-purple-500/35 border border-purple-400/40 disabled:bg-purple-600/40 text-white rounded-lg font-medium transition-colors"
                 >
                   {isEditing ? (
                     <>
                       <Save className="w-4 h-4" />
                       <span className="text-xs sm:text-sm">{isSaving ? 'Saving...' : 'Save'}</span>
+                      <span className="text-[10px] sm:text-[11px] text-purple-100/85">Save profile changes</span>
                     </>
                   ) : (
                     <>
                       <Edit2 className="w-4 h-4" />
                       <span className="text-xs sm:text-sm">Edit</span>
+                      <span className="text-[10px] sm:text-[11px] text-purple-100/85">Update your information</span>
                     </>
                   )}
                 </button>
               </div>
             </div>
 
-            {/* Verification Status */}
-            {profile?.blockchain_verified && (
-              <div className="flex items-center gap-2 px-3 py-2 bg-green-500/20 text-green-400 rounded-lg inline-flex w-fit mb-6">
-                <Shield className="w-4 h-4" />
-                <span className="text-sm font-medium">Blockchain Verified</span>
+            {/* Verification + Completion */}
+            <div className="flex flex-wrap items-center gap-2 mb-6">
+              {profile?.blockchain_verified && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-green-500/20 text-green-400 rounded-lg inline-flex w-fit">
+                  <Shield className="w-4 h-4" />
+                  <span className="text-sm font-medium">Blockchain Verified</span>
+                </div>
+              )}
+              <div className="flex items-center gap-2 px-3 py-2 bg-indigo-500/20 text-indigo-200 rounded-lg border border-indigo-400/30">
+                <User className="w-4 h-4" />
+                <span className="text-sm font-medium">Profile completion: {profileCompletionPercent}%</span>
               </div>
-            )}
+            </div>
 
             {/* Profile Details */}
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Email */}
               <div className="flex items-center gap-3 p-2.5 sm:p-3 bg-slate-700/50 rounded-lg">
                 <Mail className="w-5 h-5 text-purple-400" />
@@ -416,7 +450,7 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                       <option value="very_high">Very High ({">"} 5M UGX/month)</option>
                     </select>
                   ) : (
-                    <p className="text-white text-sm sm:text-base">{formData.income_level || 'Not provided'}</p>
+                    <p className="text-white text-sm sm:text-base">{formData.income_level ? toTitleCase(formData.income_level) : 'Not provided'}</p>
                   )}
                 </div>
               </div>
@@ -443,7 +477,7 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                       <option value="build_wealth">Build Long-term Wealth</option>
                     </select>
                   ) : (
-                    <p className="text-white text-sm sm:text-base">{formData.financial_goal || 'Not provided'}</p>
+                    <p className="text-white text-sm sm:text-base">{formData.financial_goal ? toTitleCase(formData.financial_goal) : 'Not provided'}</p>
                   )}
                 </div>
               </div>
@@ -465,7 +499,9 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                       <option value="high">Aggressive (High Risk)</option>
                     </select>
                   ) : (
-                    <p className="text-white text-sm sm:text-base capitalize">{formData.risk_tolerance || 'Not specified'}</p>
+                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full border text-sm ${riskToneClass}`}>
+                      {toTitleCase(formData.risk_tolerance || 'Not specified')}
+                    </span>
                   )}
                 </div>
               </div>
@@ -482,26 +518,24 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
           </div>
         </div>
 
-        {/* Account Actions */}
-        <div className="space-y-3">
+        {/* Account Info + Actions */}
+        <div className="mt-5 sm:mt-6 grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-stretch">
+          <div className="p-3 sm:p-4 bg-slate-800/50 border border-slate-700 rounded-lg text-left">
+            <p className="text-xs sm:text-sm text-gray-400">
+              Account ID: <span className="font-mono text-gray-300 break-all">{user?.id}</span>
+            </p>
+            <p className="text-xs text-gray-500 mt-2">
+              Member since {new Date(user?.created_at).toLocaleDateString()}
+            </p>
+          </div>
           <button
             onClick={handleLogout}
             disabled={isLoggingOut}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-600/20 hover:bg-red-600/30 border border-red-600/50 text-red-400 rounded-lg font-medium transition-colors disabled:opacity-50"
+            className="w-full md:w-auto flex items-center justify-center gap-2 px-5 py-3 bg-red-600/20 hover:bg-red-600/30 border border-red-600/50 text-red-400 rounded-lg font-medium transition-colors disabled:opacity-50"
           >
             <LogOut className="w-5 h-5" />
             <span>{isLoggingOut ? 'Signing out...' : 'Sign Out'}</span>
           </button>
-        </div>
-
-        {/* Additional Info */}
-        <div className="mt-5 sm:mt-8 p-3 sm:p-4 bg-slate-800/50 border border-slate-700 rounded-lg text-left sm:text-center">
-          <p className="text-xs sm:text-sm text-gray-400">
-            Account ID: <span className="font-mono text-gray-300 break-all">{user?.id}</span>
-          </p>
-          <p className="text-xs text-gray-500 mt-2">
-            Member since {new Date(user?.created_at).toLocaleDateString()}
-          </p>
         </div>
 
         {/* Avatar Change Modal */}
@@ -678,3 +712,4 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
 };
 
 export default ProfilePage;
+

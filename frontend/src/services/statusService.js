@@ -216,7 +216,8 @@ export const getActiveStatuses = async (userId = null) => {
       return { statuses: [], error: new Error('User not authenticated') };
     }
     
-    // When userId is not passed, return global public statuses + current user's statuses
+    // When userId is not passed, return everyone except private-only statuses.
+    // This keeps status access open without requiring contact/follower relationships.
     const queryUserId = userId || null;
 
     let query = supabase
@@ -228,7 +229,9 @@ export const getActiveStatuses = async (userId = null) => {
     if (queryUserId) {
       query = query.eq('user_id', queryUserId);
     } else {
-      query = query.or(`visibility.eq.public,user_id.eq.${authUser.id}`);
+      query = query.or(
+        `visibility.eq.public,visibility.eq.followers,visibility.eq.contacts,user_id.eq.${authUser.id}`
+      );
     }
 
     const { data, error } = await query;

@@ -646,10 +646,12 @@ const LandingPage = ({ onGetStarted }) => {
                   </div>
                   
                   {/* Label with animation */}
-                  <div className="text-center space-y-2 animate-fadeIn">
+                  <div key={`hero-${currentHeroSlide}`} className="text-center space-y-2 animate-fadeIn">
                     <p className="text-xs text-yellow-300 font-semibold uppercase tracking-wider">✨ {heroSlides[currentHeroSlide].subtitle}</p>
                     <h3 className="text-xl font-bold bg-gradient-to-r from-purple-200 via-pink-200 to-purple-200 bg-clip-text text-transparent">{heroSlides[currentHeroSlide].title}</h3>
-                    <p className="text-sm text-gray-400">{heroSlides[currentHeroSlide].description}</p>
+                    <p className="text-[11px] text-gray-500 uppercase tracking-[0.14em]">
+                      Slide {currentHeroSlide + 1} of {heroSlides.length}
+                    </p>
                   </div>
 
                   {/* Slide Navigation Buttons - Small */}
@@ -813,14 +815,20 @@ const LandingPage = ({ onGetStarted }) => {
                     }}
                   />
 
-                  {/* Text Overlay - "Why Join" Message */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/40 to-slate-950/20 flex flex-col items-center justify-center p-4 md:p-8">
-                    <div className="text-center space-y-3 md:space-y-4 animate-fadeIn max-w-2xl">
-                      <p className="text-xl md:text-2xl lg:text-4xl font-bold bg-gradient-to-r from-yellow-300 via-purple-300 to-pink-300 bg-clip-text text-transparent leading-tight">
-                        {slides[currentSlide].whyJoin}
+                  {/* Text Overlay - concise title/subtitle */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/35 to-slate-950/20 flex items-end p-4 md:p-8">
+                    <div
+                      key={`platform-slide-${currentSlide}`}
+                      className="w-full max-w-2xl rounded-2xl border border-white/20 bg-slate-950/45 backdrop-blur-md p-4 md:p-6 space-y-2 animate-fadeIn"
+                    >
+                      <p className="text-[11px] md:text-xs text-yellow-200/90 font-semibold uppercase tracking-[0.12em]">
+                        {slides[currentSlide].subtitle}
                       </p>
-                      <p className="text-xs md:text-sm lg:text-base text-purple-200 font-medium opacity-90">
-                        Join ICANera Today
+                      <h3 className="text-xl md:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-yellow-300 via-purple-300 to-pink-300 bg-clip-text text-transparent leading-tight">
+                        {slides[currentSlide].title}
+                      </h3>
+                      <p className="text-[11px] md:text-xs text-purple-200/85 uppercase tracking-[0.12em]">
+                        Slide {currentSlide + 1} of {slides.length}
                       </p>
                     </div>
                   </div>
@@ -847,16 +855,16 @@ const LandingPage = ({ onGetStarted }) => {
                   <ChevronRight className="w-5 h-5 md:w-6 md:h-6 group-hover:translate-x-1 transition" />
                 </button>
 
-                {/* Slide indicators - Hidden on Mobile, Visible on Desktop */}
-                <div className="hidden md:flex absolute bottom-4 left-1/2 transform -translate-x-1/2 gap-2 z-20 bg-slate-950/80 px-4 py-3 rounded-full backdrop-blur-md border border-yellow-500/30 shadow-lg shadow-yellow-500/20">
+                {/* Slide indicators */}
+                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-1.5 md:gap-2 z-20 bg-slate-950/80 px-3 md:px-4 py-2.5 md:py-3 rounded-full backdrop-blur-md border border-yellow-500/30 shadow-lg shadow-yellow-500/20">
                   {slides.map((_, index) => (
                     <button
                       key={index}
                       onClick={() => setCurrentSlide(index)}
                       className={`rounded-full transition transform hover:scale-125 ${
                         index === currentSlide
-                          ? 'bg-gradient-to-r from-yellow-500 to-yellow-400 w-8 h-2.5 shadow-lg shadow-yellow-500/60'
-                          : 'bg-purple-500/40 w-2.5 h-2.5 hover:bg-yellow-500/60'
+                          ? 'bg-gradient-to-r from-yellow-500 to-yellow-400 w-6 md:w-8 h-2.5 shadow-lg shadow-yellow-500/60'
+                          : 'bg-purple-500/40 w-2 h-2 md:w-2.5 md:h-2.5 hover:bg-yellow-500/60'
                       }`}
                     />
                   ))}

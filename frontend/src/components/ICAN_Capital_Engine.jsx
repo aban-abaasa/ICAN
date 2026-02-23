@@ -9329,6 +9329,14 @@ Data Freshness: ${reportData.metadata.dataFreshness}
               <Eye className="w-3.5 h-3.5" />
               Viewer
             </button>
+            <button
+              onClick={() => setShowProfilePage(true)}
+              className="hidden md:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs text-gray-200 transition"
+              title="Open My Profile"
+            >
+              <User className="w-3.5 h-3.5" />
+              Profile
+            </button>
             <div className="hidden xl:block text-right">
               <p className="text-sm font-semibold text-white truncate max-w-[180px]">{dashboardDisplayName}</p>
               <p className="text-xs text-gray-300 capitalize">{activeTab}</p>

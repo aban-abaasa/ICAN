@@ -18,7 +18,6 @@ import {
   DollarSign,
   Heart,
   PieChart,
-  ChevronLeft,
   ChevronRight,
   Dot,
   Shield,
@@ -212,24 +211,31 @@ const RecentTransactionsCollapsible = ({ transactions, formatCurrency }) => {
   );
 };
 
-// Feature Card Component with Image Slideshow - Updated with animations
-const FeatureCardWithSlideshow = ({ card, onExplore }) => {
+// Feature Card Component with Image Slideshow
+const FeatureCardWithSlideshow = ({
+  card,
+  onExplore,
+  immersiveMobile = false,
+  forcePitchinLayout = false
+}) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [isCollapsed, setIsCollapsed] = useState(card.title !== 'Pitchin');
   const [failedImages, setFailedImages] = useState({});
 
   const availableImages = (card.images || [])
     .map((src, index) => ({ src, index }))
     .filter((image) => !failedImages[image.index]);
-
-  const shouldShowMedia = availableImages.length > 0 && (!isCollapsed || card.title === 'Pitchin');
-  const visibleFeatures = isCollapsed ? (card.features || []).slice(0, 2) : (card.features || []);
-  const hasHiddenFeatures = (card.features || []).length > visibleFeatures.length;
+  const shouldShowMedia = availableImages.length > 0;
+  const quickTags = (card.features || []).slice(0, 3);
+  const slideWords =
+    card.slideWords && card.slideWords.length > 0
+      ? card.slideWords
+      : [card.subtitle || card.title];
+  const activeSlideWord = slideWords[currentImageIndex % slideWords.length];
+  const usePitchinLikeLayout = forcePitchinLayout || card.title === 'Pitchin';
 
   useEffect(() => {
     setCurrentImageIndex(0);
     setFailedImages({});
-    setIsCollapsed(card.title !== 'Pitchin');
   }, [card.title]);
 
   useEffect(() => {
@@ -237,7 +243,7 @@ const FeatureCardWithSlideshow = ({ card, onExplore }) => {
 
     const interval = setInterval(() => {
       setCurrentImageIndex((prev) => (prev + 1) % availableImages.length);
-    }, 3000);
+    }, 3200);
 
     return () => clearInterval(interval);
   }, [availableImages.length, shouldShowMedia]);
@@ -248,86 +254,173 @@ const FeatureCardWithSlideshow = ({ card, onExplore }) => {
     }
   }, [availableImages.length, currentImageIndex]);
 
-  return (
-    <div className="w-full bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl overflow-hidden shadow-2xl">
-      {/* Card Header */}
-      <div className={`bg-gradient-to-r ${card.color} p-4 text-white`}>
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <card.icon className="w-6 h-6" />
-            <div>
-              <h3 className="text-xl font-bold">{card.title}</h3>
-              {card.subtitle && (
-                <p className="text-[10px] text-white/60 font-medium">{card.subtitle}</p>
-              )}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {card.title !== 'Pitchin' && (
-              <button
-                onClick={() => setIsCollapsed((prev) => !prev)}
-                className="flex items-center gap-1 bg-white/20 hover:bg-white/30 backdrop-blur-sm px-2.5 py-1 rounded-full transition-all"
-              >
-                <span className="text-[10px] font-semibold uppercase tracking-wide">
-                  {isCollapsed ? 'Expand' : 'Collapse'}
-                </span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isCollapsed ? '' : 'rotate-180'}`} />
-              </button>
-            )}
-
-            {/* Action buttons for Pitchin card */}
-            {card.title === 'Pitchin' && card.actions && (
-              <div className="flex items-center gap-2">
-                {card.actions.map((action, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => onExplore && onExplore(card.title, action.type)}
-                    className="flex items-center gap-1 bg-white/20 hover:bg-white/30 backdrop-blur-sm px-3 py-1.5 rounded-full transition-all transform hover:scale-105 active:scale-95"
-                    title={action.label}
-                  >
-                    <action.icon className="w-4 h-4" />
-                    <span className="text-xs font-medium">{action.label}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-        <p className="text-xs text-white/80">{card.description}</p>
-        {card.info && !isCollapsed && (
-          <p className="text-[9px] text-white/50 mt-1 italic">{card.info}</p>
-        )}
-      </div>
-
-      {/* Image Slideshow - compact by default on service cards */}
-      {shouldShowMedia && (
-        <div className={`relative w-full ${card.title === 'Pitchin' ? 'h-[56vh]' : 'h-44'} bg-slate-950 overflow-hidden`}>
+  if (immersiveMobile) {
+    return (
+      <article className="w-full rounded-3xl overflow-hidden border border-slate-700/70 shadow-2xl">
+        <div className="relative h-[calc(100svh-12.5rem)] min-h-[560px] bg-slate-950 overflow-hidden">
           {availableImages.map((image, imgIdx) => (
             <img
               key={image.index}
               src={image.src}
               alt=""
               onError={() => setFailedImages((prev) => ({ ...prev, [image.index]: true }))}
-              className={`absolute inset-0 w-full h-full object-cover transition-all duration-1000 ease-in-out ${
-                imgIdx === currentImageIndex
-                  ? 'opacity-100 scale-100'
-                  : 'opacity-0 scale-110'
+              className={`absolute inset-0 w-full h-full object-cover transition-all duration-700 ease-out ${
+                imgIdx === currentImageIndex ? 'opacity-100 scale-100' : 'opacity-0 scale-105'
               }`}
-              style={{
-                transform: imgIdx === currentImageIndex ? 'scale(1)' : 'scale(1.1)',
-              }}
             />
           ))}
 
-          {/* Gradient overlay for better text visibility */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/75 via-black/20 to-black/85 pointer-events-none" />
+
+          <div className="absolute inset-x-0 top-0 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className={`inline-flex items-center gap-2.5 rounded-2xl bg-gradient-to-r ${card.color} px-3 py-2.5 shadow-xl`}>
+                <card.icon className="w-5 h-5 text-white" />
+                <div className="min-w-0">
+                  <h3 className="text-base font-bold text-white leading-tight">{card.title}</h3>
+                  {card.subtitle && (
+                    <p className="text-[11px] text-white/85 uppercase tracking-[0.08em]">{card.subtitle}</p>
+                  )}
+                </div>
+              </div>
+
+            </div>
+
+            {card.title === 'Pitchin' && card.actions && (
+              <div className="mt-3 flex items-center gap-2">
+                {card.actions.map((action, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => onExplore && onExplore(card.title, action.type)}
+                    className="flex items-center gap-1 bg-white/20 hover:bg-white/30 backdrop-blur-sm px-3 py-1.5 rounded-full transition-all active:scale-95"
+                    title={action.label}
+                  >
+                    <action.icon className="w-4 h-4 text-white" />
+                    <span className="text-xs font-medium text-white">{action.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {card.title === 'Pitchin' && onExplore && (
+            <button
+              onClick={() => onExplore(card.title, 'launch')}
+              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-purple-600/90 hover:bg-purple-500 backdrop-blur-md px-6 py-3 rounded-full flex items-center gap-2 transition-all active:scale-95 shadow-2xl shadow-purple-500/50"
+            >
+              <Play className="w-5 h-5 text-white" />
+              <span className="text-white font-bold text-sm">Launch Pitchin</span>
+            </button>
+          )}
+
+          <div className="absolute inset-x-0 bottom-5 px-4 space-y-3">
+            <div
+              key={`${card.title}-${currentImageIndex}`}
+              className="inline-flex items-center rounded-full border border-white/35 bg-black/45 backdrop-blur-md px-4 py-2 animate-fadeIn"
+            >
+              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white">
+                {activeSlideWord}
+              </span>
+            </div>
+
+            {quickTags.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {quickTags.map((feature, fIdx) => (
+                  <span
+                    key={fIdx}
+                    className="inline-flex items-center px-2.5 py-1 rounded-full bg-black/45 border border-white/25 text-[11px] text-slate-100 backdrop-blur-sm"
+                  >
+                    {feature}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {onExplore && (
+              <button
+                onClick={() => onExplore(card.title, 'explore')}
+                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 flex items-center justify-center gap-2"
+              >
+                <Rocket className="w-4 h-4" />
+                Explore {card.title}
+              </button>
+            )}
+          </div>
+
+        </div>
+      </article>
+    );
+  }
+
+  return (
+    <article className="w-full bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/60 rounded-2xl overflow-hidden shadow-2xl">
+      {/* Card Header */}
+      <div className={`bg-gradient-to-r ${card.color} p-4 text-white`}>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <card.icon className="w-5 h-5 shrink-0" />
+            <div className="min-w-0">
+              <h3 className="text-lg md:text-xl font-bold truncate">{card.title}</h3>
+              {card.subtitle && (
+                <p className="text-[11px] text-white/75 font-medium truncate">{card.subtitle}</p>
+              )}
+            </div>
+          </div>
+
+          {/* Action buttons for Pitchin card */}
+          {card.title === 'Pitchin' && card.actions && (
+            <div className="flex items-center gap-2">
+              {card.actions.map((action, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => onExplore && onExplore(card.title, action.type)}
+                  className="flex items-center gap-1 bg-white/20 hover:bg-white/30 backdrop-blur-sm px-3 py-1.5 rounded-full transition-all hover:scale-105 active:scale-95"
+                  title={action.label}
+                >
+                  <action.icon className="w-4 h-4" />
+                  <span className="text-xs font-medium">{action.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Image Slideshow */}
+      {shouldShowMedia && (
+        <div className={`relative w-full ${usePitchinLikeLayout ? 'h-[52vh] md:h-[58vh]' : 'h-56 md:h-64'} bg-slate-950 overflow-hidden`}>
+          {availableImages.map((image, imgIdx) => (
+            <img
+              key={image.index}
+              src={image.src}
+              alt=""
+              onError={() => setFailedImages((prev) => ({ ...prev, [image.index]: true }))}
+              className={`absolute inset-0 w-full h-full object-cover transition-all duration-700 ease-out ${
+                imgIdx === currentImageIndex ? 'opacity-100 scale-100' : 'opacity-0 scale-105'
+              }`}
+            />
+          ))}
+
+          {/* Gradient overlay for text readability */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-black/20 pointer-events-none" />
+
+          {/* Slide word badge that updates with each image */}
+          <div className="absolute inset-x-0 bottom-4 px-4 md:px-5">
+            <div
+              key={`${card.title}-${currentImageIndex}`}
+              className="inline-flex items-center rounded-full border border-white/35 bg-black/45 backdrop-blur-md px-4 py-2 animate-fadeIn"
+            >
+              <span className="text-[11px] md:text-xs font-semibold uppercase tracking-[0.08em] text-white">
+                {activeSlideWord}
+              </span>
+            </div>
+          </div>
 
           {/* Quick action overlay for Pitchin */}
           {card.title === 'Pitchin' && onExplore && (
             <button
               onClick={() => onExplore(card.title, 'launch')}
-              className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-purple-600/90 hover:bg-purple-500 backdrop-blur-md px-6 py-3 rounded-full flex items-center gap-2 transition-all transform hover:scale-110 active:scale-95 shadow-2xl shadow-purple-500/50"
+              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-purple-600/90 hover:bg-purple-500 backdrop-blur-md px-6 py-3 rounded-full flex items-center gap-2 transition-all hover:scale-105 active:scale-95 shadow-2xl shadow-purple-500/50"
             >
               <Play className="w-5 h-5 text-white" />
               <span className="text-white font-bold text-sm">Launch Pitchin</span>
@@ -336,58 +429,55 @@ const FeatureCardWithSlideshow = ({ card, onExplore }) => {
 
           {/* Image indicators - Bottom center */}
           {availableImages.length > 1 && (
-            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
+            <div className="absolute bottom-4 right-4 flex gap-1.5">
               {availableImages.map((_, dotIdx) => (
-                <div
+                <button
                   key={dotIdx}
-                  className={`rounded-full transition-all duration-500 ${
-                    dotIdx === currentImageIndex
-                      ? 'bg-white w-7 h-2'
-                      : 'bg-white/40 w-2 h-2'
+                  type="button"
+                  onClick={() => setCurrentImageIndex(dotIdx)}
+                  className={`rounded-full transition-all duration-300 ${
+                    dotIdx === currentImageIndex ? 'bg-white w-6 h-2' : 'bg-white/45 w-2 h-2 hover:bg-white/70'
                   }`}
+                  aria-label={`Show image ${dotIdx + 1}`}
                 />
               ))}
             </div>
           )}
 
           {/* Image counter */}
-          <div className="absolute top-3 right-3 bg-black/50 backdrop-blur-sm px-3 py-1 rounded-full text-white text-xs font-medium">
+          <div className="absolute top-3 right-3 bg-black/55 backdrop-blur-sm px-2.5 py-1 rounded-full text-white text-[11px] font-medium">
             {Math.min(currentImageIndex + 1, availableImages.length)} / {availableImages.length}
           </div>
         </div>
       )}
 
-      {/* Card Body - Compact */}
-      <div className="p-4">
-        <ul className="space-y-1.5 list-disc pl-5">
-          {visibleFeatures.map((feature, fIdx) => (
-            <li key={fIdx} className="text-xs text-gray-300 leading-relaxed marker:text-purple-400">
-              {feature}
-            </li>
-          ))}
-        </ul>
-
-        {hasHiddenFeatures && (
-          <button
-            onClick={() => setIsCollapsed(false)}
-            className="mt-2 text-[11px] font-semibold text-purple-300 hover:text-purple-200 transition-colors"
-          >
-            +{(card.features || []).length - visibleFeatures.length} more
-          </button>
+      {/* Card Footer */}
+      <div className="p-4 space-y-3">
+        {quickTags.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {quickTags.map((feature, fIdx) => (
+              <span
+                key={fIdx}
+                className="inline-flex items-center px-2.5 py-1 rounded-full bg-slate-700/65 border border-slate-600/70 text-[11px] text-slate-200"
+              >
+                {feature}
+              </span>
+            ))}
+          </div>
         )}
 
         {/* Explore button for all cards */}
         {onExplore && (
           <button
             onClick={() => onExplore(card.title, 'explore')}
-            className="w-full mt-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white py-2.5 rounded-lg font-semibold text-sm transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+            className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white py-2.5 rounded-lg font-semibold text-sm transition-all hover:scale-[1.01] active:scale-95 flex items-center justify-center gap-2"
           >
             <Rocket className="w-4 h-4" />
             Explore {card.title}
           </button>
         )}
       </div>
-    </div>
+    </article>
   );
 };
 
@@ -409,7 +499,6 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
     
     fetchAuthUser();
   }, []);
-  const [activeSlide, setActiveSlide] = useState(0);
   const [currentBalance, setCurrentBalance] = useState('156,002');
   const [activeBottomTab, setActiveBottomTab] = useState('home');
   const [showTransactionEntry, setShowTransactionEntry] = useState(false);
@@ -505,7 +594,6 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   });
 
 
-  const carouselRef = useRef(null);
   const [velocityMetrics, setVelocityMetrics] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [complianceData, setComplianceData] = useState(null);
@@ -1856,12 +1944,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
   const carouselCards = [
     {
       title: 'Pitchin',
-      subtitle: 'Video Pitch Platform',
-      description: 'Share your vision and connect with investors',
-      info: 'Create compelling video pitches to attract funding and partnerships',
+      subtitle: 'Part 3: Invest in Businesses',
       color: 'from-purple-600 to-pink-600',
       icon: Briefcase,
-      features: ['Business pitches', 'Investor connections', 'Growth opportunities'],
+      features: ['Invest in ventures', 'Raise side-business capital', 'Earn returns'],
+      slideWords: ['Invest in Businesses', 'Grow Side Ventures'],
       images: ['/images/ICANera pitchin.png', '/images/ICANera pitchin 8.png'],
       actions: [
         { label: 'Create', icon: Upload, type: 'create' },
@@ -1870,76 +1957,85 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     },
     {
       title: 'Wallet',
-      subtitle: 'Multi-Currency Hub',
-      description: 'Manage your digital assets',
-      info: 'Secure wallet supporting UGX, USD, ICAN and more currencies',
+      subtitle: 'Part 8: Instant Money Movement',
       color: 'from-green-600 to-emerald-600',
       icon: Wallet,
-      features: ['Multi-currency', 'Instant transfers', 'Security verified'],
+      features: ['Instant transfers', 'Multi-wallet control', 'Global movement'],
+      slideWords: ['Move Money Instantly', 'One Wallet, Full Control'],
       images: ['/images/icanera wallet.png', '/images/ICANwallet.png']
     },
     {
       title: 'Trust',
-      subtitle: 'Estate & Legacy',
-      description: 'Secure trust and estate management',
-      info: 'Protect your assets and plan for future generations with legal backing',
+      subtitle: 'Part 2: Smart Savings Groups',
       color: 'from-blue-600 to-cyan-600',
       icon: Lock,
-      features: ['Estate planning', 'Beneficiary management', 'Legal compliance'],
+      features: ['Save as a group', 'Earn on contributions', 'Borrow at fair rates'],
+      slideWords: ['Smart Savings Groups', 'Save, Earn, Borrow', 'Democratic Control'],
       images: ['/images/ICANera trust.png', '/images/ICANera trust 2.png', '/images/trust.png']
     },
     {
       title: 'CMMS',
-      subtitle: 'Operations Manager',
-      description: 'Complete maintenance management system',
-      info: 'Track assets, schedule maintenance and optimize operational efficiency',
+      subtitle: 'Part 5: Business Management',
       color: 'from-indigo-600 to-purple-600',
       icon: Settings,
-      features: ['Asset tracking', 'Work orders', 'Preventive maintenance'],
+      features: ['Track assets & supplies', 'Manage workers & tasks', 'Know true profit'],
+      slideWords: ['Run Your Side Business', 'Track Operations Clearly', 'Make Better Decisions'],
       images: ['/images/ICANera CMMS.png', '/images/ICANera CMMS1.png', '/images/cmms.png']
     },
     {
       title: 'Expense & Income',
-      subtitle: 'Financial Diary',
-      description: 'Track and manage your finances',
-      info: 'Record daily transactions and gain insights into spending patterns',
+      subtitle: 'Part 1: Records',
       color: 'from-orange-600 to-red-600',
       icon: TrendingUp,
-      features: ['Expense tracking', 'Income monitoring', 'Budget planning'],
+      features: ['Track every dollar', 'See monthly balance', 'Control spending'],
+      slideWords: ['Track Every Dollar', 'Know Where Money Goes'],
       images: ['/images/ICANera expense.png', '/images/dairy expense and inacome.png']
     },
     {
       title: 'Trade',
-      subtitle: 'Investment Platform',
-      description: 'Buy and sell digital assets',
-      info: 'Access shares, SACCO investments and build diversified portfolios',
+      subtitle: 'Part 9: ICAN Coins',
       color: 'from-yellow-600 to-orange-600',
       icon: BarChart3,
-      features: ['Market analysis', 'Real-time trading', 'Portfolio management'],
+      features: ['Own digital assets', 'Build long-term wealth', 'Protect buying power'],
+      slideWords: ['Own ICAN Coins', 'Grow Over Time', 'Future of Money'],
       images: ['/images/incaera share.png', '/images/ICAN era sacco.png', '/images/sacco.png']
     },
     {
       title: 'Tithe',
-      subtitle: 'Spiritual Giving',
-      description: 'Manage your spiritual giving and contributions',
-      info: 'Track tithes and offerings with digital records and receipts',
+      subtitle: 'Part 6: Giving Back',
       color: 'from-pink-600 to-rose-600',
       icon: Heart,
-      features: ['Tithe tracking', 'Giving history', 'Spiritual blessings'],
+      features: ['Automatic giving', 'Track yearly impact', 'Keep giving records'],
+      slideWords: ['Give Consistently', 'Track Your Impact'],
       images: ['/images/ICANera tithe.png', '/images/ICANera tith2.png']
     }
   ];
 
-  const handleCarouselScroll = (direction) => {
-    if (carouselRef.current) {
-      const scrollAmount = carouselRef.current.clientWidth;
-      if (direction === 'next') {
-        carouselRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-        setActiveSlide((prev) => (prev + 1) % carouselCards.length);
-      } else {
-        carouselRef.current.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
-        setActiveSlide((prev) => (prev - 1 + carouselCards.length) % carouselCards.length);
-      }
+  const handleFeatureExplore = (title, action) => {
+    console.log(`Exploring ${title} - Action: ${action}`);
+
+    if (title === 'Pitchin') {
+      setShowPitchinPanel(true);
+      setActiveBottomTab('pitchin');
+    } else if (title === 'Wallet') {
+      setShowWalletPanel(true);
+      setActiveBottomTab('wallet');
+    } else if (title === 'Trust') {
+      setShowTrustPanel(true);
+      setActiveBottomTab('trust');
+    } else if (title === 'CMMS') {
+      setShowCmmsPanel(true);
+      setActiveBottomTab('cmms');
+    } else if (title === 'Expense & Income') {
+      setShowExpenseIncomePanel(true);
+      setShowTransactionEntry(true);
+      setTransactionType('personal');
+      setActiveBottomTab('expenses');
+    } else if (title === 'Trade') {
+      setShowWalletPanel(true);
+      setActiveBottomTab('wallet');
+    } else if (title === 'Tithe') {
+      setShowTithingCalculator(true);
     }
   };
 
@@ -2062,6 +2158,14 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             {/* Header Actions - ABSOLUTE RIGHT */}
             {isWebDashboard ? (
               <div className="absolute right-2 sm:right-3 top-2 sm:top-3 flex items-center gap-2">
+                <button
+                  onClick={() => setSelectedDetail({ tab: 'profile', item: 'My Profile' })}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-cyan-300/40 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-100 text-xs font-semibold transition"
+                  title="Open my profile"
+                >
+                  <User className="w-4 h-4" />
+                  Profile
+                </button>
                 <button
                   onClick={() => setShowStatusPage(true)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-purple-300/40 bg-purple-500/20 hover:bg-purple-500/30 text-purple-100 text-xs font-semibold transition"
@@ -4897,43 +5001,30 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       </div>
 
       {/* ====== FEATURE CARDS SECTION ====== */}
-      <div className="px-4 py-6 space-y-4 overflow-y-auto">
-        {carouselCards.map((card, idx) => (
-          <FeatureCardWithSlideshow 
-            key={idx} 
-            card={card}
-            onExplore={(title, action) => {
-              console.log(`Exploring ${title} - Action: ${action}`);
-              
-              // Handle different card actions
-              if (title === 'Pitchin') {
-                setShowPitchinPanel(true);
-                setActiveBottomTab('pitchin');
-              } else if (title === 'Wallet') {
-                setShowWalletPanel(true);
-                setActiveBottomTab('wallet');
-              } else if (title === 'Trust') {
-                setShowTrustPanel(true);
-                setActiveBottomTab('trust');
-              } else if (title === 'CMMS') {
-                setShowCmmsPanel(true);
-                setActiveBottomTab('cmms');
-              } else if (title === 'Expense & Income') {
-                setShowExpenseIncomePanel(true);
-                setShowTransactionEntry(true);
-                setTransactionType('personal');
-                setActiveBottomTab('expenses');
-              } else if (title === 'Trade') {
-                // Trade is accessed via Wallet panel
-                setShowWalletPanel(true);
-                setActiveBottomTab('wallet');
-              } else if (title === 'Tithe') {
-                // Tithe uses the tithing calculator from action icons
-                setShowTithingCalculator(true);
-              }
-            }}
-          />
-        ))}
+      <div className="px-4 py-6 overflow-y-auto">
+        {isWebDashboard ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
+            {carouselCards.map((card, idx) => (
+              <FeatureCardWithSlideshow
+                key={idx}
+                card={card}
+                onExplore={handleFeatureExplore}
+                forcePitchinLayout
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {carouselCards.map((card, idx) => (
+              <FeatureCardWithSlideshow
+                key={idx}
+                card={card}
+                onExplore={handleFeatureExplore}
+                immersiveMobile
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ====== CMMS SECTION ====== */}
@@ -5007,7 +5098,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           : 'bg-transparent'
       }`}>
         <div className={isWebDashboard
-          ? 'flex items-center justify-between py-3 px-4 sm:px-6 max-w-3xl mx-auto mb-4 rounded-2xl border border-purple-400/30 bg-slate-900/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(36,18,58,0.45)]'
+          ? 'flex items-center justify-between py-3 px-4 sm:px-6 max-w-3xl mx-auto mb-4 rounded-2xl border border-green-400/30 bg-slate-900/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(36,18,58,0.45)]'
           : 'flex items-center justify-between px-2 py-3'
         }>
           {/* Home */}
@@ -5024,7 +5115,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               showPitchinPanel ? 'opacity-40' : 'opacity-100'
             }`}
           >
-            <Home className={`w-6 h-6 ${showPitchinPanel ? 'text-gray-400/60' : 'text-purple-400'}`} />
+            <Home className={`w-6 h-6 ${showPitchinPanel ? 'text-gray-400/60' : 'text-green-400'}`} />
             <span className={`text-xs font-medium ${showPitchinPanel ? 'text-gray-400/60' : 'text-gray-300'}`}>Home</span>
           </button>
 
@@ -5035,8 +5126,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               showPitchinPanel ? 'opacity-80' : 'opacity-100'
             }`}
           >
-            <Briefcase className={`w-6 h-6 ${showPitchinPanel ? 'text-purple-400/80' : 'text-purple-400'}`} />
-            <span className={`text-xs font-medium ${showPitchinPanel ? 'text-purple-300/80' : 'text-gray-300'}`}>Pitchin</span>
+            <Briefcase className={`w-6 h-6 ${showPitchinPanel ? 'text-green-400/80' : 'text-green-400'}`} />
+            <span className={`text-xs font-medium ${showPitchinPanel ? 'text-green-300/80' : 'text-gray-300'}`}>Pitchin</span>
           </button>
 
           {/* Wallet */}
@@ -5046,7 +5137,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               showPitchinPanel ? 'opacity-40' : 'opacity-100'
             }`}
           >
-            <Wallet className={`w-6 h-6 ${showPitchinPanel ? 'text-gray-400/60' : 'text-purple-400'}`} />
+            <Wallet className={`w-6 h-6 ${showPitchinPanel ? 'text-gray-400/60' : 'text-green-400'}`} />
             <span className={`text-xs font-medium ${showPitchinPanel ? 'text-gray-400/60' : 'text-gray-300'}`}>Wallet</span>
           </button>
 
@@ -5057,7 +5148,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               showPitchinPanel ? 'opacity-40' : 'opacity-100'
             }`}
           >
-            <Lock className={`w-6 h-6 ${showPitchinPanel ? 'text-gray-400/60' : 'text-purple-400'}`} />
+            <Lock className={`w-6 h-6 ${showPitchinPanel ? 'text-gray-400/60' : 'text-green-400'}`} />
             <span className={`text-xs font-medium ${showPitchinPanel ? 'text-gray-400/60' : 'text-gray-300'}`}>Trust</span>
           </button>
 
@@ -5068,7 +5159,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               showPitchinPanel ? 'opacity-40' : 'opacity-100'
             }`}
           >
-            <Settings className={`w-6 h-6 ${showPitchinPanel ? 'text-gray-400/60' : 'text-purple-400'}`} />
+            <Settings className={`w-6 h-6 ${showPitchinPanel ? 'text-gray-400/60' : 'text-green-400'}`} />
             <span className={`text-xs font-medium ${showPitchinPanel ? 'text-gray-400/60' : 'text-gray-300'}`}>CMMS</span>
           </button>
         </div>
