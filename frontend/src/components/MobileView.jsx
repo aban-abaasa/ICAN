@@ -215,16 +215,38 @@ const RecentTransactionsCollapsible = ({ transactions, formatCurrency }) => {
 // Feature Card Component with Image Slideshow - Updated with animations
 const FeatureCardWithSlideshow = ({ card, onExplore }) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [isCollapsed, setIsCollapsed] = useState(card.title !== 'Pitchin');
+  const [failedImages, setFailedImages] = useState({});
+
+  const availableImages = (card.images || [])
+    .map((src, index) => ({ src, index }))
+    .filter((image) => !failedImages[image.index]);
+
+  const shouldShowMedia = availableImages.length > 0 && (!isCollapsed || card.title === 'Pitchin');
+  const visibleFeatures = isCollapsed ? (card.features || []).slice(0, 2) : (card.features || []);
+  const hasHiddenFeatures = (card.features || []).length > visibleFeatures.length;
 
   useEffect(() => {
-    if (!card.images || card.images.length === 0) return;
+    setCurrentImageIndex(0);
+    setFailedImages({});
+    setIsCollapsed(card.title !== 'Pitchin');
+  }, [card.title]);
+
+  useEffect(() => {
+    if (!shouldShowMedia || availableImages.length <= 1) return;
 
     const interval = setInterval(() => {
-      setCurrentImageIndex((prev) => (prev + 1) % card.images.length);
-    }, 3000); // Change image every 3 seconds
+      setCurrentImageIndex((prev) => (prev + 1) % availableImages.length);
+    }, 3000);
 
     return () => clearInterval(interval);
-  }, [card.images]);
+  }, [availableImages.length, shouldShowMedia]);
+
+  useEffect(() => {
+    if (availableImages.length > 0 && currentImageIndex >= availableImages.length) {
+      setCurrentImageIndex(0);
+    }
+  }, [availableImages.length, currentImageIndex]);
 
   return (
     <div className="w-full bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl overflow-hidden shadow-2xl">
@@ -240,41 +262,56 @@ const FeatureCardWithSlideshow = ({ card, onExplore }) => {
               )}
             </div>
           </div>
-          
-          {/* Action buttons for Pitchin card */}
-          {card.title === 'Pitchin' && card.actions && (
-            <div className="flex items-center gap-2">
-              {card.actions.map((action, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => onExplore && onExplore(card.title, action.type)}
-                  className="flex items-center gap-1 bg-white/20 hover:bg-white/30 backdrop-blur-sm px-3 py-1.5 rounded-full transition-all transform hover:scale-105 active:scale-95"
-                  title={action.label}
-                >
-                  <action.icon className="w-4 h-4" />
-                  <span className="text-xs font-medium">{action.label}</span>
-                </button>
-              ))}
-            </div>
-          )}
+
+          <div className="flex items-center gap-2">
+            {card.title !== 'Pitchin' && (
+              <button
+                onClick={() => setIsCollapsed((prev) => !prev)}
+                className="flex items-center gap-1 bg-white/20 hover:bg-white/30 backdrop-blur-sm px-2.5 py-1 rounded-full transition-all"
+              >
+                <span className="text-[10px] font-semibold uppercase tracking-wide">
+                  {isCollapsed ? 'Expand' : 'Collapse'}
+                </span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isCollapsed ? '' : 'rotate-180'}`} />
+              </button>
+            )}
+
+            {/* Action buttons for Pitchin card */}
+            {card.title === 'Pitchin' && card.actions && (
+              <div className="flex items-center gap-2">
+                {card.actions.map((action, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => onExplore && onExplore(card.title, action.type)}
+                    className="flex items-center gap-1 bg-white/20 hover:bg-white/30 backdrop-blur-sm px-3 py-1.5 rounded-full transition-all transform hover:scale-105 active:scale-95"
+                    title={action.label}
+                  >
+                    <action.icon className="w-4 h-4" />
+                    <span className="text-xs font-medium">{action.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
         <p className="text-xs text-white/80">{card.description}</p>
-        {card.info && (
+        {card.info && !isCollapsed && (
           <p className="text-[9px] text-white/50 mt-1 italic">{card.info}</p>
         )}
       </div>
 
-      {/* Full Screen Image Slideshow - Mobile Optimized */}
-      {card.images && card.images.length > 0 && (
-        <div className="relative w-full h-[60vh] bg-slate-950 overflow-hidden">
-          {card.images.map((image, imgIdx) => (
+      {/* Image Slideshow - compact by default on service cards */}
+      {shouldShowMedia && (
+        <div className={`relative w-full ${card.title === 'Pitchin' ? 'h-[56vh]' : 'h-44'} bg-slate-950 overflow-hidden`}>
+          {availableImages.map((image, imgIdx) => (
             <img
-              key={imgIdx}
-              src={image}
-              alt={`${card.title} ${imgIdx + 1}`}
+              key={image.index}
+              src={image.src}
+              alt=""
+              onError={() => setFailedImages((prev) => ({ ...prev, [image.index]: true }))}
               className={`absolute inset-0 w-full h-full object-cover transition-all duration-1000 ease-in-out ${
-                imgIdx === currentImageIndex 
-                  ? 'opacity-100 scale-100' 
+                imgIdx === currentImageIndex
+                  ? 'opacity-100 scale-100'
                   : 'opacity-0 scale-110'
               }`}
               style={{
@@ -282,10 +319,10 @@ const FeatureCardWithSlideshow = ({ card, onExplore }) => {
               }}
             />
           ))}
-          
+
           {/* Gradient overlay for better text visibility */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none" />
-          
+
           {/* Quick action overlay for Pitchin */}
           {card.title === 'Pitchin' && onExplore && (
             <button
@@ -296,44 +333,54 @@ const FeatureCardWithSlideshow = ({ card, onExplore }) => {
               <span className="text-white font-bold text-sm">Launch Pitchin</span>
             </button>
           )}
-          
+
           {/* Image indicators - Bottom center */}
-          <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex gap-2">
-            {card.images.map((_, dotIdx) => (
-              <div
-                key={dotIdx}
-                className={`rounded-full transition-all duration-500 ${
-                  dotIdx === currentImageIndex
-                    ? 'bg-white w-8 h-2'
-                    : 'bg-white/40 w-2 h-2'
-                }`}
-              />
-            ))}
-          </div>
+          {availableImages.length > 1 && (
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
+              {availableImages.map((_, dotIdx) => (
+                <div
+                  key={dotIdx}
+                  className={`rounded-full transition-all duration-500 ${
+                    dotIdx === currentImageIndex
+                      ? 'bg-white w-7 h-2'
+                      : 'bg-white/40 w-2 h-2'
+                  }`}
+                />
+              ))}
+            </div>
+          )}
 
           {/* Image counter */}
-          <div className="absolute top-4 right-4 bg-black/50 backdrop-blur-sm px-3 py-1 rounded-full text-white text-xs font-medium">
-            {currentImageIndex + 1} / {card.images.length}
+          <div className="absolute top-3 right-3 bg-black/50 backdrop-blur-sm px-3 py-1 rounded-full text-white text-xs font-medium">
+            {Math.min(currentImageIndex + 1, availableImages.length)} / {availableImages.length}
           </div>
         </div>
       )}
 
       {/* Card Body - Compact */}
       <div className="p-4">
-        <div className="space-y-2">
-          {card.features.map((feature, fIdx) => (
-            <div key={fIdx} className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 bg-purple-500 rounded-full flex-shrink-0"></div>
-              <span className="text-xs text-gray-300">{feature}</span>
-            </div>
+        <ul className="space-y-1.5 list-disc pl-5">
+          {visibleFeatures.map((feature, fIdx) => (
+            <li key={fIdx} className="text-xs text-gray-300 leading-relaxed marker:text-purple-400">
+              {feature}
+            </li>
           ))}
-        </div>
-        
+        </ul>
+
+        {hasHiddenFeatures && (
+          <button
+            onClick={() => setIsCollapsed(false)}
+            className="mt-2 text-[11px] font-semibold text-purple-300 hover:text-purple-200 transition-colors"
+          >
+            +{(card.features || []).length - visibleFeatures.length} more
+          </button>
+        )}
+
         {/* Explore button for all cards */}
         {onExplore && (
           <button
             onClick={() => onExplore(card.title, 'explore')}
-            className="w-full mt-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white py-2.5 rounded-lg font-semibold text-sm transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+            className="w-full mt-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white py-2.5 rounded-lg font-semibold text-sm transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
           >
             <Rocket className="w-4 h-4" />
             Explore {card.title}
@@ -1921,6 +1968,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     selectedDetail?.tab === 'growth' ? 'growth' :
     selectedDetail?.tab === 'settings' ? 'settings' :
     'dashboard';
+  const overlayPanelBottomInset = 'calc(5.5rem + env(safe-area-inset-bottom))';
 
   const closeHeaderPanels = () => {
     setShowProfilePanel(false);
@@ -4909,15 +4957,21 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       
       {/* Pitchin Panel - Full Screen Video */}
       {showPitchinPanel && (
-        <div className="fixed inset-0 z-30 bg-black overflow-hidden">
+        <div
+          className="fixed inset-x-0 top-0 z-30 bg-black overflow-hidden"
+          style={{ bottom: overlayPanelBottomInset }}
+        >
           <Pitchin />
         </div>
       )}
 
       {/* Trust Panel - Full Web Trust System UI */}
       {showTrustPanel && (
-        <div className="fixed inset-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto pb-32">
-          <div>
+        <div
+          className="fixed inset-x-0 top-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto"
+          style={{ bottom: overlayPanelBottomInset }}
+        >
+          <div className="pt-2 px-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
             <TrustSystem currentUser={authUser || userProfile} />
           </div>
         </div>
@@ -4925,8 +4979,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
       {/* Wallet Panel - Full Web Wallet UI */}
       {showWalletPanel && (
-        <div className="fixed inset-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto pb-32">
-          <div>
+        <div
+          className="fixed inset-x-0 top-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto"
+          style={{ bottom: overlayPanelBottomInset }}
+        >
+          <div className="pt-2 px-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
             <ICANWallet />
           </div>
         </div>
@@ -4934,49 +4991,15 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
       {/* CMMS Panel - Full Web CMMS UI */}
       {showCmmsPanel && (
-        <div className="fixed inset-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto pb-32">
-          <div>
+        <div
+          className="fixed inset-x-0 top-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto"
+          style={{ bottom: overlayPanelBottomInset }}
+        >
+          <div className="pt-2 px-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
             <CMMSModule user={userProfile} />
           </div>
         </div>
       )}
-
-      {/* CMMS Panel */}
-      {showCmmsPanel && (
-        <div className="mb-32 px-4 py-6">
-          <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-6 border border-amber-200 shadow-lg">
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">⚙️ CMMS - Management System</h2>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-white rounded-lg p-4 shadow hover:shadow-lg cursor-pointer transition">
-                  <p className="text-2xl mb-1">📋</p>
-                  <p className="text-sm font-semibold text-gray-800">Tasks</p>
-                  <p className="text-xs text-gray-600">Manage tasks</p>
-                </div>
-                <div className="bg-white rounded-lg p-4 shadow hover:shadow-lg cursor-pointer transition">
-                  <p className="text-2xl mb-1">📊</p>
-                  <p className="text-sm font-semibold text-gray-800">Analytics</p>
-                  <p className="text-xs text-gray-600">View reports</p>
-                </div>
-                <div className="bg-white rounded-lg p-4 shadow hover:shadow-lg cursor-pointer transition">
-                  <p className="text-2xl mb-1">👥</p>
-                  <p className="text-sm font-semibold text-gray-800">Team</p>
-                  <p className="text-xs text-gray-600">Manage team</p>
-                </div>
-                <div className="bg-white rounded-lg p-4 shadow hover:shadow-lg cursor-pointer transition">
-                  <p className="text-2xl mb-1">⚙️</p>
-                  <p className="text-sm font-semibold text-gray-800">Settings</p>
-                  <p className="text-xs text-gray-600">System settings</p>
-                </div>
-              </div>
-              <button onClick={() => setShowCmmsPanel(false)} className="w-full py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold transition">
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ====== FIXED BOTTOM NAVIGATION - ALWAYS ON TOP ====== */}
       <div className={`fixed bottom-0 left-0 right-0 z-50 transition-all ${
         showPitchinPanel 

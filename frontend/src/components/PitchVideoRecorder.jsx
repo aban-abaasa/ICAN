@@ -808,10 +808,9 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                   className="absolute inset-0 flex flex-col items-center justify-center text-white z-10 hover:bg-black/20 transition-all active:bg-black/40 rounded-lg"
                   title="Click to start recording"
                 >
-                  <div className="w-20 h-20 rounded-full bg-slate-700 hover:bg-slate-600 flex items-center justify-center mb-4 transition-all hover:scale-110 active:scale-95 shadow-lg">
-                    <Camera className="w-10 h-10 text-slate-400" />
+                  <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-full bg-slate-700 hover:bg-slate-600 flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow-lg">
+                    <Camera className="w-7 h-7 sm:w-10 sm:h-10 text-slate-400" />
                   </div>
-                  <p className="text-lg font-semibold">Tap to start recording</p>
                 </button>
               </>
             ) : (
@@ -840,7 +839,7 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                 </div>
 
                 {/* Video Controls Overlay in Preview - Bottom Center */}
-                <div className="absolute bottom-32 left-0 right-0 flex items-center justify-center gap-4 z-40">
+                <div className="absolute bottom-28 sm:bottom-32 left-0 right-0 flex items-center justify-center gap-2 sm:gap-4 z-40">
                   {/* Play/Pause Button */}
                   <button
                     onClick={() => {
@@ -853,10 +852,10 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                         }
                       }
                     }}
-                    className="w-14 h-14 rounded-full bg-blue-500/80 hover:bg-blue-500 backdrop-blur-md border-2 border-blue-400 text-white flex items-center justify-center transition-all shadow-xl hover:scale-110"
+                    className="w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-blue-500/80 hover:bg-blue-500 backdrop-blur-md border border-blue-400 sm:border-2 text-white flex items-center justify-center transition-all shadow-xl hover:scale-105"
                     title="Play/Pause"
                   >
-                    <Play className="w-7 h-7 fill-white" />
+                    <Play className="w-5 h-5 sm:w-7 sm:h-7 fill-white" />
                   </button>
 
                   {/* Volume Toggle */}
@@ -867,10 +866,10 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                         video.muted = !video.muted;
                       }
                     }}
-                    className="w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white flex items-center justify-center transition-all"
+                    className="w-9 h-9 sm:w-12 sm:h-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white flex items-center justify-center transition-all"
                     title="Toggle Sound"
                   >
-                    <span className="text-lg">🔊</span>
+                    <span className="text-sm sm:text-lg">🔊</span>
                   </button>
 
                   {/* Fullscreen Toggle */}
@@ -881,61 +880,54 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                         video.requestFullscreen();
                       }
                     }}
-                    className="w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white flex items-center justify-center transition-all"
+                    className="w-9 h-9 sm:w-12 sm:h-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white flex items-center justify-center transition-all"
                     title="Fullscreen"
                   >
-                    <Maximize className="w-5 h-5" />
+                    <Maximize className="w-4 h-4 sm:w-5 sm:h-5" />
                   </button>
                 </div>
 
                 {/* Preview Info Indicator */}
-                <div className="absolute top-4 left-4 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full border border-white/30 z-40">
-                  <p className="text-white font-semibold text-sm flex items-center gap-2">
-                    <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                <div className="absolute top-3 left-3 sm:top-4 sm:left-4 bg-black/60 backdrop-blur-md px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-full border border-white/30 z-40">
+                  <p className="text-white font-semibold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2">
+                    <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-400 rounded-full animate-pulse"></span>
                     Preview
                   </p>
                 </div>
               </>
             )}
 
-            {/* Top Right - Camera Mode Indicator - Recording Only */}
-            {!previewUrl && (
-            <div className="absolute top-4 right-4 flex items-center gap-2 px-3 py-2 rounded-full bg-blue-500/20 backdrop-blur-md border border-blue-500/50 z-40">
-              <span className="text-blue-300 text-xs font-semibold whitespace-nowrap">
-                {facingMode === 'user' ? '📱 Front' : '🔄 Back'}
-              </span>
-            </div>
-            )}
+            {/* Top Right camera mode label removed for cleaner mobile recording UI */}
 
             {/* Top Left - Back Button - Preview Only */}
             {previewUrl && onClose && (
             <button
               onClick={onClose}
-              className="absolute top-4 left-4 flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white text-sm font-medium transition-all hover:scale-105 active:scale-95 z-40"
+              className="absolute top-3 left-3 sm:top-4 sm:left-4 flex items-center justify-center sm:justify-start gap-2 w-9 h-9 sm:w-auto sm:h-auto sm:px-4 sm:py-2 rounded-lg bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white text-sm font-medium transition-all hover:scale-105 active:scale-95 z-40"
               title="Close preview"
             >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Back</span>
+              <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">Back</span>
             </button>
             )}
 
             {/* Left Side Controls - Vertical Stack */}
-            <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-3 z-40">
+            <div className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 sm:gap-3 z-40">
               {/* Back Button */}
               {onClose && (
                 <button
                   onClick={onClose}
-                  className="flex items-center justify-center w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border-2 border-white/20 text-white transition-all hover:scale-105 active:scale-95 shadow-lg"
+                  className="flex items-center justify-center w-8 h-8 sm:w-12 sm:h-12 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 sm:border-2 text-white transition-all hover:scale-105 active:scale-95 shadow-lg"
                   title="Back"
                 >
-                  <ArrowLeft className="w-5 h-5" />
+                  <ArrowLeft className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
                 </button>
               )}
 
               {/* Upload Video Button */}
-              <label className="w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border-2 border-white/20 text-white flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-lg"
+              <label className="w-8 h-8 sm:w-12 sm:h-12 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 sm:border-2 text-white flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-lg"
                 title="Upload Video">
-                <Upload className="w-5 h-5" />
+                <Upload className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
                 <input
                   type="file"
                   accept="video/*"
@@ -946,31 +938,31 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
             </div>
 
             {/* Right Side Controls - Vertical Stack */}
-            <div className="absolute right-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-3 z-40">
+            <div className="absolute right-3 sm:right-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 sm:gap-3 z-40">
               {/* Camera Toggle Button */}
               <button
                 onClick={toggleCamera}
                 disabled={!hasMultipleCameras}
                 title={hasMultipleCameras ? `Switch to ${facingMode === 'user' ? 'Back' : 'Front'} Camera` : 'Only one camera available'}
-                className={`w-12 h-12 rounded-full backdrop-blur-md border-2 flex items-center justify-center transition-all shadow-lg ${
+                className={`w-8 h-8 sm:w-12 sm:h-12 rounded-full backdrop-blur-md border sm:border-2 flex items-center justify-center transition-all shadow-lg ${
                   hasMultipleCameras
                     ? 'bg-blue-500/20 hover:bg-blue-500/40 border-blue-400/50 text-blue-300 hover:scale-105 active:scale-95'
                     : 'bg-white/5 border-white/10 text-white/30 cursor-not-allowed opacity-50'
                 }`}
               >
-                <SwitchCamera className="w-5 h-5" />
+                <SwitchCamera className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
               </button>
 
               {/* Fullscreen Toggle */}
               <button
                 onClick={toggleFullscreen}
-                className="w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border-2 border-white/20 text-white flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow-lg"
+                className="w-8 h-8 sm:w-12 sm:h-12 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 sm:border-2 text-white flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow-lg"
                 title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
               >
                 {isFullscreen ? (
-                  <Minimize className="w-5 h-5" />
+                  <Minimize className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
                 ) : (
-                  <Maximize className="w-5 h-5" />
+                  <Maximize className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
                 )}
               </button>
 
@@ -994,34 +986,34 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
               {/* Stop Button */}
               <button
                 onClick={stopRecording}
-                className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-red-500 border-2 border-red-400 hover:bg-red-600 flex items-center justify-center transition-all shadow-lg hover:scale-110 active:scale-95"
+                className="relative w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-red-500 border-2 border-red-400 hover:bg-red-600 flex items-center justify-center transition-all shadow-lg hover:scale-105 active:scale-95"
                 title="Stop recording"
               >
-                <Square className="w-6 h-6 sm:w-7 sm:h-7 text-white fill-white" />
+                <Square className="w-5 h-5 sm:w-7 sm:h-7 text-white fill-white" />
               </button>
             </div>
             )}
 
             {/* Preview Action Buttons - Right Side Vertical Stack (Only during Preview) */}
             {previewUrl && (
-            <div className="absolute right-4 bottom-24 flex flex-col items-center gap-3 z-40">
+            <div className="absolute right-3 sm:right-4 bottom-20 sm:bottom-24 flex flex-col items-center gap-2 sm:gap-3 z-40">
               {/* Retake Button */}
               <button
                 onClick={() => setPreviewUrl(null)}
-                className="px-5 py-2 rounded-full bg-orange-500/90 hover:bg-orange-600 backdrop-blur-md border-2 border-orange-400 text-white font-semibold transition-all hover:scale-110 active:scale-95 flex items-center gap-2 shadow-lg"
+                className="w-10 h-10 sm:w-auto sm:h-auto sm:px-5 sm:py-2 rounded-full bg-orange-500/90 hover:bg-orange-600 backdrop-blur-md border border-orange-400 sm:border-2 text-white font-semibold transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2 shadow-lg"
                 title="Record again"
               >
-                <RotateCcw className="w-5 h-5" />
+                <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5" />
                 <span className="hidden sm:inline">Retake</span>
               </button>
 
               {/* Edit/Trim Button */}
               <button
                 onClick={() => setShowVideoClipper(true)}
-                className="px-5 py-2 rounded-full bg-blue-500/90 hover:bg-blue-600 backdrop-blur-md border-2 border-blue-400 text-white font-semibold transition-all hover:scale-110 active:scale-95 flex items-center gap-2 shadow-lg"
+                className="w-10 h-10 sm:w-auto sm:h-auto sm:px-5 sm:py-2 rounded-full bg-blue-500/90 hover:bg-blue-600 backdrop-blur-md border border-blue-400 sm:border-2 text-white font-semibold transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2 shadow-lg"
                 title="Trim or edit video"
               >
-                <Scissors className="w-5 h-5" />
+                <Scissors className="w-4 h-4 sm:w-5 sm:h-5" />
                 <span className="hidden sm:inline">Edit</span>
               </button>
 
@@ -1043,10 +1035,10 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                   setIsFormExpanded(true);
                   setWorkflowStatus('📋 Complete all documents to publish');
                 }}
-                className="px-5 py-2 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 border-2 border-green-400 text-white font-bold transition-all hover:scale-110 active:scale-95 flex items-center gap-2 shadow-xl"
+                className="w-10 h-10 sm:w-auto sm:h-auto sm:px-5 sm:py-2 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 border border-green-400 sm:border-2 text-white font-bold transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2 shadow-xl"
                 title="Proceed to document upload"
               >
-                <CheckCircle className="w-5 h-5" />
+                <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5" />
                 <span className="hidden sm:inline">Next</span>
               </button>
             </div>

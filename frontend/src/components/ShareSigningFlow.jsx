@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, ChevronRight, CheckCircle, Clock, Lock, Fingerprint, QrCode, Download, AlertCircle, Users, TrendingUp, Shield, FileText, DollarSign, Printer } from 'lucide-react';
+import { X, ChevronRight, ChevronDown, ChevronUp, CheckCircle, Clock, Lock, Fingerprint, QrCode, Download, AlertCircle, Users, TrendingUp, Shield, FileText, DollarSign, Printer } from 'lucide-react';
 import QRCode from 'qrcode';
 import { getSupabase, createNotification, createInvestmentNotification } from '../services/pitchingService';
 import { walletTransactionService } from '../services/walletTransactionService';
@@ -19,16 +19,16 @@ import ShareholderSignatureModal from './ShareholderSignatureModal';
  * 6. Pending Signatures (Wait for 60% shareholder signatures)
  * 7. Finalization (QR Code Seal + Add to Profile)
  * 
- * ✅ ENHANCEMENTS (Latest):
+ * ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ ENHANCEMENTS (Latest):
  * 
- * 🔓 INVESTOR DOCUMENT ACCESS (Fixed RLS):
+ * ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ INVESTOR DOCUMENT ACCESS (Fixed RLS):
  * - Stage 1 now shows "Investor Access Enabled" confirmation badge
  * - Authenticated investors can view all seller documents
  * - Fallback mechanism: If initial RLS fails (406), tries less restrictive query
  * - Console logs clearly show investor access status
  * - Documents display in organized cards with progress tracking
  * 
- * 🤝 FLEXIBLE INVESTMENT TYPES (0 Shares Support):
+ * ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€šÃ‚Â¤Ãƒâ€šÃ‚Â FLEXIBLE INVESTMENT TYPES (0 Shares Support):
  * - Stage 0: Choose between "Buy Equity", "Partner", or "Support" 
  * - Stage 3: Share input now allows min="0" for non-equity investments
  * - Partner/Support investments show "No equity stake" message (blue highlight)
@@ -36,7 +36,7 @@ import ShareholderSignatureModal from './ShareholderSignatureModal';
  * - Validation: Only requires shares > 0 for 'buy' type
  * - Stage 4 Wallet shows proper label: "Partnership/Support (no equity)" when shares=0
  * 
- * 💱 COUNTRY-SPECIFIC CURRENCY INFORMATION (Informational Only):
+ * ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€šÃ‚Â± COUNTRY-SPECIFIC CURRENCY INFORMATION (Informational Only):
  * - User's registered country detected from profiles.country on mount
  * - Supported countries: UG (UGX), KE (KES), TZ (TZS), RW (RWF)
  * - Default currency shown based on country but investor can use ANY currency
@@ -140,7 +140,7 @@ const DeadlineCountdown = ({ notificationTime, onExpired }) => {
 
       {timeLeft.expired && (
         <div className="text-red-300 text-sm font-semibold text-center">
-          ⏰ DEADLINE EXPIRED - Signature period has ended
+          ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â° DEADLINE EXPIRED - Signature period has ended
         </div>
       )}
     </div>
@@ -150,41 +150,41 @@ const DeadlineCountdown = ({ notificationTime, onExpired }) => {
 const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
   // Debug: Log what we received
   useEffect(() => {
-    console.log('🔍 ShareSigningFlow mounted with:');
-    console.log('   ═══════════════════════════════════════');
+    console.log('ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â ShareSigningFlow mounted with:');
+    console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚Â');
     console.log('   PITCH DATA RECEIVED:');
-    console.log('   ═══════════════════════════════════════');
-    console.log('   🔑 ALL PITCH KEYS:', pitch ? Object.keys(pitch) : 'PITCH IS NULL');
+    console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚Â');
+    console.log('   ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ ALL PITCH KEYS:', pitch ? Object.keys(pitch) : 'PITCH IS NULL');
     console.log('   pitch.id:', pitch?.id);
     console.log('   pitch.title:', pitch?.title);
     console.log('   pitch.business_profile_id:', pitch?.business_profile_id);
     console.log('   pitch.created_by:', pitch?.created_by);
     console.log('   pitch.creator_name:', pitch?.creator_name);
-    console.log('   ───────────────────────────────────────');
+    console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬');
     console.log('   NESTED BUSINESS PROFILES:');
-    console.log('   ───────────────────────────────────────');
+    console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬');
     console.log('   pitch.business_profiles:', pitch?.business_profiles);
     if (pitch?.business_profiles) {
-      console.log('   └─ id:', pitch.business_profiles.id);
-      console.log('   └─ business_name:', pitch.business_profiles.business_name);
-      console.log('   └─ user_id:', pitch.business_profiles.user_id);
-      console.log('   └─ description:', pitch.business_profiles.description);
-      console.log('   └─ business_co_owners:', pitch.business_profiles.business_co_owners?.length || 0, 'shareholders');
+      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ id:', pitch.business_profiles.id);
+      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ business_name:', pitch.business_profiles.business_name);
+      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ user_id:', pitch.business_profiles.user_id);
+      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ description:', pitch.business_profiles.description);
+      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ business_co_owners:', pitch.business_profiles.business_co_owners?.length || 0, 'shareholders');
     } else {
-      console.log('   └─ ❌ MISSING - data not fetched!');
+      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ MISSING - data not fetched!');
     }
-    console.log('   ═══════════════════════════════════════');
+    console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚Â');
     console.log('   INVESTOR DATA RECEIVED:');
-    console.log('   ═══════════════════════════════════════');
+    console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚Â');
     console.log('   businessProfile.id:', businessProfile?.id);
     console.log('   businessProfile.business_name:', businessProfile?.business_name);
     console.log('   businessProfile.user_id:', businessProfile?.user_id);
-    console.log('   ═══════════════════════════════════════');
+    console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚Â');
     console.log('   CURRENT USER:');
-    console.log('   ═══════════════════════════════════════');
+    console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚Â');
     console.log('   currentUser.id:', currentUser?.id);
     console.log('   currentUser.email:', currentUser?.email);
-    console.log('   ═══════════════════════════════════════');
+    console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚Â');
   }, []);
 
   // Current user ID from props
@@ -201,6 +201,32 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
   // Documents
   const [sellerDocuments, setSellerDocuments] = useState(null);
   const [documentsLoading, setDocumentsLoading] = useState(false);
+  const [expandedDocumentCards, setExpandedDocumentCards] = useState({
+    businessPlan: true,
+    financialProjection: false,
+    valueProposition: false,
+    mou: false,
+    shareAllocation: false,
+    privacy: false
+  });
+  const [activeDocumentPage, setActiveDocumentPage] = useState(null);
+  const [agreementPanels, setAgreementPanels] = useState({
+    snapshot: true,
+    terms: false
+  });
+  const [flowPanels, setFlowPanels] = useState({
+    shareOverview: true,
+    walletSummary: true,
+    walletCoins: true,
+    walletBreakdown: false,
+    walletShareholders: false,
+    paymentSummary: true,
+    pendingStatus: true,
+    pendingNotifications: false,
+    pendingTimeline: false,
+    finalSummary: true,
+    finalCertificate: false
+  });
   
   // Payment & PIN (now using wallet PIN)
   const [walletPin, setWalletPin] = useState('');
@@ -236,7 +262,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
   const [loadingWallet, setLoadingWallet] = useState(true);
   const [icanAccountNumber, setIcanAccountNumber] = useState(null);
   const [icanAccountHolder, setIcanAccountHolder] = useState(null);
-  const [walletTab, setWalletTab] = useState('overview');
+  const [walletTab, setWalletTab] = useState('wallet');
   
   // Seller's business profile (for displaying correct creator/business info)
   const [sellerBusinessProfile, setSellerBusinessProfile] = useState(null);
@@ -254,6 +280,12 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (stage !== 1 && activeDocumentPage) {
+      setActiveDocumentPage(null);
+    }
+  }, [stage, activeDocumentPage]);
 
   // Fallback mock shareholders (only if real shareholders not available)
   const mockShareholders = [
@@ -283,12 +315,12 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
     return realShareholders.filter(sh => sh.user_id || sh.id.length === 36);
   };
 
-  // ✅ CHECK ACTUAL SHAREHOLDER APPROVAL STATUS FROM DATABASE
+  // ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ CHECK ACTUAL SHAREHOLDER APPROVAL STATUS FROM DATABASE
   const checkShareholderApprovalStatus = async () => {
     try {
       const supabase = getSupabase();
       if (!supabase) {
-        console.warn('⚠️ Supabase not available');
+        console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Supabase not available');
         return { approvedCount: 0, totalRequired: 0, percentageApproved: 0, hasReachedThreshold: false };
       }
 
@@ -296,11 +328,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
       const pitchId = pitch?.id;
       
       if (!businessProfileId || !pitchId) {
-        console.warn('⚠️ Missing business profile or pitch ID for approval check');
+        console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Missing business profile or pitch ID for approval check');
         return { approvedCount: 0, totalRequired: 0, percentageApproved: 0, hasReachedThreshold: false };
       }
 
-      console.log(`\n🔍 CHECKING SHAREHOLDER APPROVALS...`);
+      console.log(`\nÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â CHECKING SHAREHOLDER APPROVALS...`);
       console.log(`   Pitch ID: ${pitchId}`);
       console.log(`   Business Profile ID: ${businessProfileId}`);
 
@@ -313,17 +345,17 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
         .order('created_at', { ascending: false });
 
       if (agreementError) {
-        console.warn('⚠️ Error fetching agreements:', agreementError?.message);
+        console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Error fetching agreements:', agreementError?.message);
         return { approvedCount: 0, totalRequired: 0, percentageApproved: 0, hasReachedThreshold: false };
       }
 
       if (!agreements || agreements.length === 0) {
-        console.log('   📄 No investment agreements found yet for this pitch');
+        console.log('   ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾ No investment agreements found yet for this pitch');
         return { approvedCount: 0, totalRequired: 0, percentageApproved: 0, hasReachedThreshold: false };
       }
 
       const latestAgreement = agreements[0];
-      console.log(`   📄 Found ${agreements.length} agreement(s), checking latest: ${latestAgreement.id}`);
+      console.log(`   ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾ Found ${agreements.length} agreement(s), checking latest: ${latestAgreement.id}`);
       console.log(`   Status: ${latestAgreement.status}`);
 
       // Get investment signatures (shareholder approvals) for this agreement
@@ -335,12 +367,12 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
         .order('signature_timestamp', { ascending: false });
 
       if (sigError) {
-        console.warn('⚠️ Error fetching signatures:', sigError?.message);
+        console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Error fetching signatures:', sigError?.message);
         return { approvedCount: 0, totalRequired: 0, percentageApproved: 0, hasReachedThreshold: false };
       }
 
       const approvedCount = signatures?.length || 0;
-      console.log(`   ✍️ Found ${approvedCount} signed shareholder(s)`);
+      console.log(`   ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Found ${approvedCount} signed shareholder(s)`);
       
       if (signatures && signatures.length > 0) {
         console.log(`      Signatories:`);
@@ -357,7 +389,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
         .eq('status', 'active');
 
       if (coOwnersError) {
-        console.warn('⚠️ Error fetching co-owners:', coOwnersError?.message);
+        console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Error fetching co-owners:', coOwnersError?.message);
       }
 
       const totalShareholders = coOwners?.length || getActualShareholders().length;
@@ -365,12 +397,12 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
       const percentageApproved = totalShareholders > 0 ? (approvedCount / totalShareholders) * 100 : 0;
       const hasReachedThreshold = approvedCount >= requiredApprovals;
 
-      console.log(`📊 SHAREHOLDER APPROVAL STATUS CHECK:`);
-      console.log(`   → Total shareholders: ${totalShareholders}`);
-      console.log(`   → Required approvals: ${requiredApprovals}`);
-      console.log(`   → Approved so far: ${approvedCount}`);
-      console.log(`   → Percentage: ${percentageApproved.toFixed(1)}%`);
-      console.log(`   → Threshold reached: ${hasReachedThreshold ? '✅ YES' : '⏳ NO'}`);
+      console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã‚Â  SHAREHOLDER APPROVAL STATUS CHECK:`);
+      console.log(`   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Total shareholders: ${totalShareholders}`);
+      console.log(`   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Required approvals: ${requiredApprovals}`);
+      console.log(`   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Approved so far: ${approvedCount}`);
+      console.log(`   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Percentage: ${percentageApproved.toFixed(1)}%`);
+      console.log(`   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Threshold reached: ${hasReachedThreshold ? 'ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ YES' : 'ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â³ NO'}`);
 
       return {
         approvedCount,
@@ -381,7 +413,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
         agreementId: latestAgreement.id
       };
     } catch (error) {
-      console.error('❌ Error checking approval status:', error?.message);
+      console.error('ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Error checking approval status:', error?.message);
       return { approvedCount: 0, totalRequired: 0, percentageApproved: 0, hasReachedThreshold: false };
     }
   };
@@ -416,7 +448,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
         setDocumentsLoading(true);
         const supabase = getSupabase();
         
-        console.log('📄 Starting document fetch...');
+        console.log('ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾ Starting document fetch...');
         console.log(`   businessProfile.id: ${businessProfile?.id || 'MISSING'}`);
         console.log(`   pitch.business_profile_id (seller): ${pitch?.business_profile_id || 'MISSING'}`);
         console.log(`   supabase available: ${!!supabase}`);
@@ -425,7 +457,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
         const sellerProfileId = pitch?.business_profile_id;
         if (supabase && sellerProfileId) {
           try {
-            console.log('🔍 Querying business_documents table for seller profile ID:', sellerProfileId);
+            console.log('ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â Querying business_documents table for seller profile ID:', sellerProfileId);
             const { data, error } = await supabase
               .from('business_documents')
               .select('*')
@@ -433,13 +465,13 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
               .single();
             
             if (data && !error) {
-              console.log('✅ Documents fetched successfully:', data);
+              console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Documents fetched successfully:', data);
               setSellerDocuments(data);
             } else if (error) {
               // Handle different error types
               if (error.code === '404' || error.code === 'PGRST116' || error.message?.includes('No rows')) {
                 // No records found - try alternative query without .single()
-                console.log('ℹ️ No documents found with .single(). Trying alternative fetch...');
+                console.log('ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¹ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â No documents found with .single(). Trying alternative fetch...');
                 try {
                   const { data: altData, error: altError } = await supabase
                     .from('business_documents')
@@ -448,27 +480,27 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                     .limit(1);
                   
                   if (altData && altData.length > 0) {
-                    console.log('✅ Documents found with alternative query:', altData[0]);
+                    console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Documents found with alternative query:', altData[0]);
                     setSellerDocuments(altData[0]);
                   } else {
-                    console.log('ℹ️ No documents found for seller profile ID:', sellerProfileId);
+                    console.log('ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¹ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â No documents found for seller profile ID:', sellerProfileId);
                     console.log('   Searching for documents from ANY profile in the database...');
                     
                     // Try fetching ALL documents to see what profiles exist
-                    console.log('🔍 Fetching all documents to see what profiles exist...');
+                    console.log('ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â Fetching all documents to see what profiles exist...');
                     const { data: allDocs } = await supabase
                       .from('business_documents')
                       .select('*')
                       .limit(1);  // Get just the first one
                     
                     if (allDocs && allDocs.length > 0) {
-                      console.log('📋 Found documents in database with different profile ID!');
+                      console.log('ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¹ Found documents in database with different profile ID!');
                       console.log(`   Saved docs profile: ${allDocs[0].business_profile_id}`);
                       console.log(`   Seller profile ID: ${sellerProfileId}`);
-                      console.log(`   ✅ USING THE DOCUMENT THAT EXISTS IN DATABASE`);
+                      console.log(`   ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ USING THE DOCUMENT THAT EXISTS IN DATABASE`);
                       setSellerDocuments(allDocs[0]);
                     } else {
-                      console.log('❌ No documents found in entire database');
+                      console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ No documents found in entire database');
                       setSellerDocuments({
                         business_plan_content: null,
                         financial_projection_content: null,
@@ -499,7 +531,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
               } else if (error.code === '406' || error.message?.includes('406')) {
                 // 406 Not Acceptable - RLS policy may be too restrictive
                 // Try fetching with less restrictive query (investor view)
-                console.log('📋 Initial RLS check triggered 406. Investor is authenticated and can view documents.');
+                console.log('ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¹ Initial RLS check triggered 406. Investor is authenticated and can view documents.');
                 try {
                   const { data: investorData, error: investorError } = await supabase
                     .from('business_documents')
@@ -508,10 +540,10 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                     .limit(1);
                   
                   if (investorData?.length > 0) {
-                    console.log('✅ Investor can now view documents:', investorData[0]);
+                    console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Investor can now view documents:', investorData[0]);
                     setSellerDocuments(investorData[0]);
                   } else {
-                    console.log('ℹ️ No documents published by seller yet');
+                    console.log('ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¹ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â No documents published by seller yet');
                     setSellerDocuments({
                       business_plan_content: null,
                       financial_projection_content: null,
@@ -607,11 +639,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
             .single();
           
           if (profileData?.country && currencyByCountry[profileData.country]) {
-            console.log(`🌍 User country detected: ${profileData.country}`);
+            console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€¦Ã¢â‚¬â„¢Ãƒâ€šÃ‚Â User country detected: ${profileData.country}`);
             setUserCountry(profileData.country);
             setAllowedCurrency(currencyByCountry[profileData.country].currency);
           } else {
-            console.log('🌍 User country not found or unsupported. Using default UGX (Uganda)');
+            console.log('ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€¦Ã¢â‚¬â„¢Ãƒâ€šÃ‚Â User country not found or unsupported. Using default UGX (Uganda)');
             setUserCountry('UG');
             setAllowedCurrency('UGX');
           }
@@ -630,17 +662,17 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
   useEffect(() => {
     const fetchRealShareholders = async () => {
       try {
-        console.log('🔍 fetchRealShareholders called');
+        console.log('ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â fetchRealShareholders called');
         console.log('   Investor businessProfile:', businessProfile?.id);
         console.log('   Seller businessProfile (from pitch):', pitch?.business_profile_id);
         const supabase = getSupabase();
-        console.log('🔍 Supabase available:', !!supabase);
+        console.log('ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â Supabase available:', !!supabase);
         
         // Get seller profile ID (from pitch, not from investor's businessProfile)
         const sellerProfileId = pitch?.business_profile_id;
         
         if (!sellerProfileId || !supabase) {
-          console.log('⚠️ Missing seller profile ID or Supabase - cannot fetch real shareholders');
+          console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Missing seller profile ID or Supabase - cannot fetch real shareholders');
           // Fallback to currentUser only if no seller profile
           if (currentUser?.id && currentUser?.email) {
             setRealShareholders([{
@@ -658,15 +690,15 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
           return;
         }
         
-        console.log('✅ Conditions met - fetching ALL shareholders from database...');
-        console.log(`🔐 Investor user ID: ${currentUser?.id}`);
-        console.log(`🔐 Investor email: ${currentUser?.email}`);
-        console.log(`🔐 SELLER Business Profile ID (from pitch): ${pitch?.business_profile_id}`);
-        console.log(`🔐 Investor Business Profile ID: ${businessProfile?.id}`);
+        console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Conditions met - fetching ALL shareholders from database...');
+        console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â Investor user ID: ${currentUser?.id}`);
+        console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â Investor email: ${currentUser?.email}`);
+        console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â SELLER Business Profile ID (from pitch): ${pitch?.business_profile_id}`);
+        console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â Investor Business Profile ID: ${businessProfile?.id}`);
         
         // Query business_co_owners DIRECTLY from SELLER'S profile - get ALL shareholders (linked + unlinked)
-        // ⚠️ IMPORTANT: Use pitch.business_profile_id (SELLER), not businessProfile.id (INVESTOR)
-        console.log(`✅ Using seller profile: ${sellerProfileId}`);
+        // ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â IMPORTANT: Use pitch.business_profile_id (SELLER), not businessProfile.id (INVESTOR)
+        console.log(`ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Using seller profile: ${sellerProfileId}`);
         
         const { data: allCoOwners, error: coOwnersError } = await supabase
           .from('business_co_owners')
@@ -675,11 +707,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
           .order('created_at');
 
         if (coOwnersError) {
-          console.warn('❌ Error fetching co-owners:', coOwnersError.message);
+          console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Error fetching co-owners:', coOwnersError.message);
           throw coOwnersError;
         }
 
-        console.log(`📋 ALL co-owners from database (${allCoOwners.length} total):`, allCoOwners.map(o => ({
+        console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¹ ALL co-owners from database (${allCoOwners.length} total):`, allCoOwners.map(o => ({
           id: o.id,
           name: o.owner_name,
           email: o.owner_email,
@@ -690,31 +722,31 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
 
         // Filter active co-owners only
         const activeCoOwners = allCoOwners.filter(owner => !owner.status || owner.status === 'active');
-        console.log(`📊 Fetched ${allCoOwners.length} total co-owners, ${activeCoOwners.length} are active`);
+        console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã‚Â  Fetched ${allCoOwners.length} total co-owners, ${activeCoOwners.length} are active`);
         
         // IMPORTANT: Exclude the investor (current user) from shareholders list
         // Investors don't approve their own investments - only OTHER co-owners do
         const otherCoOwners = activeCoOwners.filter(owner => owner.user_id !== currentUser?.id);
-        console.log(`🔐 Investor filter results:`);
+        console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â Investor filter results:`);
         console.log(`   Found investor entries: ${activeCoOwners.length - otherCoOwners.length}`);
         console.log(`   Remaining OTHER shareholders: ${otherCoOwners.length}`);
-        console.log(`📋 OTHER co-owners (after excluding investor):`, otherCoOwners.map(o => ({
+        console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¹ OTHER co-owners (after excluding investor):`, otherCoOwners.map(o => ({
           id: o.id,
           name: o.owner_name,
           user_id: o.user_id
         })));
-        console.log(`✅ Excluding investor from approval list. ${otherCoOwners.length} OTHER co-owners need to approve.`);
+        console.log(`ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Excluding investor from approval list. ${otherCoOwners.length} OTHER co-owners need to approve.`);
         
         // Split into linked (with user_id) and unlinked (no user_id)
         const linkedCoOwners = otherCoOwners.filter(owner => owner.user_id);
         const unlinkedCoOwners = otherCoOwners.filter(owner => !owner.user_id);
         
-        console.log(`👥 Linked shareholders (with auth accounts): ${linkedCoOwners.length}`);
-        console.log(`📧 Unlinked shareholders (email only, pending account creation): ${unlinkedCoOwners.length}`);
+        console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“Ãƒâ€šÃ‚Â¥ Linked shareholders (with auth accounts): ${linkedCoOwners.length}`);
+        console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â§ Unlinked shareholders (email only, pending account creation): ${unlinkedCoOwners.length}`);
         
         if (unlinkedCoOwners.length > 0) {
-          console.warn('⚠️ Unlinked shareholders - they will receive email notifications:');
-          unlinkedCoOwners.forEach(o => console.warn(`   📧 ${o.owner_name} (${o.owner_email})`));
+          console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Unlinked shareholders - they will receive email notifications:');
+          unlinkedCoOwners.forEach(o => console.warn(`   ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â§ ${o.owner_name} (${o.owner_email})`));
         }
         
         // Map ALL OTHER shareholders (linked + unlinked) for approval count
@@ -732,21 +764,21 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
         
         if (allMappedShareholders.length > 0) {
           setRealShareholders(allMappedShareholders);
-          console.log(`📊 ✅ LOADED ${allMappedShareholders.length} SHAREHOLDERS (${linkedCoOwners.length} linked + ${unlinkedCoOwners.length} unlinked)`);
+          console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã‚Â  ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ LOADED ${allMappedShareholders.length} SHAREHOLDERS (${linkedCoOwners.length} linked + ${unlinkedCoOwners.length} unlinked)`);
           const threshold = calculateApprovalThreshold(allMappedShareholders.length);
           setRequiredApprovalCount(threshold);
-          console.log(`✅ Approval threshold: ${threshold}/${allMappedShareholders.length} (60% of all shareholders must approve)`);
+          console.log(`ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Approval threshold: ${threshold}/${allMappedShareholders.length} (60% of all shareholders must approve)`);
           return;
         }
         
         // Fallback: Check if seller has nested business_co_owners from pitch data (seller's profile)
         const sellerCoOwners = sellerBusinessProfile?.business_co_owners || pitch?.business_profiles?.business_co_owners || [];
         if (sellerCoOwners && sellerCoOwners.length > 0) {
-          console.log('✅ Found shareholders in seller business profile (pitch.business_profiles.business_co_owners)');
+          console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Found shareholders in seller business profile (pitch.business_profiles.business_co_owners)');
           
           // Filter out the current investor
           const otherCoOwners = sellerCoOwners.filter(owner => owner.user_id !== currentUser?.id && owner.owner_email !== currentUser?.email);
-          console.log(`📊 Filtering: ${sellerCoOwners.length} total sellers shareholders -> ${otherCoOwners.length} after excluding investor`);
+          console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã‚Â  Filtering: ${sellerCoOwners.length} total sellers shareholders -> ${otherCoOwners.length} after excluding investor`);
           
           const mappedShareholders = otherCoOwners.map(owner => ({
             id: owner.id,
@@ -767,7 +799,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
         
         // Final fallback: Use current user only
         if (currentUser?.id && currentUser?.email) {
-          console.log('⚠️ Using currentUser as fallback');
+          console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Using currentUser as fallback');
           setRealShareholders([{
             id: currentUser.id,
             user_id: currentUser.id,
@@ -782,7 +814,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
           setRequiredApprovalCount(1);
         }
       } catch (err) {
-        console.warn('⚠️ Shareholder fetch error:', err?.message);
+        console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Shareholder fetch error:', err?.message);
         // Fallback to current user on any error
         if (currentUser?.id && currentUser?.email) {
           setRealShareholders([{
@@ -819,7 +851,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
           return;
         }
 
-        console.log('💰 Fetching ICAN coin balance for user:', currentUserId);
+        console.log('ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€šÃ‚Â° Fetching ICAN coin balance for user:', currentUserId);
 
         // PRIMARY: Try to get ICAN balance from user_balances (multi-currency tracking)
         const { data: balanceData, error: balanceError } = await supabase
@@ -831,7 +863,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
 
         if (balanceData && balanceData.balance) {
           setWalletBalance(parseFloat(balanceData.balance) || 0);
-          console.log('✅ ICAN Balance loaded from user_balances:', balanceData.balance);
+          console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ ICAN Balance loaded from user_balances:', balanceData.balance);
           return;
         }
 
@@ -844,12 +876,12 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
 
         if (walletData && walletData.ican_balance) {
           setWalletBalance(parseFloat(walletData.ican_balance) || 0);
-          console.log('✅ ICAN Balance loaded from ican_user_wallets:', walletData.ican_balance);
+          console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ ICAN Balance loaded from ican_user_wallets:', walletData.ican_balance);
           return;
         }
 
         // No balance found
-        console.log('⚠️ No ICAN coins found for user');
+        console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â No ICAN coins found for user');
         setWalletBalance(0);
       } catch (err) {
         console.error('Failed to load ICAN balance:', err);
@@ -875,7 +907,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
         return;
       }
 
-      console.log('🔄 Manually refreshing ICAN wallet balance...');
+      console.log('ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾ Manually refreshing ICAN wallet balance...');
 
       // PRIMARY: Try user_balances table (multi-currency)
       const { data: balanceData } = await supabase
@@ -887,7 +919,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
 
       if (balanceData && balanceData.balance) {
         setWalletBalance(parseFloat(balanceData.balance) || 0);
-        console.log('✅ ICAN Balance refreshed:', balanceData.balance);
+        console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ ICAN Balance refreshed:', balanceData.balance);
         return;
       }
 
@@ -900,11 +932,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
 
       if (walletData && walletData.ican_balance) {
         setWalletBalance(parseFloat(walletData.ican_balance) || 0);
-        console.log('✅ ICAN Balance refreshed:', walletData.ican_balance);
+        console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ ICAN Balance refreshed:', walletData.ican_balance);
         return;
       }
 
-      console.log('⚠️ No ICAN coins found after refresh');
+      console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â No ICAN coins found after refresh');
       setWalletBalance(0);
     } catch (err) {
       console.error('Error refreshing wallet balance:', err);
@@ -918,19 +950,19 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
     const fetchSellerBusinessProfile = async () => {
       try {
         if (!pitch?.business_profile_id) {
-          console.warn('⚠️ No business_profile_id in pitch');
+          console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â No business_profile_id in pitch');
           setSellerBusinessProfile(null);
           return;
         }
 
         const supabase = getSupabase();
         if (!supabase) {
-          console.warn('⚠️ Supabase not available');
+          console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Supabase not available');
           setSellerBusinessProfile(null);
           return;
         }
 
-        console.log('🔍 Fetching seller business profile for ID:', pitch.business_profile_id);
+        console.log('ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â Fetching seller business profile for ID:', pitch.business_profile_id);
         
         // Simple query - just get basic profile data (no nested joins)
         // Shareholders are already fetched separately by fetchRealShareholders()
@@ -942,18 +974,18 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
           .limit(1);
 
         if (error) {
-          console.error('❌ Error fetching seller profile:', error.code, error.message);
+          console.error('ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Error fetching seller profile:', error.code, error.message);
           console.log('   Pitch business_profile_id:', pitch.business_profile_id);
           console.log('   Error details:', error);
           setSellerBusinessProfile(null);
         } else if (data && data.length > 0) {
           const profileData = data[0];
-          console.log('✅ Seller business profile found:', profileData);
+          console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Seller business profile found:', profileData);
           console.log('   Business Name:', profileData.business_name);
           console.log('   User ID:', profileData.user_id);
           setSellerBusinessProfile(profileData);
         } else {
-          console.warn('⚠️ No data returned from query - may be RLS policy blocking access');
+          console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â No data returned from query - may be RLS policy blocking access');
           console.log('   Will try to use nested data from pitch object instead');
           setSellerBusinessProfile(null);
         }
@@ -972,14 +1004,14 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
   // This should be prioritized since getAllPitches() includes business_profiles join
   useEffect(() => {
     if (pitch?.business_profiles) {
-      console.log('✅ Seller business profile from pitch object:');
+      console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Seller business profile from pitch object:');
       console.log('   Business Name:', pitch.business_profiles.business_name);
       console.log('   Business ID:', pitch.business_profiles.id);
       console.log('   User ID:', pitch.business_profiles.user_id);
       console.log('   Source: pitch.business_profiles (nested join from getAllPitches)');
       setSellerBusinessProfile(pitch.business_profiles);
     } else {
-      console.warn('⚠️ Pitch missing business_profiles nested data');
+      console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Pitch missing business_profiles nested data');
       console.log('   Will fall back to direct database fetch if available');
       // Don't set to null - let the other fetch attempt work
     }
@@ -991,7 +1023,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
     if (stage === 7) {
       // DO NOT auto-simulate signatures - wait for real shareholder input via ShareholderSignatureModal
       // Shareholders must actually sign through the modal component
-      console.log(`⏳ Stage 7: Waiting for shareholders to sign via ShareholderSignatureModal...`);
+      console.log(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â³ Stage 7: Waiting for shareholders to sign via ShareholderSignatureModal...`);
       console.log(`   Required signatures: ${requiredApprovalCount}`);
       console.log(`   Current signatures: ${signatures.length}`);
       return () => {};
@@ -1012,11 +1044,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
 
       // Check if deadline has expired
       if (timeRemaining <= 0) {
-        console.warn(`⏰ DEADLINE EXPIRED! 24-hour signature period has ended without reaching 60% approval.`);
+        console.warn(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â° DEADLINE EXPIRED! 24-hour signature period has ended without reaching 60% approval.`);
         console.warn(`   Signatures received: ${signatures.length}/${requiredApprovalCount}`);
         console.warn(`   Percentage: ${percentage.toFixed(0)}%`);
         // Show expiration message
-        setError(`⏰ Signature deadline expired! Investment requires 60% shareholder approval (${requiredApprovalCount} signatures needed). You only received ${signatures.length} signatures. Investment is cancelled.`);
+        setError(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â° Signature deadline expired! Investment requires 60% shareholder approval (${requiredApprovalCount} signatures needed). You only received ${signatures.length} signatures. Investment is cancelled.`);
       }
     }
 
@@ -1026,13 +1058,13 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
       const currentTime = new Date();
       
       if (deadlineTime > currentTime) {
-        console.log(`🎯 Approval threshold met! (${signatures.length}/${requiredApprovalCount} required) ✅`);
-        console.log(`⏰ Completed within 24-hour deadline`);
+        console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€¦Ã‚Â½Ãƒâ€šÃ‚Â¯ Approval threshold met! (${signatures.length}/${requiredApprovalCount} required) ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦`);
+        console.log(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â° Completed within 24-hour deadline`);
         setTimeout(() => {
           setStage(8);
         }, 1000);
       } else {
-        console.warn(`❌ Approval threshold met but DEADLINE EXPIRED`);
+        console.warn(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Approval threshold met but DEADLINE EXPIRED`);
         setError(`Signatures reached 60% but exceeded 24-hour deadline. Investment is cancelled.`);
       }
     }
@@ -1053,7 +1085,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
           const supabase = getSupabase();
           if (!supabase || !sharesAmount || sharesAmount <= 0) return;
 
-          console.log('🎯 60% APPROVAL THRESHOLD MET - Recording investor as shareholder...');
+          console.log('ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€¦Ã‚Â½Ãƒâ€šÃ‚Â¯ 60% APPROVAL THRESHOLD MET - Recording investor as shareholder...');
 
           // Record investor share ownership NOW (only after approval)
           const { data: shareData, error: shareError } = await supabase
@@ -1072,36 +1104,36 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
               status: 'approved', // NOW APPROVED (no longer pending)
               locked_until_threshold: false, // Shares are now unlocked
               transaction_reference: 'APPROVED-' + escrowId,
-              notes: '✅ Investor became shareholder after 60% shareholder approval',
+              notes: 'ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Investor became shareholder after 60% shareholder approval',
               created_at: new Date().toISOString()
             }])
             .select();
 
           if (shareError && shareError.code !== 'PGRST116') {
-            console.warn('⚠️ Could not record investor shares:', shareError);
+            console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Could not record investor shares:', shareError);
           } else {
-            console.log('✅ INVESTOR RECORDED AS SHAREHOLDER:');
-            console.log('   → Status: APPROVED (60% threshold met)');
-            console.log('   → Shares owned: ' + sharesAmount);
-            console.log('   → Share price: ' + allowedCurrency + ' ' + sharePrice.toFixed(2));
-            console.log('   → Total value: ' + allowedCurrency + ' ' + totalInvestment.toFixed(2));
+            console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ INVESTOR RECORDED AS SHAREHOLDER:');
+            console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Status: APPROVED (60% threshold met)');
+            console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Shares owned: ' + sharesAmount);
+            console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Share price: ' + allowedCurrency + ' ' + sharePrice.toFixed(2));
+            console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Total value: ' + allowedCurrency + ' ' + totalInvestment.toFixed(2));
           }
 
-          // 🔄 REDUCE SELLER'S SHARES - Update business_co_owners proportionally
-          console.log('\n💼 Reducing seller shares and adding investor as co-owner...');
+          // ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾ REDUCE SELLER'S SHARES - Update business_co_owners proportionally
+          console.log('\nÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€šÃ‚Â¼ Reducing seller shares and adding investor as co-owner...');
           try {
             const equityOffering = parseFloat(pitch?.equity_offering || 10); // Equity being offered (%)
             const investorOwnershipNew = equityOffering / 100; // Convert % to decimal (e.g., 10% = 0.10)
             
-            console.log(`📊 Equity being offered: ${equityOffering}%`);
-            console.log(`📊 Investor getting: ${equityOffering}% of new valuation`);
+            console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã‚Â  Equity being offered: ${equityOffering}%`);
+            console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã‚Â  Investor getting: ${equityOffering}% of new valuation`);
 
             // Get current seller ownership from realShareholders
             const sellerUserId = sellerBusinessProfile?.user_id;
             const sellerCurrent = realShareholders.find(s => s.user_id === sellerUserId);
             const sellerCurrentShare = sellerCurrent?.ownership || 0;
             
-            console.log(`📊 Seller current ownership: ${sellerCurrentShare}%`);
+            console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã‚Â  Seller current ownership: ${sellerCurrentShare}%`);
             
             // Calculate new ownership shares (dilution effect)
             // Old shareholders' new share = old_share * (1 - equity_offering/100)
@@ -1109,8 +1141,8 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
             const dilutionFactor = 1 - (equityOffering / 100);
             const sellerNewShare = Math.round((sellerCurrentShare * dilutionFactor) * 100) / 100;
             
-            console.log(`📊 Seller new ownership (after dilution): ${sellerNewShare}%`);
-            console.log(`📊 Dilution factor: ${dilutionFactor.toFixed(2)} (${((1 - dilutionFactor) * 100).toFixed(1)}% dilution)`);
+            console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã‚Â  Seller new ownership (after dilution): ${sellerNewShare}%`);
+            console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã‚Â  Dilution factor: ${dilutionFactor.toFixed(2)} (${((1 - dilutionFactor) * 100).toFixed(1)}% dilution)`);
 
             // Update seller's ownership in business_co_owners
             if (sellerCurrent?.id) {
@@ -1123,9 +1155,9 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                 .eq('id', sellerCurrent.id);
 
               if (updateError) {
-                console.warn('⚠️ Could not update seller shares:', updateError.message);
+                console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Could not update seller shares:', updateError.message);
               } else {
-                console.log(`✅ Seller shares updated: ${sellerCurrentShare}% → ${sellerNewShare}%`);
+                console.log(`ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Seller shares updated: ${sellerCurrentShare}% ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ ${sellerNewShare}%`);
               }
             }
 
@@ -1145,13 +1177,13 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
               .select();
 
             if (addInvestorError) {
-              console.warn('⚠️ Could not add investor as co-owner:', addInvestorError.message);
+              console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Could not add investor as co-owner:', addInvestorError.message);
             } else {
-              console.log(`✅ Investor added as co-owner with ${equityOffering}% ownership`);
+              console.log(`ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Investor added as co-owner with ${equityOffering}% ownership`);
             }
 
             // Update all other shareholders' shares proportionally
-            console.log(`\n📊 Updating all other shareholders' shares (${realShareholders.length - 1} others)...`);
+            console.log(`\nÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã‚Â  Updating all other shareholders' shares (${realShareholders.length - 1} others)...`);
             const otherShareholders = realShareholders.filter(s => s.user_id !== sellerUserId && s.user_id !== currentUser?.id);
             
             for (const shareholder of otherShareholders) {
@@ -1166,15 +1198,15 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                 .eq('id', shareholder.id);
 
               if (!updateOtherError) {
-                console.log(`   ✅ ${shareholder.name}: ${shareholder.ownership}% → ${newShare}%`);
+                console.log(`   ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ ${shareholder.name}: ${shareholder.ownership}% ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ ${newShare}%`);
               }
             }
           } catch (err) {
             console.error('Error reducing seller shares:', err);
           }
 
-          // 🎯 CONFIRM INVESTOR AS SHAREHOLDER IN BUSINESS_PROFILE_MEMBERS
-          console.log('\n📝 Confirming investor as shareholder member (after approval)...');
+          // ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€¦Ã‚Â½Ãƒâ€šÃ‚Â¯ CONFIRM INVESTOR AS SHAREHOLDER IN BUSINESS_PROFILE_MEMBERS
+          console.log('\nÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â Confirming investor as shareholder member (after approval)...');
           try {
             const { data: memberConfirm, error: memberError } = await supabase.rpc(
               'confirm_investor_as_shareholder_after_approval',
@@ -1189,15 +1221,15 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
             );
 
             if (!memberError && memberConfirm) {
-              console.log('✅ Investor confirmed as shareholder in business_profile_members');
-              console.log('   → Role: Shareholder (confirmed)');
-              console.log('   → Status: Active');
-              console.log('   → Can receive notifications: Yes');
+              console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Investor confirmed as shareholder in business_profile_members');
+              console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Role: Shareholder (confirmed)');
+              console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Status: Active');
+              console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Can receive notifications: Yes');
             } else if (memberError) {
-              console.warn('⚠️ Could not confirm member status:', memberError?.message);
+              console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Could not confirm member status:', memberError?.message);
             }
           } catch (memberError) {
-            console.warn('⚠️ Exception confirming member status:', memberError?.message);
+            console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Exception confirming member status:', memberError?.message);
             // Continue - investor shares were recorded even if member confirmation failed
           }
         } catch (err) {
@@ -1238,7 +1270,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
       
       // If ICAN wallet doesn't exist, create one
       if (walletError && walletError.code === 'PGRST116') {
-        console.log('⚠️ ICAN Wallet not found. Creating new wallet...');
+        console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â ICAN Wallet not found. Creating new wallet...');
         
         const { data: newWallet, error: createError } = await supabase
           .from('ican_user_wallets')
@@ -1257,7 +1289,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
         }
         
         walletData = newWallet;
-        console.log('✅ New ICAN wallet created successfully');
+        console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ New ICAN wallet created successfully');
       } else if (walletError) {
         setError('Error fetching wallet: ' + walletError.message);
         return;
@@ -1269,20 +1301,20 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
       
       // Check sufficient ICAN coin balance
       if (currentBalance < investmentInIcanCoins) {
-        setError(`❌ Insufficient balance. You have ICAN ${currentBalance.toFixed(2)} but need ICAN ${investmentInIcanCoins.toFixed(2)}. Please fund your wallet first.`);
+        setError(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Insufficient balance. You have ICAN ${currentBalance.toFixed(2)} but need ICAN ${investmentInIcanCoins.toFixed(2)}. Please fund your wallet first.`);
         return;
       }
       
-      console.log('✅ ICAN Wallet verified');
-      console.log('   → Current balance: ' + currentBalance.toFixed(2) + ' ICAN coins');
-      console.log('   → Investment amount: ' + investmentInIcanCoins.toFixed(2) + ' ICAN coins');
-      console.log('   → New balance after transfer: ' + (currentBalance - investmentInIcanCoins).toFixed(2) + ' ICAN coins');
+      console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ ICAN Wallet verified');
+      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Current balance: ' + currentBalance.toFixed(2) + ' ICAN coins');
+      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Investment amount: ' + investmentInIcanCoins.toFixed(2) + ' ICAN coins');
+      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ New balance after transfer: ' + (currentBalance - investmentInIcanCoins).toFixed(2) + ' ICAN coins');
       
-      // ⚠️ IMPORTANT: SEND NOTIFICATIONS FIRST before deducting coins
+      // ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â IMPORTANT: SEND NOTIFICATIONS FIRST before deducting coins
       // This ensures coins are only removed if notification succeeds
-      console.log('\n📬 STEP: Triggering shareholder notifications BEFORE coin deduction...');
+      console.log('\nÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â¬ STEP: Triggering shareholder notifications BEFORE coin deduction...');
       await triggerShareholderNotifications(investmentId);
-      console.log('✅ Shareholder notifications sent successfully - Safe to proceed with coin deduction');
+      console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Shareholder notifications sent successfully - Safe to proceed with coin deduction');
       
       // STEP 2B: DEDUCT SHARES from available pool
       if (sharesAmount && sharesAmount > 0) {
@@ -1301,7 +1333,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
         const newSharesAvailable = pitchData.shares_available - parseInt(sharesAmount);
         
         if (newSharesAvailable < 0) {
-          setError(`❌ Not enough shares available. Only ${pitchData.shares_available} shares remaining.`);
+          setError(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Not enough shares available. Only ${pitchData.shares_available} shares remaining.`);
           return;
         }
         
@@ -1320,11 +1352,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
           return;
         }
         
-        console.log('✅ Shares deducted from available pool:');
-        console.log('   → Shares purchased: ' + sharesAmount);
-        console.log('   → Shares available before: ' + pitchData.shares_available);
-        console.log('   → Shares available after: ' + newSharesAvailable);
-        console.log('   → Total shares in pitch: ' + pitchData.total_shares);
+        console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Shares deducted from available pool:');
+        console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Shares purchased: ' + sharesAmount);
+        console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Shares available before: ' + pitchData.shares_available);
+        console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Shares available after: ' + newSharesAvailable);
+        console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Total shares in pitch: ' + pitchData.total_shares);
       }
       
       // STEP 3: Record ICAN coin blockchain transaction
@@ -1347,10 +1379,10 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
         return;
       }
       
-      console.log('✅ ICAN Coin blockchain transaction recorded (DEBIT):');
-      console.log('   → ICAN Amount: ' + investmentInIcanCoins.toFixed(2) + ' coins');
-      console.log('   → Fiat Amount: ' + allowedCurrency + ' ' + totalInvestment.toFixed(2));
-      console.log('   → New balance: ' + (currentBalance - investmentInIcanCoins).toFixed(2) + ' ICAN coins');
+      console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ ICAN Coin blockchain transaction recorded (DEBIT):');
+      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ ICAN Amount: ' + investmentInIcanCoins.toFixed(2) + ' coins');
+      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Fiat Amount: ' + allowedCurrency + ' ' + totalInvestment.toFixed(2));
+      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ New balance: ' + (currentBalance - investmentInIcanCoins).toFixed(2) + ' ICAN coins');
       
       // STEP 4: Update user ICAN wallet balance (DEDUCT coins)
       const { data: updatedWallet, error: updateError } = await supabase
@@ -1368,7 +1400,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
         return;
       }
       
-      console.log('✅ ICAN Wallet balance updated (COINS DEDUCTED)');
+      console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ ICAN Wallet balance updated (COINS DEDUCTED)');
       
       // STEP 5: Create credit transaction in blockchain ledger (for record-keeping)
       // This tracks the investment going to escrow
@@ -1387,14 +1419,14 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
         .select();
       
       if (creditError) {
-        console.warn('⚠️ Warning: Escrow ledger entry failed:', creditError);
+        console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Warning: Escrow ledger entry failed:', creditError);
         // Don't fail the investment if this fails - the main transaction already succeeded
       }
       
-      console.log('✅ ICAN investment transaction completed:');
-      console.log('   → ICAN Amount: ' + investmentInIcanCoins.toFixed(2) + ' coins');
-      console.log('   → Fiat Amount: ' + allowedCurrency + ' ' + totalInvestment.toFixed(2));
-      console.log('   → Transaction Reference: ' + transactionRef);
+      console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ ICAN investment transaction completed:');
+      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ ICAN Amount: ' + investmentInIcanCoins.toFixed(2) + ' coins');
+      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Fiat Amount: ' + allowedCurrency + ' ' + totalInvestment.toFixed(2));
+      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Transaction Reference: ' + transactionRef);
       
       // STEP 6A: Check if investment agreement already exists (for retry scenarios)
       const { data: existingAgreement } = await supabase
@@ -1409,7 +1441,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
       if (existingAgreement?.id) {
         // Agreement already exists, use it
         agreementId = existingAgreement.id;
-        console.log('✅ Investment agreement already exists: ' + agreementId + ' (using existing from retry)');
+        console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Investment agreement already exists: ' + agreementId + ' (using existing from retry)');
       } else {
         // Create new investment agreement
         const { data: agreementData, error: agreementError } = await supabase
@@ -1437,7 +1469,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
         }
         
         agreementId = agreementData?.id;
-        console.log('✅ Investment agreement created: ' + agreementId);
+        console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Investment agreement created: ' + agreementId);
       }
       
       // STEP 6B: Create investor signature record with correct schema
@@ -1464,7 +1496,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
         return;
       }
       
-      console.log('✅ Investor signature recorded in database');
+      console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Investor signature recorded in database');
       
       // STEP 7: Create or update investment approval record (using upsert to handle duplicates)
       const { data: approvalData, error: approvalError } = await supabase
@@ -1494,19 +1526,19 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
         return;
       }
       
-      console.log('✅ Investment approval record created');
-      console.log('✅ WALLET TRANSFER COMPLETED SUCCESSFULLY');
-      console.log('   → Investment ID:', investmentId);
-      console.log('   → Investor: ' + currentUser?.email);
-      console.log('   → Amount: ' + allowedCurrency + ' ' + totalInvestment.toFixed(2));
-      console.log('   → Shares: ' + (sharesAmount || 'Partnership'));
-      console.log('   → Transferred to: AGENT-KAM-5560 (Escrow)');
-      console.log('   → New ICAN balance: ' + (currentBalance - investmentInIcanCoins).toFixed(2) + ' coins');
-      console.log('   → Transaction Reference: ' + transactionRef);
+      console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Investment approval record created');
+      console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ WALLET TRANSFER COMPLETED SUCCESSFULLY');
+      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Investment ID:', investmentId);
+      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Investor: ' + currentUser?.email);
+      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Amount: ' + allowedCurrency + ' ' + totalInvestment.toFixed(2));
+      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Shares: ' + (sharesAmount || 'Partnership'));
+      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Transferred to: AGENT-KAM-5560 (Escrow)');
+      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ New ICAN balance: ' + (currentBalance - investmentInIcanCoins).toFixed(2) + ' coins');
+      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Transaction Reference: ' + transactionRef);
       
       // STEP 8: Add investor as PENDING member in business_profile_members
       // (Will only become shareholder after 60% shareholder approval)
-      console.log('\n👤 ADDING INVESTOR AS PENDING MEMBER (awaiting approval)...');
+      console.log('\nÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“Ãƒâ€šÃ‚Â¤ ADDING INVESTOR AS PENDING MEMBER (awaiting approval)...');
       try {
         const { data: pendingMemberData, error: pendingMemberError } = await supabase.rpc(
           'add_investor_as_pending_member',
@@ -1520,25 +1552,25 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
         );
 
         if (!pendingMemberError && pendingMemberData) {
-          console.log('✅ Investor added as PENDING member (awaiting shareholder approval)');
-          console.log('   → Status: Pending approval');
-          console.log('   → Will become shareholder when ≥60% shareholders approve');
-          console.log('   → Can_sign: No (will become Yes after approval)');
+          console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Investor added as PENDING member (awaiting shareholder approval)');
+          console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Status: Pending approval');
+          console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Will become shareholder when ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â°Ãƒâ€šÃ‚Â¥60% shareholders approve');
+          console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Can_sign: No (will become Yes after approval)');
         } else if (pendingMemberError) {
           if (pendingMemberError?.message?.includes('row-level security')) {
-            console.warn('⚠️ RLS: Cannot add pending member via RPC. This is OK - will be handled during 60% approval.');
-            console.log('   → Investor will be added as member when approval threshold is reached');
+            console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â RLS: Cannot add pending member via RPC. This is OK - will be handled during 60% approval.');
+            console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Investor will be added as member when approval threshold is reached');
           } else {
-            console.warn('⚠️ Could not add pending member:', pendingMemberError?.message);
+            console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Could not add pending member:', pendingMemberError?.message);
           }
         }
       } catch (pendingError) {
-        console.warn('⚠️ Exception adding pending member:', pendingError?.message);
+        console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Exception adding pending member:', pendingError?.message);
         // Continue - if this fails, shareholders will need to manually add them or it will happen at approval
       }
 
       // STEP 9: Notify ALL MEMBERS (Business Owner + All Shareholders) of new investment
-      console.log('\n📧 NOTIFYING ALL BUSINESS MEMBERS OF NEW INVESTMENT...');
+      console.log('\nÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â§ NOTIFYING ALL BUSINESS MEMBERS OF NEW INVESTMENT...');
       try {
         const investmentTypeLabel = investmentType === 'buy' ? 'Equity Investment' : 
                                     investmentType === 'partner' ? 'Partnership' : 'Support/Grant';
@@ -1550,7 +1582,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
         let failedCount = 0;
 
         // ALWAYS notify BUSINESS OWNER first (most critical)
-        console.log('📢 Notifying business owner...');
+        console.log('ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â¢ Notifying business owner...');
         console.log(`   DEBUG: sellerBusinessProfile.user_id = ${sellerBusinessProfile?.user_id}`);
         console.log(`   DEBUG: sellerBusinessProfile = `, sellerBusinessProfile);
         console.log(`   DEBUG: supabase available = ${!!supabase}`);
@@ -1560,7 +1592,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
               recipient_id: sellerBusinessProfile.user_id,
               sender_id: currentUser?.id,
               notification_type: 'new_investment',
-              title: `💰 New ${investmentTypeLabel} Received`,
+              title: `ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€šÃ‚Â° New ${investmentTypeLabel} Received`,
               message: baseMessage,
               pitch_id: pitch.id,
               business_profile_id: sellerBusinessProfile?.id || pitch?.business_profile_id,
@@ -1580,29 +1612,29 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
             });
             
             if (ownerNotification.success) {
-              console.log(`✅ Business owner notified: ${sellerBusinessProfile.user_id.substring(0, 8)}...`);
-              console.log(`   → Title: ${ownerNotification.data?.title}`);
-              console.log(`   → Message sent: Investment received notification`);
+              console.log(`ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Business owner notified: ${sellerBusinessProfile.user_id.substring(0, 8)}...`);
+              console.log(`   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Title: ${ownerNotification.data?.title}`);
+              console.log(`   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Message sent: Investment received notification`);
               notifiedCount++;
             } else if (ownerNotification.isRLSError) {
-              console.warn('⚠️ RLS: Could not create direct notification for owner');
-              console.warn(`   → This is OK - notification will be sent via backup process`);
-              console.warn(`   → Owner email: ${sellerBusinessProfile?.email || 'N/A'}`);
+              console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â RLS: Could not create direct notification for owner');
+              console.warn(`   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ This is OK - notification will be sent via backup process`);
+              console.warn(`   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Owner email: ${sellerBusinessProfile?.email || 'N/A'}`);
               notifiedCount++; // Count as handled (gracefully degraded)
             } else {
-              console.warn('⚠️ Failed to notify business owner:', ownerNotification.error);
+              console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Failed to notify business owner:', ownerNotification.error);
               failedCount++;
             }
           } catch (ownerNotifError) {
-            console.warn('⚠️ Exception notifying business owner:', ownerNotifError?.message);
+            console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Exception notifying business owner:', ownerNotifError?.message);
             failedCount++;
           }
         } else {
-          console.warn('⚠️ Business owner ID not found or Supabase not available');
+          console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Business owner ID not found or Supabase not available');
         }
 
         // THEN get and notify all other active members
-        console.log('\n📢 Fetching members for notification...');
+        console.log('\nÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â¢ Fetching members for notification...');
         const profileId = sellerBusinessProfile?.id || pitch?.business_profile_id;
         const { data: allMembers, error: membersError } = await supabase
           .from('business_profile_members')
@@ -1611,10 +1643,10 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
           .eq('status', 'active');
 
         if (membersError) {
-          console.warn('⚠️ Could not fetch members from business_profile_members:', membersError?.message);
-          console.log('   → This is OK if table is not yet migrated. Business owner was already notified above.');
+          console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Could not fetch members from business_profile_members:', membersError?.message);
+          console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ This is OK if table is not yet migrated. Business owner was already notified above.');
         } else if (allMembers && allMembers.length > 0) {
-          console.log(`📬 Found ${allMembers.length} active member(s). Notifying shareholders...`);
+          console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â¬ Found ${allMembers.length} active member(s). Notifying shareholders...`);
           
           for (const member of allMembers) {
             // Skip business owner (already notified above) and pending members (not active yet)
@@ -1629,7 +1661,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                 recipient_id: member.user_id,
                 sender_id: currentUser?.id,
                 notification_type: 'new_investment',
-                title: `💰 New ${investmentTypeLabel}: ${pitch.title}`,
+                title: `ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€šÃ‚Â° New ${investmentTypeLabel}: ${pitch.title}`,
                 message: memberMessage,
                 pitch_id: pitch.id,
                 business_profile_id: profileId,
@@ -1652,29 +1684,29 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
               });
               
               if (memberNotification.success) {
-                console.log(`   ✅ ${member.role} (${member.user_name}) notified`);
+                console.log(`   ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ ${member.role} (${member.user_name}) notified`);
                 notifiedCount++;
               } else if (memberNotification.isRLSError) {
-                console.warn(`   ⚠️ RLS: Could not create direct notification for ${member.user_name}`);
-                console.warn(`      → This is OK - notification will be sent via backup process`);
+                console.warn(`   ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â RLS: Could not create direct notification for ${member.user_name}`);
+                console.warn(`      ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ This is OK - notification will be sent via backup process`);
                 notifiedCount++; // Count as handled (gracefully degraded)
               } else {
-                console.warn(`   ⚠️ Failed to notify ${member.user_name}:`, memberNotification.error);
+                console.warn(`   ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Failed to notify ${member.user_name}:`, memberNotification.error);
                 failedCount++;
               }
             } catch (memberError) {
-              console.warn(`   ⚠️ Exception notifying ${member.user_name}:`, memberError?.message);
+              console.warn(`   ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Exception notifying ${member.user_name}:`, memberError?.message);
               failedCount++;
             }
           }
         } else {
-          console.log('ℹ️ No additional members found in business_profile_members table.');
-          console.log('   → Business owner was notified above.');
-          console.log('   → Note: Checking business_co_owners table for shareholders...');
+          console.log('ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¹ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â No additional members found in business_profile_members table.');
+          console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Business owner was notified above.');
+          console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Note: Checking business_co_owners table for shareholders...');
         }
 
         // NEW: Also notify shareholders from business_co_owners table (the main source of truth)
-        console.log('\n📢 Fetching shareholders from business_co_owners...');
+        console.log('\nÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â¢ Fetching shareholders from business_co_owners...');
         const { data: allCoOwners, error: coOwnersError } = await supabase
           .from('business_co_owners')
           .select('id, owner_name, owner_email, user_id, ownership_share, role, status')
@@ -1682,9 +1714,9 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
           .order('created_at');
 
         if (coOwnersError) {
-          console.warn('⚠️ Could not fetch co-owners from business_co_owners:', coOwnersError?.message);
+          console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Could not fetch co-owners from business_co_owners:', coOwnersError?.message);
         } else if (allCoOwners && allCoOwners.length > 0) {
-          console.log(`📬 Found ${allCoOwners.length} co-owner(s) in business_co_owners table`);
+          console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â¬ Found ${allCoOwners.length} co-owner(s) in business_co_owners table`);
           
           // Get linked shareholders only (those with user_id capability in the system)
           const linkedCoOwners = allCoOwners.filter(owner => 
@@ -1698,8 +1730,8 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
             (!owner.status || owner.status === 'active')
           );
 
-          console.log(`   → Linked shareholders (with accounts): ${linkedCoOwners.length}`);
-          console.log(`   → Unlinked shareholders (email only): ${unlinkedCoOwners.length}`);
+          console.log(`   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Linked shareholders (with accounts): ${linkedCoOwners.length}`);
+          console.log(`   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Unlinked shareholders (email only): ${unlinkedCoOwners.length}`);
           
           // Notify each linked shareholder
           for (const coOwner of linkedCoOwners) {
@@ -1710,7 +1742,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                 recipient_id: coOwner.user_id,
                 sender_id: currentUser?.id,
                 notification_type: 'shareholder_approval_needed',
-                title: `📋 Investment Approval Needed: ${pitch.title}`,
+                title: `ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¹ Investment Approval Needed: ${pitch.title}`,
                 message: shareholderMessage + ` Your approval is needed to finalize this investment.`,
                 pitch_id: pitch.id,
                 business_profile_id: profileId,
@@ -1733,47 +1765,47 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
               });
               
               if (coOwnerNotification.success) {
-                console.log(`   ✅ Co-owner (${coOwner.owner_name || coOwner.owner_email}) notified`);
+                console.log(`   ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Co-owner (${coOwner.owner_name || coOwner.owner_email}) notified`);
                 notifiedCount++;
               } else if (coOwnerNotification.isRLSError) {
-                console.warn(`   ⚠️ RLS: Could not notify ${coOwner.owner_name} - will retry`);
+                console.warn(`   ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â RLS: Could not notify ${coOwner.owner_name} - will retry`);
                 notifiedCount++; // Still count as we tried
               } else {
-                console.warn(`   ⚠️ Failed to notify ${coOwner.owner_name}:`, coOwnerNotification.error);
+                console.warn(`   ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Failed to notify ${coOwner.owner_name}:`, coOwnerNotification.error);
                 failedCount++;
               }
             } catch (coOwnerError) {
-              console.warn(`   ⚠️ Exception notifying ${coOwner.owner_name}:`, coOwnerError?.message);
+              console.warn(`   ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Exception notifying ${coOwner.owner_name}:`, coOwnerError?.message);
               failedCount++;
             }
           }
           
           // Log unlinked shareholders
           if (unlinkedCoOwners.length > 0) {
-            console.log(`📧 Unlinked shareholders (pending account creation):`);
+            console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â§ Unlinked shareholders (pending account creation):`);
             unlinkedCoOwners.forEach(owner => {
-              console.log(`   • ${owner.owner_name} (${owner.owner_email}) - ${owner.ownership_share || 'N/A'}% ownership`);
-              console.log(`     → Email notification will be sent separately`);
+              console.log(`   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ ${owner.owner_name} (${owner.owner_email}) - ${owner.ownership_share || 'N/A'}% ownership`);
+              console.log(`     ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Email notification will be sent separately`);
             });
           }
         } else {
-          console.log('ℹ️ No co-owners found in business_co_owners table.');
+          console.log('ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¹ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â No co-owners found in business_co_owners table.');
         }
 
-        console.log(`\n✅ NOTIFICATION SUMMARY:`);
-        console.log(`   → Business owner: ✅ NOTIFIED`);
-        console.log(`   → Total members/shareholders notified: ${notifiedCount}`);
-        console.log(`   → Failed: ${failedCount}`);
-        console.log(`   → Status: Investment announcement complete`);
+        console.log(`\nÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ NOTIFICATION SUMMARY:`);
+        console.log(`   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Business owner: ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ NOTIFIED`);
+        console.log(`   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Total members/shareholders notified: ${notifiedCount}`);
+        console.log(`   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Failed: ${failedCount}`);
+        console.log(`   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Status: Investment announcement complete`);
 
       } catch (membersFetchError) {
-        console.warn('⚠️ Exception in member notification workflow:', membersFetchError?.message);
+        console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Exception in member notification workflow:', membersFetchError?.message);
         // Continue anyway - investment was recorded successfully
       }
       
-      // ⚠️ NOTE: Investor shares are NOT recorded here - they will be recorded ONLY when 60% approval is met
+      // ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â NOTE: Investor shares are NOT recorded here - they will be recorded ONLY when 60% approval is met
       // This ensures the investor does not become a shareholder until shareholders approve
-      console.log('   → Investor shares will be recorded AFTER 60% shareholder approval is met');
+      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Investor shares will be recorded AFTER 60% shareholder approval is met');
       
       
       // Create PIN signature for state
@@ -1846,11 +1878,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
       // Trigger notifications to all shareholders asking them to sign
       await triggerShareholderNotifications(escrowId);
       
-      console.log('✅ QR code generated with all signatures');
-      console.log('   → Investment ID:', escrowId);
-      console.log('   → QR Code URL generated');
-      console.log('   → Shareholders signed:', shareholderSignatures.length, '/', getActualShareholders().length);
-      console.log('   → Approval percent:', sealData.approvalPercent, '%');
+      console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ QR code generated with all signatures');
+      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Investment ID:', escrowId);
+      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ QR Code URL generated');
+      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Shareholders signed:', shareholderSignatures.length, '/', getActualShareholders().length);
+      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Approval percent:', sealData.approvalPercent, '%');
       
       setStage(7); // Move to pending signatures
     } catch (err) {
@@ -1874,17 +1906,17 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
       // Get ALL shareholders (linked + unlinked) from realShareholders
       const allShareholdersToNotify = getActualShareholders();
       
-      console.log(`📢 Sending shareholders notifications for investment ${investmentId}...`);
-      console.log(`� DEBUG PROFILES:`);
+      console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â¢ Sending shareholders notifications for investment ${investmentId}...`);
+      console.log(`ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½ DEBUG PROFILES:`);
       console.log(`   pitch?.business_profile_id = ${pitch?.business_profile_id}`);
       console.log(`   businessProfile?.id = ${businessProfile?.id}`);
       console.log(`   Using profile = ${pitch?.business_profile_id || businessProfile?.id}`);
-      console.log(`�📊 Total shareholders: ${allShareholdersToNotify.length}`);
+      console.log(`ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã‚Â  Total shareholders: ${allShareholdersToNotify.length}`);
       const linkedCount = allShareholdersToNotify.filter(s => s.isLinked).length;
       const unlinkedCount = allShareholdersToNotify.filter(s => !s.isLinked).length;
-      console.log(`   📱 Linked (in-app notifications): ${linkedCount}`);
-      console.log(`   📧 Unlinked (email pending): ${unlinkedCount}`);
-      console.log(`⏰ Approval deadline: ${new Date(notificationTime.getTime() + 24 * 60 * 60 * 1000).toLocaleString()}`);
+      console.log(`   ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â± Linked (in-app notifications): ${linkedCount}`);
+      console.log(`   ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â§ Unlinked (email pending): ${unlinkedCount}`);
+      console.log(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â° Approval deadline: ${new Date(notificationTime.getTime() + 24 * 60 * 60 * 1000).toLocaleString()}`);
       
       for (const shareholder of allShareholdersToNotify) {
         try {
@@ -1909,8 +1941,8 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                 shareholder_email: shareholderEmail,
                 shareholder_name: shareholderName,
                 notification_type: 'investment_signed',
-                notification_title: `✅ Investment Approval Required`,
-                notification_message: `💰 Investment approval needed: ${sellerBusinessProfile?.business_name} is requesting your approval for "${pitch.title}". Amount: ${allowedCurrency} ${totalInvestment.toFixed(2)}. Slide to approve - funds will be transferred when 60% of shareholders approve.`,
+                notification_title: `ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Investment Approval Required`,
+                notification_message: `ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€šÃ‚Â° Investment approval needed: ${sellerBusinessProfile?.business_name} is requesting your approval for "${pitch.title}". Amount: ${allowedCurrency} ${totalInvestment.toFixed(2)}. Slide to approve - funds will be transferred when 60% of shareholders approve.`,
                 investor_name: user?.user?.user_metadata?.full_name || user?.user?.email || 'Investor',
                 investor_email: user?.user?.email,
                 investment_amount: totalInvestment || 0,
@@ -1930,10 +1962,10 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
               const errorMsg = notifError?.message || '';
               if (notifError && (errorMsg.includes('duplicate') || errorMsg.includes('Conflict') || errorMsg.includes('409'))) {
                 successCount++;
-                console.log(`✅ IN-APP NOTIFICATION sent to: ${shareholderName} (${shareholderEmail}) [already notified previously]`);
-                console.log(`   → Shareholder ID: ${shareholder.user_id || coOwnerId}`);
+                console.log(`ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ IN-APP NOTIFICATION sent to: ${shareholderName} (${shareholderEmail}) [already notified previously]`);
+                console.log(`   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Shareholder ID: ${shareholder.user_id || coOwnerId}`);
               } else if (notifError && errorMsg.includes('404')) {
-                console.warn(`⚠️ Note: shareholder_notifications table may not be set up yet. Using fallback.`);
+                console.warn(`ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Note: shareholder_notifications table may not be set up yet. Using fallback.`);
                 successCount++; // Count as success - graceful degradation
               } else if (!notifError) {
                 successCount++;
@@ -1948,49 +1980,49 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                     documentUrl: `/agreements/${investmentId}/${coOwnerId}`
                   }
                 }));
-                console.log(`✅ IN-APP NOTIFICATION sent to: ${shareholderName} (${shareholderEmail})`);
-                console.log(`   → Type: Investment Approval Request`);
-                console.log(`   → Shareholder ID: ${shareholder.user_id || coOwnerId}`);
-                console.log(`   → Deadline: ${deadlineTime.toLocaleString()}`);
+                console.log(`ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ IN-APP NOTIFICATION sent to: ${shareholderName} (${shareholderEmail})`);
+                console.log(`   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Type: Investment Approval Request`);
+                console.log(`   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Shareholder ID: ${shareholder.user_id || coOwnerId}`);
+                console.log(`   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Deadline: ${deadlineTime.toLocaleString()}`);
               } else {
                 failCount++;
-                console.warn(`⚠️ Failed to send notification: ${shareholderName} - ${notifError?.message}`);
+                console.warn(`ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Failed to send notification: ${shareholderName} - ${notifError?.message}`);
               }
             } catch (error) {
               failCount++;
-              console.error(`❌ Error notifying ${shareholderName}:`, error?.message);
+              console.error(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Error notifying ${shareholderName}:`, error?.message);
             }
           } else {
             // UNLINKED CO-OWNER - Send email notification
             // For now, log that we'll send email
             mockCount++;
-            console.log(`📧 EMAIL NOTIFICATION for unlinked shareholder: ${shareholderName} (${shareholderEmail})`);
-            console.log(`   → Co-owner ID: ${coOwnerId}`);
-            console.log(`   → They will receive an email to sign the agreement`);
-            console.log(`   → Email: ${shareholderEmail}`);
+            console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â§ EMAIL NOTIFICATION for unlinked shareholder: ${shareholderName} (${shareholderEmail})`);
+            console.log(`   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Co-owner ID: ${coOwnerId}`);
+            console.log(`   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ They will receive an email to sign the agreement`);
+            console.log(`   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Email: ${shareholderEmail}`);
             // TODO: Implement email sending via sendgrid or similar
             // Once implemented, change to successCount++
           }
         } catch (error) {
           failCount++;
-          console.error(`❌ Error notifying shareholder:`, error?.message);
+          console.error(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Error notifying shareholder:`, error?.message);
         }
       }
       
       // Record notification send time for 24hr countdown
       setNotificationsSentTime(notificationTime);
       
-      console.log(`\n✅ SHAREHOLDER NOTIFICATION SUMMARY:`);
-      if (successCount > 0) console.log(`   ✅ In-app notifications sent: ${successCount}`);
-      if (mockCount > 0) console.log(`   📧 Email notifications sent/pending: ${mockCount}`);
-      if (failCount > 0) console.log(`   ⚠️ Failed to send: ${failCount}`);
+      console.log(`\nÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ SHAREHOLDER NOTIFICATION SUMMARY:`);
+      if (successCount > 0) console.log(`   ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ In-app notifications sent: ${successCount}`);
+      if (mockCount > 0) console.log(`   ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â§ Email notifications sent/pending: ${mockCount}`);
+      if (failCount > 0) console.log(`   ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Failed to send: ${failCount}`);
       console.log(`   Total: ${successCount + mockCount}/${allShareholdersToNotify.length}`);
-      console.log(`   👥 All co-owners notified for approval`);
-      console.log(`   ⏰ Signature deadline: 24 hours from now`);
+      console.log(`   ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“Ãƒâ€šÃ‚Â¥ All co-owners notified for approval`);
+      console.log(`   ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â° Signature deadline: 24 hours from now`);
       
-      // 🔴 CRITICAL: Shareholders must be notified for approval
+      // ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â´ CRITICAL: Shareholders must be notified for approval
       if (allShareholdersToNotify.length > 0 && failCount > 0) {
-        console.warn(`❌ WARNING: ${failCount} shareholders failed to notify. But continuing since some were notified.`);
+        console.warn(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ WARNING: ${failCount} shareholders failed to notify. But continuing since some were notified.`);
       }
       
       // Validation: Ensure at least SOME notification was attempted
@@ -1998,17 +2030,17 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
       // as long as we have shareholders to notify (they'll get email/followup notifications)
       if (successCount + mockCount === 0 && allShareholdersToNotify.length === 0) {
         // Only fail if we have NO shareholders at all - this means a config error
-        throw new Error(`❌ CRITICAL: No shareholders found to notify.`);
+        throw new Error(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ CRITICAL: No shareholders found to notify.`);
       }
       
       if (allShareholdersToNotify.length > 0 && successCount === 0) {
-        console.warn(`⚠️ NOTE: No in-app notifications sent (shareholders may not have auth accounts). Email notifications pending.`);
+        console.warn(`ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â NOTE: No in-app notifications sent (shareholders may not have auth accounts). Email notifications pending.`);
       }
       
-      console.log(`\n✅ STATUS: Shareholder notifications complete. Awaiting shareholder approvals...`);
+      console.log(`\nÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ STATUS: Shareholder notifications complete. Awaiting shareholder approvals...`);
     } catch (err) {
-      console.error('❌ SHAREHOLDER NOTIFICATION FAILURE:', err?.message);
-      setError(`🛑 Shareholder notification failed. Investment cannot proceed.\n\nError: ${err?.message}\n\nPlease try again or contact support.`);
+      console.error('ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ SHAREHOLDER NOTIFICATION FAILURE:', err?.message);
+      setError(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂºÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ Shareholder notification failed. Investment cannot proceed.\n\nError: ${err?.message}\n\nPlease try again or contact support.`);
       setLoading(false);
       throw err;
     }
@@ -2050,6 +2082,203 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
     link.click();
   };
 
+  const hasValue = (value) => value !== null && value !== undefined && String(value).trim() !== '';
+  const hasBusinessPlan = hasValue(sellerDocuments?.business_plan_content);
+  const hasFinancialProjection = hasValue(sellerDocuments?.financial_projection_content);
+  const hasMou = hasValue(sellerDocuments?.mou_content);
+  const hasValueProposition = hasValue(sellerDocuments?.value_proposition_wants) && hasValue(sellerDocuments?.value_proposition_fears) && hasValue(sellerDocuments?.value_proposition_needs);
+  const hasShareAllocation = hasValue(sellerDocuments?.share_allocation_shares) && hasValue(sellerDocuments?.share_allocation_share_price);
+  const hasPrivacyRestrictions = hasValue(sellerDocuments?.disclosure_notes);
+
+  const documentSections = [
+    {
+      key: 'businessPlan',
+      icon: 'BP',
+      title: 'Business Plan',
+      description: 'Your strategic foundation and business model',
+      available: hasBusinessPlan
+    },
+    {
+      key: 'financialProjection',
+      icon: 'FP',
+      title: 'Financial Projection',
+      description: 'Revenue and expense estimates',
+      available: hasFinancialProjection
+    },
+    {
+      key: 'valueProposition',
+      icon: 'VP',
+      title: 'Value Proposition',
+      description: 'What you offer: wants, fears, and needs',
+      available: hasValueProposition
+    },
+    {
+      key: 'mou',
+      icon: 'MOU',
+      title: 'Memorandum of Understanding',
+      description: 'Legal and collaborative agreements',
+      available: hasMou
+    },
+    {
+      key: 'shareAllocation',
+      icon: 'SA',
+      title: 'Share Allocation',
+      description: 'Ownership structure and equity distribution',
+      available: hasShareAllocation
+    },
+    {
+      key: 'privacy',
+      icon: 'PR',
+      title: 'Privacy Restrictions',
+      description: 'Special confidentiality and sharing conditions',
+      available: hasPrivacyRestrictions
+    }
+  ];
+
+  const completedDocumentCount = documentSections.filter((section) => section.available).length;
+  const activeDocumentSection = documentSections.find((section) => section.key === activeDocumentPage) || null;
+
+  const toggleDocumentCard = (documentKey) => {
+    setExpandedDocumentCards((prev) => ({
+      ...prev,
+      [documentKey]: !prev[documentKey]
+    }));
+  };
+
+  const openDocumentPage = (documentKey) => {
+    if (documentSections.find((section) => section.key === documentKey && section.available)) {
+      setActiveDocumentPage(documentKey);
+    }
+  };
+
+  const closeDocumentPage = () => {
+    setActiveDocumentPage(null);
+  };
+
+  const toggleAgreementPanel = (panelKey) => {
+    setAgreementPanels((prev) => ({
+      ...prev,
+      [panelKey]: !prev[panelKey]
+    }));
+  };
+
+  const toggleFlowPanel = (panelKey) => {
+    setFlowPanels((prev) => ({
+      ...prev,
+      [panelKey]: !prev[panelKey]
+    }));
+  };
+
+  const formatAmount = (value) => {
+    const parsed = Number(String(value).replace(/,/g, ''));
+    return Number.isFinite(parsed) ? parsed.toLocaleString() : value;
+  };
+
+  const investmentInIcanCoins = convertToIcanCoins(totalInvestment, allowedCurrency);
+  const investmentId = escrowId || pitch?.id;
+  const signedShareholderCount = signatures.filter((s) => s.type === 'shareholder' || !s.type).length;
+  const totalShareholderCount = getActualShareholders().length;
+  const thresholdMet = totalShareholderCount > 0 && (signedShareholderCount / totalShareholderCount) >= 0.60;
+  const remainingSignatures = Math.max(0, Math.ceil(totalShareholderCount * 0.6) - signedShareholderCount);
+  const timelineShareholders = totalShareholderCount > 0 ? getActualShareholders() : mockShareholders;
+
+  const renderDocumentContent = (documentKey, isPageView = false) => {
+    const bodyClass = isPageView ? 'text-sm text-slate-100 whitespace-pre-wrap leading-relaxed' : 'text-sm text-slate-200 whitespace-pre-wrap';
+    const cardClass = isPageView ? 'bg-slate-900/70 p-4 rounded-lg border border-slate-600/70' : 'bg-slate-900/50 p-3 rounded border border-slate-600 max-h-36 overflow-y-auto';
+
+    if (documentKey === 'businessPlan') {
+      return hasBusinessPlan ? (
+        <div className={cardClass}>
+          <p className={bodyClass}>{sellerDocuments.business_plan_content}</p>
+        </div>
+      ) : (
+        <p className="text-sm text-amber-300">Not submitted</p>
+      );
+    }
+
+    if (documentKey === 'financialProjection') {
+      return hasFinancialProjection ? (
+        <div className={cardClass}>
+          <p className={bodyClass}>{sellerDocuments.financial_projection_content}</p>
+        </div>
+      ) : (
+        <p className="text-sm text-amber-300">Not submitted</p>
+      );
+    }
+
+    if (documentKey === 'valueProposition') {
+      return hasValueProposition ? (
+        <div className={`space-y-3 ${isPageView ? '' : 'max-h-56 overflow-y-auto pr-1'}`}>
+          <div className={cardClass}>
+            <p className="text-xs font-semibold text-pink-400 mb-2">Wants (Customer Desires)</p>
+            <p className={bodyClass}>{sellerDocuments.value_proposition_wants}</p>
+          </div>
+          <div className={cardClass}>
+            <p className="text-xs font-semibold text-orange-400 mb-2">Fears (Customer Concerns)</p>
+            <p className={bodyClass}>{sellerDocuments.value_proposition_fears}</p>
+          </div>
+          <div className={cardClass}>
+            <p className="text-xs font-semibold text-blue-400 mb-2">Needs (Customer Requirements)</p>
+            <p className={bodyClass}>{sellerDocuments.value_proposition_needs}</p>
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-amber-300">Not submitted</p>
+      );
+    }
+
+    if (documentKey === 'mou') {
+      return hasMou ? (
+        <div className={cardClass}>
+          <p className={bodyClass}>{sellerDocuments.mou_content}</p>
+        </div>
+      ) : (
+        <p className="text-sm text-amber-300">Not submitted</p>
+      );
+    }
+
+    if (documentKey === 'shareAllocation') {
+      return hasShareAllocation ? (
+        <div className={`${isPageView ? 'bg-slate-900/70 p-4 rounded-lg border border-slate-600/70' : 'bg-slate-900/50 p-3 rounded border border-slate-600'} space-y-2`}>
+          <div className="flex justify-between">
+            <span className="text-sm text-slate-400">Total Shares:</span>
+            <span className="text-sm font-semibold text-blue-400">{sellerDocuments.share_allocation_shares}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-sm text-slate-400">Price per Share:</span>
+            <span className="text-sm font-semibold text-green-400">
+              {allowedCurrency} {formatAmount(sellerDocuments.share_allocation_share_price)}
+            </span>
+          </div>
+          {hasValue(sellerDocuments.share_allocation_total_amount) && (
+            <div className="flex justify-between border-t border-slate-600 pt-2 mt-2">
+              <span className="text-sm text-slate-400">Total Valuation:</span>
+              <span className="text-sm font-semibold text-purple-400">
+                {allowedCurrency} {formatAmount(sellerDocuments.share_allocation_total_amount)}
+              </span>
+            </div>
+          )}
+        </div>
+      ) : (
+        <p className="text-sm text-amber-300">Not submitted</p>
+      );
+    }
+
+    if (documentKey === 'privacy') {
+      return hasPrivacyRestrictions ? (
+        <div className={isPageView ? 'bg-amber-900/20 border border-amber-500/30 rounded-lg p-4' : 'bg-amber-900/20 border border-amber-500/30 rounded-lg p-3 max-h-36 overflow-y-auto'}>
+          <p className={isPageView ? 'text-sm text-amber-100 whitespace-pre-wrap leading-relaxed' : 'text-sm text-amber-200 whitespace-pre-wrap'}>
+            {sellerDocuments.disclosure_notes}
+          </p>
+        </div>
+      ) : (
+        <p className="text-sm text-amber-300">Not submitted</p>
+      );
+    }
+
+    return null;
+  };
+
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
       <div className="bg-slate-900 rounded-2xl w-full h-screen overflow-y-auto">
@@ -2070,60 +2299,66 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
 
         {/* Content */}
         <div className="p-6">
-          
           {/* Stage 0: Investment Intent */}
           {stage === 0 && (
-            <div className="space-y-6">
-              <h3 className="text-xl font-bold text-white">Choose Investment Type</h3>
-              <p className="text-slate-400">
-                How would you like to invest in{' '}
-                <span className="font-semibold text-pink-400">
-                  {businessProfile?.business_name || 
-                   sellerBusinessProfile?.business_name || 
-                   pitch?.title || 
-                   'this opportunity'}?
-                </span>
-              </p>
-              
-              <div className="grid grid-cols-1 gap-4">
-                {[
-                  { id: 'buy', label: 'Buy Equity', icon: '📈', desc: 'Own shares of the business' },
-                  { id: 'partner', label: 'Partner', icon: '🤝', desc: 'Strategic partnership deal' },
-                  { id: 'support', label: 'Support', icon: '💰', desc: 'Provide financial support' }
-                ].map(type => (
-                  <button
-                    key={type.id}
-                    onClick={() => {
-                      setInvestmentType(type.id);
-                      setStage(1);
-                    }}
-                    className="p-6 border-2 border-slate-700 hover:border-pink-500 rounded-xl bg-slate-800/50 hover:bg-slate-800 transition text-left"
-                  >
-                    <div className="text-3xl mb-3">{type.icon}</div>
-                    <h4 className="font-bold text-white mb-2">{type.label}</h4>
-                    <p className="text-sm text-slate-400">{type.desc}</p>
-                  </button>
-                ))}
+            <div className="space-y-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold text-white">Choose Investment Type</h3>
+                <p className="text-slate-400 text-sm">
+                  How would you like to invest in{' '}
+                  <span className="font-semibold text-pink-400">
+                    {businessProfile?.business_name ||
+                     sellerBusinessProfile?.business_name ||
+                     pitch?.title ||
+                     'this opportunity'}?
+                  </span>
+                </p>
               </div>
+
+              <ul className="rounded-xl border border-slate-700/80 bg-slate-900/40 divide-y divide-slate-700/70 overflow-hidden">
+                {[
+                  { id: 'buy', label: 'Buy Equity', desc: 'Own shares of the business' },
+                  { id: 'partner', label: 'Partner', desc: 'Strategic partnership deal' },
+                  { id: 'support', label: 'Support', desc: 'Provide financial support' }
+                ].map((type) => (
+                  <li key={type.id}>
+                    <button
+                      onClick={() => {
+                        setInvestmentType(type.id);
+                        setStage(1);
+                      }}
+                      className="w-full px-4 py-3.5 text-left hover:bg-slate-800/60 transition"
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-pink-400 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-semibold text-white text-sm">{type.label}</h4>
+                          <p className="text-xs text-slate-400 mt-1">{type.desc}</p>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-slate-500 flex-shrink-0 mt-1" />
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
-
           {/* Stage 1: Pitch Documents Review */}
           {stage === 1 && (
-            <div className="space-y-6">
+            <div className="space-y-6 pb-[calc(7rem+env(safe-area-inset-bottom))]">
               <div className="space-y-2">
                 <h3 className="text-xl font-bold text-white flex items-center gap-2">
                   <FileText className="w-6 h-6" />
                   Seller's Pitch Documents
                 </h3>
-                <p className="text-slate-400">Review all documents submitted by {pitch?.creator_name}</p>
+                <p className="text-slate-400">Review all documents submitted by {pitch?.creator_name || 'the seller'}</p>
               </div>
 
               {/* Investor Access Confirmed */}
               <div className="bg-green-500/10 border border-green-500/50 rounded-lg p-4 flex items-start gap-3">
                 <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-green-300 font-semibold text-sm mb-1">✅ Investor Access Enabled</p>
+                  <p className="text-green-300 font-semibold text-sm mb-1">Investor Access Enabled</p>
                   <p className="text-green-200/80 text-xs">
                     You are an authenticated investor. All seller documents are accessible and visible only to authorized investors like you.
                   </p>
@@ -2137,161 +2372,101 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                 </div>
               ) : sellerDocuments ? (
                 <div className="space-y-4">
-                  {/* Document Overview */}
                   <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
                     <div className="flex items-center justify-between mb-4">
-                      <h4 className="font-semibold text-white">📋 Overall Progress</h4>
+                      <h4 className="font-semibold text-white">Overall Progress</h4>
                       <span className="text-lg font-bold text-purple-400">
-                        {[
-                          sellerDocuments?.business_plan_content,
-                          sellerDocuments?.financial_projection_content,
-                          sellerDocuments?.mou_content,
-                          (sellerDocuments?.share_allocation_shares && sellerDocuments?.share_allocation_share_price) ? 'yes' : null,
-                          (sellerDocuments?.value_proposition_wants && sellerDocuments?.value_proposition_fears && sellerDocuments?.value_proposition_needs) ? 'yes' : null
-                        ].filter(Boolean).length}/5 documents
+                        {completedDocumentCount}/{documentSections.length} fields
                       </span>
                     </div>
                     <div className="w-full bg-slate-700 rounded-full h-2">
-                      <div 
+                      <div
                         className="bg-gradient-to-r from-pink-500 to-purple-500 h-2 rounded-full transition-all"
-                        style={{ 
-                          width: `${(([
-                            sellerDocuments?.business_plan_content,
-                            sellerDocuments?.financial_projection_content,
-                            sellerDocuments?.mou_content,
-                            (sellerDocuments?.share_allocation_shares && sellerDocuments?.share_allocation_share_price) ? 'yes' : null,
-                            (sellerDocuments?.value_proposition_wants && sellerDocuments?.value_proposition_fears && sellerDocuments?.value_proposition_needs) ? 'yes' : null
-                          ].filter(Boolean).length / 5) * 100)}%` 
-                        }}
-                      ></div>
+                        style={{ width: `${(completedDocumentCount / documentSections.length) * 100}%` }}
+                      />
                     </div>
                   </div>
 
-                  {/* Business Plan */}
-                  <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-                    <div className="flex items-start gap-3">
-                      <span className="text-2xl">📋</span>
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-white mb-3">Business Plan</h4>
-                        <p className="text-sm text-slate-400 mb-3">Your strategic foundation and business model</p>
-                        {sellerDocuments?.business_plan_content ? (
-                          <div className="bg-slate-900/50 p-3 rounded border border-slate-600 max-h-40 overflow-y-auto">
-                            <p className="text-sm text-slate-200 whitespace-pre-wrap">{sellerDocuments.business_plan_content}</p>
-                          </div>
-                        ) : (
-                          <p className="text-sm text-yellow-400">⚠️ Not submitted</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Financial Projection */}
-                  <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-                    <div className="flex items-start gap-3">
-                      <span className="text-2xl">💰</span>
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-white mb-3">Financial Projection</h4>
-                        <p className="text-sm text-slate-400 mb-3">Revenue and expense estimates</p>
-                        {sellerDocuments?.financial_projection_content ? (
-                          <div className="bg-slate-900/50 p-3 rounded border border-slate-600 max-h-40 overflow-y-auto">
-                            <p className="text-sm text-slate-200 whitespace-pre-wrap">{sellerDocuments.financial_projection_content}</p>
-                          </div>
-                        ) : (
-                          <p className="text-sm text-yellow-400">⚠️ Not submitted</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Value Proposition */}
-                  <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-                    <div className="flex items-start gap-3">
-                      <span className="text-2xl">🎯</span>
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-white mb-3">Value Proposition</h4>
-                        <p className="text-sm text-slate-400 mb-3">What you offer: Wants, Fears, and Needs</p>
-                        {sellerDocuments?.value_proposition_wants && sellerDocuments?.value_proposition_fears && sellerDocuments?.value_proposition_needs ? (
-                          <div className="space-y-3">
-                            <div className="bg-slate-900/50 p-3 rounded border border-slate-600">
-                              <p className="text-xs font-semibold text-pink-400 mb-2">Wants (Customer Desires)</p>
-                              <p className="text-sm text-slate-200 whitespace-pre-wrap">{sellerDocuments.value_proposition_wants}</p>
-                            </div>
-                            <div className="bg-slate-900/50 p-3 rounded border border-slate-600">
-                              <p className="text-xs font-semibold text-orange-400 mb-2">Fears (Customer Concerns)</p>
-                              <p className="text-sm text-slate-200 whitespace-pre-wrap">{sellerDocuments.value_proposition_fears}</p>
-                            </div>
-                            <div className="bg-slate-900/50 p-3 rounded border border-slate-600">
-                              <p className="text-xs font-semibold text-blue-400 mb-2">Needs (Customer Requirements)</p>
-                              <p className="text-sm text-slate-200 whitespace-pre-wrap">{sellerDocuments.value_proposition_needs}</p>
-                            </div>
-                          </div>
-                        ) : (
-                          <p className="text-sm text-yellow-400">⚠️ Not submitted</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* MOU */}
-                  <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-                    <div className="flex items-start gap-3">
-                      <span className="text-2xl">⚖️</span>
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-white mb-3">Memorandum of Understanding</h4>
-                        <p className="text-sm text-slate-400 mb-3">Legal and collaborative agreements</p>
-                        {sellerDocuments?.mou_content ? (
-                          <div className="bg-slate-900/50 p-3 rounded border border-slate-600 max-h-40 overflow-y-auto">
-                            <p className="text-sm text-slate-200 whitespace-pre-wrap">{sellerDocuments.mou_content}</p>
-                          </div>
-                        ) : (
-                          <p className="text-sm text-yellow-400">⚠️ Not submitted</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Share Allocation */}
-                  <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-                    <div className="flex items-start gap-3">
-                      <span className="text-2xl">📊</span>
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-white mb-3">Share Allocation</h4>
-                        <p className="text-sm text-slate-400 mb-3">Ownership structure and equity distribution</p>
-                        {sellerDocuments?.share_allocation_shares && sellerDocuments?.share_allocation_share_price ? (
-                          <div className="bg-slate-900/50 p-3 rounded border border-slate-600 space-y-2">
-                            <div className="flex justify-between">
-                              <span className="text-sm text-slate-400">Total Shares:</span>
-                              <span className="text-sm font-semibold text-blue-400">{sellerDocuments.share_allocation_shares}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-sm text-slate-400">Price per Share:</span>
-                              <span className="text-sm font-semibold text-green-400">${sellerDocuments.share_allocation_share_price}</span>
-                            </div>
-                            {sellerDocuments.share_allocation_total_amount && (
-                              <div className="flex justify-between border-t border-slate-600 pt-2 mt-2">
-                                <span className="text-sm text-slate-400">Total Valuation:</span>
-                                <span className="text-sm font-semibold text-purple-400">${sellerDocuments.share_allocation_total_amount.toLocaleString()}</span>
+                  <div className="space-y-3">
+                    {documentSections.map((section) => {
+                      const isExpanded = Boolean(expandedDocumentCards[section.key]);
+                      return (
+                        <div key={section.key} className="bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => toggleDocumentCard(section.key)}
+                            className="w-full p-4 text-left flex items-start gap-3 hover:bg-slate-700/30 transition"
+                          >
+                            <span className="inline-flex items-center justify-center min-w-[2.25rem] h-9 px-2 rounded-md border border-slate-600 bg-slate-900/70 text-xs font-semibold text-slate-200">
+                              {section.icon}
+                            </span>
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <h4 className="font-semibold text-white">{section.title}</h4>
+                                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                                  section.available ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                                }`}>
+                                  {section.available ? 'Ready' : 'Missing'}
+                                </span>
                               </div>
+                              <p className="text-xs text-slate-400 mt-1">{section.description}</p>
+                            </div>
+                            {isExpanded ? (
+                              <ChevronUp className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" />
+                            ) : (
+                              <ChevronDown className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" />
                             )}
-                          </div>
-                        ) : (
-                          <p className="text-sm text-yellow-400">⚠️ Not submitted</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                          </button>
 
-                  {/* Disclosure Notes */}
-                  {sellerDocuments?.disclosure_notes && (
-                    <div className="bg-amber-900/20 border border-amber-500/30 rounded-lg p-4">
-                      <h4 className="font-semibold text-amber-300 mb-2">🔐 Privacy Restrictions</h4>
-                      <p className="text-sm text-amber-200">{sellerDocuments.disclosure_notes}</p>
-                    </div>
-                  )}
+                          {isExpanded && (
+                            <div className="px-4 pb-4 space-y-3">
+                              {renderDocumentContent(section.key)}
+                              <button
+                                type="button"
+                                onClick={() => openDocumentPage(section.key)}
+                                disabled={!section.available}
+                                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-purple-500/40 text-purple-200 hover:bg-purple-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                              >
+                                Open {section.title} page
+                                <ChevronRight className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               ) : (
                 <div className="bg-yellow-900/20 border border-yellow-600/50 rounded-lg p-4 text-yellow-300">
-                  <p className="text-sm">⚠️ No documents found for this pitch</p>
+                  <p className="text-sm">No documents found for this pitch.</p>
+                </div>
+              )}
+
+              {activeDocumentSection && (
+                <div className="fixed inset-0 z-[65] bg-slate-950/95 backdrop-blur-sm">
+                  <div className="h-full overflow-y-auto p-4 sm:p-6 pb-[calc(8rem+env(safe-area-inset-bottom))]">
+                    <div className="max-w-3xl mx-auto bg-slate-900 rounded-2xl border border-slate-700 shadow-2xl">
+                      <div className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur border-b border-slate-700 px-4 sm:px-6 py-4 flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wide text-purple-300/80 mb-1">Document Page</p>
+                          <h4 className="text-lg font-bold text-white">{activeDocumentSection.title}</h4>
+                          <p className="text-xs text-slate-400 mt-1">{activeDocumentSection.description}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={closeDocumentPage}
+                          className="px-3 py-1.5 rounded-lg border border-slate-600 text-slate-200 hover:bg-slate-800 transition"
+                        >
+                          Close
+                        </button>
+                      </div>
+
+                      <div className="px-4 sm:px-6 py-5 space-y-4">
+                        {renderDocumentContent(activeDocumentSection.key, true)}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -2314,74 +2489,96 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
 
           {/* Stage 2: Agreement */}
           {stage === 2 && (
-            <div className="space-y-6">
+            <div className="space-y-5 pb-[calc(7rem+env(safe-area-inset-bottom))]">
               <h3 className="text-xl font-bold text-white">Review Original Pitch Agreement</h3>
-              
-              <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <h4 className="text-slate-400 text-sm font-semibold mb-1">📺 Pitch Title</h4>
-                    <p className="text-white font-bold text-lg">{pitch?.title || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <h4 className="text-slate-400 text-sm font-semibold mb-1">👤 Creator</h4>
-                    <p className="text-white font-bold text-lg">{businessProfile?.owner_name || businessProfile?.business_co_owners?.[0]?.owner_name || pitch?.creator_name || 'Unknown'}</p>
-                  </div>
-                  <div>
-                    <h4 className="text-slate-400 text-sm font-semibold mb-1">📊 Pitch Type</h4>
-                    <p className="text-white font-bold">{pitch?.pitch_type || 'Equity'}</p>
-                  </div>
-                  <div>
-                    <h4 className="text-slate-400 text-sm font-semibold mb-1">🏢 Category</h4>
-                    <p className="text-white font-bold">{pitch?.category || 'Technology'}</p>
-                  </div>
-                </div>
 
-                <div className="border-t border-slate-700 pt-4">
-                  <h4 className="text-slate-400 text-sm font-semibold mb-2">📋 Pitch Description</h4>
-                  <p className="text-slate-200 text-sm leading-relaxed">{pitch?.description || 'No description provided'}</p>
-                </div>
+              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => toggleAgreementPanel('snapshot')}
+                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
+                >
+                  <span className="font-semibold text-white">Agreement Snapshot</span>
+                  {agreementPanels.snapshot ? (
+                    <ChevronUp className="w-5 h-5 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-slate-400" />
+                  )}
+                </button>
 
-                <div className="grid grid-cols-3 gap-3 bg-slate-900/50 p-4 rounded-lg border border-slate-600/30">
-                  <div>
-                    <p className="text-slate-400 text-xs">Already Raised</p>
-                    <p className="text-green-400 font-bold text-lg">{pitch?.raised_amount || pitch?.raised || '$0'}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-400 text-xs">Funding Goal</p>
-                    <p className="text-blue-400 font-bold text-lg">{pitch?.target_funding || pitch?.goal || '$500K'}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-400 text-xs">Equity Offering</p>
-                    <p className="text-purple-400 font-bold text-lg">{pitch?.equity_offering || pitch?.equity || '10%'}</p>
-                  </div>
-                </div>
+                {agreementPanels.snapshot && (
+                  <div className="px-4 pb-4">
+                    <ul className="rounded-lg border border-slate-700/70 bg-slate-900/40 divide-y divide-slate-700/60 overflow-hidden">
+                      {[
+                        ['Pitch Title', pitch?.title || 'N/A'],
+                        ['Creator', businessProfile?.owner_name || businessProfile?.business_co_owners?.[0]?.owner_name || pitch?.creator_name || 'Unknown'],
+                        ['Pitch Type', pitch?.pitch_type || 'Equity'],
+                        ['Category', pitch?.category || 'Technology'],
+                        ['Pitch Description', pitch?.description || 'No description provided'],
+                        ['Already Raised', pitch?.raised_amount || pitch?.raised || '0'],
+                        ['Funding Goal', pitch?.target_funding || pitch?.goal || '500000'],
+                        ['Equity Offering', pitch?.equity_offering || pitch?.equity || '10']
+                      ].map(([label, value]) => (
+                        <li key={label} className="px-3.5 py-3">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+                          <p className="text-sm text-white mt-1 break-words">{value}</p>
+                        </li>
+                      ))}
+                    </ul>
 
-                {pitch?.has_ip && (
-                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 flex gap-2">
-                    <span className="text-blue-300 text-sm">🔒 This pitch has intellectual property protection</span>
+                    {pitch?.has_ip && (
+                      <div className="mt-3 bg-blue-500/10 border border-blue-500/30 rounded-lg px-3.5 py-2.5">
+                        <p className="text-blue-200 text-xs">This pitch has intellectual property protection.</p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
 
-              <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-                <h4 className="font-semibold text-white mb-3">📜 Investment Terms & Conditions</h4>
-                <div className="text-slate-300 text-sm space-y-2 max-h-64 overflow-y-auto">
-                  <p>✅ <strong>Investment Type:</strong> {investmentType === 'buy' ? 'Equity Purchase' : investmentType === 'partner' ? 'Partnership Agreement' : 'Financial Support'}</p>
-                  <p>🏢 <strong>Business:</strong> {sellerBusinessProfile?.business_name || pitch?.title || 'the business'}</p>
-                  <p>💼 <strong>Pitch:</strong> {pitch.title}</p>
-                  <p>📊 <strong>Pitch Description:</strong> {pitch.description}</p>
-                  <p>💰 <strong>Funding Goal:</strong> {pitch?.target_funding || pitch?.goal || '$500K'}</p>
-                  <p>📈 <strong>Equity Offered:</strong> {pitch?.equity_offering || pitch?.equity || '10%'}</p>
-                  <p>🔐 <strong>Payment Method:</strong> ICAN Wallet with escrow protection</p>
-                  <p>✅ <strong>Escrow Protection:</strong> All investments are held in ICAN escrow pending multi-signature approval from existing shareholders.</p>
-                  <p>🔏 <strong>Release Requirement:</strong> 60% of shareholders (minimum 10 members) must sign to release funds.</p>
-                  <p>📱 <strong>Verification:</strong> PIN and device location will be recorded on the sealed agreement.</p>
-                  <p>👥 <strong>Shareholder Addition:</strong> You will be automatically added as a shareholder upon seal finalization.</p>
-                </div>
+              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => toggleAgreementPanel('terms')}
+                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
+                >
+                  <span className="font-semibold text-white">Investment Terms & Conditions</span>
+                  {agreementPanels.terms ? (
+                    <ChevronUp className="w-5 h-5 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-slate-400" />
+                  )}
+                </button>
+
+                {agreementPanels.terms && (
+                  <div className="px-4 pb-4">
+                    <ul className="rounded-lg border border-slate-700/70 bg-slate-900/40 divide-y divide-slate-700/60 overflow-hidden">
+                      {[
+                        ['Investment Type', investmentType === 'buy' ? 'Equity Purchase' : investmentType === 'partner' ? 'Partnership Agreement' : 'Financial Support'],
+                        ['Business', sellerBusinessProfile?.business_name || pitch?.title || 'the business'],
+                        ['Pitch', pitch?.title || 'N/A'],
+                        ['Pitch Description', pitch?.description || 'No description provided'],
+                        ['Funding Goal', pitch?.target_funding || pitch?.goal || '500000'],
+                        ['Equity Offered', pitch?.equity_offering || pitch?.equity || '10'],
+                        ['Payment Method', 'ICAN Wallet with escrow protection'],
+                        ['Escrow Protection', 'All investments are held in ICAN escrow pending multi-signature approval from existing shareholders.'],
+                        ['Release Requirement', '60% of shareholders (minimum 10 members) must sign to release funds.'],
+                        ['Verification', 'PIN and device location will be recorded on the sealed agreement.'],
+                        ['Shareholder Addition', 'You will be automatically added as a shareholder upon seal finalization.']
+                      ].map(([label, value]) => (
+                        <li key={label} className="px-3.5 py-3 flex items-start gap-3">
+                          <span className="mt-1 w-1.5 h-1.5 rounded-full bg-pink-400 flex-shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+                            <p className="text-sm text-slate-200 mt-1 break-words">{value}</p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
 
-              <label className="flex items-center gap-3 text-slate-300 cursor-pointer">
+              <label className="flex items-center gap-3 rounded-lg border border-slate-700/80 bg-slate-900/40 px-4 py-3 text-slate-300 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={agreedToTerms}
@@ -2401,50 +2598,62 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
             </div>
           )}
 
-          {/* Stage 3: Share Allocation */}
+                    {/* Stage 3: Share Allocation */}
           {stage === 3 && (
-            <div className="space-y-6">
+            <div className="space-y-5 pb-[calc(7rem+env(safe-area-inset-bottom))]">
               <h3 className="text-xl font-bold text-white">Share Allocation</h3>
-              
-              <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700 space-y-2 text-sm">
-                <div className="flex justify-between text-slate-300">
-                  <span>📊 Pitch:</span>
-                  <span className="text-white font-semibold">{pitch?.title}</span>
-                </div>
-                <div className="flex justify-between text-slate-300">
-                  <span>💰 Funding Goal:</span>
-                  <span className="text-white font-semibold">{pitch?.target_funding || pitch?.goal || '$500K'}</span>
-                </div>
-                <div className="flex justify-between text-slate-300">
-                  <span>📈 Total Equity:</span>
-                  <span className="text-white font-semibold">{pitch?.equity_offering || pitch?.equity || '10%'}</span>
-                </div>
-                <div className="flex justify-between text-slate-300">
-                  <span>💵 Per Share Price:</span>
-                  <span className="text-white font-semibold">${sharePrice.toFixed(2)} ICAN</span>
-                </div>
+
+              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => toggleFlowPanel('shareOverview')}
+                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
+                >
+                  <span className="font-semibold text-white">Pitch Overview</span>
+                  {flowPanels.shareOverview ? (
+                    <ChevronUp className="w-5 h-5 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-slate-400" />
+                  )}
+                </button>
+
+                {flowPanels.shareOverview && (
+                  <div className="px-4 pb-4">
+                    <ul className="rounded-lg border border-slate-700/70 bg-slate-900/40 divide-y divide-slate-700/60 overflow-hidden">
+                      {[
+                        ['Pitch', pitch?.title || 'N/A'],
+                        ['Funding Goal', pitch?.target_funding || pitch?.goal || '500000'],
+                        ['Total Equity', pitch?.equity_offering || pitch?.equity || '10'],
+                        ['Per Share Price', `${sharePrice.toFixed(2)} ICAN`]
+                      ].map(([label, value]) => (
+                        <li key={label} className="px-3.5 py-3">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+                          <p className="text-sm text-white mt-1 break-words">{value}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-2">
-                    Number of Shares to Purchase
-                    <span className="text-slate-400 font-normal text-sm"> (0 shares for partner/support only)</span>
-                  </label>
-                  <input
-                    type="number"
-                    value={sharesAmount}
-                    onChange={(e) => setSharesAmount(e.target.value)}
-                    placeholder="Enter number of shares (0 for non-equity investment)"
-                    min="0"
-                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500"
-                  />
-                  <p className="text-xs text-slate-400 mt-1">
-                    {sharesAmount === '0' || sharesAmount === '' 
-                      ? '✓ Partner/Support investment (no equity)' 
-                      : `${sharesAmount} share${sharesAmount !== '1' ? 's' : ''} selected`}
-                  </p>
-                </div>
+
+              <div className="space-y-3 rounded-xl border border-slate-700/80 bg-slate-900/40 p-4">
+                <label className="block text-slate-300 font-semibold text-sm">
+                  Number of Shares to Purchase
+                  <span className="text-slate-400 font-normal"> (0 shares for partner/support only)</span>
+                </label>
+                <input
+                  type="number"
+                  value={sharesAmount}
+                  onChange={(e) => setSharesAmount(e.target.value)}
+                  placeholder="Enter number of shares (0 for non-equity investment)"
+                  min="0"
+                  className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500"
+                />
+                <p className="text-xs text-slate-400">
+                  {sharesAmount === '0' || sharesAmount === ''
+                    ? 'Partner/Support investment (no equity)'
+                    : `${sharesAmount} share${sharesAmount !== '1' ? 's' : ''} selected`}
+                </p>
 
                 {(totalInvestment > 0 || sharesAmount === '0') && (
                   <div className={`rounded-lg p-4 space-y-2 ${
@@ -2454,10 +2663,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                   }`}>
                     {sharesAmount === '0' || !sharesAmount ? (
                       <>
-                        <p className="text-blue-300 font-semibold flex items-center gap-2">
-                          <span>🤝</span>
-                          Partner/Supporter Investment
-                        </p>
+                        <p className="text-blue-300 font-semibold">Partner/Supporter Investment</p>
                         <p className="text-blue-200 text-sm">
                           You will support this pitch without equity stake. Investment type: {investmentType === 'partner' ? 'Partnership' : 'Support'}
                         </p>
@@ -2466,8 +2672,8 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                       <>
                         <p className="text-slate-300">
                           <span className="font-semibold text-white">{sharesAmount} Share{sharesAmount !== '1' ? 's' : ''}</span>
-                          <span className="text-slate-400"> × </span>
-                          <span className="font-semibold text-white">${sharePrice.toFixed(2)} {allowedCurrency}</span>
+                          <span className="text-slate-400"> x </span>
+                          <span className="font-semibold text-white">{sharePrice.toFixed(2)} {allowedCurrency}</span>
                         </p>
                         <div className="border-t border-pink-500/30 pt-2">
                           <p className="text-slate-300">
@@ -2484,31 +2690,230 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                 )}
               </div>
 
-              {/* Account Country Info (Informational Only) */}
-              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 flex gap-3">
-                <AlertCircle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-blue-300 font-semibold text-sm mb-1">📍 Account Registered In</p>
-                  <p className="text-blue-200/80 text-xs">
-                    Your account is registered in <span className="font-semibold">{userCountry}</span> 
-                    (Default currency: <span className="font-semibold">{allowedCurrency}</span>). 
-                    You can invest in any currency supported by the business. Transactions are tracked for regulatory compliance.
-                  </p>
-                </div>
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                <p className="text-blue-300 font-semibold text-sm mb-1">Account Registered In</p>
+                <p className="text-blue-200/80 text-xs">
+                  Your account is registered in <span className="font-semibold">{userCountry}</span>
+                  {' '}(Default currency: <span className="font-semibold">{allowedCurrency}</span>). You can invest in any currency supported by the business. Transactions are tracked for regulatory compliance.
+                </p>
               </div>
 
               <button
                 onClick={() => setStage(5)}
-                disabled={!sharesAmount || totalInvestment === 0}
+                disabled={!sharesAmount || (investmentType === 'buy' && totalInvestment === 0)}
                 className="w-full px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition"
               >
-                Proceed to ICAN Wallet
+                Proceed to ICAN
               </button>
             </div>
           )}
 
           {/* Stage 5: Wallet Integration */}
           {stage === 5 && (
+            <div className="space-y-5 pb-[calc(7rem+env(safe-area-inset-bottom))]">
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <Shield className="w-6 h-6" />
+                ICAN Wallet - Investment Summary
+              </h3>
+
+              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => toggleFlowPanel('walletSummary')}
+                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
+                >
+                  <span className="font-semibold text-white">Investment Snapshot</span>
+                  {flowPanels.walletSummary ? (
+                    <ChevronUp className="w-5 h-5 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-slate-400" />
+                  )}
+                </button>
+
+                {flowPanels.walletSummary && (
+                  <div className="px-4 pb-4">
+                    <ul className="rounded-lg border border-slate-700/70 bg-slate-900/40 divide-y divide-slate-700/60 overflow-hidden">
+                      {[
+                        ['Pitch Title', pitch?.title || 'Unknown Pitch'],
+                        ['Business', sellerBusinessProfile?.business_name || businessProfile?.business_name || 'Unknown Business'],
+                        ['Seller', (() => {
+                          const sellerUserId = sellerBusinessProfile?.user_id;
+                          const sellerFromShareholders = realShareholders.find((s) => s.user_id === sellerUserId);
+                          return sellerFromShareholders?.name || sellerBusinessProfile?.owner_name || pitch?.creator_name || 'Unknown Seller';
+                        })()],
+                        ['Investor Name', currentUser?.user_metadata?.full_name || currentUser?.email || 'Unknown Investor'],
+                        ['Investor Email', currentUser?.email || 'No email'],
+                        ['Investment Type', investmentType === 'buy' ? 'Equity Purchase' : investmentType === 'partner' ? 'Partnership' : 'Support'],
+                        ['Amount', `${allowedCurrency} ${totalInvestment.toFixed(2)}`]
+                      ].map(([label, value]) => (
+                        <li key={label} className="px-3.5 py-3">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+                          <p className="text-sm text-white mt-1 break-words">{value}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => toggleFlowPanel('walletCoins')}
+                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
+                >
+                  <span className="font-semibold text-white">Your ICAN Wallet</span>
+                  {flowPanels.walletCoins ? (
+                    <ChevronUp className="w-5 h-5 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-slate-400" />
+                  )}
+                </button>
+
+                {flowPanels.walletCoins && (
+                  <div className="px-4 pb-4 space-y-3">
+                    <div className="rounded-lg border border-slate-700/70 bg-slate-900/40 p-3 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">ICAN Account</p>
+                        <p className="text-sm text-slate-200 mt-1 break-words">
+                          {icanAccountNumber || 'Not available'}
+                          {icanAccountHolder ? ` - ${icanAccountHolder}` : ''}
+                        </p>
+                      </div>
+                      <button
+                        onClick={refreshWalletBalance}
+                        disabled={loadingWallet}
+                        className="text-xs px-3 py-1.5 bg-blue-600/50 hover:bg-blue-600 disabled:bg-slate-700 disabled:text-slate-400 text-white rounded transition"
+                      >
+                        {loadingWallet ? 'Loading...' : 'Refresh'}
+                      </button>
+                    </div>
+
+                    <div className="rounded-lg border border-slate-700/70 bg-slate-900/40 p-4 text-center">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Available Balance</p>
+                      <p className="text-2xl font-bold text-yellow-400 mt-2">
+                        {loadingWallet ? 'Loading wallet data...' : `${walletBalance.toFixed(8)} ICAN`}
+                      </p>
+                      {!loadingWallet && walletBalance <= 0 && (
+                        <p className="text-xs text-red-300 mt-2">No ICAN coins available. Fund your wallet to continue.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => toggleFlowPanel('walletBreakdown')}
+                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
+                >
+                  <span className="font-semibold text-white">Investment Breakdown</span>
+                  {flowPanels.walletBreakdown ? (
+                    <ChevronUp className="w-5 h-5 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-slate-400" />
+                  )}
+                </button>
+
+                {flowPanels.walletBreakdown && (
+                  <div className="px-4 pb-4">
+                    <ul className="rounded-lg border border-slate-700/70 bg-slate-900/40 divide-y divide-slate-700/60 overflow-hidden">
+                      {[
+                        ['Investment Amount (ICAN)', `${investmentInIcanCoins.toFixed(2)} coins`],
+                        ['Equivalent Value', `${allowedCurrency} ${totalInvestment.toFixed(2)}`],
+                        ['Shares', sharesAmount === '0' || !sharesAmount ? 'Partnership/Support (no equity)' : `${sharesAmount} shares`],
+                        ['ICAN Coins Remaining', `${(walletBalance - investmentInIcanCoins).toFixed(2)} coins`],
+                        ['Payment Method', 'ICAN Coins (Escrow protected)']
+                      ].map(([label, value]) => (
+                        <li key={label} className="px-3.5 py-3">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+                          <p className={`text-sm mt-1 break-words ${
+                            label === 'ICAN Coins Remaining' && (walletBalance - investmentInIcanCoins) < 0
+                              ? 'text-red-300'
+                              : 'text-white'
+                          }`}>{value}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => toggleFlowPanel('walletShareholders')}
+                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
+                >
+                  <span className="font-semibold text-white">Business Shareholders ({getActualShareholders().length})</span>
+                  {flowPanels.walletShareholders ? (
+                    <ChevronUp className="w-5 h-5 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-slate-400" />
+                  )}
+                </button>
+
+                {flowPanels.walletShareholders && (
+                  <div className="px-4 pb-4">
+                    {getActualShareholders().length > 0 ? (
+                      <ul className="rounded-lg border border-slate-700/70 bg-slate-900/40 divide-y divide-slate-700/60 overflow-hidden max-h-56 overflow-y-auto">
+                        {getActualShareholders().map((shareholder, idx) => (
+                          <li key={shareholder.id || idx} className="px-3.5 py-3 flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-white break-words">{shareholder.name || shareholder.owner_name || 'Unnamed'}</p>
+                              <p className="text-xs text-slate-400 break-words">{shareholder.email || shareholder.owner_email || 'No email'}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-semibold text-green-400">{shareholder.ownership_share || 'N/A'}%</p>
+                              <p className="text-xs text-slate-400">{shareholder.isLinked ? 'In-app' : 'Email'}</p>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-slate-400 italic">No shareholders registered yet.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                <ul className="space-y-2">
+                  <li className="text-sm text-blue-200 flex items-start gap-2">
+                    <span className="mt-1 w-1.5 h-1.5 rounded-full bg-blue-300 flex-shrink-0" />
+                    <span>
+                      <strong>Escrow Protection:</strong> Your {allowedCurrency} {totalInvestment.toFixed(2)} is held in ICAN escrow until 60% shareholder approval is completed.
+                    </span>
+                  </li>
+                  <li className="text-sm text-blue-200 flex items-start gap-2">
+                    <span className="mt-1 w-1.5 h-1.5 rounded-full bg-blue-300 flex-shrink-0" />
+                    <span>
+                      <strong>Security:</strong> Funds cannot be released until multi-signature approval requirements are met.
+                    </span>
+                  </li>
+                </ul>
+              </div>
+
+              <button
+                onClick={() => {
+                  if (walletBalance < investmentInIcanCoins) {
+                    alert(`Insufficient balance.\n\nYour wallet: ${walletBalance.toFixed(2)} ICAN\nRequired: ${investmentInIcanCoins.toFixed(2)} ICAN\nShortfall: ${(investmentInIcanCoins - walletBalance).toFixed(2)} ICAN`);
+                    return;
+                  }
+                  setStage(6);
+                }}
+                disabled={walletBalance < investmentInIcanCoins}
+                className="w-full px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition"
+              >
+                {walletBalance < investmentInIcanCoins
+                  ? `Insufficient Balance (${(investmentInIcanCoins - walletBalance).toFixed(2)} ICAN short)`
+                  : 'Authorize with PIN'}
+              </button>
+            </div>
+          )}
+
+          {false && (
             <div className="space-y-6">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
                 <Shield className="w-6 h-6" />
@@ -2518,11 +2923,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
               <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-lg p-6 space-y-4">
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center justify-between text-slate-300">
-                    <span>📺 Pitch Title:</span>
+                    <span>ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Âº Pitch Title:</span>
                     <span className="text-white font-semibold">{pitch?.title || 'Unknown Pitch'}</span>
                   </div>
                   <div className="flex items-center justify-between text-slate-300">
-                    <span>🏢 Business:</span>
+                    <span>ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â¢ Business:</span>
                     <span className="text-white font-semibold">
                       {(() => {
                         const displayValue = sellerBusinessProfile?.business_name || businessProfile?.business_name || 'Unknown Business';
@@ -2531,13 +2936,13 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                           : businessProfile?.business_name 
                           ? 'businessProfile.business_name (investor)' 
                           : 'fallback (Unknown)';
-                        console.log('💼 Business Display:', { displayValue, source });
+                        console.log('ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€šÃ‚Â¼ Business Display:', { displayValue, source });
                         return displayValue;
                       })()}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-slate-300">
-                    <span>👤 Seller:</span>
+                    <span>ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“Ãƒâ€šÃ‚Â¤ Seller:</span>
                     <span className="text-white font-semibold text-xs">
                       {(() => {
                         // Find the seller's name from realShareholders (includes all co-owners)
@@ -2548,7 +2953,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                         // Get seller name from multiple sources
                         const sellerName = sellerFromShareholders?.name || 'Unknown Seller';
                         
-                        console.log('👤 Seller Display:', { 
+                        console.log('ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“Ãƒâ€šÃ‚Â¤ Seller Display:', { 
                           sellerUserId,
                           sellerFromShareholders,
                           displayValue: sellerName
@@ -2558,18 +2963,18 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-slate-300">
-                    <span>👤 Investor Name:</span>
+                    <span>ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“Ãƒâ€šÃ‚Â¤ Investor Name:</span>
                     <span className="text-white font-semibold">{currentUser?.user_metadata?.full_name || currentUser?.email || 'Unknown Investor'}</span>
                   </div>
                   <div className="flex items-center justify-between text-slate-300">
-                    <span>📧 Investor Email:</span>
+                    <span>ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â§ Investor Email:</span>
                     <span className="text-white font-semibold text-xs">{currentUser?.email || 'No email'}</span>
                   </div>
                 </div>
 
                 <div className="border-t border-slate-700 pt-4 space-y-3">
                   <h4 className="text-slate-300 font-semibold text-sm flex items-center gap-2">
-                    � Your ICAN Coins (For Share Purchase)
+                    ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½ Your ICAN Coins (For Share Purchase)
                   </h4>
                   <div className="bg-gradient-to-br from-slate-700 to-slate-800 rounded-lg p-4 space-y-3 border border-slate-600">
                     {/* Tabs - Only My Wallet visible */}
@@ -2579,19 +2984,19 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                         onClick={() => setWalletTab('overview')}
                         className={`px-4 py-2 text-sm font-semibold ${walletTab === 'overview' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-slate-400'}`}
                       >
-                        📊 Overview
+                        ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã‚Â  Overview
                       </button>
                       <button 
                         onClick={() => setWalletTab('trade')}
                         className={`px-4 py-2 text-sm font-semibold ${walletTab === 'trade' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-slate-400'}`}
                       >
-                        💱 Trade
+                        ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€šÃ‚Â± Trade
                       </button>
                       <button 
                         onClick={() => setWalletTab('wallet')}
                         className={`px-4 py-2 text-sm font-semibold ${walletTab === 'wallet' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-slate-400'}`}
                       >
-                        👛 My Wallet
+                        ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Âº My Wallet
                       </button>
                     </div>
                     END COMMENT */}
@@ -2602,7 +3007,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                         <div className="bg-slate-800/60 rounded-lg p-4 text-center">
                           <p className="text-slate-400 text-sm mb-2">Available Balance</p>
                           <div className="text-4xl font-bold text-yellow-400 mb-2">
-                            💎 {walletBalance.toFixed(8)}
+                            ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ {walletBalance.toFixed(8)}
                           </div>
                           <p className="text-slate-500 text-xs">Your ICAN Coins</p>
                         </div>
@@ -2624,8 +3029,8 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                         }`}>
                           <span className={walletBalance >= convertToIcanCoins(totalInvestment, allowedCurrency) ? 'text-green-400 text-sm' : 'text-red-400 text-sm'}>
                             {walletBalance >= convertToIcanCoins(totalInvestment, allowedCurrency) 
-                              ? '✅ Sufficient Funds' 
-                              : `❌ Need ${(convertToIcanCoins(totalInvestment, allowedCurrency) - walletBalance).toFixed(2)} more`
+                              ? 'ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Sufficient Funds' 
+                              : `ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Need ${(convertToIcanCoins(totalInvestment, allowedCurrency) - walletBalance).toFixed(2)} more`
                             }
                           </span>
                         </div>
@@ -2648,14 +3053,14 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                       <div className="space-y-3">
                         <div className="bg-slate-800/60 rounded-lg p-4">
                           <div className="flex items-center justify-between mb-3">
-                            <p className="text-slate-400 text-sm font-semibold">💰 Your ICAN Coin Balance</p>
+                            <p className="text-slate-400 text-sm font-semibold">ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€šÃ‚Â° Your ICAN Coin Balance</p>
                             <button 
                               onClick={refreshWalletBalance}
                               disabled={loadingWallet}
                               className="text-xs px-2 py-1 bg-blue-600/50 hover:bg-blue-600 disabled:bg-gray-600 text-white rounded transition"
                               title="Refresh wallet balance"
                             >
-                              {loadingWallet ? '⏳ Loading...' : '🔄 Refresh'}
+                              {loadingWallet ? 'ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â³ Loading...' : 'ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾ Refresh'}
                             </button>
                           </div>
                           
@@ -2667,14 +3072,14 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                             <>
                               <div className="text-center">
                                 <div className="text-3xl font-bold text-yellow-400 mt-2">
-                                  💎 {walletBalance.toFixed(8)}
+                                  ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ {walletBalance.toFixed(8)}
                                 </div>
                                 <p className="text-slate-500 text-xs mt-2">Available for investment</p>
                               </div>
                               
                               {walletBalance <= 0 && (
                                 <div className="mt-3 bg-red-500/10 border border-red-500/30 rounded p-2">
-                                  <p className="text-red-400 text-xs">⚠️ No ICAN coins. Go to ICAN Wallet to purchase coins.</p>
+                                  <p className="text-red-400 text-xs">ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â No ICAN coins. Go to ICAN Wallet to purchase coins.</p>
                                 </div>
                               )}
                             </>
@@ -2687,11 +3092,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
 
 
                 <div className="border-t border-slate-700 pt-4 space-y-3">
-                  <h4 className="text-slate-300 font-semibold text-sm">📊 Investment Breakdown (ICAN Coins)</h4>
+                  <h4 className="text-slate-300 font-semibold text-sm">ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã‚Â  Investment Breakdown (ICAN Coins)</h4>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-slate-400">Investment Amount (ICAN):</span>
-                      <span className="text-2xl font-bold text-yellow-400">💎 {convertToIcanCoins(totalInvestment, allowedCurrency).toFixed(2)} coins</span>
+                      <span className="text-2xl font-bold text-yellow-400">ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ {convertToIcanCoins(totalInvestment, allowedCurrency).toFixed(2)} coins</span>
                       <span className="text-xs text-slate-400">= {allowedCurrency} {totalInvestment.toFixed(0)}</span>
                     </div>
                     <div className="flex items-center justify-between">
@@ -2703,11 +3108,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                     <div className="border-t border-slate-700 pt-3 flex items-center justify-between">
                       <span className="text-slate-400">ICAN Coins Remaining:</span>
                       <span className={`text-xl font-semibold ${(walletBalance - totalInvestment) < 0 ? 'text-red-400' : 'text-green-400'}`}>
-                        💎 {(walletBalance - convertToIcanCoins(totalInvestment, allowedCurrency)).toFixed(2)} coins
+                        ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ {(walletBalance - convertToIcanCoins(totalInvestment, allowedCurrency)).toFixed(2)} coins
                       </span>
                     </div>
                     <div className="border-t border-slate-700 pt-3 flex items-center justify-between">
-                      <span className="text-slate-400">� Payment Method:</span>
+                      <span className="text-slate-400">ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½ Payment Method:</span>
                       <span className="text-sm font-semibold text-yellow-300">ICAN Coins (Premium Digital Currency)</span>
                     </div>
                   </div>
@@ -2728,7 +3133,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                           </div>
                           <div className="text-right">
                             <p className="text-green-400 font-semibold text-sm">{shareholder.ownership_share || 'N/A'}%</p>
-                            <p className="text-slate-400 text-xs">{shareholder.isLinked ? '✅ In-app' : '📧 Email'}</p>
+                            <p className="text-slate-400 text-xs">{shareholder.isLinked ? 'ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ In-app' : 'ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â§ Email'}</p>
                           </div>
                         </div>
                       ))}
@@ -2741,11 +3146,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
 
               <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 space-y-2">
                 <p className="text-blue-300 text-sm flex gap-2">
-                  <span>💳</span>
+                  <span>ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€šÃ‚Â³</span>
                   <span><strong>Escrow Protection:</strong> Your {allowedCurrency} {totalInvestment.toFixed(2)} investment will be securely held in ICAN Escrow until {signatures.length >= mockShareholders.length * 0.6 ? 'completed' : '60% of shareholders sign'}.</span>
                 </p>
                 <p className="text-blue-300 text-sm flex gap-2">
-                  <span>🔐</span>
+                  <span>ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â</span>
                   <span><strong>Security:</strong> Funds are protected and cannot be transferred until multi-signature approval is complete.</span>
                 </p>
               </div>
@@ -2754,7 +3159,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                 onClick={() => {
                   const investmentInCoins = convertToIcanCoins(totalInvestment, allowedCurrency);
                   if (walletBalance < investmentInCoins) {
-                    alert(`❌ Insufficient balance!\n\nYour wallet: 💎 ${walletBalance.toFixed(2)} ICAN coins\nRequired: 💎 ${investmentInCoins.toFixed(2)} ICAN coins\nShortfall: 💎 ${(investmentInCoins - walletBalance).toFixed(2)}`);
+                    alert(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Insufficient balance!\n\nYour wallet: ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ ${walletBalance.toFixed(2)} ICAN coins\nRequired: ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ ${investmentInCoins.toFixed(2)} ICAN coins\nShortfall: ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ ${(investmentInCoins - walletBalance).toFixed(2)}`);
                     return;
                   }
                   setStage(6);
@@ -2762,13 +3167,129 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                 disabled={walletBalance < convertToIcanCoins(totalInvestment, allowedCurrency)}
                 className="w-full px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition"
               >
-                {walletBalance < convertToIcanCoins(totalInvestment, allowedCurrency) ? `❌ Insufficient Balance (💎 ${(convertToIcanCoins(totalInvestment, allowedCurrency) - walletBalance).toFixed(2)} short)` : 'Authorize with PIN'}
+                {walletBalance < convertToIcanCoins(totalInvestment, allowedCurrency) ? `ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Insufficient Balance (ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ ${(convertToIcanCoins(totalInvestment, allowedCurrency) - walletBalance).toFixed(2)} short)` : 'Authorize with PIN'}
               </button>
             </div>
           )}
 
           {/* Stage 6: Payment Execution & Wallet PIN */}
           {stage === 6 && (
+            <div className="space-y-5 pb-[calc(7rem+env(safe-area-inset-bottom))]">
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <Lock className="w-6 h-6" />
+                Secure Payment - Wallet PIN Verification
+              </h3>
+
+              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => toggleFlowPanel('paymentSummary')}
+                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
+                >
+                  <span className="font-semibold text-white">Payment Summary</span>
+                  {flowPanels.paymentSummary ? (
+                    <ChevronUp className="w-5 h-5 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-slate-400" />
+                  )}
+                </button>
+
+                {flowPanels.paymentSummary && (
+                  <div className="px-4 pb-4">
+                    <ul className="rounded-lg border border-slate-700/70 bg-slate-900/40 divide-y divide-slate-700/60 overflow-hidden">
+                      {[
+                        ['Amount to Escrow', `${allowedCurrency} ${totalInvestment.toFixed(2)}`],
+                        ['ICAN Required', `${investmentInIcanCoins.toFixed(2)} coins`],
+                        ['Wallet Balance', `${walletBalance.toFixed(2)} ICAN`],
+                        ['Payment Method', 'ICAN Wallet PIN'],
+                        ['Security', 'PIN verification creates your sealed signature']
+                      ].map(([label, value]) => (
+                        <li key={label} className="px-3.5 py-3">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+                          <p className="text-sm text-white mt-1 break-words">{value}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 p-4 space-y-4">
+                <p className="text-slate-300 text-sm">
+                  Enter your ICAN Wallet PIN (4-6 digits) to authorize and seal this investment.
+                </p>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-2">Wallet PIN</label>
+                    <div className="flex gap-2">
+                      <input
+                        type={showWalletPin ? 'text' : 'password'}
+                        value={walletPin}
+                        onChange={(e) => setWalletPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        placeholder="Enter PIN"
+                        maxLength="6"
+                        className="flex-1 px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-center text-2xl tracking-widest placeholder-slate-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowWalletPin(!showWalletPin)}
+                        className="px-3 py-2 hover:bg-slate-700 rounded-lg transition text-slate-300 text-xs border border-slate-700"
+                      >
+                        {showWalletPin ? 'Hide' : 'Show'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-2">Confirm Wallet PIN</label>
+                    <input
+                      type={showWalletPin ? 'text' : 'password'}
+                      value={walletPinConfirm}
+                      onChange={(e) => setWalletPinConfirm(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="Re-enter PIN"
+                      maxLength="6"
+                      className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-center text-2xl tracking-widest placeholder-slate-500"
+                    />
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="p-3 bg-red-500/20 border border-red-500/50 rounded text-red-300 text-sm">
+                    {error}
+                  </div>
+                )}
+
+                {pinVerified && (
+                  <div className="p-3 bg-green-500/20 border border-green-500/50 rounded text-green-300 text-sm flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4" />
+                    <span>Wallet PIN verified. Payment is sealed with your signature.</span>
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={async () => {
+                  if (!pinVerified) {
+                    verifyWalletPin();
+                  } else {
+                    const approvalStatus = await checkShareholderApprovalStatus();
+                    if (approvalStatus.hasReachedThreshold) {
+                      generateQRCode();
+                    } else {
+                      setError(`Waiting for shareholder approvals: ${approvalStatus.approvedCount}/${approvalStatus.totalRequired} required (${approvalStatus.percentageApproved.toFixed(0)}%)`);
+                    }
+                  }
+                }}
+                disabled={loading || (!walletPin || !walletPinConfirm)}
+                className="w-full px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition"
+              >
+                {loading ? 'Processing...' : pinVerified ? 'Proceed to Shareholder Signatures' : 'Verify & Seal with Wallet PIN'}
+              </button>
+            </div>
+          )}
+
+          {false && (
             <div className="space-y-6">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
                 <Lock className="w-6 h-6" />
@@ -2777,11 +3298,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
 
               <div className="bg-gradient-to-r from-blue-900/50 to-purple-900/50 border border-blue-500/50 rounded-lg p-4 space-y-2">
                 <p className="text-blue-300 text-sm flex gap-2">
-                  <span>�</span>
+                  <span>ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½</span>
                   <span><strong>Amount:</strong> {allowedCurrency} {totalInvestment.toFixed(2)} will be transferred to secure escrow.</span>
                 </p>
                 <p className="text-blue-300 text-sm flex gap-2">
-                  <span>�🔐</span>
+                  <span>ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â</span>
                   <span><strong>Wallet PIN Required:</strong> Your ICAN Wallet PIN will authorize the payment to escrow and be recorded as your sealed signature for this investment.</span>
                 </p>
               </div>
@@ -2797,7 +3318,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                         type={showWalletPin ? 'text' : 'password'}
                         value={walletPin}
                         onChange={(e) => setWalletPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                        placeholder="••••"
+                        placeholder="ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢"
                         maxLength="6"
                         className="flex-1 px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-center text-2xl tracking-widest placeholder-slate-500"
                       />
@@ -2805,7 +3326,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                         onClick={() => setShowWalletPin(!showWalletPin)}
                         className="p-2 hover:bg-slate-700 rounded-lg transition text-slate-400"
                       >
-                        {showWalletPin ? '👁️' : '🙈'}
+                        {showWalletPin ? 'ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â' : 'ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢Ãƒâ€¹Ã¢â‚¬Â '}
                       </button>
                     </div>
                   </div>
@@ -2816,7 +3337,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                       type={showWalletPin ? 'text' : 'password'}
                       value={walletPinConfirm}
                       onChange={(e) => setWalletPinConfirm(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      placeholder="••••"
+                      placeholder="ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢"
                       maxLength="6"
                       className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-center text-2xl tracking-widest placeholder-slate-500"
                     />
@@ -2846,12 +3367,12 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                     const approvalStatus = await checkShareholderApprovalStatus();
                     if (approvalStatus.hasReachedThreshold) {
                       // 60% threshold met - proceed to generate QR code
-                      console.log(`✅ PROCEEDING: 60% approval threshold reached (${approvalStatus.approvedCount}/${approvalStatus.totalRequired})`);
+                      console.log(`ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ PROCEEDING: 60% approval threshold reached (${approvalStatus.approvedCount}/${approvalStatus.totalRequired})`);
                       generateQRCode();
                     } else {
                       // Still waiting for more approvals
-                      console.log(`⏳ WAITING: Need ${approvalStatus.totalRequired - approvalStatus.approvedCount} more approval(s) to reach 60%`);
-                      setError(`⏳ Waiting for shareholder approvals: ${approvalStatus.approvedCount}/${approvalStatus.totalRequired} required (${approvalStatus.percentageApproved.toFixed(0)}%)`);
+                      console.log(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â³ WAITING: Need ${approvalStatus.totalRequired - approvalStatus.approvedCount} more approval(s) to reach 60%`);
+                      setError(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â³ Waiting for shareholder approvals: ${approvalStatus.approvedCount}/${approvalStatus.totalRequired} required (${approvalStatus.percentageApproved.toFixed(0)}%)`);
                     }
                   }
                 }}
@@ -2865,6 +3386,259 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
 
           {/* Stage 7: Pending Signatures */}
           {stage === 7 && (
+            <div className="space-y-5 pb-[calc(7rem+env(safe-area-inset-bottom))]">
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <Users className="w-6 h-6" />
+                Awaiting Shareholder Signatures (24-Hour Deadline)
+              </h3>
+
+              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => toggleFlowPanel('pendingStatus')}
+                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
+                >
+                  <span className="font-semibold text-white">Escrow Status</span>
+                  {flowPanels.pendingStatus ? (
+                    <ChevronUp className="w-5 h-5 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-slate-400" />
+                  )}
+                </button>
+
+                {flowPanels.pendingStatus && (
+                  <div className="px-4 pb-4 space-y-4">
+                    <div className={`rounded-lg p-4 ${
+                      signedShareholderCount >= requiredApprovalCount
+                        ? 'bg-green-500/20 border border-green-500/50'
+                        : 'bg-yellow-500/20 border border-yellow-500/50'
+                    }`}>
+                      <p className={`font-semibold text-center ${
+                        signedShareholderCount >= requiredApprovalCount ? 'text-green-300' : 'text-yellow-300'
+                      }`}>
+                        Escrow Status: {signedShareholderCount >= requiredApprovalCount ? 'SEALED' : 'ACTIVE'} | Signatures: {signedShareholderCount}/{requiredApprovalCount}
+                      </p>
+                    </div>
+
+                    {notificationsSentTime && (
+                      <DeadlineCountdown
+                        notificationTime={notificationsSentTime}
+                        onExpired={() => setError('24-hour signature deadline has expired. Investment requires 60% approval.')}
+                      />
+                    )}
+
+                    <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-yellow-300">Signatures Required: 60%</span>
+                        <span className="text-2xl font-bold text-yellow-400">
+                          {totalShareholderCount > 0 ? ((signedShareholderCount / totalShareholderCount) * 100).toFixed(0) : 0}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-800 rounded-full h-3 overflow-hidden">
+                        <div
+                          className="bg-gradient-to-r from-yellow-500 to-orange-500 h-full transition-all duration-500"
+                          style={{ width: `${Math.min(totalShareholderCount > 0 ? (signedShareholderCount / totalShareholderCount) * 100 : 0, 100)}%` }}
+                        />
+                      </div>
+                      <p className="text-sm text-slate-300">
+                        {signedShareholderCount} of {totalShareholderCount || timelineShareholders.length} shareholders signed
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => toggleFlowPanel('pendingNotifications')}
+                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
+                >
+                  <span className="font-semibold text-white">
+                    Shareholder Notifications ({Object.keys(shareholderNotifications || {}).length})
+                  </span>
+                  {flowPanels.pendingNotifications ? (
+                    <ChevronUp className="w-5 h-5 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-slate-400" />
+                  )}
+                </button>
+
+                {flowPanels.pendingNotifications && (
+                  <div className="px-4 pb-4">
+                    {shareholderNotifications && Object.keys(shareholderNotifications).length > 0 ? (
+                      <ul className="rounded-lg border border-slate-700/70 bg-slate-900/40 divide-y divide-slate-700/60 overflow-hidden max-h-60 overflow-y-auto">
+                        {Object.entries(shareholderNotifications).map(([id, notifData]) => {
+                          const hasSigned = signatures.some((s) => String(s.id) === String(id));
+                          return (
+                            <li key={id} className="px-3.5 py-3 flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="font-medium text-white break-words">{notifData.name}</p>
+                                <p className="text-xs text-slate-400 break-words">{notifData.email}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className={`font-bold text-xs ${hasSigned ? 'text-green-400' : 'text-yellow-400'}`}>
+                                  {hasSigned ? 'SIGNED' : 'PENDING'}
+                                </p>
+                                <p className="text-xs text-slate-400">
+                                  {notifData.sentAt ? new Date(notifData.sentAt).toLocaleTimeString() : 'Awaiting'}
+                                </p>
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-slate-400">No shareholder notifications sent yet.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => toggleFlowPanel('pendingTimeline')}
+                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
+                >
+                  <span className="font-semibold text-white">Signature Timeline</span>
+                  {flowPanels.pendingTimeline ? (
+                    <ChevronUp className="w-5 h-5 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-slate-400" />
+                  )}
+                </button>
+
+                {flowPanels.pendingTimeline && (
+                  <div className="px-4 pb-4">
+                    <ul className="rounded-lg border border-slate-700/70 bg-slate-900/40 divide-y divide-slate-700/60 overflow-hidden max-h-64 overflow-y-auto">
+                      {timelineShareholders.map((shareholder, idx) => {
+                        const signature = signatures.find((s) => String(s.id) === String(shareholder.id));
+                        const displayName = shareholder.name || shareholder.owner_name || `Shareholder ${idx + 1}`;
+                        const displayEmail = shareholder.email || shareholder.owner_email || 'No email';
+                        return (
+                          <li key={shareholder.id || idx} className="px-3.5 py-3 flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="font-medium text-white break-words">{displayName}</p>
+                              <p className="text-xs text-slate-400 break-words">{displayEmail}</p>
+                            </div>
+                            {signature ? (
+                              <div className="text-right">
+                                <CheckCircle className="w-5 h-5 text-green-400 ml-auto" />
+                                <p className="text-xs text-green-400 mt-1">
+                                  {new Date(signature.timestamp).toLocaleTimeString()}
+                                </p>
+                              </div>
+                            ) : (
+                              <Clock className="w-5 h-5 text-slate-500" />
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                <p className="text-blue-300 text-sm">
+                  Your payment of {allowedCurrency} {totalInvestment.toFixed(2)} is securely held in ICAN escrow. Once 60% of shareholders sign, your investment will be finalized and added to the business profile.
+                </p>
+              </div>
+
+              <div className="bg-amber-500/10 border border-amber-500/50 rounded-lg p-4">
+                <h4 className="font-semibold text-amber-300 mb-2 flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5" />
+                  Waiting for Shareholder Signatures
+                </h4>
+                <p className="text-amber-200 text-sm mb-4">
+                  Shareholders must review and sign this agreement within 24 hours using their PIN.
+                </p>
+                <button
+                  onClick={() => {
+                    setCurrentShareholderSigning({
+                      id: currentUser?.id,
+                      name: currentUser?.user_metadata?.full_name || currentUser?.email?.split('@')[0],
+                      email: currentUser?.email
+                    });
+                    setShowShareholderSignatureModal(true);
+                  }}
+                  className="w-full px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg transition"
+                >
+                  Test: Sign as Shareholder (Demo)
+                </button>
+              </div>
+
+              {showShareholderSignatureModal && currentShareholderSigning && (
+                <ShareholderSignatureModal
+                  investment={{
+                    id: investmentId,
+                    title: pitch?.title,
+                    amount: totalInvestment,
+                    currency: allowedCurrency,
+                    businessName: sellerBusinessProfile?.business_name || pitch?.title || 'the business'
+                  }}
+                  shareholder={currentShareholderSigning}
+                  deadline={notificationsSentTime ? new Date(notificationsSentTime.getTime() + 24 * 60 * 60 * 1000) : new Date(Date.now() + 24 * 60 * 60 * 1000)}
+                  onSignatureComplete={(signatureData) => {
+                    const supabase = getSupabase();
+
+                    const shareholderSigData = {
+                      investment_id: escrowId,
+                      business_profile_id: sellerBusinessProfile?.id || pitch?.business_profile_id,
+                      signer_id: currentShareholderSigning.id,
+                      signer_email: currentShareholderSigning.email,
+                      signer_name: currentShareholderSigning.name,
+                      signer_type: 'shareholder',
+                      signature_status: 'pin_verified',
+                      signed_at: new Date().toISOString(),
+                      pin_verified_at: new Date().toISOString(),
+                      signature_data: {
+                        method: 'Shareholder PIN Verification',
+                        pin_masked: signatureData.pin_masked,
+                        verified: true
+                      }
+                    };
+
+                    supabase
+                      .from('investment_signatures')
+                      .insert([shareholderSigData])
+                      .then(({ data, error: saveError }) => {
+                        if (saveError) {
+                          console.error('Failed to save shareholder signature:', saveError);
+                          return;
+                        }
+                        console.log('Shareholder signature recorded in database:', data);
+                      });
+
+                    setSignatures((prev) => {
+                      if (!prev.some((s) => String(s.id) === String(currentShareholderSigning.id))) {
+                        return [...prev, {
+                          id: currentShareholderSigning.id,
+                          name: currentShareholderSigning.name,
+                          email: currentShareholderSigning.email,
+                          timestamp: new Date().toISOString(),
+                          type: 'shareholder',
+                          pin: signatureData.pin_masked,
+                          status: 'approved'
+                        }];
+                      }
+                      return prev;
+                    });
+
+                    setShowShareholderSignatureModal(false);
+                    setCurrentShareholderSigning(null);
+                  }}
+                  onCancel={() => {
+                    setShowShareholderSignatureModal(false);
+                    setCurrentShareholderSigning(null);
+                  }}
+                />
+              )}
+            </div>
+          )}
+
+          {false && (
             <div className="space-y-6">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
                 <Users className="w-6 h-6" />
@@ -2882,7 +3656,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                     ? 'text-green-300'
                     : 'text-yellow-300'
                 }`}>
-                  🔐 Escrow Status: {signatures.length >= requiredApprovalCount ? 'SEALED ✓' : 'ACTIVE'} | Signatures: {signatures.length}/{requiredApprovalCount}
+                  ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â Escrow Status: {signatures.length >= requiredApprovalCount ? 'SEALED ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ' : 'ACTIVE'} | Signatures: {signatures.length}/{requiredApprovalCount}
                 </p>
               </div>
 
@@ -2890,7 +3664,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
               {notificationsSentTime && (
                 <DeadlineCountdown 
                   notificationTime={notificationsSentTime}
-                  onExpired={() => setError(`⏰ 24-hour signature deadline has expired. Investment requires 60% approval.`)}
+                  onExpired={() => setError(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â° 24-hour signature deadline has expired. Investment requires 60% approval.`)}
                 />
               )}
 
@@ -2899,7 +3673,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                 <div className="bg-blue-900/30 border border-blue-500/50 rounded-lg p-4">
                   <h4 className="font-semibold text-blue-300 mb-3 flex items-center gap-2">
                     <AlertCircle className="w-5 h-5" />
-                    📬 Shareholder Notifications Sent ({Object.keys(shareholderNotifications).length})
+                    ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â¬ Shareholder Notifications Sent ({Object.keys(shareholderNotifications).length})
                   </h4>
                   <div className="space-y-2 max-h-48 overflow-y-auto">
                     {Object.entries(shareholderNotifications).map(([id, notifData]) => {
@@ -2920,12 +3694,12 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                           <div className="text-right">
                             {hasSigned ? (
                               <div>
-                                <p className="text-green-400 font-bold text-xs">✓ SIGNED</p>
+                                <p className="text-green-400 font-bold text-xs">ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ SIGNED</p>
                                 <p className="text-green-300 text-xs">{new Date(notifData.sentAt).toLocaleTimeString()}</p>
                               </div>
                             ) : (
                               <div>
-                                <p className="text-yellow-400 font-bold text-xs">⏳ PENDING</p>
+                                <p className="text-yellow-400 font-bold text-xs">ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â³ PENDING</p>
                                 <p className="text-yellow-300 text-xs">Awaiting PIN signature</p>
                               </div>
                             )}
@@ -2990,7 +3764,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
 
               <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
                 <p className="text-blue-300 text-sm">
-                  ⏳ Your payment of ${totalInvestment.toFixed(2)} is securely held in ICAN Escrow. Once 60% of shareholders sign, your investment will be automatically sealed and you'll be added to the business profile.
+                  ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â³ Your payment of ${totalInvestment.toFixed(2)} is securely held in ICAN Escrow. Once 60% of shareholders sign, your investment will be automatically sealed and you'll be added to the business profile.
                 </p>
               </div>
 
@@ -3061,7 +3835,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                           console.error('Failed to save shareholder signature:', error);
                           return;
                         }
-                        console.log('✅ Shareholder signature recorded in database:', data);
+                        console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Shareholder signature recorded in database:', data);
                       });
                     
                     // Add the shareholder signature to the signatures array
@@ -3080,7 +3854,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                       return prev;
                     });
                     
-                    console.log(`✅ Shareholder signed and recorded: ${currentShareholderSigning.name}`);
+                    console.log(`ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Shareholder signed and recorded: ${currentShareholderSigning.name}`);
                     setShowShareholderSignatureModal(false);
                     setCurrentShareholderSigning(null);
                   }}
@@ -3094,17 +3868,197 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
           )}
 
           {/* Stage 8: Finalized - ONLY SHOW WHEN 60% THRESHOLD MET */}
-          {(stage === 8 || (stage === 7 && getActualShareholders().length > 0 && (signatures.filter(s => s.type === 'shareholder' || !s.type).length / getActualShareholders().length) >= 0.60)) && (
+          {(stage === 8 || (stage === 7 && thresholdMet)) && (
+            <div className="space-y-5 pb-[calc(7rem+env(safe-area-inset-bottom))]">
+              <div className="text-center space-y-2">
+                <CheckCircle className="w-14 h-14 text-green-400 mx-auto" />
+                <h3 className="text-2xl font-bold text-white">Investment Sealed</h3>
+                <p className="text-slate-400">
+                  60% shareholder approval has been achieved. The investment is finalized and recorded.
+                </p>
+              </div>
+
+              <div className="rounded-lg border border-green-500/40 bg-green-500/10 p-4">
+                <p className="text-green-300 font-semibold text-center">
+                  Escrow Status: SEALED | Approval: {totalShareholderCount > 0 ? ((signedShareholderCount / totalShareholderCount) * 100).toFixed(1) : 0}%
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => toggleFlowPanel('finalSummary')}
+                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
+                >
+                  <span className="font-semibold text-white">Final Investment Summary</span>
+                  {flowPanels.finalSummary ? (
+                    <ChevronUp className="w-5 h-5 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-slate-400" />
+                  )}
+                </button>
+
+                {flowPanels.finalSummary && (
+                  <div className="px-4 pb-4">
+                    <ul className="rounded-lg border border-slate-700/70 bg-slate-900/40 divide-y divide-slate-700/60 overflow-hidden">
+                      {[
+                        ['Pitch', pitch?.title || 'N/A'],
+                        ['Business', sellerBusinessProfile?.business_name || pitch?.title || 'the business'],
+                        ['Escrow ID', escrowId || 'Pending'],
+                        ['Shares', sharesAmount === '0' || !sharesAmount ? 'Partnership/Support' : `${sharesAmount} @ ${sharePrice.toFixed(2)}/share`],
+                        ['Investment Amount', `${allowedCurrency} ${totalInvestment.toFixed(2)}`],
+                        ['Investor Signature', 'Wallet PIN verified'],
+                        ['Shareholders Signed', `${signedShareholderCount}/${totalShareholderCount || 0}`],
+                        ['Status', thresholdMet ? 'Completed & Approved' : `Pending ${remainingSignatures} more signatures`]
+                      ].map(([label, value]) => (
+                        <li key={label} className="px-3.5 py-3">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+                          <p className="text-sm text-white mt-1 break-words">{value}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => toggleFlowPanel('finalCertificate')}
+                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
+                >
+                  <span className="font-semibold text-white">Agreement Certificate</span>
+                  {flowPanels.finalCertificate ? (
+                    <ChevronUp className="w-5 h-5 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-slate-400" />
+                  )}
+                </button>
+
+                {flowPanels.finalCertificate && (
+                  <div className="px-4 pb-4">
+                    {qrCodeUrl ? (
+                      <div ref={printRef} className="bg-white p-5 rounded-lg space-y-5">
+                        <div className="text-center border-b border-gray-300 pb-3">
+                          <h1 className="text-xl font-bold text-gray-900">INVESTMENT AGREEMENT SEAL</h1>
+                          <p className="text-sm text-gray-600">Official Certificate of Investment</p>
+                          <p className="text-xs text-gray-500 mt-1">Generated: {new Date().toLocaleString()}</p>
+                        </div>
+
+                        <div className="flex justify-center">
+                          <img src={qrCodeUrl} alt="Agreement Seal" className="w-40 h-40 border-2 border-green-500 rounded" />
+                        </div>
+
+                        <div className="space-y-2 text-sm text-gray-800 border-b border-gray-200 pb-4">
+                          <h2 className="font-bold text-base">Investment Details</h2>
+                          <div className="flex justify-between gap-3"><span className="font-semibold">Escrow ID:</span><span className="font-mono text-right break-all">{escrowId}</span></div>
+                          <div className="flex justify-between gap-3"><span className="font-semibold">Pitch:</span><span className="text-right">{pitch?.title}</span></div>
+                          <div className="flex justify-between gap-3"><span className="font-semibold">Business:</span><span className="text-right">{sellerBusinessProfile?.business_name || pitch?.title || 'the business'}</span></div>
+                          <div className="flex justify-between gap-3"><span className="font-semibold">Investor:</span><span className="text-right">{currentUser?.email}</span></div>
+                          <div className="flex justify-between gap-3"><span className="font-semibold">Investment Type:</span><span className="text-right">{investmentType === 'buy' ? 'Equity Purchase' : investmentType === 'partner' ? 'Partnership' : 'Support'}</span></div>
+                          <div className="flex justify-between gap-3"><span className="font-semibold">Shares:</span><span className="text-right">{sharesAmount || 'N/A'} {sharePrice ? `@ ${allowedCurrency}${sharePrice.toFixed(2)}/share` : ''}</span></div>
+                          <div className="flex justify-between gap-3"><span className="font-semibold">Investment Amount:</span><span className="text-right">{allowedCurrency} {totalInvestment.toFixed(2)}</span></div>
+                        </div>
+
+                        {sellerDocuments?.business_plan_content && (
+                          <div className="border-b border-gray-200 pb-4">
+                            <h2 className="font-bold text-base mb-2 text-gray-900">Business Plan</h2>
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded">{sellerDocuments.business_plan_content}</p>
+                          </div>
+                        )}
+
+                        {sellerDocuments?.financial_projection_content && (
+                          <div className="border-b border-gray-200 pb-4">
+                            <h2 className="font-bold text-base mb-2 text-gray-900">Financial Projection</h2>
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded">{sellerDocuments.financial_projection_content}</p>
+                          </div>
+                        )}
+
+                        {(sellerDocuments?.value_proposition_wants || sellerDocuments?.value_proposition_fears || sellerDocuments?.value_proposition_needs) && (
+                          <div className="border-b border-gray-200 pb-4 space-y-2">
+                            <h2 className="font-bold text-base text-gray-900">Value Proposition</h2>
+                            {sellerDocuments?.value_proposition_wants && <p className="text-sm text-gray-700 bg-gray-50 p-2 rounded"><strong>Wants:</strong> {sellerDocuments.value_proposition_wants}</p>}
+                            {sellerDocuments?.value_proposition_fears && <p className="text-sm text-gray-700 bg-gray-50 p-2 rounded"><strong>Fears:</strong> {sellerDocuments.value_proposition_fears}</p>}
+                            {sellerDocuments?.value_proposition_needs && <p className="text-sm text-gray-700 bg-gray-50 p-2 rounded"><strong>Needs:</strong> {sellerDocuments.value_proposition_needs}</p>}
+                          </div>
+                        )}
+
+                        {sellerDocuments?.mou_content && (
+                          <div className="border-b border-gray-200 pb-4">
+                            <h2 className="font-bold text-base mb-2 text-gray-900">Memorandum of Understanding</h2>
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded">{sellerDocuments.mou_content}</p>
+                          </div>
+                        )}
+
+                        <div className="text-xs text-gray-600 text-center border-t border-gray-300 pt-3 space-y-1">
+                          <p className="font-semibold text-gray-900">This document is sealed and recorded in ICAN Escrow System.</p>
+                          <p>Approval threshold: {totalShareholderCount > 0 ? ((signedShareholderCount / totalShareholderCount) * 100).toFixed(1) : 0}% / 60% required.</p>
+                          <p>Generated: {new Date().toLocaleString()}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-slate-400">QR seal is being prepared. Please wait.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {thresholdMet ? (
+                <div className="grid grid-cols-1 gap-3">
+                  <button
+                    onClick={printAgreement}
+                    disabled={!qrCodeUrl}
+                    className="px-4 py-3 bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition flex items-center justify-center gap-2"
+                  >
+                    <Printer className="w-5 h-5" />
+                    Print Agreement with Seal
+                  </button>
+                  <button
+                    onClick={downloadQRCode}
+                    disabled={!qrCodeUrl}
+                    className="px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition flex items-center justify-center gap-2"
+                  >
+                    <Download className="w-5 h-5" />
+                    Download QR Seal
+                  </button>
+                </div>
+              ) : (
+                <div className="bg-yellow-500/10 border border-yellow-500/50 rounded-lg p-4 text-center">
+                  <p className="text-yellow-300 font-semibold">
+                    Document download is available after 60% shareholder approval.
+                  </p>
+                  <p className="text-yellow-200 text-sm mt-2">
+                    Currently: {totalShareholderCount > 0 ? ((signedShareholderCount / totalShareholderCount) * 100).toFixed(1) : 0}% approved
+                  </p>
+                </div>
+              )}
+
+              <button
+                onClick={onClose}
+                className="px-4 py-3 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white font-semibold rounded-lg transition"
+              >
+                Complete & Close
+              </button>
+
+              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+                <p className="text-green-300 text-sm">
+                  Investment sealed and recorded. You have been added as a shareholder to <strong>{sellerBusinessProfile?.business_name || pitch?.title || 'the business'}</strong> for "<strong>{pitch?.title}</strong>" with {allowedCurrency} {totalInvestment.toFixed(2)}.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {false && (
             <div className="space-y-6">
               <div className="text-center space-y-3">
                 <CheckCircle className="w-16 h-16 text-green-400 mx-auto animate-bounce" />
-                <h3 className="text-2xl font-bold text-white">✅ Investment Sealed!</h3>
-                <p className="text-slate-400">🎉 60% shareholder approval achieved! Investment is now finalized and recorded.</p>
+                <h3 className="text-2xl font-bold text-white">ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Investment Sealed!</h3>
+                <p className="text-slate-400">ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€¦Ã‚Â½ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â° 60% shareholder approval achieved! Investment is now finalized and recorded.</p>
               </div>
 
               <div className="bg-green-500/10 border border-green-500/50 rounded-lg p-4">
                 <p className="text-green-300 font-semibold text-center">
-                  🎉 Escrow Status: SEALED & FINALIZED | Approval: {getActualShareholders().length > 0 ? ((signatures.filter(s => s.type === 'shareholder' || !s.type).length / getActualShareholders().length) * 100).toFixed(1) : 0}% ✓
+                  ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€¦Ã‚Â½ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â° Escrow Status: SEALED & FINALIZED | Approval: {getActualShareholders().length > 0 ? ((signatures.filter(s => s.type === 'shareholder' || !s.type).length / getActualShareholders().length) * 100).toFixed(1) : 0}% ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ
                 </p>
               </div>
 
@@ -3174,7 +4128,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                   {/* Business Plan */}
                   {sellerDocuments?.business_plan_content && (
                     <div className="border-b pb-4">
-                      <h2 className="font-bold text-lg mb-3">📋 Business Plan</h2>
+                      <h2 className="font-bold text-lg mb-3">ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¹ Business Plan</h2>
                       <div className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded">
                         {sellerDocuments.business_plan_content}
                       </div>
@@ -3184,7 +4138,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                   {/* Financial Projection */}
                   {sellerDocuments?.financial_projection_content && (
                     <div className="border-b pb-4">
-                      <h2 className="font-bold text-lg mb-3">💰 Financial Projection</h2>
+                      <h2 className="font-bold text-lg mb-3">ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€šÃ‚Â° Financial Projection</h2>
                       <div className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded">
                         {sellerDocuments.financial_projection_content}
                       </div>
@@ -3194,7 +4148,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                   {/* Value Proposition */}
                   {(sellerDocuments?.value_proposition_wants || sellerDocuments?.value_proposition_fears || sellerDocuments?.value_proposition_needs) && (
                     <div className="border-b pb-4">
-                      <h2 className="font-bold text-lg mb-3">🎯 Value Proposition</h2>
+                      <h2 className="font-bold text-lg mb-3">ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€¦Ã‚Â½Ãƒâ€šÃ‚Â¯ Value Proposition</h2>
                       {sellerDocuments?.value_proposition_wants && (
                         <div className="mb-3">
                           <h3 className="font-semibold text-gray-900">What Customers Want:</h3>
@@ -3219,7 +4173,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                   {/* MOU */}
                   {sellerDocuments?.mou_content && (
                     <div className="border-b pb-4">
-                      <h2 className="font-bold text-lg mb-3">📄 Memorandum of Understanding</h2>
+                      <h2 className="font-bold text-lg mb-3">ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾ Memorandum of Understanding</h2>
                       <div className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded">
                         {sellerDocuments.mou_content}
                       </div>
@@ -3229,7 +4183,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                   {/* Share Allocation */}
                   {(sellerDocuments?.share_allocation_shares || sellerDocuments?.share_allocation_share_price) && (
                     <div className="border-b pb-4">
-                      <h2 className="font-bold text-lg mb-3">📊 Share Allocation Details</h2>
+                      <h2 className="font-bold text-lg mb-3">ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã‚Â  Share Allocation Details</h2>
                       <div className="space-y-2 text-sm text-gray-700">
                         {sellerDocuments?.share_allocation_shares && (
                           <div className="flex justify-between">
@@ -3250,7 +4204,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                   {/* Disclosure Notes */}
                   {sellerDocuments?.disclosure_notes && (
                     <div className="border-b pb-4">
-                      <h2 className="font-bold text-lg mb-3">⚠️ Disclosure & Notes</h2>
+                      <h2 className="font-bold text-lg mb-3">ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Disclosure & Notes</h2>
                       <div className="text-sm text-gray-700 whitespace-pre-wrap bg-yellow-50 p-3 rounded border border-yellow-200">
                         {sellerDocuments.disclosure_notes}
                       </div>
@@ -3259,7 +4213,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
 
                   {/* PIN Signature Seal */}
                   <div className="border-2 border-green-500 bg-green-50 p-4 rounded">
-                    <h3 className="font-bold text-gray-900 mb-2">🔐 Investor Signature Seal</h3>
+                    <h3 className="font-bold text-gray-900 mb-2">ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â Investor Signature Seal</h3>
                     <div className="space-y-1 text-sm text-gray-700">
                       <div className="flex justify-between">
                         <span>Method:</span>
@@ -3275,14 +4229,14 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                       </div>
                       <div className="flex justify-between">
                         <span>Status:</span>
-                        <span className="font-bold text-green-600">✓ VERIFIED</span>
+                        <span className="font-bold text-green-600">ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ VERIFIED</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Approval Threshold Status */}
                   <div className="bg-blue-50 border border-blue-300 rounded p-4">
-                    <h3 className="font-bold text-gray-900 mb-3">📊 Approval Threshold Status</h3>
+                    <h3 className="font-bold text-gray-900 mb-3">ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã‚Â  Approval Threshold Status</h3>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
                         <span className="font-semibold">Required Approval:</span>
@@ -3303,20 +4257,20 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                       <div className="flex justify-between">
                         <span className="font-semibold">Threshold Status:</span>
                         <span className={getActualShareholders().length > 0 && (signatures.length / getActualShareholders().length) >= 0.60 ? 'text-green-600 font-bold' : 'text-orange-600 font-bold'}>
-                          {getActualShareholders().length > 0 && (signatures.length / getActualShareholders().length) >= 0.60 ? '✓ THRESHOLD MET' : '⏳ PENDING'}
+                          {getActualShareholders().length > 0 && (signatures.length / getActualShareholders().length) >= 0.60 ? 'ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ THRESHOLD MET' : 'ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â³ PENDING'}
                         </span>
                       </div>
                     </div>
                     {getActualShareholders().length > 0 && (signatures.length / getActualShareholders().length) >= 0.60 && (
                       <div className="mt-3 p-2 bg-green-100 border border-green-500 rounded text-green-700 text-xs font-bold text-center">
-                        ✅ DOCUMENT APPROVED FOR PRINTING
+                        ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ DOCUMENT APPROVED FOR PRINTING
                       </div>
                     )}
                   </div>
 
                   {/* Creator/Business Owner Signature */}
                   <div className="border-2 border-purple-500 bg-purple-50 p-4 rounded">
-                    <h3 className="font-bold text-gray-900 mb-3">👔 Business Owner/Creator Signature</h3>
+                    <h3 className="font-bold text-gray-900 mb-3">ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Business Owner/Creator Signature</h3>
                     <div className="space-y-2 text-sm text-gray-700">
                       <div className="flex justify-between">
                         <span className="font-semibold">Creator:</span>
@@ -3325,7 +4279,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                       <div className="flex justify-between">
                         <span className="font-semibold">Status:</span>
                         <span className={signatures.some(s => s.type === 'creator') ? 'font-bold text-green-600' : 'font-bold text-red-600'}>
-                          {signatures.some(s => s.type === 'creator') ? '✓ SIGNED' : '⏳ AWAITING SIGNATURE'}
+                          {signatures.some(s => s.type === 'creator') ? 'ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ SIGNED' : 'ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â³ AWAITING SIGNATURE'}
                         </span>
                       </div>
                       {signatures.some(s => s.type === 'creator') && (
@@ -3342,7 +4296,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
 
                   {/* Investor Signature Seal */}
                   <div className="border-2 border-green-500 bg-green-50 p-4 rounded">
-                    <h3 className="font-bold text-gray-900 mb-2">💰 Investor Signature Seal</h3>
+                    <h3 className="font-bold text-gray-900 mb-2">ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€šÃ‚Â° Investor Signature Seal</h3>
                     <div className="space-y-1 text-sm text-gray-700">
                       <div className="flex justify-between">
                         <span>Investor:</span>
@@ -3362,7 +4316,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                       </div>
                       <div className="flex justify-between">
                         <span>Status:</span>
-                        <span className="font-bold text-green-600">✓ VERIFIED</span>
+                        <span className="font-bold text-green-600">ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ VERIFIED</span>
                       </div>
                     </div>
                   </div>
@@ -3370,7 +4324,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                   {/* All Shareholders Approvals */}
                   <div className="border-t-2 border-gray-300 pt-4">
                     <h3 className="font-bold text-gray-900 mb-3">
-                      📋 Shareholder Approvals
+                      ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¹ Shareholder Approvals
                       <span className="ml-2 text-sm font-normal text-gray-600">
                         ({signatures.filter(s => s.type === 'shareholder').length}/{getActualShareholders().length})
                       </span>
@@ -3386,11 +4340,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                                 <span className="font-semibold text-gray-900">{shareholder.name}</span>
                                 <span className="text-xs text-gray-600 ml-2">({shareholder.email})</span>
                                 {shareholder.ownership && (
-                                  <span className="text-xs text-gray-600 ml-2">• {shareholder.ownership}% ownership</span>
+                                  <span className="text-xs text-gray-600 ml-2">ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ {shareholder.ownership}% ownership</span>
                                 )}
                               </div>
                               <span className={hasSigned ? 'font-bold text-green-600' : 'font-bold text-orange-600'}>
-                                {hasSigned ? `✓ ${new Date(signatures.find(s => s.id === shareholder.id)?.timestamp).toLocaleDateString()}` : '⏳ PENDING'}
+                                {hasSigned ? `ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ ${new Date(signatures.find(s => s.id === shareholder.id)?.timestamp).toLocaleDateString()}` : 'ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â³ PENDING'}
                               </span>
                             </div>
                           );
@@ -3403,21 +4357,21 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
 
                   {/* Document Download Instructions */}
                   <div className="bg-indigo-50 border border-indigo-300 rounded p-4">
-                    <h3 className="font-bold text-gray-900 mb-2">📥 Document Distribution</h3>
+                    <h3 className="font-bold text-gray-900 mb-2">ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â¥ Document Distribution</h3>
                     <div className="space-y-2 text-sm text-gray-700">
-                      <p>✓ <span className="font-semibold">Investor</span> - Can download this document for records</p>
-                      <p>✓ <span className="font-semibold">Creator/Business Owner</span> - Will receive document link after signing</p>
-                      <p>✓ <span className="font-semibold">All Shareholders</span> - Will receive document link after 60% approval threshold is met</p>
+                      <p>ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ <span className="font-semibold">Investor</span> - Can download this document for records</p>
+                      <p>ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ <span className="font-semibold">Creator/Business Owner</span> - Will receive document link after signing</p>
+                      <p>ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ <span className="font-semibold">All Shareholders</span> - Will receive document link after 60% approval threshold is met</p>
                       <p className="text-xs text-gray-600 mt-2">Documents are encrypted and stored in ICAN Escrow System for 7 years</p>
                     </div>
                   </div>
 
                   {/* Footer */}
                   <div className="border-t-2 border-gray-300 pt-4 text-center text-xs text-gray-600 space-y-1">
-                    <p className="font-semibold text-gray-900">✅ This document is sealed and recorded in ICAN Escrow System</p>
+                    <p className="font-semibold text-gray-900">ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ This document is sealed and recorded in ICAN Escrow System</p>
                     <p>Escrow Status: {getActualShareholders().length > 0 && (signatures.length / getActualShareholders().length) >= 0.60 ? 'APPROVED FOR PRINTING' : 'ACTIVE'}</p>
                     <p>Threshold: {getActualShareholders().length > 0 ? ((signatures.length / getActualShareholders().length) * 100).toFixed(1) : 0}% / 60% Required</p>
-                    <p>Creator Signed: {signatures.some(s => s.type === 'creator') ? '✓ YES' : '⏳ AWAITING'}</p>
+                    <p>Creator Signed: {signatures.some(s => s.type === 'creator') ? 'ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ YES' : 'ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â³ AWAITING'}</p>
                     <p>Generated: {new Date().toLocaleString()}</p>
                     <p className="text-gray-500 text-xs mt-2">This is an official investment agreement. Do not modify or duplicate.</p>
                   </div>
@@ -3452,7 +4406,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                   </div>
                   <div className="flex justify-between">
                     <span>Investor Signature:</span>
-                    <span className="font-semibold text-blue-400">Wallet PIN ✓</span>
+                    <span className="font-semibold text-blue-400">Wallet PIN ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Shareholders Signed:</span>
@@ -3461,7 +4415,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                   <div className="flex justify-between">
                     <span>Status:</span>
                     <span className={`font-semibold ${getActualShareholders().length > 0 && (signatures.filter(s => s.type === 'shareholder' || !s.type).length / getActualShareholders().length) >= 0.60 ? 'text-green-400' : 'text-yellow-400'}`}>
-                      {getActualShareholders().length > 0 && (signatures.filter(s => s.type === 'shareholder' || !s.type).length / getActualShareholders().length) >= 0.60 ? '✅ COMPLETED & APPROVED' : `⏳ PENDING ${Math.ceil(getActualShareholders().length * 0.60) - signatures.filter(s => s.type === 'shareholder' || !s.type).length} MORE SIGNATURES`}
+                      {getActualShareholders().length > 0 && (signatures.filter(s => s.type === 'shareholder' || !s.type).length / getActualShareholders().length) >= 0.60 ? 'ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ COMPLETED & APPROVED' : `ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â³ PENDING ${Math.ceil(getActualShareholders().length * 0.60) - signatures.filter(s => s.type === 'shareholder' || !s.type).length} MORE SIGNATURES`}
                     </span>
                   </div>
                 </div>
@@ -3495,7 +4449,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
               ) : (
                 <div className="bg-yellow-500/10 border border-yellow-500/50 rounded-lg p-4 text-center">
                   <p className="text-yellow-300 font-semibold">
-                    📄 Document becomes available after 60% shareholder approval
+                    ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾ Document becomes available after 60% shareholder approval
                   </p>
                   <p className="text-yellow-200 text-sm mt-2">
                     Currently: {getActualShareholders().length > 0 ? ((signatures.filter(s => s.type === 'shareholder' || !s.type).length / getActualShareholders().length) * 100).toFixed(1) : 0}% approved
@@ -3512,7 +4466,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
 
               <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
                 <p className="text-green-300 text-sm">
-                  ✅ Investment sealed and recorded! You have been successfully added as a shareholder to <strong>{sellerBusinessProfile?.business_name || pitch?.title || 'the business'}</strong> for "<strong>{pitch?.title}</strong>". Your ${totalInvestment.toFixed(2)} investment ({sharesAmount} shares) is now active in ICAN Escrow.
+                  ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Investment sealed and recorded! You have been successfully added as a shareholder to <strong>{sellerBusinessProfile?.business_name || pitch?.title || 'the business'}</strong> for "<strong>{pitch?.title}</strong>". Your ${totalInvestment.toFixed(2)} investment ({sharesAmount} shares) is now active in ICAN Escrow.
                 </p>
               </div>
             </div>
