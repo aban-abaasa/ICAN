@@ -153,6 +153,18 @@ export const createStatus = async (userId, statusData) => {
       blockchain_tx_hash = null
     } = statusData;
 
+    if (!['image', 'video', 'text'].includes(media_type)) {
+      return { status: null, error: new Error('Invalid status type') };
+    }
+
+    if (media_type === 'text') {
+      if (!caption?.trim()) {
+        return { status: null, error: new Error('Text status requires words') };
+      }
+    } else if (!media_url) {
+      return { status: null, error: new Error('Image/video status requires media') };
+    }
+
     // VALIDATION: Reject blob URLs - they won't persist after page reload
     if (media_url && media_url.startsWith('blob:')) {
       const errorMsg = '❌ ERROR: Cannot save blob URLs to database. Videos must be uploaded to Supabase first. Use uploadStatusMedia() before creating status.';
@@ -208,12 +220,14 @@ export const createStatus = async (userId, statusData) => {
  */
 export const getActiveStatuses = async (userId = null) => {
   try {
-    // CRITICAL: Check authentication BEFORE querying
-    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+    // Optional authentication: public statuses should still be readable.
+    const {
+      data: { user: authUser }
+    } = await supabase.auth.getUser();
     
-    if (authError || !authUser) {
-      console.warn('⚠️ getActiveStatuses: User not authenticated. Cannot query statuses.');
-      return { statuses: [], error: new Error('User not authenticated') };
+    if (!authUser) {
+      console.info('getActiveStatuses: user not authenticated, loading public statuses');
+      // Continue and return public/followers statuses.
     }
     
     // When userId is not passed, return everyone except private-only statuses.
@@ -228,10 +242,12 @@ export const getActiveStatuses = async (userId = null) => {
 
     if (queryUserId) {
       query = query.eq('user_id', queryUserId);
-    } else {
+    } else if (authUser?.id) {
       query = query.or(
-        `visibility.eq.public,visibility.eq.followers,visibility.eq.contacts,user_id.eq.${authUser.id}`
+        `visibility.eq.public,visibility.eq.followers,user_id.eq.${authUser.id}`
       );
+    } else {
+      query = query.or('visibility.eq.public,visibility.eq.followers');
     }
 
     const { data, error } = await query;
@@ -244,6 +260,10 @@ export const getActiveStatuses = async (userId = null) => {
     const statusesWithUrls = await Promise.all(
       (data || []).map(async (status) => {
         try {
+          if (!status?.media_url || status.media_type === 'text') {
+            return status;
+          }
+
           // Extract the file path from media_url or reconstruct it
           let filePath = status.media_url;
           
@@ -361,6 +381,10 @@ export const getUserStatuses = async (userId) => {
     const statusesWithUrls = await Promise.all(
       (data || []).map(async (status) => {
         try {
+          if (!status?.media_url || status.media_type === 'text') {
+            return status;
+          }
+
           // Extract the file path from media_url or reconstruct it
           let filePath = status.media_url;
           

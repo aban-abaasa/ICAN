@@ -27,7 +27,8 @@ import {
   Building2,
   LogOut,
   Menu,
-  ChevronRight
+  ChevronRight,
+  DollarSign
 } from 'lucide-react';
 import {
   getPublicTrustGroups,
@@ -43,6 +44,7 @@ import {
 import AdminApplicationPanel from './AdminApplicationPanel';
 import VotingInterface from './VotingInterface';
 import GroupDetailsModal from './GroupDetailsModal';
+import TrustLoanManagement from './TrustLoanManagement';
 
 const SACCOHub = ({ onClose }) => {
   const { user } = useAuth();
@@ -63,6 +65,8 @@ const SACCOHub = ({ onClose }) => {
   const [showApplicationForm, setShowApplicationForm] = useState(false);
   const [selectedGroupForApplication, setSelectedGroupForApplication] = useState(null);
   const [applicationText, setApplicationText] = useState('');
+  const [showLoanForm, setShowLoanForm] = useState(false);
+  const [selectedGroupForLoan, setSelectedGroupForLoan] = useState(null);
   const [selectedAdminGroup, setSelectedAdminGroup] = useState(null);
   const [selectedGroupDetails, setSelectedGroupDetails] = useState(null); // For group details/contribution view
   
@@ -327,20 +331,70 @@ const SACCOHub = ({ onClose }) => {
           allMyGroups.map(group => (
             <div 
               key={group.id} 
-              className="bg-gradient-to-r from-slate-800 to-slate-900 border border-purple-500/30 rounded-lg p-5 hover:border-purple-500/60 transition-all cursor-pointer hover:shadow-lg hover:shadow-purple-500/20"
-              onClick={() => setSelectedGroupDetails(group)}
+              className="bg-gradient-to-r from-slate-800 to-slate-900 border border-purple-500/30 rounded-lg p-5 hover:border-purple-500/60 transition-all hover:shadow-lg hover:shadow-purple-500/20"
             >
-              <div className="flex justify-between items-start mb-2">
-                <div>
+              {/* Header */}
+              <div className="flex justify-between items-start mb-3">
+                <div className="flex-1">
                   <h3 className="text-lg font-bold text-white">{group.name}</h3>
                   <p className="text-sm text-gray-400">
                     {group.creator_id === user.id ? '👑 Creator' : '✅ Member'} • 👤 {group.member_count || 0} members
                   </p>
                 </div>
-                <span className="text-green-400 font-bold">📊 Active</span>
+                <span className="px-3 py-1 bg-green-600/50 text-green-300 text-xs font-bold rounded-full">📊 Active</span>
               </div>
-              <p className="text-sm text-gray-300">{group.description}</p>
-              <p className="text-xs text-gray-500 mt-3">💡 Click to view contributions & interest</p>
+
+              {/* Details Grid */}
+              <div className="grid grid-cols-2 gap-3 mb-4 bg-slate-900/50 p-3 rounded-lg">
+                <div>
+                  <p className="text-xs text-gray-400">Members</p>
+                  <p className="text-sm font-bold text-white">{group.member_count || 0}/30</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400">Monthly</p>
+                  <p className="text-sm font-bold text-yellow-400">₿{group.monthly_contribution} ICAN</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400">Joined</p>
+                  <p className="text-sm font-bold text-blue-300">2/11/2026</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400">Status</p>
+                  <p className="text-sm font-bold text-green-400">Testing</p>
+                </div>
+              </div>
+
+              {/* Description */}
+              <p className="text-sm text-gray-300 mb-4">{group.description}</p>
+
+              {/* Action Buttons - 4 Button Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                <button
+                  onClick={() => setSelectedGroupDetails(group)}
+                  className="w-full py-2.5 px-2 bg-slate-700 hover:bg-slate-600 text-white text-xs sm:text-sm font-bold rounded-lg transition-all"
+                >
+                  📋 View Details
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedGroupForLoan(group);
+                    setShowLoanForm(true);
+                  }}
+                  className="w-full py-2.5 px-2 bg-green-600 hover:bg-green-700 text-white text-xs sm:text-sm font-bold rounded-lg transition-all"
+                >
+                  💰 Apply Loan
+                </button>
+                <button
+                  className="w-full py-2.5 px-2 bg-orange-500 hover:bg-orange-600 text-white text-xs sm:text-sm font-bold rounded-lg transition-all"
+                >
+                  💵 Contribute
+                </button>
+                <button
+                  className="w-full py-2.5 px-2 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold rounded-lg transition-all"
+                >
+                  🎥 Boardroom
+                </button>
+              </div>
             </div>
           ))
         )}
@@ -502,9 +556,59 @@ const SACCOHub = ({ onClose }) => {
     );
   };
 
+  // ===== TAB: APPLY FOR LOAN =====
+  const renderApplyForLoan = () => {
+    if (myJoinedGroups.length === 0) {
+      return (
+        <div className="text-center py-12 bg-slate-800/50 rounded-lg border border-slate-700">
+          <AlertCircle className="w-12 h-12 text-gray-500 mx-auto mb-3" />
+          <p className="text-gray-400 mb-2">No groups joined yet</p>
+          <p className="text-sm text-gray-500">Join a group first to apply for loans</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        <div className="bg-gradient-to-r from-blue-900 to-blue-950 border border-blue-500/30 rounded-lg p-6 text-center">
+          <DollarSign className="w-16 h-16 text-blue-400 mx-auto mb-4" />
+          <h3 className="text-2xl font-bold text-white mb-2">Apply for a Loan</h3>
+          <p className="text-gray-300 mb-4">Select a group to apply for loans</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {myJoinedGroups.map(group => (
+            <div key={group.id} className="bg-gradient-to-r from-slate-800 to-slate-900 border border-green-500/30 rounded-lg p-5 hover:border-green-500/60 transition-all">
+              <div className="flex justify-between items-start mb-3">
+                <div>
+                  <h3 className="text-lg font-bold text-white">{group.name}</h3>
+                  <p className="text-sm text-gray-400">👤 {group.member_count || 0} members</p>
+                </div>
+                <span className="px-3 py-1 bg-green-600 text-white text-xs font-bold rounded-full">
+                  💰 ${group.monthly_contribution}
+                </span>
+              </div>
+              <p className="text-sm text-gray-300 mb-4 line-clamp-2">{group.description || 'No description'}</p>
+              <button
+                onClick={() => {
+                  setSelectedGroupForLoan(group);
+                  setShowLoanForm(true);
+                }}
+                className="w-full py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg font-bold transition-all"
+              >
+                💰 Apply for Loan
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   const tabs = [
     { id: 'explore', label: '🔍 Explore', icon: Users },
-    { id: 'joined', label: '👥 My Groups', icon: Building2 },
+    { id: 'joined', label: '👥 My Trusts', icon: Building2 },
+    { id: 'apply-loan', label: '💰 Apply Loan', icon: DollarSign },
     { id: 'voting', label: '🗳️ Vote', count: votingApplications.length, icon: Vote },
     { id: 'applications', label: '📮 Applications', count: myApplications.length, icon: Inbox },
     ...(myCreatedGroups.length > 0 ? [{ id: 'admin', label: '👑 Admin Panel', icon: Shield }] : [])
@@ -569,8 +673,8 @@ const SACCOHub = ({ onClose }) => {
               className="ml-auto px-2 sm:px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg font-semibold text-xs sm:text-sm flex items-center gap-1 sm:gap-2 transition-all flex-shrink-0"
             >
               <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span className="hidden sm:inline">Create Group</span>
-              <span className="sm:hidden">New</span>
+              <span className="hidden sm:inline">✨ Create</span>
+              <span className="sm:hidden">✨ New</span>
             </button>
           </div>
         </div>
@@ -587,6 +691,7 @@ const SACCOHub = ({ onClose }) => {
 
         {!loading && activeTab === 'explore' && renderExplore()}
         {!loading && activeTab === 'joined' && renderMyGroups()}
+        {!loading && activeTab === 'apply-loan' && renderApplyForLoan()}
         {!loading && activeTab === 'voting' && renderVoting()}
         {!loading && activeTab === 'applications' && renderMyApplications()}
         {!loading && activeTab === 'admin' && renderAdminPanel()}
@@ -598,7 +703,7 @@ const SACCOHub = ({ onClose }) => {
           <div className="bg-slate-900 rounded-lg p-4 sm:p-6 max-w-md w-full max-h-[90vh] overflow-y-auto border border-slate-700">
             <h2 className="text-xl sm:text-2xl font-bold text-white mb-4 flex items-center gap-2">
               <Plus className="w-5 h-5 sm:w-6 sm:h-6" />
-              Create Group
+              ✨ Create New Group
             </h2>
             <div className="space-y-4">
               <input
@@ -677,6 +782,37 @@ const SACCOHub = ({ onClose }) => {
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Loan Application Modal */}
+      {showLoanForm && selectedGroupForLoan && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4">
+          <div className="bg-slate-900 rounded-lg p-4 sm:p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-slate-700">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl sm:text-2xl font-bold text-white">💰 Apply for Loan</h2>
+              <button
+                onClick={() => {
+                  setShowLoanForm(false);
+                  setSelectedGroupForLoan(null);
+                }}
+                className="p-2 hover:bg-slate-800 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+            <p className="text-gray-400 text-sm mb-4">Group: <strong>{selectedGroupForLoan.name}</strong></p>
+            
+            {/* Loan Application Form */}
+            <TrustLoanManagement 
+              groupId={selectedGroupForLoan.id} 
+              groupName={selectedGroupForLoan.name}
+              onClose={() => {
+                setShowLoanForm(false);
+                setSelectedGroupForLoan(null);
+              }}
+            />
           </div>
         </div>
       )}

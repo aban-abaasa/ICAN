@@ -6,7 +6,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Heart, Share2, ChevronLeft, ChevronRight, Send } from 'lucide-react';
 import { incrementStatusView } from '../../services/statusService';
-import { sendStatusMessage } from '../../services/statusMessagesService';
+import {
+  sendStatusMessage,
+  getStatusMessages,
+  subscribeToStatusMessages
+} from '../../services/statusMessagesService';
 import { useAuth } from '../../context/AuthContext';
 
 export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) => {
@@ -16,6 +20,8 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
   const [liked, setLiked] = useState(false);
   const [messageText, setMessageText] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [statusMessages, setStatusMessages] = useState([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
   const [touchStart, setTouchStart] = useState(null);
   const lastTapRef = useRef(0);
 
@@ -44,12 +50,14 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
 
   // Track view
   useEffect(() => {
+    if (!currentStatus?.id) return undefined;
+
     const timer = setTimeout(() => {
       incrementStatusView(currentStatus.id).catch(console.error);
     }, 1000); // Record view after 1 second
 
     return () => clearTimeout(timer);
-  }, [currentIndex, currentStatus.id]);
+  }, [currentStatus?.id]);
 
   // Handle keyboard navigation
   useEffect(() => {
@@ -61,6 +69,35 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentIndex, statuses.length]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadMessages = async () => {
+      if (!currentStatus?.id) return;
+      setLoadingMessages(true);
+      const { messages } = await getStatusMessages(currentStatus.id);
+      if (isMounted) {
+        setStatusMessages(messages || []);
+        setLoadingMessages(false);
+      }
+    };
+
+    loadMessages();
+    const unsubscribe = currentStatus?.id
+      ? subscribeToStatusMessages(currentStatus.id, (newMessage) => {
+          setStatusMessages((prev) => {
+            if (prev.some((msg) => msg.id === newMessage.id)) return prev;
+            return [...prev, newMessage];
+          });
+        })
+      : null;
+
+    return () => {
+      isMounted = false;
+      unsubscribe?.();
+    };
+  }, [currentStatus?.id]);
 
   // Handle touch swipe
   const handleTouchStart = (e) => {
@@ -97,7 +134,7 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
 
   const showHeartAnimation = (x, y) => {
     const heart = document.createElement('div');
-    heart.innerHTML = '❤️';
+    heart.innerHTML = '♥';
     heart.style.cssText = `
       position: fixed;
       left: ${x}px;
@@ -130,7 +167,7 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
         setMessageText('');
         // Show success feedback
         const msg = document.createElement('div');
-        msg.innerHTML = '✓ Message sent';
+        msg.innerHTML = 'Message sent';
         msg.style.cssText = `
           position: fixed;
           top: 50%;
@@ -274,24 +311,43 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
                 <Share2 className="w-6 h-6" />
               </button>
 
-              <form onSubmit={handleSendMessage} className="flex-1 flex items-center gap-2">
-                <input
-                  type="text"
-                  placeholder={user ? "Send a message..." : "Sign in to message"}
-                  value={messageText}
-                  onChange={(e) => setMessageText(e.target.value)}
-                  disabled={!user || sendingMessage}
-                  className="flex-1 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-4 py-2 text-white placeholder-white/50 focus:outline-none focus:border-white/40 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                />
-                <button
-                  type="submit"
-                  disabled={!user || !messageText.trim() || sendingMessage}
-                  className="p-3 rounded-full backdrop-blur-sm bg-white/10 text-white hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                  title={!user ? "Sign in to send messages" : "Send message"}
-                >
-                  <Send className="w-5 h-5" />
-                </button>
-              </form>
+              <div className="flex-1 space-y-2">
+                <div className="max-h-28 overflow-y-auto rounded-xl bg-black/30 border border-white/10 p-2 space-y-1">
+                  {loadingMessages ? (
+                    <p className="text-xs text-white/60">Loading comments...</p>
+                  ) : statusMessages.length === 0 ? (
+                    <p className="text-xs text-white/60">No comments yet.</p>
+                  ) : (
+                    statusMessages.map((msg) => (
+                      <div key={msg.id} className="text-xs text-white/90 leading-relaxed break-words">
+                        <span className="font-semibold text-white">
+                          {msg.sender_id === user?.id ? 'You' : `User ${String(msg.sender_id || '').slice(0, 6)}`}
+                        </span>
+                        <span className="text-white/60">: </span>
+                        <span>{msg.message_text}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder={user ? 'Add a comment...' : 'Sign in to comment'}
+                    value={messageText}
+                    onChange={(e) => setMessageText(e.target.value)}
+                    disabled={!user || sendingMessage}
+                    className="flex-1 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-4 py-2 text-white placeholder-white/50 focus:outline-none focus:border-white/40 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!user || !messageText.trim() || sendingMessage}
+                    className="p-3 rounded-full backdrop-blur-sm bg-white/10 text-white hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    title={!user ? 'Sign in to send comments' : 'Send comment'}
+                  >
+                    <Send className="w-5 h-5" />
+                  </button>
+                </form>
+              </div>
             </div>
           </div>
 

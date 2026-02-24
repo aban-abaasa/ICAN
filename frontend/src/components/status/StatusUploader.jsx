@@ -28,6 +28,7 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [fileToUpload, setFileToUpload] = useState(null);
   const [previewMediaKind, setPreviewMediaKind] = useState(null);
+  const [statusMode, setStatusMode] = useState('media');
 
   const releasePreviewUrl = () => {
     if (previewUrl && previewUrl.startsWith('blob:')) {
@@ -143,6 +144,7 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
     setPreviewUrl(nextPreviewUrl);
     setPreviewMediaKind(mediaKind);
     setFileToUpload(file);
+    setStatusMode('media');
   };
 
   // Auto-close on success
@@ -169,22 +171,18 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
     }, 0);
   }, [autoOpenFilePicker, previewUrl, showCamera, isUploading, uploadSuccess]);
 
-  // If picker is canceled in auto-open mode, close uploader instead of showing intro screen.
+  // If picker is canceled, keep uploader open so user can still post words-only status.
   useEffect(() => {
     const handleWindowFocus = () => {
       if (!pendingFilePickerRef.current) return;
       setTimeout(() => {
-        const hasMediaSelected = Boolean(fileToUpload || previewUrl || fileInputRef.current?.files?.length);
-        if (!hasMediaSelected && !showCamera && !isUploading && !uploadSuccess) {
-          pendingFilePickerRef.current = false;
-          onClose?.();
-        }
+        pendingFilePickerRef.current = false;
       }, 0);
     };
 
     window.addEventListener('focus', handleWindowFocus);
     return () => window.removeEventListener('focus', handleWindowFocus);
-  }, [fileToUpload, previewUrl, showCamera, isUploading, uploadSuccess, onClose]);
+  }, []);
 
   // Simulate upload progress
   useEffect(() => {
@@ -204,8 +202,13 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
   }, [isUploading]);
 
   const handleUpload = async () => {
-    if (!fileToUpload) {
-      setError('Please select an image or video');
+    const isTextOnly = !fileToUpload && statusMode === 'text';
+    if (!fileToUpload && !isTextOnly) {
+      setError('Please select an image/video or choose words-only status');
+      return;
+    }
+    if (isTextOnly && !caption.trim()) {
+      setError('Please enter words for text status');
       return;
     }
     if (!user?.id) {
@@ -217,27 +220,29 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
     setError(null);
 
     try {
-      // Determine media type
-      const mediaType = previewMediaKind || getMediaKind(fileToUpload);
+      let mediaType = 'text';
+      let mediaUrl = null;
 
-      // Upload to storage
-      const { url, error: uploadError } = await uploadStatusMedia(user.id, fileToUpload, {
-        maxSizeMB: mediaType === 'video' ? 100 : 20,
-        allowedTypes: [
-          'image/jpeg',
-          'image/png',
-          'image/webp',
-          'video/mp4',
-          'video/quicktime',
-          'video/webm'
-        ]
-      });
-      if (uploadError) throw uploadError;
+      if (fileToUpload) {
+        mediaType = previewMediaKind || getMediaKind(fileToUpload);
+        const { url, error: uploadError } = await uploadStatusMedia(user.id, fileToUpload, {
+          maxSizeMB: mediaType === 'video' ? 100 : 20,
+          allowedTypes: [
+            'image/jpeg',
+            'image/png',
+            'image/webp',
+            'video/mp4',
+            'video/quicktime',
+            'video/webm'
+          ]
+        });
+        if (uploadError) throw uploadError;
+        mediaUrl = url;
+      }
 
-      // Create status record
       const { status, error: createError } = await createStatus(user.id, {
         media_type: mediaType,
-        media_url: url,
+        media_url: mediaUrl,
         caption: caption.trim(),
         visibility,
         background_color: backgroundColor
@@ -254,6 +259,7 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
       resetSelectedMedia();
       setCaption('');
       setVisibility('public');
+      setStatusMode('media');
 
       onStatusCreated?.(status);
     } catch (err) {
@@ -286,7 +292,7 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
             </div>
             <div>
               <h2 className="text-lg font-bold bg-gradient-to-r from-purple-300 to-pink-300 bg-clip-text text-transparent">Upload Status</h2>
-              <p className="text-xs text-gray-400">Select media to continue</p>
+              <p className="text-xs text-gray-400">Select media or post words only</p>
             </div>
           </div>
           <button
@@ -358,19 +364,38 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
                 <X className="w-4 h-4" />
               </button>
             </div>
+          ) : statusMode === 'text' ? (
+            <div
+              className="rounded-2xl p-6 min-h-[220px] flex items-center justify-center text-center border-2 border-purple-500/30"
+              style={{ backgroundColor }}
+            >
+              <p className="text-white text-xl font-semibold break-words">
+                {caption.trim() || 'Type your status words below...'}
+              </p>
+            </div>
           ) : (
             <div className="rounded-2xl border border-purple-500/20 bg-slate-900/40 p-6 text-center space-y-3">
-              <p className="text-sm text-purple-200">Opening file picker...</p>
-              <button
-                onClick={() => {
-                  pendingFilePickerRef.current = true;
-                  fileInputRef.current?.click();
-                }}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium transition-colors"
-              >
-                <Upload className="w-4 h-4" />
-                Choose File
-              </button>
+              <p className="text-sm text-purple-200">Choose media or words-only status.</p>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <button
+                  onClick={() => {
+                    pendingFilePickerRef.current = true;
+                    setStatusMode('media');
+                    fileInputRef.current?.click();
+                  }}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium transition-colors"
+                >
+                  <Upload className="w-4 h-4" />
+                  Choose File
+                </button>
+                <button
+                  onClick={() => setStatusMode('text')}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium transition-colors border border-purple-500/40"
+                >
+                  <Plus className="w-4 h-4" />
+                  Words Only
+                </button>
+              </div>
             </div>
           )}
 
@@ -383,14 +408,16 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
           />
 
           {/* Caption */}
-          {previewUrl && (
+          {(previewUrl || statusMode === 'text') && (
             <>
               <div>
-                <label className="text-xs font-semibold text-purple-300 block mb-2">✨ Add a Caption (optional)</label>
+                <label className="text-xs font-semibold text-purple-300 block mb-2">
+                  {statusMode === 'text' ? 'Write Status' : 'Add a Caption (optional)'}
+                </label>
                 <textarea
                   value={caption}
                   onChange={(e) => setCaption(e.target.value)}
-                  placeholder="What's on your mind?"
+                  placeholder={statusMode === 'text' ? 'Share with words only...' : "What's on your mind?"}
                   maxLength={500}
                   className="w-full px-4 py-3 bg-slate-800/50 border border-purple-500/30 rounded-xl text-white placeholder-gray-500 text-sm resize-none focus:border-purple-500/60 focus:outline-none transition-all"
                   rows={3}
@@ -400,7 +427,7 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
 
               {/* Visibility */}
               <div>
-                <label className="text-xs font-semibold text-purple-300 block mb-2">👥 Who can see?</label>
+                <label className="text-xs font-semibold text-purple-300 block mb-2">Who can see?</label>
                 <select
                   value={visibility}
                   onChange={(e) => setVisibility(e.target.value)}
@@ -414,7 +441,7 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
 
               {/* Background Color */}
               <div>
-                <label className="text-xs font-semibold text-purple-300 block mb-2">🎨 Vibe</label>
+                <label className="text-xs font-semibold text-purple-300 block mb-2">Background</label>
                 <div className="flex gap-2 flex-wrap">
                   {['#667eea', '#f093fb', '#4facfe', '#00f2fe', '#43e97b', '#fa709a'].map((color) => (
                     <button
@@ -472,7 +499,7 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
             <div className="p-4 bg-green-500/20 border border-green-500/50 rounded-lg flex items-center gap-2 animate-pulse">
               <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
               <div>
-                <p className="font-medium text-green-200">Story published! 🎉</p>
+                <p className="font-medium text-green-200">Status published successfully.</p>
                 <p className="text-sm text-green-300">Closing...</p>
               </div>
             </div>
@@ -480,10 +507,10 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
         </div>
 
         {/* Floating Submit Button */}
-        {fileToUpload && !uploadSuccess && (
+        {(fileToUpload || statusMode === 'text') && !uploadSuccess && (
           <button
             onClick={handleUpload}
-            disabled={isUploading}
+            disabled={isUploading || (statusMode === 'text' && !caption.trim())}
             className={`absolute bottom-24 right-6 w-16 h-16 rounded-full flex items-center justify-center transition-all shadow-2xl hover:shadow-2xl hover:scale-110 disabled:scale-95 z-10 font-bold text-lg transform ${
               isUploading 
                 ? 'bg-gradient-to-r from-purple-600 to-pink-600 animate-pulse' 
@@ -500,10 +527,14 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
         )}
 
         {/* Cancel Button */}
-        {fileToUpload && (
+        {(fileToUpload || statusMode === 'text') && (
           <div className="p-4 border-t border-purple-500/20 flex-shrink-0 bg-slate-900/50 backdrop-blur-md">
             <button
-              onClick={resetSelectedMedia}
+              onClick={() => {
+                resetSelectedMedia();
+                setCaption('');
+                setStatusMode('media');
+              }}
               className="w-full px-4 py-2 text-gray-300 hover:text-white hover:bg-white/10 rounded-lg font-medium transition-all"
             >
               Cancel

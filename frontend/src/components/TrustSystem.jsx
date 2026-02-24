@@ -29,6 +29,7 @@ import { useAuth } from '../context/AuthContext';
 import LiveBoardroom from './LiveBoardroom';
 import GroupWalletPINModal from './GroupWalletPINModal';
 import AdminApplicationPanel from './AdminApplicationPanel';
+import TrustLoanManagement from './TrustLoanManagement';
 import {
   getPublicTrustGroups,
   getUserTrustGroups,
@@ -98,6 +99,8 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
   const [userCountryCode, setUserCountryCode] = useState('US');
   const [userCurrency, setUserCurrency] = useState('USD');
   const [currencySymbol, setCurrencySymbol] = useState('$');
+  const [showLoanForm, setShowLoanForm] = useState(false);
+  const [selectedGroupForLoan, setSelectedGroupForLoan] = useState(null);
   const [hasICANWallet, setHasICANWallet] = useState(false);
   const [walletLoading, setWalletLoading] = useState(true);
   const [groupWallets, setGroupWallets] = useState({}); // Track wallet status for each group
@@ -1050,6 +1053,31 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
                         <FileText size={16} className="text-slate-300" />
                         <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-active:opacity-100 transition-opacity pointer-events-none">
                           View Details
+                        </span>
+                      </button>
+
+                      {/* Apply Loan Button */}
+                      <button
+                        onClick={() => {
+                          setSelectedGroupForLoan(group);
+                          setShowLoanForm(true);
+                        }}
+                        title="Apply for Loan"
+                        className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors text-sm font-medium hidden sm:flex items-center justify-center gap-1"
+                      >
+                        Apply Loan
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedGroupForLoan(group);
+                          setShowLoanForm(true);
+                        }}
+                        title="Apply for Loan"
+                        className="flex-1 sm:hidden px-2 py-2 bg-green-600 hover:bg-green-500 active:bg-green-700 text-white rounded-lg transition-colors flex items-center justify-center gap-1 relative group"
+                      >
+                        <DollarSign size={16} className="text-green-100" />
+                        <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-active:opacity-100 transition-opacity pointer-events-none">
+                          Apply Loan
                         </span>
                       </button>
 
@@ -2669,6 +2697,37 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
             });
           }}
         />
+      )}
+
+      {/* 💰 LOAN APPLICATION MODAL */}
+      {showLoanForm && selectedGroupForLoan && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4">
+          <div className="bg-slate-900 rounded-lg p-4 sm:p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-slate-700">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl sm:text-2xl font-bold text-white">💰 Apply for Loan</h2>
+              <button
+                onClick={() => {
+                  setShowLoanForm(false);
+                  setSelectedGroupForLoan(null);
+                }}
+                className="p-2 hover:bg-slate-800 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+            <p className="text-gray-400 text-sm mb-4">Group: <strong>{selectedGroupForLoan.name}</strong></p>
+            
+            {/* Loan Application Form Component */}
+            <TrustLoanManagement 
+              groupId={selectedGroupForLoan.id} 
+              groupName={selectedGroupForLoan.name}
+              onClose={() => {
+                setShowLoanForm(false);
+                setSelectedGroupForLoan(null);
+              }}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

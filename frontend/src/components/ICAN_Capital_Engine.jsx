@@ -9161,9 +9161,9 @@ Data Freshness: ${reportData.metadata.dataFreshness}
             onClick={() => setShowTRUST(false)}
             className="fixed top-4 right-4 z-[1001] px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg"
           >
-            Close TRUST
+            Close
           </button>
-          <SACCOHub />
+          <SACCOHub onClose={() => setShowTRUST(false)} />
         </div>
       )}
 

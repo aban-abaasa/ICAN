@@ -76,14 +76,15 @@ export default function MainNavigation({ onTrustClick, onShareClick, onWalletCli
     },
     {
       id: 'trust',
-      label: 'Trust',
+      label: '🏦 SACCO',
       icon: Banknote,
       path: '/trust',
       submenu: [
-        { label: 'My Trusts', path: '/trust', icon: Banknote },
-        { label: 'Explore', path: '/trust/explore', icon: Users },
-        { label: 'Create', path: '/trust/create', icon: Target },
-        { label: 'Dashboard', path: '/trust/dashboard', icon: BarChart3 }
+        { label: '🔍 Explore', path: '/trust', icon: Users },
+        { label: '👥 My Trusts', path: '/trust/my', icon: Banknote },
+        { label: '🗳️ Vote', path: '/trust/vote', icon: Target },
+        { label: '📮 Applications', path: '/trust/applications', icon: BarChart3 },
+        { label: '✨ Create', path: '/trust/create', icon: Target }
       ]
     },
     {

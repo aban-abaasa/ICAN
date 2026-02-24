@@ -35,6 +35,9 @@ import {
 import ContributionForm from './ContributionForm'
 import LoanForm from './LoanForm'
 import MemberApprovalPanel from './MemberApprovalPanel'
+import TrustLoanManagement from '../TrustLoanManagement'
+import AdminLoanReviewPanel from '../AdminLoanReviewPanel'
+import MemberLoanVotingInterface from '../MemberLoanVotingInterface'
 
 export default function SACCODetails({ saccoId, onBack }) {
   const { user } = useAuth()
@@ -206,6 +209,7 @@ export default function SACCODetails({ saccoId, onBack }) {
           { id: 'overview', label: 'Overview', icon: <BarChart3 className="w-4 h-4" /> },
           { id: 'contribute', label: 'Contribute', icon: <Send className="w-4 h-4" /> },
           { id: 'loan', label: 'Loans', icon: <Target className="w-4 h-4" /> },
+          { id: 'trust-loan', label: '💰 Group Loans', icon: <DollarSign className="w-4 h-4" /> },
           { id: 'members', label: 'Members', icon: <Users className="w-4 h-4" /> },
           ...(isAdmin ? [{ id: 'admin', label: 'Admin Panel', icon: <FileText className="w-4 h-4" /> }] : [])
         ].map(tab => (
@@ -246,6 +250,46 @@ export default function SACCODetails({ saccoId, onBack }) {
           activeLoan={activeLoan}
           onRequestLoan={() => setShowLoanForm(true)}
         />
+      )}
+
+      {activeSection === 'trust-loan' && (
+        <div className="space-y-6">
+          {isAdmin && (
+            <div>
+              <h2 className="text-xl font-bold text-white mb-4">👑 Admin Loan Review</h2>
+              <AdminLoanReviewPanel
+                groupId={saccoId}
+                user={member}
+                loans={[]}
+                onReviewComplete={loadDashboard}
+              />
+            </div>
+          )}
+          
+          <div>
+            <h2 className="text-xl font-bold text-white mb-4">
+              {isAdmin ? '📨 Member Voting' : '💰 Loan Applications'}
+            </h2>
+            <TrustLoanManagement
+              groupId={saccoId}
+              user={member}
+              onApplySuccess={loadDashboard}
+            />
+          </div>
+
+          {!isAdmin && (
+            <div>
+              <h2 className="text-xl font-bold text-white mb-4">🗳️ Vote on Loan Applications</h2>
+              <MemberLoanVotingInterface
+                groupId={saccoId}
+                userId={user.id}
+                user={member}
+                loansForVoting={[]}
+                onVoteSubmitted={loadDashboard}
+              />
+            </div>
+          )}
+        </div>
       )}
 
       {activeSection === 'members' && (

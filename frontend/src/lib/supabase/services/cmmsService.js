@@ -6,6 +6,59 @@
 
 import { supabase } from '../client';
 
+const normalizeCmmsRoleKey = (rawRole) => {
+  if (!rawRole) return '';
+
+  const normalizedToken = String(rawRole)
+    .trim()
+    .toLowerCase()
+    .replace(/^cmms[_-]/, '')
+    .replace(/[\s_]+/g, '-');
+
+  const aliases = {
+    administrator: 'admin',
+    admin: 'admin',
+    'department-coordinator': 'coordinator',
+    coordinator: 'coordinator',
+    'financial-officer': 'finance',
+    finance: 'finance',
+    supervisor: 'supervisor',
+    technician: 'technician',
+    storeman: 'storeman',
+    'service-provider': 'service-provider',
+    serviceprovider: 'service-provider',
+    viewer: 'viewer'
+  };
+
+  return aliases[normalizedToken] || normalizedToken;
+};
+
+const findCmmsRoleId = async (targetRoleKey) => {
+  const normalizedRoleKey = normalizeCmmsRoleKey(targetRoleKey);
+  const { data: roleRows, error: roleLookupError } = await supabase
+    .from('cmms_roles')
+    .select('id, role_name');
+
+  if (roleLookupError) {
+    throw roleLookupError;
+  }
+
+  const matchingRole = (roleRows || []).find((roleRow) => (
+    normalizeCmmsRoleKey(roleRow.role_name) === normalizedRoleKey
+  ));
+
+  if (!matchingRole) {
+    throw new Error(`Role "${normalizedRoleKey}" not found in cmms_roles`);
+  }
+
+  return matchingRole.id;
+};
+
+const isMissingRpcFunctionError = (rpcError) => {
+  const errorText = `${rpcError?.message || ''} ${rpcError?.details || ''}`.toLowerCase();
+  return errorText.includes('could not find the function') || errorText.includes('does not exist');
+};
+
 // ============================================
 // COMPANY PROFILE OPERATIONS
 // ============================================
@@ -25,11 +78,11 @@ export const createCompanyProfile = async (companyData) => {
       .from('cmms_company_profiles')
       .select('id')
       .eq('email', companyData.email)
-      .single();
+      .maybeSingle();
 
     // If profile exists, update it
     if (existingProfile && !checkError) {
-      console.log('📝 Company profile already exists, updating it...');
+      console.log('Company profile already exists, updating it...');
       const { data, error } = await supabase
         .from('cmms_company_profiles')
         .update({
@@ -43,10 +96,24 @@ export const createCompanyProfile = async (companyData) => {
         })
         .eq('id', existingProfile.id)
         .select()
-        .single();
+        .maybeSingle();
 
-      if (error) throw error;
-      console.log('✅ CMMS Company profile updated:', data);
+      if (error) {
+        const isNoRow = error?.code === 'PGRST116' || /0 rows/i.test(error?.details || '');
+        if (!isNoRow) throw error;
+      }
+
+      if (!data) {
+        const { data: fresh, error: freshError } = await supabase
+          .from('cmms_company_profiles')
+          .select('*')
+          .eq('id', existingProfile.id)
+          .maybeSingle();
+        if (freshError) throw freshError;
+        return { data: fresh || existingProfile, error: null };
+      }
+
+      console.log('CMMS Company profile updated:', data);
       return { data, error: null };
     }
 
@@ -72,7 +139,7 @@ export const createCompanyProfile = async (companyData) => {
         mobile_app_enabled: true
       })
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) throw error;
 
@@ -153,28 +220,33 @@ export const createAdminUser = async (cmmsCompanyId, userData) => {
   try {
     const { data: { user: authUser } } = await supabase.auth.getUser();
     if (!authUser) throw new Error('User not authenticated');
+    const bootstrapEmail = authUser.email || userData.email;
+
+    const { data: rpcUserId, error: rpcError } = await supabase.rpc('cmms_bootstrap_creator', {
+      p_company_id: cmmsCompanyId,
+      p_email: bootstrapEmail,
+      p_name: userData.name || 'Company Owner',
+      p_phone: userData.phone || ''
+    });
+
+    if (rpcError) throw rpcError;
 
     const { data, error } = await supabase
       .from('cmms_users')
-      .insert({
-        cmms_company_id: cmmsCompanyId,
-        email: userData.email,
-        user_name: userData.name,
-        full_name: userData.name,
-        phone: userData.phone || '',
-        is_active: true
-      })
-      .select()
-      .single();
+      .select('*')
+      .eq('id', rpcUserId)
+      .maybeSingle();
 
     if (error) throw error;
 
-    // Assign Admin role (role_id = 1 for CMMS_Admin)
-    const { error: roleError } = await assignUserRole(cmmsCompanyId, data.id, 1);
-    
-    if (roleError) {
-      console.error('❌ Failed to assign admin role:', roleError);
-      throw roleError;
+    try {
+      const adminRoleId = await findCmmsRoleId('admin');
+      const { error: roleError } = await assignUserRole(cmmsCompanyId, data.id, adminRoleId);
+      if (roleError) {
+        console.warn('⚠️ Direct admin role assignment failed, will rely on creator enforcement RPC:', roleError);
+      }
+    } catch (roleSetupError) {
+      console.warn('⚠️ Could not assign admin role during createAdminUser, creator enforcement RPC will handle it:', roleSetupError);
     }
 
     console.log('✅ CMMS Admin user created:', data);
@@ -507,13 +579,21 @@ export const getMaintenancePlans = async (companyId) => {
 export const markCompanyCreator = async (companyId, userId, creatorEmail) => {
   try {
     console.log('🔑 Marking company creator:', { companyId, userId, creatorEmail });
-    
-    const { data, error } = await supabase
-      .rpc('mark_company_creator', {
-        p_company_id: companyId,
-        p_user_id: userId,
-        p_creator_email: creatorEmail
-      });
+
+    const rpcPayload = {
+      p_company_id: companyId,
+      p_user_id: userId,
+      p_creator_email: creatorEmail
+    };
+
+    let { data, error } = await supabase.rpc('ensure_cmms_creator_admin', rpcPayload);
+
+    if (error && isMissingRpcFunctionError(error)) {
+      console.warn('⚠️ ensure_cmms_creator_admin RPC not found, falling back to mark_company_creator');
+      const fallbackResult = await supabase.rpc('mark_company_creator', rpcPayload);
+      data = fallbackResult.data;
+      error = fallbackResult.error;
+    }
 
     if (error) {
       console.error('❌ Error marking creator:', error);
@@ -546,3 +626,4 @@ export default {
   getMaintenancePlans,
   markCompanyCreator
 };
+

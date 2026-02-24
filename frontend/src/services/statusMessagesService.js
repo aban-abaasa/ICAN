@@ -18,11 +18,40 @@ export const sendStatusMessage = async (statusId, senderId, messageText) => {
       throw new Error('Message cannot be empty');
     }
 
+    const {
+      data: { user: authUser },
+      error: authError
+    } = await supabase.auth.getUser();
+
+    if (authError || !authUser) {
+      throw new Error('You must be signed in to comment');
+    }
+
+    const actualSenderId = senderId || authUser.id;
+    if (actualSenderId !== authUser.id) {
+      throw new Error('Invalid sender for this session');
+    }
+
+    // Ensure target status exists and is still active before allowing comments.
+    const { data: targetStatus, error: statusError } = await supabase
+      .from('ican_statuses')
+      .select('id, expires_at')
+      .eq('id', statusId)
+      .single();
+
+    if (statusError || !targetStatus) {
+      throw new Error('Status not found');
+    }
+
+    if (new Date(targetStatus.expires_at).getTime() <= Date.now()) {
+      throw new Error('Cannot comment on expired status');
+    }
+
     const { data, error } = await supabase
       .from('ican_status_messages')
       .insert([{
         status_id: statusId,
-        sender_id: senderId,
+        sender_id: actualSenderId,
         message_text: messageText.trim(),
         created_at: new Date().toISOString()
       }])
@@ -47,7 +76,7 @@ export const getStatusMessages = async (statusId) => {
   try {
     const { data, error } = await supabase
       .from('ican_status_messages')
-      .select('*')
+      .select('id, status_id, sender_id, message_text, created_at, updated_at')
       .eq('status_id', statusId)
       .order('created_at', { ascending: true });
 

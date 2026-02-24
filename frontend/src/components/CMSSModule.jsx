@@ -163,6 +163,54 @@ const CMMSModule = ({
     }
   };
 
+  const normalizeRoleKey = (rawRole) => {
+    if (!rawRole) return '';
+
+    const roleToken = String(rawRole)
+      .split(',')[0]
+      .trim()
+      .toLowerCase()
+      .replace(/^cmms[_-]/, '')
+      .replace(/[\s_]+/g, '-');
+
+    const aliases = {
+      administrator: 'admin',
+      admin: 'admin',
+      'department-coordinator': 'coordinator',
+      coordinator: 'coordinator',
+      'financial-officer': 'finance',
+      'finance-officer': 'finance',
+      finance: 'finance',
+      supervisor: 'supervisor',
+      technician: 'technician',
+      storeman: 'storeman',
+      'service-provider': 'service-provider',
+      serviceprovider: 'service-provider',
+      viewer: 'guest',
+      guest: 'guest',
+      assigned: 'assigned'
+    };
+
+    return aliases[roleToken] || roleToken;
+  };
+
+  const resolveUserRole = (primaryRole, roleLabels = '') => {
+    let resolvedRole = normalizeRoleKey(primaryRole);
+
+    if (!resolvedRole || resolvedRole === 'assigned' || !rolePermissions[resolvedRole]) {
+      const fallbackRole = normalizeRoleKey(roleLabels);
+      if (rolePermissions[fallbackRole]) {
+        resolvedRole = fallbackRole;
+      }
+    }
+
+    if (!resolvedRole || !rolePermissions[resolvedRole]) {
+      resolvedRole = 'guest';
+    }
+
+    return resolvedRole;
+  };
+
   // ============================================
   // CHECK USER AUTHORIZATION & LOAD COMPANY DATA
   // ============================================
@@ -213,46 +261,39 @@ const CMMSModule = ({
           // Step 2: Query cmms_users_with_roles view which has built-in creator detection
           const { data: userWithRole, error: viewError } = await supabase
             .from('cmms_users_with_roles')
-            .select('effective_role, role_labels')
+            .select('effective_role, role_labels, is_creator')
             .eq('id', cmmsUser.id)
-            .single();
+            .maybeSingle();
 
           if (!viewError && userWithRole) {
             // Use effective_role from the view (already checks if creator in DB)
-            let effectiveRole = userWithRole.effective_role?.toLowerCase() || 'viewer';
+            let effectiveRole = resolveUserRole(userWithRole.effective_role, userWithRole.role_labels);
+            let isUserCreator = userWithRole.is_creator || false;
             
-            // Additional check: If effective role is 'viewer', verify if this user is the company creator
-            if (effectiveRole === 'viewer') {
-              const cachedOwnerEmail = localStorage.getItem('cmms_company_owner_email');
-              const currentUserEmail = user?.email?.toLowerCase();
-              const ownerEmailLower = cachedOwnerEmail?.toLowerCase();
-              const isCreator = cachedOwnerEmail && currentUserEmail && currentUserEmail === ownerEmailLower;
+            // Additional RPC check: Verify admin status using cmms_is_company_admin()
+            try {
+              const { data: isAdminResult, error: adminCheckError } = await supabase.rpc(
+                'cmms_is_company_admin',
+                { p_company_id: cmmsUser.cmms_company_id }
+              );
               
-              console.log('🔍 Creator detection check:', {
-                cachedOwnerEmail,
-                currentUserEmail,
-                isCreator,
-                dbRole: userWithRole.effective_role
-              });
-              
-              if (isCreator) {
-                console.log('🔑 User IS company creator - upgrading from viewer to admin');
+              if (!adminCheckError && isAdminResult) {
+                console.log('✅ RPC verified: User is admin');
                 effectiveRole = 'admin';
-                setIsCreator(true);  // Mark user as creator for permission checks
-              } else {
-                console.log('ℹ️ User is NOT company creator (or no owner email cached)', {
-                  userEmail: user?.email,
-                  ownerEmail: cachedOwnerEmail
-                });
-                setIsCreator(false);
+                isUserCreator = true;
               }
+            } catch (rpcError) {
+              console.log('ℹ️ Admin RPC check skipped (not critical):', rpcError.message);
             }
             
             console.log(`📋 User effective role from view:`, effectiveRole);
+            console.log(`👑 User is creator:`, isUserCreator);
             console.log(`✅ User authorized with effective role: ${effectiveRole}`);
             
             localStorage.setItem('cmms_user_role', effectiveRole);
+            localStorage.setItem('cmms_user_is_creator', isUserCreator);
             setUserRole(effectiveRole);
+            setIsCreator(isUserCreator);
             setHasBusinessProfile(true);
             setIsAuthorized(true);
             setAccessDeniedReason('');
@@ -270,7 +311,7 @@ const CMMSModule = ({
                 .map(ur => ur.cmms_roles?.role_name)
                 .filter(Boolean);
               
-              const primaryRole = roleNames[0] || 'viewer';
+              const primaryRole = resolveUserRole(roleNames[0], roleNames.join(', '));
               
               console.log(`📋 User roles found (fallback):`, roleNames);
               console.log(`✅ User authorized with primary role: ${primaryRole}`);
@@ -284,13 +325,30 @@ const CMMSModule = ({
             } else {
               console.log('⚠️ User in CMMS but no active roles assigned');
               
-              // Check if user is the company creator (owner) via localStorage as final fallback
-              const cachedOwnerEmail = localStorage.getItem('cmms_company_owner_email');
-              const isCreator = cachedOwnerEmail && user?.email && user.email.toLowerCase() === cachedOwnerEmail.toLowerCase();
+              // Try RPC admin check as final verification
+              try {
+                const { data: isAdminResult, error: adminCheckError } = await supabase.rpc(
+                  'cmms_is_company_admin',
+                  { p_company_id: cmmsUser.cmms_company_id }
+                );
+                
+                if (!adminCheckError && isAdminResult) {
+                  console.log('✅ RPC verified: User is admin despite no roles showing');
+                  localStorage.setItem('cmms_user_role', 'admin');
+                  localStorage.setItem('cmms_user_is_creator', 'true');
+                  setUserRole('admin');
+                  setIsCreator(true);
+                  setHasBusinessProfile(true);
+                  setIsAuthorized(true);
+                  setAccessDeniedReason('');
+                  return;
+                }
+              } catch (rpcError) {
+                console.log('ℹ️ Admin RPC check skipped');
+              }
               
-              const defaultRole = isCreator ? 'admin' : 'viewer';
-              
-              console.log(`🔑 Assigning default role: ${defaultRole} (creator: ${isCreator}, user: ${user?.email}, owner: ${cachedOwnerEmail})`);
+              const defaultRole = 'guest';
+              console.log(`🔑 Assigning default role: ${defaultRole}`);
               localStorage.setItem('cmms_user_role', defaultRole);
               setUserRole(defaultRole);
               setHasBusinessProfile(true);
@@ -361,12 +419,7 @@ const CMMSModule = ({
       const assignedRole = user?.assignedCmmsRole || cachedRole;
       
       // Normalize CMMS role names: CMMS_Admin -> admin, CMMS_Coordinator -> coordinator, etc.
-      let normalizedRole = assignedRole;
-      if (assignedRole && assignedRole.startsWith('CMMS_')) {
-        normalizedRole = assignedRole.replace('CMMS_', '').toLowerCase();
-      } else if (assignedRole) {
-        normalizedRole = assignedRole.toLowerCase();
-      }
+      const normalizedRole = resolveUserRole(assignedRole);
       
       if (normalizedRole && rolePermissions[normalizedRole]) {
         // Fully authorized with role
@@ -430,7 +483,7 @@ const CMMSModule = ({
         .from('cmms_company_profiles')
         .select('*')
         .eq('id', companyIdToUse)
-        .single();
+        .maybeSingle();
 
       console.log('🔍 Company profile query response:', { profile, profileError });
 
@@ -472,11 +525,12 @@ const CMMSModule = ({
           name: user.full_name,
           email: user.email,
           phone: user.phone,
-          role: user.role_labels ? user.role_labels.split(', ')[0] : 'Viewer',
+          role: resolveUserRole(user.effective_role, user.role_labels),
           department: user.department,
           status: 'Active',
           icanVerified: true,
-          createdAt: user.created_at
+          createdAt: user.created_at,
+          isCreator: user.is_creator || false  // ✅ Include creator flag from view
         }));
         setCmmsData(prev => ({
           ...prev,
@@ -484,16 +538,14 @@ const CMMSModule = ({
         }));
         
         // Check if current user is the company creator (first admin user)
-        if (user?.email && userRole === 'viewer') {
-          const firstAdminUser = users.find(u => {
-            const roles = u.role_labels ? u.role_labels.split(', ') : [];
-            return roles[0]?.toLowerCase() === 'admin';
-          });
+        if (user?.email && userRole !== 'admin') {
+          const creatorUser = users.find(u => u.is_creator === true);
           
-          if (firstAdminUser && firstAdminUser.email.toLowerCase() === user.email.toLowerCase()) {
-            console.log('🔑 Current user is the company creator (first admin) - upgrading to admin');
+          if (creatorUser && creatorUser.email.toLowerCase() === user.email.toLowerCase()) {
+            console.log('🔑 Current user is the company creator - upgrading to admin');
             localStorage.setItem('cmms_user_role', 'admin');
             localStorage.setItem('cmms_company_owner_email', user.email);
+            localStorage.setItem('cmms_user_is_creator', 'true');
             setUserRole('admin');
             setIsCreator(true);  // Mark as creator for permission checks
           }
@@ -559,6 +611,13 @@ const CMMSModule = ({
     ownerName: '',
     ownerEmail: ''
   });
+
+  useEffect(() => {
+    if (!user?.email) return;
+    setProfileFormData((prev) => (
+      prev.email ? prev : { ...prev, email: user.email }
+    ));
+  }, [user?.email]);
   const [expandWelcome, setExpandWelcome] = useState(false);
   const [isCreatingProfile, setIsCreatingProfile] = useState(false);
   const [showCompanyForm, setShowCompanyForm] = useState(false);
@@ -1332,8 +1391,10 @@ const CMMSModule = ({
   // USER ROLE MANAGEMENT (ADMIN ONLY)
   // ============================================
   const UserRoleManager = () => {
-    // Strict: Only Admin can manage users and assign roles
-    if (!hasPermission('canManageUsers') || !hasPermission('canAssignRoles')) {
+    const isAdminUser = userRole === 'admin' || isCreator;
+
+    // Strict: Only Admin (or creator treated as admin) can manage users and assign roles
+    if (!isAdminUser) {
       return (
         <div className="space-y-4">
           <div className="glass-card p-4 md:p-6 bg-orange-500 bg-opacity-10 border-l-4 border-orange-500">
@@ -1358,9 +1419,16 @@ const CMMSModule = ({
                   <p className="text-gray-400 text-sm">No team members assigned yet</p>
                 ) : (
                   cmmsData.users.map(user => (
-                    <div key={user.id} className="bg-white bg-opacity-5 p-2 md:p-3 rounded flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                    <div key={user.id} className="bg-white bg-opacity-5 p-2 md:p-3 rounded flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 border border-white border-opacity-10">
                       <div className="flex-1 min-w-0">
-                        <p className="text-white font-semibold text-sm break-words">{user.name}</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-white font-semibold text-sm break-words">{user.name}</p>
+                          {user.isCreator && (
+                            <span className="px-2 py-0.5 bg-amber-500 bg-opacity-40 text-amber-200 rounded text-xs font-bold flex items-center gap-1">
+                              👑 Creator
+                            </span>
+                          )}
+                        </div>
                         <p className="text-gray-400 text-xs break-all">{user.email}</p>
                       </div>
                       <span className="px-2 md:px-3 py-1 bg-blue-500 bg-opacity-30 text-blue-300 rounded text-xs md:text-sm font-semibold uppercase whitespace-nowrap">{user.role}</span>
@@ -1378,7 +1446,7 @@ const CMMSModule = ({
       name: '',
       email: '',
       phone: '',
-      role: 'Technician',
+      role: 'technician',
       department: '',
       assignedServices: []
     });
@@ -1489,7 +1557,7 @@ const CMMSModule = ({
           .select('id')
           .eq('cmms_company_id', userCompanyId)
           .eq('email', newUser.email)
-          .single();
+          .maybeSingle();
 
         let userId;
 
@@ -1537,59 +1605,32 @@ const CMMSModule = ({
           userId = insertedUser[0].id;
         }
 
-        // Get the role ID from cmms_roles
-        const { data: roleData, error: roleError } = await supabase
-          .from('cmms_roles')
-          .select('id')
-          .eq('role_name', newUser.role.toLowerCase())
-          .single();
+        // Assign role through secure RPC (handles role-name normalization + admin access checks)
+        const { error: assignRoleError } = await supabase.rpc('assign_cmms_user_role_by_key', {
+          p_company_id: userCompanyId,
+          p_user_id: userId,
+          p_role_key: newUser.role
+        });
 
-        if (roleError) {
-          console.error('Error fetching role:', roleError);
-          alert('❌ Error assigning role: ' + roleError.message);
+        if (assignRoleError) {
+          console.error('Error assigning role:', assignRoleError);
+          alert('⚠️ User added but role assignment failed: ' + assignRoleError.message);
           return;
         }
 
-        // Check if role assignment already exists
-        const { data: existingRole, error: checkRoleError } = await supabase
-          .from('cmms_user_roles')
-          .select('id')
-          .eq('cmms_company_id', userCompanyId)
-          .eq('cmms_user_id', userId)
-          .eq('cmms_role_id', roleData.id)
-          .single();
-
-        if (!existingRole || (checkRoleError && checkRoleError.code === 'PGRST116')) {
-          // Role assignment doesn't exist - create it
-          const { error: assignError } = await supabase
-            .from('cmms_user_roles')
-            .insert([
-              {
-                cmms_company_id: userCompanyId,
-                cmms_user_id: userId,
-                cmms_role_id: roleData.id,
-                is_active: true
-              }
-            ]);
-
-          if (assignError && assignError.code !== '23505') { // 23505 is unique constraint error
-            console.error('Error assigning role:', assignError);
-            alert('⚠️ User added but role assignment failed: ' + assignError.message);
-            return;
-          }
-        }
-
         // Update local state to show new user immediately
+        const normalizedNewRole = normalizeRoleKey(newUser.role);
         const newUserObj = {
           id: userId,
           name: newUser.name,
           email: newUser.email,
           phone: newUser.phone,
-          role: newUser.role,
+          role: normalizedNewRole,
           department: newUser.department,
           status: 'Active',
           icanVerified: true,
-          createdAt: new Date()
+          createdAt: new Date(),
+          isCreator: false  // New users are not creators by default
         };
         
         setCmmsData(prev => ({
@@ -1633,7 +1674,7 @@ const CMMSModule = ({
           console.warn('⚠️ Error creating notification:', err);
         }
 
-        setNewUser({ name: '', email: '', phone: '', role: 'Technician', department: '', assignedServices: [] });
+        setNewUser({ name: '', email: '', phone: '', role: 'technician', department: '', assignedServices: [] });
         setEmailSearchQuery('');
         setSearchResults([]);
         
@@ -1652,8 +1693,96 @@ const CMMSModule = ({
       }));
     };
 
+    const handleAssignAdmin = async (targetUser) => {
+      const targetRole = normalizeRoleKey(targetUser.role);
+      if (targetRole === 'admin') {
+        alert('ℹ️ This user already has Admin access.');
+        return;
+      }
+
+      // Verify current user is admin before allowing assignment
+      const isCurrentUserAdmin = hasPermission('canAssignRoles');
+      if (!isCurrentUserAdmin) {
+        alert('❌ Only Admin users can assign Admin role.');
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `⚠️ ADMIN ROLE ASSIGNMENT\n\n` +
+        `You are about to promote:\n"${targetUser.name}" (${targetUser.email})\n\n` +
+        `to Admin (🔓 Full CMMS Access)\n\n` +
+        `They will be able to:\n` +
+        `• Manage all users and assign roles\n` +
+        `• Edit company profile\n` +
+        `• Approve all requisitions\n` +
+        `• View all financial data\n\n` +
+        `Continue?`
+      );
+      if (!confirmed) return;
+
+      try {
+        // Call RPC to assign admin role
+        const { error: assignRoleError } = await supabase.rpc('assign_cmms_user_role_by_key', {
+          p_company_id: userCompanyId,
+          p_user_id: targetUser.id,
+          p_role_key: 'admin'
+        });
+
+        if (assignRoleError) {
+          throw assignRoleError;
+        }
+
+        // Record who did the assignment (audit trail)
+        console.log(`📝 AUDIT: Admin ${user?.email} assigned Admin role to ${targetUser.email}`);
+
+        // Update UI
+        setCmmsData(prev => ({
+          ...prev,
+          users: prev.users.map(existingUser => (
+            existingUser.id === targetUser.id
+              ? { ...existingUser, role: 'admin' }
+              : existingUser
+          ))
+        }));
+
+        // Send notification to newly promoted admin
+        try {
+          await supabase
+            .from('cmms_notifications')
+            .insert([
+              {
+                cmms_user_id: targetUser.id,
+                cmms_company_id: userCompanyId,
+                notification_type: 'promoted_to_admin',
+                title: '⭐ You\'ve been promoted to Admin!',
+                message: `${user?.email || 'An admin'} has promoted you to Admin. You now have full access to CMMS including user management and approvals.`,
+                icon: '⭐',
+                action_tab: 'users',
+                action_label: 'View Admin Dashboard',
+                is_read: false,
+                created_at: new Date().toISOString()
+              }
+            ]);
+        } catch (notifErr) {
+          console.warn('Notification creation skipped:', notifErr.message);
+        }
+
+        alert(`✅ Success!\n\n"${targetUser.name}" is now an Admin.\n\n💌 Notification sent to ${targetUser.email}`);
+      } catch (error) {
+        console.error('Error assigning admin role:', error);
+        alert(`❌ Failed to assign Admin role:\n${error.message}`);
+      }
+    };
+
     return (
       <div className="space-y-6">
+        {userRole === 'admin' && (
+          <div className="glass-card p-4 bg-green-500 bg-opacity-10 border-l-4 border-green-500">
+            <p className="text-green-300 font-semibold text-sm">Admin full access is active.</p>
+            <p className="text-gray-300 text-xs mt-1">You can assign another Admin and manage all CMMS roles.</p>
+          </div>
+        )}
+
         {/* Add New User Form with Dropdown Search */}
         <div className="glass-card p-6">
           <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
@@ -1743,7 +1872,7 @@ const CMMSModule = ({
                 <span className="text-blue-300 text-sm">📧 Selected: <strong>{newUser.email}</strong></span>
                 <button
                   onClick={() => {
-                    setNewUser({ name: '', email: '', phone: '', role: 'Technician', department: '', assignedServices: [] });
+                    setNewUser({ name: '', email: '', phone: '', role: 'technician', department: '', assignedServices: [] });
                     setEmailSearchQuery('');
                   }}
                   className="ml-auto text-red-400 hover:text-red-300 text-xs"
@@ -1869,7 +1998,8 @@ const CMMSModule = ({
           </h3>
           <div className="space-y-3">
             {cmmsData.users.map(user => {
-              const role = roles.find(r => r.id === user.role);
+              const normalizedUserRole = normalizeRoleKey(user.role);
+              const role = allRoles.find(r => r.id === normalizedUserRole);
               const isNewlyAdded = newlyAddedUserId === user.id;
               
               return (
@@ -1886,15 +2016,20 @@ const CMMSModule = ({
                       <div className="flex items-center gap-2 mb-2">
                         <span className="text-2xl">{role?.icon}</span>
                         <div className="flex-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <div className="text-white font-bold">{user.name}</div>
+                            {user.isCreator && (
+                              <span className="px-2 py-0.5 bg-amber-500 bg-opacity-50 text-amber-100 text-xs rounded-full font-bold flex items-center gap-1">
+                                👑 Creator
+                              </span>
+                            )}
                             {isNewlyAdded && (
                               <span className="px-2 py-1 bg-green-500 bg-opacity-40 text-green-200 text-xs rounded-full font-semibold animate-pulse">
                                 ✨ NEW
                               </span>
                             )}
                           </div>
-                          <div className="text-xs text-gray-300">{role?.label}</div>
+                          <div className="text-xs text-gray-300">{role?.label || normalizedUserRole}</div>
                         </div>
                       </div>
                       <div className="text-xs text-gray-400 space-y-1">
@@ -1907,12 +2042,29 @@ const CMMSModule = ({
                         )}
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleDeleteUser(user.id)}
-                      className="px-3 py-1 bg-red-500 bg-opacity-30 text-red-300 rounded text-sm hover:bg-opacity-50 transition-all"
-                    >
-                      Remove
-                    </button>
+                    <div className="flex flex-col gap-2">
+                      {userRole === 'admin' && normalizedUserRole !== 'admin' && !user.isCreator && (
+                        <button
+                          onClick={() => handleAssignAdmin(user)}
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs md:text-sm font-semibold transition-all flex items-center justify-center gap-1"
+                          title="Promote this user to Admin - they will have full CMMS access"
+                        >
+                          ⭐ Make Admin
+                        </button>
+                      )}
+                      {user.isCreator && normalizedUserRole === 'admin' && (
+                        <div className="px-3 py-1.5 bg-amber-500 bg-opacity-60 text-amber-900 rounded text-xs font-semibold flex items-center justify-center gap-1">
+                          👑 Creator Admin
+                        </div>
+                      )}
+                      <button
+                        onClick={() => handleDeleteUser(user.id)}
+                        className="px-3 py-1.5 bg-red-500 bg-opacity-30 text-red-300 rounded text-xs md:text-sm hover:bg-opacity-50 font-semibold transition-all"
+                        title="Remove this user from CMMS"
+                      >
+                        🗑️ Remove
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -1993,6 +2145,8 @@ const CMMSModule = ({
 
     const lowStockItems = cmmsData.inventory.filter(item => item.quantity <= item.minStock);
     const totalInventoryValue = cmmsData.inventory.reduce((sum, item) => sum + (item.quantity * item.cost), 0);
+    const escrowPercent = 5;
+    const escrowPreview = Math.round(totalInventoryValue * (escrowPercent / 100));
 
     return (
       <div className="space-y-4 md:space-y-6">
@@ -2005,71 +2159,106 @@ const CMMSModule = ({
 
         {/* Add Inventory Item */}
         {canEditInventory && (
-          <div className="glass-card p-4 md:p-6">
-            <h3 className="text-lg md:text-xl font-bold text-white mb-4 flex items-center gap-2">
-              <Package className="w-5 h-5 md:w-6 md:h-6 text-blue-400" />
-              Add Inventory Item
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4 mb-4">
-              <input
-                type="text"
-                placeholder="Item Name"
-              value={newItem.name}
-              onChange={(e) => setNewItem({...newItem, name: e.target.value})}
-              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm"
-            />
-            <select
-              value={newItem.category}
-              onChange={(e) => setNewItem({...newItem, category: e.target.value})}
-              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm"
-            >
-              <option value="Spare Parts">Spare Parts</option>
-              <option value="Tools">Tools</option>
-              <option value="Materials">Materials</option>
-              <option value="Equipment">Equipment</option>
-              <option value="Consumables">Consumables</option>
-            </select>
-            <input
-              type="number"
-              placeholder="Quantity"
-              value={newItem.quantity}
-              onChange={(e) => setNewItem({...newItem, quantity: parseInt(e.target.value) || 0})}
-              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm"
-            />
-            <input
-              type="number"
-              placeholder="Min Stock Level"
-              value={newItem.minStock}
-              onChange={(e) => setNewItem({...newItem, minStock: parseInt(e.target.value) || 0})}
-              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm"
-            />
-            <input
-              type="number"
-              placeholder="Unit Cost (UGX)"
-              value={newItem.cost}
-              onChange={(e) => setNewItem({...newItem, cost: parseFloat(e.target.value) || 0})}
-              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400"
-            />
-            <select
-              value={newItem.storeman}
-              onChange={(e) => setNewItem({...newItem, storeman: e.target.value})}
-              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white"
-            >
-              <option value="">Assign Storeman</option>
-              {cmmsData.users.filter(u => u.role === 'storeman').map(u => (
-                <option key={u.id} value={u.name}>{u.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <button
-            onClick={handleAddItem}
-            className="w-full px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold hover:from-green-600 hover:to-emerald-700 transition-all"
-          >
-            ✓ Add Item
-          </button>
+          <div className="glass-card p-5 md:p-6 space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Package className="w-5 h-5 md:w-6 md:h-6 text-blue-400" />
+                <div>
+                  <h3 className="text-lg md:text-xl font-bold text-white">Add Inventory Item</h3>
+                  <p className="text-xs text-gray-300">Smart defaults keep stores funded to prevent the maintenance cliff.</p>
+                </div>
+              </div>
+              <div className="px-3 py-2 rounded-lg bg-emerald-600/20 border border-emerald-400/40 text-emerald-100 text-sm">
+                Escrow set‑aside ({escrowPercent}%): <span className="font-semibold">UGX {escrowPreview.toLocaleString()}</span>
+              </div>
             </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+              <div className="space-y-2">
+                <label className="text-xs text-gray-300">Item Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Hydraulic Pump"
+                  value={newItem.name}
+                  onChange={(e) => setNewItem({...newItem, name: e.target.value})}
+                  className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs text-gray-300">Category</label>
+                <div className="flex flex-wrap gap-2">
+                  {['Spare Parts','Tools','Materials','Equipment','Consumables'].map(cat => (
+                    <button
+                      key={cat}
+                      onClick={() => setNewItem({...newItem, category: cat})}
+                      className={`px-3 py-2 rounded text-sm border ${newItem.category === cat ? 'bg-blue-500/30 border-blue-400 text-white' : 'bg-white/5 border-white/10 text-gray-200'}`}
+                      type="button"
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs text-gray-300">Quantity on hand</label>
+                <input
+                  type="number"
+                  placeholder="0"
+                  value={newItem.quantity}
+                  onChange={(e) => setNewItem({...newItem, quantity: parseInt(e.target.value) || 0})}
+                  className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm"
+                />
+                <p className="text-[11px] text-gray-400">Auto-tracks low stock and escalates to repairs.</p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs text-gray-300">Minimum stock</label>
+                <input
+                  type="number"
+                  placeholder="Reorder at"
+                  value={newItem.minStock}
+                  onChange={(e) => setNewItem({...newItem, minStock: parseInt(e.target.value) || 0})}
+                  className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm"
+                />
+                <p className="text-[11px] text-gray-400">Keeps buffer before hitting the maintenance cliff.</p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs text-gray-300">Unit Cost (UGX)</label>
+                <input
+                  type="number"
+                  placeholder="0"
+                  value={newItem.cost}
+                  onChange={(e) => setNewItem({...newItem, cost: parseFloat(e.target.value) || 0})}
+                  className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400"
+                />
+                <p className="text-[11px] text-gray-400">Costs roll into escrow forecasting automatically.</p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs text-gray-300">Assign Storeman</label>
+                <select
+                  value={newItem.storeman}
+                  onChange={(e) => setNewItem({...newItem, storeman: e.target.value})}
+                  className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white"
+                >
+                  <option value="">Unassigned</option>
+                  {cmmsData.users.filter(u => u.role === 'storeman').map(u => (
+                    <option key={u.id} value={u.name}>{u.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <button
+              onClick={handleAddItem}
+              className="w-full px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold hover:from-green-600 hover:to-emerald-700 transition-all shadow-lg shadow-emerald-500/20"
+            >
+              ✓ Add Item
+            </button>
+          </div>
         )}
 
         {/* Inventory Stats */}
@@ -2639,4 +2828,6 @@ const CMMSModule = ({
 };
 
 export default CMMSModule;
+
+
 

@@ -241,6 +241,24 @@ export const searchICANUsers = async (searchTerm) => {
       console.log('auth.users search failed:', err.message);
     }
 
+    // Fallback 3b: RPC to list_auth_users (security definer)
+    try {
+      console.log('Searching auth.users via list_auth_users RPC for:', searchTerm);
+      const { data: rpcUsers, error: rpcError } = await sb
+        .rpc('list_auth_users', { p_search: searchTerm, p_limit: 10 });
+
+      if (!rpcError && rpcUsers && rpcUsers.length > 0) {
+        console.log('Found auth users via RPC:', rpcUsers);
+        return rpcUsers.map(user => ({
+          id: user.id,
+          email: user.email,
+          name: user.full_name || user.email?.split('@')[0] || 'Unknown'
+        }));
+      }
+    } catch (err) {
+      console.log('list_auth_users RPC search failed:', err.message);
+    }
+
     // Fallback 4: Email-only search in ican_user_profiles
     try {
       console.log('Trying email-only search in ican_user_profiles');
