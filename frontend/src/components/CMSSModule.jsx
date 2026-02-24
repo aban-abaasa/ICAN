@@ -10,7 +10,7 @@
 //   ├── Financial Officer
 //   └── Service Providers (can select multiple service types)
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Building,
   User,
@@ -23,7 +23,9 @@ import {
   Plus,
   Loader,
   Search,
-  CheckCircle2
+  CheckCircle2,
+  MoreVertical,
+  X
 } from 'lucide-react';
 
 // Import Supabase CMMS service
@@ -2321,6 +2323,190 @@ const CMMSModule = ({
   };
 
   // ============================================
+  // CMMS TABS WITH 3-DOT MENU COMPONENT
+  // ============================================
+  const CMSTabsWithMenu = ({ activeTab, setActiveTab, getTabs }) => {
+    const [menuOpen, setMenuOpen] = useState(false);
+    const menuRef = useRef(null);
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+    const allTabs = [
+      { id: 'company', label: '🏢 Company', icon: Building },
+      { id: 'users', label: '👥 Users & Roles', icon: Users },
+      { id: 'inventory', label: '📦 Inventory', icon: Package },
+      { id: 'requisitions', label: '📋 Requisitions & Approvals', icon: Package },
+      { id: 'reports', label: '📊 Reports', icon: Package }
+    ];
+
+    const accessibleTabs = allTabs.filter(tab => getTabs().includes(tab.id));
+
+    // Track window resize for mobile detection
+    useEffect(() => {
+      const handleResize = () => setIsMobile(window.innerWidth < 768);
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    // Close menu when clicking outside
+    useEffect(() => {
+      const handleClickOutside = (e) => {
+        if (menuRef.current && !menuRef.current.contains(e.target)) {
+          setMenuOpen(false);
+        }
+      };
+
+      if (menuOpen) {
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+      }
+    }, [menuOpen]);
+
+    // Mobile view - 3-dot menu only
+    if (isMobile) {
+      return (
+        <div className="mb-6 border-b border-white border-opacity-10 -mx-4 px-4 py-3">
+          <div className="flex items-center justify-between gap-2">
+            {/* Current active tab display */}
+            <div className="text-sm font-semibold text-blue-300">
+              {accessibleTabs.find(t => t.id === activeTab)?.label || '🏢 Company'}
+            </div>
+
+            {/* 3-Dot Menu Button */}
+            <div className="relative" ref={menuRef}>
+              <button
+                onClick={() => setMenuOpen(!menuOpen)}
+                className={`p-2.5 rounded-lg transition-all flex items-center justify-center touch-target ${
+                  menuOpen
+                    ? 'bg-blue-500 bg-opacity-40 text-blue-200'
+                    : 'bg-white bg-opacity-10 text-gray-300 active:bg-opacity-20'
+                }`}
+                title="Menu"
+              >
+                {menuOpen ? (
+                  <X className="w-5 h-5" />
+                ) : (
+                  <MoreVertical className="w-5 h-5" />
+                )}
+              </button>
+
+              {/* Mobile Dropdown Menu */}
+              {menuOpen && (
+                <div className="absolute right-0 top-full mt-2 bg-slate-800 border border-blue-500 border-opacity-50 rounded-lg shadow-2xl z-30 min-w-64 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="px-4 py-3 border-b border-slate-700 text-slate-300 text-xs font-semibold bg-slate-900 rounded-t-lg">
+                    📋 NAVIGATION
+                  </div>
+                  <div className="divide-y divide-slate-700">
+                    {accessibleTabs.map(tab => (
+                      <button
+                        key={tab.id}
+                        onClick={() => {
+                          setActiveTab(tab.id);
+                          setMenuOpen(false);
+                        }}
+                        className={`
+                          w-full px-4 py-3.5 text-sm font-medium transition-all text-left flex items-center gap-3
+                          ${activeTab === tab.id
+                            ? 'bg-blue-600 bg-opacity-50 text-blue-100'
+                            : 'text-slate-300 active:bg-slate-700 active:text-white'
+                          }
+                        `}
+                      >
+                        <span className="text-lg">{tab.label.split(' ')[0]}</span>
+                        <span className="flex-1">{tab.label}</span>
+                        {activeTab === tab.id && (
+                          <span className="text-blue-300">✓</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Desktop view - Company tab + 3-dot menu
+    const visibleTabs = accessibleTabs.slice(0, 1);
+    const hiddenTabs = accessibleTabs.slice(1);
+
+    return (
+      <div className="mb-6 border-b border-white border-opacity-10 -mx-4 md:-mx-6 lg:-mx-8">
+        <div className="flex gap-1 md:gap-2 items-center justify-between px-4 md:px-6 lg:px-8 py-2 md:py-3">
+          {/* Visible Tabs */}
+          <div className="flex gap-1 md:gap-2 items-center overflow-x-auto flex-1">
+            {visibleTabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm font-semibold transition-all whitespace-nowrap border-b-2 ${
+                  activeTab === tab.id
+                    ? 'text-blue-300 border-blue-500'
+                    : 'text-gray-400 border-transparent hover:text-white'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* 3-Dot Menu for Hidden Tabs - Desktop */}
+          {hiddenTabs.length > 0 && (
+            <div className="relative ml-2" ref={menuRef}>
+              <button
+                onClick={() => setMenuOpen(!menuOpen)}
+                className={`p-2 rounded-lg transition-all flex items-center justify-center ${
+                  menuOpen
+                    ? 'bg-blue-500 bg-opacity-30 text-blue-300'
+                    : 'bg-white bg-opacity-5 text-gray-400 hover:bg-opacity-10 hover:text-white'
+                }`}
+                title="More menu"
+              >
+                {menuOpen ? (
+                  <X className="w-5 h-5" />
+                ) : (
+                  <MoreVertical className="w-5 h-5" />
+                )}
+              </button>
+
+              {/* Dropdown Menu - Desktop */}
+              {menuOpen && (
+                <div className="absolute right-0 top-full mt-2 bg-slate-800 border border-blue-500 border-opacity-50 rounded-lg shadow-2xl z-20 min-w-max animate-in fade-in zoom-in-95 duration-200">
+                  <div className="px-3 py-2 border-b border-slate-700 text-slate-300 text-xs font-semibold bg-slate-900 rounded-t-lg">
+                    📋 MORE OPTIONS
+                  </div>
+                  <div className="py-1">
+                    {hiddenTabs.map(tab => (
+                      <button
+                        key={tab.id}
+                        onClick={() => {
+                          setActiveTab(tab.id);
+                          setMenuOpen(false);
+                        }}
+                        className={`
+                          w-full px-4 py-2.5 text-sm font-medium transition-all text-left
+                          border-b border-slate-700 last:border-b-0
+                          ${activeTab === tab.id
+                            ? 'bg-blue-600 bg-opacity-40 text-blue-200'
+                            : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                          }
+                        `}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================
   // MAIN CMMS INTERFACE
   // ============================================
   
@@ -2790,30 +2976,12 @@ const CMMSModule = ({
       )}
       */}
 
-      {/* Tabs - Role-Based & Mobile-Friendly */}
-      <div className="flex gap-1 md:gap-2 mb-6 border-b border-white border-opacity-10 overflow-x-auto -mx-4 md:-mx-6 lg:-mx-8 px-4 md:px-6 lg:px-8">
-        {[
-          { id: 'company', label: '🏢 Company', icon: Building },
-          { id: 'users', label: '👥 Users & Roles', icon: Users },
-          { id: 'inventory', label: '📦 Inventory', icon: Package },
-          { id: 'requisitions', label: '📋 Requisitions & Approvals', icon: Package },
-          { id: 'reports', label: '📊 Reports', icon: Package }
-        ]
-          .filter(tab => getTabs().includes(tab.id))
-          .map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm font-semibold transition-all whitespace-nowrap border-b-2 ${
-                activeTab === tab.id
-                  ? 'text-blue-300 border-blue-500'
-                  : 'text-gray-400 border-transparent hover:text-white'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-      </div>
+      {/* Tabs - Role-Based with 3-Dot Menu Collapse */}
+      <CMSTabsWithMenu 
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        getTabs={getTabs}
+      />
 
       {/* Tab Content */}
       <div>
