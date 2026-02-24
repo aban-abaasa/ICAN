@@ -4,22 +4,20 @@ import {
   Plus, 
   Minus, 
   RefreshCw, 
-  TrendingUp,
   AlertCircle,
   CheckCircle,
   Clock,
-  LogOut,
   BarChart3,
-  Mail,
   Lock
 } from 'lucide-react';
 import agentService from '../services/agentService';
 import { CountryService } from '../services/countryService';
+import { getSupabaseClient } from '../lib/supabase/client';
 import PinResetFlow from './PinResetFlow';
 
 /**
  * 🏪 AGENT DASHBOARD
- * Dual-Currency Terminal for Cash-In, Cash-Out, and Float Management
+ * Local-currency terminal for Cash-In, Cash-Out, and Float Management
  */
 const AgentDashboard = () => {
   // ============================================
@@ -27,11 +25,11 @@ const AgentDashboard = () => {
   // ============================================
   
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [usdFloat, setUsdFloat] = useState(0);
-  const [ugxFloat, setUgxFloat] = useState(0);
+  const [localFloat, setLocalFloat] = useState(0);
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState(null);
   const [localCurrency, setLocalCurrency] = useState('UGX'); // Default to UGX
+  const [localCurrencySymbol, setLocalCurrencySymbol] = useState('Sh');
 
   // Cash-In Form
   const [cashInForm, setCashInForm] = useState({
@@ -52,12 +50,11 @@ const AgentDashboard = () => {
   // Float Top-Up Form
   const [topUpForm, setTopUpForm] = useState({
     amount: '',
-    currency: 'USD',
+    currency: 'UGX',
     phoneNumber: ''
   });
 
   const [recentTransactions, setRecentTransactions] = useState([]);
-  const [settlementData, setSettlementData] = useState(null);
   
   // Confirmation Modal State
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -94,15 +91,53 @@ const AgentDashboard = () => {
   // ============================================
 
   useEffect(() => {
-    // Get user's country and set local currency
-    const savedCountry = localStorage.getItem('ican_country');
-    if (savedCountry) {
-      const currencyCode = CountryService.getCurrencyCode(savedCountry);
+    const loadCountryAndCurrency = async () => {
+      const supabase = getSupabaseClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Prefer server-side selected country to avoid stale localStorage values.
+      let countryCode = null;
+
+      if (user?.id) {
+        const { data: accountRow } = await supabase
+          .from('user_accounts')
+          .select('country_code')
+          .eq('user_id', user.id)
+          .limit(1)
+          .maybeSingle();
+
+        countryCode = accountRow?.country_code || null;
+      }
+
+      if (!countryCode) {
+        countryCode = user?.user_metadata?.country || null;
+      }
+
+      if (!countryCode) {
+        countryCode = localStorage.getItem('ican_country');
+      }
+
+      let normalizedCountryCode = (countryCode || 'UG').toUpperCase();
+      if (!CountryService.getCountry(normalizedCountryCode)) {
+        normalizedCountryCode = 'UG';
+      }
+
+      localStorage.setItem('ican_country', normalizedCountryCode);
+
+      const currencyCode = CountryService.getCurrencyCode(normalizedCountryCode);
+      const currencySymbol = CountryService.getCurrencySymbol(normalizedCountryCode);
       setLocalCurrency(currencyCode);
-      setCashInForm(prev => ({ ...prev, currency: currencyCode }));
-      setCashOutForm(prev => ({ ...prev, currency: currencyCode }));
-    }
+      setLocalCurrencySymbol(currencySymbol);
+    };
+
+    loadCountryAndCurrency();
   }, []);
+
+  useEffect(() => {
+    setCashInForm(prev => ({ ...prev, currency: localCurrency }));
+    setCashOutForm(prev => ({ ...prev, currency: localCurrency }));
+    setTopUpForm(prev => ({ ...prev, currency: localCurrency }));
+  }, [localCurrency]);
 
   useEffect(() => {
     initializeAgent();
@@ -137,10 +172,15 @@ const AgentDashboard = () => {
   const refreshFloatBalances = async () => {
     const balances = await agentService.getFloatBalances();
     if (balances) {
-      setUsdFloat(balances.USD?.current_balance || 0);
-      setUgxFloat(balances.UGX?.current_balance || 0);
+      setLocalFloat(balances[localCurrency]?.current_balance || 0);
     }
   };
+
+  useEffect(() => {
+    if (agentService.agentId) {
+      refreshFloatBalances();
+    }
+  }, [localCurrency]);
 
   const refreshRecentTransactions = async () => {
     const transactions = await agentService.getRecentTransactions(20);
@@ -369,7 +409,7 @@ const AgentDashboard = () => {
         title: '📱 MOMO Request Sent',
         message: result.message
       });
-      setTopUpForm({ amount: '', currency: 'USD', phoneNumber: '' });
+      setTopUpForm({ amount: '', currency: localCurrency, phoneNumber: '' });
     } else {
       setNotification({
         type: 'error',
@@ -386,10 +426,10 @@ const AgentDashboard = () => {
   const handleSubmitSettlement = async () => {
     setLoading(true);
     const result = await agentService.submitSettlement({
-      usdClosing: usdFloat,
-      ugxClosing: ugxFloat,
+      usdClosing: localCurrency === 'USD' ? localFloat : 0,
+      ugxClosing: localCurrency === 'UGX' ? localFloat : 0,
       shiftNumber: 1,
-      notes: settlementData?.notes || ''
+      notes: `Local closing (${localCurrency}): ${localFloat}`
     });
     setLoading(false);
 
@@ -411,6 +451,12 @@ const AgentDashboard = () => {
   // ============================================
   // RENDER HELPERS
   // ============================================
+
+  const formatLocalAmount = (amount) => {
+    const value = Number(amount || 0);
+    const safeValue = Number.isFinite(value) ? value : 0;
+    return `${localCurrencySymbol}${safeValue.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+  };
 
   const renderNotification = () => {
     if (!notification) return null;
@@ -940,7 +986,7 @@ const AgentDashboard = () => {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-4xl font-bold text-white mb-2">🏪 Agent Terminal</h1>
-              <p className="text-gray-400">Dual-Currency Bureau de Change Operations</p>
+              <p className="text-gray-400">Local-Currency Agent Operations ({localCurrency})</p>
             </div>
             <button
               onClick={() => setShowAgentEdit(true)}
@@ -1124,20 +1170,20 @@ const AgentDashboard = () => {
         {/* FLOAT BALANCES - MAIN CARDS */}
         {/* ============================================ */}
 
-        <div className="grid md:grid-cols-2 gap-4 mb-8">
-          {/* USD Float */}
+        <div className="grid md:grid-cols-1 gap-4 mb-8">
+          {/* Local Float */}
           <div className="bg-gradient-to-br from-emerald-900/40 to-emerald-800/20 border border-emerald-500/30 rounded-xl p-6">
             <div className="flex justify-between items-start mb-4">
               <div>
-                <p className="text-emerald-300 text-sm font-semibold mb-1">USD Float Balance</p>
-                <p className="text-4xl font-bold text-white">${usdFloat.toFixed(2)}</p>
+                <p className="text-emerald-300 text-sm font-semibold mb-1">{localCurrency} Float Balance</p>
+                <p className="text-4xl font-bold text-white">{formatLocalAmount(localFloat)}</p>
               </div>
               <DollarSign className="w-10 h-10 text-emerald-400 opacity-50" />
             </div>
             <div className="space-y-2 text-sm text-gray-300">
               <div className="flex justify-between">
                 <span>Available</span>
-                <span className="text-emerald-400 font-semibold">${usdFloat.toFixed(2)}</span>
+                <span className="text-emerald-400 font-semibold">{formatLocalAmount(localFloat)}</span>
               </div>
               <div className="h-1 bg-emerald-900/50 rounded-full overflow-hidden">
                 <div className="h-full w-3/4 bg-emerald-500"></div>
@@ -1145,25 +1191,6 @@ const AgentDashboard = () => {
             </div>
           </div>
 
-          {/* UGX Float */}
-          <div className="bg-gradient-to-br from-amber-900/40 to-amber-800/20 border border-amber-500/30 rounded-xl p-6">
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <p className="text-amber-300 text-sm font-semibold mb-1">UGX</p>
-                <p className="text-4xl font-bold text-white">₦{(ugxFloat / 1000).toFixed(2)}K</p>
-              </div>
-              <TrendingUp className="w-10 h-10 text-amber-400 opacity-50" />
-            </div>
-            <div className="space-y-2 text-sm text-gray-300">
-              <div className="flex justify-between">
-                <span>Available</span>
-                <span className="text-amber-400 font-semibold">₦{ugxFloat.toLocaleString()}</span>
-              </div>
-              <div className="h-1 bg-amber-900/50 rounded-full overflow-hidden">
-                <div className="h-full w-4/5 bg-amber-500"></div>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* ============================================ */}
@@ -1358,14 +1385,12 @@ const AgentDashboard = () => {
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-gray-300 font-semibold mb-2">Currency</label>
-                    <select
+                    <input
+                      type="text"
                       value={cashInForm.currency}
-                      onChange={(e) => setCashInForm({...cashInForm, currency: e.target.value})}
-                      className="w-full bg-slate-700/50 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500"
-                    >
-                      <option value="USD">🇺🇸 USD</option>
-                      <option value="UGX">🇺🇬 UGX</option>
-                    </select>
+                      readOnly
+                      className="w-full bg-slate-700/30 border border-slate-600 rounded-lg px-4 py-2 text-white cursor-not-allowed"
+                    />
                   </div>
 
                   <div>
@@ -1425,14 +1450,12 @@ const AgentDashboard = () => {
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-gray-300 font-semibold mb-2">Currency</label>
-                    <select
+                    <input
+                      type="text"
                       value={cashOutForm.currency}
-                      onChange={(e) => setCashOutForm({...cashOutForm, currency: e.target.value})}
-                      className="w-full bg-slate-700/50 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500"
-                    >
-                      <option value="USD">🇺🇸 USD</option>
-                      <option value="UGX">🇺🇬 UGX</option>
-                    </select>
+                      readOnly
+                      className="w-full bg-slate-700/30 border border-slate-600 rounded-lg px-4 py-2 text-white cursor-not-allowed"
+                    />
                   </div>
 
                   <div>
@@ -1483,14 +1506,12 @@ const AgentDashboard = () => {
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-gray-300 font-semibold mb-2">Currency</label>
-                    <select
+                    <input
+                      type="text"
                       value={topUpForm.currency}
-                      onChange={(e) => setTopUpForm({...topUpForm, currency: e.target.value})}
-                      className="w-full bg-slate-700/50 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500"
-                    >
-                      <option value="USD">🇺🇸 USD</option>
-                      <option value="UGX">🇺🇬 UGX</option>
-                    </select>
+                      readOnly
+                      className="w-full bg-slate-700/30 border border-slate-600 rounded-lg px-4 py-2 text-white cursor-not-allowed"
+                    />
                   </div>
 
                   <div>
@@ -1537,40 +1558,15 @@ const AgentDashboard = () => {
               <h2 className="text-2xl font-bold text-white mb-6">✅ End of Shift Settlement</h2>
               
               <div className="space-y-6">
-                <div className="grid md:grid-cols-2 gap-6">
-                  {/* USD Settlement */}
+                <div className="grid md:grid-cols-1 gap-6">
                   <div className="bg-emerald-900/30 border border-emerald-500/30 rounded-lg p-4">
-                    <h3 className="text-emerald-300 font-semibold mb-4">USD Settlement</h3>
+                    <h3 className="text-emerald-300 font-semibold mb-4">{localCurrency} Settlement</h3>
                     <div className="space-y-3">
                       <div className="flex justify-between">
                         <span className="text-gray-400">Closing Balance</span>
-                        <span className="text-white font-semibold">${usdFloat.toFixed(2)}</span>
+                        <span className="text-white font-semibold">{formatLocalAmount(localFloat)}</span>
                       </div>
                       <div className="h-1 bg-emerald-900 rounded"></div>
-                      <button
-                        onClick={() => setSettlementData({...settlementData, usdConfirmed: true})}
-                        className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg font-semibold transition"
-                      >
-                        ✓ Confirm USD
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* UGX Settlement */}
-                  <div className="bg-amber-900/30 border border-amber-500/30 rounded-lg p-4">
-                    <h3 className="text-amber-300 font-semibold mb-4">UGX Settlement</h3>
-                    <div className="space-y-3">
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">Closing Balance</span>
-                        <span className="text-white font-semibold">₦{ugxFloat.toLocaleString()}</span>
-                      </div>
-                      <div className="h-1 bg-amber-900 rounded"></div>
-                      <button
-                        onClick={() => setSettlementData({...settlementData, ugxConfirmed: true})}
-                        className="w-full bg-amber-600 hover:bg-amber-500 text-white py-2 rounded-lg font-semibold transition"
-                      >
-                        ✓ Confirm UGX
-                      </button>
                     </div>
                   </div>
                 </div>

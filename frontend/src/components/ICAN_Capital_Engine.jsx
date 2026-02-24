@@ -13,6 +13,7 @@ import SHAREHub from './SHAREHub';
 import CMMSModule from './CMSSModule';
 import ICANWallet from './ICANWallet';
 import MobileView from './MobileView';
+import { EnhancedReportConfiguration } from './EnhancedReportConfiguration';
 import { 
   Shield, 
   Globe, 
@@ -6786,147 +6787,29 @@ Data Freshness: ${reportData.metadata.dataFreshness}
               <button onClick={onClose} className="text-gray-500 hover:text-gray-700 text-2xl">×</button>
             </div>
 
+            {/* Enhanced Report Configuration Component */}
             <div className="grid lg:grid-cols-3 gap-6">
-              {/* Configuration Panel */}
-              <div className="lg:col-span-2 space-y-6">
-                {/* Report Type Selection */}
-                <div className="bg-white rounded-xl p-6 shadow-lg">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">📋 Report Configuration</h3>
-                  
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Report Title</label>
-                      <input
-                        type="text"
-                        value={reportTitle}
-                        onChange={(e) => setReportTitle(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        placeholder="My Financial Report"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Report Type</label>
-                      <div className="grid md:grid-cols-2 gap-2">
-                        {Object.entries(reportTypes).map(([key, report]) => (
-                          <button
-                            key={key}
-                            onClick={() => setSelectedReportType(key)}
-                            className={`p-3 rounded-lg border-2 text-left transition-all ${
-                              selectedReportType === key
-                                ? 'border-blue-500 bg-blue-50 text-blue-700'
-                                : 'border-gray-200 hover:border-blue-300'
-                            }`}
-                          >
-                            <div className="font-medium flex items-center gap-2">
-                              <span>{report.icon}</span>
-                              <span className="text-sm">{report.name}</span>
-                            </div>
-                            <p className="text-xs text-gray-500 mt-1">{report.description}</p>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Date Range</label>
-                        <select
-                          value={dateRange}
-                          onChange={(e) => setDateRange(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        >
-                          {Object.entries(dateRanges).map(([key, label]) => (
-                            <option key={key} value={key}>{label}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Export Format</label>
-                        <select
-                          value={exportFormat}
-                          onChange={(e) => setExportFormat(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        >
-                          {Object.entries(exportFormats).map(([key, format]) => (
-                            <option key={key} value={key}>{format.icon} {format.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    {dateRange === 'custom' && (
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
-                          <input
-                            type="date"
-                            value={customDateStart}
-                            onChange={(e) => setCustomDateStart(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
-                          <input
-                            type="date"
-                            value={customDateEnd}
-                            onChange={(e) => setCustomDateEnd(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {availableCategories.length > 0 && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Categories to Include (leave empty for all)
-                        </label>
-                        <div className="max-h-32 overflow-y-auto border border-gray-300 rounded-lg p-2">
-                          {availableCategories.map(category => (
-                            <label key={category} className="flex items-center gap-2 py-1">
-                              <input
-                                type="checkbox"
-                                checked={includeCategories.includes(category)}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setIncludeCategories([...includeCategories, category]);
-                                  } else {
-                                    setIncludeCategories(includeCategories.filter(c => c !== category));
-                                  }
-                                }}
-                                className="rounded border-gray-300"
-                              />
-                              <span className="text-sm capitalize">{category.replace(/_/g, ' ')}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Generate Button */}
-                <div className="bg-white rounded-xl p-6 shadow-lg">
-                  <button
-                    onClick={handleGenerateReport}
-                    disabled={isGenerating}
-                    className="w-full py-3 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 disabled:from-gray-400 disabled:to-gray-400 text-white rounded-lg transition-all font-semibold text-lg shadow-lg"
-                  >
-                    {isGenerating ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        Generating Report...
-                      </span>
-                    ) : (
-                      <span className="flex items-center justify-center gap-2">
-                        {exportFormats[exportFormat].icon} Generate {exportFormats[exportFormat].name}
-                      </span>
-                    )}
-                  </button>
-                </div>
+              <div className="lg:col-span-2">
+                <EnhancedReportConfiguration
+                  reportTypes={reportTypes}
+                  onGenerateReport={(config) => {
+                    // Update component state from config and generate report
+                    setReportTitle(config.reportTitle);
+                    setSelectedReportType(config.reportType);
+                    setDateRange(config.dateRange);
+                    setExportFormat(config.exportFormat);
+                    setIncludeCategories(config.includeCategories || []);
+                    setCustomDateStart(config.customDateStart || '');
+                    setCustomDateEnd(config.customDateEnd || '');
+                    
+                    // Trigger report generation
+                    setTimeout(() => handleGenerateReport(), 100);
+                  }}
+                  onExportReport={() => handleExportReport()}
+                  isGenerating={isGenerating}
+                  generatedReport={generatedReport}
+                  transactions={transactions}
+                />
               </div>
 
               {/* Comprehensive Preview Panel */}

@@ -97,8 +97,8 @@ class AgentService {
         throw new Error('Missing required fields');
       }
 
-      if (!['USD', 'UGX', 'KES'].includes(currency)) {
-        throw new Error('Currency must be USD, UGX, or KES');
+      if (!/^[A-Z]{3}$/.test(currency)) {
+        throw new Error('Currency must be a valid 3-letter code');
       }
 
       if (amount <= 0) {
@@ -481,28 +481,38 @@ class AgentService {
       if (walletUpdateError) throw walletUpdateError;
 
       // 3. Update user's account balance (for quick access)
-      const balanceColumn = currency === 'USD' ? 'usd_balance' : currency === 'UGX' ? 'ugx_balance' : 'kes_balance';
-      const { data: currentAccount } = await this.supabase
-        .from('user_accounts')
-        .select(balanceColumn)
-        .eq('user_id', userId)
-        .single();
-      
-      if (currentAccount) {
-        const currentBalance = parseFloat(currentAccount[balanceColumn]) || 0;
-        const newBalance = currentBalance + parseFloat(amount);
-        const updateQuery = {};
-        updateQuery[balanceColumn] = newBalance;
-        updateQuery['updated_at'] = new Date().toISOString();
-        
-        const { error: accountUpdateError } = await this.supabase
-          .from('user_accounts')
-          .update(updateQuery)
-          .eq('user_id', userId);
+      const balanceColumnMap = {
+        USD: 'usd_balance',
+        UGX: 'ugx_balance',
+        KES: 'kes_balance'
+      };
+      const balanceColumn = balanceColumnMap[currency];
 
-        if (accountUpdateError) {
-          console.warn('⚠️ Could not update user_accounts balance:', accountUpdateError);
+      if (balanceColumn) {
+        const { data: currentAccount } = await this.supabase
+          .from('user_accounts')
+          .select(balanceColumn)
+          .eq('user_id', userId)
+          .single();
+
+        if (currentAccount) {
+          const currentBalance = parseFloat(currentAccount[balanceColumn]) || 0;
+          const newBalance = currentBalance + parseFloat(amount);
+          const updateQuery = {};
+          updateQuery[balanceColumn] = newBalance;
+          updateQuery.updated_at = new Date().toISOString();
+
+          const { error: accountUpdateError } = await this.supabase
+            .from('user_accounts')
+            .update(updateQuery)
+            .eq('user_id', userId);
+
+          if (accountUpdateError) {
+            console.warn('Could not update user_accounts balance:', accountUpdateError);
+          }
         }
+      } else {
+        console.warn(`No quick-balance column mapped for currency: ${currency}`);
       }
 
       // 4. Record transaction
@@ -560,9 +570,9 @@ class AgentService {
         throw new Error('Missing required fields');
       }
 
-      // Validate currency
-      if (!['USD', 'UGX'].includes(currency)) {
-        throw new Error('Currency must be USD or UGX');
+      // Validate currency code
+      if (!/^[A-Z]{3}$/.test(currency)) {
+        throw new Error('Currency must be a valid 3-letter code');
       }
 
       // Get agent's float account
@@ -695,10 +705,12 @@ class AgentService {
 
       if (error) throw error;
 
-      const balances = {
-        USD: floats.find(f => f.currency === 'USD') || { current_balance: 0 },
-        UGX: floats.find(f => f.currency === 'UGX') || { current_balance: 0 }
-      };
+      const balances = (floats || []).reduce((acc, floatRow) => {
+        if (floatRow?.currency) {
+          acc[floatRow.currency] = floatRow;
+        }
+        return acc;
+      }, {});
 
       return balances;
 

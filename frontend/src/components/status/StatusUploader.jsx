@@ -8,7 +8,7 @@ import { Upload, X, Eye, EyeOff, Heart, Send, Plus, CheckCircle, AlertCircle, Lo
 import { useAuth } from '../../context/AuthContext';
 import { uploadStatusMedia, createStatus } from '../../services/statusService';
 
-export const StatusUploader = ({ onStatusCreated = null, onClose = null }) => {
+export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpenFilePicker = false }) => {
   const { user, profile } = useAuth();
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -19,6 +19,7 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null }) => {
   const [backgroundColor, setBackgroundColor] = useState('#667eea');
   const [error, setError] = useState(null);
   const fileInputRef = useRef(null);
+  const hasAutoOpenedRef = useRef(false);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const [showCamera, setShowCamera] = useState(false);
@@ -151,6 +152,19 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null }) => {
       return () => clearTimeout(timer);
     }
   }, [uploadSuccess, onClose]);
+
+  // Optionally open file picker immediately when uploader appears
+  useEffect(() => {
+    if (!autoOpenFilePicker) return;
+    if (hasAutoOpenedRef.current) return;
+    if (!fileInputRef.current) return;
+    if (previewUrl || showCamera || isUploading || uploadSuccess) return;
+
+    hasAutoOpenedRef.current = true;
+    setTimeout(() => {
+      fileInputRef.current?.click();
+    }, 0);
+  }, [autoOpenFilePicker, previewUrl, showCamera, isUploading, uploadSuccess]);
 
   // Simulate upload progress
   useEffect(() => {

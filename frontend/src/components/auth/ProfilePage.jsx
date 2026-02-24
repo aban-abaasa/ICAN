@@ -93,7 +93,8 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
 
   const handleAvatarClick = () => {
     if (isEditing) {
-      setShowAvatarModal(true);
+      // Directly open file picker while editing profile
+      triggerFileInput();
     } else {
       setShowAvatarView(true);
     }
@@ -694,6 +695,7 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
               setShowStatusUploader(false);
               // Optionally refresh statuses or show notification
             }}
+            autoOpenFilePicker={true}
           />
         )}
 

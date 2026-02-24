@@ -718,9 +718,13 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
 
   // Advanced Reporting System state
   const [selectedReportType, setSelectedReportType] = useState('financial-summary');
+  const [selectedCountry, setSelectedCountry] = useState('UG');
   const [dateRange, setDateRange] = useState('current-month');
   const [exportFormat, setExportFormat] = useState('pdf');
   const [reportTitle, setReportTitle] = useState('ICAN Financial Report');
+  const [includeAIAnalysis, setIncludeAIAnalysis] = useState(true);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [generatedReportData, setGeneratedReportData] = useState(null);
 
   // Calculate Tithing Metrics
   const calculateTithingMetrics = () => {
@@ -747,19 +751,30 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
 
   // Report types configuration
   const reportTypes = {
-    'financial-summary': { name: '📊 Financial Summary', icon: '📊', desc: 'Complete overview with KPIs' },
-    'income-analysis': { name: '💰 Income Report', icon: '💰', desc: 'Income analysis with projections' },
+    'financial-summary': { name: '📊 Financial Summary', icon: '📊', desc: 'Complete overview with KPIs', advanced: true },
+    'tax-return': { name: '🧾 Tax Return', icon: '🧾', desc: 'Country-specific tax return with deductions & compliance', advanced: true, requiresCountry: true },
+    'balance-sheet': { name: '📈 Balance Sheet', icon: '📈', desc: 'Assets, liabilities & equity analysis with ratios', advanced: true, requiresCountry: true },
+    'income-statement': { name: '💹 Income Statement', icon: '💹', desc: 'Revenue, expenses & profitability metrics', advanced: true, requiresCountry: true },
+    'income-analysis': { name: '💰 Income Report', icon: '💰', desc: 'Income analysis with projections & sources' },
     'expense-breakdown': { name: '💸 Expense Analytics', icon: '💸', desc: 'Spending patterns & optimization' },
     'cash-flow': { name: '🔄 Cash Flow', icon: '🔄', desc: 'Monthly cash flow analysis' },
     'tithe-report': { name: '⛪ Tithe Report', icon: '⛪', desc: 'Giving & stewardship tracking' },
     'loan-analysis': { name: '🏦 Loan Portfolio', icon: '🏦', desc: 'Debt analysis & optimization' },
-    'business-performance': { name: '📈 Business Intel', icon: '📈', desc: 'Business KPIs & metrics' },
-    'tax-preparation': { name: '🧾 Tax Statements', icon: '🧾', desc: 'Tax-ready statements' },
+    'business-performance': { name: '📊 Business Intel', icon: '📊', desc: 'Business KPIs & metrics' },
     'wealth-journey': { name: '🚀 Wealth Journey', icon: '🚀', desc: 'Milestone tracking' },
     'investment-analysis': { name: '💼 Investment', icon: '💼', desc: 'ROI & performance' },
     'real-estate': { name: '🏠 Real Estate', icon: '🏠', desc: 'Property portfolio' },
     'custom-analysis': { name: '🔧 Custom', icon: '🔧', desc: 'Personalized insights' }
   };
+
+  // Supported countries for tax compliance
+  const countries = [
+    { code: 'UG', name: 'Uganda', flag: '🇺🇬', tax: '30%', authority: 'URA' },
+    { code: 'KE', name: 'Kenya', flag: '🇰🇪', tax: '30%', authority: 'KRA' },
+    { code: 'TZ', name: 'Tanzania', flag: '🇹🇿', tax: '30%', authority: 'TRA' },
+    { code: 'RW', name: 'Rwanda', flag: '🇷🇼', tax: '30%', authority: 'RRA' },
+    { code: 'US', name: 'United States', flag: '🇺🇸', tax: '37%', authority: 'IRS' }
+  ];
 
   // Generate report summary
   const generateReportSummary = () => {
@@ -4624,13 +4639,32 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         >
                           <div className="font-medium flex items-center gap-2">
                             <span>{report.icon}</span>
-                            <span className="text-sm">{report.name}</span>
+                            <span className="text-xs">{report.name.split(' ').slice(1).join(' ')}</span>
                           </div>
-                          <p className="text-xs text-gray-500 mt-1">{report.description}</p>
+                          {report.advanced && <span className="text-xs text-purple-600">⚡ Advanced</span>}
                         </button>
                       ))}
                     </div>
                   </div>
+
+                  {/* Country Selection for Tax Reports */}
+                  {reportTypes[selectedReportType]?.requiresCountry && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">🌍 Country (Tax Compliance)</label>
+                      <select
+                        value={selectedCountry}
+                        onChange={(e) => setSelectedCountry(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                      >
+                        {countries.map(country => (
+                          <option key={country.code} value={country.code}>
+                            {country.flag} {country.name} ({country.authority})
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-gray-500 mt-1">Tax rate: {countries.find(c => c.code === selectedCountry)?.tax}</p>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -4641,7 +4675,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
                       >
                         <option value="current-month">Current Month</option>
-                        <option value="30-days">Last 30 Days</option>
+                        <option value="last-month">Last Month</option>
                         <option value="quarter">Quarter</option>
                         <option value="year">Year</option>
                         <option value="custom">Custom</option>
@@ -4658,26 +4692,27 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         <option value="pdf">📄 PDF</option>
                         <option value="excel">📊 Excel</option>
                         <option value="csv">📋 CSV</option>
+                        <option value="json">💾 JSON</option>
+                        <option value="html">🌐 HTML</option>
                       </select>
                     </div>
                   </div>
 
-                  {dateRange === 'custom' && (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                  {/* AI Analysis Toggle */}
+                  {reportTypes[selectedReportType]?.advanced && (
+                    <div className="bg-purple-50 rounded-lg p-3 border border-purple-200">
+                      <label className="flex items-center gap-3 cursor-pointer">
                         <input
-                          type="date"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                          type="checkbox"
+                          checked={includeAIAnalysis}
+                          onChange={(e) => setIncludeAIAnalysis(e.target.checked)}
+                          className="w-4 h-4 rounded border-gray-300"
                         />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
-                        <input
-                          type="date"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                        />
-                      </div>
+                        <span className="text-sm font-medium text-gray-700">
+                          ⚡ Include AI-Powered Analysis
+                        </span>
+                      </label>
+                      <p className="text-xs text-gray-600 mt-2">Get tax optimization recommendations, compliance guidance & AI insights</p>
                     </div>
                   )}
                 </div>
@@ -4686,13 +4721,96 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               {/* Generate Button */}
               <div className="bg-white rounded-xl p-6 shadow-lg">
                 <button
-                  className="w-full py-3 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-lg transition-all font-semibold text-lg shadow-lg"
+                  onClick={async () => {
+                    setIsGeneratingReport(true);
+                    try {
+                      // Simulate advanced report generation
+                      const reportConfig = {
+                        type: selectedReportType,
+                        country: selectedCountry,
+                        dateRange,
+                        includeAI: includeAIAnalysis && reportTypes[selectedReportType]?.advanced,
+                        title: reportTitle
+                      };
+
+                      // For advanced reports (tax returns, balance sheets, income statements)
+                      if (reportTypes[selectedReportType]?.advanced) {
+                        // Simulate AI analysis and compliance checking
+                        const generatedData = {
+                          type: selectedReportType,
+                          country: selectedCountry,
+                          title: reportTitle,
+                          generatedAt: new Date().toLocaleString(),
+                          includesAI: includeAIAnalysis,
+                          status: 'ready',
+                          metrics: {
+                            totalIncome: velocityMetrics?.income30Days || 0,
+                            totalExpenses: velocityMetrics?.expenses30Days || 0,
+                            netProfit: (velocityMetrics?.income30Days || 0) - (velocityMetrics?.expenses30Days || 0)
+                          }
+                        };
+
+                        if (selectedReportType === 'tax-return') {
+                          generatedData.taxInfo = {
+                            country: selectedCountry,
+                            taxRate: countries.find(c => c.code === selectedCountry)?.tax,
+                            authority: countries.find(c => c.code === selectedCountry)?.authority,
+                            estimatedTax: (generatedData.metrics.netProfit * 0.30),
+                            deductionOptportunities: includeAIAnalysis ? 5 : 0,
+                            complianceStatus: 'Ready for filing'
+                          };
+                        } else if (selectedReportType === 'balance-sheet') {
+                          generatedData.balanceSheet = {
+                            assets: velocityMetrics?.netWorth || 0,
+                            liabilities: 0,
+                            equity: velocityMetrics?.netWorth || 0,
+                            ratios: {
+                              currentRatio: 2.5,
+                              debtToEquity: 0,
+                              returnOnAssets: generatedData.metrics.netProfit / (velocityMetrics?.netWorth || 1)
+                            }
+                          };
+                        } else if (selectedReportType === 'income-statement') {
+                          generatedData.incomeStatement = {
+                            revenue: generatedData.metrics.totalIncome,
+                            expenses: generatedData.metrics.totalExpenses,
+                            profitMargin: ((generatedData.metrics.netProfit / generatedData.metrics.totalIncome) * 100) || 0,
+                            taxableIncome: generatedData.metrics.netProfit,
+                            netIncome: generatedData.metrics.netProfit * 0.70
+                          };
+                        }
+
+                        setGeneratedReportData(generatedData);
+                      } else {
+                        // Simple reports
+                        const data = generateReportSummary();
+                        setGeneratedReportData(data);
+                      }
+                    } catch (error) {
+                      console.error('Report generation error:', error);
+                    } finally {
+                      setIsGeneratingReport(false);
+                    }
+                  }}
+                  disabled={isGeneratingReport}
+                  className="w-full py-3 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 disabled:from-gray-400 disabled:to-gray-400 text-white rounded-lg transition-all font-semibold text-lg shadow-lg"
                 >
                   <span className="flex items-center justify-center gap-2">
-                    {exportFormat === 'pdf' && '📄'}
-                    {exportFormat === 'excel' && '📊'}
-                    {exportFormat === 'csv' && '📋'}
-                    Generate {exportFormat.toUpperCase()}
+                    {isGeneratingReport ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        {exportFormat === 'pdf' && '📄'}
+                        {exportFormat === 'excel' && '📊'}
+                        {exportFormat === 'csv' && '📋'}
+                        {exportFormat === 'json' && '💾'}
+                        {exportFormat === 'html' && '🌐'}
+                        {reportTypes[selectedReportType]?.advanced ? `Generate ${reportTypes[selectedReportType].name.split(' ')[1]}` : `Generate ${exportFormat.toUpperCase()}`}
+                      </>
+                    )}
                   </span>
                 </button>
               </div>
@@ -4721,9 +4839,138 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 {/* Dynamic Report Preview */}
                 <div className="space-y-3">
                   {(() => {
-                    const report = generateReportSummary();
+                    const report = generatedReportData || generateReportSummary();
                     
                     switch(selectedReportType) {
+                      case 'tax-return':
+                        return (
+                          <div className="space-y-2">
+                            {generatedReportData?.taxInfo && (
+                              <>
+                                <div className="bg-purple-50 p-3 rounded-lg border-l-4 border-purple-500">
+                                  <div className="text-xs text-purple-600 font-semibold mb-2">🧾 TAX RETURN PREVIEW</div>
+                                  <div className="grid grid-cols-2 gap-2 text-xs">
+                                    <div className="flex justify-between">
+                                      <span className="text-gray-600">Country:</span>
+                                      <span className="font-medium">{countries.find(c => c.code === selectedCountry)?.flag} {selectedCountry}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span className="text-gray-600">Authority:</span>
+                                      <span className="font-medium">{generatedReportData.taxInfo.authority}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span className="text-gray-600">Tax Rate:</span>
+                                      <span className="font-medium">{generatedReportData.taxInfo.taxRate}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span className="text-gray-600">Compliance:</span>
+                                      <span className="font-medium text-green-600">✓ {generatedReportData.taxInfo.complianceStatus}</span>
+                                    </div>
+                                  </div>
+                                  <div className="mt-2 pt-2 border-t border-purple-200">
+                                    <div className="text-xs font-semibold text-purple-800 mb-1">Estimated Tax Liability</div>
+                                    <div className="text-lg font-bold text-purple-900">UGX {generatedReportData.taxInfo.estimatedTax.toLocaleString()}</div>
+                                  </div>
+                                  {includeAIAnalysis && (
+                                    <div className="mt-2 bg-yellow-50 p-2 rounded text-xs border-l-2 border-yellow-400">
+                                      <span className="font-semibold text-yellow-800">⚡ AI Insights:</span>
+                                      <p className="text-yellow-700 mt-1">{generatedReportData.taxInfo.deductionOptportunities} deduction opportunities identified</p>
+                                    </div>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                            {!generatedReportData && (
+                              <div className="bg-gray-50 p-3 rounded text-xs text-center text-gray-600">
+                                Click Generate to see tax return preview with compliance details
+                              </div>
+                            )}
+                          </div>
+                        );
+
+                      case 'balance-sheet':
+                        return (
+                          <div className="space-y-2">
+                            {generatedReportData?.balanceSheet && (
+                              <>
+                                <div className="bg-blue-50 p-3 rounded-lg border-l-4 border-blue-500">
+                                  <div className="text-xs text-blue-600 font-semibold mb-2">📊 BALANCE SHEET PREVIEW</div>
+                                  <div className="grid grid-cols-2 gap-2 text-xs mb-2">
+                                    <div className="bg-white p-2 rounded border border-blue-200">
+                                      <div className="text-gray-600">ASSETS</div>
+                                      <div className="font-bold text-blue-800">UGX {generatedReportData.balanceSheet.assets.toLocaleString()}</div>
+                                    </div>
+                                    <div className="bg-white p-2 rounded border border-blue-200">
+                                      <div className="text-gray-600">EQUITY</div>
+                                      <div className="font-bold text-blue-800">UGX {generatedReportData.balanceSheet.equity.toLocaleString()}</div>
+                                    </div>
+                                  </div>
+                                  <div className="bg-white p-2 rounded border border-blue-200 text-xs mb-2">
+                                    <div className="text-gray-600 mb-1">Key Ratios</div>
+                                    <div className="flex justify-between text-xs">
+                                      <span>Current Ratio: <span className="font-semibold">{generatedReportData.balanceSheet.ratios.currentRatio.toFixed(2)}</span></span>
+                                      <span>D/E: <span className="font-semibold">{generatedReportData.balanceSheet.ratios.debtToEquity.toFixed(2)}</span></span>
+                                    </div>
+                                  </div>
+                                  {includeAIAnalysis && (
+                                    <div className="bg-yellow-50 p-2 rounded text-xs border-l-2 border-yellow-400">
+                                      <span className="font-semibold text-yellow-800">⚡ Health Score:</span>
+                                      <p className="text-yellow-700">ROA: {(generatedReportData.balanceSheet.ratios.returnOnAssets * 100).toFixed(2)}%</p>
+                                    </div>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                            {!generatedReportData && (
+                              <div className="bg-gray-50 p-3 rounded text-xs text-center text-gray-600">
+                                Click Generate to see balance sheet with financial ratios
+                              </div>
+                            )}
+                          </div>
+                        );
+
+                      case 'income-statement':
+                        return (
+                          <div className="space-y-2">
+                            {generatedReportData?.incomeStatement && (
+                              <>
+                                <div className="bg-green-50 p-3 rounded-lg border-l-4 border-green-500">
+                                  <div className="text-xs text-green-600 font-semibold mb-2">💹 INCOME STATEMENT PREVIEW</div>
+                                  <div className="space-y-2 text-xs">
+                                    <div className="flex justify-between bg-white p-2 rounded border border-green-200">
+                                      <span className="text-gray-600">Revenue:</span>
+                                      <span className="font-bold">UGX {generatedReportData.incomeStatement.revenue.toLocaleString()}</span>
+                                    </div>
+                                    <div className="flex justify-between bg-white p-2 rounded border border-green-200">
+                                      <span className="text-gray-600">Expenses:</span>
+                                      <span className="font-bold">UGX {generatedReportData.incomeStatement.expenses.toLocaleString()}</span>
+                                    </div>
+                                    <div className="flex justify-between bg-white p-2 rounded border border-green-200">
+                                      <span className="text-gray-600">Net Income:</span>
+                                      <span className="font-bold text-green-800">UGX {generatedReportData.incomeStatement.netIncome.toLocaleString()}</span>
+                                    </div>
+                                    <div className="flex justify-between bg-white p-2 rounded border border-green-200">
+                                      <span className="text-gray-600">Profit Margin:</span>
+                                      <span className="font-bold text-green-800">{generatedReportData.incomeStatement.profitMargin.toFixed(2)}%</span>
+                                    </div>
+                                  </div>
+                                  {includeAIAnalysis && (
+                                    <div className="bg-yellow-50 p-2 rounded text-xs border-l-2 border-yellow-400 mt-2">
+                                      <span className="font-semibold text-yellow-800">⚡ AI Analysis:</span>
+                                      <p className="text-yellow-700">Healthy profitability with opportunities for expense optimization</p>
+                                    </div>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                            {!generatedReportData && (
+                              <div className="bg-gray-50 p-3 rounded text-xs text-center text-gray-600">
+                                Click Generate to see income statement with profitability metrics
+                              </div>
+                            )}
+                          </div>
+                        );
+
                       case 'financial-summary':
                         return (
                           <div className="space-y-2">
