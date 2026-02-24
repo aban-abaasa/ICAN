@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+﻿import React, { useState, useRef, useEffect } from 'react';
 import {
   Mic,
   MoreVertical,
@@ -149,7 +149,7 @@ const RecentTransactionsCollapsible = ({ transactions, formatCurrency }) => {
                 <div className="text-green-400">+{formatCurrency(totalIncome)}</div>
                 <div className="text-red-400">-{formatCurrency(totalExpense)}</div>
               </div>
-              <span className="text-gray-400 text-xs">▼</span>
+              <span className="text-gray-400 text-xs"></span>
             </div>
           </div>
         </div>
@@ -170,7 +170,7 @@ const RecentTransactionsCollapsible = ({ transactions, formatCurrency }) => {
             onClick={() => setIsExpanded(false)}
             className="text-gray-400 hover:text-white text-xs"
           >
-            ▲
+            
           </button>
         </div>
         <div className="space-y-2 max-h-60 overflow-y-auto">
@@ -517,7 +517,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   // Error handling for mobile view
   useEffect(() => {
     const handleMobileError = (error) => {
-      console.error('🔴 Mobile View Error:', error);
+      console.error(' Mobile View Error:', error);
       setMobileError(error.message || 'Something went wrong');
     };
 
@@ -719,13 +719,12 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   // Advanced Reporting System state
   const [selectedReportType, setSelectedReportType] = useState('financial-summary');
   const [selectedCountry, setSelectedCountry] = useState('UG');
-  const [dateRange, setDateRange] = useState('current-month');
-  const [exportFormat, setExportFormat] = useState('pdf');
+  const [dateRange] = useState('current-month');
+  const [exportFormat] = useState('pdf');
   const [reportTitle, setReportTitle] = useState('ICAN Financial Report');
   const [includeAIAnalysis, setIncludeAIAnalysis] = useState(true);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [generatedReportData, setGeneratedReportData] = useState(null);
-
   // Calculate Tithing Metrics
   const calculateTithingMetrics = () => {
     const totalIncome = parseFloat(monthlyRevenue) || 0;
@@ -751,29 +750,29 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
 
   // Report types configuration
   const reportTypes = {
-    'financial-summary': { name: '📊 Financial Summary', icon: '📊', desc: 'Complete overview with KPIs', advanced: true },
-    'tax-return': { name: '🧾 Tax Return', icon: '🧾', desc: 'Country-specific tax return with deductions & compliance', advanced: true, requiresCountry: true },
-    'balance-sheet': { name: '📈 Balance Sheet', icon: '📈', desc: 'Assets, liabilities & equity analysis with ratios', advanced: true, requiresCountry: true },
-    'income-statement': { name: '💹 Income Statement', icon: '💹', desc: 'Revenue, expenses & profitability metrics', advanced: true, requiresCountry: true },
-    'income-analysis': { name: '💰 Income Report', icon: '💰', desc: 'Income analysis with projections & sources' },
-    'expense-breakdown': { name: '💸 Expense Analytics', icon: '💸', desc: 'Spending patterns & optimization' },
-    'cash-flow': { name: '🔄 Cash Flow', icon: '🔄', desc: 'Monthly cash flow analysis' },
-    'tithe-report': { name: '⛪ Tithe Report', icon: '⛪', desc: 'Giving & stewardship tracking' },
-    'loan-analysis': { name: '🏦 Loan Portfolio', icon: '🏦', desc: 'Debt analysis & optimization' },
-    'business-performance': { name: '📊 Business Intel', icon: '📊', desc: 'Business KPIs & metrics' },
-    'wealth-journey': { name: '🚀 Wealth Journey', icon: '🚀', desc: 'Milestone tracking' },
-    'investment-analysis': { name: '💼 Investment', icon: '💼', desc: 'ROI & performance' },
-    'real-estate': { name: '🏠 Real Estate', icon: '🏠', desc: 'Property portfolio' },
-    'custom-analysis': { name: '🔧 Custom', icon: '🔧', desc: 'Personalized insights' }
+    'financial-summary': { name: ' Financial Summary', icon: '', desc: 'Complete financial overview with KPIs', advanced: true },
+    'tax-filing': { name: ' Tax Filing', icon: '', desc: 'Country-compliant tax return with deductions & compliance', advanced: true, requiresCountry: true },
+    'balance-sheet': { name: ' Balance Sheet', icon: '', desc: 'Assets, liabilities & equity analysis with ratios', advanced: true, requiresCountry: true },
+    'income-statement': { name: ' Income Statement', icon: '', desc: 'Revenue, expenses & profitability metrics', advanced: true, requiresCountry: true },
+    'cash-flow': { name: ' Cash Flow Statement', icon: '', desc: 'Operating, investing & financing cash flows' },
+    'income-analysis': { name: ' Sales Report', icon: '', desc: 'Sales analysis with revenue breakdown & trends' },
+    'expense-breakdown': { name: ' Expense Report', icon: '', desc: 'Categorized expenses with optimization insights' },
+    'tithe-report': { name: ' Giving Report', icon: '', desc: 'Charitable giving & stewardship tracking' },
+    'loan-analysis': { name: ' Debt Analysis', icon: '', desc: 'Loan portfolio & debt optimization' },
+    'business-performance': { name: ' Performance Report', icon: '', desc: 'Business KPIs & growth metrics' },
+    'wealth-journey': { name: ' Wealth Report', icon: '', desc: 'Net worth & wealth growth tracking' },
+    'investment-analysis': { name: ' Investment Report', icon: '', desc: 'Investment performance & ROI analysis' },
+    'real-estate': { name: ' Property Report', icon: '', desc: 'Real estate portfolio & valuation' },
+    'custom-analysis': { name: ' Custom Report', icon: '', desc: 'Personalized financial analysis' }
   };
 
   // Supported countries for tax compliance
   const countries = [
-    { code: 'UG', name: 'Uganda', flag: '🇺🇬', tax: '30%', authority: 'URA' },
-    { code: 'KE', name: 'Kenya', flag: '🇰🇪', tax: '30%', authority: 'KRA' },
-    { code: 'TZ', name: 'Tanzania', flag: '🇹🇿', tax: '30%', authority: 'TRA' },
-    { code: 'RW', name: 'Rwanda', flag: '🇷🇼', tax: '30%', authority: 'RRA' },
-    { code: 'US', name: 'United States', flag: '🇺🇸', tax: '37%', authority: 'IRS' }
+    { code: 'UG', name: 'Uganda', flag: '', tax: '30%', authority: 'URA' },
+    { code: 'KE', name: 'Kenya', flag: '', tax: '30%', authority: 'KRA' },
+    { code: 'TZ', name: 'Tanzania', flag: '', tax: '30%', authority: 'TRA' },
+    { code: 'RW', name: 'Rwanda', flag: '', tax: '30%', authority: 'RRA' },
+    { code: 'US', name: 'United States', flag: '', tax: '37%', authority: 'IRS' }
   ];
 
   // Generate report summary
@@ -810,18 +809,18 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
       const welcomeMessage = {
         id: Date.now(),
         type: 'ai',
-        content: `🤖 Hello, friend! I'm your ICAN AI companion, here to support your financial journey with God's wisdom.
+        content: ` Hello, friend! I'm your ICAN AI companion, here to support your financial journey with God's wisdom.
 
 I can see you're in the **Survival Stage** - what a blessing! God is building something beautiful in your life.
 
-😊 I'm here to help you with:
+ I'm here to help you with:
 - Making wise spending choices
 - Understanding God's principles for money
 - Celebrating your progress and victories
 - Finding encouragement when things are tough
 - Planning your next steps with confidence
 
-💬 What's on your heart today? I'm here to listen and help! ✨`,
+ What's on your heart today? I'm here to listen and help! `,
         timestamp: new Date().toISOString(),
         mood: 'encouraging'
       };
@@ -990,13 +989,13 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           if (loadResult.success) {
             // Update local transactions state
             setTransactions(loadResult.data || []);
-            console.log(`✅ Mobile: Loaded ${loadResult.data?.length || 0} transactions for user ${userId}`);
+            console.log(` Mobile: Loaded ${loadResult.data?.length || 0} transactions for user ${userId}`);
           } else {
-            console.warn('⚠️ Mobile: VelocityEngine load failed:', loadResult.error);
+            console.warn(' Mobile: VelocityEngine load failed:', loadResult.error);
           }
           
           const metrics = engine.calculateMetrics();
-          console.log('📊 Mobile VelocityEngine Metrics:', metrics);
+          console.log(' Mobile VelocityEngine Metrics:', metrics);
           setVelocityMetrics(metrics);
         }
       } catch (error) {
@@ -1037,19 +1036,19 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     let mood = 'helpful';
 
     if (message.includes('spend') || message.includes('buy') || message.includes('purchase')) {
-      response = `🛒 **Let's think about this together!**\n\nI can see you're considering a purchase. That's wise to pause and ask for guidance!\n\n🙏 **God's perspective:** "The plans of the diligent lead to profit as surely as haste leads to poverty." - Proverbs 21:5\n\n✨ **Simple questions to ask yourself:**\n1. Is this a genuine NEED or just a WANT?\n2. Will this bring me closer to my goals or further away?\n3. Can I afford this without stress or worry?\n\n💪 **Remember:** You're doing great by even asking these questions! This shows wisdom.`;
+      response = ` **Let's think about this together!**\n\nI can see you're considering a purchase. That's wise to pause and ask for guidance!\n\n **God's perspective:** "The plans of the diligent lead to profit as surely as haste leads to poverty." - Proverbs 21:5\n\n **Simple questions to ask yourself:**\n1. Is this a genuine NEED or just a WANT?\n2. Will this bring me closer to my goals or further away?\n3. Can I afford this without stress or worry?\n\n **Remember:** You're doing great by even asking these questions! This shows wisdom.`;
       mood = 'advisory';
     } else if (message.includes('save') || message.includes('invest') || message.includes('money')) {
-      response = `🚀 **Wealth Building Strategy!**\n\nAmazing that you're thinking about saving! Every UGX you save is a seed for your future.\n\n💡 **Optimal Strategy for Your Stage:**\n• Target: 50% needs, 30% wants, 20% savings\n• Build emergency fund first (3 months expenses)\n• Then focus on growing passive income\n\n🎯 **Quick Challenge:** Can you save an extra UGX 5,000 this week? That's UGX 260,000 per year!`;
+      response = ` **Wealth Building Strategy!**\n\nAmazing that you're thinking about saving! Every UGX you save is a seed for your future.\n\n **Optimal Strategy for Your Stage:**\n Target: 50% needs, 30% wants, 20% savings\n Build emergency fund first (3 months expenses)\n Then focus on growing passive income\n\n **Quick Challenge:** Can you save an extra UGX 5,000 this week? That's UGX 260,000 per year!`;
       mood = 'encouraging';
     } else if (message.includes('goal') || message.includes('target') || message.includes('dream')) {
-      response = `🎯 **Goal Achievement Protocol!**\n\nYour dreams matter! God wants you to prosper and live fully.\n\n🚀 **Action Steps:**\n1. Track your daily spending - awareness is power\n2. Eliminate one unnecessary expense this week\n3. Create an additional income stream\n4. Celebrate small wins - progress builds momentum\n\n💡 **Mindset Shift:** Think like an investor, not a consumer.`;
+      response = ` **Goal Achievement Protocol!**\n\nYour dreams matter! God wants you to prosper and live fully.\n\n **Action Steps:**\n1. Track your daily spending - awareness is power\n2. Eliminate one unnecessary expense this week\n3. Create an additional income stream\n4. Celebrate small wins - progress builds momentum\n\n **Mindset Shift:** Think like an investor, not a consumer.`;
       mood = 'motivational';
     } else if (message.includes('help') || message.includes('advice') || message.includes('struggling')) {
-      response = `💙 **I've got your back!**\n\nYou're not alone in this journey. Many people face these challenges.\n\n🙏 **Here's what I want you to know:**\n✨ Every setback is a setup for a comeback\n💪 Small progress is still progress\n🌟 You're stronger than you think\n❤️ This is all temporary - better days are coming\n\n**Daily Habit for Peace of Mind:**\n1. Track one transaction\n2. Celebrate one small win\n3. Pray/reflect on your progress`;
+      response = ` **I've got your back!**\n\nYou're not alone in this journey. Many people face these challenges.\n\n **Here's what I want you to know:**\n Every setback is a setup for a comeback\n Small progress is still progress\n You're stronger than you think\n This is all temporary - better days are coming\n\n**Daily Habit for Peace of Mind:**\n1. Track one transaction\n2. Celebrate one small win\n3. Pray/reflect on your progress`;
       mood = 'supportive';
     } else {
-      response = `🤖 **Thinking about your situation...**\n\nI appreciate your question! Here's my insight for someone at your stage:\n\n💡 **Key Principle:** Every UGX saved is a seed that grows into financial freedom.\n\n✨ **Remember:** Progress over perfection. Small consistent actions lead to big results.\n\nWhat would you like to explore more?`;
+      response = ` **Thinking about your situation...**\n\nI appreciate your question! Here's my insight for someone at your stage:\n\n **Key Principle:** Every UGX saved is a seed that grows into financial freedom.\n\n **Remember:** Progress over perfection. Small consistent actions lead to big results.\n\nWhat would you like to explore more?`;
       mood = 'conversational';
     }
 
@@ -1175,7 +1174,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
     if (cashFlow < 0) {
       return {
-        decision: '🚨 CRITICAL RISK',
+        decision: ' CRITICAL RISK',
         message: 'Negative cash flow - loan will worsen finances',
         color: 'text-red-300'
       };
@@ -1183,7 +1182,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
     if (debtRatio > 40) {
       return {
-        decision: '⛔ EXCESSIVE DEBT',
+        decision: ' EXCESSIVE DEBT',
         message: `Debt ratio ${debtRatio.toFixed(1)}% is too high`,
         color: 'text-red-300'
       };
@@ -1191,7 +1190,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
     if (parseFloat(interestRate) > 25) {
       return {
-        decision: '💸 HIGH RATE',
+        decision: ' HIGH RATE',
         message: 'Interest rate above 25% will drain resources',
         color: 'text-red-300'
       };
@@ -1199,7 +1198,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
     if (profitMargin < 5 || debtRatio > 25) {
       return {
-        decision: '⚠️ CAUTION',
+        decision: ' CAUTION',
         message: `Profit margin ${profitMargin.toFixed(1)}% requires monitoring`,
         color: 'text-yellow-300'
       };
@@ -1207,14 +1206,14 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
     if (cashFlow > loanMetrics.monthlyPayment * 2 && debtRatio < 20 && profitMargin > 10) {
       return {
-        decision: '✅ EXCELLENT',
+        decision: ' EXCELLENT',
         message: 'Strong financials support this loan',
         color: 'text-green-300'
       };
     }
 
     return {
-      decision: '👍 RECOMMENDED',
+      decision: ' RECOMMENDED',
       message: 'Adequate cash flow and manageable debt',
       color: 'text-green-300'
     };
@@ -1359,7 +1358,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       };
 
       setContractAnalysis(analysis);
-      console.log('✅ Contract analysis complete:', analysis);
+      console.log(' Contract analysis complete:', analysis);
     } catch (error) {
       setContractError('Failed to analyze contract. Please try again.');
       console.error('Contract analysis error:', error);
@@ -1383,7 +1382,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         ]
       };
       setComplianceData(compliance);
-      console.log('✅ Compliance check complete:', compliance);
+      console.log(' Compliance check complete:', compliance);
     } catch (error) {
       console.error('Compliance check failed:', error);
     } finally {
@@ -1408,7 +1407,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         nextActions: ['Book gym membership', 'Set up morning routine', 'Block calendar for HVW']
       };
       setScheduleData(schedule);
-      console.log('✅ Schedule optimization complete:', schedule);
+      console.log(' Schedule optimization complete:', schedule);
     } catch (error) {
       console.error('Schedule optimization failed:', error);
     } finally {
@@ -1827,8 +1826,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         setActiveWalletTab(firstAvailable);
       }
       
-      console.log('✅ Wallet accounts loaded:', accounts);
-      console.log('✅ Available wallet tabs:', availableTabs.map(t => t.name));
+      console.log(' Wallet accounts loaded:', accounts);
+      console.log(' Available wallet tabs:', availableTabs.map(t => t.name));
       
     } catch (error) {
       console.error('Error loading wallet accounts:', error);
@@ -1844,7 +1843,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         const { data: { user }, error } = await supabase.auth.getUser();
         
         if (error || !user) {
-          console.warn('⚠️ User not authenticated for wallet data');
+          console.warn(' User not authenticated for wallet data');
           return;
         }
 
@@ -1857,7 +1856,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         await loadWalletAccounts(user.id);
         
       } catch (error) {
-        console.error('❌ Error initializing wallet data:', error);
+        console.error(' Error initializing wallet data:', error);
         setWalletAccountsLoading(false);
       }
     };
@@ -1917,27 +1916,27 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
   // Menu Dropdown Data - UPDATED WITH NEW SECTIONS
   const menuOptions = {
     profile: {
-      label: '👤 My Profile',
+      label: ' My Profile',
       icon: User,
       items: ['Profile Info', 'Financial Goals', 'Risk Profile', 'Account Security']
     },
     security: {
-      label: '🔒 Security',
+      label: ' Security',
       icon: Shield,
       items: ['Treasury Guardian', 'Contract Analysis', 'Privacy Settings', '2FA Verification']
     },
     readiness: {
-      label: '📋 Readiness',
+      label: ' Readiness',
       icon: CheckCircle,
       items: ['Global Navigator', 'Regulatory Gap', 'Compliance Check', 'Documentation']
     },
     growth: {
-      label: '🚀 Growth',
+      label: ' Growth',
       icon: TrendingUp,
       items: ['Prosperity Architect', 'Schedule Optimization', 'Investments', 'Opportunities']
     },
     settings: {
-      label: '⚙️ Settings',
+      label: ' Settings',
       icon: Settings,
       items: ['Readiness Pillars', 'Profile Configuration', 'Target Net Worth', 'Preferences']
     }
@@ -2226,7 +2225,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       }}
                       className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-purple-500/20 hover:text-purple-300 rounded transition"
                     >
-                      👤 My profile
+                       My profile
                     </button>
 
                     {/* Security */}
@@ -2237,7 +2236,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       }}
                       className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-purple-500/20 hover:text-purple-300 rounded transition"
                     >
-                      🔒 Security
+                       Security
                     </button>
 
                     {/* Readiness */}
@@ -2248,7 +2247,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       }}
                       className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-purple-500/20 hover:text-purple-300 rounded transition"
                     >
-                      📋 Readiness
+                       Readiness
                     </button>
 
                     {/* Growth */}
@@ -2259,7 +2258,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       }}
                       className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-purple-500/20 hover:text-purple-300 rounded transition"
                     >
-                      🚀 Growth
+                       Growth
                     </button>
 
                     {/* Settings - Expandable */}
@@ -2268,8 +2267,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         onClick={() => setActiveMenuTab(activeMenuTab === 'settings' ? null : 'settings')}
                         className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-purple-500/20 hover:text-purple-300 rounded transition flex items-center justify-between"
                       >
-                        <span>⚙️ Settings</span>
-                        <span className={`text-xs transition ${activeMenuTab === 'settings' ? 'rotate-90' : ''}`}>→</span>
+                        <span> Settings</span>
+                        <span className={`text-xs transition ${activeMenuTab === 'settings' ? 'rotate-90' : ''}`}></span>
                       </button>
 
                       {/* Settings Submenu */}
@@ -2282,7 +2281,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                             }}
                             className="w-full px-4 py-2 text-left text-xs text-gray-400 hover:bg-purple-500/10 hover:text-purple-200 rounded transition"
                           >
-                            📊 Readiness Pillars
+                             Readiness Pillars
                           </button>
 
                           <button
@@ -2292,7 +2291,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                             }}
                             className="w-full px-4 py-2 text-left text-xs text-gray-400 hover:bg-purple-500/10 hover:text-purple-200 rounded transition"
                           >
-                            ⚙️ Profile Configuration
+                             Profile Configuration
                           </button>
 
                           <button
@@ -2302,7 +2301,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                             }}
                             className="w-full px-4 py-2 text-left text-xs text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded transition"
                           >
-                            ⚠️ Danger Zone
+                             Danger Zone
                           </button>
                         </div>
                       )}
@@ -2351,14 +2350,14 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               <div className="flex items-center justify-between mb-6 pb-4 border-b border-purple-500/20">
               <div>
                 <h2 className="text-2xl font-bold text-purple-300">
-                  ⚙️ {selectedDetail.item}
+                   {selectedDetail.item}
                 </h2>
               </div>
               <button
                 onClick={() => setSelectedDetail(null)}
                 className="text-2xl text-gray-400 hover:text-white transition"
               >
-                ✕
+                
               </button>
               </div>
             )}
@@ -2379,7 +2378,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               {false && selectedDetail.tab === 'profile' && selectedDetail.item === 'My Profile' && (
                 <div className="space-y-4">
                   <div className="bg-slate-900/50 border border-purple-500/30 rounded-lg p-4">
-                    <h3 className="text-sm font-bold text-white mb-4">👤 Profile Information</h3>
+                    <h3 className="text-sm font-bold text-white mb-4"> Profile Information</h3>
                     <div className="space-y-3">
                       <div>
                         <p className="text-xs text-gray-400">Name</p>
@@ -2394,7 +2393,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         <p className="text-white font-semibold">January 1, 2026</p>
                       </div>
                       <button className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium text-sm mt-3">
-                        ✏️ Edit Profile
+                         Edit Profile
                       </button>
                     </div>
                   </div>
@@ -2743,7 +2742,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         disabled={isSavingProfileConfig}
                         className="w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-60 text-white rounded-lg transition font-medium text-sm"
                       >
-                        💾 Save Changes
+                         Save Changes
                       </button>
                     </div>
                   </div>
@@ -2778,7 +2777,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         disabled={isSavingProfileConfig}
                         className="w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-60 text-white rounded-lg transition font-medium text-sm"
                       >
-                        💾 Save Target
+                         Save Target
                       </button>
                     </div>
                   </div>
@@ -2792,18 +2791,18 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     <div className="space-y-3">
                       <div className="flex items-center justify-between p-2">
                         <span className="text-sm text-gray-300">Dark Mode</span>
-                        <button className="px-3 py-1 bg-green-500/20 text-green-300 rounded text-xs font-medium">✓ Enabled</button>
+                        <button className="px-3 py-1 bg-green-500/20 text-green-300 rounded text-xs font-medium"> Enabled</button>
                       </div>
                       <div className="flex items-center justify-between p-2">
                         <span className="text-sm text-gray-300">Notifications</span>
-                        <button className="px-3 py-1 bg-green-500/20 text-green-300 rounded text-xs font-medium">✓ Enabled</button>
+                        <button className="px-3 py-1 bg-green-500/20 text-green-300 rounded text-xs font-medium"> Enabled</button>
                       </div>
                       <div className="flex items-center justify-between p-2">
                         <span className="text-sm text-gray-300">Two-Factor Auth</span>
-                        <button className="px-3 py-1 bg-green-500/20 text-green-300 rounded text-xs font-medium">✓ Enabled</button>
+                        <button className="px-3 py-1 bg-green-500/20 text-green-300 rounded text-xs font-medium"> Enabled</button>
                       </div>
                       <button className="w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg transition font-medium text-sm mt-3">
-                        💾 Save Preferences
+                         Save Preferences
                       </button>
                     </div>
                   </div>
@@ -2924,7 +2923,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
                               {notification.action_label && (
                                 <span className="text-purple-400 text-[10px] font-medium">
-                                  {notification.action_label} →
+                                  {notification.action_label} 
                                 </span>
                               )}
                             </div>
@@ -2989,7 +2988,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     <ProfilePage 
                       onClose={() => setSelectedDetail(null)}
                       onLogout={() => {
-                        console.log('✅ User logged out');
+                        console.log(' User logged out');
                         setSelectedDetail(null);
                       }}
                     />
@@ -3049,7 +3048,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                             : 'bg-red-500/20 text-red-300'
                         }`}
                       >
-                        {privacySettings.dataSharing ? '✓ Enabled' : '✗ Disabled'}
+                        {privacySettings.dataSharing ? ' Enabled' : ' Disabled'}
                       </button>
                     </div>
                   </div>
@@ -3068,7 +3067,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                             : 'bg-gray-500/20 text-gray-300'
                         }`}
                       >
-                        {privacySettings.marketingComms ? '✓ Enabled' : '✗ Disabled'}
+                        {privacySettings.marketingComms ? ' Enabled' : ' Disabled'}
                       </button>
                     </div>
                   </div>
@@ -3076,7 +3075,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   {/* Save Button */}
                   <button
                     onClick={() => {
-                      console.log('✅ Privacy settings saved:', privacySettings);
+                      console.log(' Privacy settings saved:', privacySettings);
                     }}
                     className="w-full px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg transition font-medium"
                   >
@@ -3120,12 +3119,12 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         disabled={isAnalyzingContract}
                         className="w-full px-3 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 text-white rounded text-sm font-medium transition"
                       >
-                        {isAnalyzingContract ? '⏳ Analyzing...' : '🔍 Analyze Contract (Secure)'}
+                        {isAnalyzingContract ? ' Analyzing...' : ' Analyze Contract (Secure)'}
                       </button>
 
                       {contractAnalysis && (
                         <div className="p-3 bg-indigo-500/20 border border-indigo-400/30 rounded text-xs space-y-2">
-                          <p className="font-bold text-indigo-200">✅ Analysis Complete</p>
+                          <p className="font-bold text-indigo-200"> Analysis Complete</p>
                           <p className="text-gray-300">{contractAnalysis}</p>
                         </div>
                       )}
@@ -3143,7 +3142,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     <div className="space-y-3">
                       <div className="bg-slate-900/50 border border-emerald-500/20 rounded p-3">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-bold text-white">✅ Email Verified</span>
+                          <span className="text-sm font-bold text-white"> Email Verified</span>
                           <span className="px-2 py-1 bg-green-500/20 text-green-300 rounded text-xs font-medium">Verified</span>
                         </div>
                         <p className="text-xs text-gray-400">Verified on {contractVerificationDates.emailVerified}</p>
@@ -3152,7 +3151,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       {/* Phone Verified */}
                       <div className="bg-slate-900/50 border border-emerald-500/20 rounded p-3">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-bold text-white">✅ Phone Verified</span>
+                          <span className="text-sm font-bold text-white"> Phone Verified</span>
                           <span className="px-2 py-1 bg-green-500/20 text-green-300 rounded text-xs font-medium">Verified</span>
                         </div>
                         <p className="text-xs text-gray-400">Verified on {contractVerificationDates.phoneVerified}</p>
@@ -3166,7 +3165,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         </div>
                         <p className="text-xs text-gray-400">Status: {contractVerificationDates.identityVerified}</p>
                         <button className="mt-2 text-xs text-yellow-300 hover:text-yellow-200 font-medium transition">
-                          ▶ Complete Identity Verification
+                           Complete Identity Verification
                         </button>
                       </div>
 
@@ -3182,7 +3181,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                                 : 'bg-gray-500/20 text-gray-300'
                             }`}
                           >
-                            {verificationStatus.twoFactorEnabled ? '✅ Enabled' : '✗ Disabled'}
+                            {verificationStatus.twoFactorEnabled ? ' Enabled' : ' Disabled'}
                           </button>
                         </div>
                         <p className="text-xs text-gray-400">Extra security layer for your account</p>
@@ -3200,7 +3199,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                                 : 'bg-gray-500/20 text-gray-300'
                             }`}
                           >
-                            {verificationStatus.biometricEnabled ? '✅ Active' : '✗ Inactive'}
+                            {verificationStatus.biometricEnabled ? ' Active' : ' Inactive'}
                           </button>
                         </div>
                         <p className="text-xs text-gray-400">Fingerprint or face authentication</p>
@@ -3211,8 +3210,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   {/* Save Button */}
                   <button
                     onClick={() => {
-                      console.log('✅ Verification settings saved:', verificationStatus);
-                      console.log('✅ Contract analysis:', contractAnalysis);
+                      console.log(' Verification settings saved:', verificationStatus);
+                      console.log(' Contract analysis:', contractAnalysis);
                     }}
                     className="w-full px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg transition font-medium"
                   >
@@ -3230,7 +3229,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         <p className="text-sm font-bold text-white">Email Verification</p>
                         <p className="text-xs text-gray-400 mt-1">Email address confirmed</p>
                       </div>
-                      <span className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium">✅ Verified</span>
+                      <span className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium"> Verified</span>
                     </div>
                   </div>
 
@@ -3240,7 +3239,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         <p className="text-sm font-bold text-white">Phone Verification</p>
                         <p className="text-xs text-gray-400 mt-1">Confirm your phone number</p>
                       </div>
-                      <span className="px-3 py-1 bg-yellow-500/20 text-yellow-300 rounded-full text-xs font-medium">⏳ Pending</span>
+                      <span className="px-3 py-1 bg-yellow-500/20 text-yellow-300 rounded-full text-xs font-medium"> Pending</span>
                     </div>
                   </div>
 
@@ -3250,7 +3249,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         <p className="text-sm font-bold text-white">Two-Factor Authentication</p>
                         <p className="text-xs text-gray-400 mt-1">Extra security layer enabled</p>
                       </div>
-                      <span className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium">✅ Enabled</span>
+                      <span className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium"> Enabled</span>
                     </div>
                   </div>
 
@@ -3260,7 +3259,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         <p className="text-sm font-bold text-white">Biometric Lock</p>
                         <p className="text-xs text-gray-400 mt-1">Fingerprint or face authentication</p>
                       </div>
-                      <span className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium">✅ Active</span>
+                      <span className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium"> Active</span>
                     </div>
                   </div>
                 </div>
@@ -3284,7 +3283,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   <div className="bg-slate-900/50 border border-slate-700/50 rounded-lg p-4">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-bold text-white">STATUS</p>
-                      <span className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium">✅ APPROVED</span>
+                      <span className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium"> APPROVED</span>
                     </div>
                   </div>
 
@@ -3301,28 +3300,28 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   <div className="bg-slate-900/50 border border-slate-700/50 rounded-lg p-4">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-bold text-white">Government ID</p>
-                      <span className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium">✅ Valid</span>
+                      <span className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium"> Valid</span>
                     </div>
                   </div>
 
                   <div className="bg-slate-900/50 border border-slate-700/50 rounded-lg p-4">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-bold text-white">Address Proof</p>
-                      <span className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium">✅ Verified</span>
+                      <span className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium"> Verified</span>
                     </div>
                   </div>
 
                   <div className="bg-slate-900/50 border border-slate-700/50 rounded-lg p-4">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-bold text-white">Business Registration</p>
-                      <span className="px-3 py-1 bg-yellow-500/20 text-yellow-300 rounded-full text-xs font-medium">⏳ Pending</span>
+                      <span className="px-3 py-1 bg-yellow-500/20 text-yellow-300 rounded-full text-xs font-medium"> Pending</span>
                     </div>
                   </div>
 
                   <div className="bg-slate-900/50 border border-slate-700/50 rounded-lg p-4">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-bold text-white">Tax Certificate</p>
-                      <span className="px-3 py-1 bg-gray-500/20 text-gray-300 rounded-full text-xs font-medium">⊘ Not Needed</span>
+                      <span className="px-3 py-1 bg-gray-500/20 text-gray-300 rounded-full text-xs font-medium"> Not Needed</span>
                     </div>
                   </div>
                 </div>
@@ -3334,28 +3333,28 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   <div className="bg-slate-900/50 border border-slate-700/50 rounded-lg p-4">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-bold text-white">Anti-Money Laundering</p>
-                      <span className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium">✅ Passed</span>
+                      <span className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium"> Passed</span>
                     </div>
                   </div>
 
                   <div className="bg-slate-900/50 border border-slate-700/50 rounded-lg p-4">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-bold text-white">Know Your Customer</p>
-                      <span className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium">✅ Passed</span>
+                      <span className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium"> Passed</span>
                     </div>
                   </div>
 
                   <div className="bg-slate-900/50 border border-slate-700/50 rounded-lg p-4">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-bold text-white">Risk Assessment</p>
-                      <span className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium">✅ Low</span>
+                      <span className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium"> Low</span>
                     </div>
                   </div>
 
                   <div className="bg-slate-900/50 border border-slate-700/50 rounded-lg p-4">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-bold text-white">Compliance Status</p>
-                      <span className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium">✅ Compliant</span>
+                      <span className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium"> Compliant</span>
                     </div>
                   </div>
                 </div>
@@ -3477,7 +3476,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         <p className="text-white font-semibold text-xs break-all">4c25b54b-d6e7-4fd2-b784-66021c41a5d4</p>
                       </div>
                       <button className="w-full px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg transition font-medium text-sm mt-4">
-                        ✏️ Edit Profile
+                         Edit Profile
                       </button>
                     </div>
                   </div>
@@ -3521,7 +3520,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       </div>
                       <div className="bg-slate-900/50 p-3 rounded">
                         <p className="text-xs text-gray-400">Approved by</p>
-                        <p className="text-white font-semibold">✓ Approved</p>
+                        <p className="text-white font-semibold"> Approved</p>
                       </div>
                     </div>
                   </div>
@@ -3534,7 +3533,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     <h3 className="text-sm font-bold text-white mb-4">Sign Out</h3>
                     <p className="text-xs text-gray-400 mb-4">Are you sure you want to sign out? You'll need to log back in to access your account.</p>
                     <button className="w-full px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition font-medium">
-                      🚪 Sign Out
+                       Sign Out
                     </button>
                   </div>
                 </div>
@@ -3557,7 +3556,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       rows="4"
                     />
                     <button className="w-full px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg transition font-medium text-sm mt-3">
-                      🔍 Analyze Contract (Secure)
+                       Analyze Contract (Secure)
                     </button>
                   </div>
                 </div>
@@ -3568,9 +3567,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   <div className="bg-gradient-to-br from-indigo-900/40 to-blue-900/40 border border-indigo-500/30 rounded-lg p-4">
                     <h3 className="text-sm font-bold text-white mb-4">Contract Analysis Results</h3>
                     <div className="space-y-2 text-xs text-gray-300">
-                      <p>✓ Contract verified</p>
-                      <p>✓ All terms reviewed</p>
-                      <p>✓ Risk assessment completed</p>
+                      <p> Contract verified</p>
+                      <p> All terms reviewed</p>
+                      <p> Risk assessment completed</p>
                       <p className="text-indigo-300 mt-3">Status: Ready for signing</p>
                     </div>
                   </div>
@@ -3597,7 +3596,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         <p className="text-white font-semibold">Uganda</p>
                       </div>
                       <button className="w-full px-4 py-2 bg-gradient-to-r from-teal-600 to-green-600 hover:from-teal-700 hover:to-green-700 text-white rounded-lg transition font-medium text-sm mt-3">
-                        📊 Perform Regulatory Gap Analysis
+                         Perform Regulatory Gap Analysis
                       </button>
                     </div>
                   </div>
@@ -3615,11 +3614,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       </div>
                       <div className="flex items-center justify-between p-2 bg-slate-900/50 rounded">
                         <span className="text-sm text-gray-300">Documentation</span>
-                        <span className="text-xs font-semibold text-green-300">✓ Complete</span>
+                        <span className="text-xs font-semibold text-green-300"> Complete</span>
                       </div>
                       <div className="flex items-center justify-between p-2 bg-slate-900/50 rounded">
                         <span className="text-sm text-gray-300">Eligibility</span>
-                        <span className="text-xs font-semibold text-green-300">✓ Verified</span>
+                        <span className="text-xs font-semibold text-green-300"> Verified</span>
                       </div>
                     </div>
                   </div>
@@ -3638,7 +3637,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     </div>
                     <p className="text-xs text-gray-400 mb-4">Optimize your schedule for maximum value creation while maintaining spiritual and physical alignment.</p>
                     <button className="w-full px-4 py-2 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-white rounded-lg transition font-medium text-sm">
-                      ⏰ Optimize Daily Schedule
+                       Optimize Daily Schedule
                     </button>
                   </div>
                 </div>
@@ -3672,7 +3671,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               {selectedDetail.tab === 'settings' && selectedDetail.item === 'Readiness Pillars' && (
                 <div className="space-y-4">
                   <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-purple-500/30 rounded-lg p-4">
-                    <h3 className="text-sm font-bold text-white mb-4">📊 Readiness Pillars</h3>
+                    <h3 className="text-sm font-bold text-white mb-4"> Readiness Pillars</h3>
                     
                     <div className="space-y-3">
                       <div className="bg-slate-900/50 p-3 rounded">
@@ -3795,10 +3794,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         <div className="px-2 py-2 text-center text-gray-400">Loading...</div>
                       ) : (
                         <>
-                          <button className="w-full px-2 py-1 text-left text-purple-300 hover:bg-purple-500/20 rounded transition">📅 Daily: {periodData.daily.toLocaleString()}</button>
-                          <button className="w-full px-2 py-1 text-left text-purple-300 hover:bg-purple-500/20 rounded transition">📊 Weekly: {periodData.weekly.toLocaleString()}</button>
-                          <button className="w-full px-2 py-1 text-left text-purple-300 hover:bg-purple-500/20 rounded transition">📈 Monthly: {periodData.monthly.toLocaleString()}</button>
-                          <button className="w-full px-2 py-1 text-left text-purple-300 hover:bg-purple-500/20 rounded transition">📉 Yearly: {periodData.yearly.toLocaleString()}</button>
+                          <button className="w-full px-2 py-1 text-left text-purple-300 hover:bg-purple-500/20 rounded transition"> Daily: {periodData.daily.toLocaleString()}</button>
+                          <button className="w-full px-2 py-1 text-left text-purple-300 hover:bg-purple-500/20 rounded transition"> Weekly: {periodData.weekly.toLocaleString()}</button>
+                          <button className="w-full px-2 py-1 text-left text-purple-300 hover:bg-purple-500/20 rounded transition"> Monthly: {periodData.monthly.toLocaleString()}</button>
+                          <button className="w-full px-2 py-1 text-left text-purple-300 hover:bg-purple-500/20 rounded transition"> Yearly: {periodData.yearly.toLocaleString()}</button>
                         </>
                       )}
                     </div>
@@ -3834,10 +3833,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         <div className="px-2 py-2 text-center text-gray-400">Loading...</div>
                       ) : (
                         <>
-                          <button className="w-full px-2 py-1 text-left text-blue-300 hover:bg-blue-500/20 rounded transition">📅 Daily: {periodData.daily}</button>
-                          <button className="w-full px-2 py-1 text-left text-blue-300 hover:bg-blue-500/20 rounded transition">📊 Weekly: {periodData.weekly}</button>
-                          <button className="w-full px-2 py-1 text-left text-blue-300 hover:bg-blue-500/20 rounded transition">📈 Monthly: {periodData.monthly}</button>
-                          <button className="w-full px-2 py-1 text-left text-blue-300 hover:bg-blue-500/20 rounded transition">📉 Yearly: {periodData.yearly}</button>
+                          <button className="w-full px-2 py-1 text-left text-blue-300 hover:bg-blue-500/20 rounded transition"> Daily: {periodData.daily}</button>
+                          <button className="w-full px-2 py-1 text-left text-blue-300 hover:bg-blue-500/20 rounded transition"> Weekly: {periodData.weekly}</button>
+                          <button className="w-full px-2 py-1 text-left text-blue-300 hover:bg-blue-500/20 rounded transition"> Monthly: {periodData.monthly}</button>
+                          <button className="w-full px-2 py-1 text-left text-blue-300 hover:bg-blue-500/20 rounded transition"> Yearly: {periodData.yearly}</button>
                         </>
                       )}
                     </div>
@@ -3870,10 +3869,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     <div className="px-2 py-2 text-center text-gray-400">Loading...</div>
                   ) : (
                     <>
-                      <button className="px-2 py-1 text-left text-yellow-300 hover:bg-yellow-500/20 rounded transition block">📅 Daily: {metricPeriodData.roi.daily}</button>
-                      <button className="px-2 py-1 text-left text-yellow-300 hover:bg-yellow-500/20 rounded transition block">📊 Weekly: {metricPeriodData.roi.weekly}</button>
-                      <button className="px-2 py-1 text-left text-yellow-300 hover:bg-yellow-500/20 rounded transition block">📈 Monthly: {metricPeriodData.roi.monthly}</button>
-                      <button className="px-2 py-1 text-left text-yellow-300 hover:bg-yellow-500/20 rounded transition block">📉 Yearly: {metricPeriodData.roi.yearly}</button>
+                      <button className="px-2 py-1 text-left text-yellow-300 hover:bg-yellow-500/20 rounded transition block"> Daily: {metricPeriodData.roi.daily}</button>
+                      <button className="px-2 py-1 text-left text-yellow-300 hover:bg-yellow-500/20 rounded transition block"> Weekly: {metricPeriodData.roi.weekly}</button>
+                      <button className="px-2 py-1 text-left text-yellow-300 hover:bg-yellow-500/20 rounded transition block"> Monthly: {metricPeriodData.roi.monthly}</button>
+                      <button className="px-2 py-1 text-left text-yellow-300 hover:bg-yellow-500/20 rounded transition block"> Yearly: {metricPeriodData.roi.yearly}</button>
                     </>
                   )}
                 </div>
@@ -3941,7 +3940,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 <Building className="w-5 h-5 text-blue-400" />
                 Progress Journey
               </h3>
-              <button onClick={() => setShowJourneyDetails(false)} className="text-gray-400 hover:text-white text-xl">✕</button>
+              <button onClick={() => setShowJourneyDetails(false)} className="text-gray-400 hover:text-white text-xl"></button>
             </div>
 
             {/* Current Stage - Stage 1 (Survival) */}
@@ -3993,22 +3992,22 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             {/* Journey Insights */}
             <div className="space-y-3">
               <div className="p-3 bg-blue-500/10 rounded-lg border border-blue-400/30">
-                <div className="text-blue-300 font-medium text-sm mb-2">🎯 Next Milestone:</div>
+                <div className="text-blue-300 font-medium text-sm mb-2"> Next Milestone:</div>
                 <div className="text-white text-sm">Stabilize into steady income stream (UGX 20,000+)</div>
                 <div className="text-gray-300 text-xs mt-1">Estimated time: Focus on positive cash flow first</div>
               </div>
 
               <div className="p-3 bg-green-500/10 rounded-lg border border-green-400/30">
-                <div className="text-green-300 font-medium text-sm mb-2">💪 Current Strengths:</div>
-                <div className="text-gray-300 text-sm">Building momentum • Establishing habits</div>
+                <div className="text-green-300 font-medium text-sm mb-2"> Current Strengths:</div>
+                <div className="text-gray-300 text-sm">Building momentum  Establishing habits</div>
               </div>
 
               <div className="p-3 bg-yellow-500/10 rounded-lg border border-yellow-400/30">
-                <div className="text-yellow-300 font-medium text-sm mb-2">⚠️ Focus Areas:</div>
+                <div className="text-yellow-300 font-medium text-sm mb-2"> Focus Areas:</div>
                 <div className="text-gray-300 text-sm space-y-1">
-                  <div>• Establish basic income tracking</div>
-                  <div>• Build transaction recording habits</div>
-                  <div>• Achieve daily cash flow visibility</div>
+                  <div> Establish basic income tracking</div>
+                  <div> Build transaction recording habits</div>
+                  <div> Achieve daily cash flow visibility</div>
                 </div>
               </div>
             </div>
@@ -4023,7 +4022,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 <BarChart3 className="w-5 h-5 text-orange-400" />
                 Financial Analytics
               </h3>
-              <button onClick={() => setShowFinancialAnalytics(false)} className="text-gray-400 hover:text-white text-xl">✕</button>
+              <button onClick={() => setShowFinancialAnalytics(false)} className="text-gray-400 hover:text-white text-xl"></button>
             </div>
             
             <div className="grid grid-cols-2 gap-2">
@@ -4065,16 +4064,16 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           <div className="mt-4 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-6 border border-blue-200 shadow-lg">
             <div className="flex justify-between items-center mb-6">
               <div>
-                <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-2">💼 Business Loan Calculator</h2>
+                <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-2"> Business Loan Calculator</h2>
                 <p className="text-gray-600 mt-1">Smart financing decisions for your business growth</p>
               </div>
-              <button onClick={() => setShowBusinessLoanCalculator(false)} className="text-gray-500 hover:text-gray-700 text-2xl">×</button>
+              <button onClick={() => setShowBusinessLoanCalculator(false)} className="text-gray-500 hover:text-gray-700 text-2xl"></button>
             </div>
 
             <div className="space-y-4 max-h-[70vh] overflow-y-auto">
               {/* Loan Details */}
               <div className="bg-white rounded-xl p-6 shadow-lg">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">💳 Loan Details</h3>
+                <h3 className="text-lg font-semibold text-gray-800 mb-4"> Loan Details</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Loan Amount</label>
@@ -4102,7 +4101,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
               {/* Business Financials */}
               <div className="bg-white rounded-xl p-6 shadow-lg">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">📊 Monthly Financials</h3>
+                <h3 className="text-lg font-semibold text-gray-800 mb-4"> Monthly Financials</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Revenue</label>
@@ -4133,7 +4132,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
               {/* Tax & Tithe */}
               <div className="bg-white rounded-xl p-6 shadow-lg">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">🏛️ Taxes & Tithes</h3>
+                <h3 className="text-lg font-semibold text-gray-800 mb-4"> Taxes & Tithes</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Corporate Tax Rate (%)</label>
@@ -4162,7 +4161,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               <div className="space-y-3">
                 {/* Loan Analysis */}
                 <div className="bg-white rounded-xl p-4 shadow-lg">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-2">💰 Loan Analysis</h3>
+                  <h3 className="text-lg font-semibold text-gray-800 mb-2"> Loan Analysis</h3>
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between"><span className="text-gray-600">Monthly Payment:</span><span className="font-semibold">UGX {(loanMetrics.monthlyPayment || 0).toLocaleString()}</span></div>
                     <div className="flex justify-between"><span className="text-gray-600">Total Interest:</span><span className="font-semibold text-red-600">UGX {(loanMetrics.totalInterest || 0).toLocaleString()}</span></div>
@@ -4171,7 +4170,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
                 {/* Business Cash Flow */}
                 <div className="bg-white rounded-xl p-4 shadow-lg">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-2">💵 Business Cash Flow</h3>
+                  <h3 className="text-lg font-semibold text-gray-800 mb-2"> Business Cash Flow</h3>
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between"><span className="text-gray-600">Gross Revenue:</span><span className="font-semibold text-green-600">UGX {((loanMetrics.businessMetrics?.grossMonthlyRevenue) || 0).toLocaleString()}</span></div>
                     <div className="flex justify-between"><span className="text-gray-600">Total Expenses:</span><span className="font-semibold text-red-600">UGX {((loanMetrics.businessMetrics?.totalMonthlyExpenses) || 0).toLocaleString()}</span></div>
@@ -4182,7 +4181,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
                 {/* Risk Analysis */}
                 <div className="bg-white rounded-xl p-4 shadow-lg">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-2">⚡ Risk Analysis</h3>
+                  <h3 className="text-lg font-semibold text-gray-800 mb-2"> Risk Analysis</h3>
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between"><span className="text-gray-600">Debt Service Ratio:</span><span className={`font-semibold ${((loanMetrics.businessMetrics?.debtServiceRatio) || 0) > 30 ? 'text-red-600' : 'text-green-600'}`}>{((loanMetrics.businessMetrics?.debtServiceRatio) || 0).toFixed(1)}%</span></div>
                     <div className="flex justify-between"><span className="text-gray-600">Profit Margin:</span><span className={`font-semibold ${((loanMetrics.businessMetrics?.profitMargin) || 0) < 5 ? 'text-red-600' : 'text-green-600'}`}>{((loanMetrics.businessMetrics?.profitMargin) || 0).toFixed(1)}%</span></div>
@@ -4221,7 +4220,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 <Wallet className="w-5 h-5 text-teal-400" />
                 Wallet Accounts
               </h3>
-              <button onClick={() => setShowWalletAccounts(false)} className="text-gray-400 hover:text-white text-xl">✕</button>
+              <button onClick={() => setShowWalletAccounts(false)} className="text-gray-400 hover:text-white text-xl"></button>
             </div>
 
             {/* Wallet Tabs */}
@@ -4361,8 +4360,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       </p>
                       {activeWalletTab === 'trust' && (
                         <p className="text-[11px] text-purple-200 mt-1">
-                          {walletAccounts.trust?.scope === 'admin' ? 'All members total • ' : ''}
-                          ≈ {walletAccounts.trust?.localSymbol}
+                          {walletAccounts.trust?.scope === 'admin' ? 'All members total  ' : ''}
+                           {walletAccounts.trust?.localSymbol}
                           {(Number(walletAccounts.trust?.localValue) || 0).toLocaleString('en-US', {
                             minimumFractionDigits: 0,
                             maximumFractionDigits: 2
@@ -4376,10 +4375,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   {/* Account Actions */}
                   <div className="grid grid-cols-2 gap-2 mt-4">
                     <button className="px-3 py-2 bg-green-500/20 text-green-300 rounded-lg text-sm font-medium hover:bg-green-500/30 transition border border-green-500/30">
-                      💰 Deposit
+                       Deposit
                     </button>
                     <button className="px-3 py-2 bg-red-500/20 text-red-300 rounded-lg text-sm font-medium hover:bg-red-500/30 transition border border-red-500/30">
-                      💸 Withdraw
+                       Withdraw
                     </button>
                   </div>
 
@@ -4392,7 +4391,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       </div>
                       <div>
                         <p className="text-gray-400">Status</p>
-                        <p className="text-green-400 font-medium">✓ Active</p>
+                        <p className="text-green-400 font-medium"> Active</p>
                       </div>
                       <div>
                         <p className="text-gray-400">Currency</p>
@@ -4459,10 +4458,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           <div className="mt-4 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-6 border border-blue-200 shadow-lg">
             <div className="flex justify-between items-center mb-6">
               <div>
-                <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-2">🙏 Business Tithing Manager</h2>
+                <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-2"> Business Tithing Manager</h2>
                 <p className="text-gray-600 mt-1">Separate business and personal tithing - Honor God in both spheres</p>
               </div>
-              <button onClick={() => setShowTithingCalculator(false)} className="text-gray-500 hover:text-gray-700 text-2xl">×</button>
+              <button onClick={() => setShowTithingCalculator(false)} className="text-gray-500 hover:text-gray-700 text-2xl"></button>
             </div>
 
             <div className="space-y-4 max-h-[70vh] overflow-y-auto">
@@ -4473,13 +4472,13 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     onClick={() => setSelectedTithingTab('business')}
                     className={`flex-1 py-3 px-6 rounded-lg font-semibold transition-colors ${selectedTithingTab === 'business' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-600 hover:text-gray-800'}`}
                   >
-                    💼 Business Tithing
+                     Business Tithing
                   </button>
                   <button
                     onClick={() => setSelectedTithingTab('personal')}
                     className={`flex-1 py-3 px-6 rounded-lg font-semibold transition-colors ${selectedTithingTab === 'personal' ? 'bg-green-600 text-white shadow-lg' : 'text-gray-600 hover:text-gray-800'}`}
                   >
-                    👤 Personal Tithing
+                     Personal Tithing
                   </button>
                 </div>
               </div>
@@ -4489,25 +4488,25 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="bg-white rounded-xl p-4 shadow-lg border-l-4 border-blue-500">
-                      <h3 className="text-sm font-semibold text-gray-800 mb-2">📊 Business Revenue</h3>
+                      <h3 className="text-sm font-semibold text-gray-800 mb-2"> Business Revenue</h3>
                       <p className="text-lg font-bold text-blue-600">UGX {(tithingMetrics.businessProfit || 0).toLocaleString()}</p>
                       <p className="text-xs text-gray-500 mt-1">Gross income</p>
                     </div>
 
                     <div className="bg-white rounded-xl p-4 shadow-lg border-l-4 border-red-500">
-                      <h3 className="text-sm font-semibold text-gray-800 mb-2">📉 Expenses</h3>
+                      <h3 className="text-sm font-semibold text-gray-800 mb-2"> Expenses</h3>
                       <p className="text-lg font-bold text-red-600">UGX {(tithingMetrics.businessProfit || 0).toLocaleString()}</p>
                       <p className="text-xs text-gray-500 mt-1">Operating costs</p>
                     </div>
 
                     <div className="bg-white rounded-xl p-4 shadow-lg border-l-4 border-green-500">
-                      <h3 className="text-sm font-semibold text-gray-800 mb-2">💰 Business Profit</h3>
+                      <h3 className="text-sm font-semibold text-gray-800 mb-2"> Business Profit</h3>
                       <p className="text-lg font-bold text-green-600">UGX {(tithingMetrics.businessProfit || 0).toLocaleString()}</p>
                       <p className="text-xs text-gray-500 mt-1">Net income</p>
                     </div>
 
                     <div className="bg-white rounded-xl p-4 shadow-lg border-l-4 border-purple-500">
-                      <h3 className="text-sm font-semibold text-gray-800 mb-2">🙏 Tithe Due</h3>
+                      <h3 className="text-sm font-semibold text-gray-800 mb-2"> Tithe Due</h3>
                       <p className="text-lg font-bold text-purple-600">UGX {(tithingMetrics.businessTithe || 0).toLocaleString()}</p>
                       <p className="text-xs text-gray-500 mt-1">{businessTithingRate}% of profits</p>
                     </div>
@@ -4515,7 +4514,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
                   {/* Faithfulness Score */}
                   <div className="bg-white rounded-xl p-4 shadow-lg">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-3">💼 Faithfulness Score</h3>
+                    <h3 className="text-lg font-semibold text-gray-800 mb-3"> Faithfulness Score</h3>
                     <div className="flex items-center gap-4 mb-4">
                       <div className="flex-1 bg-gray-200 rounded-full h-3">
                         <div className="h-3 rounded-full bg-gradient-to-r from-green-400 to-green-600" style={{ width: '75%' }}></div>
@@ -4534,19 +4533,19 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="bg-white rounded-xl p-4 shadow-lg border-l-4 border-green-500">
-                      <h3 className="text-sm font-semibold text-gray-800 mb-2">💰 Personal Income</h3>
+                      <h3 className="text-sm font-semibold text-gray-800 mb-2"> Personal Income</h3>
                       <p className="text-lg font-bold text-green-600">UGX {(tithingMetrics.personalIncome || 0).toLocaleString()}</p>
                       <p className="text-xs text-gray-500 mt-1">Salary & income</p>
                     </div>
 
                     <div className="bg-white rounded-xl p-4 shadow-lg border-l-4 border-blue-500">
-                      <h3 className="text-sm font-semibold text-gray-800 mb-2">🙏 Tithe Due</h3>
+                      <h3 className="text-sm font-semibold text-gray-800 mb-2"> Tithe Due</h3>
                       <p className="text-lg font-bold text-blue-600">UGX {(tithingMetrics.personalTithe || 0).toLocaleString()}</p>
                       <p className="text-xs text-gray-500 mt-1">{personalTithingRate}% of income</p>
                     </div>
 
                     <div className="bg-white rounded-xl p-4 shadow-lg border-l-4 border-purple-500 col-span-2">
-                      <h3 className="text-sm font-semibold text-gray-800 mb-2">🎁 Personal Given</h3>
+                      <h3 className="text-sm font-semibold text-gray-800 mb-2"> Personal Given</h3>
                       <p className="text-lg font-bold text-purple-600">UGX {(tithingMetrics.personalTithe || 0).toLocaleString()}</p>
                       <p className="text-xs text-gray-500 mt-1">Amount given</p>
                     </div>
@@ -4554,7 +4553,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
                   {/* Faithfulness Score */}
                   <div className="bg-white rounded-xl p-4 shadow-lg">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-3">👤 Faithfulness Score</h3>
+                    <h3 className="text-lg font-semibold text-gray-800 mb-3"> Faithfulness Score</h3>
                     <div className="flex items-center gap-4 mb-4">
                       <div className="flex-1 bg-gray-200 rounded-full h-3">
                         <div className="h-3 rounded-full bg-gradient-to-r from-blue-400 to-blue-600" style={{ width: '85%' }}></div>
@@ -4570,7 +4569,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
               {/* Settings */}
               <div className="pt-4 border-t border-gray-300">
-                <h3 className="text-lg font-semibold text-gray-800 mb-3">⚙️ Tithing Settings</h3>
+                <h3 className="text-lg font-semibold text-gray-800 mb-3"> Tithing Settings</h3>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">Business Rate</label>
@@ -4596,21 +4595,21 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           </div>
         )}
 
-        {/* 5. Reporting System Panel - Advanced Reporting */}
+        {/* 5. Reporting System Panel - Financial Reports */}
         {showReportingSystem && (
           <div className="glass-card p-4 border-l-4 border-rose-500 animate-in fade-in space-y-3">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                 <PieChart className="w-5 h-5 text-rose-400" />
-                📊 Advanced Reporting System
+                 Professional Financial Reports
               </h3>
-              <button onClick={() => setShowReportingSystem(false)} className="text-gray-500 hover:text-gray-700 text-xl">×</button>
+              <button onClick={() => setShowReportingSystem(false)} className="text-gray-500 hover:text-gray-700 text-xl"></button>
             </div>
 
             <div className="space-y-4 max-h-[70vh] overflow-y-auto">
               {/* Configuration Panel */}
               <div className="bg-white rounded-xl p-6 shadow-lg">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">📋 Report Configuration</h3>
+                <h3 className="text-lg font-semibold text-gray-800 mb-4"> Generate Financial Report</h3>
                 
                 <div className="space-y-4">
                   <div>
@@ -4625,32 +4624,30 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Report Type</label>
-                    <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                    <label className="block text-sm font-medium text-gray-700 mb-3">Report Type</label>
+                    <ul className="max-h-96 overflow-y-auto bg-gray-50 rounded-lg border border-gray-200 divide-y divide-gray-200">
                       {Object.entries(reportTypes).map(([key, report]) => (
-                        <button
-                          key={key}
-                          onClick={() => setSelectedReportType(key)}
-                          className={`p-3 rounded-lg border-2 text-left transition-all ${
-                            selectedReportType === key
-                              ? 'border-blue-500 bg-blue-50 text-blue-700'
-                              : 'border-gray-200 hover:border-blue-300'
-                          }`}
-                        >
-                          <div className="font-medium flex items-center gap-2">
-                            <span>{report.icon}</span>
-                            <span className="text-xs">{report.name.split(' ').slice(1).join(' ')}</span>
-                          </div>
-                          {report.advanced && <span className="text-xs text-purple-600">⚡ Advanced</span>}
-                        </button>
+                        <li key={key}>
+                          <button
+                            onClick={() => setSelectedReportType(key)}
+                            className={`w-full flex items-center justify-between gap-3 px-3 py-2 text-left transition ${
+                              selectedReportType === key ? 'bg-blue-50' : 'hover:bg-gray-100'
+                            }`}
+                          >
+                            <span className="text-sm font-medium text-gray-800">{report.name}</span>
+                            {report.advanced && (
+                              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full whitespace-nowrap"> Advanced</span>
+                            )}
+                          </button>
+                        </li>
                       ))}
-                    </div>
+                    </ul>
                   </div>
 
                   {/* Country Selection for Tax Reports */}
                   {reportTypes[selectedReportType]?.requiresCountry && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">🌍 Country (Tax Compliance)</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2"> Country (Tax Compliance)</label>
                       <select
                         value={selectedCountry}
                         onChange={(e) => setSelectedCountry(e.target.value)}
@@ -4666,35 +4663,14 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     </div>
                   )}
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Date Range</label>
-                      <select
-                        value={dateRange}
-                        onChange={(e) => setDateRange(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                      >
-                        <option value="current-month">Current Month</option>
-                        <option value="last-month">Last Month</option>
-                        <option value="quarter">Quarter</option>
-                        <option value="year">Year</option>
-                        <option value="custom">Custom</option>
-                      </select>
+                  <div className="bg-gray-50 rounded-lg border border-gray-200 divide-y divide-gray-200">
+                    <div className="flex items-center justify-between px-3 py-2">
+                      <span className="text-sm font-medium text-gray-700">Date Range</span>
+                      <span className="text-sm font-semibold text-gray-900">Current Month</span>
                     </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Export Format</label>
-                      <select
-                        value={exportFormat}
-                        onChange={(e) => setExportFormat(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                      >
-                        <option value="pdf">📄 PDF</option>
-                        <option value="excel">📊 Excel</option>
-                        <option value="csv">📋 CSV</option>
-                        <option value="json">💾 JSON</option>
-                        <option value="html">🌐 HTML</option>
-                      </select>
+                    <div className="flex items-center justify-between px-3 py-2">
+                      <span className="text-sm font-medium text-gray-700">Export Format</span>
+                      <span className="text-sm font-semibold text-gray-900"> PDF</span>
                     </div>
                   </div>
 
@@ -4709,7 +4685,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                           className="w-4 h-4 rounded border-gray-300"
                         />
                         <span className="text-sm font-medium text-gray-700">
-                          ⚡ Include AI-Powered Analysis
+                           Include AI-Powered Analysis
                         </span>
                       </label>
                       <p className="text-xs text-gray-600 mt-2">Get tax optimization recommendations, compliance guidance & AI insights</p>
@@ -4750,14 +4726,27 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                           }
                         };
 
-                        if (selectedReportType === 'tax-return') {
+                        if (selectedReportType === 'tax-filing') {
+                          // Get country-specific tax standards
+                          const countryData = countries.find(c => c.code === selectedCountry);
+                          const taxRate = parseFloat(countryData?.tax) / 100;
+                          const grossIncome = generatedData.metrics.totalIncome;
+                          const deductibleExpenses = generatedData.metrics.totalExpenses * 0.85;
+                          const taxableIncome = Math.max(0, grossIncome - deductibleExpenses);
+                          const estimatedTaxLiability = taxableIncome * taxRate;
+                          
                           generatedData.taxInfo = {
                             country: selectedCountry,
-                            taxRate: countries.find(c => c.code === selectedCountry)?.tax,
-                            authority: countries.find(c => c.code === selectedCountry)?.authority,
-                            estimatedTax: (generatedData.metrics.netProfit * 0.30),
-                            deductionOptportunities: includeAIAnalysis ? 5 : 0,
-                            complianceStatus: 'Ready for filing'
+                            countryName: countryData?.name,
+                            taxRate: countryData?.tax,
+                            authority: countryData?.authority,
+                            grossIncome: grossIncome,
+                            deductibleExpenses: deductibleExpenses,
+                            taxableIncome: taxableIncome,
+                            estimatedTax: estimatedTaxLiability,
+                            deductionOptportunities: includeAIAnalysis ? 8 : 0,
+                            complianceStatus: 'Compliant with ' + countryData?.authority + ' standards',
+                            filingDeadline: selectedCountry === 'RW' ? 'March 31' : selectedCountry === 'US' ? 'April 15' : 'June 30'
                           };
                         } else if (selectedReportType === 'balance-sheet') {
                           generatedData.balanceSheet = {
@@ -4803,11 +4792,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       </>
                     ) : (
                       <>
-                        {exportFormat === 'pdf' && '📄'}
-                        {exportFormat === 'excel' && '📊'}
-                        {exportFormat === 'csv' && '📋'}
-                        {exportFormat === 'json' && '💾'}
-                        {exportFormat === 'html' && '🌐'}
+                        {exportFormat === 'pdf' && ''}
+                        {exportFormat === 'excel' && ''}
+                        {exportFormat === 'csv' && ''}
+                        {exportFormat === 'json' && ''}
+                        {exportFormat === 'html' && ''}
                         {reportTypes[selectedReportType]?.advanced ? `Generate ${reportTypes[selectedReportType].name.split(' ')[1]}` : `Generate ${exportFormat.toUpperCase()}`}
                       </>
                     )}
@@ -4815,281 +4804,49 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 </button>
               </div>
 
-              {/* Comprehensive Preview Panel */}
-              <div className="bg-white rounded-xl p-4 shadow-lg">
-                <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                  👁️ Live Report Preview
-                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
-                    {exportFormat.toUpperCase()}
-                  </span>
-                </h3>
-                
-                <div className="grid grid-cols-2 gap-2 text-xs mb-3">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Type:</span>
-                    <span className="font-medium">{reportTypes[selectedReportType]?.name}</span>
-                  </div>
-                  
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Period:</span>
-                    <span className="font-medium">{dateRange}</span>
-                  </div>
+              {/* Report Summary Panel */}
+              <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                  <h3 className="text-base font-semibold text-gray-800">Report Information</h3>
                 </div>
-
-                {/* Dynamic Report Preview */}
-                <div className="space-y-3">
-                  {(() => {
-                    const report = generatedReportData || generateReportSummary();
-                    
-                    switch(selectedReportType) {
-                      case 'tax-return':
-                        return (
-                          <div className="space-y-2">
-                            {generatedReportData?.taxInfo && (
-                              <>
-                                <div className="bg-purple-50 p-3 rounded-lg border-l-4 border-purple-500">
-                                  <div className="text-xs text-purple-600 font-semibold mb-2">🧾 TAX RETURN PREVIEW</div>
-                                  <div className="grid grid-cols-2 gap-2 text-xs">
-                                    <div className="flex justify-between">
-                                      <span className="text-gray-600">Country:</span>
-                                      <span className="font-medium">{countries.find(c => c.code === selectedCountry)?.flag} {selectedCountry}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span className="text-gray-600">Authority:</span>
-                                      <span className="font-medium">{generatedReportData.taxInfo.authority}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span className="text-gray-600">Tax Rate:</span>
-                                      <span className="font-medium">{generatedReportData.taxInfo.taxRate}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span className="text-gray-600">Compliance:</span>
-                                      <span className="font-medium text-green-600">✓ {generatedReportData.taxInfo.complianceStatus}</span>
-                                    </div>
-                                  </div>
-                                  <div className="mt-2 pt-2 border-t border-purple-200">
-                                    <div className="text-xs font-semibold text-purple-800 mb-1">Estimated Tax Liability</div>
-                                    <div className="text-lg font-bold text-purple-900">UGX {generatedReportData.taxInfo.estimatedTax.toLocaleString()}</div>
-                                  </div>
-                                  {includeAIAnalysis && (
-                                    <div className="mt-2 bg-yellow-50 p-2 rounded text-xs border-l-2 border-yellow-400">
-                                      <span className="font-semibold text-yellow-800">⚡ AI Insights:</span>
-                                      <p className="text-yellow-700 mt-1">{generatedReportData.taxInfo.deductionOptportunities} deduction opportunities identified</p>
-                                    </div>
-                                  )}
-                                </div>
-                              </>
-                            )}
-                            {!generatedReportData && (
-                              <div className="bg-gray-50 p-3 rounded text-xs text-center text-gray-600">
-                                Click Generate to see tax return preview with compliance details
-                              </div>
-                            )}
-                          </div>
-                        );
-
-                      case 'balance-sheet':
-                        return (
-                          <div className="space-y-2">
-                            {generatedReportData?.balanceSheet && (
-                              <>
-                                <div className="bg-blue-50 p-3 rounded-lg border-l-4 border-blue-500">
-                                  <div className="text-xs text-blue-600 font-semibold mb-2">📊 BALANCE SHEET PREVIEW</div>
-                                  <div className="grid grid-cols-2 gap-2 text-xs mb-2">
-                                    <div className="bg-white p-2 rounded border border-blue-200">
-                                      <div className="text-gray-600">ASSETS</div>
-                                      <div className="font-bold text-blue-800">UGX {generatedReportData.balanceSheet.assets.toLocaleString()}</div>
-                                    </div>
-                                    <div className="bg-white p-2 rounded border border-blue-200">
-                                      <div className="text-gray-600">EQUITY</div>
-                                      <div className="font-bold text-blue-800">UGX {generatedReportData.balanceSheet.equity.toLocaleString()}</div>
-                                    </div>
-                                  </div>
-                                  <div className="bg-white p-2 rounded border border-blue-200 text-xs mb-2">
-                                    <div className="text-gray-600 mb-1">Key Ratios</div>
-                                    <div className="flex justify-between text-xs">
-                                      <span>Current Ratio: <span className="font-semibold">{generatedReportData.balanceSheet.ratios.currentRatio.toFixed(2)}</span></span>
-                                      <span>D/E: <span className="font-semibold">{generatedReportData.balanceSheet.ratios.debtToEquity.toFixed(2)}</span></span>
-                                    </div>
-                                  </div>
-                                  {includeAIAnalysis && (
-                                    <div className="bg-yellow-50 p-2 rounded text-xs border-l-2 border-yellow-400">
-                                      <span className="font-semibold text-yellow-800">⚡ Health Score:</span>
-                                      <p className="text-yellow-700">ROA: {(generatedReportData.balanceSheet.ratios.returnOnAssets * 100).toFixed(2)}%</p>
-                                    </div>
-                                  )}
-                                </div>
-                              </>
-                            )}
-                            {!generatedReportData && (
-                              <div className="bg-gray-50 p-3 rounded text-xs text-center text-gray-600">
-                                Click Generate to see balance sheet with financial ratios
-                              </div>
-                            )}
-                          </div>
-                        );
-
-                      case 'income-statement':
-                        return (
-                          <div className="space-y-2">
-                            {generatedReportData?.incomeStatement && (
-                              <>
-                                <div className="bg-green-50 p-3 rounded-lg border-l-4 border-green-500">
-                                  <div className="text-xs text-green-600 font-semibold mb-2">💹 INCOME STATEMENT PREVIEW</div>
-                                  <div className="space-y-2 text-xs">
-                                    <div className="flex justify-between bg-white p-2 rounded border border-green-200">
-                                      <span className="text-gray-600">Revenue:</span>
-                                      <span className="font-bold">UGX {generatedReportData.incomeStatement.revenue.toLocaleString()}</span>
-                                    </div>
-                                    <div className="flex justify-between bg-white p-2 rounded border border-green-200">
-                                      <span className="text-gray-600">Expenses:</span>
-                                      <span className="font-bold">UGX {generatedReportData.incomeStatement.expenses.toLocaleString()}</span>
-                                    </div>
-                                    <div className="flex justify-between bg-white p-2 rounded border border-green-200">
-                                      <span className="text-gray-600">Net Income:</span>
-                                      <span className="font-bold text-green-800">UGX {generatedReportData.incomeStatement.netIncome.toLocaleString()}</span>
-                                    </div>
-                                    <div className="flex justify-between bg-white p-2 rounded border border-green-200">
-                                      <span className="text-gray-600">Profit Margin:</span>
-                                      <span className="font-bold text-green-800">{generatedReportData.incomeStatement.profitMargin.toFixed(2)}%</span>
-                                    </div>
-                                  </div>
-                                  {includeAIAnalysis && (
-                                    <div className="bg-yellow-50 p-2 rounded text-xs border-l-2 border-yellow-400 mt-2">
-                                      <span className="font-semibold text-yellow-800">⚡ AI Analysis:</span>
-                                      <p className="text-yellow-700">Healthy profitability with opportunities for expense optimization</p>
-                                    </div>
-                                  )}
-                                </div>
-                              </>
-                            )}
-                            {!generatedReportData && (
-                              <div className="bg-gray-50 p-3 rounded text-xs text-center text-gray-600">
-                                Click Generate to see income statement with profitability metrics
-                              </div>
-                            )}
-                          </div>
-                        );
-
-                      case 'financial-summary':
-                        return (
-                          <div className="space-y-2">
-                            <div className="grid grid-cols-2 gap-2">
-                              <div className="bg-green-50 p-2 rounded text-xs">
-                                <div className="text-green-600 font-medium">Total Income</div>
-                                <div className="text-sm font-bold text-green-800">UGX {(report.metrics.totalIncome || 0).toLocaleString()}</div>
-                              </div>
-                              <div className="bg-red-50 p-2 rounded text-xs">
-                                <div className="text-red-600 font-medium">Total Expenses</div>
-                                <div className="text-sm font-bold text-red-800">UGX {(report.metrics.totalExpenses || 0).toLocaleString()}</div>
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div className="bg-blue-50 p-2 rounded text-xs">
-                                <div className="text-blue-600 font-medium">Net Cash Flow</div>
-                                <div className={`text-sm font-bold ${(report.metrics.netProfit || 0) >= 0 ? 'text-green-800' : 'text-red-800'}`}>
-                                  UGX {(report.metrics.netProfit || 0).toLocaleString()}
-                                </div>
-                              </div>
-                              <div className="bg-purple-50 p-2 rounded text-xs">
-                                <div className="text-purple-600 font-medium">Savings Rate</div>
-                                <div className="text-sm font-bold text-purple-800">{(report.metrics.savingsRate || 0).toFixed(1)}%</div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                        
-                      case 'income-analysis':
-                        return (
-                          <div className="space-y-2">
-                            <div className="text-center border-b pb-2 mb-2">
-                              <div className="text-2xl font-bold text-green-600">UGX {(report.metrics.totalIncome || 0).toLocaleString()}</div>
-                              <div className="text-xs text-gray-500">Total Income</div>
-                            </div>
-                            <div>
-                              <h6 className="text-xs font-medium text-gray-600 mb-2">Income Sources</h6>
-                              <div className="space-y-1 text-xs">
-                                <div className="flex justify-between">
-                                  <span>Primary Income</span>
-                                  <span className="font-medium">45%</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span>Secondary Income</span>
-                                  <span className="font-medium">35%</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span>Other Income</span>
-                                  <span className="font-medium">20%</span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                        
-                      case 'expense-breakdown':
-                        return (
-                          <div className="space-y-2">
-                            <div className="text-center border-b pb-2 mb-2">
-                              <div className="text-2xl font-bold text-red-600">UGX {(report.metrics.totalExpenses || 0).toLocaleString()}</div>
-                              <div className="text-xs text-gray-500">Total Expenses</div>
-                            </div>
-                            <div>
-                              <h6 className="text-xs font-medium text-gray-600 mb-2">Top Expense Categories</h6>
-                              <div className="space-y-1 text-xs">
-                                <div className="flex justify-between">
-                                  <span>Operations</span>
-                                  <span className="font-medium">40%</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span>Salaries</span>
-                                  <span className="font-medium">35%</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span>Utilities</span>
-                                  <span className="font-medium">25%</span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                        
-                      case 'cash-flow':
-                        return (
-                          <div className="grid grid-cols-3 gap-2 text-xs text-center">
-                            <div className="bg-blue-50 p-2 rounded">
-                              <div className="text-blue-600 font-medium">Inflow</div>
-                              <div className="text-sm font-bold text-blue-800">UGX {(report.metrics.totalIncome || 0).toLocaleString()}</div>
-                            </div>
-                            <div className="bg-red-50 p-2 rounded">
-                              <div className="text-red-600 font-medium">Outflow</div>
-                              <div className="text-sm font-bold text-red-800">UGX {(report.metrics.totalExpenses || 0).toLocaleString()}</div>
-                            </div>
-                            <div className="bg-green-50 p-2 rounded">
-                              <div className="text-green-600 font-medium">Net Flow</div>
-                              <div className="text-sm font-bold text-green-800">UGX {(report.metrics.netProfit || 0).toLocaleString()}</div>
-                            </div>
-                          </div>
-                        );
-                        
-                      default:
-                        return (
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="bg-blue-50 p-2 rounded text-xs">
-                              <div className="text-blue-600 font-medium">Income</div>
-                              <div className="font-bold text-blue-800">UGX {(report.metrics.totalIncome || 0).toLocaleString()}</div>
-                            </div>
-                            <div className="bg-red-50 p-2 rounded text-xs">
-                              <div className="text-red-600 font-medium">Expenses</div>
-                              <div className="font-bold text-red-800">UGX {(report.metrics.totalExpenses || 0).toLocaleString()}</div>
-                            </div>
-                            <div className="bg-purple-50 p-2 rounded text-xs col-span-2 text-center">
-                              <div className="text-purple-600 font-medium">Net Profit</div>
-                              <div className="font-bold text-purple-800">UGX {(report.metrics.netProfit || 0).toLocaleString()}</div>
-                            </div>
-                          </div>
-                        );
-                    }
-                  })()}
+                <div className="p-4 space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">Report Type</span>
+                    <span className="font-semibold text-gray-900">{reportTypes[selectedReportType]?.name}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">Date Range</span>
+                    <span className="font-semibold text-gray-900">Current Month</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">Export Format</span>
+                    <span className="font-semibold text-gray-900">PDF</span>
+                  </div>
+                  {reportTypes[selectedReportType]?.requiresCountry && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">Jurisdiction</span>
+                      <span className="font-semibold text-gray-900">
+                        {countries.find(c => c.code === selectedCountry)?.flag} {countries.find(c => c.code === selectedCountry)?.name}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="px-4 pb-4">
+                  <h4 className="text-sm font-semibold text-gray-800 mb-2">Report Content</h4>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-blue-50 p-2 rounded text-xs">
+                      <div className="text-blue-700">Income</div>
+                      <div className="font-bold text-blue-900">UGX {((generatedReportData || reportSummary).metrics?.totalIncome || 0).toLocaleString()}</div>
+                    </div>
+                    <div className="bg-red-50 p-2 rounded text-xs">
+                      <div className="text-red-700">Expenses</div>
+                      <div className="font-bold text-red-900">UGX {((generatedReportData || reportSummary).metrics?.totalExpenses || 0).toLocaleString()}</div>
+                    </div>
+                    <div className="bg-green-50 p-2 rounded text-xs">
+                      <div className="text-green-700">Net Profit</div>
+                      <div className="font-bold text-green-900">UGX {((generatedReportData || reportSummary).metrics?.netProfit || 0).toLocaleString()}</div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -5104,7 +4861,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 <Brain className="w-5 h-5 text-violet-400" />
                 ICAN AI Assistant
               </h3>
-              <button onClick={() => setShowAIChat(false)} className="text-gray-400 hover:text-white text-xl">✕</button>
+              <button onClick={() => setShowAIChat(false)} className="text-gray-400 hover:text-white text-xl"></button>
             </div>
             <div className="space-y-3">
               {/* Message History */}
@@ -5123,7 +4880,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 {aiIsThinking && (
                   <div className="flex justify-start">
                     <div className="bg-violet-900/40 border border-violet-500/30 rounded p-2 text-violet-300 text-xs animate-pulse">
-                      🤖 Thinking...
+                       Thinking...
                     </div>
                   </div>
                 )}
@@ -5158,7 +4915,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 <DollarSign className="w-5 h-5 text-teal-400" />
                 Wallet Accounts
               </h3>
-              <button onClick={() => setShowWalletAccounts(false)} className="text-gray-400 hover:text-white text-xl">✕</button>
+              <button onClick={() => setShowWalletAccounts(false)} className="text-gray-400 hover:text-white text-xl"></button>
             </div>
 
             <div className="space-y-2">
@@ -5176,7 +4933,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               </div>
 
               <div className="space-y-1.5">
-                <p className="text-xs text-gray-400 font-semibold">💳 ACCOUNT TYPES</p>
+                <p className="text-xs text-gray-400 font-semibold"> ACCOUNT TYPES</p>
                 <div className="grid grid-cols-2 gap-2">
                   <button className="py-2 px-2 bg-teal-600/30 hover:bg-teal-600/50 border border-teal-500/30 text-white rounded text-xs font-medium transition">Main Wallet</button>
                   <button className="py-2 px-2 bg-teal-600/30 hover:bg-teal-600/50 border border-teal-500/30 text-white rounded text-xs font-medium transition">Savings</button>
@@ -5186,7 +4943,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               </div>
 
               <div className="bg-teal-900/40 rounded p-2 border border-teal-500/30">
-                <p className="text-xs font-semibold text-teal-300 mb-1">🔒 Account Security</p>
+                <p className="text-xs font-semibold text-teal-300 mb-1"> Account Security</p>
                 <p className="text-xs text-gray-300">All transactions are encrypted and verified on blockchain</p>
               </div>
             </div>
@@ -5426,6 +5183,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         <StatusUploader
           onClose={() => setShowStatusUploader(false)}
           onStatusCreated={() => setShowStatusUploader(false)}
+          autoOpenFilePicker={true}
         />
       )}
 
@@ -5483,7 +5241,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               {/* Info Footer */}
               <div className="mt-6 pt-4 border-t border-purple-500/20">
                 <p className="text-xs text-gray-500 text-center">
-                  💡 Tip: Transactions are recorded with AI-powered categorization for precise accounting
+                   Tip: Transactions are recorded with AI-powered categorization for precise accounting
                 </p>
               </div>
             </div>
@@ -5544,7 +5302,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 });
 
                 if (result.success) {
-                  console.log(`✅ Mobile: Saved transaction for user ${userId}`, result.transaction);
+                  console.log(` Mobile: Saved transaction for user ${userId}`, result.transaction);
                   // Update with real transaction data
                   setTransactions(prev => [
                     result.transaction,
@@ -5555,7 +5313,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   const loadResult = await engine.loadTransactions();
                   if (loadResult.success) {
                     const metrics = engine.calculateMetrics();
-                    console.log('📊 Updated VelocityEngine Metrics:', metrics);
+                    console.log(' Updated VelocityEngine Metrics:', metrics);
                     setVelocityMetrics(metrics);
                   }
                 } else {
@@ -5587,7 +5345,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             }
           }
 
-          console.log('✅ Transaction recorded:', transaction);
+          console.log(' Transaction recorded:', transaction);
         }}
       />
     </div>
@@ -5596,4 +5354,5 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
 
 export default MobileView;
+
 

@@ -73,6 +73,7 @@ export const Header = () => {
             setShowStatusUploader(false);
             // Optional: Show success notification
           }}
+          autoOpenFilePicker={true}
         />
       )}
     </>

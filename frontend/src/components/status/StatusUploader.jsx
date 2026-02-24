@@ -4,11 +4,11 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, X, Eye, EyeOff, Heart, Send, Plus, CheckCircle, AlertCircle, Loader, Camera, Video, Sparkles, Zap } from 'lucide-react';
+import { Upload, X, Send, Plus, CheckCircle, AlertCircle, Loader, Camera, Sparkles } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { uploadStatusMedia, createStatus } from '../../services/statusService';
 
-export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpenFilePicker = false }) => {
+export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpenFilePicker = true }) => {
   const { user, profile } = useAuth();
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -20,6 +20,7 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
   const [error, setError] = useState(null);
   const fileInputRef = useRef(null);
   const hasAutoOpenedRef = useRef(false);
+  const pendingFilePickerRef = useRef(false);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const [showCamera, setShowCamera] = useState(false);
@@ -111,6 +112,7 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
 
   const handleFileSelect = async (e) => {
     const file = e.target.files?.[0];
+    pendingFilePickerRef.current = false;
     if (!file) return;
 
     setError(null);
@@ -161,10 +163,28 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
     if (previewUrl || showCamera || isUploading || uploadSuccess) return;
 
     hasAutoOpenedRef.current = true;
+    pendingFilePickerRef.current = true;
     setTimeout(() => {
       fileInputRef.current?.click();
     }, 0);
   }, [autoOpenFilePicker, previewUrl, showCamera, isUploading, uploadSuccess]);
+
+  // If picker is canceled in auto-open mode, close uploader instead of showing intro screen.
+  useEffect(() => {
+    const handleWindowFocus = () => {
+      if (!pendingFilePickerRef.current) return;
+      setTimeout(() => {
+        const hasMediaSelected = Boolean(fileToUpload || previewUrl || fileInputRef.current?.files?.length);
+        if (!hasMediaSelected && !showCamera && !isUploading && !uploadSuccess) {
+          pendingFilePickerRef.current = false;
+          onClose?.();
+        }
+      }, 0);
+    };
+
+    window.addEventListener('focus', handleWindowFocus);
+    return () => window.removeEventListener('focus', handleWindowFocus);
+  }, [fileToUpload, previewUrl, showCamera, isUploading, uploadSuccess, onClose]);
 
   // Simulate upload progress
   useEffect(() => {
@@ -265,8 +285,8 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
               <Sparkles className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="text-lg font-bold bg-gradient-to-r from-purple-300 to-pink-300 bg-clip-text text-transparent">Share a Story</h2>
-              <p className="text-xs text-gray-400">Create your moment</p>
+              <h2 className="text-lg font-bold bg-gradient-to-r from-purple-300 to-pink-300 bg-clip-text text-transparent">Upload Status</h2>
+              <p className="text-xs text-gray-400">Select media to continue</p>
             </div>
           </div>
           <button
@@ -339,52 +359,18 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
               </button>
             </div>
           ) : (
-            <div className="space-y-3">
-              {/* Camera Capture Option */}
+            <div className="rounded-2xl border border-purple-500/20 bg-slate-900/40 p-6 text-center space-y-3">
+              <p className="text-sm text-purple-200">Opening file picker...</p>
               <button
-                onClick={startCamera}
-                className="relative group w-full rounded-2xl p-6 transition-all overflow-hidden border-2 border-purple-500/40 hover:border-purple-500/80 bg-gradient-to-br from-purple-500/10 to-pink-500/10 hover:from-purple-500/20 hover:to-pink-500/20"
+                onClick={() => {
+                  pendingFilePickerRef.current = true;
+                  fileInputRef.current?.click();
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium transition-colors"
               >
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                  <div className="absolute inset-0 bg-gradient-to-r from-purple-600/20 to-pink-600/20"></div>
-                </div>
-                <div className="relative space-y-2">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform shadow-lg">
-                    <Camera className="w-6 h-6 text-white" />
-                  </div>
-                  <p className="text-sm font-bold bg-gradient-to-r from-purple-300 to-pink-300 bg-clip-text text-transparent">Take Photo</p>
-                  <p className="text-xs text-purple-200/70">Capture from your camera</p>
-                </div>
+                <Upload className="w-4 h-4" />
+                Choose File
               </button>
-
-              {/* File Upload Option */}
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="relative group w-full rounded-2xl p-6 transition-all overflow-hidden border-2 border-blue-500/40 hover:border-blue-500/80 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 hover:from-blue-500/20 hover:to-cyan-500/20"
-              >
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                  <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 to-cyan-600/20"></div>
-                </div>
-                <div className="relative space-y-2">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform shadow-lg">
-                    <Upload className="w-6 h-6 text-white" />
-                  </div>
-                  <p className="text-sm font-bold bg-gradient-to-r from-blue-300 to-cyan-300 bg-clip-text text-transparent">Upload Media</p>
-                  <p className="text-xs text-blue-200/70">JPEG/PNG/WebP up to 20MB, MP4/MOV/WebM up to 100MB</p>
-                </div>
-              </button>
-
-              {/* Info Cards */}
-              <div className="grid grid-cols-2 gap-2 pt-2">
-                <div className="rounded-lg bg-gradient-to-br from-orange-500/20 to-red-500/20 border border-orange-500/30 p-3 text-center">
-                  <Zap className="w-4 h-4 text-orange-400 mx-auto mb-1" />
-                  <p className="text-xs font-semibold text-orange-300">Instant</p>
-                </div>
-                <div className="rounded-lg bg-gradient-to-br from-green-500/20 to-emerald-500/20 border border-green-500/30 p-3 text-center">
-                  <Heart className="w-4 h-4 text-green-400 mx-auto mb-1" />
-                  <p className="text-xs font-semibold text-green-300">Engaging</p>
-                </div>
-              </div>
             </div>
           )}
 

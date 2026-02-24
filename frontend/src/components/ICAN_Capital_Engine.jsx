@@ -9540,6 +9540,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
             // Trigger status refresh in StatusViewerUI
             setStatusRefresh(prev => prev + 1);
           }}
+          autoOpenFilePicker={true}
         />
       )}
 
