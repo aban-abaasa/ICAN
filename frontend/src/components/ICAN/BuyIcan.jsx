@@ -168,6 +168,12 @@ export default function BuyIcan() {
   return (
     <div className="ican-trading-container buy-ican">
       <div className="trading-card">
+        {/* Title */}
+        <div style={{ marginBottom: '24px', textAlign: 'center' }}>
+          <h3 style={{ margin: '0 0 4px 0', color: '#333', fontSize: '20px' }}>💳 Buy ICAN Coins</h3>
+          <p style={{ margin: 0, color: '#666', fontSize: '13px' }}>Convert your local currency to ICAN at current market price</p>
+        </div>
+
         {/* Trading Form */}
         <form onSubmit={handleBuyIcan} className="trading-form">
           {/* Local Amount Input */}
@@ -195,14 +201,14 @@ export default function BuyIcan() {
           {icanAmount > 0 && (
             <div className="conversion-display">
               <div className="conversion-item">
-                <div className="conversion-label">{currency}</div>
+                <div className="conversion-label">You Pay</div>
                 <div className="conversion-value">{currencySymbol}{parseFloat(localAmount).toLocaleString()}</div>
               </div>
               
               <div className="conversion-arrow">→</div>
               
               <div className="conversion-item">
-                <div className="conversion-label">ICAN Coins</div>
+                <div className="conversion-label">You Get</div>
                 <div className="conversion-value highlight">{icanAmount.toFixed(2)}</div>
               </div>
             </div>
@@ -211,13 +217,13 @@ export default function BuyIcan() {
           {/* Error Message */}
           {error && (
             <div className="alert alert-error">
-              ❌ {error}
+              {error}
             </div>
           )}
 
           {/* Success Message */}
           {success && (
-            <div className="alert alert-success">
+            <div className="alert alert-success" style={{ whiteSpace: 'pre-wrap' }}>
               {success}
             </div>
           )}
@@ -237,6 +243,16 @@ export default function BuyIcan() {
             )}
           </button>
         </form>
+
+        {/* Info Section */}
+        <div style={{ marginTop: '20px', padding: '16px', background: '#f8f9fa', borderRadius: '8px', borderLeft: '3px solid #667eea' }}>
+          <p style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#666', fontWeight: '600', textTransform: 'uppercase' }}>ℹ️ How it works</p>
+          <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: '13px', color: '#666', lineHeight: '1.6' }}>
+            <li style={{ marginBottom: '4px' }}>✓ Real money is deducted from your account</li>
+            <li style={{ marginBottom: '4px' }}>✓ ICAN coins arrive in your wallet instantly</li>
+            <li>✓ Your coins are ready to invest or trade</li>
+          </ul>
+        </div>
       </div>
     </div>
   );

@@ -18,6 +18,7 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
   const [prevDataLength, setPrevDataLength] = useState(0);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [xAxisDomain, setXAxisDomain] = useState([0, 'dataMax']);
+  const [showAnalysis, setShowAnalysis] = useState(false);
   const chartContainerRef = useRef(null);
 
   const defaultSettings = {
@@ -376,9 +377,9 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
   }
 
   return (
-    <div className="bg-slate-900 rounded-xl p-4 md:p-6 space-y-4 h-full">
+    <div className="bg-slate-900 rounded-xl p-4 md:p-6 space-y-4 h-full w-full flex flex-col">
       {/* Chart Header - Compact Professional Style */}
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3 flex-shrink-0">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
           <div className="flex items-center gap-3">
             <h2 className="text-lg font-bold text-white">ICAN/USD</h2>
@@ -395,10 +396,10 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
       </div>
 
       {/* Zoom & Pan Controls */}
-      <div className="flex flex-wrap items-center gap-2 bg-slate-800/50 p-2.5 rounded-lg border border-slate-700">
+      <div className="flex flex-wrap items-center gap-2 bg-slate-800/50 p-2.5 rounded-lg border border-slate-700 flex-shrink-0">
         <button
           onClick={handlePanLeft}
-          className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-white border border-slate-700 hover:border-slate-600"
+          className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-white border border-slate-700 hover:border-slate-600 text-sm"
           title="Pan Left"
         >
           ◀ Pan
@@ -407,7 +408,7 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
         <button
           onClick={handleZoomOut}
           disabled={zoomLevel <= 1}
-          className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-white border border-slate-700 hover:border-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-white border border-slate-700 hover:border-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
           title="Zoom Out"
         >
           🔍−
@@ -420,7 +421,7 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
         <button
           onClick={handleZoomIn}
           disabled={zoomLevel >= 3}
-          className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-white border border-slate-700 hover:border-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-white border border-slate-700 hover:border-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
           title="Zoom In"
         >
           🔍+
@@ -429,7 +430,7 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
         <button
           onClick={handleResetZoom}
           disabled={zoomLevel === 1}
-          className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-white border border-slate-700 hover:border-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-white border border-slate-700 hover:border-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
           title="Reset Zoom"
         >
           ⟲ Reset
@@ -437,16 +438,24 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
 
         <button
           onClick={handlePanRight}
-          className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-white border border-slate-700 hover:border-slate-600"
+          className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-white border border-slate-700 hover:border-slate-600 text-sm"
           title="Pan Right"
         >
           Pan ▶
         </button>
       </div>
 
-      {/* Technical Analysis Grid */}
-      {analysis && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      {/* Toggle Analysis Button */}
+      <button
+        onClick={() => setShowAnalysis(!showAnalysis)}
+        className="w-full py-2 px-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors text-sm font-semibold text-slate-300 flex-shrink-0"
+      >
+        {showAnalysis ? '▼ Hide Analysis' : '▶ Show Analysis'}
+      </button>
+
+      {/* Technical Analysis Grid - Collapsible */}
+      {analysis && showAnalysis && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 flex-shrink-0">
           {/* Trend Analysis Card */}
           <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
             <div className="flex items-center gap-2 mb-3">
@@ -500,13 +509,12 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
         </div>
       )}
 
-      {/* Main Chart Container - Stable, no flickering */}
+      {/* Main Chart Container - Flexible for fullscreen */}
       <div 
         ref={chartContainerRef}
-        className="bg-slate-950 rounded-lg p-3 border border-slate-800 cursor-grab active:cursor-grabbing overflow-x-auto" 
-        style={{ minHeight: '350px' }}
+        className="bg-slate-950 rounded-lg p-3 border border-slate-800 cursor-grab active:cursor-grabbing overflow-x-auto flex-1 flex flex-col min-h-0" 
       >
-        <ResponsiveContainer width="100%" height={350}>
+        <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={zoomedDisplayData} margin={{ top: 20, right: 30, left: 50, bottom: 50 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.1)" />
             <XAxis
@@ -555,20 +563,22 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
         </ResponsiveContainer>
       </div>
 
-      {/* Footer Stats */}
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 pt-2 border-t border-slate-800">
-        <div className="flex items-center gap-4">
-          <span className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded" style={{backgroundColor: chartSettings.upColor}}></span>
-            Bullish
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded" style={{backgroundColor: chartSettings.downColor}}></span>
-            Bearish
-          </span>
+      {/* Footer Stats - Only show when analysis is visible */}
+      {showAnalysis && (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 pt-2 border-t border-slate-800 flex-shrink-0">
+          <div className="flex items-center gap-4">
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded" style={{backgroundColor: chartSettings.upColor}}></span>
+              Bullish
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded" style={{backgroundColor: chartSettings.downColor}}></span>
+              Bearish
+            </span>
+          </div>
+          <span>Auto-refresh: 7s</span>
         </div>
-        <span>Auto-refresh: 7s</span>
-      </div>
+      )}
     </div>
   );
 });

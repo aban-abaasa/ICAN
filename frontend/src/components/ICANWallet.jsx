@@ -44,6 +44,7 @@ import UnifiedApprovalModal from './UnifiedApprovalModal';
 import CandlestickChart from './CandlestickChart';
 import BuyIcan from './ICAN/BuyIcan';
 import SellIcan from './ICAN/SellIcan';
+import ReceiveMoneyModal from './ReceiveMoneyModal';
 
 const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
   const [showBalance, setShowBalance] = useState(true);
@@ -124,6 +125,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
   const [agentAccountLoading, setAgentAccountLoading] = useState(false);
   const [showWalletAccountNumber, setShowWalletAccountNumber] = useState(false);
   const [showAgentAccountNumber, setShowAgentAccountNumber] = useState(true);
+  const [showReceiveMoneyModal, setShowReceiveMoneyModal] = useState(false);
   
   // Payment Cards State
   const [paymentCards, setPaymentCards] = useState([]);
@@ -693,6 +695,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
   // 🔧 ALWAYS show user's registered country currency for balance (NOT selectable)
   const registeredCurrency = registeredCurrencyFromDB || userAccount?.preferred_currency || 'USD';
   const currentWallet = walletData[registeredCurrency];
+  const localCountryInfo = CountryService.getCountry(userCountry);
+  const localCurrencyLabel = `${localCountryInfo?.flag || '🌍'} ${registeredCurrency} - Local Currency`;
 
   const formatIcanValue = (amount) =>
     (Number(amount) || 0).toLocaleString('en-US', {
@@ -784,6 +788,12 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
     if (!currentUserId) return;
     loadTrustAccountSummary(currentUserId, userCountry || 'UG');
   }, [currentUserId, userCountry]);
+
+  // Force wallet/account forms to always use local currency
+  useEffect(() => {
+    setAccountCreationForm((prev) => ({ ...prev, preferredCurrency: registeredCurrency }));
+    setAccountEditForm((prev) => ({ ...prev, preferredCurrency: registeredCurrency }));
+  }, [registeredCurrency]);
 
   // 🏢 Auto-fill business account creation form
   useEffect(() => {
@@ -1403,24 +1413,18 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
 
       if (agentError) throw agentError;
 
-      // Initialize float accounts (USD and UGX)
-      const { error: floatUSDError } = await agentService.supabase
+      // Initialize float account with local currency only
+      const agentCountryCode = (user.user_metadata?.country || userCountry || 'UG').toUpperCase();
+      const agentLocalCurrency = CountryService.getCurrencyCode(agentCountryCode) || registeredCurrency || 'UGX';
+      const { error: floatError } = await agentService.supabase
         .from('agent_floats')
         .insert([{
           agent_id: newAgent[0].id,
-          currency: 'USD',
+          currency: agentLocalCurrency,
           current_balance: 0
         }]);
 
-      const { error: floatUGXError } = await agentService.supabase
-        .from('agent_floats')
-        .insert([{
-          agent_id: newAgent[0].id,
-          currency: 'UGX',
-          current_balance: 0
-        }]);
-
-      if (floatUSDError || floatUGXError) {
+      if (floatError) {
         throw new Error('Failed to initialize float accounts');
       }
 
@@ -1503,7 +1507,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
         phoneNumber: accountCreationForm.phoneNumber,
         email: accountCreationForm.email,
         pin: accountCreationForm.pin,
-        preferredCurrency: accountCreationForm.preferredCurrency,
+        preferredCurrency: registeredCurrency,
         biometrics: {
           fingerprintEnabled: accountCreationForm.fingerprintEnabled || false,
           phonePhoneEnabled: accountCreationForm.phonePhoneEnabled || false
@@ -1534,7 +1538,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
         phoneNumber: '',
         email: '',
         pin: '',
-        preferredCurrency: 'USD',
+        preferredCurrency: registeredCurrency,
         fingerprintEnabled: false,
         phonePhoneEnabled: false
       });
@@ -1745,7 +1749,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
         accountHolderName: accountEditForm.accountHolderName,
         phoneNumber: accountEditForm.phoneNumber,
         email: accountEditForm.email,
-        preferredCurrency: accountEditForm.preferredCurrency
+        preferredCurrency: registeredCurrency
       });
 
       if (!result.success) {
@@ -1826,7 +1830,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
         phoneNumber: accountEditForm.phoneNumber,
         email: accountEditForm.email,
         pin: accountEditForm.newPin,
-        preferredCurrency: accountEditForm.preferredCurrency
+        preferredCurrency: registeredCurrency
       });
 
       if (!result.success) {
@@ -1843,7 +1847,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
         accountHolderName: '',
         phoneNumber: '',
         email: '',
-        preferredCurrency: 'USD',
+        preferredCurrency: registeredCurrency,
         currentPin: '',
         newPin: '',
         confirmNewPin: '',
@@ -1903,7 +1907,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
           account_holder_name: accountEditForm.accountHolderName,
           phone_number: accountEditForm.phoneNumber,
           email: accountEditForm.email,
-          preferred_currency: accountEditForm.preferredCurrency,
+          preferred_currency: registeredCurrency,
           updated_at: new Date().toISOString()
         })
         .eq('id', account.id);
@@ -1949,7 +1953,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
         accountHolderName: '',
         phoneNumber: '',
         email: '',
-        preferredCurrency: 'USD',
+        preferredCurrency: registeredCurrency,
         currentPin: '',
         newPin: '',
         confirmNewPin: '',
@@ -3311,7 +3315,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
               <span className="text-xs sm:text-sm font-medium text-white">Send</span>
             </button>
             <button 
-              onClick={() => setActiveModal('receive')}
+              onClick={() => setShowReceiveMoneyModal(true)}
               className="bg-gradient-to-br from-cyan-600 to-cyan-700 border border-cyan-500 hover:border-cyan-400 rounded-lg py-2 sm:py-3 px-2 sm:px-4 flex flex-col items-center gap-1 sm:gap-2 transition-all"
             >
               <ArrowDownLeft className="w-4 sm:w-5 h-4 sm:h-5 text-cyan-200" />
@@ -3368,7 +3372,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
                     accountHolderName: userAccount.account_holder_name,
                     phoneNumber: userAccount.phone_number,
                     email: userAccount.email,
-                    preferredCurrency: userAccount.preferred_currency
+                    preferredCurrency: registeredCurrency
                   });
                   setShowAccountEdit(true);
                 }}
@@ -3939,15 +3943,12 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
               {/* Preferred Currency */}
               <div>
                 <label className="block text-sm font-semibold text-gray-300 mb-2">Preferred Currency</label>
-                <select
-                  value={accountEditForm.preferredCurrency}
-                  onChange={(e) => setAccountEditForm({ ...accountEditForm, preferredCurrency: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-lg bg-slate-700/50 border border-cyan-500/30 text-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all"
-                >
-                  <option value="USD">USD - US Dollar</option>
-                  <option value="UGX">UGX - Uganda Shilling</option>
-                  <option value="KES">KES - Kenya Shilling</option>
-                </select>
+                <input
+                  type="text"
+                  value={localCurrencyLabel}
+                  readOnly
+                  className="w-full px-4 py-2.5 rounded-lg bg-slate-800/60 border border-cyan-500/30 text-cyan-200 focus:outline-none"
+                />
               </div>
 
               {/* PIN */}
@@ -4089,7 +4090,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
                     accountHolderName: userAccount.account_holder_name,
                     phoneNumber: userAccount.phone_number,
                     email: userAccount.email,
-                    preferredCurrency: userAccount.preferred_currency
+                    preferredCurrency: registeredCurrency
                   });
                   setShowAccountEdit(true);
                 }}
@@ -4930,15 +4931,12 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
               {/* Preferred Currency */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Preferred Currency</label>
-                <select
-                  value={accountEditForm.preferredCurrency}
-                  onChange={(e) => setAccountEditForm({ ...accountEditForm, preferredCurrency: e.target.value })}
-                  className="w-full px-4 py-3 bg-slate-700/50 border border-purple-500/30 hover:border-purple-500/60 rounded-lg text-white focus:border-purple-500 focus:outline-none transition-all cursor-pointer"
-                >
-                  <option value="USD">🇺🇸 USD - US Dollar</option>
-                  <option value="UGX">🇺🇬 UGX - Uganda Shilling</option>
-                  <option value="KES">🇰🇪 KES - Kenya Shilling</option>
-                </select>
+                <input
+                  type="text"
+                  value={localCurrencyLabel}
+                  readOnly
+                  className="w-full px-4 py-3 bg-slate-800/60 border border-purple-500/30 rounded-lg text-purple-200 focus:outline-none"
+                />
               </div>
 
               {/* PIN Change Section */}
@@ -5153,15 +5151,12 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
               {/* Preferred Currency */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Preferred Currency</label>
-                <select
-                  value={accountCreationForm.preferredCurrency}
-                  onChange={(e) => setAccountCreationForm({ ...accountCreationForm, preferredCurrency: e.target.value })}
-                  className="w-full px-4 py-3 bg-slate-700/50 border border-purple-500/30 hover:border-purple-500/60 rounded-lg text-white focus:border-purple-500 focus:outline-none transition-all cursor-pointer"
-                >
-                  <option value="USD">🇺🇸 USD - US Dollar</option>
-                  <option value="UGX">🇺🇬 UGX - Uganda Shilling</option>
-                  <option value="KES">🇰🇪 KES - Kenya Shilling</option>
-                </select>
+                <input
+                  type="text"
+                  value={localCurrencyLabel}
+                  readOnly
+                  className="w-full px-4 py-3 bg-slate-800/60 border border-purple-500/30 rounded-lg text-purple-200 focus:outline-none"
+                />
               </div>
 
               {/* Action Buttons */}
@@ -5985,6 +5980,14 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
           </div>
         </div>
       )}
+
+      {/* NEW RECEIVE MONEY MODAL WITH QR CODE */}
+      <ReceiveMoneyModal
+        isOpen={showReceiveMoneyModal}
+        onClose={() => setShowReceiveMoneyModal(false)}
+        userId={userAccount?.id}
+        selectedCurrency={selectedCurrency}
+      />
     </div>
   );
 };

@@ -8,6 +8,7 @@ import { useAuth } from '../../context/AuthContext';
 import icanCoinService from '../../services/icanCoinService';
 import icanCoinBlockchainService from '../../services/icanCoinBlockchainService';
 import { CountryService } from '../../services/countryService';
+import CandlestickChart from '../CandlestickChart';
 import './IcanPortfolio.css';
 
 export default function IcanPortfolio() {
@@ -21,6 +22,9 @@ export default function IcanPortfolio() {
   const [selectedTab, setSelectedTab] = useState('overview');
   const [priceHistory, setPriceHistory] = useState(null);
   const [period, setPeriod] = useState('24h');
+  const [chartMenuOpen, setChartMenuOpen] = useState(false);
+  const [chartFullscreen, setChartFullscreen] = useState(false);
+  const [candleData, setCandleData] = useState([]);
 
   // Load portfolio data
   useEffect(() => {
@@ -309,50 +313,130 @@ export default function IcanPortfolio() {
           {/* Market Chart Tab */}
           {selectedTab === 'market' && (
             <div className="tab-content">
-              <div className="period-selector">
-                {['1h', '24h', '7d', '30d'].map((p) => (
-                  <button
-                    key={p}
-                    className={`period-btn ${period === p ? 'active' : ''}`}
-                    onClick={() => setPeriod(p)}
-                  >
-                    {p}
-                  </button>
-                ))}
+              <div className="chart-controls">
+                {/* Mobile Menu Button */}
+                <button
+                  className="chart-menu-btn"
+                  onClick={() => setChartMenuOpen(!chartMenuOpen)}
+                  title="Toggle chart controls"
+                >
+                  ⋮
+                </button>
+
+                {/* Period Selector - Hidden on mobile by default */}
+                <div className={!chartMenuOpen ? 'chart-controls-hidden' : 'chart-controls-visible'}>
+                  <div className="period-selector">
+                    {['1h', '24h', '7d', '30d'].map((p) => (
+                      <button
+                        key={p}
+                        className={`period-btn ${period === p ? 'active' : ''}`}
+                        onClick={() => {
+                          setPeriod(p);
+                          setChartMenuOpen(false);
+                        }}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Mobile Menu Overlay */}
+                {chartMenuOpen && (
+                  <div className="chart-menu-overlay">
+                    <div className="chart-menu-overlay-item">
+                      <strong>Time Period</strong>
+                    </div>
+                    {['1h', '24h', '7d', '30d'].map((p) => (
+                      <div
+                        key={p}
+                        className="chart-menu-overlay-item"
+                        onClick={() => {
+                          setPeriod(p);
+                          setChartMenuOpen(false);
+                        }}
+                      >
+                        {period === p ? '✓ ' : ''}{p}
+                      </div>
+                    ))}
+                    <div className="chart-menu-overlay-item" style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #f0f0f0', cursor: 'default' }}>
+                      <strong>Stats</strong>
+                    </div>
+                    {priceHistory && priceHistory.length > 0 && (
+                      <>
+                        <div className="chart-menu-overlay-item">
+                          Current: {portfolio.marketPrice.toLocaleString()} UGX
+                        </div>
+                        <div className="chart-menu-overlay-item">
+                          High: {Math.max(...priceHistory.map(p => p.price_ugx)).toLocaleString()} UGX
+                        </div>
+                        <div className="chart-menu-overlay-item">
+                          Low: {Math.min(...priceHistory.map(p => p.price_ugx)).toLocaleString()} UGX
+                        </div>
+                        <div className="chart-menu-overlay-item">
+                          Avg: {(priceHistory.reduce((a, p) => a + p.price_ugx, 0) / priceHistory.length).toLocaleString()} UGX
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
 
               {priceHistory && priceHistory.length > 0 ? (
                 <div className="chart-display">
-                  <div className="price-stats">
-                    <div className="stat">
-                      <span className="label">Current:</span>
-                      <span className="value">{portfolio.marketPrice.toLocaleString()} UGX</span>
-                    </div>
-                    <div className="stat">
-                      <span className="label">High:</span>
-                      <span className="value">
-                        {Math.max(...priceHistory.map(p => p.price_ugx)).toLocaleString()} UGX
-                      </span>
-                    </div>
-                    <div className="stat">
-                      <span className="label">Low:</span>
-                      <span className="value">
-                        {Math.min(...priceHistory.map(p => p.price_ugx)).toLocaleString()} UGX
-                      </span>
-                    </div>
-                    <div className="stat">
-                      <span className="label">Avg:</span>
-                      <span className="value">
-                        {(
-                          priceHistory.reduce((a, p) => a + p.price_ugx, 0) / priceHistory.length
-                        ).toLocaleString()} UGX
-                      </span>
+                  {/* Price Stats - Hidden on mobile by default */}
+                  <div className={!chartMenuOpen ? 'chart-controls-hidden' : 'chart-controls-visible'}>
+                    <div className="price-stats">
+                      <div className="stat">
+                        <span className="label">Current:</span>
+                        <span className="value">{portfolio.marketPrice.toLocaleString()} UGX</span>
+                      </div>
+                      <div className="stat">
+                        <span className="label">High:</span>
+                        <span className="value">
+                          {Math.max(...priceHistory.map(p => p.price_ugx)).toLocaleString()} UGX
+                        </span>
+                      </div>
+                      <div className="stat">
+                        <span className="label">Low:</span>
+                        <span className="value">
+                          {Math.min(...priceHistory.map(p => p.price_ugx)).toLocaleString()} UGX
+                        </span>
+                      </div>
+                      <div className="stat">
+                        <span className="label">Avg:</span>
+                        <span className="value">
+                          {(
+                            priceHistory.reduce((a, p) => a + p.price_ugx, 0) / priceHistory.length
+                          ).toLocaleString()} UGX
+                        </span>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="chart-container">
-                    <p>📈 Price chart visualization would appear here</p>
-                    <p>Higher resolution charts coming soon with Chart.js integration</p>
+                  <div className={`chart-container ${chartFullscreen ? 'fullscreen' : ''}`}>
+                    <div className="chart-header-row">
+                      <h3 style={{ margin: 0, color: 'white' }}>ICAN/USD Live Chart</h3>
+                      <button
+                        className="chart-fullscreen-btn"
+                        onClick={() => setChartFullscreen(!chartFullscreen)}
+                        title={chartFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+                      >
+                        {chartFullscreen ? '⛶' : '⛶'}
+                      </button>
+                    </div>
+                    <CandlestickChart 
+                      candleData={candleData} 
+                      priceUSD={portfolio?.marketPrice || 0} 
+                      loading={loading}
+                      settings={{
+                        upColor: '#10b981',
+                        downColor: '#ef4444',
+                        wickColor: '#808080',
+                        showVolume: true,
+                        selectedTimeframe: '7s'
+                      }}
+                    />
                   </div>
                 </div>
               ) : (
