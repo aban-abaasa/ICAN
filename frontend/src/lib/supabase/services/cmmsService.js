@@ -1265,6 +1265,157 @@ export const markCompanyCreator = async (companyId, userId, creatorEmail) => {
   }
 };
 
+// ============================================
+// MAINTENANCE REQUISITIONS MANAGEMENT
+// ============================================
+
+/**
+ * Fetch company requisitions from Supabase
+ * Includes all requisition details and approval chain status
+ */
+export const getCompanyRequisitions = async (companyId) => {
+  try {
+    console.log(`📋 Fetching requisitions for company: ${companyId}`);
+    
+    // First check if table exists and has data
+    console.log('🔍 Querying cmms_requisitions table...');
+    const { data, error } = await supabase
+      .from('cmms_requisitions')
+      .select(`
+        id,
+        requisition_number,
+        requisition_date,
+        requested_by,
+        requested_by_name,
+        requested_by_email,
+        requested_by_role,
+        purpose,
+        justification,
+        urgency_level,
+        required_by_date,
+        status,
+        total_estimated_cost,
+        budget_sufficient,
+        dept_head_approved_at,
+        dept_head_decision_notes,
+        finance_approved_at,
+        finance_decision_notes,
+        order_placed_date,
+        po_number,
+        expected_delivery_date,
+        actual_delivery_date
+      `)
+      .eq('cmms_company_id', companyId)
+      .order('requisition_date', { ascending: false });
+
+    if (error) {
+      console.error('❌ Error fetching requisitions:', error);
+      console.error('Error details:', { code: error.code, message: error.message });
+      return { data: null, error };
+    }
+
+    console.log(`✅ Query successful - ${data?.length || 0} requisitions found`);
+    if (data && data.length > 0) {
+      console.log('📊 Sample requisition:', data[0]);
+    }
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('❌ Exception fetching requisitions:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Create a new maintenance requisition
+ * Automatically sent to department head for approval
+ */
+export const createRequisition = async (companyId, departmentId, requisitionData, userId) => {
+  try {
+    console.log(`📝 Creating requisition for company: ${companyId}`);
+    console.log('📝 Department ID:', departmentId);
+    console.log('📝 User ID:', userId);
+    console.log('📝 Requisition Data:', requisitionData);
+    
+    const requisitionNumber = `REQ-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+    console.log('📝 Generated Requisition Number:', requisitionNumber);
+    
+    const insertData = {
+      cmms_company_id: companyId,
+      department_id: departmentId,
+      requisition_number: requisitionNumber,
+      requested_by: userId,
+      requested_by_name: requisitionData.requesterName || 'Unknown',
+      requested_by_email: requisitionData.requesterEmail,
+      requested_by_role: requisitionData.requesterRole,
+      purpose: requisitionData.purpose || 'maintenance',
+      justification: requisitionData.description,
+      urgency_level: requisitionData.priority || 'normal',
+      required_by_date: requisitionData.requiredByDate,
+      total_estimated_cost: requisitionData.estimatedCost || 0,
+      status: 'pending_department_head',
+      budget_sufficient: requisitionData.budgetSufficient !== false
+    };
+    
+    console.log('📝 Insert data to DB:', insertData);
+    
+    const { data, error } = await supabase
+      .from('cmms_requisitions')
+      .insert(insertData)
+      .select();
+
+    if (error) {
+      console.error('❌ Error creating requisition:', error);
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      return { data: null, error };
+    }
+
+    console.log('✅ Requisition created successfully!');
+    console.log('✅ Response data:', data);
+    return { data: data?.[0] || null, error: null };
+  } catch (error) {
+    console.error('❌ Exception creating requisition:', error);
+    console.error('Exception details:', error.message);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Update requisition status during approval workflow
+ */
+export const updateRequisitionStatus = async (requisitionId, newStatus, approverNotes = '', approverRole = 'department_head') => {
+  try {
+    console.log(`🔄 Updating requisition ${requisitionId} to status: ${newStatus}`);
+    
+    const updateData = { status: newStatus };
+    
+    if (approverRole === 'department_head' && newStatus.includes('approved')) {
+      updateData.dept_head_approved_at = new Date().toISOString();
+      updateData.dept_head_decision_notes = approverNotes;
+    } else if (approverRole === 'finance' && newStatus.includes('approved')) {
+      updateData.finance_approved_at = new Date().toISOString();
+      updateData.finance_decision_notes = approverNotes;
+    }
+
+    const { data, error } = await supabase
+      .from('cmms_requisitions')
+      .update(updateData)
+      .eq('id', requisitionId)
+      .select();
+
+    if (error) {
+      console.error('❌ Error updating requisition:', error);
+      return { data: null, error };
+    }
+
+    console.log('✅ Requisition updated successfully');
+    return { data: data?.[0] || null, error: null };
+  } catch (error) {
+    console.error('❌ Exception updating requisition:', error);
+    return { data: null, error };
+  }
+};
+
 export default {
   createCompanyProfile,
   getCompanyProfile,
@@ -1291,6 +1442,9 @@ export default {
   getCompanyBudget,
   getCompanyEquipment,
   getMaintenancePlans,
-  markCompanyCreator
+  markCompanyCreator,
+  getCompanyRequisitions,
+  createRequisition,
+  updateRequisitionStatus
 };
 

@@ -10,7 +10,7 @@
 //   ├── Financial Officer
 //   └── Service Providers (can select multiple service types)
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Building,
   User,
@@ -25,7 +25,8 @@ import {
   Search,
   CheckCircle2,
   MoreVertical,
-  X
+  X,
+  Clipboard
 } from 'lucide-react';
 
 // Import Supabase CMMS service
@@ -652,6 +653,9 @@ const CMMSModule = ({
   const [editingUser, setEditingUser] = useState(null);
   const [newlyAddedUserId, setNewlyAddedUserId] = useState(null);  // Track newly added user for UI highlight
   
+  // Calculate companyId from localStorage and user state
+  const companyIdToUse = localStorage.getItem('cmms_company_id') || userCompanyId;
+  
   // Profile creation form state - moved to top to avoid hook order issues
   const [profileFormData, setProfileFormData] = useState({
     companyName: '',
@@ -680,8 +684,17 @@ const CMMSModule = ({
   // ============================================
   // ROLE-BASED ACCESSIBLE TABS
   // ============================================
+  // IMPORTANT: Role-based tab access is maintained for EVERY user
+  // This means a user with 'technician' role sees only technician tabs
+  // regardless if they're a company creator or just have an assigned role
+  // 
+  // Feature: Users can now create multiple company profiles but still maintain
+  // their role-based access control. If assigned as 'technician', they only see
+  // [inventory, requisitions] tabs even if they create/own a company.
   const getTabs = () => {
     // Define which tabs are accessible for each role
+    // NOTE: Tab access is role-restricted, not company-restricted
+    // So a technician can only see [inventory, requisitions] even if they create a company
     const tabsByRole = {
       guest: [],
       admin: ['company', 'departments', 'users', 'inventory', 'requisitions', 'reports'],
@@ -726,60 +739,282 @@ const CMMSModule = ({
   // REQUISITION MANAGER (TECHNICIAN & WORKFLOW)
   // ============================================
   const RequisitionManager = () => {
+    // Requisitions Manager State
     const [newRequisition, setNewRequisition] = useState({
       title: '',
       description: '',
       equipmentId: '',
       estimatedCost: 0,
-      priority: 'Medium',
-      estimatedDays: 1
+      priority: 'normal',
+      estimatedDays: 1,
+      requiredByDate: '',
+      items: []  // NEW: Track items to be serviced/purchased
     });
+    
+    const [selectedEquipment, setSelectedEquipment] = useState('');  // NEW: For equipment selector
+    const [itemQuantity, setItemQuantity] = useState(1);  // NEW: For item quantity
+    const [itemCost, setItemCost] = useState(0);  // NEW: For item cost
+    
+    const [loadingRequisitions, setLoadingRequisitions] = useState(false);
+    const [isSubmittingRequisition, setIsSubmittingRequisition] = useState(false);
+    const hasLoadedRequisitions = useRef(false);  // Track if already loaded to prevent blinking
+    
+    // Load requisitions from Supabase
+    const loadRequisitionsFromSupabase = useCallback(async () => {
+      console.log('🚀 loadRequisitionsFromSupabase called');
+      console.log('   hasLoadedRequisitions:', hasLoadedRequisitions.current);
+      
+      if (hasLoadedRequisitions.current) {
+        console.log('   ✓ Already loaded, returning early');
+        return;
+      }
+      
+      console.log('   📋 Starting load...');
+      hasLoadedRequisitions.current = true;
+      setLoadingRequisitions(true);
+      
+      // Safety timeout - force stop loading after 8 seconds
+      const timeoutId = setTimeout(() => {
+        console.warn('⚠️ Loading timeout - stopping spinner');
+        setLoadingRequisitions(false);
+      }, 8000);
+      
+      try {
+        console.log('   📡 Fetching from company:', companyIdToUse);
+        const { data, error } = await cmmsService.getCompanyRequisitions(companyIdToUse);
+        
+        clearTimeout(timeoutId);
+        console.log('   ✅ Fetch returned, error:', error, 'data length:', data?.length);
+        
+        if (error) {
+          console.error('   ❌ Fetch error:', error);
+          setLoadingRequisitions(false);
+          return;
+        }
+
+        // Transform Supabase data
+        const transformedRequisitions = (data || []).map(req => ({
+          id: req.id,
+          title: req.purpose || 'Maintenance Request',
+          description: req.justification || '',
+          createdBy: req.requested_by_role || 'technician',
+          createdByName: req.requested_by_name || 'Unknown',
+          createdAt: new Date(req.requisition_date),
+          status: req.status || 'pending_department_head',
+          priority: req.urgency_level || 'normal',
+          estimatedCost: req.total_estimated_cost || 0,
+          estimatedDays: 1,
+          requisitionNumber: req.requisition_number,
+          budgetSufficient: req.budget_sufficient,
+          approvals: {
+            supervisor: req.dept_head_approved_at ? { approved: true } : null,
+            coordinator: req.finance_approved_at ? { approved: true } : null,
+            finance: null
+          },
+          assignedTechnician: null
+        }));
+        
+        console.log(`   📊 Transformed ${transformedRequisitions.length} requisitions`);
+        setCmmsData(prev => ({
+          ...prev,
+          requisitions: transformedRequisitions
+        }));
+        
+        console.log('✅ Load complete');
+        setLoadingRequisitions(false);
+      } catch (error) {
+        clearTimeout(timeoutId);
+        console.error('   🔥 Exception:', error);
+        setLoadingRequisitions(false);
+      }
+    }, [companyIdToUse]);
+    
+    // Fetch requisitions from Supabase when tab changes
+    useEffect(() => {
+      console.log('🔄 useEffect triggered - activeTab:', activeTab);
+      
+      if (activeTab !== 'requisitions') {
+        console.log('❌ Not on requisitions tab, resetting...');
+        hasLoadedRequisitions.current = false;
+        return;
+      }
+      
+      if (!companyIdToUse) {
+        console.log('⚠️ No company ID available');
+        return;
+      }
+      
+      if (hasLoadedRequisitions.current) {
+        console.log('✓ Already loaded, skipping');
+        return;
+      }
+      
+      console.log('▶️ Triggering load...');
+      loadRequisitionsFromSupabase();
+      // DO NOT include loadRequisitionsFromSupabase in deps - it causes circular updates
+    }, [companyIdToUse, activeTab]);
+
+    // NEW: Add item to requisition
+    const handleAddItem = () => {
+      if (!selectedEquipment || itemQuantity <= 0 || itemCost <= 0) {
+        alert('⚠️ Please select equipment, set quantity and cost');
+        return;
+      }
+
+      const newItem = {
+        id: Date.now(),
+        equipment: selectedEquipment,
+        quantity: itemQuantity,
+        costPerUnit: itemCost,
+        totalCost: itemQuantity * itemCost
+      };
+
+      const updatedItems = [...newRequisition.items, newItem];
+      const totalCost = updatedItems.reduce((sum, item) => sum + item.totalCost, 0);
+
+      setNewRequisition(prev => ({
+        ...prev,
+        items: updatedItems,
+        estimatedCost: totalCost
+      }));
+
+      // Reset the form
+      setSelectedEquipment('');
+      setItemQuantity(1);
+      setItemCost(0);
+    };
+
+    // NEW: Remove item from requisition
+    const handleRemoveItem = (itemId) => {
+      const updatedItems = newRequisition.items.filter(item => item.id !== itemId);
+      const totalCost = updatedItems.reduce((sum, item) => sum + item.totalCost, 0);
+
+      setNewRequisition(prev => ({
+        ...prev,
+        items: updatedItems,
+        estimatedCost: totalCost
+      }));
+    };
 
     const canCreateRequisition = ['technician', 'supervisor', 'coordinator'].includes(userRole);
     const canApproveSupervisor = userRole === 'supervisor';
     const canApproveCoordinator = userRole === 'coordinator';
     const canApproveFinance = userRole === 'finance';
 
-    const handleCreateRequisition = () => {
+    const handleCreateRequisition = async () => {
       if (!canCreateRequisition) {
         alert('❌ Only Technicians, Supervisors, and Coordinators can create requisitions.');
         return;
       }
       if (!newRequisition.title || !newRequisition.description) {
-        alert('Please fill in all required fields');
+        alert('⚠️ Please fill in the Title and Description fields');
+        return;
+      }
+      if (newRequisition.items.length === 0) {
+        alert('⚠️ Please add at least one item to service or purchase');
+        return;
+      }
+      if (newRequisition.estimatedCost <= 0) {
+        alert('⚠️ Total cost must be greater than 0');
         return;
       }
 
-      const requisition = {
-        id: Date.now(),
-        ...newRequisition,
-        createdBy: userRole,
-        createdByName: user?.name || userRole,
-        createdAt: new Date(),
-        status: 'pending-supervisor',
-        approvals: {
-          supervisor: null,
-          coordinator: null,
-          finance: null
-        },
-        assignedTechnician: userRole === 'technician' ? user?.name : null
-      };
+      setIsSubmittingRequisition(true);
+      try {
+        console.log('💾 Starting requisition submission...');
+        console.log('💾 Company ID:', companyIdToUse);
+        console.log('💾 User ID:', user?.id);
+        console.log('💾 Requisition:', newRequisition);
+        
+        // Get user's department (or use first available)
+        const departmentId = cmmsData.departments?.[0]?.id || selectedDepartmentId;
+        console.log('💾 Selected Department ID:', departmentId);
+        
+        if (!departmentId) {
+          alert('⚠️ No department found. Please ensure you have a department assigned.');
+          setIsSubmittingRequisition(false);
+          return;
+        }
 
-      setCmmsData(prev => ({
-        ...prev,
-        requisitions: [...prev.requisitions, requisition]
-      }));
+        const { data, error } = await cmmsService.createRequisition(
+          companyIdToUse,
+          departmentId,
+          {
+            description: newRequisition.description,
+            purpose: newRequisition.title,
+            priority: newRequisition.priority,
+            estimatedCost: newRequisition.estimatedCost,
+            requiredByDate: newRequisition.requiredByDate,
+            requesterName: user?.name || userRole,
+            requesterEmail: user?.email || '',
+            requesterRole: userRole,
+            budgetSufficient: true,
+            items: newRequisition.items  // NEW: Include items
+          },
+          user?.id
+        );
 
-      setNewRequisition({
-        title: '',
-        description: '',
-        equipmentId: '',
-        estimatedCost: 0,
-        priority: 'Medium',
-        estimatedDays: 1
-      });
+        if (error) {
+          console.error('❌ Error creating requisition:', error);
+          alert('❌ Failed to create requisition. Please try again.');
+          setIsSubmittingRequisition(false);
+          return;
+        }
 
-      onDataUpdate({ requisitions: [...cmmsData.requisitions, requisition] });
+        console.log('✅ Requisition created successfully!');
+        
+        // Add to local state
+        const newReq = {
+          id: data.id,
+          title: newRequisition.title,
+          description: newRequisition.description,
+          createdBy: userRole,
+          createdByName: user?.name || userRole,
+          createdAt: new Date(),
+          status: 'pending_department_head',
+          priority: newRequisition.priority,
+          estimatedCost: newRequisition.estimatedCost,
+          estimatedDays: newRequisition.estimatedDays,
+          requisitionNumber: data.requisition_number,
+          budgetSufficient: data.budget_sufficient,
+          items: newRequisition.items,  // NEW: Include items
+          approvals: {
+            supervisor: null,
+            coordinator: null,
+            finance: null
+          },
+          assignedTechnician: null
+        };
+
+        setCmmsData(prev => ({
+          ...prev,
+          requisitions: [newReq, ...prev.requisitions]
+        }));
+
+        // Reset form
+        setNewRequisition({
+          title: '',
+          description: '',
+          equipmentId: '',
+          estimatedCost: 0,
+          priority: 'normal',
+          estimatedDays: 1,
+          requiredByDate: '',
+          items: []
+        });
+        
+        // Reset equipment fields
+        setSelectedEquipment('');
+        setItemQuantity(1);
+        setItemCost(0);
+
+        alert('✅ Maintenance Requisition Created!\n\n📋 Reference: ' + data.requisition_number + '\n\n⏳ Awaiting Department Head Approval');
+        setIsSubmittingRequisition(false);
+      } catch (error) {
+        console.error('❌ Exception creating requisition:', error);
+        alert('❌ An error occurred while creating the requisition.');
+        setIsSubmittingRequisition(false);
+      }
     };
 
     const handleSupervisorApproval = (requisitionId, approved, notes = '') => {
@@ -909,221 +1144,353 @@ const CMMSModule = ({
 
     return (
       <div className="space-y-6">
-        {/* Create Requisition Form - Technicians Only */}
+        {/* Create Requisition Form - ALWAYS VISIBLE */}
         {canCreateRequisition && (
-          <div className="glass-card p-6">
-            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-              <Plus className="w-6 h-6 text-green-400" />
+          <div className="glass-card p-6 bg-gradient-to-br from-blue-500/5 to-cyan-500/5 border border-blue-500/20">
+            <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+              <Plus className="w-6 h-6 text-blue-400" />
               Create Maintenance Requisition
             </h3>
+            <p className="text-gray-400 text-sm mb-4">Submit a new maintenance request for approval</p>
 
             <div className="grid md:grid-cols-2 gap-4 mb-4">
-              <input
-                type="text"
-                placeholder="Requisition Title"
-                value={newRequisition.title}
-                onChange={(e) => setNewRequisition({...newRequisition, title: e.target.value})}
-                className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 md:col-span-2"
-              />
-              <textarea
-                placeholder="Description of work needed"
-                value={newRequisition.description}
-                onChange={(e) => setNewRequisition({...newRequisition, description: e.target.value})}
-                className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 md:col-span-2 min-h-24"
-              />
-              <select
-                value={newRequisition.priority}
-                onChange={(e) => setNewRequisition({...newRequisition, priority: e.target.value})}
-                className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white"
-              >
-                <option value="Low">Low Priority</option>
-                <option value="Medium">Medium Priority</option>
-                <option value="High">High Priority</option>
-                <option value="Emergency">Emergency</option>
-              </select>
-              <input
-                type="number"
-                placeholder="Estimated Cost (UGX)"
-                value={newRequisition.estimatedCost}
-                onChange={(e) => setNewRequisition({...newRequisition, estimatedCost: parseFloat(e.target.value) || 0})}
-                className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400"
-              />
-              <input
-                type="number"
-                placeholder="Estimated Days"
-                value={newRequisition.estimatedDays}
-                onChange={(e) => setNewRequisition({...newRequisition, estimatedDays: parseInt(e.target.value) || 1})}
-                className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400"
-              />
+              <div>
+                <label className="text-xs font-semibold text-gray-300 uppercase">Requisition Title *</label>
+                <input
+                  type="text"
+                  placeholder="e.g., Emergency AC Repair, Pump Replacement"
+                  value={newRequisition.title}
+                  onChange={(e) => setNewRequisition({...newRequisition, title: e.target.value})}
+                  className="w-full px-3 py-2 mt-1 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:bg-opacity-20 transition-all"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-300 uppercase">Priority Level</label>
+                <select
+                  value={newRequisition.priority}
+                  onChange={(e) => setNewRequisition({...newRequisition, priority: e.target.value})}
+                  className="w-full px-3 py-2 mt-1 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white focus:border-blue-400 transition-all"
+                >
+                  <option value="low">🟢 Low - Routine maintenance</option>
+                  <option value="normal">🟡 Normal - Standard request</option>
+                  <option value="urgent">🔴 Urgent - ASAP needed</option>
+                  <option value="emergency">🚨 Emergency - Critical issue</option>
+                </select>
+              </div>
+              
+              <div className="md:col-span-2">
+                <label className="text-xs font-semibold text-gray-300 uppercase">Work Description *</label>
+                <textarea
+                  placeholder="Detailed description of work needed, equipment affected, expected outcome..."
+                  value={newRequisition.description}
+                  onChange={(e) => setNewRequisition({...newRequisition, description: e.target.value})}
+                  className="w-full px-3 py-2 mt-1 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:bg-opacity-20 transition-all min-h-24"
+                />
+              </div>
+
+              {/* NEW: Equipment & Items Section */}
+              <div className="md:col-span-2">
+                <label className="text-xs font-semibold text-gray-300 uppercase mb-3 block">🔧 Equipment/Items to Service or Purchase</label>
+                
+                <div className="grid md:grid-cols-4 gap-2 mb-3">
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">Equipment/Item *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g., AC Compressor, Oil, Bearings"
+                      value={selectedEquipment}
+                      onChange={(e) => setSelectedEquipment(e.target.value)}
+                      className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 transition-all text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">Qty *</label>
+                    <input
+                      type="number"
+                      placeholder="1"
+                      min="1"
+                      value={itemQuantity}
+                      onChange={(e) => setItemQuantity(parseInt(e.target.value) || 1)}
+                      className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 transition-all text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">Cost/Unit (UGX) *</label>
+                    <input
+                      type="number"
+                      placeholder="0"
+                      min="0"
+                      value={itemCost}
+                      onChange={(e) => setItemCost(parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 transition-all text-sm"
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <button
+                      onClick={handleAddItem}
+                      className="w-full px-3 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-bold hover:from-green-600 hover:to-green-700 transition-all text-sm"
+                    >
+                      ➕ Add Item
+                    </button>
+                  </div>
+                </div>
+
+                {/* Items List */}
+                {newRequisition.items.length > 0 && (
+                  <div className="mb-3 p-3 bg-white bg-opacity-5 border border-white border-opacity-10 rounded-lg">
+                    <h4 className="text-xs font-semibold text-gray-300 uppercase mb-2">📋 Items to Service/Purchase ({newRequisition.items.length}):</h4>
+                    <div className="space-y-2">
+                      {newRequisition.items.map((item) => (
+                        <div key={item.id} className="flex justify-between items-center p-2 bg-white bg-opacity-5 rounded border border-white border-opacity-10">
+                          <div className="flex-1">
+                            <span className="text-white font-medium">{item.equipment}</span>
+                            <span className="text-gray-400 text-xs ml-2">× {item.quantity} @ UGX {item.costPerUnit.toLocaleString()} each</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-amber-400 font-bold">UGX {item.totalCost.toLocaleString()}</span>
+                            <button
+                              onClick={() => handleRemoveItem(item.id)}
+                              className="px-2 py-1 text-xs bg-red-500/20 border border-red-400 text-red-300 rounded hover:bg-red-500/40 transition-all"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-gray-300 uppercase">Estimated Cost (UGX) - Auto Calculated</label>
+                <div className="mt-1">
+                  <input
+                    type="number"
+                    placeholder="0"
+                    value={newRequisition.estimatedCost}
+                    disabled
+                    className="w-full px-3 py-2 bg-white bg-opacity-5 border border-white border-opacity-20 rounded-lg text-amber-300 placeholder-gray-400 transition-all cursor-not-allowed"
+                  />
+                  {newRequisition.estimatedCost > 0 && (
+                    <div className="mt-2 p-3 bg-amber-500/20 border border-amber-400 rounded text-amber-300 text-sm font-semibold">
+                      💰 Total: UGX {newRequisition.estimatedCost.toLocaleString()}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-gray-300 uppercase">Required By Date</label>
+                <input
+                  type="date"
+                  value={newRequisition.requiredByDate}
+                  onChange={(e) => setNewRequisition({...newRequisition, requiredByDate: e.target.value})}
+                  className="w-full px-3 py-2 mt-1 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white focus:border-blue-400 transition-all"
+                />
+              </div>
+            </div>
+
+            {/* Cost Summary Before Submission */}
+            <div className="mb-4 p-4 bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-400/50 rounded-lg">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-gray-300 font-semibold">📋 Requisition Summary:</span>
+                <span className="text-xs text-gray-400">Before you submit</span>
+              </div>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Title:</span>
+                  <span className="text-white font-semibold">{newRequisition.title || '(Not set)'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Priority:</span>
+                  <span className="text-white font-semibold capitalize">{newRequisition.priority}</span>
+                </div>
+                
+                {/* Show items in summary */}
+                {newRequisition.items.length > 0 && (
+                  <div className="border-t border-white/20 pt-2 mt-2">
+                    <span className="text-gray-300 font-semibold block mb-1">📦 Items: ({newRequisition.items.length})</span>
+                    <div className="space-y-1 ml-2">
+                      {newRequisition.items.map((item) => (
+                        <div key={item.id} className="text-gray-300 text-xs">
+                          • {item.equipment} × {item.quantity} = UGX {item.totalCost.toLocaleString()}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-between pt-2 border-t border-white/20">
+                  <span className="text-amber-300 font-bold">💰 Total Cost Requested:</span>
+                  <span className="text-amber-300 font-bold text-lg">UGX {newRequisition.estimatedCost.toLocaleString()}</span>
+                </div>
+              </div>
             </div>
 
             <button
               onClick={handleCreateRequisition}
-              className="w-full px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold hover:from-green-600 hover:to-emerald-700 transition-all"
+              disabled={isSubmittingRequisition}
+              className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-bold hover:from-blue-600 hover:to-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              📝 Submit Requisition for Supervisor Approval
+              {isSubmittingRequisition ? '⏳ Submitting...' : '📝 Submit Requisition for Approval'}
             </button>
           </div>
         )}
 
         {!canCreateRequisition && (
           <div className="glass-card p-4 bg-orange-500 bg-opacity-10 border-l-4 border-orange-500">
-            <p className="text-orange-300 text-sm">🔒 <span className="font-semibold">View-Only Mode</span> - Only Technicians, Supervisors, and Coordinators can create requisitions.</p>
+            <p className="text-orange-300 text-sm">
+              🔒 <span className="font-semibold">View-Only Mode</span> - Only Technicians, Supervisors, and Coordinators can create requisitions.
+            </p>
           </div>
         )}
 
-        {/* Requisitions Workflow Display */}
+        {/* Requisitions List - Independent of form */}
+        {loadingRequisitions && (
+          <div className="glass-card p-6 bg-cyan-500/10 border border-cyan-500/30">
+            <div className="text-center py-8">
+              <div className="inline-block">
+                <div className="animate-spin rounded-full h-12 w-12 border border-cyan-400 border-t-transparent mx-auto mb-3"></div>
+              </div>
+              <p className="text-gray-400">Loading your maintenance requisitions...</p>
+              <p className="text-gray-500 text-xs mt-2">This usually takes a few seconds</p>
+            </div>
+          </div>
+        )}
+
+        {!loadingRequisitions && (
         <div className="glass-card p-6">
-          <h3 className="text-xl font-bold text-white mb-4">Maintenance Requisitions</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+              <Clipboard className="w-6 h-6 text-cyan-400" />
+              Maintenance Requisitions
+              <span className="ml-2 px-2 py-1 bg-cyan-500 bg-opacity-30 rounded text-sm text-cyan-300">
+                {cmmsData.requisitions.length}
+              </span>
+            </h3>
+            <button
+              onClick={() => {
+                hasLoadedRequisitions.current = false;
+                loadRequisitionsFromSupabase();
+              }}
+              className="px-3 py-1 text-xs bg-cyan-500/20 border border-cyan-400 text-cyan-300 rounded hover:bg-cyan-500/40 transition-all disabled:opacity-50"
+              disabled={loadingRequisitions}
+            >
+              🔄 Refresh
+            </button>
+          </div>
           
           {cmmsData.requisitions.length === 0 ? (
-            <p className="text-gray-400">No requisitions yet</p>
+            <div className="text-center py-8">
+              <Clipboard className="w-12 h-12 text-gray-600 mx-auto mb-3 opacity-50" />
+              <p className="text-gray-400 text-lg">No requisitions created yet</p>
+              <p className="text-gray-500 text-sm mt-1">Create your first maintenance requisition to get started</p>
+            </div>
           ) : (
             <div className="space-y-4">
               {cmmsData.requisitions.map(req => {
-                const statusInfo = requisitionStatuses.find(s => s.id === req.status);
-                const showSupervisorApproval = req.status === 'pending-supervisor' && canApproveSupervisor;
-                const showCoordinatorApproval = req.status === 'supervisor-approved' && canApproveCoordinator;
-                const showFinanceApproval = req.status === 'pending-finance' && canApproveFinance;
-                const canAssignTech = req.status === 'finance-approved' && ['coordinator', 'supervisor', 'admin'].includes(userRole);
-                const canComplete = req.status === 'in-progress' && (userRole === 'technician' || userRole === 'supervisor');
+                const priorityConfig = {
+                  low: { icon: '🟢', color: 'green', label: 'Low' },
+                  normal: { icon: '🟡', color: 'yellow', label: 'Normal' },
+                  urgent: { icon: '🔴', color: 'red', label: 'Urgent' },
+                  emergency: { icon: '🚨', color: 'red', label: 'Emergency' }
+                };
+                
+                const statusConfig = {
+                  pending_department_head: { icon: '⏳', label: 'Pending Department Approval', color: 'yellow' },
+                  pending_finance: { icon: '💰', label: 'Pending Finance Review', color: 'blue' },
+                  approved: { icon: '✅', label: 'Approved & Ordered', color: 'green' },
+                  completed: { icon: '🏁', label: 'Completed', color: 'green' }
+                };
+
+                const pConfig = priorityConfig[req.priority] || priorityConfig.normal;
+                const sConfig = statusConfig[req.status] || statusConfig.pending_department_head;
 
                 return (
-                  <div key={req.id} className="border border-white border-opacity-20 rounded-lg p-4 bg-white bg-opacity-5">
-                    {/* Requisition Header */}
+                  <div key={req.id} className="border border-white/20 rounded-lg p-4 bg-white/5 hover:bg-white/10 transition-all">
+                    {/* Header */}
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex-1">
-                        <h4 className="text-white font-bold text-lg">{req.title}</h4>
-                        <p className="text-gray-400 text-sm mt-1">{req.description}</p>
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="text-white font-bold text-lg">{req.title}</h4>
+                          <span className="text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded">
+                            {req.requisitionNumber || `REQ-${req.id.slice(0, 8)}`}
+                          </span>
+                        </div>
+                        <p className="text-gray-400 text-sm">{req.description}</p>
                       </div>
-                      <div className="flex items-center gap-2 text-right">
-                        <span className="text-2xl">{statusInfo?.icon}</span>
-                        <div>
-                          <div className={`text-xs font-bold text-${statusInfo?.color}-300`}>{statusInfo?.label}</div>
-                          <div className="text-xs text-gray-500">{req.priority} Priority</div>
+                      <div className="text-right ml-4">
+                        <div className="text-3xl mb-1">{sConfig.icon}</div>
+                        <div className={`text-xs font-bold text-${sConfig.color}-300`}>{sConfig.label}</div>
+                      </div>
+                    </div>
+
+                    {/* Details Grid */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 pb-4 border-b border-white/10">
+                      <div className="bg-white/5 p-2 rounded">
+                        <div className="text-xs text-gray-400">Priority</div>
+                        <div className="text-white font-semibold text-sm">{pConfig.icon} {pConfig.label}</div>
+                      </div>
+                      <div className="bg-white/5 p-2 rounded">
+                        <div className="text-xs text-gray-400">Estimated Cost</div>
+                        <div className="text-white font-semibold text-sm">UGX {req.estimatedCost.toLocaleString()}</div>
+                      </div>
+                      <div className="bg-white/5 p-2 rounded">
+                        <div className="text-xs text-gray-400">Requested By</div>
+                        <div className="text-white font-semibold text-sm">{req.createdByName}</div>
+                      </div>
+                      <div className="bg-white/5 p-2 rounded">
+                        <div className="text-xs text-gray-400">Date Created</div>
+                        <div className="text-white font-semibold text-sm">{new Date(req.createdAt).toLocaleDateString()}</div>
+                      </div>
+                    </div>
+
+                    {/* Items List */}
+                    {req.items && req.items.length > 0 && (
+                      <div className="mb-4 pb-4 border-b border-white/10">
+                        <div className="text-xs text-gray-400 mb-2">📦 Items to Service/Purchase:</div>
+                        <div className="space-y-1">
+                          {req.items.map((item) => (
+                            <div key={item.id} className="text-xs text-gray-300 pl-2">
+                              • <span className="text-white font-medium">{item.equipment}</span> × {item.quantity} @ UGX {item.costPerUnit?.toLocaleString() || 0} = <span className="text-amber-300 font-bold">UGX {item.totalCost?.toLocaleString() || 0}</span>
+                            </div>
+                          ))}
                         </div>
                       </div>
-                    </div>
+                    )}
 
-                    {/* Requisition Details */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 pb-4 border-b border-white border-opacity-10">
-                      <div>
-                        <div className="text-xs text-gray-400">Estimated Cost</div>
-                        <div className="text-white font-semibold">UGX {req.estimatedCost.toLocaleString()}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-400">Est. Duration</div>
-                        <div className="text-white font-semibold">{req.estimatedDays} day(s)</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-400">Created By</div>
-                        <div className="text-white font-semibold">{req.createdByName}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-400">Assigned To</div>
-                        <div className="text-white font-semibold">{req.assignedTechnician || 'Unassigned'}</div>
-                      </div>
-                    </div>
-
-                    {/* Approval Chain */}
-                    <div className="mb-4 pb-4 border-b border-white border-opacity-10">
+                    {/* Approval Status */}
+                    <div className="mb-4 pb-4 border-b border-white/10">
                       <div className="text-xs text-gray-400 mb-2">Approval Chain:</div>
                       <div className="flex items-center gap-2 flex-wrap text-xs">
-                        <div className={`px-3 py-1 rounded ${req.approvals.supervisor ? 'bg-green-500 bg-opacity-30 text-green-300' : 'bg-gray-500 bg-opacity-30 text-gray-300'}`}>
-                          👔 Supervisor {req.approvals.supervisor?.approved ? '✓' : '⏳'}
+                        <div className={`px-3 py-1 rounded bg-${req.approvals?.supervisor ? 'green' : 'gray'}-500 bg-opacity-30 text-${req.approvals?.supervisor ? 'green' : 'gray'}-300`}>
+                          👔 Dept Head {req.approvals?.supervisor ? '✓' : '⏳'}
                         </div>
-                        <span className="text-gray-500">→</span>
-                        <div className={`px-3 py-1 rounded ${req.approvals.coordinator ? 'bg-green-500 bg-opacity-30 text-green-300' : 'bg-gray-500 bg-opacity-30 text-gray-300'}`}>
-                          📋 Coordinator {req.approvals.coordinator?.approved ? '✓' : '⏳'}
+                        <span className="text-gray-600">→</span>
+                        <div className={`px-3 py-1 rounded bg-${req.approvals?.coordinator ? 'green' : 'gray'}-500 bg-opacity-30 text-${req.approvals?.coordinator ? 'green' : 'gray'}-300`}>
+                          💼 Finance {req.approvals?.coordinator ? '✓' : '⏳'}
                         </div>
-                        <span className="text-gray-500">→</span>
-                        <div className={`px-3 py-1 rounded ${req.approvals.finance ? 'bg-green-500 bg-opacity-30 text-green-300' : 'bg-gray-500 bg-opacity-30 text-gray-300'}`}>
-                          💰 Finance {req.approvals.finance?.approved ? '✓' : '⏳'}
-                        </div>
-                        <span className="text-gray-500">→</span>
-                        <div className={`px-3 py-1 rounded ${req.status === 'in-progress' || req.status === 'completed' ? 'bg-green-500 bg-opacity-30 text-green-300' : 'bg-gray-500 bg-opacity-30 text-gray-300'}`}>
-                          🔧 Execute {req.status === 'completed' ? '✓' : '⏳'}
+                        <span className="text-gray-600">→</span>
+                        <div className={`px-3 py-1 rounded ${req.status === 'approved' || req.status === 'completed' ? 'bg-green-500 bg-opacity-30 text-green-300' : 'bg-gray-500 bg-opacity-30 text-gray-300'}`}>
+                          🎯 Execute {req.status === 'approved' || req.status === 'completed' ? '✓' : '⏳'}
                         </div>
                       </div>
                     </div>
 
-                    {/* Action Buttons Based on Role & Status */}
-                    <div className="flex gap-2 flex-wrap">
-                      {showSupervisorApproval && (
-                        <>
-                          <button
-                            onClick={() => handleSupervisorApproval(req.id, true, 'Approved by supervisor')}
-                            className="px-3 py-1 bg-green-500 bg-opacity-30 text-green-300 rounded hover:bg-opacity-50 transition-all text-sm font-semibold"
-                          >
-                            ✓ Approve & Forward to Coordinator
-                          </button>
-                          <button
-                            onClick={() => handleSupervisorApproval(req.id, false, 'Rejected by supervisor')}
-                            className="px-3 py-1 bg-red-500 bg-opacity-30 text-red-300 rounded hover:bg-opacity-50 transition-all text-sm font-semibold"
-                          >
-                            ❌ Reject
-                          </button>
-                        </>
-                      )}
-
-                      {showCoordinatorApproval && (
-                        <>
-                          <button
-                            onClick={() => handleCoordinatorApproval(req.id, true, 'Approved by coordinator')}
-                            className="px-3 py-1 bg-green-500 bg-opacity-30 text-green-300 rounded hover:bg-opacity-50 transition-all text-sm font-semibold"
-                          >
-                            ✓ Approve & Send to Finance
-                          </button>
-                          <button
-                            onClick={() => handleCoordinatorApproval(req.id, false, 'Rejected by coordinator')}
-                            className="px-3 py-1 bg-red-500 bg-opacity-30 text-red-300 rounded hover:bg-opacity-50 transition-all text-sm font-semibold"
-                          >
-                            ❌ Reject
-                          </button>
-                        </>
-                      )}
-
-                      {showFinanceApproval && (
-                        <>
-                          <button
-                            onClick={() => handleFinanceApproval(req.id, true, 'Approved by finance')}
-                            className="px-3 py-1 bg-green-500 bg-opacity-30 text-green-300 rounded hover:bg-opacity-50 transition-all text-sm font-semibold"
-                          >
-                            ✓ Approve - Ready to Execute
-                          </button>
-                          <button
-                            onClick={() => handleFinanceApproval(req.id, false, 'Rejected by finance')}
-                            className="px-3 py-1 bg-red-500 bg-opacity-30 text-red-300 rounded hover:bg-opacity-50 transition-all text-sm font-semibold"
-                          >
-                            ❌ Reject
-                          </button>
-                        </>
-                      )}
-
-                      {canAssignTech && (
-                        <button
-                          onClick={() => handleAssignTechnician(req.id, user?.name || 'Technician')}
-                          className="px-3 py-1 bg-blue-500 bg-opacity-30 text-blue-300 rounded hover:bg-opacity-50 transition-all text-sm font-semibold"
-                        >
-                          🎯 Assign Technician & Start Work
-                        </button>
-                      )}
-
-                      {canComplete && (
-                        <button
-                          onClick={() => handleCompleteRequisition(req.id)}
-                          className="px-3 py-1 bg-green-500 bg-opacity-30 text-green-300 rounded hover:bg-opacity-50 transition-all text-sm font-semibold"
-                        >
-                          ✅ Mark as Completed
-                        </button>
-                      )}
-                    </div>
+                    {/* Budget Status */}
+                    {req.budgetSufficient !== undefined && (
+                      <div className={`text-xs px-3 py-2 rounded ${req.budgetSufficient ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
+                        {req.budgetSufficient ? '✅ Budget Available' : '❌ Budget Insufficient - May require additional approval'}
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
           )}
         </div>
+        )}
       </div>
     );
   };
@@ -3755,12 +4122,19 @@ const CMMSModule = ({
   // Allow access even without sign-in to create company profile
   // Once profile created and role set to admin, show dashboard
   if (!hasBusinessProfile || userRole === 'guest') {
-    const handleCreateProfileAsGuest = async () => {
+    // Allow BOTH guests and users with roles to create company profiles
+    // Users with roles can create additional company profiles and switch between them
+    const handleCreateCompanyProfile = async () => {
       // Validate required fields
       if (!profileFormData.companyName || !profileFormData.email) {
         alert('⚠️ Please fill in Company Name and Company Email');
         return;
       }
+      
+      console.log('📝 Creating company profile...');
+      console.log('Current user role:', userRole);
+      console.log('Is authorized:', isAuthorized);
+      console.log('Is creator:', isCreator);
 
       setIsCreatingProfile(true);
       try {
@@ -3861,7 +4235,13 @@ const CMMSModule = ({
         setActiveTab('company');
         
         console.log('✅ Profile created successfully, user is now admin with creator permissions');
-        alert('🎉 Company profile created! You are now the Administrator.');
+        alert('🎉 Company profile created! You are now the Administrator.\n\n✅ Role-Based Tab Access Maintained: Your tab access is still controlled by your assigned role, not your company ownership.');
+        
+        // Log important: Role-based users can create companies but keep their role restrictions
+        if (userRole && userRole !== 'creator') {
+          console.log(`ℹ️ User created company profile while having role: ${userRole}`);
+          console.log(`ℹ️ Tab access remains restricted to: ${getTabs().join(', ')}`);
+        }
       } catch (error) {
         console.error('❌ Error creating profile:', error);
         alert('❌ Error creating company profile: ' + (error.message || 'Unknown error'));
@@ -3959,6 +4339,8 @@ const CMMSModule = ({
           </div>
 
           {/* Company Profile Form - Expandable */}
+          {/* Available to: Guests AND Users with Roles */}
+          {/* Users with roles can create their own company profile while maintaining their role-based tab access */}
           {showCompanyForm && (
             <div className="mb-6 bg-blue-500 bg-opacity-10 border border-blue-500 border-opacity-30 rounded-lg p-6 animate-in fade-in slide-in-from-top-4 duration-300">
               <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
@@ -4017,7 +4399,7 @@ const CMMSModule = ({
               </div>
               <div className="flex gap-3 mt-4">
                 <button
-                  onClick={handleCreateProfileAsGuest}
+                  onClick={handleCreateCompanyProfile}
                   disabled={isCreatingProfile}
                   className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-green-600 transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
