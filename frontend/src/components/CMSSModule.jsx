@@ -53,10 +53,10 @@ const CMMSModule = ({
   const rolePermissions = {
     guest: {
       canViewCompany: false,
-      canEditCompany: true,  // Can only create profile
+      canEditCompany: false,
       canManageUsers: false,
       canAssignRoles: false,
-      canViewInventory: false,
+      canViewInventory: true,
       canEditInventory: false,
       canDeleteUsers: false,
       canViewFinancials: false,
@@ -80,21 +80,21 @@ const CMMSModule = ({
       level: 7
     },
     coordinator: {
-      canViewCompany: true,
-      canEditCompany: true,  // Allow coordinator to edit company details (they manage operations)
-      canManageUsers: true,  // Allow coordinator to manage users (add storeman & service providers)
-      canAssignRoles: true,  // Allow coordinator to assign roles
+      canViewCompany: false,
+      canEditCompany: false,
+      canManageUsers: true,
+      canAssignRoles: true,
       canViewInventory: true,
       canEditInventory: false,
       canDeleteUsers: false,
       canViewFinancials: false,
-      canManageServiceProviders: true,  // Allow managing service providers
+      canManageServiceProviders: true,
       canCreateWorkOrders: true,
       canViewAllData: false,
       level: 5
     },
     supervisor: {
-      canViewCompany: true,
+      canViewCompany: false,
       canEditCompany: false,
       canManageUsers: false,
       canAssignRoles: false,
@@ -108,7 +108,7 @@ const CMMSModule = ({
       level: 4
     },
     technician: {
-      canViewCompany: true,
+      canViewCompany: false,
       canEditCompany: false,
       canManageUsers: false,
       canAssignRoles: false,
@@ -122,7 +122,7 @@ const CMMSModule = ({
       level: 2
     },
     storeman: {
-      canViewCompany: true,
+      canViewCompany: false,
       canEditCompany: false,
       canManageUsers: false,
       canAssignRoles: false,
@@ -136,7 +136,7 @@ const CMMSModule = ({
       level: 2
     },
     finance: {
-      canViewCompany: true,
+      canViewCompany: false,
       canEditCompany: false,
       canManageUsers: false,
       canAssignRoles: false,
@@ -150,7 +150,7 @@ const CMMSModule = ({
       level: 4
     },
     'service-provider': {
-      canViewCompany: true,
+      canViewCompany: false,
       canEditCompany: false,
       canManageUsers: false,
       canAssignRoles: false,
@@ -223,7 +223,7 @@ const CMMSModule = ({
     initializeUser();
   }, [user]);
 
-  // Check authorization and load company data from database
+    // Check authorization and load company data from database
   const checkAuthorizationAndLoadCompanyData = async () => {
     try {
       // Check 1: User must exist (or have cached data)
@@ -231,14 +231,14 @@ const CMMSModule = ({
       const cachedRole = localStorage.getItem('cmms_user_role');
       
       if (!user && !cachedCompanyId) {
-        setAccessDeniedReason('❌ No user logged in. Please sign in to access CMMS.');
+        setAccessDeniedReason('âŒ No user logged in. Please sign in to access CMMS.');
         setIsAuthorized(false);
         return;
       }
 
       // If user is logged in, check if they're in the cmms_users table
       if (user?.email) {
-        console.log('🔍 Searching for user in CMMS database:', user.email);
+        console.log('ðŸ” Searching for user in CMMS database:', user.email);
         
         // Step 1: Find user in cmms_users table (case-insensitive search)
         const { data: cmmsUsers, error: userError } = await supabase
@@ -252,8 +252,8 @@ const CMMSModule = ({
 
         if (cmmsUsers && cmmsUsers.length > 0) {
           const cmmsUser = cmmsUsers[0];
-          console.log('✅ User found in CMMS database:', cmmsUser.email);
-          console.log('✅ User company ID:', cmmsUser.cmms_company_id);
+          console.log('âœ… User found in CMMS database:', cmmsUser.email);
+          console.log('âœ… User company ID:', cmmsUser.cmms_company_id);
           
           // Save company ID to localStorage and state
           localStorage.setItem('cmms_company_id', cmmsUser.cmms_company_id);
@@ -280,17 +280,17 @@ const CMMSModule = ({
               );
               
               if (!adminCheckError && isAdminResult) {
-                console.log('✅ RPC verified: User is admin');
+                console.log('âœ… RPC verified: User is admin');
                 effectiveRole = 'admin';
                 isUserCreator = true;
               }
             } catch (rpcError) {
-              console.log('ℹ️ Admin RPC check skipped (not critical):', rpcError.message);
+              console.log('â„¹ï¸ Admin RPC check skipped (not critical):', rpcError.message);
             }
             
-            console.log(`📋 User effective role from view:`, effectiveRole);
-            console.log(`👑 User is creator:`, isUserCreator);
-            console.log(`✅ User authorized with effective role: ${effectiveRole}`);
+            console.log(`ðŸ“‹ User effective role from view:`, effectiveRole);
+            console.log(`ðŸ‘‘ User is creator:`, isUserCreator);
+            console.log(`âœ… User authorized with effective role: ${effectiveRole}`);
             
             localStorage.setItem('cmms_user_role', effectiveRole);
             localStorage.setItem('cmms_user_is_creator', isUserCreator);
@@ -299,10 +299,10 @@ const CMMSModule = ({
             setHasBusinessProfile(true);
             setIsAuthorized(true);
             setAccessDeniedReason('');
-            console.log('🔓 hasBusinessProfile set to TRUE - should load dashboard');
+            console.log('ðŸ”“ hasBusinessProfile set to TRUE - should load dashboard');
           } else {
             // Fallback: Check user roles the old way
-            const { data: userRoles, error: rolesError } = await supabase
+            const { data: userRoles } = await supabase
               .from('cmms_user_roles')
               .select('cmms_role_id, cmms_roles(role_name)')
               .eq('cmms_user_id', cmmsUser.id)
@@ -315,17 +315,17 @@ const CMMSModule = ({
               
               const primaryRole = resolveUserRole(roleNames[0], roleNames.join(', '));
               
-              console.log(`📋 User roles found (fallback):`, roleNames);
-              console.log(`✅ User authorized with primary role: ${primaryRole}`);
+              console.log(`ðŸ“‹ User roles found (fallback):`, roleNames);
+              console.log(`âœ… User authorized with primary role: ${primaryRole}`);
               
               localStorage.setItem('cmms_user_role', primaryRole);
               setUserRole(primaryRole);
               setHasBusinessProfile(true);
               setIsAuthorized(true);
               setAccessDeniedReason('');
-              console.log('🔓 hasBusinessProfile set to TRUE - should load dashboard');
+              console.log('ðŸ”“ hasBusinessProfile set to TRUE - should load dashboard');
             } else {
-              console.log('⚠️ User in CMMS but no active roles assigned');
+              console.log('âš ï¸ User in CMMS but no active roles assigned');
               
               // Try RPC admin check as final verification
               try {
@@ -335,7 +335,7 @@ const CMMSModule = ({
                 );
                 
                 if (!adminCheckError && isAdminResult) {
-                  console.log('✅ RPC verified: User is admin despite no roles showing');
+                  console.log('âœ… RPC verified: User is admin despite no roles showing');
                   localStorage.setItem('cmms_user_role', 'admin');
                   localStorage.setItem('cmms_user_is_creator', 'true');
                   setUserRole('admin');
@@ -346,34 +346,34 @@ const CMMSModule = ({
                   return;
                 }
               } catch (rpcError) {
-                console.log('ℹ️ Admin RPC check skipped');
+                console.log('â„¹ï¸ Admin RPC check skipped');
               }
               
               const defaultRole = 'guest';
-              console.log(`🔑 Assigning default role: ${defaultRole}`);
+              console.log(`ðŸ”‘ Assigning default role: ${defaultRole}`);
               localStorage.setItem('cmms_user_role', defaultRole);
               setUserRole(defaultRole);
               setHasBusinessProfile(true);
               setIsAuthorized(true);
               setAccessDeniedReason('');
-              console.log('🔓 hasBusinessProfile set to TRUE - should load dashboard');
+              console.log('ðŸ”“ hasBusinessProfile set to TRUE - should load dashboard');
             }
           }
 
           // Load company data
-          console.log('📂 Loading company data for company_id:', cmmsUser.cmms_company_id);
+          console.log('ðŸ“‚ Loading company data for company_id:', cmmsUser.cmms_company_id);
           await loadCompanyData(cmmsUser.cmms_company_id);  // Pass company ID directly
           return;
         } else if (user?.email) {
           // User not found in cmms_users table - check if they're a company creator
-          console.log('⚠️ User not found in CMMS users table - checking if they are a company creator');
+          console.log('âš ï¸ User not found in CMMS users table - checking if they are a company creator');
           
           const cachedOwnerEmail = localStorage.getItem('cmms_company_owner_email');
           const currentUserEmail = user.email.toLowerCase();
           const ownerEmailLower = cachedOwnerEmail?.toLowerCase();
           const isCreator = cachedOwnerEmail && currentUserEmail === ownerEmailLower;
           
-          console.log('🔍 Creator check (not in cmms_users):', {
+          console.log('ðŸ” Creator check (not in cmms_users):', {
             cachedOwnerEmail,
             currentUserEmail,
             ownerEmailLower,
@@ -382,7 +382,7 @@ const CMMSModule = ({
           });
           
           if (isCreator && cachedCompanyId) {
-            console.log('🔑 User IS company creator (not in cmms_users) - granting admin access');
+            console.log('ðŸ”‘ User IS company creator (not in cmms_users) - granting admin access');
             localStorage.setItem('cmms_user_role', 'admin');
             localStorage.setItem('cmms_company_id', cachedCompanyId);
             setUserRole('admin');
@@ -402,7 +402,7 @@ const CMMSModule = ({
       const cachedOwnerEmail = localStorage.getItem('cmms_company_owner_email');
       if (user?.email && cachedOwnerEmail && user.email.toLowerCase() === cachedOwnerEmail.toLowerCase()) {
         // User is the company creator
-        console.log('🔑 User is company creator - using admin role');
+        console.log('ðŸ”‘ User is company creator - using admin role');
         localStorage.setItem('cmms_user_role', 'admin');
         setUserRole('admin');
         setIsCreator(true);  // Mark as creator for permission checks
@@ -474,11 +474,11 @@ const CMMSModule = ({
       const companyIdToUse = companyIdParam || localStorage.getItem('cmms_company_id') || userCompanyId;
       
       if (!companyIdToUse) {
-        console.warn('⚠️ No company ID available - user may not be linked to company yet');
+        console.warn('âš ï¸ No company ID available - user may not be linked to company yet');
         return;
       }
 
-      console.log('🔍 Loading company data for company_id:', companyIdToUse);
+      console.log('ðŸ” Loading company data for company_id:', companyIdToUse);
 
       // Fetch company profile from Supabase - this is the source of truth
       const { data: profile, error: profileError } = await supabase
@@ -487,25 +487,25 @@ const CMMSModule = ({
         .eq('id', companyIdToUse)
         .maybeSingle();
 
-      console.log('🔍 Company profile query response:', { profile, profileError });
+      console.log('ðŸ” Company profile query response:', { profile, profileError });
 
       if (profileError) {
-        console.warn('⚠️ Company profile query error:', profileError.message);
+        console.warn('âš ï¸ Company profile query error:', profileError.message);
         // Log more details about the error
         console.warn('Error code:', profileError.code);
         console.warn('Company ID searched:', companyIdToUse);
         // Don't return - users might not have created profile yet
       } else if (profile) {
-        console.log('✅ Company profile loaded:', profile);
-        console.log('✅ Setting company name:', profile.company_name);
+        console.log('âœ… Company profile loaded:', profile);
+        console.log('âœ… Setting company name:', profile.company_name);
         setCmmsData(prev => ({
           ...prev,
           companyProfile: profile
         }));
         setUserCompanyId(profile.id);
-        console.log('✅ cmmsData.companyProfile updated in state');
+        console.log('âœ… cmmsData.companyProfile updated in state');
       } else {
-        console.warn('⚠️ No company profile found for ID:', companyIdToUse);
+        console.warn('âš ï¸ No company profile found for ID:', companyIdToUse);
       }
 
       // Fetch users from cmms_users table
@@ -516,23 +516,24 @@ const CMMSModule = ({
         .eq('is_active', true);
 
       if (usersError) {
-        console.error('❌ Error loading users from Supabase:', usersError);
+        console.error('âŒ Error loading users from Supabase:', usersError);
         return;
       }
 
       if (users && users.length > 0) {
-        console.log(`✅ Loaded ${users.length} users from Supabase`);
+        console.log(`âœ… Loaded ${users.length} users from Supabase`);
         const formattedUsers = users.map(user => ({
           id: user.id,
-          name: user.full_name,
+          name: user.full_name || user.user_name || user.email?.split('@')[0] || 'User',
           email: user.email,
           phone: user.phone,
           role: resolveUserRole(user.effective_role, user.role_labels),
-          department: user.department,
+          department: user.department || user.department_name || '',
+          department_id: user.department_id || null,
           status: 'Active',
           icanVerified: true,
           createdAt: user.created_at,
-          isCreator: user.is_creator || false  // ✅ Include creator flag from view
+          isCreator: user.is_creator || false
         }));
         setCmmsData(prev => ({
           ...prev,
@@ -544,7 +545,7 @@ const CMMSModule = ({
           const creatorUser = users.find(u => u.is_creator === true);
           
           if (creatorUser && creatorUser.email.toLowerCase() === user.email.toLowerCase()) {
-            console.log('🔑 Current user is the company creator - upgrading to admin');
+            console.log('ðŸ”‘ Current user is the company creator - upgrading to admin');
             localStorage.setItem('cmms_user_role', 'admin');
             localStorage.setItem('cmms_company_owner_email', user.email);
             localStorage.setItem('cmms_user_is_creator', 'true');
@@ -553,12 +554,49 @@ const CMMSModule = ({
           }
         }
         
-        console.log('📊 Updated cmmsData.users with', formattedUsers.length, 'users');
+        console.log('ðŸ“Š Updated cmmsData.users with', formattedUsers.length, 'users');
       } else {
-        console.log('ℹ️ No users found in company');
+        console.log('â„¹ï¸ No users found in company');
+      }
+
+      const { data: departments, error: departmentsError } = await cmmsService.getCmmsDepartments(companyIdToUse);
+      if (!departmentsError) {
+        setCmmsData(prev => ({
+          ...prev,
+          departments: departments || []
+        }));
+      } else {
+        console.error('âŒ Error loading departments from Supabase:', departmentsError);
+      }
+
+      // Fetch inventory items from Supabase (source of truth)
+      const { data: inventoryItems, error: inventoryError } = await cmmsService.getCompanyInventory(companyIdToUse);
+      console.log('📊 Inventory fetch result:', { count: inventoryItems?.length, error: inventoryError, items: inventoryItems });
+      
+      if (!inventoryError && inventoryItems && inventoryItems.length > 0) {
+        console.log(`✅ Loaded ${inventoryItems.length} inventory items from Supabase`);
+        inventoryItems.forEach(item => {
+          console.log(`  - ${item.item_code}: ${item.item_name} @ UGX ${item.unit_cost || item.unit_price || 'NaN'}`);
+        });
+        setCmmsData(prev => ({
+          ...prev,
+          inventory: inventoryItems
+        }));
+      } else if (!inventoryError) {
+        console.log('⚠️ No inventory items found for this company');
+        setCmmsData(prev => ({
+          ...prev,
+          inventory: []
+        }));
+      } else {
+        console.error('❌ Error loading inventory from Supabase:', inventoryError);
+        setCmmsData(prev => ({
+          ...prev,
+          inventory: []
+        }));
       }
     } catch (err) {
-      console.error('❌ Exception loading company data from Supabase:', err);
+      console.error('âŒ Exception loading company data from Supabase:', err);
     }
   };
 
@@ -568,15 +606,27 @@ const CMMSModule = ({
   const hasPermission = (permission) => {
     if (!isAuthorized || !userRole) return false;
     
-    // Creators get special permissions: can edit company and manage users
+    // Creators can manage users, but company profile stays admin-only.
     if (isCreator) {
-      if (permission === 'canEditCompany') return true;  // Creators can always edit company
-      if (permission === 'canManageUsers') return true;  // Creators can manage users
-      if (permission === 'canAssignRoles') return true;  // Creators can assign roles
+      if (permission === 'canManageUsers') return true;
+      if (permission === 'canAssignRoles') return true;
     }
     
     return rolePermissions[userRole]?.[permission] || false;
   };
+
+  // ============================================
+  // ROLES CONFIGURATION (SHARED - Accessible to all components)
+  // ============================================
+  const allRoles = [
+    { id: 'admin', label: 'Admin', color: 'from-red-500 to-pink-600', icon: '👑' },
+    { id: 'coordinator', label: 'Department Coordinator', color: 'from-blue-500 to-cyan-600', icon: '📋' },
+    { id: 'supervisor', label: 'Supervisor', color: 'from-purple-500 to-indigo-600', icon: '👔' },
+    { id: 'technician', label: 'Technician', color: 'from-green-500 to-emerald-600', icon: '🔧' },
+    { id: 'storeman', label: 'Storeman', color: 'from-yellow-500 to-orange-600', icon: '📦' },
+    { id: 'finance', label: 'Financial Officer', color: 'from-teal-500 to-cyan-600', icon: '💰' },
+    { id: 'service-provider', label: 'Service Provider', color: 'from-violet-500 to-purple-600', icon: '🏢' }
+  ];
 
 
 
@@ -633,18 +683,28 @@ const CMMSModule = ({
   const getTabs = () => {
     // Define which tabs are accessible for each role
     const tabsByRole = {
-      guest: ['company'],
-      admin: ['company', 'users', 'inventory', 'requisitions', 'reports'],
-      coordinator: ['company', 'users', 'inventory', 'requisitions', 'reports'],
-      supervisor: ['company', 'inventory', 'requisitions', 'reports'],
-      technician: ['company', 'inventory', 'requisitions'],
+      guest: [],
+      admin: ['company', 'departments', 'users', 'inventory', 'requisitions', 'reports'],
+      coordinator: ['departments', 'users', 'inventory', 'requisitions', 'reports'],
+      supervisor: ['inventory', 'requisitions', 'reports'],
+      technician: ['inventory', 'requisitions'],
       storeman: ['inventory', 'requisitions'],
       finance: ['requisitions', 'reports'],
-      'service-provider': ['requisitions', 'company']
+      'service-provider': ['requisitions']
     };
     
-    return tabsByRole[userRole] || ['company'];
+    return tabsByRole[userRole] || [];
   };
+
+  useEffect(() => {
+    if (!isAuthorized || !hasBusinessProfile) return;
+
+    const allowedTabs = getTabs();
+    if (!allowedTabs.length) return;
+    if (!allowedTabs.includes(activeTab)) {
+      setActiveTab(allowedTabs[0]);
+    }
+  }, [activeTab, hasBusinessProfile, isAuthorized, userRole, isCreator]);
 
   // Requisition status workflow
   const requisitionStatuses = [
@@ -1089,8 +1149,12 @@ const CMMSModule = ({
     }
 
     const generateInventoryReport = () => {
-      const lowStockCount = cmmsData.inventory.filter(i => i.quantity <= i.minStock).length;
-      const totalValue = cmmsData.inventory.reduce((sum, i) => sum + (i.quantity * i.cost), 0);
+      const lowStockCount = cmmsData.inventory.filter(i => i.quantity_in_stock <= (i.reorder_level || 0)).length;
+      const totalValue = cmmsData.inventory.reduce((sum, i) => {
+        const quantity = i.quantity_in_stock || 0;
+        const price = i.unit_price || 0;
+        return sum + (quantity * price);
+      }, 0);
       
       return {
         title: 'Inventory Status Report',
@@ -1203,17 +1267,82 @@ const CMMSModule = ({
   // COMPANY PROFILE MANAGEMENT (ADMIN ONLY)
   // ============================================
   const CompanyProfileManager = () => {
-    // State must be declared BEFORE any conditional returns
     const [showProfileForm, setShowProfileForm] = useState(false);
+    const [isEditingProfile, setIsEditingProfile] = useState(false);
+    const [isSavingProfile, setIsSavingProfile] = useState(false);
+    const [isSavingDepartment, setIsSavingDepartment] = useState(false);
+    const [profileError, setProfileError] = useState('');
+    const [departmentError, setDepartmentError] = useState('');
 
-    const [formData, setFormData] = useState({
-      companyName: cmmsData.companyProfile?.companyName || '',
-      companyRegistration: cmmsData.companyProfile?.companyRegistration || '',
-      location: cmmsData.companyProfile?.location || '',
-      phone: cmmsData.companyProfile?.phone || '',
-      email: cmmsData.companyProfile?.email || '',
-      industry: cmmsData.companyProfile?.industry || 'Manufacturing'
+    // Department templates by industry
+    const departmentsByIndustry = {
+      Manufacturing: [
+        { name: 'Production', description: 'Manufacturing and production floor' },
+        { name: 'Maintenance', description: 'Equipment and facility maintenance' },
+        { name: 'Quality Assurance', description: 'Quality control and assurance' },
+        { name: 'Operations', description: 'Daily operations management' },
+        { name: 'Warehouse', description: 'Inventory and storage' },
+      ],
+      Healthcare: [
+        { name: 'Operations', description: 'Daily operations management' },
+        { name: 'Maintenance', description: 'Facility and equipment maintenance' },
+        { name: 'Facilities', description: 'Building and grounds maintenance' },
+        { name: 'Administration', description: 'Administrative operations' },
+      ],
+      Transportation: [
+        { name: 'Fleet Management', description: 'Vehicle and fleet maintenance' },
+        { name: 'Operations', description: 'Daily operations' },
+        { name: 'Maintenance', description: 'Equipment maintenance' },
+        { name: 'Logistics', description: 'Logistics and supply chain' },
+      ],
+      'Building Management': [
+        { name: 'Maintenance', description: 'Building and facility maintenance' },
+        { name: 'Operations', description: 'Daily operations' },
+        { name: 'Security', description: 'Security and access control' },
+        { name: 'Facilities', description: 'Facilities management' },
+      ],
+      Industrial: [
+        { name: 'Production', description: 'Manufacturing and production' },
+        { name: 'Maintenance', description: 'Equipment maintenance' },
+        { name: 'Safety', description: 'Safety and compliance' },
+        { name: 'Operations', description: 'Daily operations' },
+      ],
+      Energy: [
+        { name: 'Operations', description: 'Energy operations' },
+        { name: 'Maintenance', description: 'Equipment and system maintenance' },
+        { name: 'Safety', description: 'Safety and environmental compliance' },
+        { name: 'Support', description: 'Technical support' },
+      ],
+      Other: [
+        { name: 'Operations', description: 'Daily operations' },
+        { name: 'Maintenance', description: 'General maintenance' },
+        { name: 'Administration', description: 'Administrative operations' },
+      ]
+    };
+
+    const mapProfileToForm = (profile) => ({
+      companyName: profile?.company_name || profile?.companyName || '',
+      companyRegistration: profile?.company_registration || profile?.companyRegistration || '',
+      location: profile?.location || '',
+      phone: profile?.phone || '',
+      email: profile?.email || '',
+      industry: profile?.industry || 'Manufacturing',
+      website: profile?.website || ''
     });
+
+    const [formData, setFormData] = useState(mapProfileToForm(cmmsData.companyProfile));
+    const [selectedDepartments, setSelectedDepartments] = useState([]);
+    const [departmentForm, setDepartmentForm] = useState({
+      department_name: '',
+      description: '',
+      location: ''
+    });
+
+    useEffect(() => {
+      setFormData(mapProfileToForm(cmmsData.companyProfile));
+      setSelectedDepartments([]);
+      setDepartmentForm({ department_name: '', description: '', location: '' });
+    }, [cmmsData.companyProfile]);
 
     // Strict: Only Admin can manage company profile
     if (!hasPermission('canEditCompany')) {
@@ -1222,169 +1351,424 @@ const CMMSModule = ({
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
             <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-orange-400 flex-shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
-              <p className="text-orange-300 font-semibold text-sm md:text-base">🔒 Access Restricted</p>
-              <p className="text-gray-400 text-xs md:text-sm mt-1">Only Administrators can manage company profiles. Your role: <span className="text-blue-300 font-bold uppercase">{userRole}</span></p>
+              <p className="text-orange-300 font-semibold text-sm md:text-base">Access Restricted</p>
+              <p className="text-gray-400 text-xs md:text-sm mt-1">Only Administrators can view and edit company details. Your role: <span className="text-blue-300 font-bold uppercase">{userRole}</span></p>
             </div>
           </div>
         </div>
       );
     }
 
-    const handleSaveProfile = () => {
-      setCmmsData(prev => ({
-        ...prev,
-        companyProfile: { ...formData, createdAt: new Date(), createdBy: userRole }
-      }));
-      onDataUpdate({ companyProfile: formData });
+    const handleSaveProfile = async () => {
+      setIsSavingProfile(true);
+      setProfileError('');
+      setDepartmentError('');
+
+      try {
+        // VALIDATE: At least one department is REQUIRED
+        if (selectedDepartments.length === 0) {
+          setDepartmentError('Please add at least one department before saving.');
+          setIsSavingProfile(false);
+          return;
+        }
+
+        let savedProfile;
+        let savedDepartments = [];
+
+        if (isEditingProfile && cmmsData.companyProfile?.id) {
+          console.log('📝 Editing existing company:', cmmsData.companyProfile.id);
+          // EDIT EXISTING: Update company profile
+          const updateResponse = await cmmsService.updateCompanyProfile(cmmsData.companyProfile.id, formData);
+          if (updateResponse.error) throw updateResponse.error;
+
+          savedProfile = updateResponse.data;
+
+          // For existing company, create new departments separately
+          for (const dept of selectedDepartments) {
+            const deptResult = await cmmsService.createCmmsDepartment(cmmsData.companyProfile.id, {
+              department_name: dept.name || dept.department_name,
+              description: dept.description || '',
+              location: ''
+            });
+            if (deptResult.error) {
+              throw new Error(`Failed to create department "${dept.name}": ${deptResult.error.message}`);
+            }
+          }
+
+          // Reload departments list
+          const { data: depts, error: listError } = await cmmsService.getCmmsDepartments(cmmsData.companyProfile.id);
+          if (listError) throw listError;
+          savedDepartments = depts || [];
+
+          console.log('✅ Company profile updated with new departments');
+        } else {
+          console.log('🆕 Creating new company with departments:', selectedDepartments);
+          // CREATE NEW: Use atomic function that creates company + departments together
+          const createResponse = await cmmsService.createCompanyWithDepartments(
+            formData, 
+            selectedDepartments
+          );
+          
+          if (createResponse.error) {
+            console.error('❌ Error creating company with departments:', createResponse.error);
+            throw createResponse.error;
+          }
+
+          savedProfile = createResponse.data?.company;
+          savedDepartments = createResponse.data?.departments || [];
+
+          console.log('✅ New company created with departments:', {
+            companyId: savedProfile?.id,
+            departmentCount: savedDepartments.length,
+            departments: savedDepartments.map(d => d.department_name)
+          });
+        }
+
+        if (savedProfile?.id) {
+          localStorage.setItem('cmms_company_id', savedProfile.id);
+          setUserCompanyId(savedProfile.id);
+          setNotificationCompanyId(savedProfile.id);
+        }
+
+        setCmmsData(prev => ({
+          ...prev,
+          companyProfile: savedProfile || prev.companyProfile,
+          departments: savedDepartments
+        }));
+
+        setSelectedDepartments([]);
+        setShowProfileForm(false);
+        setIsEditingProfile(false);
+        if (onDataUpdate && typeof onDataUpdate === 'function') {
+          onDataUpdate({ companyProfile: savedProfile || formData });
+        }
+
+        await loadCompanyData(savedProfile?.id || cmmsData.companyProfile?.id || userCompanyId);
+      } catch (error) {
+        console.error('❌ Profile save error:', error);
+        setProfileError(error.message || 'Failed to save company profile');
+      } finally {
+        setIsSavingProfile(false);
+      }
     };
 
-    if (!cmmsData.companyProfile) {
+    const handleRegisterDepartment = async () => {
+      if (!cmmsData.companyProfile?.id) {
+        setDepartmentError('Create or load a company profile first.');
+        return;
+      }
+
+      if (!departmentForm.department_name.trim()) {
+        setDepartmentError('Department name is required.');
+        return;
+      }
+
+      setIsSavingDepartment(true);
+      setDepartmentError('');
+      try {
+        const { error } = await cmmsService.createCmmsDepartment(cmmsData.companyProfile.id, departmentForm);
+        if (error) throw error;
+
+        const { data: depts, error: listError } = await cmmsService.getCmmsDepartments(cmmsData.companyProfile.id);
+        if (listError) throw listError;
+
+        setCmmsData(prev => ({
+          ...prev,
+          departments: depts || []
+        }));
+
+        setDepartmentForm({ department_name: '', description: '', location: '' });
+      } catch (error) {
+        setDepartmentError(error.message || 'Failed to register department');
+      } finally {
+        setIsSavingDepartment(false);
+      }
+    };
+
+    const profile = cmmsData.companyProfile;
+    const displayProfile = {
+      companyName: profile?.company_name || profile?.companyName || '',
+      companyRegistration: profile?.company_registration || profile?.companyRegistration || '',
+      location: profile?.location || '',
+      email: profile?.email || '',
+      phone: profile?.phone || ''
+    };
+
+    const departments = cmmsData.departments || [];
+
+    if (!profile && !showProfileForm) {
       return (
-        <div className="space-y-4">
-          {/* Collapsed Icon Row */}
-          <div className="flex gap-2 md:gap-3 items-center justify-start overflow-x-auto pb-2">
-            {/* Create Company Profile Icon */}
-            <button
-              onClick={() => setShowProfileForm(!showProfileForm)}
-              className={`
-                flex flex-col items-center justify-center w-16 h-16 md:w-20 md:h-20 rounded-lg
-                transition-all duration-300 transform hover:scale-110 flex-shrink-0
-                ${showProfileForm 
-                  ? 'bg-gradient-to-br from-blue-600 to-blue-800 ring-2 ring-blue-400' 
-                  : 'bg-gradient-to-br from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800'
-                }
-              `}
-              title="Create Company Profile"
-            >
-              <Building className="w-7 h-7 md:w-8 md:h-8 text-white mb-0.5 md:mb-1" />
-              <span className="text-xs text-white font-bold text-center leading-tight">Company</span>
-            </button>
-
-            {/* Newly Added Users Icon */}
-            <div 
-              className={`
-                flex flex-col items-center justify-center w-16 h-16 md:w-20 md:h-20 rounded-lg
-                bg-gradient-to-br from-green-500 to-green-700 hover:from-green-600 hover:to-green-800
-                transition-all duration-300 transform hover:scale-110 relative flex-shrink-0
-              `}
-              title="Newly Added Users"
-            >
-              <User className="w-7 h-7 md:w-8 md:h-8 text-white mb-0.5 md:mb-1" />
-              <span className="text-xs text-white font-bold text-center leading-tight">New Users</span>
-              {newlyAddedUserId && (
-                <span className="absolute -top-2 -right-2 w-5 h-5 md:w-6 md:h-6 bg-yellow-400 text-gray-900 rounded-full text-xs font-bold flex items-center justify-center animate-pulse">
-                  1
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Expandable Form */}
-          {showProfileForm && (
-            <div className="glass-card p-4 md:p-6 space-y-4 animate-in fade-in slide-in-from-top-4 duration-300">
-              <h3 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
-                <Building className="w-5 h-5 md:w-6 md:h-6 text-blue-400" />
-                Create Company Profile
-              </h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-            <input
-              type="text"
-              placeholder="Company Name"
-              value={formData.companyName}
-              onChange={(e) => setFormData({...formData, companyName: e.target.value})}
-              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm"
-            />
-            <input
-              type="text"
-              placeholder="Registration Number"
-              value={formData.companyRegistration}
-              onChange={(e) => setFormData({...formData, companyRegistration: e.target.value})}
-              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm"
-            />
-            <input
-              type="text"
-              placeholder="Location"
-              value={formData.location}
-              onChange={(e) => setFormData({...formData, location: e.target.value})}
-              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm"
-            />
-            <input
-              type="tel"
-              placeholder="Phone"
-              value={formData.phone}
-              onChange={(e) => setFormData({...formData, phone: e.target.value})}
-              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm"
-            />
-            <input
-              type="email"
-              placeholder="Email"
-              value={formData.email}
-              onChange={(e) => setFormData({...formData, email: e.target.value})}
-              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm"
-            />
-            <select
-              value={formData.industry}
-              onChange={(e) => setFormData({...formData, industry: e.target.value})}
-              className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm"
-            >
-              <option value="Manufacturing">Manufacturing</option>
-              <option value="Healthcare">Healthcare</option>
-              <option value="Transportation">Transportation</option>
-              <option value="Building Management">Building Management</option>
-              <option value="Industrial">Industrial</option>
-              <option value="Energy">Energy</option>
-              <option value="Other">Other</option>
-            </select>
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-2 md:gap-3">
-                <button
-                  onClick={handleSaveProfile}
-                  className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-green-600 transition-all text-sm"
-                >
-                  ✓ Create Profile & Get Access Code
-                </button>
-                <button
-                  onClick={() => setShowProfileForm(false)}
-                  className="px-4 py-2 bg-gray-500 bg-opacity-30 text-gray-300 rounded-lg font-semibold hover:bg-opacity-50 transition-all text-sm"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
+        <div className="glass-card p-4 md:p-6 space-y-4">
+          <h3 className="text-lg md:text-xl font-bold text-white">Company Profile</h3>
+          <p className="text-gray-300 text-sm">Create your company profile to continue.</p>
+          <button
+            onClick={() => setShowProfileForm(true)}
+            className="px-4 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-green-600 transition-all text-sm"
+          >
+            Create Company Profile
+          </button>
         </div>
       );
     }
 
     return (
-      <div className="glass-card p-4 md:p-6">
-        <h3 className="text-lg md:text-xl font-bold text-white mb-4">Company Profile</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mb-6">
-          <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded">
-            <div className="text-gray-400 text-xs md:text-sm">Company Name</div>
-            <div className="text-white font-bold text-sm md:text-base">{cmmsData.companyProfile.companyName}</div>
+      <div className="space-y-4">
+        {(showProfileForm || isEditingProfile || !profile) && (
+          <div className="glass-card p-4 md:p-6 space-y-4">
+            <h3 className="text-lg md:text-xl font-bold text-white">{profile ? '🏢 Edit Company Profile' : '🏢 Create Company Profile'}</h3>
+
+            {profileError && (
+              <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-sm">
+                {profileError}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+              {/* Company Name */}
+              <div className="space-y-1.5">
+                <label className="block text-gray-300 text-sm font-semibold">Company Name *</label>
+                <input
+                  type="text"
+                  placeholder="Enter company name"
+                  value={formData.companyName}
+                  onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+                  className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-500 text-sm focus:border-blue-500 focus:border-opacity-50 outline-none"
+                />
+              </div>
+
+              {/* Registration Number */}
+              <div className="space-y-1.5">
+                <label className="block text-gray-300 text-sm font-semibold">Registration Number</label>
+                <input
+                  type="text"
+                  placeholder="e.g., TIN-123456789"
+                  value={formData.companyRegistration}
+                  onChange={(e) => setFormData({ ...formData, companyRegistration: e.target.value })}
+                  className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-500 text-sm focus:border-blue-500 focus:border-opacity-50 outline-none"
+                />
+              </div>
+
+              {/* Location */}
+              <div className="space-y-1.5">
+                <label className="block text-gray-300 text-sm font-semibold">Location</label>
+                <input
+                  type="text"
+                  placeholder="City, Country"
+                  value={formData.location}
+                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                  className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-500 text-sm focus:border-blue-500 focus:border-opacity-50 outline-none"
+                />
+              </div>
+
+              {/* Phone */}
+              <div className="space-y-1.5">
+                <label className="block text-gray-300 text-sm font-semibold">Phone *</label>
+                <input
+                  type="tel"
+                  placeholder="+1 (555) 000-0000"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-500 text-sm focus:border-blue-500 focus:border-opacity-50 outline-none"
+                />
+              </div>
+
+              {/* Email */}
+              <div className="space-y-1.5">
+                <label className="block text-gray-300 text-sm font-semibold">Email *</label>
+                <input
+                  type="email"
+                  placeholder="contact@company.com"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-500 text-sm focus:border-blue-500 focus:border-opacity-50 outline-none"
+                />
+              </div>
+
+              {/* Department Input - Moved Here */}
+              <div className="space-y-3 md:col-span-2 bg-blue-500 bg-opacity-10 border border-blue-500 border-opacity-30 rounded-lg p-4">
+                <h4 className="text-sm font-bold text-white mb-2">🏭 Add Departments <span className="text-red-400 text-xs">(Required)</span></h4>
+                <p className="text-gray-400 text-xs mb-3">Create your own departments manually.</p>
+
+                {departmentError && (
+                  <div className="p-2 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-xs">
+                    {departmentError}
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="e.g., Maintenance, Operations, Production"
+                    value={departmentForm.department_name}
+                    onChange={(e) => setDepartmentForm({ ...departmentForm, department_name: e.target.value })}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && departmentForm.department_name.trim()) {
+                        setSelectedDepartments([...selectedDepartments, {
+                          name: departmentForm.department_name,
+                          description: departmentForm.description
+                        }]);
+                        setDepartmentForm({ department_name: '', description: '', location: '' });
+                      }
+                    }}
+                    className="flex-1 px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-500 text-sm focus:border-blue-500 focus:border-opacity-50 outline-none"
+                  />
+                  <button
+                    onClick={() => {
+                      if (departmentForm.department_name.trim()) {
+                        setSelectedDepartments([...selectedDepartments, {
+                          name: departmentForm.department_name,
+                          description: departmentForm.description
+                        }]);
+                        setDepartmentForm({ department_name: '', description: '', location: '' });
+                      }
+                    }}
+                    className="px-3 py-2 bg-blue-500 bg-opacity-40 text-blue-100 rounded-lg font-semibold hover:bg-opacity-60 transition-all text-sm whitespace-nowrap"
+                  >
+                    + Add
+                  </button>
+                </div>
+
+                <input
+                  type="text"
+                  placeholder="e.g., Equipment and facility maintenance"
+                  value={departmentForm.description}
+                  onChange={(e) => setDepartmentForm({ ...departmentForm, description: e.target.value })}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && departmentForm.department_name.trim()) {
+                      setSelectedDepartments([...selectedDepartments, {
+                        name: departmentForm.department_name,
+                        description: departmentForm.description
+                      }]);
+                      setDepartmentForm({ department_name: '', description: '', location: '' });
+                    }
+                  }}
+                  className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-500 text-sm focus:border-blue-500 focus:border-opacity-50 outline-none"
+                />
+
+                {/* Selected Departments Preview */}
+                {selectedDepartments.length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-white border-opacity-20 space-y-1">
+                    <div className="text-gray-300 text-xs font-semibold">Selected ({selectedDepartments.length})</div>
+                    <div className="space-y-1">
+                      {selectedDepartments.map((dept, idx) => (
+                        <div key={idx} className="bg-green-500 bg-opacity-20 border border-green-500 border-opacity-30 rounded px-2 py-1 flex items-center justify-between text-xs">
+                          <div>
+                            <div className="text-white font-semibold">{dept.name}</div>
+                            {dept.description && <div className="text-gray-400 text-xs">{dept.description}</div>}
+                          </div>
+                          <button
+                            onClick={() => setSelectedDepartments(selectedDepartments.filter((_, i) => i !== idx))}
+                            className="text-red-400 hover:text-red-300 transition-colors p-0.5 ml-2"
+                            title="Remove"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 md:gap-3">
+              <button
+                onClick={handleSaveProfile}
+                disabled={isSavingProfile}
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-green-600 transition-all text-sm disabled:opacity-50"
+              >
+                {isSavingProfile ? 'Saving...' : profile ? 'Save Profile Changes' : 'Create Profile'}
+              </button>
+              {profile && (
+                <button
+                  onClick={() => {
+                    setShowProfileForm(false);
+                    setIsEditingProfile(false);
+                    setProfileError('');
+                    setDepartmentError('');
+                    setSelectedDepartments([]);
+                    setFormData(mapProfileToForm(cmmsData.companyProfile));
+                  }}
+                  className="px-4 py-2 bg-gray-500 bg-opacity-30 text-gray-300 rounded-lg font-semibold hover:bg-opacity-50 transition-all text-sm"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
           </div>
-          <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded">
-            <div className="text-gray-400 text-xs md:text-sm">Registration</div>
-            <div className="text-white font-bold text-sm md:text-base">{cmmsData.companyProfile.companyRegistration}</div>
+        )}
+
+        {profile && !showProfileForm && !isEditingProfile && (
+          <div className="glass-card p-4 md:p-6">
+            <h3 className="text-lg md:text-xl font-bold text-white mb-4">📋 Company Profile</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mb-6">
+              <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded">
+                <div className="text-gray-400 text-xs md:text-sm">Company Name</div>
+                <div className="text-white font-bold text-sm md:text-base">{displayProfile.companyName}</div>
+              </div>
+              <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded">
+                <div className="text-gray-400 text-xs md:text-sm">Registration</div>
+                <div className="text-white font-bold text-sm md:text-base">{displayProfile.companyRegistration}</div>
+              </div>
+              <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded">
+                <div className="text-gray-400 text-xs md:text-sm">Location</div>
+                <div className="text-white font-bold text-sm md:text-base">{displayProfile.location}</div>
+              </div>
+              <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded">
+                <div className="text-gray-400 text-xs md:text-sm">Email</div>
+                <div className="text-white font-bold text-sm md:text-base break-all">{displayProfile.email}</div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                onClick={() => {
+                  setIsEditingProfile(true);
+                  setShowProfileForm(true);
+                  setProfileError('');
+                  setDepartmentError('');
+                  setFormData(mapProfileToForm(cmmsData.companyProfile));
+                  setDepartmentForm({ department_name: '', description: '', location: '' });
+                  setSelectedDepartments([]);
+                }}
+                className="flex-1 px-4 py-2 bg-orange-500 bg-opacity-30 text-orange-300 rounded-lg hover:bg-opacity-40 transition-all text-sm font-semibold"
+              >
+                ✏️ Edit Profile
+              </button>
+              <button
+                onClick={() => {
+                  setShowProfileForm(true);
+                  setIsEditingProfile(false);
+                  setFormData({ companyName: '', companyRegistration: '', location: '', phone: '', email: '', industry: 'Manufacturing' });
+                  setDepartmentForm({ department_name: '', description: '', location: '' });
+                  setSelectedDepartments([]);
+                  setProfileError('');
+                  setDepartmentError('');
+                }}
+                className="flex-1 px-4 py-2 bg-green-500 bg-opacity-30 text-green-300 rounded-lg hover:bg-opacity-40 transition-all text-sm font-semibold"
+              >
+                ➕ Create Another Company
+              </button>
+            </div>
+
+            {/* View Departments */}
+            {departments.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-white border-opacity-20">
+                <h4 className="text-sm font-bold text-gray-300 mb-3">🏭 Departments ({departments.length})</h4>
+                <div className="space-y-2">
+                  {departments.map(dept => (
+                    <div key={dept.id} className="bg-white bg-opacity-5 border border-white border-opacity-10 rounded px-3 py-2">
+                      <div className="text-white text-sm font-semibold">{dept.department_name}</div>
+                      {(dept.location || dept.description) && (
+                        <div className="text-gray-400 text-xs mt-1">{[dept.location, dept.description].filter(Boolean).join(' • ')}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-          <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded">
-            <div className="text-gray-400 text-xs md:text-sm">Location</div>
-            <div className="text-white font-bold text-sm md:text-base">{cmmsData.companyProfile.location}</div>
-          </div>
-          <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded">
-            <div className="text-gray-400 text-xs md:text-sm">Email</div>
-            <div className="text-white font-bold text-sm md:text-base break-all">{cmmsData.companyProfile.email}</div>
-          </div>
-        </div>
-        <button
-          onClick={() => setCmmsData(prev => ({...prev, companyProfile: null}))}
-          className="w-full md:w-auto px-4 py-2 bg-orange-500 bg-opacity-30 text-orange-300 rounded-lg hover:bg-opacity-40 transition-all text-sm"
-        >
-          Edit Profile
-        </button>
+        )}
       </div>
     );
   };
@@ -1449,7 +1833,7 @@ const CMMSModule = ({
       email: '',
       phone: '',
       role: 'technician',
-      department: '',
+      department_id: '',
       assignedServices: []
     });
 
@@ -1457,6 +1841,66 @@ const CMMSModule = ({
     const [searchResults, setSearchResults] = useState([]);
     const [searchingUsers, setSearchingUsers] = useState(false);
     const [verificationStatus, setVerificationStatus] = useState({});
+    const [showDepartmentForm, setShowDepartmentForm] = useState(false);
+    const [isSavingDepartment, setIsSavingDepartment] = useState(false);
+    const [departmentForm, setDepartmentForm] = useState({
+      department_name: '',
+      description: '',
+      location: ''
+    });
+
+    const departmentOptions = cmmsData.departments || [];
+    const roleNeedsDepartment = ['coordinator', 'supervisor', 'technician', 'storeman'].includes(newUser.role);
+
+    useEffect(() => {
+      const hydrateDepartments = async () => {
+        if (!userCompanyId || departmentOptions.length > 0) return;
+        const { data: depts, error } = await cmmsService.getCmmsDepartments(userCompanyId);
+        if (!error) {
+          setCmmsData(prev => ({
+            ...prev,
+            departments: depts || []
+          }));
+        }
+      };
+
+      hydrateDepartments();
+    }, [userCompanyId, departmentOptions.length]);
+
+    const handleCreateDepartmentInline = async () => {
+      if (!userCompanyId) {
+        alert('âŒ Company not loaded yet.');
+        return;
+      }
+      if (!departmentForm.department_name.trim()) {
+        alert('âŒ Department name is required.');
+        return;
+      }
+
+      setIsSavingDepartment(true);
+      try {
+        const { data, error } = await cmmsService.createCmmsDepartment(userCompanyId, departmentForm);
+        if (error) {
+          throw error;
+        }
+
+        const { data: depts, error: reloadError } = await cmmsService.getCmmsDepartments(userCompanyId);
+        if (!reloadError) {
+          setCmmsData(prev => ({
+            ...prev,
+            departments: depts || []
+          }));
+        }
+
+        setNewUser(prev => ({ ...prev, department_id: data?.id || '' }));
+        setDepartmentForm({ department_name: '', description: '', location: '' });
+        setShowDepartmentForm(false);
+      } catch (error) {
+        alert(`âŒ Failed to create department: ${error.message || 'Unknown error'}`);
+      } finally {
+        setIsSavingDepartment(false);
+      }
+    };
 
     // Search ICAN users - exact function from BusinessProfileForm
     const handleSearchUsers = async (query) => {
@@ -1504,16 +1948,6 @@ const CMMSModule = ({
       setEmailSearchQuery('');
     };
 
-    const allRoles = [
-      { id: 'admin', label: 'Admin', color: 'from-red-500 to-pink-600', icon: '👑' },
-      { id: 'coordinator', label: 'Department Coordinator', color: 'from-blue-500 to-cyan-600', icon: '📋' },
-      { id: 'supervisor', label: 'Supervisor', color: 'from-purple-500 to-indigo-600', icon: '👔' },
-      { id: 'technician', label: 'Technician', color: 'from-green-500 to-emerald-600', icon: '🔧' },
-      { id: 'storeman', label: 'Storeman', color: 'from-yellow-500 to-orange-600', icon: '📦' },
-      { id: 'finance', label: 'Financial Officer', color: 'from-teal-500 to-cyan-600', icon: '💰' },
-      { id: 'service-provider', label: 'Service Provider', color: 'from-violet-500 to-purple-600', icon: '🏢' }
-    ];
-
     // Filter roles based on current user's role
     let roles = allRoles;
     if (userRole === 'coordinator') {
@@ -1525,35 +1959,38 @@ const CMMSModule = ({
     }
 
     const handleAddUser = async () => {
-      // User selection from dropdown is required
       if (!newUser.email) {
-        alert('❌ Please search and select a user from the dropdown');
+        alert('âŒ Please search and select a user from the dropdown');
         return;
       }
 
       if (!newUser.name) {
-        alert('❌ Please select a valid user');
+        alert('âŒ Please select a valid user');
         return;
       }
 
       if (!newUser.role) {
-        alert('❌ Please select a role');
+        alert('âŒ Please select a role');
         return;
       }
 
-      // Verify ICAN account exists
+      if (roleNeedsDepartment && !newUser.department_id) {
+        alert('âŒ Please select a department for this role.');
+        return;
+      }
+
       let isVerified = verificationStatus[newUser.email]?.exists;
       if (!isVerified) {
         const verification = await verifyICANUser(newUser.email);
         if (!verification.exists) {
-          alert('❌ User must have an ICAN account.\n\nPlease ask the user to:\n1. Sign up for ICAN\n2. Complete their ICAN profile\n3. Then they can be added to CMMS');
+          alert('âŒ User must have an ICAN account.\n\nPlease ask the user to:\n1. Sign up for ICAN\n2. Complete their ICAN profile\n3. Then they can be added to CMMS');
           return;
         }
       }
 
-      // User has ICAN account - proceed to add to CMMS
+      const selectedDepartment = departmentOptions.find((dept) => dept.id === newUser.department_id);
+
       try {
-        // First check if user already exists in this company
         const { data: existingUser, error: checkError } = await supabase
           .from('cmms_users')
           .select('id')
@@ -1564,50 +2001,53 @@ const CMMSModule = ({
         let userId;
 
         if (existingUser) {
-          // User already exists - just use their ID for role assignment
-          console.log('ℹ️ User already exists in company, updating roles');
           userId = existingUser.id;
+
+          const { error: updateUserError } = await supabase
+            .from('cmms_users')
+            .update({
+              user_name: newUser.name || newUser.email.split('@')[0],
+              phone: newUser.phone || null,
+              department_id: roleNeedsDepartment ? newUser.department_id : null,
+              role: newUser.role,
+              is_active: true,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', userId);
+
+          if (updateUserError) {
+            alert('âŒ Failed to update existing user: ' + updateUserError.message);
+            return;
+          }
         } else if (checkError && checkError.code !== 'PGRST116') {
-          // Unexpected error (PGRST116 means no rows found, which is expected)
-          console.error('Error checking user existence:', checkError);
-          alert('❌ Error checking user: ' + checkError.message);
+          alert('âŒ Error checking user: ' + checkError.message);
           return;
         } else {
-          // User doesn't exist - insert them
           const { data: insertedUser, error: userError } = await supabase
             .from('cmms_users')
             .insert([
               {
                 cmms_company_id: userCompanyId,
                 email: newUser.email,
-                user_name: newUser.email.split('@')[0],
-                full_name: newUser.name,
+                user_name: newUser.name || newUser.email.split('@')[0],
                 phone: newUser.phone || null,
-                department: newUser.department || null,
-                job_title: newUser.role,
+                department_id: roleNeedsDepartment ? newUser.department_id : null,
+                role: newUser.role,
                 is_active: true,
-                status: 'active',
-                ican_verified: true,
-                ican_verified_at: new Date().toISOString()
+                is_creator: false
               }
             ])
-            .select();
+            .select('id')
+            .single();
 
-          if (userError) {
-            console.error('Error inserting user:', userError);
-            alert('❌ Error adding user to database: ' + userError.message);
+          if (userError || !insertedUser) {
+            alert('âŒ Error adding user to database: ' + (userError?.message || 'Unknown error'));
             return;
           }
 
-          if (!insertedUser || insertedUser.length === 0) {
-            alert('❌ Failed to add user to database');
-            return;
-          }
-
-          userId = insertedUser[0].id;
+          userId = insertedUser.id;
         }
 
-        // Assign role through secure RPC (handles role-name normalization + admin access checks)
         const { error: assignRoleError } = await supabase.rpc('assign_cmms_user_role_by_key', {
           p_company_id: userCompanyId,
           p_user_id: userId,
@@ -1615,76 +2055,45 @@ const CMMSModule = ({
         });
 
         if (assignRoleError) {
-          console.error('Error assigning role:', assignRoleError);
-          alert('⚠️ User added but role assignment failed: ' + assignRoleError.message);
+          alert('âš ï¸ User added but role assignment failed: ' + assignRoleError.message);
           return;
         }
 
-        // Update local state to show new user immediately
-        const normalizedNewRole = normalizeRoleKey(newUser.role);
-        const newUserObj = {
-          id: userId,
-          name: newUser.name,
-          email: newUser.email,
-          phone: newUser.phone,
-          role: normalizedNewRole,
-          department: newUser.department,
-          status: 'Active',
-          icanVerified: true,
-          createdAt: new Date(),
-          isCreator: false  // New users are not creators by default
-        };
-        
-        setCmmsData(prev => ({
-          ...prev,
-          users: [...prev.users, newUserObj]
-        }));
-
-        // Mark this user as newly added (for UI highlight)
         setNewlyAddedUserId(userId);
-        
-        // Remove highlight after 5 seconds
         setTimeout(() => setNewlyAddedUserId(null), 5000);
 
-        // 📢 SEND NOTIFICATION TO NEWLY ADDED USER
         try {
-          console.log(`📬 Creating notification for ${newUser.email}`);
-          const { error: notifError } = await supabase
+          await supabase
             .from('cmms_notifications')
             .insert([
               {
                 cmms_user_id: userId,
                 cmms_company_id: userCompanyId,
                 notification_type: 'user_added_to_cmms',
-                title: '✅ You\'ve been added to CMMS!',
+                title: 'âœ… You\'ve been added to CMMS!',
                 message: `Welcome to ${cmmsData.companyProfile?.companyName || 'the company'}! Your admin has added you as a ${newUser.role}. You can now access the CMMS dashboard and manage maintenance tasks.`,
-                icon: '🎉',
+                icon: 'ðŸŽ‰',
                 action_tab: 'users',
-                action_label: `View Your Role in Users & Roles`,
+                action_label: 'View Your Role in Users & Roles',
                 action_link: '/cmms/users',
                 is_read: false,
                 created_at: new Date().toISOString()
               }
             ]);
-
-          if (notifError) {
-            console.warn('⚠️ Could not save notification to database:', notifError.message);
-          } else {
-            console.log('✅ Notification created successfully');
-          }
-        } catch (err) {
-          console.warn('⚠️ Error creating notification:', err);
+        } catch (notificationError) {
+          console.warn('Notification creation skipped:', notificationError.message);
         }
 
-        setNewUser({ name: '', email: '', phone: '', role: 'technician', department: '', assignedServices: [] });
+        await loadCompanyData(userCompanyId);
+
+        setNewUser({ name: '', email: '', phone: '', role: 'technician', department_id: '', assignedServices: [] });
         setEmailSearchQuery('');
         setSearchResults([]);
-        
-        // Show success message with user notification info and company profile details
-        alert(`✅ User added to CMMS successfully!\n\n📬 Notification sent to ${newUser.email}\n\n🏢 Company Profile: "${cmmsData.companyProfile?.companyName || 'Your Company'}"\n🔑 Role: ${newUserObj.role}\n\nWhen they log in, they will see the company profile and their role in the Users & Roles tab.`);
+
+        alert(`âœ… User added to CMMS successfully!\n\nðŸ“¬ Notification sent to ${newUser.email}\nðŸ”‘ Role: ${normalizeRoleKey(newUser.role)}\nðŸ¢ Department: ${selectedDepartment?.department_name || 'Not assigned'}`);
       } catch (error) {
         console.error('Exception adding user:', error);
-        alert('❌ Error: ' + error.message);
+        alert('âŒ Error: ' + error.message);
       }
     };
 
@@ -1773,6 +2182,52 @@ const CMMSModule = ({
       } catch (error) {
         console.error('Error assigning admin role:', error);
         alert(`❌ Failed to assign Admin role:\n${error.message}`);
+      }
+    };
+
+    const handleUpdateUserDepartment = async (userId, departmentId) => {
+      try {
+        console.log(`🔄 Updating department for user ${userId} to department ${departmentId || 'None'}...`);
+
+        // Update ONLY in Supabase (source of truth)
+        const { error: updateError } = await supabase
+          .from('cmms_users')
+          .update({ 
+            department_id: departmentId || null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', userId);
+
+        if (updateError) {
+          console.error('❌ Supabase update error:', updateError);
+          throw updateError;
+        }
+
+        // Update local state for immediate UI feedback (but don't persist to localStorage)
+        const updatedUser = cmmsData.users.find(u => u.id === userId);
+        const newDeptName = departmentId 
+          ? cmmsData.departments?.find(d => d.id === departmentId)?.department_name 
+          : null;
+
+        setCmmsData(prev => ({
+          ...prev,
+          users: prev.users.map(u =>
+            u.id === userId
+              ? { ...u, department_id: departmentId || null, department: newDeptName || null }
+              : u
+          )
+        }));
+
+        console.log(`✅ Department successfully updated in Supabase for ${updatedUser?.name} → ${newDeptName || 'No Department'}`);
+
+        // Show success feedback
+        const deptName = departmentId 
+          ? cmmsData.departments?.find(d => d.id === departmentId)?.department_name 
+          : 'No Department';
+        alert(`✅ ${updatedUser?.name} reassigned to ${deptName}\n(Saved to Supabase)`);
+      } catch (error) {
+        console.error('❌ Error updating user department:', error);
+        alert(`❌ Failed to update department:\n${error.message}`);
       }
     };
 
@@ -1874,7 +2329,7 @@ const CMMSModule = ({
                 <span className="text-blue-300 text-sm">📧 Selected: <strong>{newUser.email}</strong></span>
                 <button
                   onClick={() => {
-                    setNewUser({ name: '', email: '', phone: '', role: 'technician', department: '', assignedServices: [] });
+                    setNewUser({ name: '', email: '', phone: '', role: 'technician', department_id: '', assignedServices: [] });
                     setEmailSearchQuery('');
                   }}
                   className="ml-auto text-red-400 hover:text-red-300 text-xs"
@@ -1935,14 +2390,64 @@ const CMMSModule = ({
             )}
 
             {/* Department - conditional */}
-            {newUser.email && (newUser.role === 'coordinator' || newUser.role === 'supervisor' || newUser.role === 'technician' || newUser.role === 'storeman') && (
-              <input
-                type="text"
-                placeholder="Department"
-                value={newUser.department}
-                onChange={(e) => setNewUser({...newUser, department: e.target.value})}
-                className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400"
-              />
+            {newUser.email && roleNeedsDepartment && (
+              <div className="space-y-2">
+                <label className="text-white text-sm block">Department *</label>
+                <select
+                  value={newUser.department_id}
+                  onChange={(e) => setNewUser({ ...newUser, department_id: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-700 border border-white border-opacity-20 rounded text-white font-medium focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="">{departmentOptions.length === 0 ? 'Loading departments...' : 'Select Department...'}</option>
+                  {departmentOptions.map(dept => (
+                    <option key={dept.id} value={dept.id} className="bg-slate-700 text-white">
+                      {dept.department_name || dept.name}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={() => setShowDepartmentForm(prev => !prev)}
+                  className="px-3 py-1.5 bg-blue-500 bg-opacity-30 text-blue-200 rounded text-xs font-semibold hover:bg-opacity-50 transition-all"
+                >
+                  {showDepartmentForm ? 'Hide Department Form' : 'Register New Department'}
+                </button>
+
+                {showDepartmentForm && (
+                  <div className="bg-white bg-opacity-5 border border-white border-opacity-10 rounded p-3 space-y-2">
+                    <input
+                      type="text"
+                      placeholder="Department Name *"
+                      value={departmentForm.department_name}
+                      onChange={(e) => setDepartmentForm({ ...departmentForm, department_name: e.target.value })}
+                      className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Location"
+                      value={departmentForm.location}
+                      onChange={(e) => setDepartmentForm({ ...departmentForm, location: e.target.value })}
+                      className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400"
+                    />
+                    <textarea
+                      placeholder="Description"
+                      value={departmentForm.description}
+                      onChange={(e) => setDepartmentForm({ ...departmentForm, description: e.target.value })}
+                      rows={2}
+                      className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCreateDepartmentInline}
+                      disabled={isSavingDepartment}
+                      className="px-3 py-2 bg-green-500 bg-opacity-30 text-green-200 rounded text-xs font-semibold hover:bg-opacity-50 transition-all disabled:opacity-50"
+                    >
+                      {isSavingDepartment ? 'Saving...' : 'Create Department'}
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Services - conditional */}
@@ -2003,6 +2508,7 @@ const CMMSModule = ({
               const normalizedUserRole = normalizeRoleKey(user.role);
               const role = allRoles.find(r => r.id === normalizedUserRole);
               const isNewlyAdded = newlyAddedUserId === user.id;
+              const currentDept = cmmsData.departments?.find(d => d.id === user.department_id);
               
               return (
                 <div 
@@ -2013,60 +2519,92 @@ const CMMSModule = ({
                     ${isNewlyAdded ? 'ring-2 ring-green-400 shadow-lg shadow-green-500/50 scale-105' : 'hover:border-opacity-60'}
                   `}
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-2xl">{role?.icon}</span>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <div className="text-white font-bold">{user.name}</div>
-                            {user.isCreator && (
-                              <span className="px-2 py-0.5 bg-amber-500 bg-opacity-50 text-amber-100 text-xs rounded-full font-bold flex items-center gap-1">
-                                👑 Creator
-                              </span>
-                            )}
-                            {isNewlyAdded && (
-                              <span className="px-2 py-1 bg-green-500 bg-opacity-40 text-green-200 text-xs rounded-full font-semibold animate-pulse">
-                                ✨ NEW
-                              </span>
-                            )}
+                  <div className="flex flex-col gap-4">
+                    {/* User Info Row */}
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-2xl">{role?.icon}</span>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <div className="text-white font-bold">{user.name}</div>
+                              {user.isCreator && (
+                                <span className="px-2 py-0.5 bg-amber-500 bg-opacity-50 text-amber-100 text-xs rounded-full font-bold flex items-center gap-1">
+                                  👑 Creator
+                                </span>
+                              )}
+                              {isNewlyAdded && (
+                                <span className="px-2 py-1 bg-green-500 bg-opacity-40 text-green-200 text-xs rounded-full font-semibold animate-pulse">
+                                  ✨ NEW
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-gray-300">{role?.label || normalizedUserRole}</div>
                           </div>
-                          <div className="text-xs text-gray-300">{role?.label || normalizedUserRole}</div>
+                        </div>
+                        <div className="text-xs text-gray-400 space-y-1">
+                          <div>📧 {user.email}</div>
+                          {user.phone && <div>📱 {user.phone}</div>}
+                          {user.icanVerified && <div className="text-green-300">✅ ICAN Verified</div>}
+                          {user.assignedServices && user.assignedServices.length > 0 && (
+                            <div>🔧 {user.assignedServices.join(', ')}</div>
+                          )}
                         </div>
                       </div>
-                      <div className="text-xs text-gray-400 space-y-1">
-                        <div>📧 {user.email}</div>
-                        {user.phone && <div>📱 {user.phone}</div>}
-                        {user.department && <div>🏢 {user.department}</div>}
-                        {user.icanVerified && <div className="text-green-300">✅ ICAN Verified</div>}
-                        {user.assignedServices && user.assignedServices.length > 0 && (
-                          <div>🔧 {user.assignedServices.join(', ')}</div>
+                      <div className="flex flex-col gap-2">
+                        {userRole === 'admin' && normalizedUserRole !== 'admin' && !user.isCreator && (
+                          <button
+                            onClick={() => handleAssignAdmin(user)}
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs md:text-sm font-semibold transition-all flex items-center justify-center gap-1"
+                            title="Promote this user to Admin - they will have full CMMS access"
+                          >
+                            ⭐ Make Admin
+                          </button>
                         )}
+                        {user.isCreator && normalizedUserRole === 'admin' && (
+                          <div className="px-3 py-1.5 bg-amber-500 bg-opacity-60 text-amber-900 rounded text-xs font-semibold flex items-center justify-center gap-1">
+                            👑 Creator Admin
+                          </div>
+                        )}
+                        <button
+                          onClick={() => handleDeleteUser(user.id)}
+                          className="px-3 py-1.5 bg-red-500 bg-opacity-30 text-red-300 rounded text-xs md:text-sm hover:bg-opacity-50 font-semibold transition-all"
+                          title="Remove this user from CMMS"
+                        >
+                          🗑️ Remove
+                        </button>
                       </div>
                     </div>
-                    <div className="flex flex-col gap-2">
-                      {userRole === 'admin' && normalizedUserRole !== 'admin' && !user.isCreator && (
-                        <button
-                          onClick={() => handleAssignAdmin(user)}
-                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs md:text-sm font-semibold transition-all flex items-center justify-center gap-1"
-                          title="Promote this user to Admin - they will have full CMMS access"
-                        >
-                          ⭐ Make Admin
-                        </button>
-                      )}
-                      {user.isCreator && normalizedUserRole === 'admin' && (
-                        <div className="px-3 py-1.5 bg-amber-500 bg-opacity-60 text-amber-900 rounded text-xs font-semibold flex items-center justify-center gap-1">
-                          👑 Creator Admin
+
+                    {/* Department Assignment Row */}
+                    {userRole === 'admin' && (
+                      <div className="border-t border-white border-opacity-20 pt-3 mt-2">
+                        <div className="flex flex-col md:flex-row items-start md:items-center gap-3">
+                          <div className="flex-1">
+                            <label className="text-xs font-semibold text-gray-300 block mb-1.5">
+                              🏢 Assign to Department
+                            </label>
+                            <select
+                              value={user.department_id || ''}
+                              onChange={(e) => handleUpdateUserDepartment(user.id, e.target.value)}
+                              className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-30 rounded text-white text-sm focus:border-blue-400 outline-none transition-all"
+                            >
+                              <option value="">← No Department Assigned</option>
+                              {cmmsData.departments?.map(dept => (
+                                <option key={dept.id} value={dept.id}>
+                                  {dept.department_name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          {currentDept && (
+                            <div className="flex items-center gap-2 px-3 py-2 bg-green-500 bg-opacity-20 border border-green-500 border-opacity-40 rounded text-xs text-green-200 font-semibold md:mt-6">
+                              ✅ {currentDept.department_name}
+                            </div>
+                          )}
                         </div>
-                      )}
-                      <button
-                        onClick={() => handleDeleteUser(user.id)}
-                        className="px-3 py-1.5 bg-red-500 bg-opacity-30 text-red-300 rounded text-xs md:text-sm hover:bg-opacity-50 font-semibold transition-all"
-                        title="Remove this user from CMMS"
-                      >
-                        🗑️ Remove
-                      </button>
-                    </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -2083,54 +2621,522 @@ const CMMSModule = ({
   };
 
   // ============================================
-  // INVENTORY TRACKING
+  // DEPARTMENT MANAGEMENT (ADMIN & COORDINATOR)
   // ============================================
-  const InventoryManager = () => {
-    // Strict: Only Storeman and Admin can edit inventory
-    const canViewInventory = hasPermission('canViewInventory');
-    const canEditInventory = hasPermission('canEditInventory');
+  const DepartmentManager = () => {
+    const [newDept, setNewDept] = useState({
+      department_name: '',
+      description: '',
+      location: ''
+    });
+    const [editingDeptId, setEditingDeptId] = useState(null);
+    const [editingDept, setEditingDept] = useState(null);
+    const [deptError, setDeptError] = useState('');
+    const [deptSuccess, setDeptSuccess] = useState('');
+    const [isSavingDept, setIsSavingDept] = useState(false);
 
-    if (!canViewInventory) {
-      return (
-        <div className="glass-card p-4 md:p-6 bg-red-500 bg-opacity-10 border-l-4 border-red-500">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-red-400 flex-shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0">
-              <p className="text-red-300 font-semibold text-sm md:text-base">🔒 Inventory Access Denied</p>
-              <p className="text-gray-400 text-xs md:text-sm mt-1">Your role (<span className="text-blue-300 font-bold uppercase">{userRole}</span>) does not have access to inventory data.</p>
+    const isAdmin = userRole === 'admin';
+    const isCoordinator = userRole === 'coordinator';
+
+    // Get departments managed by coordinator
+    const getManagedDepartments = () => {
+      if (isAdmin) return cmmsData.departments || [];
+      if (isCoordinator) {
+        // Coordinator can manage departments they're assigned to + all others
+        return cmmsData.departments || [];
+      }
+      return [];
+    };
+
+    const managedDepts = getManagedDepartments();
+
+    // Count staff per department
+    const getStaffCount = (deptId) => {
+      return cmmsData.users?.filter(u => u.department_id === deptId).length || 0;
+    };
+
+    // Get staff by department
+    const getDepartmentStaff = (deptId) => {
+      return cmmsData.users?.filter(u => u.department_id === deptId) || [];
+    };
+
+    const handleAddDepartment = async () => {
+      if (!newDept.department_name.trim()) {
+        setDeptError('Department name is required');
+        return;
+      }
+
+      setIsSavingDept(true);
+      setDeptError('');
+      try {
+        const { data, error } = await cmmsService.createCmmsDepartment(
+          cmmsData.companyProfile?.id,
+          newDept
+        );
+
+        if (error) throw error;
+
+        // Update local state
+        setCmmsData(prev => ({
+          ...prev,
+          departments: [...(prev.departments || []), { id: data.id, ...newDept, is_active: true }]
+        }));
+
+        setNewDept({ department_name: '', description: '', location: '' });
+        setDeptSuccess(`✅ "${newDept.department_name}" created successfully!`);
+        setTimeout(() => setDeptSuccess(''), 3000);
+      } catch (error) {
+        setDeptError(error.message || 'Failed to create department');
+      } finally {
+        setIsSavingDept(false);
+      }
+    };
+
+    const handleEditDepartment = (dept) => {
+      setEditingDeptId(dept.id);
+      setEditingDept({ ...dept });
+    };
+
+    const handleSaveEditDepartment = async () => {
+      if (!editingDept.department_name.trim()) {
+        setDeptError('Department name is required');
+        return;
+      }
+
+      setIsSavingDept(true);
+      setDeptError('');
+      try {
+        const { error } = await cmmsService.updateCmmsDepartment(
+          editingDept.id,
+          {
+            department_name: editingDept.department_name,
+            description: editingDept.description,
+            location: editingDept.location,
+            is_active: true
+          }
+        );
+
+        if (error) throw error;
+
+        setCmmsData(prev => ({
+          ...prev,
+          departments: prev.departments.map(d => 
+            d.id === editingDept.id ? editingDept : d
+          )
+        }));
+
+        setEditingDeptId(null);
+        setEditingDept(null);
+        setDeptSuccess(`✅ "${editingDept.department_name}" updated successfully!`);
+        setTimeout(() => setDeptSuccess(''), 3000);
+      } catch (error) {
+        setDeptError(error.message || 'Failed to update department');
+      } finally {
+        setIsSavingDept(false);
+      }
+    };
+
+    const handleDeleteDepartment = async (dept) => {
+      const staffCount = getStaffCount(dept.id);
+      if (staffCount > 0 && !isAdmin) {
+        setDeptError(`⚠️ Cannot delete department with ${staffCount} staff members. Admin only.`);
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `⚠️ Delete "${dept.department_name}"?\n\n${staffCount > 0 ? `Warning: ${staffCount} staff member(s) assigned.` : 'This department has no staff.'}\n\nThis action cannot be undone.`
+      );
+      if (!confirmed) return;
+
+      try {
+        const { error } = await cmmsService.deleteCmmsDepartment(dept.id);
+        if (error) throw error;
+
+        setCmmsData(prev => ({
+          ...prev,
+          departments: prev.departments.filter(d => d.id !== dept.id)
+        }));
+
+        setDeptSuccess(`✅ "${dept.department_name}" deleted successfully!`);
+        setTimeout(() => setDeptSuccess(''), 3000);
+      } catch (error) {
+        setDeptError(error.message || 'Failed to delete department');
+      }
+    };
+
+    return (
+      <div className="space-y-6">
+        {/* Department Overview Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="glass-card p-4 bg-blue-500 bg-opacity-10 border-l-4 border-blue-500">
+            <div className="text-xs text-gray-400 font-semibold">TOTAL DEPARTMENTS</div>
+            <div className="text-2xl font-bold text-blue-300 mt-1">{managedDepts.length}</div>
+          </div>
+          <div className="glass-card p-4 bg-green-500 bg-opacity-10 border-l-4 border-green-500">
+            <div className="text-xs text-gray-400 font-semibold">ACTIVE STAFF</div>
+            <div className="text-2xl font-bold text-green-300 mt-1">{cmmsData.users?.length || 0}</div>
+          </div>
+          <div className="glass-card p-4 bg-purple-500 bg-opacity-10 border-l-4 border-purple-500">
+            <div className="text-xs text-gray-400 font-semibold">AVG STAFF/DEPT</div>
+            <div className="text-2xl font-bold text-purple-300 mt-1">
+              {managedDepts.length > 0 ? Math.ceil((cmmsData.users?.length || 0) / managedDepts.length) : 0}
             </div>
           </div>
         </div>
-      );
-    }
+
+        {/* Add New Department */}
+        {isAdmin && (
+          <div className="glass-card p-6">
+            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+              <Plus className="w-6 h-6 text-blue-400" />
+              Add New Department
+            </h3>
+
+            {deptError && (
+              <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-sm mb-4">
+                {deptError}
+              </div>
+            )}
+
+            {deptSuccess && (
+              <div className="p-3 bg-green-500/20 border border-green-500/50 rounded-lg text-green-200 text-sm mb-4">
+                {deptSuccess}
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <input
+                type="text"
+                placeholder="Department Name (e.g., Maintenance, Operations)"
+                value={newDept.department_name}
+                onChange={(e) => setNewDept({ ...newDept, department_name: e.target.value })}
+                className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-500 text-sm focus:border-blue-500 outline-none"
+              />
+              <input
+                type="text"
+                placeholder="Description (e.g., Equipment and facility maintenance)"
+                value={newDept.description}
+                onChange={(e) => setNewDept({ ...newDept, description: e.target.value })}
+                className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-500 text-sm focus:border-blue-500 outline-none"
+              />
+              <input
+                type="text"
+                placeholder="Location (e.g., Building A, Floor 2)"
+                value={newDept.location}
+                onChange={(e) => setNewDept({ ...newDept, location: e.target.value })}
+                className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-500 text-sm focus:border-blue-500 outline-none"
+              />
+              <button
+                onClick={handleAddDepartment}
+                disabled={isSavingDept}
+                className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-all disabled:opacity-50"
+              >
+                {isSavingDept ? '⏳ Creating...' : '✅ Create Department'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Departments List */}
+        <div className="glass-card p-6">
+          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <Building className="w-6 h-6 text-green-400" />
+            Departments ({managedDepts.length})
+          </h3>
+
+          <div className="space-y-3">
+            {managedDepts.map(dept => {
+              const staffCount = getStaffCount(dept.id);
+              const staff = getDepartmentStaff(dept.id);
+              const isEditing = editingDeptId === dept.id;
+
+              if (isEditing) {
+                return (
+                  <div key={dept.id} className="bg-blue-500 bg-opacity-10 border border-blue-500 border-opacity-50 rounded-lg p-4">
+                    <div className="space-y-3">
+                      <input
+                        type="text"
+                        value={editingDept.department_name}
+                        onChange={(e) => setEditingDept({ ...editingDept, department_name: e.target.value })}
+                        className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm focus:border-blue-500 outline-none"
+                      />
+                      <input
+                        type="text"
+                        value={editingDept.description || ''}
+                        onChange={(e) => setEditingDept({ ...editingDept, description: e.target.value })}
+                        className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm focus:border-blue-500 outline-none"
+                      />
+                      <input
+                        type="text"
+                        value={editingDept.location || ''}
+                        onChange={(e) => setEditingDept({ ...editingDept, location: e.target.value })}
+                        className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm focus:border-blue-500 outline-none"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleSaveEditDepartment}
+                          disabled={isSavingDept}
+                          className="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-semibold transition-all disabled:opacity-50"
+                        >
+                          💾 Save
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingDeptId(null);
+                            setEditingDept(null);
+                          }}
+                          className="flex-1 px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded font-semibold transition-all"
+                        >
+                          ✕ Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div key={dept.id} className="bg-gradient-to-r from-indigo-500 bg-opacity-10 border border-indigo-500 border-opacity-30 rounded-lg p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <h4 className="text-white font-bold text-lg">{dept.department_name}</h4>
+                      <p className="text-gray-400 text-sm mt-1">{dept.description}</p>
+                      {dept.location && <p className="text-gray-500 text-xs mt-1">📍 {dept.location}</p>}
+                      <div className="mt-3 flex gap-2 flex-wrap">
+                        <span className="px-2 py-1 bg-blue-500 bg-opacity-30 text-blue-200 text-xs rounded">
+                          👥 {staffCount} Staff {staffCount === 1 ? 'Member' : 'Members'}
+                        </span>
+                        <span className={`px-2 py-1 ${dept.is_active ? 'bg-green-500' : 'bg-red-500'} bg-opacity-30 text-xs rounded`}>
+                          {dept.is_active ? '✅ Active' : '❌ Inactive'}
+                        </span>
+                      </div>
+
+                      {/* Staff List */}
+                      {staffCount > 0 && (
+                        <div className="mt-3 space-y-1">
+                          <p className="text-xs font-semibold text-gray-300">Staff Members:</p>
+                          {staff.map(member => {
+                            const memberRole = allRoles.find(r => r.id === normalizeRoleKey(member.role));
+                            return (
+                              <div key={member.id} className="text-xs text-gray-400 flex items-center gap-2">
+                                <span>{memberRole?.icon}</span>
+                                <span>{member.name}</span>
+                                <span className="text-gray-500">({memberRole?.label})</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      {isAdmin && (
+                        <>
+                          <button
+                            onClick={() => handleEditDepartment(dept)}
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold transition-all"
+                          >
+                            ✏️ Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteDepartment(dept)}
+                            className="px-3 py-1.5 bg-red-500 bg-opacity-30 text-red-300 rounded text-xs hover:bg-opacity-50 font-semibold transition-all"
+                          >
+                            🗑️ Delete
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {managedDepts.length === 0 && (
+              <div className="text-center py-8 text-gray-400">
+                No departments yet. {isAdmin ? 'Create one to get started.' : 'Ask your admin to create departments.'}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================
+  // INVENTORY TRACKING
+  // ============================================
+  const InventoryManager = () => {
+    // All members can view inventory
+    // Only Storeman and Admin can edit inventory
+    const canViewInventory = true; // Allow all members to see inventory
+    const canEditInventory = hasPermission('canEditInventory');
+    const [expandedItems, setExpandedItems] = useState({});
+    const [isAddingItem, setIsAddingItem] = useState(false);
+    const [addItemError, setAddItemError] = useState(null);
+    const [departments, setDepartments] = useState([]);
+    const [storemen, setStoremen] = useState([]);
+    const [isLoadingDepts, setIsLoadingDepts] = useState(false);
+
+    const toggleExpandItem = (itemId) => {
+      setExpandedItems(prev => ({
+        ...prev,
+        [itemId]: !prev[itemId]
+      }));
+    };
 
     const [newItem, setNewItem] = useState({
-      name: '',
+      item_name: '',
       category: 'Spare Parts',
-      quantity: 0,
-      minStock: 0,
-      cost: 0,
-      storeman: ''
+      quantity_in_stock: 0,
+      minimum_stock_level: 0,
+      unit_cost: 0,
+      supplier_name: '',
+      storage_location: '',
+      bin_number: '',
+      unit_of_measure: 'pcs',
+      lead_time_days: 0,
+      department_id: '',
+      assigned_storeman_id: ''
     });
 
-    const handleAddItem = () => {
+    // Fetch departments from Supabase when component loads
+    useEffect(() => {
+      const fetchDepartments = async () => {
+        if (!cmmsData.companyProfile?.id) return;
+        
+        setIsLoadingDepts(true);
+        const { data: depts, error } = await cmmsService.getCmmsDepartments(cmmsData.companyProfile.id);
+        
+        if (!error && depts) {
+          setDepartments(depts);
+          console.log('✅ Departments loaded:', depts.length);
+        } else {
+          console.error('❌ Failed to load departments:', error);
+        }
+        setIsLoadingDepts(false);
+      };
+
+      fetchDepartments();
+    }, [cmmsData.companyProfile?.id]);
+    // Get storemen for current department from cmmsData
+    const getStoremenForDepartment = (deptId) => {
+      if (!deptId) return [];
+      return cmmsData.users?.filter(u => 
+        u.department_id === deptId && 
+        (normalizeRoleKey(u.role) === 'storeman' || normalizeRoleKey(u.role) === 'admin')
+      ) || [];
+    };
+
+    // Update storemen list when department changes
+    useEffect(() => {
+      if (!newItem.department_id) {
+        setStoremen([]);
+        return;
+      }
+
+      const stm = getStoremenForDepartment(newItem.department_id);
+      setStoremen(stm);
+      console.log('✅ Storemen loaded for department:', stm.length);
+    }, [newItem.department_id, cmmsData.users]);
+
+    const handleAddItem = async () => {
       if (!canEditInventory) {
         alert('🔒 You do not have permission to add inventory items.');
         return;
       }
-      if (newItem.name && newItem.quantity >= 0) {
+
+      if (!newItem.item_name || newItem.item_name.trim() === '') {
+        setAddItemError('❌ Item name is required');
+        return;
+      }
+
+      if (newItem.quantity_in_stock < 0 || newItem.unit_cost < 0) {
+        setAddItemError('❌ Quantity and cost cannot be negative');
+        return;
+      }
+
+      setIsAddingItem(true);
+      setAddItemError(null);
+
+      try {
+        // Get current company ID
+        const companyId = cmmsData.companyProfile?.id;
+        console.log('🔍 Frontend - Company Profile:', {
+          companyProfile: cmmsData.companyProfile,
+          companyId: companyId,
+          companyIdType: typeof companyId,
+          companyIdIsNull: companyId === null,
+          companyIdIsUndefined: companyId === undefined
+        });
+
+        if (!companyId) {
+          setAddItemError('❌ No company profile found. Please create a company first.');
+          setIsAddingItem(false);
+          return;
+        }
+
+        console.log('📝 Calling addInventoryItem with:', { companyId, itemName: newItem.item_name });
+
+        // Call Supabase service
+        const { data, error } = await cmmsService.addInventoryItem(companyId, newItem);
+
+        if (error) {
+          console.error('Supabase Error:', error);
+          setAddItemError(`❌ Failed to add item: ${error.message || 'Unknown error'}`);
+          setIsAddingItem(false);
+          return;
+        }
+
+        if (!data) {
+          setAddItemError('❌ Failed to add item - no data returned');
+          setIsAddingItem(false);
+          return;
+        }
+
+        // Update local state with new item
         setCmmsData(prev => ({
           ...prev,
-          inventory: [...prev.inventory, {
-            id: Date.now(),
-            ...newItem,
-            createdAt: new Date(),
-            lastRestocked: new Date(),
-            createdBy: userRole,
-            lastModifiedBy: userRole
+          inventory: [...(prev.inventory || []), {
+            id: data.id,
+            item_code: data.item_code,
+            item_name: data.item_name,
+            category: data.category,
+            quantity_in_stock: data.quantity_in_stock,
+            minimum_stock_level: data.minimum_stock_level,
+            unit_cost: data.unit_cost,
+            supplier_name: data.supplier_name,
+            storage_location: data.storage_location,
+            bin_number: data.bin_number,
+            unit_of_measure: data.unit_of_measure,
+            is_active: data.is_active,
+            created_at: data.created_at,
+            updated_at: data.updated_at
           }]
         }));
-        setNewItem({ name: '', category: 'Spare Parts', quantity: 0, minStock: 0, cost: 0, storeman: '' });
+
+        // Reset form
+        setNewItem({
+          item_name: '',
+          category: 'Spare Parts',
+          quantity_in_stock: 0,
+          minimum_stock_level: 0,
+          unit_cost: 0,
+          supplier_name: '',
+          storage_location: '',
+          bin_number: '',
+          unit_of_measure: 'pcs',
+          lead_time_days: 0,
+          department_id: '',
+          assigned_storeman_id: ''
+        });
+
+        console.log('✅ Item added to Supabase successfully:', data);
+      } catch (err) {
+        console.error('Exception adding item:', err);
+        setAddItemError(`❌ Error: ${err.message}`);
+      } finally {
+        setIsAddingItem(false);
       }
     };
 
@@ -2145,8 +3151,12 @@ const CMMSModule = ({
       }));
     };
 
-    const lowStockItems = cmmsData.inventory.filter(item => item.quantity <= item.minStock);
-    const totalInventoryValue = cmmsData.inventory.reduce((sum, item) => sum + (item.quantity * item.cost), 0);
+    const lowStockItems = cmmsData.inventory.filter(item => item.quantity_in_stock <= item.minimum_stock_level);
+    const totalInventoryValue = cmmsData.inventory.reduce((sum, item) => {
+      const quantity = item.quantity_in_stock || 0;
+      const price = item.unit_price || 0;
+      return sum + (quantity * price);
+    }, 0);
     const escrowPercent = 5;
     const escrowPreview = Math.round(totalInventoryValue * (escrowPercent / 100));
 
@@ -2162,6 +3172,13 @@ const CMMSModule = ({
         {/* Add Inventory Item */}
         {canEditInventory && (
           <div className="glass-card p-5 md:p-6 space-y-4">
+            {/* Error Message */}
+            {addItemError && (
+              <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-sm">
+                {addItemError}
+              </div>
+            )}
+
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Package className="w-5 h-5 md:w-6 md:h-6 text-blue-400" />
@@ -2177,13 +3194,14 @@ const CMMSModule = ({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
               <div className="space-y-2">
-                <label className="text-xs text-gray-300">Item Name</label>
+                <label className="text-xs text-gray-300">Item Name <span className="text-red-400">*</span></label>
                 <input
                   type="text"
                   placeholder="e.g. Hydraulic Pump"
-                  value={newItem.name}
-                  onChange={(e) => setNewItem({...newItem, name: e.target.value})}
-                  className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm"
+                  value={newItem.item_name}
+                  onChange={(e) => setNewItem({...newItem, item_name: e.target.value})}
+                  disabled={isAddingItem}
+                  className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm disabled:opacity-50"
                 />
               </div>
 
@@ -2194,7 +3212,8 @@ const CMMSModule = ({
                     <button
                       key={cat}
                       onClick={() => setNewItem({...newItem, category: cat})}
-                      className={`px-3 py-2 rounded text-sm border ${newItem.category === cat ? 'bg-blue-500/30 border-blue-400 text-white' : 'bg-white/5 border-white/10 text-gray-200'}`}
+                      disabled={isAddingItem}
+                      className={`px-3 py-2 rounded text-sm border transition-all ${newItem.category === cat ? 'bg-blue-500/30 border-blue-400 text-white' : 'bg-white/5 border-white/10 text-gray-200'} disabled:opacity-50`}
                       type="button"
                     >
                       {cat}
@@ -2204,13 +3223,56 @@ const CMMSModule = ({
               </div>
 
               <div className="space-y-2">
+                <label className="text-xs text-gray-300">Department <span className="text-red-400">*</span></label>
+                <select
+                  value={newItem.department_id}
+                  onChange={(e) => {
+                    setNewItem({
+                      ...newItem, 
+                      department_id: e.target.value,
+                      assigned_storeman_id: '' // Reset storeman when department changes
+                    });
+                  }}
+                  disabled={isAddingItem || isLoadingDepts}
+                  className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white disabled:opacity-50"
+                >
+                  <option value="">{isLoadingDepts ? 'Loading departments...' : 'Select Department...'}</option>
+                  {departments.map(dept => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.department_name || dept.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-gray-400">Separates inventory by department.</p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs text-gray-300">Assign Storeman <span className="text-red-400">*</span></label>
+                <select
+                  value={newItem.assigned_storeman_id}
+                  onChange={(e) => setNewItem({...newItem, assigned_storeman_id: e.target.value})}
+                  disabled={isAddingItem || !newItem.department_id || storemen.length === 0}
+                  className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white disabled:opacity-50"
+                >
+                  <option value="">{!newItem.department_id ? 'Select Department First' : storemen.length === 0 ? 'No Storemen Available' : 'Select Storeman...'}</option>
+                  {storemen.map(storeman => (
+                    <option key={storeman.id} value={storeman.id}>
+                      {storeman.name || storeman.user_name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-gray-400">Responsible storeman for this department.</p>
+              </div>
+
+              <div className="space-y-2">
                 <label className="text-xs text-gray-300">Quantity on hand</label>
                 <input
                   type="number"
                   placeholder="0"
-                  value={newItem.quantity}
-                  onChange={(e) => setNewItem({...newItem, quantity: parseInt(e.target.value) || 0})}
-                  className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm"
+                  value={newItem.quantity_in_stock}
+                  onChange={(e) => setNewItem({...newItem, quantity_in_stock: parseInt(e.target.value) || 0})}
+                  disabled={isAddingItem}
+                  className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm disabled:opacity-50"
                 />
                 <p className="text-[11px] text-gray-400">Auto-tracks low stock and escalates to repairs.</p>
               </div>
@@ -2220,9 +3282,10 @@ const CMMSModule = ({
                 <input
                   type="number"
                   placeholder="Reorder at"
-                  value={newItem.minStock}
-                  onChange={(e) => setNewItem({...newItem, minStock: parseInt(e.target.value) || 0})}
-                  className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm"
+                  value={newItem.minimum_stock_level}
+                  onChange={(e) => setNewItem({...newItem, minimum_stock_level: parseInt(e.target.value) || 0})}
+                  disabled={isAddingItem}
+                  className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm disabled:opacity-50"
                 />
                 <p className="text-[11px] text-gray-400">Keeps buffer before hitting the maintenance cliff.</p>
               </div>
@@ -2232,33 +3295,54 @@ const CMMSModule = ({
                 <input
                   type="number"
                   placeholder="0"
-                  value={newItem.cost}
-                  onChange={(e) => setNewItem({...newItem, cost: parseFloat(e.target.value) || 0})}
-                  className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400"
+                  value={newItem.unit_cost}
+                  onChange={(e) => setNewItem({...newItem, unit_cost: parseFloat(e.target.value) || 0})}
+                  disabled={isAddingItem}
+                  className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 disabled:opacity-50"
                 />
                 <p className="text-[11px] text-gray-400">Costs roll into escrow forecasting automatically.</p>
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs text-gray-300">Assign Storeman</label>
-                <select
-                  value={newItem.storeman}
-                  onChange={(e) => setNewItem({...newItem, storeman: e.target.value})}
-                  className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white"
-                >
-                  <option value="">Unassigned</option>
-                  {cmmsData.users.filter(u => u.role === 'storeman').map(u => (
-                    <option key={u.id} value={u.name}>{u.name}</option>
-                  ))}
-                </select>
+                <label className="text-xs text-gray-300">Supplier Name</label>
+                <input
+                  type="text"
+                  placeholder="Optional"
+                  value={newItem.supplier_name}
+                  onChange={(e) => setNewItem({...newItem, supplier_name: e.target.value})}
+                  disabled={isAddingItem}
+                  className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm disabled:opacity-50"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs text-gray-300">Storage Location</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Warehouse A5"
+                  value={newItem.storage_location}
+                  onChange={(e) => setNewItem({...newItem, storage_location: e.target.value})}
+                  disabled={isAddingItem}
+                  className="px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400 text-sm disabled:opacity-50"
+                />
               </div>
             </div>
 
             <button
               onClick={handleAddItem}
-              className="w-full px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold hover:from-green-600 hover:to-emerald-700 transition-all shadow-lg shadow-emerald-500/20"
+              disabled={isAddingItem}
+              className="w-full px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold hover:from-green-600 hover:to-emerald-700 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              ✓ Add Item
+              {isAddingItem ? (
+                <>
+                  <Loader className="w-4 h-4 animate-spin" />
+                  Adding Item...
+                </>
+              ) : (
+                <>
+                  ✓ Add Item to Supabase
+                </>
+              )}
             </button>
           </div>
         )}
@@ -2279,41 +3363,197 @@ const CMMSModule = ({
           </div>
         </div>
 
-        {/* Inventory List */}
+        {/* Inventory List - Collapsible Items */}
         <div className="glass-card p-6">
-          <h3 className="text-xl font-bold text-white mb-4">Inventory Items</h3>
-          <div className="space-y-2 max-h-96 overflow-y-auto">
-            {cmmsData.inventory.map(item => (
-              <div key={item.id} className={`p-3 rounded-lg border ${
-                item.quantity <= item.minStock
-                  ? 'bg-orange-500 bg-opacity-20 border-orange-500 border-opacity-50'
-                  : 'bg-white bg-opacity-5 border-white border-opacity-20'
-              }`}>
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <div className="text-white font-semibold">{item.name}</div>
-                    <div className="text-xs text-gray-400">
-                      {item.category} • Stock: {item.quantity} (Min: {item.minStock}) • Cost: UGX {(item.cost * item.quantity).toLocaleString()}
+          <h3 className="text-xl font-bold text-white mb-4">Inventory Items ({cmmsData.inventory.length})</h3>
+          <div className="space-y-2 max-h-full overflow-y-auto">
+            {cmmsData.inventory.map(item => {
+              const isExpanded = expandedItems[item.id];
+              const isLowStock = item.quantity_in_stock <= item.minimum_stock_level;
+              const totalValue = item.unit_cost * item.quantity_in_stock;
+              
+              return (
+                <div
+                  key={item.id}
+                  className={`rounded-lg border transition-all ${
+                    isLowStock
+                      ? 'bg-orange-500 bg-opacity-20 border-orange-500 border-opacity-50'
+                      : 'bg-white bg-opacity-5 border-white border-opacity-20'
+                  } ${
+                    isExpanded ? 'p-4' : 'p-3'
+                  }`}
+                >
+                  {/* Compact View - Always Shown */}
+                  <div
+                    onClick={() => toggleExpandItem(item.id)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        toggleExpandItem(item.id);
+                      }
+                    }}
+                    className="w-full text-left hover:opacity-80 transition-opacity cursor-pointer"
+                  >
+                    <div className="flex justify-between items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline gap-2">
+                          <div className="text-white font-semibold text-sm md:text-base truncate">{item.item_name}</div>
+                          <div className="text-xs text-gray-400 flex-shrink-0">
+                            {item.category}
+                          </div>
+                        </div>
+                        {/* Compact Summary Line */}
+                        <div className="text-xs text-gray-300 mt-1">
+                          <span className="text-green-400">Stock: {item.quantity_in_stock}</span>
+                          <span className="text-gray-500 mx-1">•</span>
+                          <span className="text-blue-300">Min: {item.minimum_stock_level}</span>
+                          <span className="text-gray-500 mx-1">•</span>
+                          <span className="text-yellow-300">UGX {totalValue.toLocaleString()}</span>
+                          {item.supplier_name && (
+                            <>
+                              <span className="text-gray-500 mx-1">•</span>
+                              <span className="text-blue-300">📦 {item.supplier_name}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Status Badge and Actions */}
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {isLowStock && (
+                          <span className="px-2 py-1 bg-orange-500 text-white text-xs rounded font-bold whitespace-nowrap">⚠️ LOW</span>
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleExpandItem(item.id);
+                          }}
+                          className="p-1 hover:bg-white hover:bg-opacity-10 rounded transition-all"
+                          title={isExpanded ? 'Collapse' : 'Expand'}
+                          type="button"
+                        >
+                          <span className="text-gray-400 text-lg">{isExpanded ? '▲' : '▼'}</span>
+                        </button>
+                      </div>
                     </div>
-                    {item.storeman && <div className="text-xs text-blue-300 mt-1">📦 {item.storeman}</div>}
                   </div>
-                  {item.quantity <= item.minStock && (
-                    <span className="px-2 py-1 bg-orange-500 text-white text-xs rounded font-bold">⚠️ LOW STOCK</span>
-                  )}
-                  {canEditInventory && (
-                    <button
-                      onClick={() => handleDeleteItem(item.id)}
-                      className="ml-2 px-2 py-1 bg-red-500 bg-opacity-30 text-red-300 text-xs rounded hover:bg-opacity-50 transition-all"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
+
+                  {/* Expanded View - Full Details */}
+                  {isExpanded && (
+                    <div className="mt-4 pt-4 border-t border-white border-opacity-10 space-y-3">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                        {/* Basic Info */}
+                        <div>
+                          <p className="text-gray-400 text-xs uppercase tracking-wider">Item Name</p>
+                          <p className="text-white font-semibold mt-1">{item.item_name}</p>
+                        </div>
+                        
+                        <div>
+                          <p className="text-gray-400 text-xs uppercase tracking-wider">Category</p>
+                          <p className="text-white font-semibold mt-1">{item.category}</p>
+                        </div>
+                        
+                        {/* Stock Information */}
+                        <div>
+                          <p className="text-gray-400 text-xs uppercase tracking-wider">Current Stock</p>
+                          <p className={`font-semibold mt-1 ${
+                            item.quantity_in_stock <= item.minimum_stock_level ? 'text-orange-400' : 'text-green-400'
+                          }`}>
+                            {item.quantity_in_stock} {item.unit_of_measure || 'units'}
+                          </p>
+                        </div>
+                        
+                        <div>
+                          <p className="text-gray-400 text-xs uppercase tracking-wider">Minimum Stock Level</p>
+                          <p className="text-blue-300 font-semibold mt-1">{item.minimum_stock_level} {item.unit_of_measure || 'units'}</p>
+                        </div>
+                        
+                        {/* Pricing */}
+                        <div>
+                          <p className="text-gray-400 text-xs uppercase tracking-wider">Unit Cost</p>
+                          <p className="text-yellow-300 font-semibold mt-1">UGX {item.unit_cost.toLocaleString()}</p>
+                        </div>
+                        
+                        <div>
+                          <p className="text-gray-400 text-xs uppercase tracking-wider">Total Value</p>
+                          <p className="text-green-300 font-bold mt-1">UGX {totalValue.toLocaleString()}</p>
+                        </div>
+                        
+                        {/* Assigned Storeman */}
+                        <div className="md:col-span-2">
+                          <p className="text-gray-400 text-xs uppercase tracking-wider">📦 Department & Assigned Storeman</p>
+                          <p className="text-blue-300 font-semibold mt-1">
+                            {(() => {
+                              const dept = cmmsData.departments?.find(d => d.id === item.department_id);
+                              const storeman = cmmsData.users?.find(u => u.id === item.assigned_storeman_id);
+                              return `${dept?.department_name || dept?.name || 'Unassigned'} → ${storeman?.name || storeman?.user_name || 'No Storeman'}`;
+                            })()}
+                          </p>
+                        </div>
+
+                        {/* Supplier Name */}
+                        <div className="md:col-span-2">
+                          <p className="text-gray-400 text-xs uppercase tracking-wider">Supplier Name</p>
+                          <p className="text-blue-300 font-semibold mt-1">
+                            {item.supplier_name ? `🏭 ${item.supplier_name}` : 'Not specified'}
+                          </p>
+                        </div>
+
+                        {/* Storage Location */}
+                        {item.storage_location && (
+                          <div className="md:col-span-2">
+                            <p className="text-gray-400 text-xs uppercase tracking-wider">Storage Location</p>
+                            <p className="text-gray-300 font-semibold mt-1">
+                              📍 {item.storage_location}
+                            </p>
+                          </div>
+                        )}
+                        
+                        {/* Metadata */}
+                        {item.created_at && (
+                          <div>
+                            <p className="text-gray-400 text-xs uppercase tracking-wider">Added On</p>
+                            <p className="text-gray-300 text-xs mt-1">
+                              {new Date(item.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                        )}
+                        
+                        {item.updated_at && (
+                          <div>
+                            <p className="text-gray-400 text-xs uppercase tracking-wider">Last Updated</p>
+                            <p className="text-gray-300 text-xs mt-1">
+                              {new Date(item.updated_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Edit/Delete Actions - Only for authorized users */}
+                      {canEditInventory && (
+                        <div className="mt-4 pt-4 border-t border-white border-opacity-10 flex gap-2">
+                          <button
+                            onClick={() => handleDeleteItem(item.id)}
+                            className="flex-1 px-3 py-2 bg-red-500 bg-opacity-20 text-red-300 text-xs rounded hover:bg-opacity-40 transition-all font-semibold flex items-center justify-center gap-2"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            Delete Item
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
+            
             {cmmsData.inventory.length === 0 && (
               <div className="text-center py-8 text-gray-400">
-                No inventory items yet.
+                <Package className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                <p>No inventory items yet.</p>
+                {canEditInventory && <p className="text-xs mt-2">Add items using the form above.</p>}
               </div>
             )}
           </div>
@@ -2332,6 +3572,7 @@ const CMMSModule = ({
 
     const allTabs = [
       { id: 'company', label: '🏢 Company', icon: Building },
+      { id: 'departments', label: '🏭 Departments', icon: Building },
       { id: 'users', label: '👥 Users & Roles', icon: Users },
       { id: 'inventory', label: '📦 Inventory', icon: Package },
       { id: 'requisitions', label: '📋 Requisitions & Approvals', icon: Package },
@@ -2986,6 +4227,7 @@ const CMMSModule = ({
       {/* Tab Content */}
       <div>
         {activeTab === 'company' && <CompanyProfileManager />}
+        {activeTab === 'departments' && <DepartmentManager />}
         {activeTab === 'users' && <UserRoleManager />}
         {activeTab === 'inventory' && <InventoryManager />}
         {activeTab === 'requisitions' && <RequisitionManager />}

@@ -59,6 +59,43 @@ const isMissingRpcFunctionError = (rpcError) => {
   return errorText.includes('could not find the function') || errorText.includes('does not exist');
 };
 
+const resolveCmmsUserIdByEmail = async (companyId, userEmail) => {
+  if (!companyId || !userEmail) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from('cmms_users')
+    .select('id')
+    .eq('cmms_company_id', companyId)
+    .ilike('email', userEmail)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data?.id || null;
+};
+
+const mapCmmsInventoryItem = (itemRow) => {
+  if (!itemRow) return null;
+
+  console.log(`🔍 Mapping item ${itemRow.item_code}:`, {
+    unit_price: itemRow.unit_price,
+    unit_cost: itemRow.unit_cost,
+    reorder_level: itemRow.reorder_level,
+    minimum_stock_level: itemRow.minimum_stock_level,
+    is_active: itemRow.is_active
+  });
+
+  return {
+    ...itemRow,
+    minimum_stock_level: itemRow.reorder_level ?? itemRow.minimum_stock_level ?? 0,
+    unit_cost: itemRow.unit_price ?? itemRow.unit_cost ?? 0
+  };
+};
+
 // ============================================
 // COMPANY PROFILE OPERATIONS
 // ============================================
@@ -159,7 +196,7 @@ export const createCompanyProfile = async (companyData) => {
 export const getCompanyProfile = async (companyId) => {
   try {
     const { data, error } = await supabase
-      .from('companies')
+      .from('cmms_company_profiles')
       .select('*')
       .eq('id', companyId)
       .single();
@@ -182,9 +219,10 @@ export const getCompanyProfile = async (companyId) => {
 export const updateCompanyProfile = async (companyId, updates) => {
   try {
     const { data, error } = await supabase
-      .from('companies')
+      .from('cmms_company_profiles')
       .update({
         company_name: updates.companyName,
+        company_registration: updates.companyRegistration,
         location: updates.location,
         phone: updates.phone,
         email: updates.email,
@@ -202,6 +240,112 @@ export const updateCompanyProfile = async (companyId, updates) => {
     return { data, error: null };
   } catch (error) {
     console.error('❌ Error updating company profile:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Create CMMS company with departments (ATOMIC - Company + All Departments)
+ * @param {Object} companyData - Company information
+ * @param {Array} departments - Array of department objects with name, description, location
+ * @returns {Object} Created company, departments, status or error
+ */
+export const createCompanyWithDepartments = async (companyData, departments = []) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    // Format departments as JSONB array with proper field names
+    const departmentsJsonb = departments.length > 0 
+      ? departments.map(dept => ({
+          department_name: dept.department_name || dept.name || '',
+          description: dept.description || '',
+          location: dept.location || ''
+        }))
+      : null;
+
+    console.log('📤 Calling RPC fn_create_cmms_company_with_departments with:', {
+      p_company_name: companyData.companyName,
+      p_departments: departmentsJsonb
+    });
+
+    // Call RPC function that creates company and all departments atomically
+    const { data: rpcResult, error: rpcError } = await supabase.rpc(
+      'fn_create_cmms_company_with_departments',
+      {
+        p_company_name: companyData.companyName,
+        p_company_registration: companyData.companyRegistration || '',
+        p_location: companyData.location || '',
+        p_email: companyData.email,
+        p_phone: companyData.phone,
+        p_departments: departmentsJsonb
+      }
+    );
+
+    if (rpcError) {
+      console.error('❌ RPC Error:', rpcError);
+      throw rpcError;
+    }
+
+    console.log('📥 RPC Response:', rpcResult);
+
+    // Extract result (might be array or single object)
+    const resultRow = Array.isArray(rpcResult) ? rpcResult[0] : rpcResult;
+    
+    if (!resultRow) {
+      throw new Error('RPC returned no result');
+    }
+
+    if (resultRow.status && resultRow.status.includes('ERROR')) {
+      throw new Error(resultRow.message || 'RPC returned error status');
+    }
+
+    const companyId = resultRow.company_id;
+    const departmentsCreated = resultRow.departments_created || 0;
+
+    if (!companyId) {
+      throw new Error('RPC returned null company_id');
+    }
+
+    console.log('✅ Company created by RPC:', { companyId, departmentsCreated });
+
+    // Fetch the created company profile
+    const { data: companyProfile, error: companyError } = await supabase
+      .from('cmms_company_profiles')
+      .select('*')
+      .eq('id', companyId)
+      .single();
+
+    if (companyError) throw companyError;
+
+    // Fetch the created departments via RPC
+    let deptsList = [];
+    if (departmentsCreated > 0) {
+      const { data: depts, error: deptsError } = await supabase.rpc('fn_get_departments_by_company', {
+        p_company_id: companyId
+      });
+      if (deptsError) {
+        console.error('⚠️ Error fetching departments:', deptsError);
+      } else {
+        deptsList = depts || [];
+      }
+    }
+
+    console.log('✅ Company with departments ready:', {
+      company: companyProfile,
+      departments: deptsList
+    });
+
+    return {
+      data: {
+        company: companyProfile,
+        departments: deptsList,
+        departmentsCreated
+      },
+      error: null
+    };
+  } catch (error) {
+    console.error('❌ Error creating company with departments:', error);
     return { data: null, error };
   }
 };
@@ -264,11 +408,10 @@ export const createAdminUser = async (cmmsCompanyId, userData) => {
  */
 export const getCompanyUsers = async (cmmsCompanyId) => {
   try {
-    const { data, error } = await supabase
-      .from('cmms_users')
-      .select('*')
-      .eq('cmms_company_id', cmmsCompanyId)
-      .order('created_at', { ascending: false });
+    // Use RPC function that bypasses RLS
+    const { data, error } = await supabase.rpc('fn_get_company_users_list', {
+      p_company_id: cmmsCompanyId
+    });
 
     if (error) throw error;
 
@@ -344,11 +487,273 @@ export const getUserRoles = async (cmmsCompanyId) => {
 };
 
 // ============================================
-// DEPARTMENT OPERATIONS
+// DEPARTMENT OPERATIONS (CMMS DEPARTMENTS)
 // ============================================
 
 /**
- * Create department
+ * Create CMMS department
+ * @param {string} companyId - CMMS Company UUID
+ * @param {Object} deptData - Department information
+ * @returns {Object} Created department data or error
+ */
+export const createCmmsDepartment = async (companyId, deptData) => {
+  try {
+    if (!companyId) {
+      throw new Error('Company ID is required to create a department');
+    }
+
+    console.log('📤 Creating department for company:', companyId, deptData);
+
+    let rpcResult;
+    let rpcError;
+
+    ({ data: rpcResult, error: rpcError } = await supabase.rpc('fn_create_cmms_department', {
+      p_company_id: companyId,
+      p_department_name: deptData.department_name || deptData.departmentName || '',
+      p_description: deptData.description || null,
+      p_location: deptData.location || null
+    }));
+
+    console.log('📥 RPC response:', rpcResult, 'Error:', rpcError);
+
+    if (rpcError && isMissingRpcFunctionError(rpcError)) {
+      console.log('⚠️ RPC not found, using fallback direct insert');
+      const fallback = await supabase
+        .from('cmms_departments')
+        .insert({
+          cmms_company_id: companyId,
+          department_name: deptData.department_name || deptData.departmentName || '',
+          description: deptData.description || '',
+          location: deptData.location || '',
+          is_active: true
+        })
+        .select()
+        .single();
+
+      if (fallback.error) throw fallback.error;
+      console.log('✅ Department created via fallback:', fallback.data);
+      return { data: fallback.data, error: null };
+    }
+
+    if (rpcError) {
+      console.error('❌ RPC Error:', rpcError);
+      throw rpcError;
+    }
+
+    const resultRow = Array.isArray(rpcResult) ? rpcResult[0] : rpcResult;
+    
+    // Check if RPC returned valid result
+    if (!resultRow) {
+      throw new Error('RPC returned empty result');
+    }
+
+    // Check for error status in RPC result
+    if (resultRow.status === 'ERROR' || resultRow.message?.includes('ERROR')) {
+      console.error('❌ RPC returned error status:', resultRow);
+      throw new Error(resultRow.message || 'RPC function returned an error');
+    }
+
+    // If result row already has department data, return it directly
+    if (resultRow.id && resultRow.department_name) {
+      console.log('✅ Department created by RPC:', resultRow);
+      return { data: resultRow, error: null };
+    }
+
+    // If RPC returned a department_id, construct the department object from it
+    if (resultRow.department_id) {
+      // Build minimal department object from what we know
+      const createdDept = {
+        id: resultRow.department_id,
+        cmms_company_id: companyId,
+        department_name: deptData.department_name || deptData.departmentName || '',
+        description: deptData.description || '',
+        location: deptData.location || '',
+        is_active: true,
+        created_at: new Date().toISOString()
+      };
+      
+      console.log('✅ Department created by RPC (ID: ' + resultRow.department_id + ')');
+      return { data: createdDept, error: null };
+    }
+
+    // If we get here, result has unexpected format
+    console.warn('⚠️ Unexpected RPC result format:', resultRow);
+    return { data: resultRow, error: null };
+
+  } catch (error) {
+    console.error('❌ Error creating CMMS department:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Get CMMS departments for company
+ * @param {string} companyId - CMMS Company UUID
+ * @returns {Object} Array of departments or error
+ */
+export const getCmmsDepartments = async (companyId) => {
+  try {
+    // Use RPC function that bypasses RLS
+    const { data, error } = await supabase.rpc('fn_get_departments_by_company', {
+      p_company_id: companyId
+    });
+
+    if (error) throw error;
+
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('Error fetching CMMS departments:', error);
+    return { data: [], error };
+  }
+};
+
+/**
+ * Update CMMS department
+ * @param {string} departmentId - Department UUID
+ * @param {Object} updates - Fields to update
+ * @returns {Object} Updated department data or error
+ */
+export const updateCmmsDepartment = async (departmentId, updates) => {
+  try {
+    let rpcResult;
+    let rpcError;
+
+    ({ data: rpcResult, error: rpcError } = await supabase.rpc('fn_update_cmms_department', {
+      p_department_id: departmentId,
+      p_department_name: updates.department_name ?? null,
+      p_description: updates.description ?? null,
+      p_location: updates.location ?? null,
+      p_is_active: updates.is_active ?? null
+    }));
+
+    if (rpcError && isMissingRpcFunctionError(rpcError)) {
+      const fallback = await supabase
+        .from('cmms_departments')
+        .update({
+          department_name: updates.department_name,
+          description: updates.description,
+          location: updates.location,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', departmentId)
+        .select()
+        .single();
+
+      if (fallback.error) throw fallback.error;
+      return { data: fallback.data, error: null };
+    }
+
+    if (rpcError) throw rpcError;
+
+    const resultRow = Array.isArray(rpcResult) ? rpcResult[0] : rpcResult;
+    if (!resultRow || resultRow.status !== 'SUCCESS') {
+      throw new Error(resultRow?.message || 'Unable to update department');
+    }
+
+    const { data: updatedDept, error: fetchError } = await supabase
+      .from('cmms_departments')
+      .select('*')
+      .eq('id', departmentId)
+      .maybeSingle();
+
+    if (fetchError) throw fetchError;
+
+    return { data: updatedDept || resultRow, error: null };
+  } catch (error) {
+    console.error('Error updating CMMS department:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Delete (deactivate) CMMS department
+ * @param {string} departmentId - Department UUID
+ * @returns {Object} Success or error
+ */
+export const deleteCmmsDepartment = async (departmentId) => {
+  try {
+    let rpcResult;
+    let rpcError;
+
+    ({ data: rpcResult, error: rpcError } = await supabase.rpc('fn_delete_cmms_department', {
+      p_department_id: departmentId
+    }));
+
+    if (rpcError && isMissingRpcFunctionError(rpcError)) {
+      const fallback = await supabase
+        .from('cmms_departments')
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq('id', departmentId);
+
+      if (fallback.error) throw fallback.error;
+      return { data: { success: true }, error: null };
+    }
+
+    if (rpcError) throw rpcError;
+
+    const resultRow = Array.isArray(rpcResult) ? rpcResult[0] : rpcResult;
+    if (!resultRow || resultRow.status !== 'SUCCESS') {
+      throw new Error(resultRow?.message || 'Unable to delete department');
+    }
+
+    return { data: { success: true }, error: null };
+  } catch (error) {
+    console.error('Error deleting CMMS department:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Get storemen for a department
+ * @param {string} departmentId - Department UUID
+ * @returns {Object} Array of storemen or error
+ */
+export const getDepartmentStoremen = async (departmentId) => {
+  try {
+    if (!departmentId) {
+      return { data: [], error: null };
+    }
+
+    const { data, error } = await supabase
+      .from('cmms_users')
+      .select(`
+        id,
+        user_name,
+        email,
+        department_id,
+        cmms_user_roles:cmms_user_id(
+          is_active,
+          cmms_roles:cmms_role_id(role_name)
+        )
+      `)
+      .eq('department_id', departmentId)
+      .eq('is_active', true)
+      .order('user_name', { ascending: true });
+
+    if (error) throw error;
+
+    const storemen = (data || [])
+      .filter((userRow) => {
+        const roles = userRow.cmms_user_roles || [];
+        return roles.some((roleRow) => (
+          roleRow.is_active !== false &&
+          ['storeman', 'admin'].includes(normalizeCmmsRoleKey(roleRow.cmms_roles?.role_name))
+        ));
+      })
+      .map((userRow) => ({
+        ...userRow,
+        name: userRow.user_name
+      }));
+
+    return { data: storemen, error: null };
+  } catch (error) {
+    console.error('Error fetching department storemen:', error);
+    return { data: [], error };
+  }
+};
+
+/**
+ * Create department (legacy - uses departments table)
  * @param {string} companyId - Company UUID
  * @param {Object} deptData - Department information
  * @returns {Object} Created department data or error
@@ -436,24 +841,36 @@ export const getCompanyWorkOrders = async (companyId) => {
 
 /**
  * Get inventory items for company
+ * Uses RPC function that bypasses RLS
  * @param {string} companyId - Company UUID
  * @returns {Object} Array of inventory items or error
  */
 export const getCompanyInventory = async (companyId) => {
   try {
-    const { data, error } = await supabase
-      .from('inventory_items')
-      .select('*')
-      .eq('company_id', companyId)
-      .eq('is_active', true)
-      .order('item_code', { ascending: true });
+    console.log('📦 Fetching inventory for company via RPC:', companyId);
+    
+    // Use RPC function that bypasses RLS (SECURITY DEFINER)
+    const { data, error } = await supabase.rpc('fn_get_company_inventory', {
+      p_company_id: companyId
+    });
 
-    if (error) throw error;
+    if (error) {
+      console.error('❌ RPC fetch error:', error);
+      throw error;
+    }
 
-    return { data, error: null };
+    console.log(`📦 RPC response: ${data?.length || 0} items returned`);
+    if (data && data.length > 0) {
+      console.log('🔍 Sample item from RPC:', data[0]);
+    }
+
+    const mappedItems = (data || []).map(mapCmmsInventoryItem);
+    console.log(`✅ Mapped inventory: ${mappedItems.length} items`, mappedItems.slice(0, 2));
+    
+    return { data: mappedItems, error: null };
   } catch (error) {
     console.error('❌ Error fetching inventory:', error);
-    return { data: null, error };
+    return { data: [], error };
   }
 };
 
@@ -479,6 +896,216 @@ export const getInventoryTransactions = async (companyId, limit = 50) => {
     return { data, error: null };
   } catch (error) {
     console.error('❌ Error fetching transactions:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Add a new inventory item
+ * @param {string} companyId - Company UUID
+ * @param {Object} itemData - Item data
+ * @returns {Object} Created item or error
+ */
+export const addInventoryItem = async (companyId, itemData) => {
+  try {
+    console.log('📝 Adding inventory item via RPC function...');
+    console.log('🔍 Parameters:', { 
+      company_id: companyId,
+      department_id: itemData.department_id,
+      item_name: itemData.item_name,
+      item_code: itemData.item_code,
+      unit_price: parseFloat(itemData.unit_price ?? itemData.unit_cost),
+      quantity_in_stock: parseFloat(itemData.quantity_in_stock)
+    });
+    
+    // Use RPC function to bypass RLS
+    const { data, error } = await supabase.rpc('fn_create_cmms_inventory_item', {
+      p_company_id: companyId,
+      p_department_id: itemData.department_id || null,
+      p_item_name: itemData.item_name,
+      p_item_code: itemData.item_code || null,
+      p_category: itemData.category || 'Spare Parts',
+      p_supplier_name: itemData.supplier_name || '',
+      p_quantity_in_stock: parseFloat(itemData.quantity_in_stock) || 0,
+      p_reorder_level: parseFloat(itemData.reorder_level ?? itemData.minimum_stock_level) || 0,
+      p_unit_price: parseFloat(itemData.unit_price ?? itemData.unit_cost) || 0,
+      p_storage_location: itemData.storage_location || '',
+      p_bin_number: itemData.bin_number || '',
+      p_unit_of_measure: itemData.unit_of_measure || 'units',
+      p_description: itemData.description || '',
+      p_lead_time_days: parseInt(itemData.lead_time_days) || 0
+    });
+
+    if (error) {
+      console.error('❌ RPC error:', error);
+      throw error;
+    }
+
+    if (!data || data.length === 0) {
+      console.error('❌ Function returned no data');
+      throw new Error('No data returned from function');
+    }
+
+    const result = data[0];
+    console.log('📦 RPC Response:', result);
+
+    if (result.status === 'ERROR') {
+      const errorMsg = result.message || 'Unknown error';
+      console.error('❌ Function returned error:', errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    // IMPORTANT: Map returned data to inventory item format with field mappings
+    const unitPrice = parseFloat(itemData.unit_price ?? itemData.unit_cost) || 0;
+    const mappedItem = {
+      id: result.item_id,
+      cmms_company_id: companyId,
+      department_id: itemData.department_id,
+      item_code: result.item_code,
+      item_name: result.item_name,
+      category: itemData.category || 'Spare Parts',
+      quantity_in_stock: parseFloat(itemData.quantity_in_stock) || 0,
+      reorder_level: parseFloat(itemData.reorder_level ?? itemData.minimum_stock_level) || 0,
+      unit_price: unitPrice,
+      unit_cost: unitPrice,  // Ensure both are set for compatibility
+      minimum_stock_level: parseFloat(itemData.reorder_level ?? itemData.minimum_stock_level) || 0,
+      supplier_name: itemData.supplier_name || '',
+      storage_location: itemData.storage_location || '',
+      bin_number: itemData.bin_number || '',
+      unit_of_measure: itemData.unit_of_measure || 'units',
+      description: itemData.description || '',
+      lead_time_days: parseInt(itemData.lead_time_days) || 0,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    console.log('✅ Inventory item created via RPC:', {
+      item_code: result.item_code,
+      unit_price: mappedItem.unit_price,
+      is_active: mappedItem.is_active
+    });
+    return { data: mappedItem, error: null };
+  } catch (error) {
+    console.error('❌ Error adding inventory item:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Update inventory item
+ * @param {string} itemId - Item UUID
+ * @param {Object} updates - Fields to update
+ * @returns {Object} Updated item or error
+ */
+export const updateInventoryItem = async (itemId, updates) => {
+  try {
+    let cmmsUserId = null;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user?.email) {
+      const { data: existingItem } = await supabase
+        .from('cmms_inventory_items')
+        .select('cmms_company_id')
+        .eq('id', itemId)
+        .maybeSingle();
+      cmmsUserId = await resolveCmmsUserIdByEmail(existingItem?.cmms_company_id, user.email);
+    }
+
+    const { data, error } = await supabase
+      .from('cmms_inventory_items')
+      .update({
+        ...(updates.item_name && { item_name: updates.item_name }),
+        ...(updates.category && { category: updates.category }),
+        ...(updates.quantity_in_stock !== undefined && { quantity_in_stock: parseFloat(updates.quantity_in_stock) }),
+        ...(updates.minimum_stock_level !== undefined && { reorder_level: parseFloat(updates.minimum_stock_level) }),
+        ...(updates.reorder_level !== undefined && { reorder_level: parseFloat(updates.reorder_level) }),
+        ...(updates.unit_cost !== undefined && { unit_price: parseFloat(updates.unit_cost) }),
+        ...(updates.unit_price !== undefined && { unit_price: parseFloat(updates.unit_price) }),
+        ...(updates.department_id !== undefined && { department_id: updates.department_id || null }),
+        ...(updates.assigned_storeman_id !== undefined && { assigned_storeman_id: updates.assigned_storeman_id || null }),
+        ...(updates.storage_location && { storage_location: updates.storage_location }),
+        ...(updates.supplier_name && { supplier_name: updates.supplier_name }),
+        updated_at: new Date().toISOString(),
+        last_stock_check: new Date().toISOString(),
+        ...(cmmsUserId && { last_updated_by: cmmsUserId })
+      })
+      .eq('id', itemId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return { data: mapCmmsInventoryItem(data), error: null };
+  } catch (error) {
+    console.error('Error updating inventory item:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Delete (deactivate) inventory item
+ * @param {string} itemId - Item UUID
+ * @returns {Object} Success or error
+ */
+export const deleteInventoryItem = async (itemId) => {
+  try {
+    const { error } = await supabase
+      .from('cmms_inventory_items')
+      .update({
+        is_active: false,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', itemId);
+
+    if (error) throw error;
+
+    return { data: { success: true }, error: null };
+  } catch (error) {
+    console.error('Error deleting inventory item:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Update inventory quantity with transaction logging
+ * @param {string} itemId - Item UUID
+ * @param {number} newQuantity - New quantity
+ * @param {string} reason - Reason for change
+ * @returns {Object} Success or error
+ */
+export const updateInventoryQuantity = async (itemId, newQuantity, reason = 'Quantity update') => {
+  try {
+    let cmmsUserId = null;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user?.email) {
+      const { data: existingItem } = await supabase
+        .from('cmms_inventory_items')
+        .select('cmms_company_id')
+        .eq('id', itemId)
+        .maybeSingle();
+      cmmsUserId = await resolveCmmsUserIdByEmail(existingItem?.cmms_company_id, user.email);
+    }
+
+    const { data, error } = await supabase
+      .from('cmms_inventory_items')
+      .update({
+        quantity_in_stock: parseFloat(newQuantity),
+        last_stock_check: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        ...(cmmsUserId && { last_updated_by: cmmsUserId })
+      })
+      .eq('id', itemId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Quantity audit logging is handled by DB trigger on cmms_inventory_items.
+    void reason;
+
+    return { data: mapCmmsInventoryItem(data), error: null };
+  } catch (error) {
+    console.error('Error updating quantity:', error);
     return { data: null, error };
   }
 };
@@ -569,13 +1196,43 @@ export const getMaintenancePlans = async (companyId) => {
 };
 
 /**
- * Mark a user as the company creator/owner
- * This ensures they get admin role detection in views
- * @param {string} companyId - Company UUID
- * @param {string} userId - User UUID
- * @param {string} creatorEmail - Creator email
- * @returns {Object} Result of function call or error
+ * Get all storemen for a company
+ * @param {string} companyId - CMMS Company UUID
+ * @returns {Object} Array of all storemen or error
  */
+export const getCompanyStoremen = async (companyId) => {
+  try {
+    const { data, error } = await supabase
+      .from('cmms_users')
+      .select(`
+        id,
+        user_name,
+        name,
+        email,
+        department_id,
+        cmms_user_roles:cmms_user_id(
+          cmms_role_id,
+          cmms_roles:cmms_role_id(role_name)
+        )
+      `)
+      .eq('cmms_company_id', companyId)
+      .eq('is_active', true);
+
+    if (error) throw error;
+
+    // Filter for storemen only
+    const storemen = (data || []).filter(user => {
+      const roles = user.cmms_user_roles || [];
+      return roles.some(r => r.cmms_roles?.role_name === 'storeman');
+    });
+
+    return { data: storemen, error: null };
+  } catch (error) {
+    console.error('❌ Error fetching company storemen:', error);
+    return { data: [], error };
+  }
+};
+
 export const markCompanyCreator = async (companyId, userId, creatorEmail) => {
   try {
     console.log('🔑 Marking company creator:', { companyId, userId, creatorEmail });
@@ -616,11 +1273,21 @@ export default {
   getCompanyUsers,
   assignUserRole,
   getUserRoles,
+  createCmmsDepartment,
+  updateCmmsDepartment,
+  deleteCmmsDepartment,
   createDepartment,
   getCompanyDepartments,
+  getCmmsDepartments,
+  getDepartmentStoremen,
+  getCompanyStoremen,
   getCompanyWorkOrders,
   getCompanyInventory,
   getInventoryTransactions,
+  addInventoryItem,
+  updateInventoryItem,
+  updateInventoryQuantity,
+  deleteInventoryItem,
   getCompanyBudget,
   getCompanyEquipment,
   getMaintenancePlans,
