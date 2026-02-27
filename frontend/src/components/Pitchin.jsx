@@ -1250,6 +1250,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
       {showRecorder ? (
         // Recording Page - No header, full focus on recording
         <PitchVideoRecorder
+          onPitchCreated={handleCreatePitch}
           onClose={() => {
             setShowRecorder(false);
             setCurrentPitch(null);

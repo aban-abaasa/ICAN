@@ -1151,7 +1151,7 @@ const CMMSModule = ({
               <Plus className="w-6 h-6 text-blue-400" />
               Create Maintenance Requisition
             </h3>
-            <p className="text-gray-400 text-sm mb-4">Submit a new maintenance request for approval</p>
+            <p className="text-gray-400 text-sm mb-4">Submit a new maintenance request</p>
 
             <div className="grid md:grid-cols-2 gap-4 mb-4">
               <div>
@@ -3942,7 +3942,7 @@ const CMMSModule = ({
       { id: 'departments', label: '🏭 Departments', icon: Building },
       { id: 'users', label: '👥 Users & Roles', icon: Users },
       { id: 'inventory', label: '📦 Inventory', icon: Package },
-      { id: 'requisitions', label: '📋 Requisitions & Approvals', icon: Package },
+      { id: 'requisitions', label: '📋 Requisitions', icon: Package },
       { id: 'reports', label: '📊 Reports', icon: Package }
     ];
 

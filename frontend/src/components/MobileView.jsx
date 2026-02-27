@@ -1660,33 +1660,22 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       // Check if user has owned/co-owned business profiles
       const [
         ownedBusinessByUserIdResult,
-        ownedBusinessByEmailResult,
         coOwnedByUserIdResult,
-        coOwnedByOwnerIdResult,
-        coOwnedByEmailResult
+        coOwnedByOwnerIdResult
       ] = await Promise.all([
+        // Only query by user_id (owner_email doesn't exist in business_profiles)
         supabase.from('business_profiles').select('id').eq('user_id', userId).limit(1),
-        normalizedEmail
-          ? supabase.from('business_profiles').select('id').ilike('owner_email', normalizedEmail).limit(1)
-          : Promise.resolve({ data: [], error: null }),
         supabase.from('business_co_owners').select('business_profile_id').eq('user_id', userId).limit(1),
-        supabase.from('business_co_owners').select('business_profile_id').eq('owner_id', userId).limit(1),
-        normalizedEmail
-          ? supabase.from('business_co_owners').select('business_profile_id').ilike('owner_email', normalizedEmail).limit(1)
-          : Promise.resolve({ data: [], error: null })
+        supabase.from('business_co_owners').select('business_profile_id').eq('owner_id', userId).limit(1)
       ]);
 
       const hasOwnedBusinessByUserId = !ownedBusinessByUserIdResult.error && (ownedBusinessByUserIdResult.data?.length || 0) > 0;
-      const hasOwnedBusinessByEmail = !ownedBusinessByEmailResult.error && (ownedBusinessByEmailResult.data?.length || 0) > 0;
       const hasCoOwnedBusinessByUserId = !coOwnedByUserIdResult.error && (coOwnedByUserIdResult.data?.length || 0) > 0;
       const hasCoOwnedBusinessByOwnerId = !coOwnedByOwnerIdResult.error && (coOwnedByOwnerIdResult.data?.length || 0) > 0;
-      const hasCoOwnedBusinessByEmail = !coOwnedByEmailResult.error && (coOwnedByEmailResult.data?.length || 0) > 0;
       accounts.business.exists = (
         hasOwnedBusinessByUserId ||
-        hasOwnedBusinessByEmail ||
         hasCoOwnedBusinessByUserId ||
-        hasCoOwnedBusinessByOwnerId ||
-        hasCoOwnedBusinessByEmail
+        hasCoOwnedBusinessByOwnerId
       );
 
       // Trust account only appears when user is in at least one trust group

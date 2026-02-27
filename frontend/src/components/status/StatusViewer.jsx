@@ -4,46 +4,22 @@
  * Shows statuses one at a time, auto-advances to next after duration
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, X, Eye, Heart } from 'lucide-react';
 
 export const StatusViewer = ({ 
   statuses = [], 
   initialIndex = 0, 
-  onClose = null,
-  duration = 5000 // 5 seconds per status
+  onClose = null
 }) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [progress, setProgress] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const videoRef = useRef(null);
 
   const currentStatus = statuses[currentIndex];
-
-  // Auto-progress to next status
-  useEffect(() => {
-    if (isPaused || !statuses.length) return;
-
-    const interval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          // Move to next status
-          setCurrentIndex((idx) => {
-            const nextIdx = idx + 1;
-            if (nextIdx >= statuses.length) {
-              onClose?.();
-              return idx;
-            }
-            setProgress(0);
-            return nextIdx;
-          });
-          return 0;
-        }
-        return prev + (100 / (duration / 10));
-      });
-    }, 10);
-
-    return () => clearInterval(interval);
-  }, [isPaused, statuses.length, duration, onClose]);
+  const isVideo = currentStatus?.media_type === 'video';
+  const duration = isVideo ? 0 : 3000; // 3 seconds for images, instant for videos
 
   const handlePrevious = () => {
     if (currentIndex > 0) {
@@ -60,6 +36,39 @@ export const StatusViewer = ({
       onClose?.();
     }
   };
+
+  // Auto-progress to next status (only for images)
+  useEffect(() => {
+    if (isPaused || !statuses.length || isVideo) return; // Skip auto-advance for videos
+
+    const interval = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 100) {
+          handleNext();
+          return 0;
+        }
+        return prev + (100 / (duration / 10));
+      });
+    }, 10);
+
+    return () => clearInterval(interval);
+  }, [isPaused, statuses.length, duration, isVideo, currentIndex]);
+
+  // Auto-advance when video ends
+  useEffect(() => {
+    if (!isVideo || !videoRef.current) return;
+
+    const video = videoRef.current;
+    const handleVideoEnd = () => {
+      handleNext();
+    };
+
+    video.addEventListener('ended', handleVideoEnd);
+
+    return () => {
+      video.removeEventListener('ended', handleVideoEnd);
+    };
+  }, [currentIndex, statuses.length, isVideo]);
 
   if (!statuses.length) return null;
 
@@ -110,9 +119,13 @@ export const StatusViewer = ({
           />
         ) : (
           <video
+            ref={videoRef}
             src={currentStatus?.media_url}
             autoPlay
+            controls={false}
             className="w-full h-full object-contain"
+            onMouseEnter={() => setIsPaused(true)}
+            onMouseLeave={() => setIsPaused(false)}
           />
         )}
 

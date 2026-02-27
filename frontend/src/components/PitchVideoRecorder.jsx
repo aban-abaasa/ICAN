@@ -343,13 +343,13 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
       
       if (fileSizeMB > maxUploadMB) {
         console.error(`❌ Video is ${fileSizeMB.toFixed(2)}MB, exceeds maximum ${maxUploadMB}MB`);
-        alert(`❌ Video Too Large!\n\nYour video is ${fileSizeMB.toFixed(2)}MB but the maximum allowed is ${maxUploadMB}MB.\n\nPlease:\n1. Compress your video using tools like:\n   - HandBrake (free)\n   - ffmpeg (command line)\n   - Online compressors\n2. Reduce resolution or frame rate\n3. Try again with a smaller file\n\n💡 Tip: A 5-10 minute pitch video typically compresses to 20-50MB`);
+        alert(`❌ Video Too Large!\n\nYour video is ${fileSizeMB.toFixed(2)}MB but the maximum allowed is ${maxUploadMB}MB.\n\nPlease:\n1. Compress your video using tools like:\n   - HandBrake (free)\n   - ffmpeg (command line)\n   - Online compressors\n2. Reduce resolution or frame rate\n3. Try again with a smaller file\n\n💡 Tip: A 5-minute pitch video typically needs 50-80MB for good quality, or 20-50MB if heavily compressed`);
         return;
       }
       
-      // Warn if over 50MB
-      if (fileSizeMB > 50) {
-        console.warn(`⚠️ Warning: Video is ${fileSizeMB.toFixed(2)}MB, exceeds recommended 50MB. Upload will take several minutes.`);
+      // Warn if over 80MB (5-minute videos typically range from 50-80MB)
+      if (fileSizeMB > 80) {
+        console.warn(`⚠️ Notice: Video is ${fileSizeMB.toFixed(2)}MB. Upload may take a few minutes depending on connection speed.`);
       }
       
       // Show real preview immediately for uploaded videos (skip trim dialog)

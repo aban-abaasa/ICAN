@@ -19,7 +19,7 @@ const MIME_TO_EXTENSION = {
 const inferExtensionFromMime = (mimeType = '') => MIME_TO_EXTENSION[mimeType] || 'bin';
 
 const buildStorageMimeErrorMessage = (mimeType) =>
-  `Storage rejected file type "${mimeType || 'unknown'}". Add video/mp4, video/quicktime, and video/webm to the "user-content" bucket allowed MIME types in Supabase Storage.`;
+  `Storage rejected file type "${mimeType || 'unknown'}". Ensure "pitches" bucket allows video/mp4, video/quicktime, and video/webm MIME types in Supabase Storage.`;
 
 /**
  * Upload status media to Supabase Storage
@@ -71,10 +71,10 @@ export const uploadStatusMedia = async (userId, file, options = {}) => {
     const filename = `${userId}-${timestamp}-${random}.${fileExt}`;
     const filePath = `statuses/${userId}/${filename}`;
 
-    // Upload to storage with fallback for restrictive MIME policies
+    // Upload to 'pitches' bucket (same as pitch videos - supports all media types)
     const uploadWithMime = async (contentType) =>
       supabase.storage
-        .from('user-content')
+        .from('pitches')
         .upload(filePath, file, {
           upsert: false,
           contentType
@@ -104,15 +104,15 @@ export const uploadStatusMedia = async (userId, file, options = {}) => {
       throw uploadError;
     }
 
-    // Get signed URL (24-hour expiry) - works even with restrictive RLS
+    // Get signed URL (24-hour expiry) - same bucket as pitches
     const { data: signedData, error: urlError } = await supabase.storage
-      .from('user-content')
+      .from('pitches')
       .createSignedUrl(filePath, 86400); // 24 hours
 
     if (urlError) {
       console.warn('Could not create signed URL, falling back to public URL:', urlError);
       const { data: publicData } = supabase.storage
-        .from('user-content')
+        .from('pitches')
         .getPublicUrl(filePath);
       return { 
         url: publicData?.publicUrl, 
@@ -264,20 +264,12 @@ export const getActiveStatuses = async (userId = null) => {
             return status;
           }
 
-          // Extract the file path from media_url or reconstruct it
-          let filePath = status.media_url;
+          // Detect bucket and extract path from media_url
+          const { bucketName, filePath } = extractBucketAndPath(status.media_url);
           
-          // If it's already a full URL, extract the path
-          if (status.media_url?.includes('statuses/')) {
-            const match = status.media_url.match(/statuses\/[^?]*/);
-            if (match) {
-              filePath = match[0];
-            }
-          }
-          
-          // Generate fresh signed URL
+          // Generate fresh signed URL from correct bucket
           const { data: signedData } = await supabase.storage
-            .from('user-content')
+            .from(bucketName)
             .createSignedUrl(filePath, 3600); // 1 hour for viewing
 
           return {
@@ -296,6 +288,30 @@ export const getActiveStatuses = async (userId = null) => {
     console.error('Get statuses error:', error);
     return { statuses: [], error };
   }
+};
+
+/**
+ * Helper: Extract bucket name and file path from media_url
+ */
+const extractBucketAndPath = (mediaUrl) => {
+  let bucketName = 'user-content'; // default for existing statuses
+  let filePath = mediaUrl;
+  
+  if (mediaUrl?.includes('/user-content/')) {
+    bucketName = 'user-content';
+    const match = mediaUrl.match(/user-content\/([^?]*)/);
+    if (match) filePath = match[1];
+  } else if (mediaUrl?.includes('/pitches/')) {
+    bucketName = 'pitches';
+    const match = mediaUrl.match(/pitches\/([^?]*)/);
+    if (match) filePath = match[1];
+  } else if (mediaUrl?.includes('statuses/')) {
+    // Fallback: if just path with statuses/ prefix, use user-content
+    const match = mediaUrl.match(/statuses\/[^?]*/);
+    if (match) filePath = match[0];
+  }
+  
+  return { bucketName, filePath };
 };
 
 /**
@@ -373,6 +389,7 @@ export const getUserStatuses = async (userId) => {
       .from('ican_statuses')
       .select('*')
       .eq('user_id', userId)
+      .gt('expires_at', new Date().toISOString())
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -385,21 +402,13 @@ export const getUserStatuses = async (userId) => {
             return status;
           }
 
-          // Extract the file path from media_url or reconstruct it
-          let filePath = status.media_url;
+          // Detect bucket and extract path from media_url
+          const { bucketName, filePath: pathToSign } = extractBucketAndPath(status.media_url);
           
-          // If it's already a full URL, extract the path
-          if (status.media_url?.includes('statuses/')) {
-            const match = status.media_url.match(/statuses\/[^?]*/);
-            if (match) {
-              filePath = match[0];
-            }
-          }
-          
-          // Generate fresh signed URL
+          // Generate fresh signed URL from correct bucket
           const { data: signedData } = await supabase.storage
-            .from('user-content')
-            .createSignedUrl(filePath, 3600); // 1 hour for viewing
+            .from(bucketName)
+            .createSignedUrl(pathToSign, 3600); // 1 hour for viewing
 
           return {
             ...status,

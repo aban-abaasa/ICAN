@@ -434,40 +434,60 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
     }
   };
 
+  // Helper to get step info
+  const steps = ['business', 'owners', 'documents', 'wallet', 'approvals', 'notifications', 'review'];
+  const stepLabels = ['Business Info', 'Shareholders', 'Documents', 'Wallet', 'Approvals', 'Notifications', 'Review'];
+  const currentStepIndex = steps.indexOf(step);
+  const totalSteps = steps.length;
+  const progressPercent = ((currentStepIndex + 1) / totalSteps) * 100;
+
+  // Navigation handlers
+  const goToNextStep = () => {
+    if (currentStepIndex < totalSteps - 1) {
+      setStep(steps[currentStepIndex + 1]);
+      window.scrollTo(0, 0);
+    }
+  };
+
+  const goToPrevStep = () => {
+    if (currentStepIndex > 0) {
+      setStep(steps[currentStepIndex - 1]);
+      window.scrollTo(0, 0);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 rounded-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto border border-slate-700">
-        {/* Header */}
-        <div className="sticky top-0 bg-slate-900 border-b border-slate-700 p-6 flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-white flex items-center gap-3">
-            <Building2 className="w-6 h-6 text-blue-400" />
-            {editingProfile ? 'Edit Business Profile' : 'Create Business Profile'}
-          </h2>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur flex items-center justify-center z-50 p-2 md:p-4">
+      <div className="bg-slate-800 rounded-2xl w-full md:max-w-2xl max-h-[95vh] overflow-y-auto border border-slate-700">
+        {/* Header - Mobile Optimized */}
+        <div className="sticky top-0 bg-slate-900 border-b border-slate-700 p-4 md:p-6 flex items-center justify-between">
+          <div className="flex-1">
+            <h2 className="text-lg md:text-2xl font-bold text-white flex items-center gap-2 md:gap-3">
+              <Building2 className="w-5 h-5 md:w-6 md:h-6 text-blue-400" />
+              <span className="truncate">{editingProfile ? 'Edit Profile' : 'Create Profile'}</span>
+            </h2>
+            <p className="text-xs md:text-sm text-slate-400 mt-1">Step {currentStepIndex + 1} of {totalSteps}: {stepLabels[currentStepIndex]}</p>
+          </div>
           <button
             onClick={onCancel}
-            className="text-slate-400 hover:text-white transition"
+            className="text-slate-400 hover:text-white transition ml-2"
           >
-            <X className="w-6 h-6" />
+            <X className="w-5 h-5 md:w-6 md:h-6" />
           </button>
         </div>
 
-        <div className="p-6">
-          {/* Step Indicator */}
-          <div className="flex gap-2 mb-8">
-            {['business', 'owners', 'documents', 'wallet', 'approvals', 'notifications', 'review'].map((s, idx) => (
-              <button
-                key={s}
-                onClick={() => setStep(s)}
-                className={`flex-1 py-2 px-4 rounded-lg font-semibold transition text-sm ${
-                  step === s
-                    ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white'
-                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                }`}
-              >
-                {idx + 1}. {['Business Info', 'Shareholders', 'Documents', 'Wallet', 'Approvals', 'Notifications', 'Review'][idx]}
-              </button>
-            ))}
+        {/* Progress Bar */}
+        <div className="bg-slate-900 px-4 md:px-6 py-3">
+          <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
+            <div 
+              className="bg-gradient-to-r from-blue-500 to-cyan-500 h-full transition-all duration-300"
+              style={{ width: `${progressPercent}%` }}
+            ></div>
           </div>
+          <p className="text-xs text-slate-400 mt-2 text-center">{Math.round(progressPercent)}%</p>
+        </div>
+
+        <div className="p-4 md:p-6">
 
           {/* Step 1: Business Information */}
           {step === 'business' && (
@@ -580,12 +600,21 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                 </div>
               </div>
 
-              <button
-                onClick={() => setStep('owners')}
-                className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white py-3 rounded-lg font-semibold transition"
-              >
-                Next: Add Shareholders
-              </button>
+              {/* Mobile-Optimized Navigation */}
+              <div className="flex gap-3 mt-8 pt-6 border-t border-slate-700">
+                <button
+                  onClick={onCancel}
+                  className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-lg font-semibold transition text-sm md:text-base"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={goToNextStep}
+                  className="flex-1 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white py-3 rounded-lg font-semibold transition text-sm md:text-base"
+                >
+                  Next →
+                </button>
+              </div>
             </div>
           )}
 
@@ -1595,21 +1624,22 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                 </div>
               )}
 
-              <div className="flex gap-4">
+              {/* Mobile-Optimized Navigation */}
+              <div className="flex gap-3 mt-8 pt-6 border-t border-slate-700">
                 <button
-                  onClick={() => setStep('notifications')}
+                  onClick={goToPrevStep}
                   disabled={loading}
-                  className="flex-1 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-700 text-white py-3 rounded-lg font-semibold transition"
+                  className="flex-1 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-700 text-white py-3 rounded-lg font-semibold transition text-sm md:text-base"
                 >
-                  Back
+                  ← Back
                 </button>
                 <button
                   onClick={handleCreateProfile}
                   disabled={totalShare !== 100 || coOwners.length === 0 || loading}
-                  className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-slate-600 disabled:to-slate-600 text-white py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2"
+                  className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-slate-600 disabled:to-slate-600 text-white py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 text-sm md:text-base"
                 >
                   {loading && <Loader className="w-4 h-4 animate-spin" />}
-                  {loading ? 'Creating...' : 'Create Business Profile'}
+                  {loading ? 'Creating...' : 'Create'}
                 </button>
               </div>
             </div>
