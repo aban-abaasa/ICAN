@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Mic,
   MoreVertical,
@@ -15,6 +15,7 @@ import {
   Settings,
   Home,
   TrendingUp,
+  TrendingDown,
   DollarSign,
   Heart,
   PieChart,
@@ -45,7 +46,8 @@ import {
   Plus,
   Globe,
   Target,
-  Clock
+  Clock,
+  Percent
 } from 'lucide-react';
 import SmartTransactionEntry from './SmartTransactionEntry';
 import { ProfilePage } from './auth/ProfilePage';
@@ -55,6 +57,7 @@ import TrustSystem from './TrustSystem';
 import CMMSModule from './CMSSModule';
 import { StatusPage } from './StatusPage';
 import { StatusUploader } from './status/StatusUploader';
+import SearchModal from './SearchModal';
 import { VelocityEngine } from '../utils/velocityEngine';
 import { supabase } from '../lib/supabase/client';
 import { walletAccountService } from '../services/walletAccountService';
@@ -70,6 +73,7 @@ import {
   formatTimeAgo
 } from '../services/investmentNotificationsService';
 import { getUserTrustGroups } from '../services/trustService';
+import { getUserStatuses } from '../services/statusService';
 import { CountryService } from '../services/countryService';
 
 const PROFILE_CONFIG_STORAGE_PREFIX = 'ican_profile_configuration';
@@ -549,6 +553,23 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [showCmmsPanel, setShowCmmsPanel] = useState(false);
   const [showRecordPanel, setShowRecordPanel] = useState(false);
   const [showExpenseIncomePanel, setShowExpenseIncomePanel] = useState(false);
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  
+  // Collapsed Sections State
+  const [expandedSections, setExpandedSections] = useState({
+    progress: false,
+    analytics: false,
+    recentTransactions: false,
+    walletAccounts: false,
+    exploreStatus: false
+  });
+
+  const toggleSection = (section) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
   
   // Notifications State
   const [notifications, setNotifications] = useState([]);
@@ -690,6 +711,8 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [imageError, setImageError] = useState(false);
   const [showStatusPage, setShowStatusPage] = useState(false);
   const [showStatusUploader, setShowStatusUploader] = useState(false);
+  const [userStatuses, setUserStatuses] = useState([]);
+  const [loadingStatuses, setLoadingStatuses] = useState(false);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [showAvatarView, setShowAvatarView] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
@@ -1004,6 +1027,26 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     };
 
     loadFinancialMetrics();
+  }, [userProfile?.id]);
+
+  // Load user statuses for Explore Status section
+  useEffect(() => {
+    const loadStatuses = async () => {
+      if (!userProfile?.id) return;
+      
+      try {
+        setLoadingStatuses(true);
+        const { statuses } = await getUserStatuses(userProfile.id);
+        setUserStatuses(statuses || []);
+      } catch (error) {
+        console.error('Error loading statuses:', error);
+        setUserStatuses([]);
+      } finally {
+        setLoadingStatuses(false);
+      }
+    };
+
+    loadStatuses();
   }, [userProfile?.id]);
 
   // Process AI messages
@@ -2139,28 +2182,28 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       }`}>
         <div className={`px-3 py-2.5 sm:px-4 sm:py-3 relative ${isWebDashboard ? 'max-w-7xl mx-auto' : ''}`}>
           <div className={isWebDashboard ? 'rounded-2xl border border-purple-400/25 bg-slate-900/55 px-3 py-2 shadow-[0_10px_28px_rgba(16,10,34,0.4)]' : ''}>
-          {/* Header Row - Recording Input, Branding & Settings */}
-          <div className={`flex items-center w-full gap-1.5 sm:gap-2 ${isWebDashboard ? 'min-h-[54px]' : ''}`}>
-            {/* Recording Input Badge - CLICKABLE - Mobile optimized */}
-            <button
-              onClick={() => setShowRecordTypeModal(true)}
-              className={`flex items-center gap-1.5 sm:gap-2 bg-gradient-to-r from-purple-600 to-purple-500 border border-purple-400/50 hover:border-purple-300/80 rounded-full px-3 sm:px-4 py-1.5 sm:py-2.5 hover:bg-gradient-to-r hover:from-purple-500 hover:to-purple-400 transition-all active:scale-95 flex-shrink-0 shadow-lg shadow-purple-500/30 whitespace-nowrap ${
-                isWebDashboard ? 'md:min-w-[220px] md:justify-start md:rounded-xl md:px-4 md:py-2 md:shadow-purple-500/40' : ''
-              }`}
-            >
-              <Mic className="w-4 sm:w-5 h-4 sm:h-5 text-white flex-shrink-0" />
-              <span className="text-xs sm:text-sm font-semibold text-white">Record</span>
-              <div className="w-1.5 sm:w-2 h-1.5 sm:h-2 bg-red-400 rounded-full animate-pulse flex-shrink-0"></div>
-            </button>
-
-            {/* IcanEra Branding - Responsive sizing */}
-            <h1 className={`${isWebDashboard ? 'text-3xl md:text-4xl' : 'text-2xl sm:text-3xl md:text-4xl lg:text-5xl'} font-serif font-bold text-transparent bg-gradient-to-r from-amber-200 via-yellow-100 to-amber-300 bg-clip-text tracking-wide sm:tracking-wider flex-1 text-center px-1 sm:px-2 leading-tight`}>
+          {/* Header Row - IcanEra, Search, Menu */}
+          <div className={`flex items-center w-full gap-3 ${isWebDashboard ? 'min-h-[54px]' : ''}`}>
+            {/* IcanEra Branding - Left aligned */}
+            <h1 className={`${isWebDashboard ? 'text-3xl md:text-4xl' : 'text-2xl sm:text-3xl'} font-serif font-bold text-transparent bg-gradient-to-r from-amber-200 via-yellow-100 to-amber-300 bg-clip-text tracking-wide sm:tracking-wider leading-tight`}>
               IcanEra
             </h1>
 
-            {/* Header Actions - ABSOLUTE RIGHT */}
+            {/* Search Icon */}
+            <button
+              onClick={() => setShowSearchModal(true)}
+              className="p-1.5 sm:p-2 hover:bg-purple-500/20 rounded-lg transition active:scale-95 flex-shrink-0"
+              title="Search and AI Assistant"
+            >
+              <Search className="w-5 sm:w-6 h-5 sm:h-6 text-gray-300 hover:text-white" />
+            </button>
+
+            {/* Spacer */}
+            <div className="flex-1"></div>
+
+            {/* Header Menu Actions - RIGHT */}
             {isWebDashboard ? (
-              <div className="absolute right-2 sm:right-3 top-2 sm:top-3 flex items-center gap-2">
+              <div className="flex items-center gap-2">
                 <button
                   onClick={() => setSelectedDetail({ tab: 'profile', item: 'My Profile' })}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-cyan-300/40 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-100 text-xs font-semibold transition"
@@ -2186,14 +2229,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 </button>
               </div>
             ) : (
-              <div className="absolute right-2 sm:right-3 top-2 sm:top-3 flex items-center gap-1">
-                <button
-                  onClick={() => setShowStatusPage(true)}
-                  className="p-1.5 sm:p-2 hover:bg-purple-500/20 rounded-lg transition active:scale-95"
-                  title="Open status viewer"
-                >
-                  <Eye className="w-5 sm:w-6 h-5 sm:h-6 text-purple-300" />
-                </button>
+              <div className="flex items-center gap-1">
               <div className="relative">
               <button 
                 onClick={() => setShowMenuDropdown(!showMenuDropdown)}
@@ -2329,6 +2365,23 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         </div>
       </div>
       )}
+
+      {/* ====== RECORD EVERY TRANSACTION SECTION ====== */}
+      <div className="px-4 py-4">
+        <h2 className="text-lg font-bold text-white mb-3">Record Every Transaction</h2>
+        <button
+          onClick={() => setShowRecordTypeModal(true)}
+          className="w-full flex items-center gap-3 bg-gradient-to-r from-purple-700 to-purple-600 border border-purple-500/50 hover:border-purple-400/80 rounded-full px-4 py-3 sm:py-4 hover:bg-gradient-to-r hover:from-purple-600 hover:to-purple-500 transition-all active:scale-95 shadow-lg shadow-purple-600/40"
+        >
+          <input
+            type="text"
+            placeholder="Tap to record or type transaction..."
+            className="flex-1 bg-transparent text-white placeholder-gray-400 outline-none text-sm sm:text-base"
+            readOnly
+          />
+          <Mic className="w-5 sm:w-6 h-5 sm:h-6 text-white flex-shrink-0" />
+        </button>
+      </div>
 
       {/* ====== DETAIL PAGE - SETTINGS ONLY ====== */}
       {selectedDetail && (
@@ -3756,1334 +3809,566 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         </div>
       )}
 
-      {/* ====== FINANCIAL METRICS - TINY CLICKABLE WITH DROPDOWNS ====== */}
-      <div className="px-4 py-3">
-        {/* First Row - Income, Expense, Net Profit */}
-        <div className="grid grid-cols-3 gap-1.5 mb-1.5">
-          {financialMetrics.map((metric, idx) => {
-            const metricKey = ['income', 'expense', 'netProfit'][idx];
-            const periodData = metricPeriodData[metricKey];
-            return (
-              <div key={idx} className="relative">
-                <button
-                  onClick={() => handleMetricClick(metricKey)}
-                  className={`w-full bg-gradient-to-br ${metric.color} rounded-lg p-1.5 text-center shadow-sm hover:shadow-md hover:scale-110 transition-all transform cursor-pointer`}
-                  title={metric.label}
-                >
-                  <metric.icon className="w-3.5 h-3.5 mx-auto text-white/80" />
-                  <p className="text-xs text-white/70 leading-tight">{metric.label}</p>
-                  <p className="text-xs font-bold text-white">{metric.value}</p>
-                </button>
-                
-                {/* Dropdown Menu */}
-                {metricDropdowns[metricKey] && (
-                  <div className="absolute top-full mt-1 left-0 right-0 bg-slate-950 border border-purple-500/50 rounded-lg shadow-xl z-50 text-xs">
-                    <div className="p-2 space-y-1">
-                      {periodData.loading ? (
-                        <div className="px-2 py-2 text-center text-gray-400">Loading...</div>
-                      ) : (
-                        <>
-                          <button className="w-full px-2 py-1 text-left text-purple-300 hover:bg-purple-500/20 rounded transition"> Daily: {periodData.daily.toLocaleString()}</button>
-                          <button className="w-full px-2 py-1 text-left text-purple-300 hover:bg-purple-500/20 rounded transition"> Weekly: {periodData.weekly.toLocaleString()}</button>
-                          <button className="w-full px-2 py-1 text-left text-purple-300 hover:bg-purple-500/20 rounded transition"> Monthly: {periodData.monthly.toLocaleString()}</button>
-                          <button className="w-full px-2 py-1 text-left text-purple-300 hover:bg-purple-500/20 rounded transition"> Yearly: {periodData.yearly.toLocaleString()}</button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+      {/* ====== PROGRESS & ANALYTICS ROW ====== */}
+      <div className="px-4 py-4 grid grid-cols-2 gap-4">
+        {/* PROGRESS BUTTON */}
+        <button
+          onClick={() => toggleSection('progress')}
+          className={`p-3 rounded-lg border flex items-center justify-between transition-all ${
+            expandedSections.progress
+              ? 'bg-blue-600/30 border-blue-500/60'
+              : 'bg-blue-600/10 border-blue-500/30 hover:bg-blue-600/15'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Building className="w-4 h-4 text-blue-400" />
+            <span className="font-semibold text-white text-sm">Progress</span>
+          </div>
+          <ChevronDown className={`w-4 h-4 text-blue-400 transition-transform ${expandedSections.progress ? 'rotate-180' : ''}`} />
+        </button>
 
-        {/* Second Row - Transactions, Savings, Net Worth */}
-        <div className="grid grid-cols-3 gap-1.5">
-          {secondMetrics.map((metric, idx) => {
-            const metricKey = ['transactions', 'savingsRate', 'netWorth'][idx];
-            const periodData = metricPeriodData[metricKey];
-            return (
-              <div key={idx} className="relative">
-                <button
-                  onClick={() => handleMetricClick(metricKey)}
-                  className={`w-full bg-gradient-to-br ${metric.color} rounded-lg p-1.5 text-center shadow-sm hover:shadow-md hover:scale-110 transition-all transform cursor-pointer`}
-                  title={metric.label}
-                >
-                  <metric.icon className="w-3.5 h-3.5 mx-auto text-white/80" />
-                  <p className="text-xs text-white/70 leading-tight">{metric.label}</p>
-                  <p className="text-xs font-bold text-white">{metric.value}</p>
-                </button>
-                
-                {/* Dropdown Menu */}
-                {metricDropdowns[metricKey] && (
-                  <div className="absolute top-full mt-1 left-0 right-0 bg-slate-950 border border-blue-500/50 rounded-lg shadow-xl z-50 text-xs">
-                    <div className="p-2 space-y-1">
-                      {periodData.loading ? (
-                        <div className="px-2 py-2 text-center text-gray-400">Loading...</div>
-                      ) : (
-                        <>
-                          <button className="w-full px-2 py-1 text-left text-blue-300 hover:bg-blue-500/20 rounded transition"> Daily: {periodData.daily}</button>
-                          <button className="w-full px-2 py-1 text-left text-blue-300 hover:bg-blue-500/20 rounded transition"> Weekly: {periodData.weekly}</button>
-                          <button className="w-full px-2 py-1 text-left text-blue-300 hover:bg-blue-500/20 rounded transition"> Monthly: {periodData.monthly}</button>
-                          <button className="w-full px-2 py-1 text-left text-blue-300 hover:bg-blue-500/20 rounded transition"> Yearly: {periodData.yearly}</button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        {/* ANALYTICS BUTTON */}
+        <button
+          onClick={() => toggleSection('analytics')}
+          className={`p-3 rounded-lg border flex items-center justify-between transition-all ${
+            expandedSections.analytics
+              ? 'bg-purple-600/30 border-purple-500/60'
+              : 'bg-purple-600/10 border-purple-500/30 hover:bg-purple-600/15'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <BarChart3 className="w-4 h-4 text-purple-400" />
+            <span className="font-semibold text-white text-sm">Analytics</span>
+          </div>
+          <ChevronDown className={`w-4 h-4 text-purple-400 transition-transform ${expandedSections.analytics ? 'rotate-180' : ''}`} />
+        </button>
+      </div>
 
-        {/* ROI - Tiny Clickable Circle */}
-        <div className="flex justify-center mt-2">
-          <div className="relative">
-            <button
-              onClick={() => handleMetricClick('roi')}
-              className="w-16 h-16 rounded-full bg-gradient-to-br from-yellow-500 to-orange-600 flex items-center justify-center shadow-sm hover:shadow-md hover:scale-110 transition-all transform cursor-pointer"
-              title="ROI"
-            >
-              <div className="text-center">
-                <p className="text-xs text-white/70">ROI</p>
-                <p className="text-sm font-bold text-white">{velocityMetrics?.roi || 0}%</p>
+      {/* ====== PROGRESS MODAL ====== */}
+      {expandedSections.progress && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-end">
+          <div className="w-full bg-gradient-to-br from-slate-900 to-slate-950 rounded-t-4xl p-5 max-h-[85vh] overflow-y-auto">
+            {/* Header with Stage Title */}
+            <div className="flex items-center justify-between mb-5">
+              <h1 className="text-xl font-bold text-white">Our Inkal Stage</h1>
+              <button
+                onClick={() => toggleSection('progress')}
+                className="w-9 h-9 flex items-center justify-center bg-red-500/20 hover:bg-red-500/30 rounded-full transition"
+              >
+                <X className="w-5 h-5 text-red-400" />
+              </button>
+            </div>
+
+            {/* Main Stage Card - Compact */}
+            <div className="bg-gradient-to-br from-red-900/60 to-red-900/40 border border-red-500/60 rounded-3xl p-5 mb-5 overflow-hidden relative">
+              {/* Completion Badge */}
+              <div className="absolute top-4 right-4 bg-red-500/30 backdrop-blur-sm px-3 py-1 rounded-full border border-red-500/50">
+                <span className="text-xs font-bold text-red-300">Complete</span>
               </div>
-            </button>
-            
-            {/* ROI Dropdown */}
-            {metricDropdowns.roi && (
-              <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 bg-slate-950 border border-yellow-500/50 rounded-lg shadow-xl z-50 text-xs whitespace-nowrap">
-                <div className="p-2 space-y-1">
-                  {metricPeriodData.roi.loading ? (
-                    <div className="px-2 py-2 text-center text-gray-400">Loading...</div>
-                  ) : (
-                    <>
-                      <button className="px-2 py-1 text-left text-yellow-300 hover:bg-yellow-500/20 rounded transition block"> Daily: {metricPeriodData.roi.daily}</button>
-                      <button className="px-2 py-1 text-left text-yellow-300 hover:bg-yellow-500/20 rounded transition block"> Weekly: {metricPeriodData.roi.weekly}</button>
-                      <button className="px-2 py-1 text-left text-yellow-300 hover:bg-yellow-500/20 rounded transition block"> Monthly: {metricPeriodData.roi.monthly}</button>
-                      <button className="px-2 py-1 text-left text-yellow-300 hover:bg-yellow-500/20 rounded transition block"> Yearly: {metricPeriodData.roi.yearly}</button>
-                    </>
-                  )}
+
+              <div className="pr-16">
+                {/* Stage Title */}
+                <h2 className="text-2xl font-bold text-white mb-1">Stage 1</h2>
+                <p className="text-red-100/80 text-sm font-medium mb-3">Establishing Velocity</p>
+                
+                {/* Progress Bar */}
+                <div className="w-full bg-gray-700/50 rounded-full h-2.5 mb-4">
+                  <div className="h-2.5 rounded-full bg-gradient-to-r from-red-500 to-red-400 transition-all" style={{ width: '0%' }}></div>
                 </div>
+                
+                {/* Description */}
+                <p className="text-gray-300 text-xs leading-relaxed">
+                  Cash flow is minute, volatile, and impossible to track reliably. No savings, only daily survival.
+                </p>
+              </div>
+            </div>
+
+            {/* All Stages - Compact Buttons */}
+            <div className="flex gap-2.5 mb-6 justify-between">
+              {/* Stage 1 */}
+              <button className="flex-1 py-3 px-2 rounded-2xl border bg-gradient-to-br from-red-600/50 to-red-700/40 border-red-500/60 text-center hover:from-red-600/70 hover:to-red-700/60 transition active:scale-95">
+                <Zap className="w-5 h-5 mx-auto mb-1.5 text-red-400" />
+                <div className="text-xs font-bold text-red-300">Stage 1</div>
+              </button>
+
+              {/* Stage 2 */}
+              <button className="flex-1 py-3 px-2 rounded-2xl border bg-gradient-to-br from-yellow-600/40 to-yellow-700/30 border-yellow-500/40 text-center hover:from-yellow-600/60 hover:to-yellow-700/50 transition active:scale-95">
+                <Building className="w-5 h-5 mx-auto mb-1.5 text-yellow-400" />
+                <div className="text-xs font-bold text-yellow-300">Stage 2</div>
+              </button>
+
+              {/* Stage 3 */}
+              <button className="flex-1 py-3 px-2 rounded-2xl border bg-gradient-to-br from-blue-600/40 to-blue-700/30 border-blue-500/40 text-center hover:from-blue-600/60 hover:to-blue-700/50 transition active:scale-95">
+                <Crown className="w-5 h-5 mx-auto mb-1.5 text-blue-400" />
+                <div className="text-xs font-bold text-blue-300">Stage 3</div>
+              </button>
+
+              {/* Stage 4 */}
+              <button className="flex-1 py-3 px-2 rounded-2xl border bg-gradient-to-br from-green-600/40 to-green-700/30 border-green-500/40 text-center hover:from-green-600/60 hover:to-green-700/50 transition active:scale-95">
+                <Rocket className="w-5 h-5 mx-auto mb-1.5 text-green-400" />
+                <div className="text-xs font-bold text-green-300">Stage 4</div>
+              </button>
+            </div>
+
+            {/* Next Milestone - Compact */}
+            <div className="bg-gradient-to-br from-blue-900/50 to-blue-800/40 border border-blue-500/50 rounded-2xl p-4 space-y-3">
+              <h3 className="text-xs font-bold text-blue-300 uppercase tracking-wide">Next Milestone</h3>
+              
+              <div>
+                <p className="text-white font-semibold text-sm leading-snug mb-2">
+                  Stabilize into steady income stream (UGX 20,000+)
+                </p>
+                <p className="text-gray-400 text-xs leading-relaxed">
+                  Estimated time: Focus on positive cash flow first
+                </p>
+              </div>
+
+              {/* Stage Focus Guidance */}
+              <div className="pt-3 border-t border-blue-500/30">
+                <p className="text-xs text-blue-100/70 leading-relaxed">
+                  <span className="font-semibold text-blue-300">Stage 1 Focus:</span> Build consistent daily income and establish basic financial tracking.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ====== ANALYTICS MODAL ====== */}
+      {expandedSections.analytics && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-end">
+          <div className="w-full bg-gradient-to-br from-slate-900 to-slate-950 rounded-t-3xl p-6 max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <BarChart3 className="w-6 h-6 text-purple-400" />
+                <h2 className="text-2xl font-bold text-white">Analytics</h2>
+              </div>
+              <button
+                onClick={() => toggleSection('analytics')}
+                className="w-10 h-10 flex items-center justify-center bg-red-500/20 hover:bg-red-500/30 rounded-full transition"
+              >
+                <X className="w-6 h-6 text-red-400" />
+              </button>
+            </div>
+
+            {/* Period Tabs */}
+            <div className="flex gap-2 mb-6 pb-4 border-b border-slate-700/50">
+              {['weekly', 'monthly', 'yearly'].map((period) => (
+                <button
+                  key={period}
+                  onClick={async () => {
+                    setExpandedPeriods({...expandedPeriods, [period]: !expandedPeriods[period]});
+                    // Pre-load data for all metrics in this period
+                    if (!expandedPeriods[period]) {
+                      ['income', 'expense', 'netProfit', 'transactions', 'savingsRate', 'netWorth', 'roi'].forEach(metric => {
+                        handleMetricClick(metric);
+                      });
+                    }
+                  }}
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
+                    expandedPeriods[period]
+                      ? 'bg-purple-500/30 text-purple-300 border border-purple-400/50'
+                      : 'bg-slate-700/30 text-gray-400 hover:text-gray-300'
+                  }`}
+                >
+                  {period.charAt(0).toUpperCase() + period.slice(1)}
+                </button>
+              ))}
+            </div>
+
+            {/* Pre-load Monthly Data on Modal Open */}
+            {expandedSections.analytics && Object.keys(metricPeriodData).some(key => !metricPeriodData[key].monthly) && (
+              <div className="absolute inset-0 opacity-0 pointer-events-none">
+                {['income', 'expense', 'netProfit', 'transactions', 'savingsRate', 'netWorth', 'roi'].map(metric => (
+                  <div key={`preload-${metric}`} onClick={() => handleMetricClick(metric)} className="hidden" />
+                ))}
+              </div>
+            )}
+
+            {/* Metrics Grid - 3x2 Layout */}
+            <div className="grid grid-cols-3 gap-3 mb-6">
+              {/* Income */}
+              <button
+                onClick={() => handleMetricClick('income')}
+                className="bg-gradient-to-br from-emerald-500 to-green-600 rounded-2xl p-4 text-center hover:shadow-lg transition active:scale-95"
+                title="Click to load all periods"
+              >
+                <div className="text-white font-bold text-lg">
+                  {metricPeriodData.income.monthly 
+                    ? formatCurrency(metricPeriodData.income.monthly)
+                    : formatCurrency(velocityMetrics?.income30Days || 0)}
+                </div>
+                <div className="text-white/80 text-xs font-semibold mt-1">Income</div>
+              </button>
+
+              {/* Expense */}
+              <button
+                onClick={() => handleMetricClick('expense')}
+                className="bg-gradient-to-br from-red-500 to-orange-600 rounded-2xl p-4 text-center hover:shadow-lg transition active:scale-95"
+                title="Click to load all periods"
+              >
+                <div className="text-white font-bold text-lg">
+                  {metricPeriodData.expense.monthly 
+                    ? formatCurrency(metricPeriodData.expense.monthly)
+                    : formatCurrency(velocityMetrics?.expenses30Days || 0)}
+                </div>
+                <div className="text-white/80 text-xs font-semibold mt-1">Expense</div>
+              </button>
+
+              {/* Net Profit */}
+              <button
+                onClick={() => handleMetricClick('netProfit')}
+                className="bg-gradient-to-br from-pink-500 to-red-500 rounded-2xl p-4 text-center hover:shadow-lg transition active:scale-95"
+                title="Click to load all periods"
+              >
+                <div className="text-white font-bold text-lg">
+                  {metricPeriodData.netProfit.monthly 
+                    ? formatCurrency(metricPeriodData.netProfit.monthly)
+                    : formatCurrency(velocityMetrics?.velocity30Days || 0)}
+                </div>
+                <div className="text-white/80 text-xs font-semibold mt-1">Net Profit</div>
+              </button>
+
+              {/* Transactions */}
+              <button
+                onClick={() => handleMetricClick('transactions')}
+                className="bg-gradient-to-br from-blue-500 to-cyan-600 rounded-2xl p-4 text-center hover:shadow-lg transition active:scale-95"
+                title="Click to load all periods"
+              >
+                <div className="text-white font-bold text-lg">
+                  {metricPeriodData.transactions.monthly || velocityMetrics?.transactionCount || 0}
+                </div>
+                <div className="text-white/80 text-xs font-semibold mt-1">Transactions</div>
+              </button>
+
+              {/* Savings Rate */}
+              <button
+                onClick={() => handleMetricClick('savingsRate')}
+                className="bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl p-4 text-center hover:shadow-lg transition active:scale-95"
+                title="Click to load all periods"
+              >
+                <div className="text-white font-bold text-lg">
+                  {metricPeriodData.savingsRate.monthly 
+                    ? (typeof metricPeriodData.savingsRate.monthly === 'string' 
+                      ? metricPeriodData.savingsRate.monthly 
+                      : `${(metricPeriodData.savingsRate.monthly).toFixed(1)}%`)
+                    : `${velocityMetrics?.savingsRate || 0}%`}
+                </div>
+                <div className="text-white/80 text-xs font-semibold mt-1">Savings Rate</div>
+              </button>
+
+              {/* Net Worth */}
+              <button
+                onClick={() => handleMetricClick('netWorth')}
+                className="bg-gradient-to-br from-yellow-500 to-orange-600 rounded-2xl p-4 text-center hover:shadow-lg transition active:scale-95"
+                title="Click to load all periods"
+              >
+                <div className="text-white font-bold text-lg">
+                  {metricPeriodData.netWorth.monthly 
+                    ? formatCurrency(metricPeriodData.netWorth.monthly)
+                    : formatCurrency(velocityMetrics?.netWorth || 0)}
+                </div>
+                <div className="text-white/80 text-xs font-semibold mt-1">Net Worth</div>
+              </button>
+            </div>
+
+            {/* ROI Circular Badge */}
+            <div className="flex justify-center mb-6">
+              <button
+                onClick={() => handleMetricClick('roi')}
+                className="w-24 h-24 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex flex-col items-center justify-center hover:shadow-2xl transition active:scale-95 text-white font-bold"
+                title="Click to load all periods"
+              >
+                <span className="text-xs font-semibold">ROI</span>
+                <span className="text-3xl font-bold">
+                  {metricPeriodData.roi.monthly 
+                    ? (typeof metricPeriodData.roi.monthly === 'string'
+                      ? metricPeriodData.roi.monthly.replace('%', '')
+                      : `${(metricPeriodData.roi.monthly).toFixed(1)}`)
+                    : velocityMetrics?.roi || 0}%
+                </span>
+              </button>
+            </div>
+
+            {/* Period Data Detail (if clicked) */}
+            {(expandedPeriods.weekly || expandedPeriods.monthly || expandedPeriods.yearly) && (
+              <div className="bg-slate-800/50 border border-slate-700/50 rounded-2xl p-4 space-y-3">
+                {expandedPeriods.weekly && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-bold text-purple-400">WEEKLY DATA</p>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="bg-slate-700/30 p-2 rounded">Income: {metricPeriodData.income.weekly || 0}</div>
+                      <div className="bg-slate-700/30 p-2 rounded">Expense: {metricPeriodData.expense.weekly || 0}</div>
+                    </div>
+                  </div>
+                )}
+                {expandedPeriods.monthly && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-bold text-purple-400">MONTHLY DATA</p>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="bg-slate-700/30 p-2 rounded">Income: {metricPeriodData.income.monthly || 0}</div>
+                      <div className="bg-slate-700/30 p-2 rounded">Expense: {metricPeriodData.expense.monthly || 0}</div>
+                      <div className="bg-slate-700/30 p-2 rounded">Profit: {metricPeriodData.netProfit.monthly || 0}</div>
+                      <div className="bg-slate-700/30 p-2 rounded">Savings: {metricPeriodData.savingsRate.monthly || 0}%</div>
+                    </div>
+                  </div>
+                )}
+                {expandedPeriods.yearly && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-bold text-purple-400">YEARLY DATA</p>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="bg-slate-700/30 p-2 rounded">Income: {metricPeriodData.income.yearly || 0}</div>
+                      <div className="bg-slate-700/30 p-2 rounded">Expense: {metricPeriodData.expense.yearly || 0}</div>
+                      <div className="bg-slate-700/30 p-2 rounded">Net Profit: {metricPeriodData.netProfit.yearly || 0}</div>
+                      <div className="bg-slate-700/30 p-2 rounded">Net Worth: {metricPeriodData.netWorth.yearly || 0}</div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
         </div>
-      </div>
+      )}
 
-      {/* TIME PERIOD SELECTOR - COLLAPSIBLE (COMMENTED OUT) 
-      
-      <div className="px-4 py-4 space-y-2">
-        <p className="text-xs text-gray-400 font-bold mb-3">ANALYTICS PERIOD</p>
-        
-        Daily Section Removed
-        
-        Weekly Section Removed
-        
-        Monthly Section Removed
-        
-        Yearly Section Removed
-      </div>
-      
-      */}
-
-      {/* ====== ACTION CHIPS ====== */}
+      {/* ====== RECENT TRANSACTIONS SECTION - COLLAPSIBLE ====== */}
       <div className="px-4 py-4">
-        <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
-          {actionChips.map((chip, idx) => {
-            // Map each action chip to its modal state
-            let handleClick;
-            if (idx === 0) handleClick = () => setShowJourneyDetails(!showJourneyDetails);           // Progress
-            else if (idx === 1) handleClick = () => setShowFinancialAnalytics(!showFinancialAnalytics); // Analytics
-            else if (idx === 2) handleClick = () => setShowBusinessLoanCalculator(!showBusinessLoanCalculator); // Loans
-            else if (idx === 3) handleClick = () => setShowWalletAccounts(!showWalletAccounts);     // Wallet
-            else if (idx === 4) handleClick = () => setShowTithingCalculator(!showTithingCalculator); // Goals (Tithing)
-            else if (idx === 5) handleClick = () => setShowReportingSystem(!showReportingSystem);   // Reports (Advanced Reporting)
-            else if (idx === 6) handleClick = () => setShowAIChat(!showAIChat);                     // ICAN AI
-
-            return (
-              <button
-                key={idx}
-                onClick={handleClick}
-                className={`${chip.color} rounded-lg px-4 py-3 text-white shadow-lg hover:shadow-xl transition flex flex-col items-center gap-1.5 whitespace-nowrap flex-shrink-0 hover:scale-105 transform`}
-                title={chip.label}
-              >
-                <chip.icon className="w-5 h-5" />
-                <span className="text-xs font-semibold">{chip.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Recent Transactions Section */}
-      {transactions.length > 0 && <RecentTransactionsCollapsible transactions={transactions} formatCurrency={formatCurrency} />}
-
-      {/* ====== MODAL PANELS (appear below action chips) ====== */}
-      <div className="px-4 py-4 space-y-4">
-        {/* 1. Journey Details Panel */}
-        {showJourneyDetails && (
-          <div className="glass-card p-4 border-l-4 border-blue-500 animate-in fade-in">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                <Building className="w-5 h-5 text-blue-400" />
-                Progress Journey
-              </h3>
-              <button onClick={() => setShowJourneyDetails(false)} className="text-gray-400 hover:text-white text-xl"></button>
-            </div>
-
-            {/* Current Stage - Stage 1 (Survival) */}
-            <div className="p-4 rounded-lg bg-red-500/20 border border-red-500/30 mb-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-red-500/30 rounded-full flex items-center justify-center">
-                    <Zap className="w-5 h-5 text-red-400" />
-                  </div>
-                  <div>
-                    <div className="font-semibold text-red-400">Stage 1: Survival Stage</div>
-                    <div className="text-gray-300 text-sm">Establishing Velocity</div>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-white font-bold">{formatCurrency(velocityMetrics?.netWorth || 0)}</div>
-                  <div className="text-gray-400 text-xs">0% Complete</div>
-                </div>
-              </div>
-              
-              {/* Progress Bar */}
-              <div className="w-full bg-gray-700 rounded-full h-2 mb-3">
-                <div className="h-2 rounded-full bg-red-500 transition-all" style={{ width: '0%' }}></div>
-              </div>
-              
-              <p className="text-gray-300 text-sm">Cash flow is minute, volatile, and impossible to track reliably. No savings, only daily survival.</p>
-            </div>
-
-            {/* Stage Timeline - All 4 Stages */}
-            <div className="grid grid-cols-4 gap-2 mb-4">
-              <div className="p-2 rounded-lg border bg-red-500/20 border-red-500/30 text-center">
-                <Zap className="w-4 h-4 mx-auto mb-1 text-red-400" />
-                <div className="text-xs font-medium text-red-400">Stage 1</div>
-              </div>
-              <div className="p-2 rounded-lg border bg-yellow-500/20 border-yellow-500/30 text-center">
-                <Building className="w-4 h-4 mx-auto mb-1 text-yellow-400" />
-                <div className="text-xs font-medium text-yellow-400">Stage 2</div>
-              </div>
-              <div className="p-2 rounded-lg border bg-blue-500/20 border-blue-500/30 text-center">
-                <Crown className="w-4 h-4 mx-auto mb-1 text-blue-400" />
-                <div className="text-xs font-medium text-blue-400">Stage 3</div>
-              </div>
-              <div className="p-2 rounded-lg border bg-green-500/20 border-green-500/30 text-center">
-                <Rocket className="w-4 h-4 mx-auto mb-1 text-green-400" />
-                <div className="text-xs font-medium text-green-400">Stage 4</div>
-              </div>
-            </div>
-
-            {/* Journey Insights */}
-            <div className="space-y-3">
-              <div className="p-3 bg-blue-500/10 rounded-lg border border-blue-400/30">
-                <div className="text-blue-300 font-medium text-sm mb-2"> Next Milestone:</div>
-                <div className="text-white text-sm">Stabilize into steady income stream (UGX 20,000+)</div>
-                <div className="text-gray-300 text-xs mt-1">Estimated time: Focus on positive cash flow first</div>
-              </div>
-
-              <div className="p-3 bg-green-500/10 rounded-lg border border-green-400/30">
-                <div className="text-green-300 font-medium text-sm mb-2"> Current Strengths:</div>
-                <div className="text-gray-300 text-sm">Building momentum  Establishing habits</div>
-              </div>
-
-              <div className="p-3 bg-yellow-500/10 rounded-lg border border-yellow-400/30">
-                <div className="text-yellow-300 font-medium text-sm mb-2"> Focus Areas:</div>
-                <div className="text-gray-300 text-sm space-y-1">
-                  <div> Establish basic income tracking</div>
-                  <div> Build transaction recording habits</div>
-                  <div> Achieve daily cash flow visibility</div>
-                </div>
-              </div>
-            </div>
+        <button
+          onClick={() => toggleSection('recentTransactions')}
+          className={`w-full p-3 rounded-lg border flex items-center justify-between transition-all ${
+            expandedSections.recentTransactions
+              ? 'bg-cyan-600/20 border-cyan-500/50'
+              : 'bg-cyan-600/10 border-cyan-500/30 hover:bg-cyan-600/15'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Activity className="w-5 h-5 text-cyan-400" />
+            <span className="font-semibold text-white">Recent Transactions</span>
+            {transactions.length > 0 && <span className="text-xs bg-cyan-500/30 text-cyan-300 px-2 py-1 rounded">{transactions.length}</span>}
           </div>
-        )}
+          <ChevronDown className={`w-5 h-5 text-cyan-400 transition-transform ${expandedSections.recentTransactions ? 'rotate-180' : ''}`} />
+        </button>
 
-        {/* 2. Financial Analytics Panel */}
-        {showFinancialAnalytics && (
-          <div className="glass-card p-4 border-l-4 border-orange-500 animate-in fade-in space-y-3">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-orange-400" />
-                Financial Analytics
-              </h3>
-              <button onClick={() => setShowFinancialAnalytics(false)} className="text-gray-400 hover:text-white text-xl"></button>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-2">
-              <div className="bg-green-900/30 border border-green-500/30 rounded p-2">
-                <p className="text-xs text-gray-400 mb-0.5">Income (30 days)</p>
-                <p className="text-sm font-bold text-green-300">{formatCurrency(velocityMetrics?.income30Days || 0)}</p>
-              </div>
-              <div className="bg-red-900/30 border border-red-500/30 rounded p-2">
-                <p className="text-xs text-gray-400 mb-0.5">Expenses (30 days)</p>
-                <p className="text-sm font-bold text-red-300">{formatCurrency(velocityMetrics?.expenses30Days || 0)}</p>
-              </div>
-              <div className="bg-blue-900/30 border border-blue-500/30 rounded p-2">
-                <p className="text-xs text-gray-400 mb-0.5">Net Profit</p>
-                <p className="text-sm font-bold text-blue-300">{formatCurrency(velocityMetrics?.velocity30Days || 0)}</p>
-              </div>
-              <div className="bg-purple-900/30 border border-purple-500/30 rounded p-2">
-                <p className="text-xs text-gray-400 mb-0.5">Savings Rate</p>
-                <p className="text-sm font-bold text-purple-300">{velocityMetrics?.savingsRate || 0}%</p>
-              </div>
-            </div>
-
-            <div className="bg-orange-900/30 border border-orange-500/30 rounded p-2 space-y-1">
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-400">Net Worth</span>
-                <span className="font-bold text-orange-300">{formatCurrency(velocityMetrics?.netWorth || 0)}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-400">30-Day Velocity</span>
-                <span className={`font-bold ${(velocityMetrics?.velocity30Days || 0) > 0 ? 'text-green-300' : 'text-red-300'}`}>
-                  {formatCurrency(velocityMetrics?.velocity30Days || 0)}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 3. Business Loan Calculator Panel */}
-        {showBusinessLoanCalculator && (
-          <div className="mt-4 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-6 border border-blue-200 shadow-lg">
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-2"> Business Loan Calculator</h2>
-                <p className="text-gray-600 mt-1">Smart financing decisions for your business growth</p>
-              </div>
-              <button onClick={() => setShowBusinessLoanCalculator(false)} className="text-gray-500 hover:text-gray-700 text-2xl"></button>
-            </div>
-
-            <div className="space-y-4 max-h-[70vh] overflow-y-auto">
-              {/* Loan Details */}
-              <div className="bg-white rounded-xl p-6 shadow-lg">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4"> Loan Details</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Loan Amount</label>
-                    <input type="number" value={loanAmount} onChange={(e) => setLoanAmount(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm" placeholder="5,000,000" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Interest Rate (%)</label>
-                    <input type="number" value={interestRate} onChange={(e) => setInterestRate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm" placeholder="20" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Loan Term (Years)</label>
-                    <input type="number" value={loanTerm} onChange={(e) => setLoanTerm(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm" placeholder="3" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Loan Purpose</label>
-                    <select value={loanPurpose} onChange={(e) => setLoanPurpose(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm">
-                      <option value="business-expansion">Business Expansion</option>
-                      <option value="equipment">Equipment</option>
-                      <option value="inventory">Inventory</option>
-                      <option value="working-capital">Working Capital</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* Business Financials */}
-              <div className="bg-white rounded-xl p-6 shadow-lg">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4"> Monthly Financials</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Revenue</label>
-                    <input type="number" value={monthlyRevenue} onChange={(e) => setMonthlyRevenue(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm" placeholder="3,000,000" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Operating Expenses</label>
-                    <input type="number" value={operatingExpenses} onChange={(e) => setOperatingExpenses(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm" placeholder="500,000" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Salaries</label>
-                    <input type="number" value={employeeSalaries} onChange={(e) => setEmployeeSalaries(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm" placeholder="800,000" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Rent & Utilities</label>
-                    <input type="number" value={rentUtilities} onChange={(e) => setRentUtilities(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm" placeholder="300,000" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Marketing</label>
-                    <input type="number" value={marketingCosts} onChange={(e) => setMarketingCosts(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm" placeholder="200,000" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Inventory</label>
-                    <input type="number" value={inventoryCosts} onChange={(e) => setInventoryCosts(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm" placeholder="600,000" />
-                  </div>
-                </div>
-              </div>
-
-              {/* Tax & Tithe */}
-              <div className="bg-white rounded-xl p-6 shadow-lg">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4"> Taxes & Tithes</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Corporate Tax Rate (%)</label>
-                    <input type="number" value={currentTaxRate} onChange={(e) => setCurrentTaxRate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm" placeholder="30" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">VAT Rate (%)</label>
-                    <input type="number" value={vatRate} onChange={(e) => setVatRate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm" placeholder="18" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">PAYE Deductions</label>
-                    <input type="number" value={payeDeductions} onChange={(e) => setPayeDeductions(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm" placeholder="100,000" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Tithe Percentage (%)</label>
-                    <input type="number" value={tithePercentage} onChange={(e) => setTithePercentage(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm" placeholder="10" />
-                  </div>
-                </div>
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Existing Monthly Debt</label>
-                  <input type="number" value={existingDebts} onChange={(e) => setExistingDebts(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm" placeholder="400,000" />
-                </div>
-              </div>
-
-              {/* Analysis Results */}
-              <div className="space-y-3">
-                {/* Loan Analysis */}
-                <div className="bg-white rounded-xl p-4 shadow-lg">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-2"> Loan Analysis</h3>
-                  <div className="space-y-1 text-sm">
-                    <div className="flex justify-between"><span className="text-gray-600">Monthly Payment:</span><span className="font-semibold">UGX {(loanMetrics.monthlyPayment || 0).toLocaleString()}</span></div>
-                    <div className="flex justify-between"><span className="text-gray-600">Total Interest:</span><span className="font-semibold text-red-600">UGX {(loanMetrics.totalInterest || 0).toLocaleString()}</span></div>
-                  </div>
-                </div>
-
-                {/* Business Cash Flow */}
-                <div className="bg-white rounded-xl p-4 shadow-lg">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-2"> Business Cash Flow</h3>
-                  <div className="space-y-1 text-sm">
-                    <div className="flex justify-between"><span className="text-gray-600">Gross Revenue:</span><span className="font-semibold text-green-600">UGX {((loanMetrics.businessMetrics?.grossMonthlyRevenue) || 0).toLocaleString()}</span></div>
-                    <div className="flex justify-between"><span className="text-gray-600">Total Expenses:</span><span className="font-semibold text-red-600">UGX {((loanMetrics.businessMetrics?.totalMonthlyExpenses) || 0).toLocaleString()}</span></div>
-                    <div className="flex justify-between"><span className="text-gray-600">Gross Profit:</span><span className="font-semibold">UGX {((loanMetrics.businessMetrics?.grossProfit) || 0).toLocaleString()}</span></div>
-                    <div className="flex justify-between border-t pt-1"><span className="text-gray-600">Net Cash Flow:</span><span className={`font-bold ${((loanMetrics.businessMetrics?.monthlyNetCashFlow) || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>UGX {((loanMetrics.businessMetrics?.monthlyNetCashFlow) || 0).toLocaleString()}</span></div>
-                  </div>
-                </div>
-
-                {/* Risk Analysis */}
-                <div className="bg-white rounded-xl p-4 shadow-lg">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-2"> Risk Analysis</h3>
-                  <div className="space-y-1 text-sm">
-                    <div className="flex justify-between"><span className="text-gray-600">Debt Service Ratio:</span><span className={`font-semibold ${((loanMetrics.businessMetrics?.debtServiceRatio) || 0) > 30 ? 'text-red-600' : 'text-green-600'}`}>{((loanMetrics.businessMetrics?.debtServiceRatio) || 0).toFixed(1)}%</span></div>
-                    <div className="flex justify-between"><span className="text-gray-600">Profit Margin:</span><span className={`font-semibold ${((loanMetrics.businessMetrics?.profitMargin) || 0) < 5 ? 'text-red-600' : 'text-green-600'}`}>{((loanMetrics.businessMetrics?.profitMargin) || 0).toFixed(1)}%</span></div>
-                    <div className="flex justify-between border-t pt-1"><span className="text-gray-600">Risk Level:</span><span className={`font-bold ${loanMetrics.riskLevel === 'low' ? 'text-green-600' : loanMetrics.riskLevel === 'medium' ? 'text-yellow-600' : 'text-red-600'}`}>{loanMetrics.riskLevel?.toUpperCase()}</span></div>
-                  </div>
-                </div>
-
-                {/* Advice */}
-                <div className={`p-4 rounded-xl border-2 ${
-                  loanAdvice.color === 'green' ? 'bg-green-50 border-green-200' :
-                  loanAdvice.color === 'yellow' ? 'bg-yellow-50 border-yellow-200' :
-                  loanAdvice.color === 'red' ? 'bg-red-50 border-red-200' :
-                  'bg-gray-50 border-gray-200'
-                }`}>
-                  <div className={`text-lg font-bold mb-1 ${
-                    loanAdvice.color === 'green' ? 'text-green-800' :
-                    loanAdvice.color === 'yellow' ? 'text-yellow-800' :
-                    loanAdvice.color === 'red' ? 'text-red-800' :
-                    'text-gray-800'
-                  }`}>
-                    {loanAdvice.decision}
-                  </div>
-                  <p className="text-sm">{loanAdvice.message}</p>
-                  {loanAdvice.advice && <p className="text-sm font-medium mt-2">{loanAdvice.advice}</p>}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 4. Wallet Accounts Panel */}
-        {showWalletAccounts && (
-          <div className="glass-card p-4 border-l-4 border-teal-500 animate-in fade-in">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                <Wallet className="w-5 h-5 text-teal-400" />
-                Wallet Accounts
-              </h3>
-              <button onClick={() => setShowWalletAccounts(false)} className="text-gray-400 hover:text-white text-xl"></button>
-            </div>
-
-            {/* Wallet Tabs */}
-            <div className="mb-4">
-              <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-                {availableWalletTabs.map((tab, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setActiveWalletTab(getWalletTabKey(tab.name))}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg whitespace-nowrap transition-all transform hover:scale-105 active:scale-95 ${
-                      activeWalletTab === getWalletTabKey(tab.name)
-                        ? 'bg-gradient-to-r from-teal-500/30 to-teal-600/30 text-teal-300 border border-teal-400/50 shadow-lg shadow-teal-500/20'
-                        : 'bg-slate-800/50 text-gray-300 hover:bg-slate-700/50 hover:text-white border border-transparent'
-                    }`}
-                  >
-                    <tab.icon className={`w-5 h-5 transition-all ${
-                      activeWalletTab === getWalletTabKey(tab.name)
-                        ? 'text-teal-300 animate-pulse'
-                        : 'text-gray-400 group-hover:text-white'
-                    }`} />
-                    <span className="text-sm font-medium">{getWalletTabLabel(tab.name)}</span>
-                    
-                    {/* Account status indicator */}
-                    <div className={`w-2 h-2 rounded-full ${
-                      walletAccounts[getWalletTabKey(tab.name)]?.exists 
-                        ? 'bg-green-400' 
-                        : 'bg-red-400'
-                    }`} 
-                    title={walletAccounts[getWalletTabKey(tab.name)]?.exists 
-                      ? 'Active Account' 
-                      : 'No Account'
-                    }/>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Quick Access Wallet Icons */}
-            <div className="mb-4">
-              <p className="text-xs text-gray-400 mb-2 uppercase tracking-wide">Quick Access</p>
-              <div className="flex justify-center gap-4">
-                {availableWalletTabs.map((tab, idx) => {
-                  const tabKey = getWalletTabKey(tab.name);
-                  const account = walletAccounts[tabKey];
-                  const balance = account?.balance || 0;
-                  const currency = account?.currency || 'UGX';
-                  
-                  return (
-                    <button
-                      key={idx}
-                      onClick={() => setActiveWalletTab(tabKey)}
-                      className={`relative group p-4 rounded-xl transition-all transform hover:scale-105 active:scale-95 min-w-[80px] ${
-                        activeWalletTab === tabKey
-                          ? 'bg-gradient-to-br from-teal-500 to-teal-600 shadow-lg shadow-teal-500/30'
-                          : 'bg-slate-800/50 hover:bg-slate-700/50 border border-slate-700 hover:border-slate-600'
-                      }`}
-                      title={`Switch to ${tab.name} Wallet`}
-                    >
-                      <div className="flex flex-col items-center gap-1">
-                        <tab.icon className={`w-6 h-6 transition-all ${
-                          activeWalletTab === tabKey
-                            ? 'text-white'
-                            : 'text-gray-400 group-hover:text-white'
-                        }`} />
-                        
-                        {/* Balance Amount */}
-                        <div className={`text-xs font-semibold transition-all ${
-                          activeWalletTab === tabKey
-                            ? 'text-white'
-                            : 'text-gray-300 group-hover:text-white'
-                        }`}>
-                          {formatWalletBalanceByTab(tabKey, balance)}
-                        </div>
-                        
-                        {/* Currency */}
-                        <div className={`text-[10px] font-medium transition-all ${
-                          activeWalletTab === tabKey
-                            ? 'text-teal-100'
-                            : 'text-gray-500 group-hover:text-gray-300'
-                        }`}>
-                          {currency}
-                        </div>
-                      </div>
-                      
-                      {/* Active indicator */}
-                      {activeWalletTab === tabKey && (
-                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-slate-900 animate-pulse"></div>
-                      )}
-                      
-                      {/* Wallet name tooltip */}
-                      <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-slate-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
-                        {tab.name}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Wallet Account Display */}
-            <div className="space-y-4">
-              {walletAccountsLoading ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin w-6 h-6 border-2 border-teal-400 border-t-transparent rounded-full mx-auto mb-2"></div>
-                  <p className="text-gray-400 text-sm">Loading wallet accounts...</p>
-                </div>
-              ) : (
-                <div className="bg-slate-800/50 rounded-lg p-4 border border-teal-500/20">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-10 h-10 bg-teal-500/20 rounded-full flex items-center justify-center">
-                        {activeWalletTab === 'ican' && <Wallet className="w-5 h-5 text-teal-400" />}
-                        {activeWalletTab === 'personal' && <User2 className="w-5 h-5 text-blue-400" />}
-                        {activeWalletTab === 'agent' && <Settings className="w-5 h-5 text-purple-400" />}
-                        {activeWalletTab === 'business' && <Briefcase className="w-5 h-5 text-orange-400" />}
-                        {activeWalletTab === 'trust' && <Lock className="w-5 h-5 text-red-400" />}
+        {/* Expanded Content */}
+        {expandedSections.recentTransactions && (
+          <div className="mt-3">
+            {transactions.length > 0 ? (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {transactions.slice(0, 5).map((transaction) => (
+                  <div key={transaction.id} className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700/30 hover:border-slate-600/50 transition">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                        transaction.transaction_type === 'income' 
+                          ? 'bg-green-500/20 text-green-400' 
+                          : 'bg-red-500/20 text-red-400'
+                      }`}>
+                        {transaction.transaction_type === 'income' ? <TrendingUp className="w-5 h-5" /> : <DollarSign className="w-5 h-5" />}
                       </div>
                       <div>
-                        <h4 className="text-white font-semibold capitalize">{activeWalletTab} Account</h4>
-                        <p className="text-gray-400 text-xs">
-                          {walletAccounts[activeWalletTab]?.currency || 'USD'} Wallet
+                        <p className="text-sm font-medium text-white truncate max-w-32">
+                          {transaction.description || 'Transaction'}
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          {new Date(transaction.created_at).toLocaleDateString()}
                         </p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs text-gray-400">Current Balance</p>
-                      <p className="text-xl font-bold text-white">
-                        {walletAccounts[activeWalletTab]?.loading ? (
-                          <span className="animate-pulse">Loading...</span>
-                        ) : (
-                          `${
-                            activeWalletTab === 'trust'
-                              ? formatExactIcanBalance(walletAccounts[activeWalletTab]?.balance || 0)
-                              : formatCurrency(walletAccounts[activeWalletTab]?.balance || 0)
-                          } ${walletAccounts[activeWalletTab]?.currency}`
-                        )}
+                      <p className={`text-sm font-bold ${
+                        transaction.transaction_type === 'income' ? 'text-green-300' : 'text-red-300'
+                      }`}>
+                        {transaction.transaction_type === 'income' ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount || 0))}
                       </p>
-                      {activeWalletTab === 'trust' && (
-                        <p className="text-[11px] text-purple-200 mt-1">
-                          {walletAccounts.trust?.scope === 'admin' ? 'All members total  ' : ''}
-                           {walletAccounts.trust?.localSymbol}
-                          {(Number(walletAccounts.trust?.localValue) || 0).toLocaleString('en-US', {
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 2
-                          })}{' '}
-                          {walletAccounts.trust?.localCurrency}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Account Actions */}
-                  <div className="grid grid-cols-2 gap-2 mt-4">
-                    <button className="px-3 py-2 bg-green-500/20 text-green-300 rounded-lg text-sm font-medium hover:bg-green-500/30 transition border border-green-500/30">
-                       Deposit
-                    </button>
-                    <button className="px-3 py-2 bg-red-500/20 text-red-300 rounded-lg text-sm font-medium hover:bg-red-500/30 transition border border-red-500/30">
-                       Withdraw
-                    </button>
-                  </div>
-
-                  {/* Account Info */}
-                  <div className="mt-4 pt-3 border-t border-slate-700/50">
-                    <div className="grid grid-cols-2 gap-4 text-xs">
-                      <div>
-                        <p className="text-gray-400">Account Type</p>
-                        <p className="text-white font-medium capitalize">{activeWalletTab}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-400">Status</p>
-                        <p className="text-green-400 font-medium"> Active</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-400">Currency</p>
-                        <p className="text-white font-medium">{walletAccounts[activeWalletTab]?.currency || 'USD'}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-400">Last Updated</p>
-                        <p className="text-white font-medium">Just now</p>
-                      </div>
-                      {activeWalletTab === 'trust' && (
-                        <div>
-                          <p className="text-gray-400">
-                            {walletAccounts.trust?.scope === 'admin' ? 'Managed Trust Groups' : 'Trust Groups'}
-                          </p>
-                          <p className="text-white font-medium">{walletAccounts.trust?.groupCount || 0}</p>
-                        </div>
-                      )}
-                      {activeWalletTab === 'trust' && (
-                        <div>
-                          <p className="text-gray-400">Members Counted</p>
-                          <p className="text-white font-medium">{walletAccounts.trust?.memberCount || 0}</p>
-                        </div>
-                      )}
-                      {activeWalletTab === 'trust' && (
-                        <div>
-                          <p className="text-gray-400">Local Equivalent</p>
-                          <p className="text-white font-medium">
-                            {walletAccounts.trust?.localSymbol}
-                            {(Number(walletAccounts.trust?.localValue) || 0).toLocaleString('en-US', {
-                              minimumFractionDigits: 0,
-                              maximumFractionDigits: 2
-                            })}{' '}
-                            {walletAccounts.trust?.localCurrency}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Quick Balance Overview */}
-                  <div className="mt-4 pt-3 border-t border-slate-700/50">
-                    <p className="text-gray-400 text-xs mb-2">All Account Balances:</p>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      {Object.entries(walletAccounts).map(([type, account]) => (
-                        <div key={type} className="flex justify-between">
-                          <span className="text-gray-400 capitalize">{type}:</span>
-                          <span className="text-white font-medium">
-                            {account.loading
-                              ? '...'
-                              : `${type === 'trust' ? formatExactIcanBalance(account.balance) : formatCurrency(account.balance)} ${account.currency}`}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* 5. Tithing Calculator Panel */}
-        {showTithingCalculator && (
-          <div className="mt-4 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-6 border border-blue-200 shadow-lg">
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-2"> Business Tithing Manager</h2>
-                <p className="text-gray-600 mt-1">Separate business and personal tithing - Honor God in both spheres</p>
-              </div>
-              <button onClick={() => setShowTithingCalculator(false)} className="text-gray-500 hover:text-gray-700 text-2xl"></button>
-            </div>
-
-            <div className="space-y-4 max-h-[70vh] overflow-y-auto">
-              {/* Business vs Personal Tabs */}
-              <div className="mb-6">
-                <div className="flex bg-gray-100 rounded-xl p-1">
-                  <button
-                    onClick={() => setSelectedTithingTab('business')}
-                    className={`flex-1 py-3 px-6 rounded-lg font-semibold transition-colors ${selectedTithingTab === 'business' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-600 hover:text-gray-800'}`}
-                  >
-                     Business Tithing
-                  </button>
-                  <button
-                    onClick={() => setSelectedTithingTab('personal')}
-                    className={`flex-1 py-3 px-6 rounded-lg font-semibold transition-colors ${selectedTithingTab === 'personal' ? 'bg-green-600 text-white shadow-lg' : 'text-gray-600 hover:text-gray-800'}`}
-                  >
-                     Personal Tithing
-                  </button>
-                </div>
-              </div>
-
-              {/* Business Tithing Tab */}
-              {selectedTithingTab === 'business' && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-white rounded-xl p-4 shadow-lg border-l-4 border-blue-500">
-                      <h3 className="text-sm font-semibold text-gray-800 mb-2"> Business Revenue</h3>
-                      <p className="text-lg font-bold text-blue-600">UGX {(tithingMetrics.businessProfit || 0).toLocaleString()}</p>
-                      <p className="text-xs text-gray-500 mt-1">Gross income</p>
-                    </div>
-
-                    <div className="bg-white rounded-xl p-4 shadow-lg border-l-4 border-red-500">
-                      <h3 className="text-sm font-semibold text-gray-800 mb-2"> Expenses</h3>
-                      <p className="text-lg font-bold text-red-600">UGX {(tithingMetrics.businessProfit || 0).toLocaleString()}</p>
-                      <p className="text-xs text-gray-500 mt-1">Operating costs</p>
-                    </div>
-
-                    <div className="bg-white rounded-xl p-4 shadow-lg border-l-4 border-green-500">
-                      <h3 className="text-sm font-semibold text-gray-800 mb-2"> Business Profit</h3>
-                      <p className="text-lg font-bold text-green-600">UGX {(tithingMetrics.businessProfit || 0).toLocaleString()}</p>
-                      <p className="text-xs text-gray-500 mt-1">Net income</p>
-                    </div>
-
-                    <div className="bg-white rounded-xl p-4 shadow-lg border-l-4 border-purple-500">
-                      <h3 className="text-sm font-semibold text-gray-800 mb-2"> Tithe Due</h3>
-                      <p className="text-lg font-bold text-purple-600">UGX {(tithingMetrics.businessTithe || 0).toLocaleString()}</p>
-                      <p className="text-xs text-gray-500 mt-1">{businessTithingRate}% of profits</p>
-                    </div>
-                  </div>
-
-                  {/* Faithfulness Score */}
-                  <div className="bg-white rounded-xl p-4 shadow-lg">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-3"> Faithfulness Score</h3>
-                    <div className="flex items-center gap-4 mb-4">
-                      <div className="flex-1 bg-gray-200 rounded-full h-3">
-                        <div className="h-3 rounded-full bg-gradient-to-r from-green-400 to-green-600" style={{ width: '75%' }}></div>
-                      </div>
-                      <span className="text-2xl font-bold text-gray-800">75%</span>
-                    </div>
-                    <div className="text-center text-sm text-gray-600">
-                      <p className="font-medium">UGX {(tithingMetrics.businessTithe || 0).toLocaleString()} Already Tithed</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Personal Tithing Tab */}
-              {selectedTithingTab === 'personal' && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-white rounded-xl p-4 shadow-lg border-l-4 border-green-500">
-                      <h3 className="text-sm font-semibold text-gray-800 mb-2"> Personal Income</h3>
-                      <p className="text-lg font-bold text-green-600">UGX {(tithingMetrics.personalIncome || 0).toLocaleString()}</p>
-                      <p className="text-xs text-gray-500 mt-1">Salary & income</p>
-                    </div>
-
-                    <div className="bg-white rounded-xl p-4 shadow-lg border-l-4 border-blue-500">
-                      <h3 className="text-sm font-semibold text-gray-800 mb-2"> Tithe Due</h3>
-                      <p className="text-lg font-bold text-blue-600">UGX {(tithingMetrics.personalTithe || 0).toLocaleString()}</p>
-                      <p className="text-xs text-gray-500 mt-1">{personalTithingRate}% of income</p>
-                    </div>
-
-                    <div className="bg-white rounded-xl p-4 shadow-lg border-l-4 border-purple-500 col-span-2">
-                      <h3 className="text-sm font-semibold text-gray-800 mb-2"> Personal Given</h3>
-                      <p className="text-lg font-bold text-purple-600">UGX {(tithingMetrics.personalTithe || 0).toLocaleString()}</p>
-                      <p className="text-xs text-gray-500 mt-1">Amount given</p>
-                    </div>
-                  </div>
-
-                  {/* Faithfulness Score */}
-                  <div className="bg-white rounded-xl p-4 shadow-lg">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-3"> Faithfulness Score</h3>
-                    <div className="flex items-center gap-4 mb-4">
-                      <div className="flex-1 bg-gray-200 rounded-full h-3">
-                        <div className="h-3 rounded-full bg-gradient-to-r from-blue-400 to-blue-600" style={{ width: '85%' }}></div>
-                      </div>
-                      <span className="text-2xl font-bold text-gray-800">85%</span>
-                    </div>
-                    <div className="text-center text-sm text-gray-600">
-                      <p className="font-medium">UGX {(tithingMetrics.personalTithe || 0).toLocaleString()} Already Tithed</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Settings */}
-              <div className="pt-4 border-t border-gray-300">
-                <h3 className="text-lg font-semibold text-gray-800 mb-3"> Tithing Settings</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Business Rate</label>
-                    <select value={businessTithingRate} onChange={(e) => setBusinessTithingRate(Number(e.target.value))} className="w-full border rounded-lg px-2 py-1 text-xs">
-                      <option value={5}>5% Conservative</option>
-                      <option value={10}>10% Standard</option>
-                      <option value={15}>15% Generous</option>
-                      <option value={20}>20% Abundant</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Personal Rate</label>
-                    <select value={personalTithingRate} onChange={(e) => setPersonalTithingRate(Number(e.target.value))} className="w-full border rounded-lg px-2 py-1 text-xs">
-                      <option value={5}>5% Growing</option>
-                      <option value={10}>10% Standard</option>
-                      <option value={15}>15% Generous</option>
-                      <option value={20}>20% Abundant</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 5. Reporting System Panel - Financial Reports */}
-        {showReportingSystem && (
-          <div className="glass-card p-4 border-l-4 border-rose-500 animate-in fade-in space-y-3">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                <PieChart className="w-5 h-5 text-rose-400" />
-                 Professional Financial Reports
-              </h3>
-              <button onClick={() => setShowReportingSystem(false)} className="text-gray-500 hover:text-gray-700 text-xl"></button>
-            </div>
-
-            <div className="space-y-4 max-h-[70vh] overflow-y-auto">
-              {/* Configuration Panel */}
-              <div className="bg-white rounded-xl p-6 shadow-lg">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4"> Generate Financial Report</h3>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Report Title</label>
-                    <input
-                      type="text"
-                      value={reportTitle}
-                      onChange={(e) => setReportTitle(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                      placeholder="My Financial Report"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-3">Report Type</label>
-                    <ul className="max-h-96 overflow-y-auto bg-gray-50 rounded-lg border border-gray-200 divide-y divide-gray-200">
-                      {Object.entries(reportTypes).map(([key, report]) => (
-                        <li key={key}>
-                          <button
-                            onClick={() => setSelectedReportType(key)}
-                            className={`w-full flex items-center justify-between gap-3 px-3 py-2 text-left transition ${
-                              selectedReportType === key ? 'bg-blue-50' : 'hover:bg-gray-100'
-                            }`}
-                          >
-                            <span className="text-sm font-medium text-gray-800">{report.name}</span>
-                            {report.advanced && (
-                              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full whitespace-nowrap"> Advanced</span>
-                            )}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  {/* Country Selection for Tax Reports */}
-                  {reportTypes[selectedReportType]?.requiresCountry && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2"> Country (Tax Compliance)</label>
-                      <select
-                        value={selectedCountry}
-                        onChange={(e) => setSelectedCountry(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                      >
-                        {countries.map(country => (
-                          <option key={country.code} value={country.code}>
-                            {country.flag} {country.name} ({country.authority})
-                          </option>
-                        ))}
-                      </select>
-                      <p className="text-xs text-gray-500 mt-1">Tax rate: {countries.find(c => c.code === selectedCountry)?.tax}</p>
-                    </div>
-                  )}
-
-                  <div className="bg-gray-50 rounded-lg border border-gray-200 divide-y divide-gray-200">
-                    <div className="flex items-center justify-between px-3 py-2">
-                      <span className="text-sm font-medium text-gray-700">Date Range</span>
-                      <span className="text-sm font-semibold text-gray-900">Current Month</span>
-                    </div>
-                    <div className="flex items-center justify-between px-3 py-2">
-                      <span className="text-sm font-medium text-gray-700">Export Format</span>
-                      <span className="text-sm font-semibold text-gray-900"> PDF</span>
-                    </div>
-                  </div>
-
-                  {/* AI Analysis Toggle */}
-                  {reportTypes[selectedReportType]?.advanced && (
-                    <div className="bg-purple-50 rounded-lg p-3 border border-purple-200">
-                      <label className="flex items-center gap-3 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={includeAIAnalysis}
-                          onChange={(e) => setIncludeAIAnalysis(e.target.checked)}
-                          className="w-4 h-4 rounded border-gray-300"
-                        />
-                        <span className="text-sm font-medium text-gray-700">
-                           Include AI-Powered Analysis
-                        </span>
-                      </label>
-                      <p className="text-xs text-gray-600 mt-2">Get tax optimization recommendations, compliance guidance & AI insights</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Generate Button */}
-              <div className="bg-white rounded-xl p-6 shadow-lg">
-                <button
-                  onClick={async () => {
-                    setIsGeneratingReport(true);
-                    try {
-                      // Simulate advanced report generation
-                      const reportConfig = {
-                        type: selectedReportType,
-                        country: selectedCountry,
-                        dateRange,
-                        includeAI: includeAIAnalysis && reportTypes[selectedReportType]?.advanced,
-                        title: reportTitle
-                      };
-
-                      // For advanced reports (tax returns, balance sheets, income statements)
-                      if (reportTypes[selectedReportType]?.advanced) {
-                        // Simulate AI analysis and compliance checking
-                        const generatedData = {
-                          type: selectedReportType,
-                          country: selectedCountry,
-                          title: reportTitle,
-                          generatedAt: new Date().toLocaleString(),
-                          includesAI: includeAIAnalysis,
-                          status: 'ready',
-                          metrics: {
-                            totalIncome: velocityMetrics?.income30Days || 0,
-                            totalExpenses: velocityMetrics?.expenses30Days || 0,
-                            netProfit: (velocityMetrics?.income30Days || 0) - (velocityMetrics?.expenses30Days || 0)
-                          }
-                        };
-
-                        if (selectedReportType === 'tax-filing') {
-                          // Get country-specific tax standards
-                          const countryData = countries.find(c => c.code === selectedCountry);
-                          const taxRate = parseFloat(countryData?.tax) / 100;
-                          const grossIncome = generatedData.metrics.totalIncome;
-                          const deductibleExpenses = generatedData.metrics.totalExpenses * 0.85;
-                          const taxableIncome = Math.max(0, grossIncome - deductibleExpenses);
-                          const estimatedTaxLiability = taxableIncome * taxRate;
-                          
-                          generatedData.taxInfo = {
-                            country: selectedCountry,
-                            countryName: countryData?.name,
-                            taxRate: countryData?.tax,
-                            authority: countryData?.authority,
-                            grossIncome: grossIncome,
-                            deductibleExpenses: deductibleExpenses,
-                            taxableIncome: taxableIncome,
-                            estimatedTax: estimatedTaxLiability,
-                            deductionOptportunities: includeAIAnalysis ? 8 : 0,
-                            complianceStatus: 'Compliant with ' + countryData?.authority + ' standards',
-                            filingDeadline: selectedCountry === 'RW' ? 'March 31' : selectedCountry === 'US' ? 'April 15' : 'June 30'
-                          };
-                        } else if (selectedReportType === 'balance-sheet') {
-                          generatedData.balanceSheet = {
-                            assets: velocityMetrics?.netWorth || 0,
-                            liabilities: 0,
-                            equity: velocityMetrics?.netWorth || 0,
-                            ratios: {
-                              currentRatio: 2.5,
-                              debtToEquity: 0,
-                              returnOnAssets: generatedData.metrics.netProfit / (velocityMetrics?.netWorth || 1)
-                            }
-                          };
-                        } else if (selectedReportType === 'income-statement') {
-                          generatedData.incomeStatement = {
-                            revenue: generatedData.metrics.totalIncome,
-                            expenses: generatedData.metrics.totalExpenses,
-                            profitMargin: ((generatedData.metrics.netProfit / generatedData.metrics.totalIncome) * 100) || 0,
-                            taxableIncome: generatedData.metrics.netProfit,
-                            netIncome: generatedData.metrics.netProfit * 0.70
-                          };
-                        }
-
-                        setGeneratedReportData(generatedData);
-                      } else {
-                        // Simple reports
-                        const data = generateReportSummary();
-                        setGeneratedReportData(data);
-                      }
-                    } catch (error) {
-                      console.error('Report generation error:', error);
-                    } finally {
-                      setIsGeneratingReport(false);
-                    }
-                  }}
-                  disabled={isGeneratingReport}
-                  className="w-full py-3 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 disabled:from-gray-400 disabled:to-gray-400 text-white rounded-lg transition-all font-semibold text-lg shadow-lg"
-                >
-                  <span className="flex items-center justify-center gap-2">
-                    {isGeneratingReport ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        {exportFormat === 'pdf' && ''}
-                        {exportFormat === 'excel' && ''}
-                        {exportFormat === 'csv' && ''}
-                        {exportFormat === 'json' && ''}
-                        {exportFormat === 'html' && ''}
-                        {reportTypes[selectedReportType]?.advanced ? `Generate ${reportTypes[selectedReportType].name.split(' ')[1]}` : `Generate ${exportFormat.toUpperCase()}`}
-                      </>
-                    )}
-                  </span>
-                </button>
-              </div>
-
-              {/* Report Summary Panel */}
-              <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-                <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
-                  <h3 className="text-base font-semibold text-gray-800">Report Information</h3>
-                </div>
-                <div className="p-4 space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">Report Type</span>
-                    <span className="font-semibold text-gray-900">{reportTypes[selectedReportType]?.name}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">Date Range</span>
-                    <span className="font-semibold text-gray-900">Current Month</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">Export Format</span>
-                    <span className="font-semibold text-gray-900">PDF</span>
-                  </div>
-                  {reportTypes[selectedReportType]?.requiresCountry && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Jurisdiction</span>
-                      <span className="font-semibold text-gray-900">
-                        {countries.find(c => c.code === selectedCountry)?.flag} {countries.find(c => c.code === selectedCountry)?.name}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <div className="px-4 pb-4">
-                  <h4 className="text-sm font-semibold text-gray-800 mb-2">Report Content</h4>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="bg-blue-50 p-2 rounded text-xs">
-                      <div className="text-blue-700">Income</div>
-                      <div className="font-bold text-blue-900">UGX {((generatedReportData || reportSummary).metrics?.totalIncome || 0).toLocaleString()}</div>
-                    </div>
-                    <div className="bg-red-50 p-2 rounded text-xs">
-                      <div className="text-red-700">Expenses</div>
-                      <div className="font-bold text-red-900">UGX {((generatedReportData || reportSummary).metrics?.totalExpenses || 0).toLocaleString()}</div>
-                    </div>
-                    <div className="bg-green-50 p-2 rounded text-xs">
-                      <div className="text-green-700">Net Profit</div>
-                      <div className="font-bold text-green-900">UGX {((generatedReportData || reportSummary).metrics?.netProfit || 0).toLocaleString()}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 6. AI Chat Panel */}
-        {showAIChat && (
-          <div className="glass-card p-4 border-l-4 border-violet-500 animate-in fade-in">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                <Brain className="w-5 h-5 text-violet-400" />
-                ICAN AI Assistant
-              </h3>
-              <button onClick={() => setShowAIChat(false)} className="text-gray-400 hover:text-white text-xl"></button>
-            </div>
-            <div className="space-y-3">
-              {/* Message History */}
-              <div className="bg-violet-900/20 border border-violet-500/30 rounded p-3 max-h-56 overflow-y-auto space-y-3">
-                {aiMessages.map((msg) => (
-                  <div key={msg.id} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-xs px-3 py-2 rounded text-xs whitespace-pre-wrap ${
-                      msg.type === 'user' 
-                        ? 'bg-violet-600/40 border border-violet-400/30 text-white' 
-                        : `bg-violet-900/40 border border-violet-500/30 ${getMoodColor(msg.mood || 'helpful')}`
-                    }`}>
-                      {msg.content}
                     </div>
                   </div>
                 ))}
-                {aiIsThinking && (
-                  <div className="flex justify-start">
-                    <div className="bg-violet-900/40 border border-violet-500/30 rounded p-2 text-violet-300 text-xs animate-pulse">
-                       Thinking...
-                    </div>
-                  </div>
-                )}
               </div>
-              {/* Input Area */}
-              <div className="flex gap-2">
-                <input 
-                  type="text" 
-                  value={aiInputMessage}
-                  onChange={(e) => setAiInputMessage(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && processAIMessage(aiInputMessage)}
-                  placeholder="Ask about finances, goals, savings..." 
-                  className="flex-1 px-3 py-2 bg-slate-800/50 border border-slate-600/50 rounded text-xs text-white placeholder-gray-500 focus:outline-none focus:border-violet-400" 
-                />
+            ) : (
+              <div className="text-center py-6">
+                <Activity className="w-10 h-10 text-gray-600 mx-auto mb-2" />
+                <p className="text-gray-400 text-sm">No transactions yet</p>
                 <button 
-                  onClick={() => processAIMessage(aiInputMessage)}
-                  disabled={aiIsThinking || !aiInputMessage.trim()}
-                  className="px-3 py-2 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-600/50 text-white rounded text-xs font-medium transition"
+                  onClick={() => setShowRecordTypeModal(true)}
+                  className="mt-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition"
                 >
-                  Send
+                  Record One
                 </button>
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* 7. Wallet Accounts Panel */}
-        {showWalletAccounts && (
-          <div className="glass-card p-4 border-l-4 border-teal-500 animate-in fade-in space-y-3">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                <DollarSign className="w-5 h-5 text-teal-400" />
-                Wallet Accounts
-              </h3>
-              <button onClick={() => setShowWalletAccounts(false)} className="text-gray-400 hover:text-white text-xl"></button>
-            </div>
-
-            <div className="space-y-2">
-              <div className="bg-teal-900/30 border border-teal-500/30 rounded p-2">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs text-gray-400">Available Balance</span>
-                  <span className="text-sm font-bold text-teal-300">{formatCurrency(velocityMetrics?.netWorth || 0)}</span>
-                </div>
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-gray-400">30-Day Velocity</span>
-                  <span className={`font-bold ${(velocityMetrics?.velocity30Days || 0) > 0 ? 'text-green-300' : 'text-red-300'}`}>
-                    {formatCurrency(velocityMetrics?.velocity30Days || 0)}
-                  </span>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <p className="text-xs text-gray-400 font-semibold"> ACCOUNT TYPES</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <button className="py-2 px-2 bg-teal-600/30 hover:bg-teal-600/50 border border-teal-500/30 text-white rounded text-xs font-medium transition">Main Wallet</button>
-                  <button className="py-2 px-2 bg-teal-600/30 hover:bg-teal-600/50 border border-teal-500/30 text-white rounded text-xs font-medium transition">Savings</button>
-                  <button className="py-2 px-2 bg-teal-600/30 hover:bg-teal-600/50 border border-teal-500/30 text-white rounded text-xs font-medium transition">Investments</button>
-                  <button className="py-2 px-2 bg-teal-600/30 hover:bg-teal-600/50 border border-teal-500/30 text-white rounded text-xs font-medium transition">Tithe</button>
-                </div>
-              </div>
-
-              <div className="bg-teal-900/40 rounded p-2 border border-teal-500/30">
-                <p className="text-xs font-semibold text-teal-300 mb-1"> Account Security</p>
-                <p className="text-xs text-gray-300">All transactions are encrypted and verified on blockchain</p>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ====== WALLET RIBBON ====== */}
-      <div className="px-4 py-4 bg-purple-900/20 border-y border-purple-500/20">
-        <div className="mb-3">
-          <p className="text-xs text-gray-400 mb-2">WALLET ACCOUNTS</p>
-          <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
-            {availableWalletTabs.map((tab, idx) => {
-              const tabKey = getWalletTabKey(tab.name);
-              const account = walletAccounts[tabKey];
-              const balance = account?.balance || 0;
-              const currency = account?.currency || 'UGX';
-              const tabLabel = getWalletTabLabel(tab.name);
-              const themedBackground = tabKey === 'personal'
-                ? 'from-blue-500/25 to-indigo-500/25'
-                : tabKey === 'trust'
-                  ? 'from-violet-500/25 to-purple-500/25'
-                  : 'from-slate-500/20 to-slate-400/20';
-              
-              return (
-                <button
-                  key={idx}
-                  onClick={() => {
-                    setActiveWalletTab(tabKey);
-                    setCurrentBalance(formatWalletBalanceByTab(tabKey, balance));
-                  }}
-                  className={`relative min-w-[84px] h-[92px] px-3 py-2 rounded-[30px] border transition-all duration-200 flex flex-col items-center justify-center gap-1 bg-gradient-to-br ${themedBackground} ${
-                    activeWalletTab === tabKey
-                      ? 'border-purple-300/90 ring-2 ring-purple-300/50 text-purple-100 shadow-lg shadow-purple-900/40 scale-[1.03]'
-                      : 'border-purple-500/40 hover:border-purple-400/70 text-purple-200 hover:text-purple-100'
-                  }`}
-                >
-                  <tab.icon className="w-4 h-4" />
-                  <span className="text-xs font-semibold whitespace-nowrap">{tabLabel}</span>
-                  <span className="text-[10px] font-semibold">
-                    {formatWalletBalanceByTab(tabKey, balance)}
-                  </span>
-                  <span className={`text-[9px] ${activeWalletTab === tabKey ? 'text-purple-200' : 'text-gray-400'}`}>{currency}</span>
-                </button>
-              );
-            })}
-            {availableWalletTabs.length === 0 && (
-              <div className="text-xs text-gray-400 py-2">No wallet accounts available yet.</div>
             )}
           </div>
-        </div>
-
-        {/* Current Balance Display */}
-        {/* <div className="bg-gradient-to-r from-green-600/20 to-emerald-600/20 border border-green-500/30 rounded-lg p-4">
-          <p className="text-xs text-gray-300 mb-1">Current Balance</p>
-          <p className="text-2xl font-bold text-green-400">${currentBalance}</p>
-          <p className="text-xs text-gray-400 mt-1">+2.5% this month</p>
-        </div> */}
+        )}
       </div>
 
-      {/* ====== FEATURE CARDS SECTION ====== */}
-      <div className="px-4 py-6 overflow-y-auto">
-        {isWebDashboard ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
-            {carouselCards.map((card, idx) => (
-              <FeatureCardWithSlideshow
-                key={idx}
-                card={card}
-                onExplore={handleFeatureExplore}
-                forcePitchinLayout
-              />
-            ))}
+      {/* ====== WALLET ACCOUNTS SECTION - COLLAPSIBLE ====== */}
+      <div className="px-4 py-4">
+        <button
+          onClick={() => toggleSection('walletAccounts')}
+          className={`w-full p-3 rounded-lg border flex items-center justify-between transition-all ${
+            expandedSections.walletAccounts
+              ? 'bg-purple-600/20 border-purple-500/50'
+              : 'bg-purple-600/10 border-purple-500/30 hover:bg-purple-600/15'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Wallet className="w-5 h-5 text-purple-400" />
+            <span className="font-semibold text-white">Wallet Accounts</span>
           </div>
-        ) : (
-          <div className="space-y-5">
-            {carouselCards.map((card, idx) => (
-              <FeatureCardWithSlideshow
-                key={idx}
-                card={card}
-                onExplore={handleFeatureExplore}
-                immersiveMobile
-              />
-            ))}
+          <ChevronDown className={`w-5 h-5 text-purple-400 transition-transform ${expandedSections.walletAccounts ? 'rotate-180' : ''}`} />
+        </button>
+
+        {/* Expanded Content - Beautiful Card Layout */}
+        {expandedSections.walletAccounts && (
+          <div className="mt-4">
+            <div className="grid grid-cols-2 gap-4">
+              {walletTabs.map((tab, idx) => {
+                const tabKey = getWalletTabKey(tab.name);
+                const account = walletAccounts[tabKey];
+                
+                if (!account?.exists) return null;
+
+                // Wallet colors
+                const walletColors = {
+                  personal: 'from-purple-600 to-purple-500',
+                  business: 'from-blue-600 to-blue-500',
+                  trust: 'from-indigo-600 to-indigo-500',
+                  agent: 'from-pink-600 to-pink-500',
+                  ican: 'from-yellow-600 to-yellow-500'
+                };
+
+                const selectedColor = walletColors[tabKey] || walletColors.personal;
+                
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      setActiveWalletTab(tabKey);
+                      setShowWalletAccounts(true);
+                    }}
+                    className={`p-6 rounded-3xl bg-gradient-to-br ${selectedColor} border border-white/20 hover:border-white/40 transition-all hover:shadow-xl hover:scale-105 flex flex-col items-center text-center`}
+                  >
+                    {/* Icon Circle */}
+                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mb-3 border border-white/30">
+                      <tab.icon className="w-6 h-6 text-white" />
+                    </div>
+
+                    {/* Wallet Name */}
+                    <p className="text-white font-bold text-sm capitalize mb-2">{tab.name}</p>
+
+                    {/* Amount */}
+                    <p className="text-white font-bold text-lg mb-1">
+                      {account?.loading ? '...' : formatWalletBalanceByTab(tabKey, account?.balance || 0)}
+                    </p>
+
+                    {/* Currency */}
+                    <p className="text-white/80 text-xs font-medium">
+                      {tabKey === 'ican' ? 'ICAN' : account?.currency || 'UGX'}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
 
-      {/* ====== CMMS SECTION ====== */}
+      {/* Recent Transactions Section - Keep for backup */}
+      {transactions.length > 0 && false && <RecentTransactionsCollapsible transactions={transactions} formatCurrency={formatCurrency} />}
+
+      {/* ====== EXPLORE STATUS SECTION ====== */}
       <div className="px-4 py-6">
-        <h3 className="text-lg font-bold mb-4">Management System</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-gradient-to-br from-blue-900/30 to-blue-800/30 border border-blue-500/30 rounded-lg p-4 hover:border-blue-500/50 transition cursor-pointer">
-            <Settings className="w-6 h-6 text-blue-400 mb-2" />
-            <p className="text-sm font-semibold text-white">Operations</p>
-            <p className="text-xs text-gray-400 mt-1">Manage tasks</p>
+        {/* Section Header */}
+        <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+          <Eye className="w-6 h-6 text-indigo-400" />
+          Explore Status
+        </h2>
+
+        {loadingStatuses ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-indigo-500"></div>
           </div>
-          <div className="bg-gradient-to-br from-green-900/30 to-green-800/30 border border-green-500/30 rounded-lg p-4 hover:border-green-500/50 transition cursor-pointer">
-            <TrendingUp className="w-6 h-6 text-green-400 mb-2" />
-            <p className="text-sm font-semibold text-white">Analytics</p>
-            <p className="text-xs text-gray-400 mt-1">View reports</p>
-          </div>
-        </div>
+        ) : userStatuses.length > 0 ? (
+          <>
+            {/* Status Previews Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+              {userStatuses.slice(0, 6).map(status => (
+                <div
+                  key={status.id}
+                  onClick={() => setShowStatusPage(true)}
+                  className="group relative rounded-xl overflow-hidden cursor-pointer aspect-[9/16] bg-black hover:scale-105 transition-transform duration-300"
+                >
+                  {/* Status Media */}
+                  {status.media_type === 'image' ? (
+                    <img
+                      src={status.media_url}
+                      alt="Status"
+                      className="w-full h-full object-cover group-hover:brightness-75 transition-all"
+                    />
+                  ) : status.media_type === 'video' ? (
+                    <>
+                      <video
+                        src={status.media_url}
+                        className="w-full h-full object-cover group-hover:brightness-75 transition-all"
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                        <Play className="w-8 h-8 text-white/80" />
+                      </div>
+                    </>
+                  ) : (
+                    <div
+                      style={{ backgroundColor: status.background_color || '#6366f1' }}
+                      className="w-full h-full flex items-center justify-center p-3"
+                    >
+                      <p className="text-white text-center text-xs font-medium line-clamp-3">
+                        {status.caption}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Overlay */}
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
+                    <Eye className="w-6 h-6 text-white" />
+                  </div>
+
+                  {/* Duration Badge */}
+                  <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm px-1.5 py-0.5 rounded text-xs text-white font-medium">
+                    {Math.ceil((new Date(status.expires_at) - new Date()) / (1000 * 60 * 60))}h
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* View All Button */}
+            <button
+              onClick={() => setShowStatusPage(true)}
+              className="w-full bg-gradient-to-r from-indigo-600/30 to-indigo-700/20 border-2 border-indigo-500/50 hover:border-indigo-400/80 rounded-2xl py-3 flex items-center justify-center gap-2 transition-all hover:from-indigo-600/50 hover:to-indigo-700/40 group"
+            >
+              <span className="text-sm font-medium text-indigo-300 group-hover:text-indigo-200">View All ({userStatuses.length})</span>
+              <ChevronRight className="w-4 h-4 text-indigo-400" />
+            </button>
+          </>
+        ) : (
+          /* No Statuses State */
+          <button
+            onClick={() => setShowStatusUploader(true)}
+            className="w-full bg-gradient-to-br from-indigo-600/30 to-indigo-700/20 border-2 border-indigo-500/50 hover:border-indigo-400/80 rounded-2xl p-6 flex flex-col items-center gap-4 transition-all hover:from-indigo-600/50 hover:to-indigo-700/40 group"
+          >
+            <div className="w-16 h-16 bg-indigo-500/30 rounded-full flex items-center justify-center group-hover:bg-indigo-500/50 transition">
+              <Plus className="w-8 h-8 text-indigo-400 group-hover:text-indigo-300 transition" />
+            </div>
+            <div className="text-center">
+              <h3 className="text-lg font-bold text-white group-hover:text-indigo-100 transition">Create Your First Status</h3>
+              <p className="text-sm text-gray-400 group-hover:text-gray-300 transition mt-1">Share a moment with your community</p>
+            </div>
+            <div className="flex items-center gap-2 text-indigo-400 group-hover:text-indigo-300 transition">
+              <span className="text-sm font-medium">Start Now</span>
+              <ChevronRight className="w-4 h-4" />
+            </div>
+          </button>
+        )}
       </div>
 
-      {/* ====== BOTTOM TAB PANELS ====== */}
-      
-      {/* Pitchin Panel - Full Screen Video */}
-      {showPitchinPanel && (
-        <div
-          className="fixed inset-x-0 top-0 z-30 bg-black overflow-hidden"
-          style={{ bottom: overlayPanelBottomInset }}
-        >
-          <Pitchin />
-        </div>
-      )}
+      {/* ====== COMMENTED OUT - ALL SECTIONS BELOW REMOVED FOR CLEANUP ====== */}
 
-      {/* Trust Panel - Full Web Trust System UI */}
-      {showTrustPanel && (
-        <div
-          className="fixed inset-x-0 top-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto"
-          style={{ bottom: overlayPanelBottomInset }}
-        >
-          <div className="pt-2 px-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-            <TrustSystem currentUser={authUser || userProfile} />
-          </div>
-        </div>
-      )}
-
-      {/* Wallet Panel - Full Web Wallet UI */}
-      {showWalletPanel && (
-        <div
-          className="fixed inset-x-0 top-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto"
-          style={{ bottom: overlayPanelBottomInset }}
-        >
-          <div className="pt-2 px-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-            <ICANWallet />
-          </div>
-        </div>
-      )}
-
-      {/* CMMS Panel - Full Web CMMS UI */}
-      {showCmmsPanel && (
-        <div
-          className="fixed inset-x-0 top-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto"
-          style={{ bottom: overlayPanelBottomInset }}
-        >
-          <div className="pt-2 px-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-            <CMMSModule user={userProfile} />
-          </div>
-        </div>
-      )}
       {/* ====== FIXED BOTTOM NAVIGATION - ALWAYS ON TOP ====== */}
       <div className={`fixed bottom-0 left-0 right-0 z-50 transition-all ${
         showPitchinPanel 
@@ -5158,6 +4443,52 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         </div>
       </div>
 
+      {/* Pitchin Panel - Full Screen Video */}
+      {showPitchinPanel && (
+        <div
+          className="fixed inset-x-0 top-0 z-30 bg-black overflow-hidden"
+          style={{ bottom: overlayPanelBottomInset }}
+        >
+          <Pitchin />
+        </div>
+      )}
+
+      {/* Trust Panel - Full Web Trust System UI */}
+      {showTrustPanel && (
+        <div
+          className="fixed inset-x-0 top-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto"
+          style={{ bottom: overlayPanelBottomInset }}
+        >
+          <div className="pt-2 px-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+            <TrustSystem currentUser={authUser || userProfile} />
+          </div>
+        </div>
+      )}
+
+      {/* Wallet Panel - Full Web Wallet UI */}
+      {showWalletPanel && (
+        <div
+          className="fixed inset-x-0 top-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto"
+          style={{ bottom: overlayPanelBottomInset }}
+        >
+          <div className="pt-2 px-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+            <ICANWallet />
+          </div>
+        </div>
+      )}
+
+      {/* CMMS Panel - Full Web CMMS UI */}
+      {showCmmsPanel && (
+        <div
+          className="fixed inset-x-0 top-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto"
+          style={{ bottom: overlayPanelBottomInset }}
+        >
+          <div className="pt-2 px-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+            <CMMSModule user={userProfile} />
+          </div>
+        </div>
+      )}
+
       {/* Status Feed Page */}
       {showStatusPage && (
         <div className="fixed inset-0 z-[130]" onClick={() => setShowStatusPage(false)}>
@@ -5167,14 +4498,14 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         </div>
       )}
 
-      {/* Status Uploader Modal */}
-      {showStatusUploader && (
-        <StatusUploader
-          onClose={() => setShowStatusUploader(false)}
-          onStatusCreated={() => setShowStatusUploader(false)}
-          autoOpenFilePicker={true}
-        />
-      )}
+      {/* Search Modal with AI Assistant */}
+      <SearchModal
+        isOpen={showSearchModal}
+        onClose={() => setShowSearchModal(false)}
+        user={authUser}
+        transactions={transactions}
+        wallets={walletAccounts}
+      />
 
       {/* Record Type Selection Modal */}
       {showRecordTypeModal && (
@@ -5343,5 +4674,3 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
 
 export default MobileView;
-
-

@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getActiveStatuses, getUserStatuses, deleteStatus } from '../services/statusService';
-import { Eye, Trash2, Share2, MoreVertical } from 'lucide-react';
+import { Eye, Trash2, Share2, MoreVertical, ChevronDown } from 'lucide-react';
 import { FullscreenStatusViewer } from './status/FullscreenStatusViewer';
 
 export const StatusFeed = () => {
@@ -16,12 +16,10 @@ export const StatusFeed = () => {
   const [loading, setLoading] = useState(true);
   const [selectedStatus, setSelectedStatus] = useState(null);
   const [showMenu, setShowMenu] = useState(null);
+  const [myStatusesCollapsed, setMyStatusesCollapsed] = useState(false);
 
   useEffect(() => {
     loadStatuses();
-    // Refresh every 30 seconds
-    const interval = setInterval(loadStatuses, 30000);
-    return () => clearInterval(interval);
   }, [user?.id]);
 
   const loadStatuses = async () => {
@@ -64,23 +62,22 @@ export const StatusFeed = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* Header */}
-      <div className="sticky top-0 z-30 bg-gradient-to-r from-purple-600 to-blue-600 backdrop-blur-sm border-b border-white/10">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <h1 className="text-3xl font-bold text-white">Status</h1>
-          <p className="text-purple-100 text-sm mt-1">Your stories expire in 24 hours</p>
-        </div>
-      </div>
-
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* My Statuses Section */}
         {myStatuses.length > 0 && (
           <div className="mb-12">
-            <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+            <button
+              onClick={() => setMyStatusesCollapsed(!myStatusesCollapsed)}
+              className="mb-6 flex items-center gap-2 text-xl font-bold text-white hover:text-purple-300 transition-colors group w-full"
+            >
               <div className="w-1 h-6 bg-gradient-to-b from-purple-500 to-pink-500 rounded"></div>
-              My Statuses
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <span>My Statuses</span>
+              <ChevronDown 
+                className={`w-5 h-5 transition-transform duration-300 ${myStatusesCollapsed ? '-rotate-90' : ''}`}
+              />
+            </button>
+            {!myStatusesCollapsed && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {myStatuses.map(status => (
                 <div
                   key={status.id}
@@ -181,6 +178,7 @@ export const StatusFeed = () => {
                 </div>
               ))}
             </div>
+            )}
           </div>
         )}
 

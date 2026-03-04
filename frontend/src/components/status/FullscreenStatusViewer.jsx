@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Heart, Share2, ChevronLeft, ChevronRight, Send } from 'lucide-react';
+import { X, Heart, Share2, ChevronLeft, ChevronRight, Send, MessageCircle } from 'lucide-react';
 import { incrementStatusView } from '../../services/statusService';
 import {
   sendStatusMessage,
@@ -24,8 +24,17 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [touchStart, setTouchStart] = useState(null);
   const lastTapRef = useRef(0);
+  const [showCommentsPanel, setShowCommentsPanel] = useState(false);
+  const messagesEndRef = useRef(null);
 
   const currentStatus = statuses[currentIndex];
+
+  // Auto-scroll to bottom of comments
+  useEffect(() => {
+    if (showCommentsPanel && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [statusMessages, showCommentsPanel]);
 
   // Progress bar animation
   useEffect(() => {
@@ -217,6 +226,19 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
             transform: translate(-50%, -200px) scale(1.5);
           }
         }
+        @keyframes slideUpFade {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .comments-panel-animate {
+          animation: slideUpFade 0.2s ease-out;
+        }
       `}</style>
 
       <div className="fixed inset-0 bg-black z-50 flex items-center justify-center">
@@ -285,8 +307,9 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
           </div>
 
           {/* Bottom actions */}
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-6 z-30">
-            <div className="flex items-center gap-4">
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black to-transparent p-4 z-30">
+            {/* Action buttons */}
+            <div className="flex items-center justify-between gap-3 mb-3">
               <button
                 onClick={() => setLiked(!liked)}
                 className={`p-3 rounded-full backdrop-blur-sm transition-all ${
@@ -294,6 +317,7 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
                     ? 'bg-red-500/30 text-red-400'
                     : 'bg-white/10 text-white hover:bg-white/20'
                 }`}
+                title={liked ? 'Unlike' : 'Like'}
               >
                 <Heart className={`w-6 h-6 ${liked ? 'fill-current' : ''}`} />
               </button>
@@ -307,48 +331,83 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
                   }).catch(() => {});
                 }}
                 className="p-3 rounded-full backdrop-blur-sm bg-white/10 text-white hover:bg-white/20 transition-all"
+                title="Share"
               >
                 <Share2 className="w-6 h-6" />
               </button>
 
-              <div className="flex-1 space-y-2">
-                <div className="max-h-28 overflow-y-auto rounded-xl bg-black/30 border border-white/10 p-2 space-y-1">
+              <button
+                onClick={() => setShowCommentsPanel(!showCommentsPanel)}
+                className="flex-1 flex items-center justify-center gap-2 p-3 rounded-full backdrop-blur-sm bg-white/10 text-white hover:bg-white/20 transition-all"
+                title={showCommentsPanel ? 'Hide comments' : 'Show comments'}
+              >
+                <MessageCircle className="w-6 h-6" />
+                <span className="text-sm font-medium">{statusMessages.length}</span>
+              </button>
+            </div>
+
+            {/* Mobile-optimized comment section */}
+            {showCommentsPanel && (
+              <div className="mt-3 max-h-64 rounded-2xl bg-black/60 border border-white/20 backdrop-blur-md flex flex-col overflow-hidden comments-panel-animate w-full">
+                {/* Comments list */}
+                <div className="flex-1 overflow-y-auto p-3 space-y-2 min-w-0">
                   {loadingMessages ? (
-                    <p className="text-xs text-white/60">Loading comments...</p>
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-6 w-6 border-2 border-white/30 border-t-white"></div>
+                    </div>
                   ) : statusMessages.length === 0 ? (
-                    <p className="text-xs text-white/60">No comments yet.</p>
+                    <div className="flex items-center justify-center py-6">
+                      <p className="text-sm text-white/60">No comments yet. Be the first!</p>
+                    </div>
                   ) : (
-                    statusMessages.map((msg) => (
-                      <div key={msg.id} className="text-xs text-white/90 leading-relaxed break-words">
-                        <span className="font-semibold text-white">
-                          {msg.sender_id === user?.id ? 'You' : `User ${String(msg.sender_id || '').slice(0, 6)}`}
-                        </span>
-                        <span className="text-white/60">: </span>
-                        <span>{msg.message_text}</span>
-                      </div>
-                    ))
+                    <>
+                      {statusMessages.map((msg) => (
+                        <div key={msg.id} className="bg-white/5 rounded-lg p-2.5 border border-white/10 min-w-0">
+                          <div className="flex items-start gap-2 min-w-0">
+                            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                              {(msg.sender_id === user?.id ? 'Y' : 'U')}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-white">
+                                {msg.sender_id === user?.id ? 'You' : `User`}
+                              </p>
+                              <p className="text-xs text-white/90 break-words leading-relaxed">
+                                {msg.message_text}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      <div ref={messagesEndRef} />
+                    </>
                   )}
                 </div>
-                <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+
+                {/* Comment input */}
+                <form
+                  onSubmit={handleSendMessage}
+                  className="border-t border-white/10 p-2 bg-black/40 flex items-center gap-2 flex-shrink-0 min-w-0"
+                >
                   <input
                     type="text"
-                    placeholder={user ? 'Add a comment...' : 'Sign in to comment'}
+                    placeholder={user ? 'Say something...' : 'Sign in to comment'}
                     value={messageText}
                     onChange={(e) => setMessageText(e.target.value)}
                     disabled={!user || sendingMessage}
-                    className="flex-1 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-4 py-2 text-white placeholder-white/50 focus:outline-none focus:border-white/40 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    autoFocus={showCommentsPanel}
+                    className="flex-1 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-3 py-2 text-xs text-white placeholder-white/50 focus:outline-none focus:border-white/40 focus:bg-white/15 disabled:opacity-50 disabled:cursor-not-allowed transition-all min-w-0"
                   />
                   <button
                     type="submit"
                     disabled={!user || !messageText.trim() || sendingMessage}
-                    className="p-3 rounded-full backdrop-blur-sm bg-white/10 text-white hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                    title={!user ? 'Sign in to send comments' : 'Send comment'}
+                    className="p-2 rounded-full backdrop-blur-sm bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-500 hover:to-pink-500 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all flex-shrink-0 shadow-md hover:shadow-lg"
+                    title={!user ? 'Sign in to send comments' : sendingMessage ? 'Sending...' : 'Send comment'}
                   >
                     <Send className="w-5 h-5" />
                   </button>
                 </form>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Navigation arrows */}
