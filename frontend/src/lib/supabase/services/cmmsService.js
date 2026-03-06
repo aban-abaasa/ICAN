@@ -1,4 +1,4 @@
-/**
+﻿/**
  * CMMS Supabase Service
  * Handles all database operations for Computerized Maintenance Management System
  * Integrates with CMMS_IMPLEMENTATION_DATA_SPECIFIC schema
@@ -81,7 +81,7 @@ const resolveCmmsUserIdByEmail = async (companyId, userEmail) => {
 const mapCmmsInventoryItem = (itemRow) => {
   if (!itemRow) return null;
 
-  console.log(`🔍 Mapping item ${itemRow.item_code}:`, {
+  console.log(`ðŸ” Mapping item ${itemRow.item_code}:`, {
     unit_price: itemRow.unit_price,
     unit_cost: itemRow.unit_cost,
     reorder_level: itemRow.reorder_level,
@@ -180,10 +180,10 @@ export const createCompanyProfile = async (companyData) => {
 
     if (error) throw error;
 
-    console.log('✅ CMMS Company profile created:', data);
+    console.log('âœ… CMMS Company profile created:', data);
     return { data, error: null };
   } catch (error) {
-    console.error('❌ Error creating CMMS company profile:', error);
+    console.error('âŒ Error creating CMMS company profile:', error);
     return { data: null, error };
   }
 };
@@ -205,7 +205,7 @@ export const getCompanyProfile = async (companyId) => {
 
     return { data, error: null };
   } catch (error) {
-    console.error('❌ Error fetching company profile:', error);
+    console.error('âŒ Error fetching company profile:', error);
     return { data: null, error };
   }
 };
@@ -236,10 +236,10 @@ export const updateCompanyProfile = async (companyId, updates) => {
 
     if (error) throw error;
 
-    console.log('✅ Company profile updated:', data);
+    console.log('âœ… Company profile updated:', data);
     return { data, error: null };
   } catch (error) {
-    console.error('❌ Error updating company profile:', error);
+    console.error('âŒ Error updating company profile:', error);
     return { data: null, error };
   }
 };
@@ -264,7 +264,7 @@ export const createCompanyWithDepartments = async (companyData, departments = []
         }))
       : null;
 
-    console.log('📤 Calling RPC fn_create_cmms_company_with_departments with:', {
+    console.log('ðŸ“¤ Calling RPC fn_create_cmms_company_with_departments with:', {
       p_company_name: companyData.companyName,
       p_departments: departmentsJsonb
     });
@@ -283,11 +283,11 @@ export const createCompanyWithDepartments = async (companyData, departments = []
     );
 
     if (rpcError) {
-      console.error('❌ RPC Error:', rpcError);
+      console.error('âŒ RPC Error:', rpcError);
       throw rpcError;
     }
 
-    console.log('📥 RPC Response:', rpcResult);
+    console.log('ðŸ“¥ RPC Response:', rpcResult);
 
     // Extract result (might be array or single object)
     const resultRow = Array.isArray(rpcResult) ? rpcResult[0] : rpcResult;
@@ -307,7 +307,7 @@ export const createCompanyWithDepartments = async (companyData, departments = []
       throw new Error('RPC returned null company_id');
     }
 
-    console.log('✅ Company created by RPC:', { companyId, departmentsCreated });
+    console.log('âœ… Company created by RPC:', { companyId, departmentsCreated });
 
     // Fetch the created company profile
     const { data: companyProfile, error: companyError } = await supabase
@@ -325,13 +325,13 @@ export const createCompanyWithDepartments = async (companyData, departments = []
         p_company_id: companyId
       });
       if (deptsError) {
-        console.error('⚠️ Error fetching departments:', deptsError);
+        console.error('âš ï¸ Error fetching departments:', deptsError);
       } else {
         deptsList = depts || [];
       }
     }
 
-    console.log('✅ Company with departments ready:', {
+    console.log('âœ… Company with departments ready:', {
       company: companyProfile,
       departments: deptsList
     });
@@ -345,7 +345,7 @@ export const createCompanyWithDepartments = async (companyData, departments = []
       error: null
     };
   } catch (error) {
-    console.error('❌ Error creating company with departments:', error);
+    console.error('âŒ Error creating company with departments:', error);
     return { data: null, error };
   }
 };
@@ -387,16 +387,16 @@ export const createAdminUser = async (cmmsCompanyId, userData) => {
       const adminRoleId = await findCmmsRoleId('admin');
       const { error: roleError } = await assignUserRole(cmmsCompanyId, data.id, adminRoleId);
       if (roleError) {
-        console.warn('⚠️ Direct admin role assignment failed, will rely on creator enforcement RPC:', roleError);
+        console.warn('âš ï¸ Direct admin role assignment failed, will rely on creator enforcement RPC:', roleError);
       }
     } catch (roleSetupError) {
-      console.warn('⚠️ Could not assign admin role during createAdminUser, creator enforcement RPC will handle it:', roleSetupError);
+      console.warn('âš ï¸ Could not assign admin role during createAdminUser, creator enforcement RPC will handle it:', roleSetupError);
     }
 
-    console.log('✅ CMMS Admin user created:', data);
+    console.log('âœ… CMMS Admin user created:', data);
     return { data, error: null };
   } catch (error) {
-    console.error('❌ Error creating CMMS admin user:', error);
+    console.error('âŒ Error creating CMMS admin user:', error);
     return { data: null, error };
   }
 };
@@ -417,7 +417,7 @@ export const getCompanyUsers = async (cmmsCompanyId) => {
 
     return { data, error: null };
   } catch (error) {
-    console.error('❌ Error fetching company users:', error);
+    console.error('âŒ Error fetching company users:', error);
     return { data: null, error };
   }
 };
@@ -455,7 +455,7 @@ export const assignUserRole = async (cmmsCompanyId, cmmsUserId, cmmsRoleId) => {
 
     return { data, error: null };
   } catch (error) {
-    console.error('❌ Error assigning role:', error);
+    console.error('âŒ Error assigning role:', error);
     return { data: null, error };
   }
 };
@@ -481,7 +481,7 @@ export const getUserRoles = async (cmmsCompanyId) => {
 
     return { data, error: null };
   } catch (error) {
-    console.error('❌ Error fetching user roles:', error);
+    console.error('âŒ Error fetching user roles:', error);
     return { data: null, error };
   }
 };
@@ -502,7 +502,7 @@ export const createCmmsDepartment = async (companyId, deptData) => {
       throw new Error('Company ID is required to create a department');
     }
 
-    console.log('📤 Creating department for company:', companyId, deptData);
+    console.log('ðŸ“¤ Creating department for company:', companyId, deptData);
 
     let rpcResult;
     let rpcError;
@@ -514,10 +514,10 @@ export const createCmmsDepartment = async (companyId, deptData) => {
       p_location: deptData.location || null
     }));
 
-    console.log('📥 RPC response:', rpcResult, 'Error:', rpcError);
+    console.log('ðŸ“¥ RPC response:', rpcResult, 'Error:', rpcError);
 
     if (rpcError && isMissingRpcFunctionError(rpcError)) {
-      console.log('⚠️ RPC not found, using fallback direct insert');
+      console.log('âš ï¸ RPC not found, using fallback direct insert');
       const fallback = await supabase
         .from('cmms_departments')
         .insert({
@@ -531,12 +531,12 @@ export const createCmmsDepartment = async (companyId, deptData) => {
         .single();
 
       if (fallback.error) throw fallback.error;
-      console.log('✅ Department created via fallback:', fallback.data);
+      console.log('âœ… Department created via fallback:', fallback.data);
       return { data: fallback.data, error: null };
     }
 
     if (rpcError) {
-      console.error('❌ RPC Error:', rpcError);
+      console.error('âŒ RPC Error:', rpcError);
       throw rpcError;
     }
 
@@ -549,13 +549,13 @@ export const createCmmsDepartment = async (companyId, deptData) => {
 
     // Check for error status in RPC result
     if (resultRow.status === 'ERROR' || resultRow.message?.includes('ERROR')) {
-      console.error('❌ RPC returned error status:', resultRow);
+      console.error('âŒ RPC returned error status:', resultRow);
       throw new Error(resultRow.message || 'RPC function returned an error');
     }
 
     // If result row already has department data, return it directly
     if (resultRow.id && resultRow.department_name) {
-      console.log('✅ Department created by RPC:', resultRow);
+      console.log('âœ… Department created by RPC:', resultRow);
       return { data: resultRow, error: null };
     }
 
@@ -572,16 +572,16 @@ export const createCmmsDepartment = async (companyId, deptData) => {
         created_at: new Date().toISOString()
       };
       
-      console.log('✅ Department created by RPC (ID: ' + resultRow.department_id + ')');
+      console.log('âœ… Department created by RPC (ID: ' + resultRow.department_id + ')');
       return { data: createdDept, error: null };
     }
 
     // If we get here, result has unexpected format
-    console.warn('⚠️ Unexpected RPC result format:', resultRow);
+    console.warn('âš ï¸ Unexpected RPC result format:', resultRow);
     return { data: resultRow, error: null };
 
   } catch (error) {
-    console.error('❌ Error creating CMMS department:', error);
+    console.error('âŒ Error creating CMMS department:', error);
     return { data: null, error };
   }
 };
@@ -778,7 +778,7 @@ export const createDepartment = async (companyId, deptData) => {
 
     return { data, error: null };
   } catch (error) {
-    console.error('❌ Error creating department:', error);
+    console.error('âŒ Error creating department:', error);
     return { data: null, error };
   }
 };
@@ -801,7 +801,7 @@ export const getCompanyDepartments = async (companyId) => {
 
     return { data, error: null };
   } catch (error) {
-    console.error('❌ Error fetching departments:', error);
+    console.error('âŒ Error fetching departments:', error);
     return { data: null, error };
   }
 };
@@ -830,7 +830,7 @@ export const getCompanyWorkOrders = async (companyId) => {
 
     return { data, error: null };
   } catch (error) {
-    console.error('❌ Error fetching work orders:', error);
+    console.error('âŒ Error fetching work orders:', error);
     return { data: null, error };
   }
 };
@@ -847,7 +847,7 @@ export const getCompanyWorkOrders = async (companyId) => {
  */
 export const getCompanyInventory = async (companyId) => {
   try {
-    console.log('📦 Fetching inventory for company via RPC:', companyId);
+    console.log('ðŸ“¦ Fetching inventory for company via RPC:', companyId);
     
     // Use RPC function that bypasses RLS (SECURITY DEFINER)
     const { data, error } = await supabase.rpc('fn_get_company_inventory', {
@@ -855,21 +855,21 @@ export const getCompanyInventory = async (companyId) => {
     });
 
     if (error) {
-      console.error('❌ RPC fetch error:', error);
+      console.error('âŒ RPC fetch error:', error);
       throw error;
     }
 
-    console.log(`📦 RPC response: ${data?.length || 0} items returned`);
+    console.log(`ðŸ“¦ RPC response: ${data?.length || 0} items returned`);
     if (data && data.length > 0) {
-      console.log('🔍 Sample item from RPC:', data[0]);
+      console.log('ðŸ” Sample item from RPC:', data[0]);
     }
 
     const mappedItems = (data || []).map(mapCmmsInventoryItem);
-    console.log(`✅ Mapped inventory: ${mappedItems.length} items`, mappedItems.slice(0, 2));
+    console.log(`âœ… Mapped inventory: ${mappedItems.length} items`, mappedItems.slice(0, 2));
     
     return { data: mappedItems, error: null };
   } catch (error) {
-    console.error('❌ Error fetching inventory:', error);
+    console.error('âŒ Error fetching inventory:', error);
     return { data: [], error };
   }
 };
@@ -895,7 +895,7 @@ export const getInventoryTransactions = async (companyId, limit = 50) => {
 
     return { data, error: null };
   } catch (error) {
-    console.error('❌ Error fetching transactions:', error);
+    console.error('âŒ Error fetching transactions:', error);
     return { data: null, error };
   }
 };
@@ -908,8 +908,8 @@ export const getInventoryTransactions = async (companyId, limit = 50) => {
  */
 export const addInventoryItem = async (companyId, itemData) => {
   try {
-    console.log('📝 Adding inventory item via RPC function...');
-    console.log('🔍 Parameters:', { 
+    console.log('ðŸ“ Adding inventory item via RPC function...');
+    console.log('ðŸ” Parameters:', { 
       company_id: companyId,
       department_id: itemData.department_id,
       item_name: itemData.item_name,
@@ -937,21 +937,21 @@ export const addInventoryItem = async (companyId, itemData) => {
     });
 
     if (error) {
-      console.error('❌ RPC error:', error);
+      console.error('âŒ RPC error:', error);
       throw error;
     }
 
     if (!data || data.length === 0) {
-      console.error('❌ Function returned no data');
+      console.error('âŒ Function returned no data');
       throw new Error('No data returned from function');
     }
 
     const result = data[0];
-    console.log('📦 RPC Response:', result);
+    console.log('ðŸ“¦ RPC Response:', result);
 
     if (result.status === 'ERROR') {
       const errorMsg = result.message || 'Unknown error';
-      console.error('❌ Function returned error:', errorMsg);
+      console.error('âŒ Function returned error:', errorMsg);
       throw new Error(errorMsg);
     }
 
@@ -980,14 +980,14 @@ export const addInventoryItem = async (companyId, itemData) => {
       updated_at: new Date().toISOString()
     };
 
-    console.log('✅ Inventory item created via RPC:', {
+    console.log('âœ… Inventory item created via RPC:', {
       item_code: result.item_code,
       unit_price: mappedItem.unit_price,
       is_active: mappedItem.is_active
     });
     return { data: mappedItem, error: null };
   } catch (error) {
-    console.error('❌ Error adding inventory item:', error);
+    console.error('âŒ Error adding inventory item:', error);
     return { data: null, error };
   }
 };
@@ -1134,7 +1134,7 @@ export const getCompanyBudget = async (companyId) => {
 
     return { data, error: null };
   } catch (error) {
-    console.error('❌ Error fetching budget:', error);
+    console.error('âŒ Error fetching budget:', error);
     return { data: null, error };
   }
 };
@@ -1160,7 +1160,7 @@ export const getCompanyEquipment = async (companyId) => {
 
     return { data, error: null };
   } catch (error) {
-    console.error('❌ Error fetching equipment:', error);
+    console.error('âŒ Error fetching equipment:', error);
     return { data: null, error };
   }
 };
@@ -1190,7 +1190,7 @@ export const getMaintenancePlans = async (companyId) => {
 
     return { data, error: null };
   } catch (error) {
-    console.error('❌ Error fetching maintenance plans:', error);
+    console.error('âŒ Error fetching maintenance plans:', error);
     return { data: null, error };
   }
 };
@@ -1228,14 +1228,14 @@ export const getCompanyStoremen = async (companyId) => {
 
     return { data: storemen, error: null };
   } catch (error) {
-    console.error('❌ Error fetching company storemen:', error);
+    console.error('âŒ Error fetching company storemen:', error);
     return { data: [], error };
   }
 };
 
 export const markCompanyCreator = async (companyId, userId, creatorEmail) => {
   try {
-    console.log('🔑 Marking company creator:', { companyId, userId, creatorEmail });
+    console.log('ðŸ”‘ Marking company creator:', { companyId, userId, creatorEmail });
 
     const rpcPayload = {
       p_company_id: companyId,
@@ -1246,21 +1246,21 @@ export const markCompanyCreator = async (companyId, userId, creatorEmail) => {
     let { data, error } = await supabase.rpc('ensure_cmms_creator_admin', rpcPayload);
 
     if (error && isMissingRpcFunctionError(error)) {
-      console.warn('⚠️ ensure_cmms_creator_admin RPC not found, falling back to mark_company_creator');
+      console.warn('âš ï¸ ensure_cmms_creator_admin RPC not found, falling back to mark_company_creator');
       const fallbackResult = await supabase.rpc('mark_company_creator', rpcPayload);
       data = fallbackResult.data;
       error = fallbackResult.error;
     }
 
     if (error) {
-      console.error('❌ Error marking creator:', error);
+      console.error('âŒ Error marking creator:', error);
       return { data: null, error };
     }
 
-    console.log('✅ Company creator marked successfully');
+    console.log('âœ… Company creator marked successfully');
     return { data, error: null };
   } catch (error) {
-    console.error('❌ Exception marking company creator:', error);
+    console.error('âŒ Exception marking company creator:', error);
     return { data: null, error };
   }
 };
@@ -1269,20 +1269,63 @@ export const markCompanyCreator = async (companyId, userId, creatorEmail) => {
 // MAINTENANCE REQUISITIONS MANAGEMENT
 // ============================================
 
+const mapRequisitionLineItem = (itemRow = {}) => {
+  const quantity = Number(itemRow.requested_quantity ?? itemRow.quantity ?? 0);
+  const costPerUnit = Number(itemRow.unit_price ?? itemRow.costPerUnit ?? itemRow.unit_cost ?? 0);
+  const lineTotal = Number(itemRow.line_total ?? itemRow.totalCost ?? quantity * costPerUnit);
+  const equipment = itemRow.item_name || itemRow.equipment || 'Inventory item';
+
+  return {
+    ...itemRow,
+    id: itemRow.id,
+    equipment,
+    quantity: Number.isFinite(quantity) ? quantity : 0,
+    costPerUnit: Number.isFinite(costPerUnit) ? costPerUnit : 0,
+    totalCost: Number.isFinite(lineTotal) ? lineTotal : 0,
+    condition: itemRow.condition || itemRow.item_condition || itemRow.item_description || ''
+  };
+};
+
+const toRequisitionItemInsertRow = (item = {}, requisitionId, departmentId) => {
+  const quantity = Number(item.quantity ?? item.requested_quantity ?? 0);
+  const unitPrice = Number(item.costPerUnit ?? item.unit_price ?? item.unit_cost ?? 0);
+
+  if (!Number.isFinite(quantity) || quantity <= 0) return null;
+  if (!Number.isFinite(unitPrice) || unitPrice <= 0) return null;
+
+  return {
+    requisition_id: requisitionId,
+    department_id: departmentId,
+    inventory_item_id: item.inventory_item_id || null,
+    item_code: item.item_code || null,
+    item_name: item.equipment || item.item_name || 'Inventory item',
+    item_description: item.condition || item.item_description || null,
+    category: item.category || null,
+    requested_quantity: quantity,
+    unit_of_measure: item.unit_of_measure || 'unit',
+    unit_price: unitPrice,
+    reason_for_requisition: item.reason_for_requisition || null
+  };
+};
+
+const isRlsPolicyError = (error) => {
+  const message = String(error?.message || '').toLowerCase();
+  return error?.code === '42501' || message.includes('row-level security') || message.includes('policy');
+};
+
 /**
  * Fetch company requisitions from Supabase
  * Includes all requisition details and approval chain status
  */
 export const getCompanyRequisitions = async (companyId) => {
   try {
-    console.log(`📋 Fetching requisitions for company: ${companyId}`);
-    
-    // First check if table exists and has data
-    console.log('🔍 Querying cmms_requisitions table...');
-    const { data, error } = await supabase
+    console.log(`Fetching requisitions for company: ${companyId}`);
+
+    const { data: requisitions, error } = await supabase
       .from('cmms_requisitions')
       .select(`
         id,
+        cmms_company_id,
         requisition_number,
         requisition_date,
         requested_by,
@@ -1309,18 +1352,59 @@ export const getCompanyRequisitions = async (companyId) => {
       .order('requisition_date', { ascending: false });
 
     if (error) {
-      console.error('❌ Error fetching requisitions:', error);
+      console.error('Error fetching requisitions:', error);
       console.error('Error details:', { code: error.code, message: error.message });
       return { data: null, error };
     }
 
-    console.log(`✅ Query successful - ${data?.length || 0} requisitions found`);
-    if (data && data.length > 0) {
-      console.log('📊 Sample requisition:', data[0]);
+    const requisitionRows = requisitions || [];
+    const requisitionIds = requisitionRows.map((row) => row.id).filter(Boolean);
+    let itemsByRequisition = {};
+
+    if (requisitionIds.length > 0) {
+      const { data: lineItems, error: lineItemsError } = await supabase
+        .from('cmms_requisition_items')
+        .select(`
+          id,
+          requisition_id,
+          inventory_item_id,
+          item_code,
+          item_name,
+          item_description,
+          category,
+          requested_quantity,
+          unit_of_measure,
+          unit_price,
+          line_total,
+          reason_for_requisition,
+          status
+        `)
+        .in('requisition_id', requisitionIds);
+
+      if (lineItemsError) {
+        console.warn('Could not fetch requisition line items:', lineItemsError);
+      } else {
+        itemsByRequisition = (lineItems || []).reduce((acc, row) => {
+          if (!acc[row.requisition_id]) acc[row.requisition_id] = [];
+          acc[row.requisition_id].push(mapRequisitionLineItem(row));
+          return acc;
+        }, {});
+      }
     }
-    return { data: data || [], error: null };
+
+    const merged = requisitionRows.map((row) => ({
+      ...row,
+      items: itemsByRequisition[row.id] || []
+    }));
+
+    console.log(`Loaded ${merged.length} requisitions`);
+    if (merged.length > 0) {
+      console.log('Sample requisition:', merged[0]);
+    }
+
+    return { data: merged, error: null };
   } catch (error) {
-    console.error('❌ Exception fetching requisitions:', error);
+    console.error('Exception fetching requisitions:', error);
     return { data: null, error };
   }
 };
@@ -1331,14 +1415,13 @@ export const getCompanyRequisitions = async (companyId) => {
  */
 export const createRequisition = async (companyId, departmentId, requisitionData, userId) => {
   try {
-    console.log(`📝 Creating requisition for company: ${companyId}`);
-    console.log('📝 Department ID:', departmentId);
-    console.log('📝 User ID:', userId);
-    console.log('📝 Requisition Data:', requisitionData);
-    
+    console.log(`Creating requisition for company: ${companyId}`);
+    console.log('Department ID:', departmentId);
+    console.log('User ID:', userId);
+    console.log('Requisition Data:', requisitionData);
+
     const requisitionNumber = `REQ-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-    console.log('📝 Generated Requisition Number:', requisitionNumber);
-    
+
     const insertData = {
       cmms_company_id: companyId,
       department_id: departmentId,
@@ -1355,27 +1438,56 @@ export const createRequisition = async (companyId, departmentId, requisitionData
       status: 'pending_department_head',
       budget_sufficient: requisitionData.budgetSufficient !== false
     };
-    
-    console.log('📝 Insert data to DB:', insertData);
-    
+
     const { data, error } = await supabase
       .from('cmms_requisitions')
       .insert(insertData)
       .select();
 
     if (error) {
-      console.error('❌ Error creating requisition:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
+      console.error('Error creating requisition:', error);
       return { data: null, error };
     }
 
-    console.log('✅ Requisition created successfully!');
-    console.log('✅ Response data:', data);
-    return { data: data?.[0] || null, error: null };
+    const createdRequisition = data?.[0] || null;
+
+    if (createdRequisition && Array.isArray(requisitionData.items) && requisitionData.items.length > 0) {
+      const lineItemRows = requisitionData.items
+        .map((item) => toRequisitionItemInsertRow(item, createdRequisition.id, departmentId))
+        .filter(Boolean);
+
+      if (lineItemRows.length > 0) {
+        const { data: lineItemsData, error: lineItemsError } = await supabase
+          .from('cmms_requisition_items')
+          .insert(lineItemRows)
+          .select(`
+            id,
+            requisition_id,
+            inventory_item_id,
+            item_code,
+            item_name,
+            item_description,
+            category,
+            requested_quantity,
+            unit_of_measure,
+            unit_price,
+            line_total,
+            reason_for_requisition,
+            status
+          `);
+
+        if (lineItemsError) {
+          console.warn('Requisition created, but line items were not persisted:', lineItemsError);
+        } else {
+          createdRequisition.items = (lineItemsData || []).map(mapRequisitionLineItem);
+        }
+      }
+    }
+
+    console.log('Requisition created successfully');
+    return { data: createdRequisition, error: null };
   } catch (error) {
-    console.error('❌ Exception creating requisition:', error);
-    console.error('Exception details:', error.message);
+    console.error('Exception creating requisition:', error);
     return { data: null, error };
   }
 };
@@ -1385,16 +1497,20 @@ export const createRequisition = async (companyId, departmentId, requisitionData
  */
 export const updateRequisitionStatus = async (requisitionId, newStatus, approverNotes = '', approverRole = 'department_head') => {
   try {
-    console.log(`🔄 Updating requisition ${requisitionId} to status: ${newStatus}`);
-    
-    const updateData = { status: newStatus };
-    
-    if (approverRole === 'department_head' && newStatus.includes('approved')) {
-      updateData.dept_head_approved_at = new Date().toISOString();
-      updateData.dept_head_decision_notes = approverNotes;
-    } else if (approverRole === 'finance' && newStatus.includes('approved')) {
-      updateData.finance_approved_at = new Date().toISOString();
-      updateData.finance_decision_notes = approverNotes;
+    console.log(`Updating requisition ${requisitionId} to status: ${newStatus}`);
+
+    const nowIso = new Date().toISOString();
+    const updateData = {
+      status: newStatus,
+      updated_at: nowIso
+    };
+
+    if (approverRole === 'department_head') {
+      updateData.dept_head_approved_at = nowIso;
+      updateData.dept_head_decision_notes = approverNotes || null;
+    } else if (approverRole === 'finance') {
+      updateData.finance_approved_at = nowIso;
+      updateData.finance_decision_notes = approverNotes || null;
     }
 
     const { data, error } = await supabase
@@ -1404,14 +1520,53 @@ export const updateRequisitionStatus = async (requisitionId, newStatus, approver
       .select();
 
     if (error) {
-      console.error('❌ Error updating requisition:', error);
+      console.error('Error updating requisition:', error);
       return { data: null, error };
     }
 
-    console.log('✅ Requisition updated successfully');
-    return { data: data?.[0] || null, error: null };
+    const updatedRow = data?.[0] || null;
+
+    try {
+      const decision = String(newStatus).startsWith('rejected') ? 'rejected' : 'approved';
+      const { data: requisitionRow, error: requisitionLookupError } = await supabase
+        .from('cmms_requisitions')
+        .select('id, cmms_company_id')
+        .eq('id', requisitionId)
+        .maybeSingle();
+
+      if (!requisitionLookupError && requisitionRow?.cmms_company_id) {
+        const { data: authData } = await supabase.auth.getUser();
+        const approverEmail = authData?.user?.email || null;
+        const approverName = authData?.user?.user_metadata?.full_name || authData?.user?.email || 'Unknown';
+        const approverId = await resolveCmmsUserIdByEmail(requisitionRow.cmms_company_id, approverEmail);
+
+        if (approverId) {
+          const { error: approvalInsertError } = await supabase
+            .from('cmms_requisition_approvals')
+            .insert({
+              requisition_id: requisitionId,
+              approval_level: approverRole,
+              approved_by: approverId,
+              approved_by_email: approverEmail,
+              approved_by_name: approverName,
+              approved_by_role: approverRole,
+              decision,
+              decision_comment: approverNotes || null
+            });
+
+          if (approvalInsertError) {
+            console.warn('Decision saved but approval history insert failed:', approvalInsertError);
+          }
+        }
+      }
+    } catch (approvalHistoryError) {
+      console.warn('Decision saved but approval history logging failed:', approvalHistoryError);
+    }
+
+    console.log('Requisition updated successfully');
+    return { data: updatedRow, error: null };
   } catch (error) {
-    console.error('❌ Exception updating requisition:', error);
+    console.error('Exception updating requisition:', error);
     return { data: null, error };
   }
 };
@@ -1447,4 +1602,5 @@ export default {
   createRequisition,
   updateRequisitionStatus
 };
+
 

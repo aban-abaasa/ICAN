@@ -34,6 +34,8 @@ import cmmsService from '../lib/supabase/services/cmmsService';
 import { supabase } from '../lib/supabase/client';
 import { searchICANUsers, verifyICANUser } from '../services/pitchingService';
 import NotificationsPanel from './NotificationsPanel';
+import RequisitionWorkspace from './CMMS/RequisitionWorkspace.jsx';
+import RequisitionApprovalsTab from './CMMS/RequisitionApprovalsTab.jsx';
 
 const CMMSModule = ({ 
   onDataUpdate,
@@ -697,13 +699,13 @@ const CMMSModule = ({
     // So a technician can only see [inventory, requisitions] even if they create a company
     const tabsByRole = {
       guest: [],
-      admin: ['company', 'departments', 'users', 'inventory', 'requisitions', 'reports'],
-      coordinator: ['departments', 'users', 'inventory', 'requisitions', 'reports'],
-      supervisor: ['inventory', 'requisitions', 'reports'],
+      admin: ['company', 'departments', 'users', 'inventory', 'requisitions', 'approvals', 'reports'],
+      coordinator: ['departments', 'users', 'inventory', 'requisitions', 'approvals', 'reports'],
+      supervisor: ['inventory', 'requisitions', 'approvals', 'reports'],
       technician: ['inventory', 'requisitions'],
       storeman: ['inventory', 'requisitions'],
-      finance: ['requisitions', 'reports'],
-      'service-provider': ['requisitions']
+      finance: ['requisitions', 'approvals', 'reports'],
+      'service-provider': ['requisitions', 'approvals']
     };
     
     return tabsByRole[userRole] || [];
@@ -3946,6 +3948,12 @@ const CMMSModule = ({
       { id: 'reports', label: '📊 Reports', icon: Package }
     ];
 
+    allTabs.splice(
+      Math.max(allTabs.findIndex((tab) => tab.id === 'reports'), 0),
+      0,
+      { id: 'approvals', label: 'Approvals', icon: CheckCircle }
+    );
+
     const accessibleTabs = allTabs.filter(tab => getTabs().includes(tab.id));
 
     // Track window resize for mobile detection
@@ -4612,7 +4620,23 @@ const CMMSModule = ({
         {activeTab === 'departments' && <DepartmentManager />}
         {activeTab === 'users' && <UserRoleManager />}
         {activeTab === 'inventory' && <InventoryManager />}
-        {activeTab === 'requisitions' && <RequisitionManager />}
+        {activeTab === 'requisitions' && (
+          <RequisitionWorkspace
+            userRole={userRole}
+            user={user}
+            companyId={companyIdToUse}
+            cmmsData={cmmsData}
+            setCmmsData={setCmmsData}
+          />
+        )}
+        {activeTab === 'approvals' && (
+          <RequisitionApprovalsTab
+            userRole={userRole}
+            companyId={companyIdToUse}
+            cmmsData={cmmsData}
+            setCmmsData={setCmmsData}
+          />
+        )}
         {activeTab === 'reports' && <ReportsManager />}
       </div>
     </div>

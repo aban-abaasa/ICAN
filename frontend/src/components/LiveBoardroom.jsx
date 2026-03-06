@@ -533,7 +533,7 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
     
     // Stop ringtone
     if (audioServiceRef.current) {
-      audioServiceRef.current.stopAll?.();
+      audioServiceRef.current.stopAllSounds();
     }
     
     // Broadcast call ended

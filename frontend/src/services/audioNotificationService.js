@@ -30,6 +30,8 @@ class AudioNotificationService {
     const soundMap = {
       // Incoming call ringtone
       incomingCall: this.generateRingtone('call'),
+      // Outgoing call ringtone (ringing others)
+      outgoingCall: this.generateRingtone('outgoing'),
       // Message notification
       messageNotification: this.generateRingtone('message'),
       // Member joined
@@ -59,6 +61,11 @@ class AudioNotificationService {
         // Classic phone ringtone pattern (double burst)
         duration = 3;
         frequencies = [950, 1400]; // Higher frequencies for call
+        break;
+      case 'outgoing':
+        // Slow pulsing ring-back tone (like hearing a phone ring on the other end)
+        duration = 2;
+        frequencies = [440, 480]; // Standard ring-back frequencies
         break;
       case 'message':
         // Short beep for message
@@ -132,7 +139,7 @@ class AudioNotificationService {
     masterGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
 
     // Play frequencies with pattern
-    if (type === 'call' || type === 'end') {
+    if (type === 'call' || type === 'end' || type === 'outgoing') {
       // Pulse pattern
       const patternDuration = duration / 3;
       frequencies.forEach((freq, i) => {

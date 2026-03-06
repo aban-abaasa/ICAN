@@ -115,6 +115,57 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
   const [joinApplicationForm, setJoinApplicationForm] = useState({ // User's application text
     reason: ''
   });
+  const [incomingCallData, setIncomingCallData] = useState(null); // { groupId, hostEmail, hostId }
+  const globalCallChannelsRef = React.useRef([]);
+
+  const supabaseClient = getSupabaseClient();
+
+  // ── Global incoming-call listener across ALL user groups ──────────
+  // This runs even when LiveBoardroom is NOT open so the user sees
+  // incoming call notifications and can auto-open the boardroom.
+  useEffect(() => {
+    if (!supabaseClient || !currentUser?.id || myGroups.length === 0) return;
+
+    // Clean up old channels first
+    globalCallChannelsRef.current.forEach(ch => { try { ch.unsubscribe(); } catch (_) {} });
+    globalCallChannelsRef.current = [];
+
+    myGroups.forEach(group => {
+      // Don't duplicate if the boardroom for this group is already open
+      if (boardroomGroupId === group.id) return;
+
+      const ch = supabaseClient.channel(`boardroom-calls:${group.id}`, {
+        config: { broadcast: { self: false } }
+      });
+
+      ch.on('broadcast', { event: 'call-started' }, ({ payload }) => {
+        console.log('📞 [GLOBAL] Incoming call for group', group.id, payload);
+        if (payload.hostId !== currentUser?.id) {
+          setIncomingCallData({ ...payload, groupId: group.id, groupName: group.name });
+        }
+      })
+      .on('broadcast', { event: 'call-ended' }, () => {
+        setIncomingCallData(prev => prev?.groupId === group.id ? null : prev);
+      })
+      .subscribe();
+
+      globalCallChannelsRef.current.push(ch);
+    });
+
+    return () => {
+      globalCallChannelsRef.current.forEach(ch => { try { ch.unsubscribe(); } catch (_) {} });
+      globalCallChannelsRef.current = [];
+    };
+  }, [supabaseClient, currentUser?.id, myGroups, boardroomGroupId]);
+
+  // Auto-open boardroom when user answers global incoming call
+  const answerGlobalCall = () => {
+    if (incomingCallData) {
+      setBoardroomGroupId(incomingCallData.groupId);
+      setIncomingCallData(null);
+    }
+  };
+  const dismissGlobalCall = () => setIncomingCallData(null);
 
   // Load user's country, currency, and ICAN wallet
   useEffect(() => {
@@ -2647,6 +2698,38 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
                 className="flex-1 px-6 py-3 sm:py-4 bg-slate-700 hover:bg-slate-600 active:bg-slate-800 disabled:opacity-50 text-white rounded-lg transition-all font-semibold text-base sm:text-lg"
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* GLOBAL INCOMING CALL OVERLAY — shown even when boardroom is closed */}
+      {incomingCallData && !boardroomGroupId && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+          <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-700/60 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl">
+            {/* Pulsing phone icon */}
+            <div className="w-20 h-20 bg-gradient-to-br from-red-500 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-5 shadow-2xl animate-pulse">
+              <Video className="w-10 h-10 text-white animate-bounce" style={{ animationDelay: '0.15s' }} />
+            </div>
+            <h3 className="text-xl font-bold text-white mb-1">{incomingCallData.groupName || 'Trust Group'}</h3>
+            <p className="text-sm text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-orange-400 font-semibold mb-1">
+              {incomingCallData.hostEmail || 'A member'} is calling…
+            </p>
+            <p className="text-xs text-gray-500 mb-6">Live Boardroom</p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={answerGlobalCall}
+                className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl font-bold transition-all active:scale-95 flex items-center justify-center gap-2 text-sm"
+              >
+                <Video className="w-4 h-4" /> Join
+              </button>
+              <button
+                onClick={dismissGlobalCall}
+                className="flex-1 py-3 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white rounded-xl font-bold transition-all active:scale-95 flex items-center justify-center gap-2 text-sm"
+              >
+                <X className="w-4 h-4" /> Decline
               </button>
             </div>
           </div>
