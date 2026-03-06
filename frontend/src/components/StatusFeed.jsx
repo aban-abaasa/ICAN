@@ -61,7 +61,7 @@ export const StatusFeed = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen bg-white/30 backdrop-blur-md">
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* My Statuses Section */}
         {myStatuses.length > 0 && (
@@ -71,7 +71,7 @@ export const StatusFeed = () => {
               className="mb-6 flex items-center gap-2 text-xl font-bold text-white hover:text-purple-300 transition-colors group w-full"
             >
               <div className="w-1 h-6 bg-gradient-to-b from-purple-500 to-pink-500 rounded"></div>
-              <span>My Statuses</span>
+              <span>Updates</span>
               <ChevronDown 
                 className={`w-5 h-5 transition-transform duration-300 ${myStatusesCollapsed ? '-rotate-90' : ''}`}
               />
@@ -103,15 +103,20 @@ export const StatusFeed = () => {
                       <div
                         style={{ backgroundColor: status.background_color }}
                         className="w-full h-full flex items-center justify-center p-4"
-                      >
-                        <p className="text-white text-center text-lg font-medium">
+                      />
+                    )}
+
+                    {/* Caption overlay */}
+                    {status.caption && (
+                      <div className="absolute inset-0 flex items-end justify-start bg-gradient-to-t from-black/70 to-transparent p-4">
+                        <p className="text-white text-sm font-medium line-clamp-2">
                           {status.caption}
                         </p>
                       </div>
                     )}
 
                     {/* Overlay with actions */}
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center gap-4 opacity-0 group-hover:opacity-100">
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center gap-4 opacity-0 group-hover:opacity-100 z-10">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -187,7 +192,7 @@ export const StatusFeed = () => {
           <div>
             <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
               <div className="w-1 h-6 bg-gradient-to-b from-blue-500 to-cyan-500 rounded"></div>
-              Latest Stories
+              Updates
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {otherStatuses.map(status => (
@@ -213,15 +218,20 @@ export const StatusFeed = () => {
                       <div
                         style={{ backgroundColor: status.background_color }}
                         className="w-full h-full flex items-center justify-center p-4"
-                      >
-                        <p className="text-white text-center text-lg font-medium">
+                      />
+                    )}
+
+                    {/* Caption overlay */}
+                    {status.caption && (
+                      <div className="absolute inset-0 flex items-end justify-start bg-gradient-to-t from-black/70 to-transparent p-4">
+                        <p className="text-white text-sm font-medium line-clamp-2">
                           {status.caption}
                         </p>
                       </div>
                     )}
 
                     {/* User badge */}
-                    <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-sm px-3 py-1 rounded-full flex items-center gap-2">
+                    <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-sm px-3 py-1 rounded-full flex items-center gap-2 z-10">
                       <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-xs font-bold text-white">
                         {status.user_id.slice(0, 1).toUpperCase()}
                       </div>

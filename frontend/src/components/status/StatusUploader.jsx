@@ -291,7 +291,7 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
               <Sparkles className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="text-lg font-bold bg-gradient-to-r from-purple-300 to-pink-300 bg-clip-text text-transparent">Upload Status</h2>
+              <h2 className="text-lg font-bold bg-gradient-to-r from-purple-300 to-pink-300 bg-clip-text text-transparent">Upload Updates</h2>
               <p className="text-xs text-gray-400">Select media or post words only</p>
             </div>
           </div>

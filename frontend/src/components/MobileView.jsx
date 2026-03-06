@@ -73,7 +73,7 @@ import {
   formatTimeAgo
 } from '../services/investmentNotificationsService';
 import { getUserTrustGroups } from '../services/trustService';
-import { getUserStatuses } from '../services/statusService';
+import { getUserStatuses, getActiveStatuses } from '../services/statusService';
 import { CountryService } from '../services/countryService';
 
 const PROFILE_CONFIG_STORAGE_PREFIX = 'ican_profile_configuration';
@@ -1029,15 +1029,21 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     loadFinancialMetrics();
   }, [userProfile?.id]);
 
-  // Load user statuses for Explore Status section
+  // Load all available statuses/updates for Updates section
   useEffect(() => {
     const loadStatuses = async () => {
-      if (!userProfile?.id) return;
-      
       try {
         setLoadingStatuses(true);
-        const { statuses } = await getUserStatuses(userProfile.id);
-        setUserStatuses(statuses || []);
+        
+        // Get all active statuses from all users
+        const { statuses: allStats } = await getActiveStatuses();
+        
+        // Sort with user's own statuses first (if available), then others'
+        const userOwnStatuses = allStats?.filter(s => s.user_id === userProfile?.id) || [];
+        const otherStatuses = allStats?.filter(s => s.user_id !== userProfile?.id) || [];
+        const combinedStatuses = [...userOwnStatuses, ...otherStatuses];
+        
+        setUserStatuses(combinedStatuses || []);
       } catch (error) {
         console.error('Error loading statuses:', error);
         setUserStatuses([]);
@@ -4274,12 +4280,12 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* Recent Transactions Section - Keep for backup */}
       {transactions.length > 0 && false && <RecentTransactionsCollapsible transactions={transactions} formatCurrency={formatCurrency} />}
 
-      {/* ====== EXPLORE STATUS SECTION ====== */}
+      {/* ====== UPDATES SECTION - HORIZONTAL SCROLLING ====== */}
       <div className="px-4 py-6">
         {/* Section Header */}
         <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
           <Eye className="w-6 h-6 text-indigo-400" />
-          Explore Status
+          Updates
         </h2>
 
         {loadingStatuses ? (
@@ -4288,66 +4294,68 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           </div>
         ) : userStatuses.length > 0 ? (
           <>
-            {/* Status Previews Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
-              {userStatuses.slice(0, 6).map(status => (
-                <div
-                  key={status.id}
-                  onClick={() => setShowStatusPage(true)}
-                  className="group relative rounded-xl overflow-hidden cursor-pointer aspect-[9/16] bg-black hover:scale-105 transition-transform duration-300"
-                >
-                  {/* Status Media */}
-                  {status.media_type === 'image' ? (
-                    <img
-                      src={status.media_url}
-                      alt="Status"
-                      className="w-full h-full object-cover group-hover:brightness-75 transition-all"
-                    />
-                  ) : status.media_type === 'video' ? (
-                    <>
-                      <video
+            {/* Horizontal Scrolling Updates */}
+            <div className="overflow-x-auto pb-4 -mr-4 pr-4 scrollbar-hide">
+              <div className="flex gap-3 min-w-min">
+                {userStatuses.map(status => (
+                  <div
+                    key={status.id}
+                    onClick={() => setShowStatusPage(true)}
+                    className="group relative rounded-2xl overflow-hidden cursor-pointer w-56 h-32 bg-black flex-shrink-0 hover:scale-105 transition-transform duration-300 border border-white/10"
+                  >
+                    {/* Update Content */}
+                    {status.media_type === 'image' ? (
+                      <img
                         src={status.media_url}
+                        alt="Update"
                         className="w-full h-full object-cover group-hover:brightness-75 transition-all"
                       />
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                        <Play className="w-8 h-8 text-white/80" />
+                    ) : status.media_type === 'video' ? (
+                      <>
+                        <video
+                          src={status.media_url}
+                          className="w-full h-full object-cover group-hover:brightness-75 transition-all"
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                          <Play className="w-6 h-6 text-white/80" />
+                        </div>
+                      </>
+                    ) : (
+                      <div
+                        style={{ backgroundColor: status.background_color || '#6366f1' }}
+                        className="w-full h-full flex items-center justify-center p-4"
+                      >
+                        <p className="text-white text-center text-sm font-medium line-clamp-4">
+                          {status.caption}
+                        </p>
                       </div>
-                    </>
-                  ) : (
-                    <div
-                      style={{ backgroundColor: status.background_color || '#6366f1' }}
-                      className="w-full h-full flex items-center justify-center p-3"
-                    >
-                      <p className="text-white text-center text-xs font-medium line-clamp-3">
-                        {status.caption}
-                      </p>
+                    )}
+
+                    {/* Gradient Overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
+                      <Eye className="w-5 h-5 text-white" />
                     </div>
-                  )}
 
-                  {/* Overlay */}
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
-                    <Eye className="w-6 h-6 text-white" />
+                    {/* Duration Badge */}
+                    <div className="absolute top-2 right-2 bg-black/70 backdrop-blur-sm px-2 py-1 rounded-full text-xs text-white font-medium">
+                      {Math.ceil((new Date(status.expires_at) - new Date()) / (1000 * 60 * 60))}h
+                    </div>
                   </div>
-
-                  {/* Duration Badge */}
-                  <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm px-1.5 py-0.5 rounded text-xs text-white font-medium">
-                    {Math.ceil((new Date(status.expires_at) - new Date()) / (1000 * 60 * 60))}h
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
 
-            {/* View All Button */}
+            {/* View All Updates Button */}
             <button
               onClick={() => setShowStatusPage(true)}
-              className="w-full bg-gradient-to-r from-indigo-600/30 to-indigo-700/20 border-2 border-indigo-500/50 hover:border-indigo-400/80 rounded-2xl py-3 flex items-center justify-center gap-2 transition-all hover:from-indigo-600/50 hover:to-indigo-700/40 group"
+              className="w-full bg-gradient-to-r from-indigo-600/30 to-indigo-700/20 border-2 border-indigo-500/50 hover:border-indigo-400/80 rounded-2xl py-3 flex items-center justify-center gap-2 transition-all hover:from-indigo-600/50 hover:to-indigo-700/40 group mt-4"
             >
-              <span className="text-sm font-medium text-indigo-300 group-hover:text-indigo-200">View All ({userStatuses.length})</span>
+              <span className="text-sm font-medium text-indigo-300 group-hover:text-indigo-200">View All Updates ({userStatuses.length})</span>
               <ChevronRight className="w-4 h-4 text-indigo-400" />
             </button>
           </>
         ) : (
-          /* No Statuses State */
+          /* No Updates State */
           <button
             onClick={() => setShowStatusUploader(true)}
             className="w-full bg-gradient-to-br from-indigo-600/30 to-indigo-700/20 border-2 border-indigo-500/50 hover:border-indigo-400/80 rounded-2xl p-6 flex flex-col items-center gap-4 transition-all hover:from-indigo-600/50 hover:to-indigo-700/40 group"

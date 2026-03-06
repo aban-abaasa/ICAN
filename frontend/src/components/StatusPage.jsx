@@ -33,7 +33,7 @@ export const StatusPage = ({ onGoBack }) => {
           >
             <ArrowLeft className="w-6 h-6" />
           </button>
-          <h1 className="text-2xl font-bold text-white">Status</h1>
+          <h1 className="text-2xl font-bold text-white">Updates</h1>
           <button
             onClick={() => setShowStatusUploader(true)}
             className="p-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-500 hover:to-blue-500 transition-all shadow-lg"
