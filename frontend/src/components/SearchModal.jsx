@@ -1,442 +1,389 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  X,
-  Search,
-  Zap,
-  Wallet,
-  TrendingUp,
-  Brain,
-  PieChart,
-  Users,
-  Briefcase,
-  FileText,
-  Settings,
-  Clock,
-  Send,
-  Bot,
-  AlertCircle
+  X, Search, Zap, Wallet, TrendingUp, Brain, PieChart,
+  Users, Briefcase, Settings, Send, Bot, AlertCircle,
+  Sparkles, ChevronRight, ArrowLeft, Clock, Hash,
+  DollarSign, Activity, FileText
 } from 'lucide-react';
 
 /**
- * 🔍 Universal Search Modal with AI Integration
- * Searches across all ICAN features and tools
+ * ICAN Search + Copilot Modal
+ * Tab 1 — Instant search across features, transactions, wallets
+ * Tab 2 — ICAN Copilot: real OpenAI proxy, full financial context
  */
-const SearchModal = ({ isOpen, onClose, user, transactions, wallets }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [results, setResults] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [showAIChat, setShowAIChat] = useState(false);
-  const [aiMessages, setAIMessages] = useState([]);
-  const [aiInput, setAIInput] = useState('');
-  const [isAIThinking, setIsAIThinking] = useState(false);
-  const searchInputRef = useRef(null);
-  const aiMessagesRef = useRef(null);
+const SearchModal = ({ isOpen, onClose, user, transactions = [], wallets = [], onNavigate }) => {
+  const [tab, setTab] = useState('copilot');
 
-  // All searchable features/tools
-  const applicationTools = [
-    {
-      id: 'transactions',
-      name: 'Transactions',
-      icon: TrendingUp,
-      color: 'from-blue-600 to-blue-400',
-      description: 'View and manage all your financial transactions',
-      keywords: ['transaction', 'money', 'payment', 'income', 'expense', 'cash flow']
-    },
-    {
-      id: 'wallets',
-      name: 'Wallets',
-      icon: Wallet,
-      color: 'from-green-600 to-green-400',
-      description: 'Manage your personal, business, agent, and trust wallets',
-      keywords: ['wallet', 'account', 'balance', 'fund', 'money store']
-    },
-    {
-      id: 'ican-coin',
-      name: 'ICAN Coin',
-      icon: Zap,
-      color: 'from-yellow-600 to-yellow-400',
-      description: 'Buy, sell, and trade ICAN Coins across borders',
-      keywords: ['ican', 'coin', 'crypto', 'trading', 'cross-border', 'exchange']
-    },
-    {
-      id: 'pitching',
-      name: 'ICAN Pitchin',
-      icon: Briefcase,
-      color: 'from-purple-600 to-purple-400',
-      description: 'Create and manage business pitches for investment',
-      keywords: ['pitch', 'investment', 'business', 'startup', 'funding']
-    },
-    {
-      id: 'trust',
-      name: 'Trust System',
-      icon: Users,
-      color: 'from-indigo-600 to-indigo-400',
-      description: 'Build trust groups and manage collaborative finances',
-      keywords: ['trust', 'group', 'friends', 'family', 'collaboration', 'members']
-    },
-    {
-      id: 'cmms',
-      name: 'CMMS Module',
-      icon: Briefcase,
-      color: 'from-cyan-600 to-cyan-400',
-      description: 'Manage inventory, equipment, and maintenance',
-      keywords: ['cmms', 'inventory', 'equipment', 'maintenance', 'assets', 'stock']
-    },
-    {
-      id: 'reports',
-      name: 'Reports',
-      icon: PieChart,
-      color: 'from-pink-600 to-pink-400',
-      description: 'Generate financial reports and analytics',
-      keywords: ['report', 'analysis', 'analytics', 'chart', 'insights', 'data']
-    },
-    {
-      id: 'profile',
-      name: 'Profile',
-      icon: Settings,
-      color: 'from-slate-600 to-slate-400',
-      description: 'Manage your account settings and preferences',
-      keywords: ['profile', 'settings', 'account', 'preferences', 'configuration']
-    },
-    {
-      id: 'ai-assistant',
-      name: 'AI Assistant',
-      icon: Brain,
-      color: 'from-teal-600 to-teal-400',
-      description: 'Get AI-powered financial advice and insights',
-      keywords: ['ai', 'assistant', 'advice', 'help', 'suggestion', 'recommendation']
-    }
+  /* Search */
+  const [searchQuery, setSearchQuery] = useState('');
+  const [results, setResults]         = useState([]);
+  const searchRef = useRef(null);
+
+  /* Copilot */
+  const [messages, setMessages] = useState([]);
+  const [input, setInput]       = useState('');
+  const [thinking, setThinking] = useState(false);
+  const bottomRef = useRef(null);
+  const inputRef  = useRef(null);
+
+  const tools = [
+    { id:'transactions', name:'Transactions',  icon:TrendingUp, color:'from-blue-600 to-blue-400',    description:'View and manage all financial transactions', keywords:['transaction','money','payment','income','expense','cash'] },
+    { id:'wallets',      name:'Wallets',        icon:Wallet,     color:'from-green-600 to-green-400',   description:'Manage personal, business, agent & trust wallets', keywords:['wallet','account','balance','fund'] },
+    { id:'ican-coin',    name:'ICAN Coin',       icon:Zap,        color:'from-yellow-600 to-yellow-400', description:'Buy, sell and trade ICAN Coins across borders', keywords:['ican','coin','crypto','trading','exchange'] },
+    { id:'pitching',     name:'ICAN Pitchin',    icon:Briefcase,  color:'from-purple-600 to-purple-400', description:'Create and manage business pitches for investment', keywords:['pitch','investment','business','funding'] },
+    { id:'trust',        name:'Trust System',    icon:Users,      color:'from-indigo-600 to-indigo-400', description:'Build trust groups and manage collaborative finances', keywords:['trust','group','collaboration','members'] },
+    { id:'cmms',         name:'CMMS Module',     icon:Activity,   color:'from-cyan-600 to-cyan-400',    description:'Manage inventory, equipment and maintenance', keywords:['cmms','inventory','equipment','maintenance','assets'] },
+    { id:'reports',      name:'Reports',         icon:PieChart,   color:'from-pink-600 to-pink-400',    description:'Generate financial reports and analytics', keywords:['report','analysis','analytics','insights'] },
+    { id:'profile',      name:'Profile',         icon:Settings,   color:'from-slate-500 to-slate-400',  description:'Manage account settings and preferences', keywords:['profile','settings','account','preferences'] },
+    { id:'ai-copilot',   name:'AI Copilot',      icon:Brain,      color:'from-teal-600 to-teal-400',    description:'Get AI-powered financial advice and insights', keywords:['ai','copilot','advice','help','suggestion'] },
   ];
 
-  // Focus search input when modal opens
   useEffect(() => {
-    if (isOpen && searchInputRef.current) {
-      setTimeout(() => searchInputRef.current?.focus(), 100);
+    if (isOpen) {
+      if (tab === 'search') setTimeout(() => searchRef.current?.focus(), 80);
+      if (tab === 'copilot') {
+        setTimeout(() => inputRef.current?.focus(), 80);
+        if (messages.length === 0) initCopilot();
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, tab]);
 
-  // Auto-scroll AI messages
   useEffect(() => {
-    aiMessagesRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [aiMessages]);
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, thinking]);
 
-  // Search through features
-  const handleSearch = (query) => {
-    setSearchQuery(query);
-    setIsSearching(true);
+  /* ---- SEARCH ---- */
+  const handleSearch = useCallback((q) => {
+    setSearchQuery(q);
+    if (!q.trim()) { setResults([]); return; }
+    const ql = q.toLowerCase();
+    const toolHits = tools
+      .filter(t => t.name.toLowerCase().includes(ql) || t.description.toLowerCase().includes(ql) || t.keywords.some(k => k.includes(ql)))
+      .map(t => ({ type: 'tool', data: t }));
+    const txHits = (transactions || [])
+      .filter(t => (t.description?.toLowerCase().includes(ql)) || (t.category?.toLowerCase().includes(ql)) || (t.transaction_type?.toLowerCase().includes(ql)))
+      .slice(0, 6)
+      .map(t => ({ type: 'transaction', data: t }));
+    setResults([...toolHits, ...txHits]);
+  }, [transactions]);
 
-    if (!query.trim()) {
-      setResults([]);
-      setIsSearching(false);
-      return;
-    }
-
-    const queryLower = query.toLowerCase();
-    const filtered = applicationTools.filter(tool =>
-      tool.name.toLowerCase().includes(queryLower) ||
-      tool.description.toLowerCase().includes(queryLower) ||
-      tool.keywords.some(k => k.includes(queryLower))
-    );
-
-    // Also search transactions if query matches
-    let transactionResults = [];
-    if (transactions && transactions.length > 0) {
-      transactionResults = transactions
-        .filter(t =>
-          (t.description?.toLowerCase().includes(queryLower)) ||
-          (t.category?.toLowerCase().includes(queryLower)) ||
-          (t.transaction_type?.toLowerCase().includes(queryLower))
-        )
-        .slice(0, 5)
-        .map(t => ({
-          type: 'transaction',
-          data: t,
-          title: t.description || 'Transaction',
-          subtitle: `${t.transaction_type} - UGX ${t.amount?.toLocaleString()}`
-        }));
-    }
-
-    setTimeout(() => {
-      setResults([
-        ...filtered.map(tool => ({ type: 'tool', data: tool })),
-        ...transactionResults
-      ]);
-      setIsSearching(false);
-    }, 300);
+  const handleToolClick = (tool) => {
+    onClose();
+    if (onNavigate) onNavigate(tool.id);
   };
 
-  // Initialize AI chat
-  const initializeAIChat = () => {
-    setShowAIChat(true);
-    if (aiMessages.length === 0) {
-      setAIMessages([{
-        id: 1,
-        type: 'ai',
-        content: '🤖 **ICAN AI Assistant**\n\nHello! I can help you with:\n📊 Financial advice\n💰 Transaction analysis\n🎯 Savings goals\n📈 Investment guidance\n🔍 Feature navigation\n\nWhat would you like to know?',
-        timestamp: new Date()
-      }]);
-    }
+  /* ---- COPILOT ---- */
+  const initCopilot = () => {
+    setMessages([{
+      id: 'init', role: 'assistant',
+      content: `Hi${user?.name ? ` ${user.name.split(' ')[0]}` : ''}! I'm your ICAN Copilot. Ask me anything about your finances.`,
+    }]);
   };
 
-  // Send message to AI
-  const handleAISend = async () => {
-    if (!aiInput.trim()) return;
+  const buildSystemPrompt = () => {
+    const txCount  = transactions?.length || 0;
+    const income   = (transactions || []).filter(t => t.transaction_type === 'income').reduce((s,t) => s+(t.amount||0), 0);
+    const expenses = (transactions || []).filter(t => t.transaction_type === 'expense').reduce((s,t) => s+(t.amount||0), 0);
+    const netWorth = income - expenses;
+    const recentTx = (transactions || []).slice(0,10).map(t =>
+      `${(t.transaction_type||'').toUpperCase()} UGX ${(t.amount||0).toLocaleString()} - ${t.description||'No description'} (${t.created_at?new Date(t.created_at).toLocaleDateString():'unknown'})`
+    ).join('\n') || '(no transactions)';
+    const walletSummary = (wallets||[]).map(w => `${w.wallet_type||w.name}: UGX ${(w.balance||0).toLocaleString()}`).join(', ') || 'No wallet data';
+    return `You are ICAN Copilot, a financial AI assistant. Be SHORT and PRECISE — max 4 bullet points, no long paragraphs.
 
-    const userMsg = {
-      id: Date.now(),
-      type: 'user',
-      content: aiInput,
-      timestamp: new Date()
-    };
+USER DATA: income UGX ${income.toLocaleString()}, expenses UGX ${expenses.toLocaleString()}, net UGX ${netWorth.toLocaleString()}, ${txCount} transactions. Wallets: ${walletSummary}.
+Recent: ${recentTx}
 
-    setAIMessages(prev => [...prev, userMsg]);
-    setAIInput('');
-    setIsAIThinking(true);
-
-    try {
-      // Simulate AI response (in production, call OpenAI service)
-      setTimeout(() => {
-        const response = generateAIResponse(aiInput);
-        setAIMessages(prev => [...prev, {
-          id: Date.now() + 1,
-          type: 'ai',
-          content: response,
-          timestamp: new Date()
-        }]);
-        setIsAIThinking(false);
-      }, 800);
-    } catch (error) {
-      console.error('AI error:', error);
-      setIsAIThinking(false);
-    }
+Rules: Use UGX. Be direct. 2-5 lines max per response. No filler words.`;
   };
 
-  // Generate contextual AI responses
-  const generateAIResponse = (query) => {
+  /* Local fallback — always responds with real data */
+  const localFallback = (query) => {
     const q = query.toLowerCase();
+    const income   = (transactions||[]).filter(t=>t.transaction_type==='income').reduce((s,t)=>s+(t.amount||0),0);
+    const expenses = (transactions||[]).filter(t=>t.transaction_type==='expense').reduce((s,t)=>s+(t.amount||0),0);
+    const net      = income - expenses;
+    const rate     = income > 0 ? ((net/income)*100).toFixed(0) : 0;
+    const top3     = [...(transactions||[])].filter(t=>t.transaction_type==='expense').sort((a,b)=>(b.amount||0)-(a.amount||0)).slice(0,3);
 
-    if (q.includes('transaction')) {
-      return `📊 **Your Transactions**\n\nYou have ${transactions?.length || 0} transactions tracked.\n\n💡 **Tips:**\n• Categorize transactions for better insights\n• Track spending patterns weekly\n• Set budget alerts for each category`;
-    }
+    if (q.includes('spend') || q.includes('expense'))
+      return `Expenses: UGX ${expenses.toLocaleString()}\nIncome: UGX ${income.toLocaleString()}\nSavings rate: ${rate}%\n\nTop 3:\n${top3.map(t=>`• UGX ${(t.amount||0).toLocaleString()} — ${t.description||'Expense'}`).join('\n')||'• None yet'}`;
+
+    if (q.includes('save') || q.includes('saving'))
+      return `Savings target (20%): UGX ${(income*0.2).toLocaleString()}\nCurrent savings: UGX ${Math.max(0,net).toLocaleString()}\n\n• Pay yourself first\n• Reduce your top 3 expenses`;
+
+    if (q.includes('health') || q.includes('status'))
+      return `Financial health: ${net>0?(rate>20?'Excellent':rate>10?'Good':'Fair'):'Needs attention'}\n\n• Income: UGX ${income.toLocaleString()}\n• Expenses: UGX ${expenses.toLocaleString()}\n• Net: UGX ${net.toLocaleString()} (${rate}% savings rate)`;
+
+    if (q.includes('budget'))
+      return `50/30/20 budget on UGX ${income.toLocaleString()}:\n• Needs (50%): UGX ${(income*.5).toLocaleString()}\n• Wants (30%): UGX ${(income*.3).toLocaleString()}\n• Savings (20%): UGX ${(income*.2).toLocaleString()}`;
+
+    if (q.includes('big') || q.includes('larg') || q.includes('top'))
+      return `Top expenses:\n${top3.map(t=>`• UGX ${(t.amount||0).toLocaleString()} — ${t.description||'Expense'}`).join('\n')||'• None recorded'}`;
 
     if (q.includes('wallet') || q.includes('balance')) {
-      return `💰 **Wallet Information**\n\nYour wallets:\n• Personal: Ready to manage\n• Business: Available\n• Trust: Set up groups\n• Agent: For cash in/out\n\n📈 Keep growing! 🚀`;
+      const ws = (wallets||[]).map(w=>`• ${w.wallet_type||w.name}: UGX ${(w.balance||0).toLocaleString()}`).join('\n')||'• No wallets yet';
+      return `Your wallets:\n${ws}`;
     }
+    if (q.includes('report') || q.includes('tax'))
+      return `Available reports:\n• Tax Filing (URA compliant)\n• Balance Sheet\n• Income Statement\n• Country Compliance\n\nOpen Reports from the ⋮ menu.`;
 
-    if (q.includes('ican') || q.includes('coin')) {
-      return `⚡ **ICAN Coin Trading**\n\n🌍 Buy & sell ICAN Coins at market price\n🚀 Send coins globally - no restrictions!\n💹 Current market provides best rates\n\n💡 **Next step:** Open ICAN Coin to start trading`;
-    }
-
-    if (q.includes('advice') || q.includes('help')) {
-      return `🤖 **Financial Advice**\n\nI can help with:\n✅ Spending analysis\n✅ Savings strategies  \n✅ Budget planning\n✅ Investment guidance\n✅ Goal setting\n\nTell me more about your situation!`;
-    }
-
-    if (q.includes('goal') || q.includes('target')) {
-      return `🎯 **Goal Setting**\n\nSet your net worth target and I'll help track progress:\n• Define your financial goal\n• Create action steps\n• Monitor milestones\n• Celebrate wins!\n\n💪 You got this!`;
-    }
-
-    return `🤖 **ICAN AI Assistant**\n\n✨ I understood: "${query}"\n\n💡 **I can help with:**\n• Feature navigation\n• Financial questions\n• Transaction insights\n• Budget advice\n• Savings strategies\n\n👉 Ask me anything about money!`;
+    return `Income: UGX ${income.toLocaleString()} · Expenses: UGX ${expenses.toLocaleString()} · Net: UGX ${net.toLocaleString()}\n\nTry: "my spending", "how to save", "budget", "top expenses"`;
   };
 
-  // Handle feature click
-  const handleFeatureClick = (tool) => {
-    onClose();
-    // Feature navigation would be handled by parent component
+  const handleSend = async () => {
+    const text = input.trim();
+    if (!text || thinking) return;
+    const userMsg = { id: Date.now(), role: 'user', content: text };
+    setMessages(prev => [...prev, userMsg]);
+    setInput('');
+    setThinking(true);
+    try {
+      const history = messages.filter(m => m.id !== 'init').map(m => ({ role: m.role, content: m.content }));
+      const payload = {
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: buildSystemPrompt() },
+          ...history,
+          { role: 'user', content: text }
+        ],
+        max_tokens: 600,
+        temperature: 0.7,
+      };
+      const res = await fetch('/api/ai-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const reply = data?.choices?.[0]?.message?.content;
+      if (!reply) throw new Error('empty');
+      setMessages(prev => [...prev, { id: Date.now()+1, role: 'assistant', content: reply }]);
+    } catch (err) {
+      console.warn('Copilot API unavailable, using local fallback:', err.message);
+      // Always give a useful response from local financial data
+      const fallback = localFallback(text);
+      setMessages(prev => [...prev, { id: Date.now()+1, role: 'assistant', content: fallback }]);
+    } finally {
+      setThinking(false);
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
   };
+
+  const renderContent = (text) => {
+    return text.split('\n').map((line, i) => {
+      const html = line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      if (line.trim().startsWith('•') || line.trim().startsWith('-')) {
+        return <li key={i} className="ml-3 list-none leading-relaxed" dangerouslySetInnerHTML={{ __html: html }} />;
+      }
+      return <p key={i} className="leading-relaxed" dangerouslySetInnerHTML={{ __html: html }} />;
+    });
+  };
+
+  const suggestions = [
+    'My spending',
+    'How to save more?',
+    'Financial health',
+    'Top expenses',
+    'Budget plan',
+  ];
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center">
-      <div className="bg-gradient-to-br from-slate-900 to-slate-800 w-full sm:max-w-2xl sm:rounded-2xl rounded-t-3xl shadow-2xl max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center">
+      <div className="bg-gradient-to-br from-slate-900 to-slate-800 w-full sm:max-w-2xl sm:rounded-2xl rounded-t-3xl shadow-2xl flex flex-col overflow-hidden"
+           style={{ maxHeight: '92vh' }}>
+
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700/50">
-          <div className="flex items-center gap-3 flex-1">
-            <Search className="w-5 h-5 text-purple-400" />
-            <h2 className="text-lg font-bold text-white">Search & AI Assistant</h2>
+        <div className="flex items-center gap-3 px-4 pt-4 pb-3 border-b border-white/10 flex-shrink-0">
+          <div className="flex gap-1 bg-white/5 rounded-xl p-1 flex-1">
+            <button
+              onClick={() => setTab('copilot')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-semibold transition ${
+                tab === 'copilot' ? 'bg-purple-600 text-white shadow' : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <Sparkles className="w-4 h-4" />
+              Copilot
+            </button>
+            <button
+              onClick={() => { setTab('search'); setTimeout(() => searchRef.current?.focus(), 80); }}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-semibold transition ${
+                tab === 'search' ? 'bg-purple-600 text-white shadow' : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <Search className="w-4 h-4" />
+              Search
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-slate-700/50 rounded-lg transition"
-          >
+          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-xl transition flex-shrink-0">
             <X className="w-5 h-5 text-gray-400" />
           </button>
         </div>
 
-        {/* Search/AI Content */}
-        <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
-          {!showAIChat ? (
-            <>
-              {/* Search Input */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  placeholder="Search tools, transactions, features..."
-                  value={searchQuery}
-                  onChange={(e) => handleSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                />
-              </div>
-
-              {/* AI Assistant Quick Access */}
-              <button
-                onClick={initializeAIChat}
-                className="w-full flex items-center gap-3 p-4 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-700 hover:to-teal-600 rounded-lg transition"
-              >
-                <Brain className="w-5 h-5 text-white" />
-                <div className="text-left">
-                  <div className="font-semibold text-white">Ask ICAN AI</div>
-                  <div className="text-xs text-teal-100">Get instant financial advice</div>
-                </div>
-                <Send className="w-5 h-5 text-white ml-auto" />
-              </button>
-
-              {/* Search Results */}
+        {/* SEARCH TAB */}
+        {tab === 'search' && (
+          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                ref={searchRef}
+                type="text"
+                placeholder="Search features, transactions, wallets..."
+                value={searchQuery}
+                onChange={e => handleSearch(e.target.value)}
+                className="w-full pl-10 pr-10 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+              />
               {searchQuery && (
-                <div className="space-y-3">
-                  {isSearching ? (
-                    <div className="text-center py-8">
-                      <div className="inline-flex items-center gap-2 text-gray-400">
-                        <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce"></div>
-                        <span className="text-sm">Searching...</span>
-                      </div>
-                    </div>
-                  ) : results.length > 0 ? (
-                    <>
-                      <div className="text-xs text-gray-400 font-semibold uppercase">Results ({results.length})</div>
-                      {results.map((result, idx) => {
-                        if (result.type === 'tool') {
-                          const tool = result.data;
-                          const Icon = tool.icon;
-                          return (
-                            <button
-                              key={idx}
-                              onClick={() => handleFeatureClick(tool)}
-                              className="w-full p-4 bg-slate-800/50 hover:bg-slate-700/50 rounded-lg border border-slate-700 transition flex items-start gap-4"
-                            >
-                              <div className={`p-3 bg-gradient-to-br ${tool.color} rounded-lg flex-shrink-0`}>
-                                <Icon className="w-5 h-5 text-white" />
-                              </div>
-                              <div className="text-left flex-1">
-                                <div className="font-semibold text-white">{tool.name}</div>
-                                <div className="text-xs text-gray-400 mt-1">{tool.description}</div>
-                              </div>
-                              <ChevronRight className="w-5 h-5 text-gray-500 flex-shrink-0 mt-1" />
-                            </button>
-                          );
-                        }
-
-                        if (result.type === 'transaction') {
-                          return (
-                            <div key={idx} className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
-                              <div className="font-semibold text-white">{result.title}</div>
-                              <div className="text-xs text-gray-400 mt-1">{result.subtitle}</div>
-                            </div>
-                          );
-                        }
-
-                        return null;
-                      })}
-                    </>
-                  ) : (
-                    <div className="text-center py-8 text-gray-400">
-                      <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">No results found for "{searchQuery}"</p>
-                      <p className="text-xs text-gray-500 mt-2">Try searching for a tool or transaction</p>
-                    </div>
-                  )}
-                </div>
+                <button onClick={() => handleSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <X className="w-4 h-4 text-gray-400" />
+                </button>
               )}
+            </div>
 
-              {/* Quick Links - When no search */}
-              {!searchQuery && (
+            {searchQuery ? (
+              results.length > 0 ? (
                 <div className="space-y-2">
-                  <div className="text-xs text-gray-400 font-semibold uppercase">Popular Tools</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {applicationTools.slice(0, 6).map((tool) => {
-                      const Icon = tool.icon;
+                  <p className="text-xs text-gray-500 uppercase font-semibold">{results.length} result{results.length !== 1 ? 's' : ''}</p>
+                  {results.map((r, i) => {
+                    if (r.type === 'tool') {
+                      const Icon = r.data.icon;
                       return (
-                        <button
-                          key={tool.id}
-                          onClick={() => handleFeatureClick(tool)}
-                          className={`p-3 bg-gradient-to-br ${tool.color} rounded-lg flex flex-col items-center gap-2 hover:shadow-lg transition`}
-                        >
-                          <Icon className="w-5 h-5 text-white" />
-                          <span className="text-xs font-semibold text-white text-center">{tool.name}</span>
+                        <button key={i} onClick={() => handleToolClick(r.data)}
+                          className="w-full flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition text-left">
+                          <div className={`w-10 h-10 bg-gradient-to-br ${r.data.color} rounded-xl flex items-center justify-center flex-shrink-0`}>
+                            <Icon className="w-5 h-5 text-white" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-white text-sm">{r.data.name}</p>
+                            <p className="text-xs text-gray-400 truncate">{r.data.description}</p>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-gray-500 flex-shrink-0" />
                         </button>
                       );
-                    })}
+                    }
+                    if (r.type === 'transaction') {
+                      const t = r.data;
+                      const isIncome = t.transaction_type === 'income';
+                      return (
+                        <div key={i} className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/10">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${isIncome ? 'bg-green-600/20' : 'bg-red-600/20'}`}>
+                            <DollarSign className={`w-5 h-5 ${isIncome ? 'text-green-400' : 'text-red-400'}`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-white text-sm truncate">{t.description || 'Transaction'}</p>
+                            <p className="text-xs text-gray-400">{t.transaction_type} · UGX {(t.amount||0).toLocaleString()}</p>
+                          </div>
+                          <span className={`text-xs font-bold ${isIncome ? 'text-green-400' : 'text-red-400'}`}>
+                            {isIncome ? '+' : '-'}{(t.amount||0).toLocaleString()}
+                          </span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-10 text-gray-500">
+                  <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                  <p className="text-sm">No results for "{searchQuery}"</p>
+                  <button onClick={() => { setTab('copilot'); setInput(`Tell me about ${searchQuery}`); }}
+                    className="mt-2 text-xs text-purple-400 hover:underline">Ask Copilot instead →</button>
+                </div>
+              )
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-gray-500 uppercase font-semibold">All features</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {tools.map(tool => {
+                    const Icon = tool.icon;
+                    return (
+                      <button key={tool.id} onClick={() => handleToolClick(tool)}
+                        className={`p-3 bg-gradient-to-br ${tool.color} rounded-xl flex flex-col items-center gap-2 hover:opacity-90 active:scale-95 transition`}>
+                        <Icon className="w-5 h-5 text-white" />
+                        <span className="text-xs font-semibold text-white text-center leading-tight">{tool.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* COPILOT TAB */}
+        {tab === 'copilot' && (
+          <>
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+              {messages.map(msg => (
+                <div key={msg.id} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  {msg.role === 'assistant' && (
+                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-600 to-teal-500 flex items-center justify-center flex-shrink-0 mt-1">
+                      <Sparkles className="w-4 h-4 text-white" />
+                    </div>
+                  )}
+                  <div className={`max-w-[80%] px-3 py-2.5 rounded-2xl text-sm space-y-1 ${
+                    msg.role === 'user'
+                      ? 'bg-purple-600 text-white rounded-br-sm'
+                      : 'bg-white/8 border border-white/10 text-gray-100 rounded-bl-sm'
+                  }`}>
+                    {msg.role === 'assistant' ? renderContent(msg.content) : <p>{msg.content}</p>}
+                  </div>
+                </div>
+              ))}
+
+              {thinking && (
+                <div className="flex gap-2 justify-start">
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-600 to-teal-500 flex items-center justify-center flex-shrink-0">
+                    <Sparkles className="w-4 h-4 text-white animate-pulse" />
+                  </div>
+                  <div className="bg-white/8 border border-white/10 px-4 py-3 rounded-2xl rounded-bl-sm flex items-center gap-1.5">
+                    <span className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{animationDelay:'0ms'}} />
+                    <span className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{animationDelay:'120ms'}} />
+                    <span className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{animationDelay:'240ms'}} />
                   </div>
                 </div>
               )}
-            </>
-          ) : (
-            <>
-              {/* AI Chat Messages */}
-              <div className="space-y-4 h-64 overflow-y-auto">
-                {aiMessages.map((msg) => (
-                  <div key={msg.id} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-xs p-3 rounded-lg ${
-                      msg.type === 'user'
-                        ? 'bg-purple-600 text-white rounded-br-none'
-                        : 'bg-slate-700 text-gray-100 rounded-bl-none'
-                    }`}>
-                      <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                    </div>
-                  </div>
-                ))}
-                {isAIThinking && (
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-teal-600/20 flex items-center justify-center">
-                      <Bot className="w-4 h-4 text-teal-400 animate-pulse" />
-                    </div>
-                    <div className="flex gap-1">
-                      <div className="w-2 h-2 bg-teal-400 rounded-full animate-bounce"></div>
-                      <div className="w-2 h-2 bg-teal-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                      <div className="w-2 h-2 bg-teal-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                    </div>
-                  </div>
-                )}
-                <div ref={aiMessagesRef} />
-              </div>
-            </>
-          )}
-        </div>
 
-        {/* Footer - AI Chat Input (when showing AI) */}
-        {showAIChat && (
-          <div className="px-6 py-4 border-t border-slate-700/50">
-            <div className="flex items-end gap-2">
+              {messages.length <= 1 && !thinking && (
+                <div className="pt-1 flex flex-wrap gap-2">
+                  {suggestions.map(s => (
+                    <button key={s} onClick={() => { setInput(s); inputRef.current?.focus(); }}
+                      className="px-3 py-1.5 bg-white/6 hover:bg-purple-600/30 border border-white/10 hover:border-purple-500/50 rounded-full text-xs text-gray-300 hover:text-white transition">
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div ref={bottomRef} />
+            </div>
+
+            <div className="flex items-center gap-2 px-4 py-3 border-t border-white/10 flex-shrink-0">
               <input
+                ref={inputRef}
                 type="text"
-                placeholder="Ask AI anything..."
-                value={aiInput}
-                onChange={(e) => setAIInput(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleAISend()}
-                className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+                placeholder="Ask ICAN Copilot anything..."
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
+                disabled={thinking}
+                className="flex-1 min-w-0 px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm disabled:opacity-50"
               />
               <button
-                onClick={handleAISend}
-                disabled={isAIThinking || !aiInput.trim()}
-                className="p-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-lg transition"
+                onClick={handleSend}
+                disabled={thinking || !input.trim()}
+                className="w-10 h-10 flex-shrink-0 bg-gradient-to-br from-purple-600 to-teal-500 disabled:opacity-40 rounded-xl flex items-center justify-center transition active:scale-95"
               >
-                <Send className="w-5 h-5 text-white" />
+                <Send className="w-4 h-4 text-white" />
               </button>
             </div>
-          </div>
+          </>
         )}
       </div>
     </div>
   );
 };
-
-// Missing imports add to file
-const ChevronRight = ({ className }) => (
-  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-  </svg>
-);
 
 export default SearchModal;

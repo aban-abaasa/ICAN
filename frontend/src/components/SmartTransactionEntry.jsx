@@ -74,37 +74,143 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
   const stopVoiceRecognition = () => recognitionRef.current?.stop();
 
   // Keywords for detecting expense vs income
-  const incomeKeywords = ['salary', 'earned', 'received', 'income', 'bonus', 'interest', 'dividend', 'payment', 'refund', 'returned', 'paid', 'sales', 'revenue'];
-  const expenseKeywords = ['bought', 'lunch', 'dinner', 'breakfast', 'transport', 'taxi', 'shopping', 'fuel', 'bills', 'paid for', 'spent', 'expense', 'cost'];
-  const investmentKeywords = ['invested', 'purchased', 'acquired', 'equipment', 'property', 'vehicle', 'asset', 'capital'];
+  const incomeKeywords = ['salary', 'earned', 'received', 'income', 'bonus', 'interest', 'dividend', 'payment', 'refund', 'returned', 'paid me', 'paid us', 'sales', 'revenue', 'sold', 'commission', 'tip', 'grant', 'profit'];
+  const expenseKeywords = ['bought', 'lunch', 'dinner', 'breakfast', 'transport', 'taxi', 'shopping', 'fuel', 'bills', 'paid for', 'spent', 'expense', 'cost', 'subscription', 'fee'];
 
-  // Business Accounting Categories for precise categorization
+  // ─────────────────────────────────────────────────────────
+  // BUSINESS ACCOUNTING CATEGORIES — Real business logic
+  // ─────────────────────────────────────────────────────────
   const businessCategories = {
     revenue: {
-      name: 'Revenue',
-      keywords: ['sales', 'revenue', 'income', 'earned', 'received', 'payment'],
-      emoji: '📈'
+      name: 'Revenue / Sales',
+      keywords: ['sales', 'revenue', 'income', 'earned', 'received', 'payment received', 'sold', 'commission', 'service fee', 'consultation'],
+      emoji: '📈',
+      accountingType: 'revenue',
+      isIncome: true,
     },
     cogs: {
-      name: 'Cost of Goods Sold',
-      keywords: ['cost', 'material', 'inventory', 'purchased', 'goods'],
-      emoji: '📦'
+      name: 'Stock & Inventory (COGS)',
+      // Buying goods you intend to SELL is a business investment — COGS
+      keywords: [
+        'stock', 'inventory', 'goods', 'merchandise', 'produce', 'wholesale',
+        'raw material', 'materials', 'supplies', 'resell', 'for sale', 'to sell',
+        'products', 'items to sell', 'buy goods', 'bought goods', 'stock up',
+        'maize', 'rice', 'beans', 'sugar', 'flour', 'oil', 'timber', 'cement',
+        'clothes', 'shoes', 'electronics', 'phones', 'fabric', 'charcoal',
+      ],
+      emoji: '📦',
+      accountingType: 'cogs',
+      isIncome: false,
     },
-    expenses: {
-      name: 'Operating Expenses',
-      keywords: ['paid', 'spent', 'expense', 'bill', 'utilities', 'rent', 'salary', 'fuel', 'transport'],
-      emoji: '💸'
+    capital_asset: {
+      name: 'Capital Asset',
+      // Fixed assets that grow the business long-term
+      keywords: [
+        'equipment', 'machinery', 'machine', 'vehicle', 'car', 'van', 'truck',
+        'motorcycle', 'boda', 'computer', 'laptop', 'phone for business',
+        'property', 'land', 'building', 'shop', 'office', 'warehouse',
+        'solar', 'generator', 'fridge', 'freezer', 'refrigerator',
+        'furniture', 'shelves', 'shelf', 'display', 'tools',
+      ],
+      emoji: '🏭',
+      accountingType: 'asset',
+      isIncome: false,
     },
-    investments: {
-      name: 'Investments & Assets',
-      keywords: ['invested', 'purchased', 'acquired', 'capital', 'asset', 'equipment', 'vehicle', 'property'],
-      emoji: '💰'
+    operating_expense: {
+      name: 'Operating Expense',
+      // Day-to-day costs of running the business
+      keywords: [
+        'rent', 'salary', 'wage', 'staff', 'worker', 'employee', 'payroll',
+        'electricity', 'water', 'internet', 'airtime', 'data', 'utilities',
+        'fuel', 'transport', 'delivery', 'marketing', 'advertising', 'signage',
+        'printing', 'stationery', 'repairs', 'maintenance', 'cleaning',
+        'insurance', 'security', 'guard', 'license', 'permit', 'tax payment',
+        'accountant', 'lawyer', 'consultation fee',
+      ],
+      emoji: '💸',
+      accountingType: 'expense',
+      isIncome: false,
     },
-    cashflow: {
-      name: 'Cash Flow',
-      keywords: ['loan', 'borrowed', 'lent', 'receivable', 'payable'],
-      emoji: '💳'
-    }
+    loan: {
+      name: 'Loan / Liability',
+      keywords: [
+        'loan', 'borrowed', 'borrow', 'credit', 'financing', 'mortgage',
+        'debt', 'overdraft', 'advance', 'lent me', 'microfinance', 'sacco',
+      ],
+      emoji: '🏦',
+      accountingType: 'liability',
+      isIncome: true, // cash comes in when you take a loan
+    },
+    loan_repayment: {
+      name: 'Loan Repayment',
+      keywords: ['repay', 'repayment', 'paid loan', 'loan payment', 'installment', 'instalment'],
+      emoji: '🔄',
+      accountingType: 'liability_payment',
+      isIncome: false,
+    },
+    owner_equity: {
+      name: 'Owner Investment / Equity',
+      keywords: ['invested my own', 'own capital', 'personal investment', 'owner contribution', 'capital injection', 'startup capital'],
+      emoji: '💼',
+      accountingType: 'equity',
+      isIncome: true,
+    },
+  };
+
+  // ─────────────────────────────────────────────────────────
+  // PERSONAL CATEGORIES — Real personal finance
+  // ─────────────────────────────────────────────────────────
+  const personalCategories = {
+    income: {
+      name: 'Income',
+      keywords: ['salary', 'earned', 'received', 'bonus', 'commission', 'dividend', 'allowance', 'pay', 'wages'],
+      emoji: '💰',
+    },
+    food: {
+      name: 'Food & Dining',
+      keywords: ['food', 'lunch', 'dinner', 'breakfast', 'restaurant', 'eating', 'groceries', 'supermarket', 'market'],
+      emoji: '🍽️',
+    },
+    transport: {
+      name: 'Transport',
+      keywords: ['taxi', 'boda', 'uber', 'transport', 'bus', 'fuel', 'petrol', 'fare'],
+      emoji: '🚗',
+    },
+    bills: {
+      name: 'Bills & Utilities',
+      keywords: ['rent', 'electricity', 'water', 'internet', 'tv', 'airtime', 'data', 'utility'],
+      emoji: '🧾',
+    },
+    health: {
+      name: 'Health',
+      keywords: ['hospital', 'clinic', 'doctor', 'medicine', 'pharmacy', 'medical', 'health'],
+      emoji: '🏥',
+    },
+    education: {
+      name: 'Education',
+      keywords: ['school', 'fees', 'tuition', 'university', 'college', 'books', 'training', 'course'],
+      emoji: '📚',
+    },
+    personal_investment: {
+      name: 'Personal Investment',
+      keywords: ['saved', 'saving', 'invested', 'shares', 'land', 'property', 'deposit', 'fixed deposit', 'sacco', 'chama', 'merry-go-round'],
+      emoji: '📊',
+    },
+    loan_personal: {
+      name: 'Personal Loan',
+      keywords: ['borrowed', 'loan', 'lent', 'credit', 'advance'],
+      emoji: '🏦',
+    },
+    entertainment: {
+      name: 'Entertainment',
+      keywords: ['movie', 'cinema', 'concert', 'game', 'sport', 'gym', 'subscription', 'netflix', 'youtube'],
+      emoji: '🎬',
+    },
+    family: {
+      name: 'Family & Giving',
+      keywords: ['tithe', 'offering', 'church', 'charity', 'donation', 'sent', 'family', 'parent', 'sibling', 'child', 'kids', 'school fees'],
+      emoji: '❤️',
+    },
   };
 
   // Core parser — mode passed explicitly so it works from voice onend, mode switches, and typing
@@ -126,47 +232,117 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
     let isIncome = false;
     let detectedType = 'expense';
     let businessAccountingType = null;
+    let detectedCategory = null;
+    let categoryEmoji = '💸';
+    let categoryName = '';
 
     if (mode === 'business') {
-      // 💼 BUSINESS ACCOUNTING RULES (Professional)
-      // Rule 1: Large purchases with "bought/purchased" keywords = ASSET (investment)
-      if ((amount > 1000000 || /bought|purchased|acquired|invest|capital/i.test(text)) && 
-          /van|car|vehicle|truck|equipment|machinery|property|land|building|computer/i.test(text)) {
-        detectedType = 'investment';
-        businessAccountingType = 'asset';
-      }
-      // Rule 2: Revenue keywords = INCOME
-      else if (/earned|received|sold|revenue|income|payment|sales/i.test(text)) {
+      // ─── BUSINESS RULES ─── priority order matters ───
+
+      // 1. REVENUE — money coming IN from business
+      if (businessCategories.revenue.keywords.some(kw => text.includes(kw))) {
         isIncome = true;
         detectedType = 'income';
         businessAccountingType = 'revenue';
+        detectedCategory = 'revenue';
+        categoryEmoji = '📈';
+        categoryName = 'Revenue / Sales';
       }
-      // Rule 3: Loan keywords = LIABILITY
-      else if (/borrowed|loan|financing|mortgage|credit|debt/i.test(text)) {
+      // 2. LOAN RECEIVED — cash in but it's a liability
+      else if (businessCategories.loan.keywords.some(kw => text.includes(kw)) &&
+               !businessCategories.loan_repayment.keywords.some(kw => text.includes(kw))) {
+        isIncome = true;
         detectedType = 'loan';
         businessAccountingType = 'liability';
+        detectedCategory = 'loan';
+        categoryEmoji = '🏦';
+        categoryName = 'Loan Received (Liability)';
       }
-      // Rule 4: Operating expenses = EXPENSE
-      else if (/salary|wage|rent|utility|bill|fuel|supply|expense|cost|paid/i.test(text)) {
+      // 3. LOAN REPAYMENT — paying back
+      else if (businessCategories.loan_repayment.keywords.some(kw => text.includes(kw))) {
+        isIncome = false;
+        detectedType = 'expense';
+        businessAccountingType = 'liability_payment';
+        detectedCategory = 'loan_repayment';
+        categoryEmoji = '🔄';
+        categoryName = 'Loan Repayment';
+      }
+      // 4. CAPITAL ASSET — long-term fixed asset purchase
+      else if (businessCategories.capital_asset.keywords.some(kw => text.includes(kw))) {
+        isIncome = false;
+        detectedType = 'investment';
+        businessAccountingType = 'asset';
+        detectedCategory = 'capital_asset';
+        categoryEmoji = '🏭';
+        categoryName = 'Capital Asset';
+      }
+      // 5. STOCK / GOODS / INVENTORY (COGS) — buying goods to sell
+      //    This is the KEY insight: buying goods = business investment/COGS
+      else if (businessCategories.cogs.keywords.some(kw => text.includes(kw))) {
+        isIncome = false;
+        detectedType = 'investment';
+        businessAccountingType = 'cogs';
+        detectedCategory = 'cogs';
+        categoryEmoji = '📦';
+        categoryName = 'Stock / Goods (COGS)';
+      }
+      // 6. OWNER EQUITY — owner putting in own money
+      else if (businessCategories.owner_equity.keywords.some(kw => text.includes(kw))) {
+        isIncome = true;
+        detectedType = 'income';
+        businessAccountingType = 'equity';
+        detectedCategory = 'owner_equity';
+        categoryEmoji = '💼';
+        categoryName = 'Owner Investment';
+      }
+      // 7. OPERATING EXPENSE — day-to-day running costs
+      else if (businessCategories.operating_expense.keywords.some(kw => text.includes(kw))) {
         isIncome = false;
         detectedType = 'expense';
         businessAccountingType = 'expense';
+        detectedCategory = 'operating_expense';
+        categoryEmoji = '💸';
+        categoryName = 'Operating Expense';
       }
-      // Rule 5: Default — large amounts = likely asset, otherwise expense
+      // 8. DEFAULT FALLBACK — use amount heuristics
       else {
-        if (amount > 5000000 && !(/spent|paid for|cost|bill/i.test(text))) {
+        // Large amounts that aren't labelled as expenses = likely asset/investment
+        if (amount >= 2000000 && !/(spent|paid for|cost|bill|salary|rent)/i.test(text)) {
           detectedType = 'investment';
           businessAccountingType = 'asset';
+          categoryEmoji = '🏭';
+          categoryName = 'Possible Asset';
+        } else if (/(bought|purchased)/i.test(text)) {
+          // "bought" without clear category — treat as COGS (bought goods to sell)
+          detectedType = 'investment';
+          businessAccountingType = 'cogs';
+          categoryEmoji = '📦';
+          categoryName = 'Goods Purchased';
         } else {
           detectedType = 'expense';
           businessAccountingType = 'expense';
+          categoryEmoji = '💸';
+          categoryName = 'Operating Expense';
         }
       }
     } else {
-      // 👤 PERSONAL ACCOUNT RULES
+      // ─── PERSONAL RULES ───
       const hasIncome = incomeKeywords.some(kw => text.includes(kw));
       const hasExpense = expenseKeywords.some(kw => text.includes(kw));
+
+      // Detect personal category
+      for (const [key, cat] of Object.entries(personalCategories)) {
+        if (cat.keywords.some(kw => text.includes(kw))) {
+          detectedCategory = key;
+          categoryEmoji = cat.emoji;
+          categoryName = cat.name;
+          break;
+        }
+      }
+
       if (hasIncome && !hasExpense) { isIncome = true; detectedType = 'income'; }
+      else if (/borrowed|loan/i.test(text)) { isIncome = true; detectedType = 'loan'; }
+      else if (/saved|saving|invested|deposit/i.test(text)) { isIncome = false; detectedType = 'saving'; }
       else { isIncome = false; detectedType = 'expense'; }
     }
 
@@ -197,8 +373,12 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
     if (source) description = description.replace(new RegExp(`(?:from|at|bought|sold)\\s+${source}`, 'i'), '').trim();
     description = description.replace(/\s+/g, ' ').trim();
     description = description.charAt(0).toUpperCase() + description.slice(1);
-    if (!description || description.length < 2)
-      description = isIncome ? 'Income received' : detectedType === 'investment' ? 'Asset / Investment' : 'Expense';
+    if (!description || description.length < 2) {
+      if (detectedType === 'income') description = 'Income received';
+      else if (detectedType === 'investment') description = categoryName || 'Business Investment';
+      else if (detectedType === 'loan') description = 'Loan received';
+      else description = categoryName || 'Expense';
+    }
 
     return {
       amount: Math.round(amount),
@@ -208,13 +388,9 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
       source,
       action,
       businessAccountingType,
-      category: mode === 'business'
-        ? (investmentKeywords.some(kw => text.includes(kw))
-            ? 'investments'
-            : Object.keys(businessCategories).find(cat =>
-                businessCategories[cat].keywords.some(kw => text.includes(kw))
-              ) || null)
-        : null,
+      detectedCategory,
+      categoryEmoji,
+      categoryName,
       accountingType: mode,
       isValid: amount > 0,
     };
@@ -283,10 +459,12 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
           timestamp: new Date().toISOString(),
           rawInput: textInput,
           accountingType: parsedData.accountingType,
-          category: parsedData.category,
-          categoryName: parsedData.category ? businessCategories[parsedData.category]?.name : null,
+          category: parsedData.detectedCategory,
+          categoryName: parsedData.categoryName,
+          categoryEmoji: parsedData.categoryEmoji,
+          businessAccountingType: parsedData.businessAccountingType,
           aiConfidence: 0.95,
-          auditTrail: `AI-Categorized as ${parsedData.category ? businessCategories[parsedData.category]?.name : 'General'}`
+          auditTrail: `Categorized as ${parsedData.categoryName || 'General'} (${parsedData.businessAccountingType || 'expense'})`
         };
 
         // Use OpenAI for professional accounting analysis in business mode
@@ -482,8 +660,8 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
                   isListening
                     ? '🎙 Listening...'
                     : selectedMode === 'business'
-                      ? '"Bought equipment 500k"'
-                      : '"Lunch 15k" • "Salary 800k"'
+                      ? '"Bought 50 bags maize 500k" • "Sold goods 800k"'
+                      : '"Lunch 15k" • "Salary 800k" • "Bought shoes 120k"'
                 }
                 value={isListening ? voiceInterim : textInput}
                 onChange={(e) => { if (!isListening) handleSmartInput(e); }}
@@ -526,73 +704,106 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
           </div>
 
           {/* Smart Detection Display - Enhanced for Business */}
-          {parsedData && (
-            <div className={`rounded-lg p-4 flex flex-col gap-3 transition border-2 ${
-              parsedData.isValid
-                ? parsedData.type === 'investment'
-                  ? 'bg-amber-50 border-amber-300'
-                  : parsedData.isIncome
-                  ? 'bg-green-50 border-green-300'
-                  : 'bg-orange-50 border-orange-300'
-                : 'bg-gray-50 border-gray-300'
-            }`}>
-              {/* Main Transaction Info */}
-              <div className="flex items-center gap-3">
-                <span className="text-3xl">
-                  {/* Use accounting analysis icon if available (professional mode), otherwise use parsed type */}
-                  {parsedData.accountingAnalysis?.displayIcon || (parsedData.type === 'investment' ? '💰' : parsedData.isIncome ? '📈' : '💸')}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="font-bold text-gray-900 text-sm">
-                    {/* Show accounting classification if available, otherwise description */}
-                    {parsedData.accountingAnalysis?.classification || parsedData.description}
+          {parsedData && (() => {
+            // Derive display properties from new category fields
+            const acctType = parsedData.businessAccountingType;
+            const isCOGS    = acctType === 'cogs';
+            const isAsset   = acctType === 'asset';
+            const isLiab    = acctType === 'liability' || acctType === 'liability_payment';
+            const isEquity  = acctType === 'equity';
+            const isRevenue = acctType === 'revenue';
+            const isExpense = acctType === 'expense';
+
+            const cardBg =
+              !parsedData.isValid     ? 'bg-gray-50 border-gray-300' :
+              isCOGS || isAsset      ? 'bg-amber-50 border-amber-300' :
+              isRevenue || isEquity  ? 'bg-green-50 border-green-300' :
+              isLiab                 ? 'bg-blue-50 border-blue-300' :
+              isExpense              ? 'bg-orange-50 border-orange-300' :
+              parsedData.isIncome    ? 'bg-green-50 border-green-300' :
+                                       'bg-orange-50 border-orange-300';
+
+            const amountColor =
+              isCOGS || isAsset     ? 'text-amber-600' :
+              isRevenue || isEquity ? 'text-green-600' :
+              isLiab                ? 'text-blue-600' :
+                                      'text-orange-600';
+
+            const icon = parsedData.categoryEmoji ||
+              (parsedData.type === 'investment' ? '💰' : parsedData.isIncome ? '📈' : '💸');
+
+            const amountDisplay = parsedData.isIncome
+              ? `+${parsedData.amount.toLocaleString()}`
+              : (isCOGS || isAsset)
+                ? `${parsedData.amount.toLocaleString()}`   // no +/- for assets
+                : `-${parsedData.amount.toLocaleString()}`;
+
+            // Badge label for business mode
+            const badgeLabel = parsedData.categoryName ||
+              (parsedData.type === 'investment' ? 'Business Investment' :
+               parsedData.type === 'income'     ? 'Income / Revenue' : 'Expense');
+
+            // Accounting label (shown under the amount)
+            const acctLabel =
+              acctType === 'revenue'           ? 'DR Cash / Accounts Receivable · CR Revenue' :
+              acctType === 'cogs'              ? 'DR Inventory / COGS · CR Cash' :
+              acctType === 'asset'             ? 'DR Fixed Asset · CR Cash' :
+              acctType === 'liability'         ? 'DR Cash · CR Loan Payable' :
+              acctType === 'liability_payment' ? 'DR Loan Payable · CR Cash' :
+              acctType === 'equity'            ? 'DR Cash · CR Owner Equity' :
+              acctType === 'expense'           ? 'DR Operating Expense · CR Cash' : null;
+
+            return (
+              <div className={`rounded-lg p-4 flex flex-col gap-3 transition border-2 ${cardBg}`}>
+                {/* Main Transaction Info */}
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl">{icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-gray-900 text-sm">{parsedData.description}</div>
+                    {parsedData.source && (
+                      <div className="text-xs text-gray-600 mt-1">
+                        {parsedData.action === 'bought' && '🛍️ From:'}
+                        {parsedData.action === 'sold'   && '💵 To:'}
+                        {parsedData.action === 'from'   && '📤 From:'}
+                        {parsedData.action === 'at'     && '📍 At:'}
+                        {!parsedData.action && '📌'} {parsedData.source}
+                      </div>
+                    )}
+                    {selectedMode === 'business' && acctLabel && (
+                      <div className="text-xs text-gray-500 mt-1 font-mono">📊 {acctLabel}</div>
+                    )}
                   </div>
-                  {parsedData.source && (
-                    <div className="text-xs text-gray-600 mt-1">
-                      {parsedData.action === 'bought' && '🛍️ Vendor:'}
-                      {parsedData.action === 'sold' && '💵 Customer:'}
-                      {parsedData.action === 'from' && '📤 From:'}
-                      {parsedData.action === 'at' && '📍 Location:'}
-                      {!parsedData.action && '📌'} {parsedData.source}
-                    </div>
-                  )}
-                  {parsedData.accountingAnalysis && (
-                    <div className="text-xs text-gray-500 mt-1">
-                      📊 {parsedData.accountingAnalysis.account}
-                    </div>
-                  )}
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <div className={`text-xl font-bold ${
-                    parsedData.accountingAnalysis ? (
-                      parsedData.accountingAnalysis.displaySign === '+' ? 'text-blue-600' :
-                      parsedData.accountingAnalysis.displaySign === '-' ? 'text-red-600' :
-                      'text-gray-600'
-                    ) : (
-                      parsedData.type === 'investment' ? 'text-amber-600' : parsedData.isIncome ? 'text-green-600' : 'text-orange-600'
-                    )
-                  }`}>
-                    {parsedData.accountingAnalysis ? parsedData.accountingAnalysis.displayAmount : `${parsedData.type !== 'investment' && (parsedData.isIncome ? '+' : '-')} ${parsedData.amount.toLocaleString()}`}
+                  <div className={`text-xl font-bold text-right flex-shrink-0 ${amountColor}`}>
+                    {amountDisplay}
                   </div>
                 </div>
+
+                {/* Accounting Category Badge (Business Only) */}
+                {selectedMode === 'business' && parsedData.categoryName && (
+                  <div className="bg-white/70 rounded-lg px-3 py-2 flex items-center gap-2 text-sm">
+                    <span className="text-lg">{parsedData.categoryEmoji}</span>
+                    <span className="font-semibold text-gray-800">{badgeLabel}</span>
+                    {acctType && (
+                      <span className={`ml-auto text-xs font-bold px-2 py-0.5 rounded-full ${
+                        isCOGS || isAsset     ? 'bg-amber-200 text-amber-800' :
+                        isRevenue || isEquity ? 'bg-green-200 text-green-800' :
+                        isLiab               ? 'bg-blue-200 text-blue-800' :
+                                               'bg-gray-200 text-gray-700'
+                      }`}>
+                        {acctType.toUpperCase().replace('_', ' ')}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
+            );
+          })()}
 
-              {/* Accounting Category Badge (Business Only) */}
-              {selectedMode === 'business' && parsedData.category && businessCategories[parsedData.category] && (
-                <div className="bg-white/60 rounded px-3 py-2 flex items-center gap-2 text-sm">
-                  <span className="text-lg">{businessCategories[parsedData.category].emoji}</span>
-                  <span className="font-semibold text-gray-800">{businessCategories[parsedData.category].name}</span>
-                  <span className="text-xs text-gray-500 ml-auto">AI-Powered Categorization</span>
-                </div>
-              )}
-
-              {/* Professional Accounting Analysis (AI-Powered) */}
-              {selectedMode === 'business' && isAnalyzing && (
-                <div className="bg-blue-50 border border-blue-200 rounded px-3 py-2 flex items-center gap-2">
-                  <Loader className="w-4 h-4 animate-spin text-blue-600" />
-                  <span className="text-xs text-blue-700">🤖 Consulting professional accountant...</span>
-                </div>
-              )}
+          {/* Analyzing spinner (business mode) */}
+          {selectedMode === 'business' && isAnalyzing && (
+            <div className="bg-blue-50 border border-blue-200 rounded px-3 py-2 flex items-center gap-2">
+              <Loader className="w-4 h-4 animate-spin text-blue-600" />
+              <span className="text-xs text-blue-700">🤖 Consulting professional accountant...</span>
             </div>
           )}
 
@@ -600,8 +811,8 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
           {!textInput && !isListening && (
             <p className="text-xs text-gray-500 text-center">
               {selectedMode === 'business'
-                ? '📊 "Bought van 40m" • "Salary expense 2m" • "Sales revenue 500k"'
-                : '💡 "Lunch 15k" • "Salary 800k" • "Bought shoes 120k"'}
+                ? '� "Bought 100 bags of rice 2m" • "⛏️ Sales 800k" • "💰 Loan from bank 5m" • "Paid salary 1.5m"'
+                : '💡 "Lunch 15k" • "Salary 800k" • "Saved 100k" • "Transport 5k"'}
             </p>
           )}
           {isListening && (

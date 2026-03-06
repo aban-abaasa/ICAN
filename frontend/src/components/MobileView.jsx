@@ -60,6 +60,14 @@ import { StatusPage } from './StatusPage';
 import { StatusUploader } from './status/StatusUploader';
 import SearchModal from './SearchModal';
 import { BusinessLoanCalculator } from './BusinessLoanCalculator';
+import { jsPDF } from 'jspdf';
+import * as XLSX from 'xlsx';
+import {
+  generateTaxReturn,
+  generateBalanceSheet,
+  generateIncomeStatement,
+  generateCountryComplianceReport,
+} from '../services/advancedReportService';
 import { VelocityEngine } from '../utils/velocityEngine';
 import { supabase } from '../lib/supabase/client';
 import { walletAccountService } from '../services/walletAccountService';
@@ -807,7 +815,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [selectedReportType, setSelectedReportType] = useState('financial-summary');
   const [selectedCountry, setSelectedCountry] = useState('UG');
   const [dateRange] = useState('current-month');
-  const [exportFormat] = useState('pdf');
+  const [exportFormat, setExportFormat] = useState('pdf');
   const [reportTitle, setReportTitle] = useState('ICAN Financial Report');
   const [includeAIAnalysis, setIncludeAIAnalysis] = useState(true);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
@@ -4801,13 +4809,23 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         </div>
       )}
 
-      {/* Search Modal with AI Assistant */}
+      {/* Search Modal with AI Copilot */}
       <SearchModal
         isOpen={showSearchModal}
         onClose={() => setShowSearchModal(false)}
         user={authUser}
         transactions={transactions}
         wallets={walletAccounts}
+        onNavigate={(featureId) => {
+          setShowSearchModal(false);
+          if (featureId === 'wallets' || featureId === 'ican-coin') setShowWalletPanel(true);
+          else if (featureId === 'pitching') setShowPitchinPanel(true);
+          else if (featureId === 'trust') setShowTrustPanel(true);
+          else if (featureId === 'cmms') setShowCmmsPanel(true);
+          else if (featureId === 'profile') setShowProfilePanel(true);
+          else if (featureId === 'reports') setShowReportingSystem(true);
+          // 'transactions' and 'ai-copilot' stay on home screen
+        }}
       />
 
       {/* Record Type Selection Modal */}
@@ -5021,26 +5039,257 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   </div>
                 )}
 
+                {/* Export format selector */}
+                <div>
+                  <p className="text-xs font-semibold text-gray-400 mb-1">Export As</p>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      {id:'csv',   label:'📊 CSV'},
+                      {id:'excel', label:'🟢 Excel'},
+                      {id:'json',  label:'🗂 JSON'},
+                      {id:'pdf',   label:'📄 PDF'},
+                      {id:'email', label:'✉️ Email'},
+                    ].map(fmt => (
+                      <button key={fmt.id} onClick={() => setExportFormat(fmt.id)}
+                        className={`flex-1 min-w-[60px] py-2 rounded-lg text-xs font-bold border transition ${
+                          exportFormat === fmt.id
+                            ? 'bg-purple-600 border-purple-400 text-white'
+                            : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+                        }`}>{fmt.label}</button>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Generate button */}
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     setIsGeneratingReport(true);
-                    setTimeout(() => {
-                      setGeneratedReportData(reportSummary);
+                    setGeneratedReportData(null);
+                    try {
+                      const income   = velocityMetrics?.income30Days    || 0;
+                      const expenses = velocityMetrics?.expenses30Days  || 0;
+                      const netWorth = velocityMetrics?.netWorth         || 0;
+                      const userId   = userProfile?.id;
+                      const fd = {
+                        revenue: income,
+                        costOfGoodsSold: expenses * 0.4,
+                        operatingExpenses: expenses * 0.6,
+                        otherIncome: 0,
+                        otherExpenses: 0,
+                        taxExpense: Math.max(0, (income - expenses) * 0.30),
+                        assets: { cash: netWorth * 0.3, investments: netWorth * 0.4, equipment: netWorth * 0.2, property: 0, other: netWorth * 0.1 },
+                        liabilities: { loans: expenses * 2, creditCards: 0, payables: expenses * 0.5, other: 0 },
+                        equity: netWorth,
+                        income, expenses, netProfit: income - expenses,
+                        savingsRate: income > 0 ? ((income - expenses) / income * 100) : 0,
+                        netWorth,
+                      };
+                      let result;
+                      if (selectedReportType === 'tax-filing') {
+                        result = await generateTaxReturn(fd, selectedCountry, userId);
+                      } else if (selectedReportType === 'balance-sheet') {
+                        result = await generateBalanceSheet(fd, selectedCountry, userId);
+                      } else if (selectedReportType === 'income-statement') {
+                        result = await generateIncomeStatement(fd, selectedCountry, userId);
+                      } else if (selectedReportType === 'custom-analysis') {
+                        result = await generateCountryComplianceReport(fd, selectedCountry, userId);
+                      } else {
+                        // Generic — save to Supabase financial_reports
+                        result = { ...fd, type: selectedReportType, country: selectedCountry, generated: new Date().toLocaleDateString() };
+                        if (userId) {
+                          await supabase.from('financial_reports').insert([{
+                            user_id: userId,
+                            report_type: selectedReportType,
+                            country: selectedCountry,
+                            data: result,
+                            created_at: new Date().toISOString()
+                          }]).then(({ error }) => { if(error) console.error('Save report:', error); });
+                        }
+                      }
+                      setGeneratedReportData({ ...result, reportName: reportTypes[selectedReportType]?.name, generated: new Date().toLocaleDateString() });
+                    } catch(e) {
+                      console.error('Report generation error:', e);
+                      setGeneratedReportData({ error: true, reportName: reportTypes[selectedReportType]?.name, generated: new Date().toLocaleDateString() });
+                    } finally {
                       setIsGeneratingReport(false);
-                    }, 1800);
+                    }
                   }}
                   disabled={isGeneratingReport}
                   className="w-full py-3 rounded-xl font-bold text-white text-sm transition active:scale-95 disabled:opacity-60"
                   style={{background: 'linear-gradient(135deg, #e11d48, #9333ea)'}}
                 >
-                  {isGeneratingReport ? '⏳ Generating...' : '🚀 Generate Report'}
+                  {isGeneratingReport ? '⏳ Generating & Saving...' : '🚀 Generate Report'}
                 </button>
 
                 {generatedReportData && !isGeneratingReport && (
-                  <div className="bg-green-900/30 border border-green-500/40 rounded-xl p-3">
-                    <p className="text-green-400 font-semibold text-xs">✅ Report ready — {generatedReportData.generated}</p>
-                    <p className="text-gray-400 text-xs mt-1">{generatedReportData.reportName?.trim()} generated for {countries.find(c => c.code === selectedCountry)?.name || 'Uganda'}</p>
+                  <div className="space-y-2">
+                    {generatedReportData.error ? (
+                      <div className="bg-red-900/30 border border-red-500/40 rounded-xl p-3">
+                        <p className="text-red-400 font-semibold text-xs">⚠️ Generation failed — check connection</p>
+                      </div>
+                    ) : (
+                      <div className="bg-green-900/30 border border-green-500/40 rounded-xl p-3 space-y-2">
+                        <p className="text-green-400 font-semibold text-xs">✅ Saved to Supabase — {generatedReportData.generated}</p>
+                        <p className="text-gray-400 text-xs">{generatedReportData.reportName?.trim()} · {countries.find(c => c.code === selectedCountry)?.name || 'Uganda'}</p>
+                        {/* Export action buttons */}
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {/* CSV */}
+                          <button
+                            onClick={() => {
+                              const rows = [];
+                              const flatten = (obj, prefix='') => {
+                                Object.entries(obj).forEach(([k,v]) => {
+                                  const key = prefix ? `${prefix}.${k}` : k;
+                                  if (v && typeof v === 'object' && !Array.isArray(v)) flatten(v, key);
+                                  else rows.push(`"${key}","${String(v ?? '')}"`);
+                                });
+                              };
+                              flatten(generatedReportData);
+                              const csv = ['Field,Value', ...rows].join('\n');
+                              const blob = new Blob([csv], {type:'text/csv'});
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a'); a.href=url;
+                              a.download = `ICAN_${selectedReportType}_${Date.now()}.csv`;
+                              a.click(); URL.revokeObjectURL(url);
+                            }}
+                            className={`flex-1 min-w-[60px] py-2 rounded-lg text-xs font-bold transition active:scale-95 ${
+                              exportFormat==='csv' ? 'bg-emerald-600 text-white' : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                            }`}
+                          >📊 CSV</button>
+
+                          {/* Excel */}
+                          <button
+                            onClick={() => {
+                              const rows = [];
+                              const flatten = (obj, prefix='') => {
+                                Object.entries(obj).forEach(([k,v]) => {
+                                  const key = prefix ? `${prefix}.${k}` : k;
+                                  if (v && typeof v === 'object' && !Array.isArray(v)) flatten(v, key);
+                                  else rows.push({ Field: key, Value: v });
+                                });
+                              };
+                              flatten(generatedReportData);
+                              const ws = XLSX.utils.json_to_sheet(rows);
+                              ws['!cols'] = [{wch:40},{wch:30}];
+                              const wb = XLSX.utils.book_new();
+                              XLSX.utils.book_append_sheet(wb, ws, 'Report');
+                              XLSX.writeFile(wb, `ICAN_${selectedReportType}_${Date.now()}.xlsx`);
+                            }}
+                            className={`flex-1 min-w-[60px] py-2 rounded-lg text-xs font-bold transition active:scale-95 ${
+                              exportFormat==='excel' ? 'bg-green-600 text-white' : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                            }`}
+                          >🟢 Excel</button>
+
+                          {/* JSON */}
+                          <button
+                            onClick={() => {
+                              const json = JSON.stringify(generatedReportData, null, 2);
+                              const blob = new Blob([json], {type:'application/json'});
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a'); a.href=url;
+                              a.download = `ICAN_${selectedReportType}_${Date.now()}.json`;
+                              a.click(); URL.revokeObjectURL(url);
+                            }}
+                            className={`flex-1 min-w-[60px] py-2 rounded-lg text-xs font-bold transition active:scale-95 ${
+                              exportFormat==='json' ? 'bg-blue-600 text-white' : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                            }`}
+                          >🗂 JSON</button>
+
+                          {/* PDF */}
+                          <button
+                            onClick={() => {
+                              const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+                              const rpt = generatedReportData;
+                              const countryName = countries?.find(c => c.code === selectedCountry)?.name || selectedCountry || 'Uganda';
+                              const title = rpt.reportName || selectedReportType.replace(/-/g,' ').toUpperCase();
+                              // Header band
+                              doc.setFillColor(147, 51, 234);
+                              doc.rect(0, 0, 210, 28, 'F');
+                              doc.setTextColor(255, 255, 255);
+                              doc.setFontSize(16); doc.setFont('helvetica','bold');
+                              doc.text('ICAN Financial Report', 14, 12);
+                              doc.setFontSize(10); doc.setFont('helvetica','normal');
+                              doc.text(`${title} · ${countryName}`, 14, 20);
+                              doc.text(`Generated: ${rpt.generated || new Date().toLocaleDateString()}`, 150, 20);
+                              // Body
+                              doc.setTextColor(30, 30, 30);
+                              let y = 36;
+                              const addSection = (heading, obj) => {
+                                if (!obj || typeof obj !== 'object') return;
+                                doc.setFontSize(11); doc.setFont('helvetica','bold');
+                                doc.setTextColor(147, 51, 234);
+                                doc.text(heading, 14, y); y += 5;
+                                doc.setDrawColor(200, 180, 240);
+                                doc.line(14, y, 196, y); y += 4;
+                                doc.setFontSize(9); doc.setFont('helvetica','normal');
+                                doc.setTextColor(50, 50, 50);
+                                Object.entries(obj).forEach(([k, v]) => {
+                                  if (typeof v === 'object' && v !== null) return;
+                                  const label = k.replace(/([A-Z])/g,' $1').replace(/_/g,' ');
+                                  const val = typeof v === 'number' ? v.toLocaleString() : String(v ?? '');
+                                  doc.text(`${label}:`, 16, y);
+                                  doc.text(val, 110, y);
+                                  y += 5;
+                                  if (y > 270) { doc.addPage(); y = 20; }
+                                });
+                                y += 3;
+                              };
+                              // Top-level primitives
+                              addSection('Summary', Object.fromEntries(
+                                Object.entries(rpt).filter(([,v]) => typeof v !== 'object')
+                              ));
+                              // Nested objects
+                              Object.entries(rpt).forEach(([k,v]) => {
+                                if (v && typeof v === 'object' && !Array.isArray(v)) {
+                                  addSection(k.replace(/([A-Z])/g,' $1').replace(/_/g,' ').toUpperCase(), v);
+                                }
+                              });
+                              // Footer
+                              const pages = doc.internal.getNumberOfPages();
+                              for (let i = 1; i <= pages; i++) {
+                                doc.setPage(i);
+                                doc.setFontSize(8); doc.setTextColor(160,160,160);
+                                doc.text(`ICAN · Confidential · Page ${i} of ${pages}`, 14, 290);
+                              }
+                              doc.save(`ICAN_${selectedReportType}_${Date.now()}.pdf`);
+                            }}
+                            className={`flex-1 min-w-[60px] py-2 rounded-lg text-xs font-bold transition active:scale-95 ${
+                              exportFormat==='pdf' ? 'bg-rose-600 text-white' : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                            }`}
+                          >📄 PDF</button>
+
+                          {/* Email */}
+                          <button
+                            onClick={() => {
+                              const rpt = generatedReportData;
+                              const countryName = countries?.find(c => c.code === selectedCountry)?.name || 'Uganda';
+                              const subject = encodeURIComponent(`ICAN Financial Report — ${rpt.reportName || selectedReportType} (${countryName})`);
+                              const lines = [];
+                              const flatten = (obj, prefix='') => {
+                                Object.entries(obj).forEach(([k,v]) => {
+                                  const key = prefix ? `${prefix}.${k}` : k;
+                                  if (v && typeof v === 'object' && !Array.isArray(v)) flatten(v, key);
+                                  else lines.push(`${key}: ${v}`);
+                                });
+                              };
+                              flatten(rpt);
+                              const body = encodeURIComponent(
+                                `ICAN Financial Report\n` +
+                                `Type: ${rpt.reportName || selectedReportType}\n` +
+                                `Country: ${countryName}\n` +
+                                `Generated: ${rpt.generated || new Date().toLocaleDateString()}\n\n` +
+                                `--- Report Data ---\n` +
+                                lines.join('\n')
+                              );
+                              window.location.href = `mailto:?subject=${subject}&body=${body}`;
+                            }}
+                            className={`flex-1 min-w-[60px] py-2 rounded-lg text-xs font-bold transition active:scale-95 ${
+                              exportFormat==='email' ? 'bg-amber-600 text-white' : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                            }`}
+                          >✉️ Email</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

@@ -4,9 +4,9 @@
  * with AI-powered country-specific compliance using OpenAI API
  */
 
-import { supabaseClient } from '../config/supabase';
+import { supabase as supabaseClient } from '../lib/supabase/client';
 
-const OPENAI_API_KEY = process.env.REACT_APP_OPENAI_API_KEY;
+const OPENAI_API_KEY = import.meta.env?.VITE_OPENAI_API_KEY || process.env?.REACT_APP_OPENAI_API_KEY;
 
 // Country Tax Regulations Configuration
 const COUNTRY_REGULATIONS = {
@@ -447,7 +447,7 @@ export const generateBalanceSheet = async (financialData, countryCode = 'UG', us
     ratios: {
       currentRatio: (assets.cash || 0) / (totalLiabilities || 1),
       debtToEquity: totalLiabilities / (totalEquity || 1),
-      assetTurno ver: totalAssets / (totalLiabilities || 1),
+      assetTurnover: totalAssets / (totalLiabilities || 1),
       equityRatio: totalEquity / totalAssets
     },
 
