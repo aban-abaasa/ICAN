@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Mic,
+  MicOff,
   MoreVertical,
   Building,
   BarChart3,
@@ -554,7 +555,16 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [showRecordPanel, setShowRecordPanel] = useState(false);
   const [showExpenseIncomePanel, setShowExpenseIncomePanel] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
-  
+
+  // ====== VOICE RECOGNITION STATE ======
+  const [isListening, setIsListening] = useState(false);
+  const [voiceInterim, setVoiceInterim] = useState('');
+  const [voiceTranscript, setVoiceTranscript] = useState('');
+  const [voicePrefill, setVoicePrefill] = useState('');
+  const [voiceSupported] = useState(() => !!(window.SpeechRecognition || window.webkitSpeechRecognition));
+  const recognitionRef = useRef(null);
+  const voiceTranscriptRef = useRef('');
+
   // Collapsed Sections State
   const [expandedSections, setExpandedSections] = useState({
     progress: false,
@@ -2173,6 +2183,78 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     }
   };
 
+  // ====== VOICE RECOGNITION FUNCTIONS ======
+  const startVoiceRecognition = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('Voice recognition is not supported in this browser. Please use Chrome or Edge.');
+      return;
+    }
+
+    // Stop any existing recognition
+    recognitionRef.current?.abort();
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    recognition.maxAlternatives = 1;
+
+    recognitionRef.current = recognition;
+    voiceTranscriptRef.current = '';
+    setVoiceTranscript('');
+    setVoiceInterim('');
+
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+
+    recognition.onresult = (event) => {
+      let interim = '';
+      let finalChunk = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const t = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalChunk += t;
+        } else {
+          interim += t;
+        }
+      }
+      setVoiceInterim(interim);
+      if (finalChunk) {
+        voiceTranscriptRef.current = (voiceTranscriptRef.current + ' ' + finalChunk).trim();
+        setVoiceTranscript(voiceTranscriptRef.current);
+      }
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      setVoiceInterim('');
+      const finalText = voiceTranscriptRef.current.trim();
+      voiceTranscriptRef.current = '';
+      setVoiceTranscript('');
+      if (finalText) {
+        setVoicePrefill(finalText);
+        // Auto-open the record type modal with the spoken text pre-filled
+        setShowRecordTypeModal(true);
+      }
+    };
+
+    recognition.onerror = (event) => {
+      console.warn('Voice recognition error:', event.error);
+      setIsListening(false);
+      setVoiceInterim('');
+      setVoiceTranscript('');
+      voiceTranscriptRef.current = '';
+    };
+
+    recognition.start();
+  };
+
+  const stopVoiceRecognition = () => {
+    recognitionRef.current?.stop();
+  };
+
   return (
     <div className={`min-h-screen text-white overflow-x-hidden ${
       isWebDashboard
@@ -2375,18 +2457,60 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* ====== RECORD EVERY TRANSACTION SECTION ====== */}
       <div className="px-4 py-4">
         <h2 className="text-lg font-bold text-white mb-3">Record Every Transaction</h2>
-        <button
-          onClick={() => setShowRecordTypeModal(true)}
-          className="w-full flex items-center gap-3 bg-gradient-to-r from-purple-700 to-purple-600 border border-purple-500/50 hover:border-purple-400/80 rounded-full px-4 py-3 sm:py-4 hover:bg-gradient-to-r hover:from-purple-600 hover:to-purple-500 transition-all active:scale-95 shadow-lg shadow-purple-600/40"
-        >
-          <input
-            type="text"
-            placeholder="Tap to record or type transaction..."
-            className="flex-1 bg-transparent text-white placeholder-gray-400 outline-none text-sm sm:text-base"
-            readOnly
-          />
-          <Mic className="w-5 sm:w-6 h-5 sm:h-6 text-white flex-shrink-0" />
-        </button>
+        <div className={`w-full flex items-center gap-3 rounded-full px-4 py-3 sm:py-4 shadow-lg transition-all ${
+          isListening
+            ? 'bg-gradient-to-r from-red-700 to-red-600 border border-red-400/60 shadow-red-600/40'
+            : 'bg-gradient-to-r from-purple-700 to-purple-600 border border-purple-500/50 shadow-purple-600/40'
+        }`}>
+          {/* Tappable text area → opens type modal when not listening */}
+          <button
+            onClick={() => {
+              if (!isListening) setShowRecordTypeModal(true);
+            }}
+            className="flex-1 text-left outline-none"
+          >
+            <span className={`text-sm sm:text-base block truncate ${
+              isListening || voiceInterim || voiceTranscript ? 'text-white' : 'text-gray-300'
+            }`}>
+              {isListening
+                ? (voiceInterim
+                    ? voiceInterim
+                    : voiceTranscript
+                      ? voiceTranscript
+                      : 'Listening... speak now 🎙')
+                : voiceTranscript
+                  ? voiceTranscript
+                  : 'Tap to record or type transaction...'}
+            </span>
+          </button>
+
+          {/* Mic button - toggles voice recognition */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (isListening) {
+                stopVoiceRecognition();
+              } else {
+                startVoiceRecognition();
+              }
+            }}
+            className={`flex-shrink-0 p-1.5 rounded-full transition-all active:scale-90 ${
+              isListening ? 'bg-white/20 animate-pulse' : 'hover:bg-white/10'
+            }`}
+            title={isListening ? 'Tap to stop recording' : 'Tap to speak'}
+          >
+            {isListening
+              ? <MicOff className="w-5 sm:w-6 h-5 sm:h-6 text-red-200" />
+              : <Mic className="w-5 sm:w-6 h-5 sm:h-6 text-white" />}
+          </button>
+        </div>
+
+        {/* Listening hint */}
+        {isListening && (
+          <p className="text-center text-xs text-red-300 mt-2 animate-pulse">
+            🎙 Listening... tap the mic to stop
+          </p>
+        )}
       </div>
 
       {/* ====== DETAIL PAGE - SETTINGS ONLY ====== */}
@@ -4581,10 +4705,12 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       <SmartTransactionEntry
         isOpen={showTransactionEntry}
         transactionType={transactionType}
+        prefillText={voicePrefill}
         onClose={() => {
           setShowTransactionEntry(false);
           setShowRecordPanel(false);
           setTransactionType(null);
+          setVoicePrefill('');
         }}
         onSubmit={(transaction) => {
           // Add timestamp if not present

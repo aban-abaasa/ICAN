@@ -9,7 +9,7 @@ import { Send, Check, DollarSign, Briefcase, Loader } from 'lucide-react';
 import { analyzeTransactionWithAI } from '../services/accountingAIService';
 
 
-export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, onClose = null, onSubmit = null }) => {
+export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, onClose = null, onSubmit = null, prefillText = '' }) => {
   const [textInput, setTextInput] = useState('');
   const [parsedData, setParsedData] = useState(null);
   const [aiAnalysis, setAiAnalysis] = useState(null);
@@ -181,16 +181,30 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
     setParsedData(parsed);
   };
 
-  // Focus input when modal opens
+  // Focus input when modal opens; pre-fill voice transcript if provided
   useEffect(() => {
-    if (isOpen && inputRef.current) {
-      setTimeout(() => inputRef.current?.focus(), 100);
+    if (isOpen) {
+      // Pre-fill text from voice recognition
+      if (prefillText && prefillText.trim()) {
+        setTextInput(prefillText.trim());
+        const parsed = parseSmartInput(prefillText.trim());
+        setParsedData(parsed);
+      }
+      if (inputRef.current) {
+        setTimeout(() => inputRef.current?.focus(), 150);
+      }
+    } else {
+      // Reset when modal closes
+      setTextInput('');
+      setParsedData(null);
+      setAiAnalysis(null);
     }
     // Update selectedMode if transactionType prop changes
     if (transactionType && transactionType !== selectedMode) {
       setSelectedMode(transactionType);
     }
-  }, [isOpen, transactionType]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, transactionType, prefillText]);
 
   // Submit transaction with AI analysis
   const handleSubmit = async () => {

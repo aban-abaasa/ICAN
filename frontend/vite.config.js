@@ -98,7 +98,9 @@ export default defineConfig({
       '@supabase/supabase-js',
       'lucide-react'
     ],
-    exclude: ['node_modules/.vite']
+    // ffmpeg.wasm loads its own WASM binary at runtime from a Blob URL;
+    // letting Vite pre-bundle it breaks the dynamic import chain.
+    exclude: ['node_modules/.vite', '@ffmpeg/ffmpeg', '@ffmpeg/util']
   },
 
   // CSS preprocessing

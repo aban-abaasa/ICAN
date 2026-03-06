@@ -7,6 +7,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Upload, X, Send, Plus, CheckCircle, AlertCircle, Loader, Camera, Sparkles } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { uploadStatusMedia, createStatus } from '../../services/statusService';
+import { compressVideo, shouldCompress } from '../../utils/videoCompressor';
 
 export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpenFilePicker = true }) => {
   const { user, profile } = useAuth();
@@ -29,6 +30,10 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
   const [fileToUpload, setFileToUpload] = useState(null);
   const [previewMediaKind, setPreviewMediaKind] = useState(null);
   const [statusMode, setStatusMode] = useState('media');
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [compressionProgress, setCompressionProgress] = useState(0);
+  // 'idle' | 'loading-wasm' | 'compressing'
+  const [compressionPhase, setCompressionPhase] = useState('idle');
 
   const releasePreviewUrl = () => {
     if (previewUrl && previewUrl.startsWith('blob:')) {
@@ -118,7 +123,7 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
 
     setError(null);
     const mediaKind = getMediaKind(file);
-    const maxSizeMB = mediaKind === 'video' ? 100 : 20;
+
     const allowedTypes = [
       'image/jpeg',
       'image/png',
@@ -133,17 +138,59 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
       return;
     }
 
-    if (file.size > maxSizeMB * 1024 * 1024) {
-      setError(`${mediaKind === 'video' ? 'Video' : 'Image'} is too large. Max ${maxSizeMB}MB.`);
+    // Images: hard cap at 10 MB (no compression)
+    if (mediaKind === 'image' && file.size > 10 * 1024 * 1024) {
+      const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+      setError(`Image is too large (${sizeMB} MB). Max 10 MB.`);
       return;
     }
 
+    // Videos: no hard cap on input — ffmpeg will compress anything.
+    // Warn if file is absurdly large (> 2 GB) since browsers can't load that into memory.
+    if (mediaKind === 'video' && file.size > 2048 * 1024 * 1024) {
+      setError('Video is too large to process in the browser (>2 GB). Please trim it first.');
+      return;
+    }
+
+    let finalFile = file;
+
+    // Compress any video > 5 MB using ffmpeg.wasm → targets 720p H.264 ≈ <30 MB output
+    if (shouldCompress(file)) {
+      const originalMB = (file.size / 1024 / 1024).toFixed(1);
+      setIsCompressing(true);
+      setCompressionProgress(0);
+      // Phase 1: loading the WASM binary (first-use download ~10 MB from CDN)
+      setCompressionPhase('loading-wasm');
+      try {
+        finalFile = await compressVideo(file, {
+          onProgress: (ratio) => {
+            // Once ffmpeg starts reporting progress, we're in the actual encode phase
+            setCompressionPhase('compressing');
+            setCompressionProgress(Math.round(ratio * 100));
+          },
+        });
+        const compressedMB = (finalFile.size / 1024 / 1024).toFixed(1);
+        console.log(`✓ ffmpeg compressed: ${originalMB} MB → ${compressedMB} MB`);
+      } catch (compErr) {
+        console.warn('ffmpeg compression failed, falling back to original:', compErr);
+        finalFile = file;
+        setError(
+          `Auto-compression failed: ${compErr.message}. ` +
+          `The file (${originalMB} MB) may exceed Supabase's limit — try a shorter clip.`
+        );
+      } finally {
+        setIsCompressing(false);
+        setCompressionProgress(0);
+        setCompressionPhase('idle');
+      }
+    }
+
     // Preview (object URL supports both image and video)
-    const nextPreviewUrl = URL.createObjectURL(file);
+    const nextPreviewUrl = URL.createObjectURL(finalFile);
     releasePreviewUrl();
     setPreviewUrl(nextPreviewUrl);
     setPreviewMediaKind(mediaKind);
-    setFileToUpload(file);
+    setFileToUpload(finalFile);
     setStatusMode('media');
   };
 
@@ -226,7 +273,7 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
       if (fileToUpload) {
         mediaType = previewMediaKind || getMediaKind(fileToUpload);
         const { url, error: uploadError } = await uploadStatusMedia(user.id, fileToUpload, {
-          maxSizeMB: mediaType === 'video' ? 100 : 20,
+          maxSizeMB: mediaType === 'video' ? 50 : 10,
           allowedTypes: [
             'image/jpeg',
             'image/png',
@@ -265,8 +312,9 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
     } catch (err) {
       const message = String(err?.message || 'Upload failed');
       if (message.toLowerCase().includes('mime type')) {
-        setError('Video upload is blocked by storage MIME policy. Please allow video/mp4, video/quicktime, and video/webm in Supabase bucket "user-content".');
-      } else {
+        setError('Video upload is blocked by storage MIME policy. Please allow video/mp4, video/quicktime, and video/webm in Supabase bucket "user-content".');      } else if (message.toLowerCase().includes('maximum allowed size') || message.toLowerCase().includes('too large') || message.toLowerCase().includes('exceeded')) {
+        const sizeMB = fileToUpload ? (fileToUpload.size / (1024 * 1024)).toFixed(1) : '?';
+        setError(`File too large for upload (${sizeMB} MB). Please use a shorter video clip under 50 MB.`);      } else {
         setError(message);
       }
       console.error('Upload error:', err);
@@ -478,6 +526,39 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
             </div>
           )}
 
+          {/* Compression Progress */}
+          {isCompressing && (
+            <div className="space-y-3 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg backdrop-blur-sm">
+              {compressionPhase === 'loading-wasm' ? (
+                /* Phase 1 — downloading the ffmpeg WASM binary (~10 MB, once per session) */
+                <div className="flex items-center gap-3">
+                  <Loader className="w-5 h-5 text-blue-400 animate-spin flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-blue-200">Loading compression engine…</p>
+                    <p className="text-xs text-blue-300/70 mt-0.5">One-time download, takes a few seconds</p>
+                  </div>
+                </div>
+              ) : (
+                /* Phase 2 — actual encoding */
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-blue-200">Compressing video…</span>
+                    <span className="text-sm text-blue-300 font-bold">{compressionProgress}%</span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 transition-all duration-300"
+                      style={{ width: `${compressionProgress}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-blue-300/70">
+                    Encoding to 720p H.264 — much faster than real-time ⚡
+                  </p>
+                </>
+              )}
+            </div>
+          )}
+
           {/* Upload Progress */}
           {isUploading && (
             <div className="space-y-3 p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg backdrop-blur-sm">
@@ -510,15 +591,15 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
         {(fileToUpload || statusMode === 'text') && !uploadSuccess && (
           <button
             onClick={handleUpload}
-            disabled={isUploading || (statusMode === 'text' && !caption.trim())}
+            disabled={isUploading || isCompressing || (statusMode === 'text' && !caption.trim())}
             className={`absolute bottom-24 right-6 w-16 h-16 rounded-full flex items-center justify-center transition-all shadow-2xl hover:shadow-2xl hover:scale-110 disabled:scale-95 z-10 font-bold text-lg transform ${
-              isUploading 
+              isUploading || isCompressing
                 ? 'bg-gradient-to-r from-purple-600 to-pink-600 animate-pulse' 
                 : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 hover:shadow-purple-500/50'
             } text-white border-2 border-white/30`}
-            title={isUploading ? 'Publishing...' : 'Publish Story'}
+            title={isCompressing ? 'Compressing...' : isUploading ? 'Publishing...' : 'Publish Story'}
           >
-            {isUploading ? (
+            {(isUploading || isCompressing) ? (
               <Loader className="w-6 h-6 animate-spin" />
             ) : (
               <Send className="w-6 h-6" />
@@ -530,14 +611,19 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
         {(fileToUpload || statusMode === 'text') && (
           <div className="p-4 border-t border-purple-500/20 flex-shrink-0 bg-slate-900/50 backdrop-blur-md">
             <button
+              disabled={isCompressing || isUploading}
               onClick={() => {
                 resetSelectedMedia();
                 setCaption('');
                 setStatusMode('media');
               }}
-              className="w-full px-4 py-2 text-gray-300 hover:text-white hover:bg-white/10 rounded-lg font-medium transition-all"
+              className="w-full px-4 py-2 text-gray-300 hover:text-white hover:bg-white/10 rounded-lg font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              Cancel
+              {compressionPhase === 'loading-wasm'
+                ? 'Loading engine… please wait'
+                : isCompressing
+                ? 'Compressing… please wait'
+                : 'Cancel'}
             </button>
           </div>
         )}
