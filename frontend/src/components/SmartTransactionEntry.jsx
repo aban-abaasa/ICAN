@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Check, DollarSign, Briefcase, Loader } from 'lucide-react';
+import { Send, Check, DollarSign, Briefcase, Loader, Mic, MicOff } from 'lucide-react';
 import { analyzeTransactionWithAI } from '../services/accountingAIService';
 
 
@@ -18,6 +18,60 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
   const [selectedMode, setSelectedMode] = useState(transactionType || 'personal');
   const [showModeSelector, setShowModeSelector] = useState(!transactionType); // Show selector if no transactionType
   const inputRef = useRef(null);
+
+  // ── Voice recognition state ──
+  const [isListening, setIsListening] = useState(false);
+  const [voiceInterim, setVoiceInterim] = useState('');
+  const recognitionRef = useRef(null);
+  const voiceTranscriptRef = useRef('');
+  const voiceSupported = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+
+  const startVoiceRecognition = () => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return;
+    const recognition = new SR();
+    recognitionRef.current = recognition;
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    voiceTranscriptRef.current = '';
+
+    recognition.onstart = () => { setIsListening(true); setVoiceInterim(''); };
+
+    recognition.onresult = (e) => {
+      let interim = '';
+      let final = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) final += e.results[i][0].transcript;
+        else interim += e.results[i][0].transcript;
+      }
+      if (final) voiceTranscriptRef.current += final;
+      // Show combined final+interim so user sees their words live
+      const combined = (voiceTranscriptRef.current + ' ' + interim).trim();
+      setVoiceInterim(combined);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      setVoiceInterim('');
+      const spoken = voiceTranscriptRef.current.trim();
+      voiceTranscriptRef.current = '';
+      if (spoken) {
+        setTextInput(spoken);
+        setParsedData(parseSmartInputWithMode(spoken, selectedMode));
+      }
+    };
+
+    recognition.onerror = (e) => {
+      console.warn('Voice error:', e.error);
+      setIsListening(false);
+      setVoiceInterim('');
+    };
+
+    recognition.start();
+  };
+
+  const stopVoiceRecognition = () => recognitionRef.current?.stop();
 
   // Keywords for detecting expense vs income
   const incomeKeywords = ['salary', 'earned', 'received', 'income', 'bonus', 'interest', 'dividend', 'payment', 'refund', 'returned', 'paid', 'sales', 'revenue'];
@@ -53,29 +107,27 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
     }
   };
 
-  // 🧠 Smart text parser - detects expense/income and extracts amount + source/destination
-  const parseSmartInput = (input) => {
-    if (!input.trim()) return null;
+  // Core parser — mode passed explicitly so it works from voice onend, mode switches, and typing
+  const parseSmartInputWithMode = (input, mode) => {
+    if (!input || !input.trim()) return null;
 
     const text = input.toLowerCase();
-    
-    // Extract amount (e.g., "500k", "500,000", "500000", "50m", "50000")
-    const amountMatch = text.match(/(\d+\.?\d*)\s*([km])?/i);
+
+    // Extract amount — supports "500k", "1.5m", "500,000", plain numbers
+    const amountMatch = text.match(/(\d[\d,]*\.?\d*)\s*(million|m\b|k\b|thousand)?/i);
     let amount = 0;
-    
     if (amountMatch) {
-      amount = parseFloat(amountMatch[1]);
-      const multiplier = amountMatch[2]?.toLowerCase();
-      if (multiplier === 'k') amount *= 1000;
-      else if (multiplier === 'm') amount *= 1000000;
+      amount = parseFloat(amountMatch[1].replace(/,/g, ''));
+      const mult = (amountMatch[2] || '').toLowerCase();
+      if (mult === 'k' || mult === 'thousand') amount *= 1000;
+      else if (mult === 'm' || mult === 'million') amount *= 1000000;
     }
 
-    // 🧮 PROFESSIONAL ACCOUNTING RULES - Applied when in Business Mode
     let isIncome = false;
     let detectedType = 'expense';
     let businessAccountingType = null;
 
-    if (transactionType === 'business') {
+    if (mode === 'business') {
       // 💼 BUSINESS ACCOUNTING RULES (Professional)
       // Rule 1: Large purchases with "bought/purchased" keywords = ASSET (investment)
       if ((amount > 1000000 || /bought|purchased|acquired|invest|capital/i.test(text)) && 
@@ -100,33 +152,22 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
         detectedType = 'expense';
         businessAccountingType = 'expense';
       }
-      // Rule 5: Default for business = Check amount and keywords
+      // Rule 5: Default — large amounts = likely asset, otherwise expense
       else {
-        // Large amounts (>5M) without clear expense keywords = likely investment
         if (amount > 5000000 && !(/spent|paid for|cost|bill/i.test(text))) {
           detectedType = 'investment';
           businessAccountingType = 'asset';
         } else {
-          isIncome = false;
           detectedType = 'expense';
           businessAccountingType = 'expense';
         }
       }
     } else {
-      // 👤 PERSONAL ACCOUNT RULES (Simple)
-      const hasIncome = incomeKeywords.some(keyword => text.includes(keyword));
-      const hasExpense = expenseKeywords.some(keyword => text.includes(keyword));
-
-      if (hasIncome && !hasExpense) {
-        isIncome = true;
-        detectedType = 'income';
-      } else if (hasExpense && !hasIncome) {
-        isIncome = false;
-        detectedType = 'expense';
-      } else if (!hasIncome && !hasExpense) {
-        isIncome = false;
-        detectedType = 'expense';
-      }
+      // 👤 PERSONAL ACCOUNT RULES
+      const hasIncome = incomeKeywords.some(kw => text.includes(kw));
+      const hasExpense = expenseKeywords.some(kw => text.includes(kw));
+      if (hasIncome && !hasExpense) { isIncome = true; detectedType = 'income'; }
+      else { isIncome = false; detectedType = 'expense'; }
     }
 
     // Extract source/destination/action
@@ -151,13 +192,13 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
       source = atMatch ? atMatch[1].trim() : '';
     }
 
-    // Extract description
-    let description = text.replace(/(\d+\.?\d*)\s*([km])?/i, '').trim();
-    if (source) {
-      description = description.replace(/(?:from|at|bought|sold)\s+.+?(?:\s|$)/i, '').trim();
-    }
+    // Clean up description
+    let description = input.replace(/(\d[\d,]*\.?\d*)\s*(million|m\b|k\b|thousand)?/gi, '').trim();
+    if (source) description = description.replace(new RegExp(`(?:from|at|bought|sold)\\s+${source}`, 'i'), '').trim();
+    description = description.replace(/\s+/g, ' ').trim();
     description = description.charAt(0).toUpperCase() + description.slice(1);
-    if (!description) description = isIncome ? 'Income' : (detectedType === 'investment' ? 'Asset/Investment' : 'Expense');
+    if (!description || description.length < 2)
+      description = isIncome ? 'Income received' : detectedType === 'investment' ? 'Asset / Investment' : 'Expense';
 
     return {
       amount: Math.round(amount),
@@ -166,19 +207,33 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
       isIncome,
       source,
       action,
-      businessAccountingType, // Include the professional accounting type
-      category: selectedMode === 'business' ? (investmentKeywords.some(keyword => text.includes(keyword)) ? 'investments' : Object.keys(businessCategories).find(cat => businessCategories[cat].keywords.some(kw => text.includes(kw))) || null) : null,
-      accountingType: selectedMode,
-      isValid: amount > 0
+      businessAccountingType,
+      category: mode === 'business'
+        ? (investmentKeywords.some(kw => text.includes(kw))
+            ? 'investments'
+            : Object.keys(businessCategories).find(cat =>
+                businessCategories[cat].keywords.some(kw => text.includes(kw))
+              ) || null)
+        : null,
+      accountingType: mode,
+      isValid: amount > 0,
     };
   };
+
+  // Convenience wrapper uses current selectedMode
+  const parseSmartInput = (input) => parseSmartInputWithMode(input, selectedMode);
 
   // Handle smart input change
   const handleSmartInput = (e) => {
     const value = e.target.value;
     setTextInput(value);
-    const parsed = parseSmartInput(value);
-    setParsedData(parsed);
+    setParsedData(parseSmartInputWithMode(value, selectedMode));
+  };
+
+  // Re-parse when mode switches so the classification card updates immediately
+  const handleModeChange = (mode) => {
+    setSelectedMode(mode);
+    if (textInput.trim()) setParsedData(parseSmartInputWithMode(textInput, mode));
   };
 
   // Focus input when modal opens; pre-fill voice transcript if provided
@@ -198,6 +253,10 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
       setTextInput('');
       setParsedData(null);
       setAiAnalysis(null);
+      setIsListening(false);
+      setVoiceInterim('');
+      recognitionRef.current?.stop();
+      voiceTranscriptRef.current = '';
     }
     // Update selectedMode if transactionType prop changes
     if (transactionType && transactionType !== selectedMode) {
@@ -336,29 +395,29 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
       {/* Input Bar - Bottom */}
       <div className={`${selectedMode === 'business' ? 'bg-gradient-to-r from-slate-50 to-blue-50' : 'bg-white'} border-t-2 ${selectedMode === 'business' ? 'border-blue-400' : 'border-purple-400'} shadow-2xl`}>
         <div className="p-4 space-y-3">
-          {/* Mode Selector - Show on web or when transactionType not forced */}
+          {/* Mode Selector */}
           {!transactionType && (
             <div className="flex gap-2">
               <button
-                onClick={() => setSelectedMode('business')}
+                onClick={() => handleModeChange('business')}
                 className={`flex-1 px-4 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-3 ${
                   selectedMode === 'business'
                     ? 'bg-blue-600 text-white border-2 border-blue-700'
                     : 'bg-gray-100 text-gray-700 border-2 border-gray-300 hover:border-blue-400'
                 }`}
               >
-                <span className="text-3xl">🏢</span>
+                <span className="text-2xl">🏢</span>
                 <span>Business</span>
               </button>
               <button
-                onClick={() => setSelectedMode('personal')}
+                onClick={() => handleModeChange('personal')}
                 className={`flex-1 px-4 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-3 ${
                   selectedMode === 'personal'
                     ? 'bg-purple-600 text-white border-2 border-purple-700'
                     : 'bg-gray-100 text-gray-700 border-2 border-gray-300 hover:border-purple-400'
                 }`}
               >
-                <span className="text-3xl">👤</span>
+                <span className="text-2xl">👤</span>
                 <span>Personal</span>
               </button>
             </div>
@@ -408,21 +467,60 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
 
           {/* Input Field */}
           <div className="flex items-center gap-2">
-            <input
-              ref={inputRef}
-              type="text"
-              placeholder={selectedMode === 'business' ? "Describe business transaction..." : "Type expense or income..."}
-              value={textInput}
-              onChange={handleSmartInput}
-              onKeyPress={handleKeyPress}
-              className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg text-base text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              autoFocus
-            />
+            <div className={`flex-1 flex items-center gap-2 border-2 rounded-lg px-3 transition-all ${
+              isListening
+                ? 'border-red-400 bg-red-50 shadow-red-100 shadow-md'
+                : selectedMode === 'business'
+                  ? 'border-blue-300 bg-white focus-within:ring-2 focus-within:ring-blue-400'
+                  : 'border-gray-300 bg-white focus-within:ring-2 focus-within:ring-purple-400'
+            }`}>
+              {/* Live voice interim text overlay */}
+              {isListening && (
+                <span className="text-xs text-red-400 animate-pulse flex-shrink-0">🎙</span>
+              )}
+              <input
+                ref={inputRef}
+                type="text"
+                placeholder={
+                  isListening
+                    ? 'Listening... speak now 🎙'
+                    : selectedMode === 'business'
+                      ? 'e.g. "Bought equipment 500k" or tap 🎙'
+                      : 'e.g. "Lunch 8k" • "Salary 500k" or tap 🎙'
+                }
+                value={isListening ? voiceInterim : textInput}
+                onChange={(e) => { if (!isListening) handleSmartInput(e); }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !isListening) handleKeyPress(e); }}
+                readOnly={isListening}
+                autoComplete="off"
+                className="flex-1 py-3 text-base text-gray-900 bg-transparent focus:outline-none"
+              />
+            </div>
+
+            {/* Mic button */}
+            {voiceSupported && (
+              <button
+                type="button"
+                onClick={() => isListening ? stopVoiceRecognition() : startVoiceRecognition()}
+                title={isListening ? 'Stop recording' : 'Speak your transaction'}
+                className={`p-3 rounded-lg transition active:scale-90 flex-shrink-0 ${
+                  isListening
+                    ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-200'
+                    : selectedMode === 'business'
+                      ? 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+              </button>
+            )}
+
+            {/* Submit button */}
             <button
               onClick={handleSubmit}
-              disabled={!parsedData?.isValid || isAnalyzing}
-              className={`p-3 rounded-lg font-bold transition flex items-center gap-2 ${
-                parsedData?.isValid && !isAnalyzing
+              disabled={!parsedData?.isValid || isAnalyzing || isListening}
+              className={`p-3 rounded-lg font-bold transition flex items-center gap-2 flex-shrink-0 ${
+                parsedData?.isValid && !isAnalyzing && !isListening
                   ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:shadow-lg active:scale-95'
                   : 'bg-gray-200 text-gray-400 cursor-not-allowed'
               }`}
@@ -510,12 +608,16 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
           )}
 
           {/* Helper Text */}
-          {!textInput && (
+          {!textInput && !isListening && (
             <p className="text-xs text-gray-500 text-center">
-              {selectedMode === 'business' 
-                ? 'e.g. "Bought equipment 500k" • "Salary expense 200k" • "Sales revenue 1m"'
-                : 'e.g. "Lunch 8k" • "Salary 500k" • "Bought from amazon 50k"'
-              }
+              {selectedMode === 'business'
+                ? '📊 "Bought van 40m" • "Salary expense 2m" • "Sales revenue 500k"'
+                : '💡 "Lunch 15k" • "Salary 800k" • "Bought shoes 120k"'}
+            </p>
+          )}
+          {isListening && (
+            <p className="text-center text-xs text-red-500 animate-pulse font-medium">
+              🎙 Listening... tap the mic to stop
             </p>
           )}
         </div>

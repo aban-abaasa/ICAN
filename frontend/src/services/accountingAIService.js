@@ -2,11 +2,13 @@
  * Accounting AI Service - Uses OpenAI to provide real accounting analysis
  * Categorizes transactions using proper accounting principles
  * Handles: Investments, Expenses, Revenue, Cash Flow, Assets, Liabilities
+ *
+ * OpenAI is called through a server-side proxy (/api/ai-analysis) so the
+ * API key never ships in the browser bundle and CORS is never an issue.
  */
 
-// Get API key from environment variables (Vite uses import.meta.env)
-const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY || '';
-const OPENAI_API_URL = import.meta.env.VITE_OPENAI_API_URL || 'https://api.openai.com/v1';
+// Relative URL — in dev Vite proxies this; in prod the Vercel function handles it
+const AI_PROXY_URL = '/api/ai-analysis';
 
 const ACCOUNTING_PROMPT = `You are a professional accountant specializing in business and personal wealth management.
 Analyze this transaction CAREFULLY and classify it using proper accounting principles:
@@ -53,22 +55,9 @@ RESPOND ONLY IN THIS JSON FORMAT - NO OTHER TEXT:
  */
 export const analyzeTransactionWithAI = async (transaction) => {
   try {
-    if (!OPENAI_API_KEY) {
-      console.warn('⚠️ OpenAI API key not configured. Using fallback categorization.');
-      return fallbackCategorization(transaction);
-    }
-
-    const prompt = ACCOUNTING_PROMPT.replace(
-      '{transaction}',
-      `${transaction.description} - ${transaction.amount} in ${transaction.type}`
-    );
-
-    const response = await fetch(`${OPENAI_API_URL}/chat/completions`, {
+    const response = await fetch(AI_PROXY_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'gpt-3.5-turbo',
         messages: [
@@ -78,7 +67,10 @@ export const analyzeTransactionWithAI = async (transaction) => {
           },
           {
             role: 'user',
-            content: prompt
+            content: ACCOUNTING_PROMPT.replace(
+              '{transaction}',
+              `${transaction.description} - ${transaction.amount} in ${transaction.type}`
+            )
           }
         ],
         temperature: 0.3,
@@ -87,7 +79,9 @@ export const analyzeTransactionWithAI = async (transaction) => {
     });
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`);
+      // e.g. 401 missing key or 404 proxy not set up — fall through to fallback
+      console.warn(`⚠️ AI proxy returned ${response.status} — using fallback categorization`);
+      return fallbackCategorization(transaction);
     }
 
     const data = await response.json();

@@ -102,7 +102,9 @@ export class VelocityEngine {
             metadata: {
               category: transactionData.category,
               source: transactionData.source,
-              originalDate: transactionData.date
+              originalDate: transactionData.date,
+              record_category: transactionData.record_category || 'personal',
+              accounting_type: transactionData.accounting_type || null
             }
           }
         ])

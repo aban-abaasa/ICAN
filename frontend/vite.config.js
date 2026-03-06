@@ -11,7 +11,21 @@ export default defineConfig({
     host: true,
     strictPort: false,
     open: true,
-    cors: true
+    cors: true,
+    // Proxy OpenAI calls to avoid CORS + keep API key server-side
+    proxy: {
+      '/api/ai-analysis': {
+        target: 'https://api.openai.com/v1',
+        changeOrigin: true,
+        rewrite: () => '/chat/completions',
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            const key = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY || '';
+            if (key) proxyReq.setHeader('Authorization', `Bearer ${key}`);
+          });
+        }
+      }
+    }
   },
 
   // Build optimization for production

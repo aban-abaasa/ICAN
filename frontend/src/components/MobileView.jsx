@@ -135,6 +135,16 @@ const RecentTransactionsCollapsible = ({ transactions, formatCurrency }) => {
     .slice(0, 5)
     .reduce((sum, t) => sum + (t.amount || 0), 0);
 
+  // Business vs Personal split (all loaded transactions)
+  const businessTx = transactions.filter(t =>
+    (t.record_category || t.metadata?.record_category) === 'business'
+  );
+  const personalTx = transactions.filter(t =>
+    (t.record_category || t.metadata?.record_category) !== 'business'
+  );
+  const businessTotal = businessTx.reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+  const personalTotal = personalTx.reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+
   // Collapsed Badge View
   if (!isExpanded) {
     return (
@@ -178,38 +188,80 @@ const RecentTransactionsCollapsible = ({ transactions, formatCurrency }) => {
             
           </button>
         </div>
-        <div className="space-y-2 max-h-60 overflow-y-auto">
-          {transactions.slice(0, 10).map((transaction) => (
-            <div key={transaction.id} className="flex items-center justify-between p-3 bg-slate-800/30 rounded-lg border border-slate-700/30">
-              <div className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  transaction.transaction_type === 'income' 
-                    ? 'bg-green-500/20 text-green-400' 
-                    : 'bg-red-500/20 text-red-400'
-                }`}>
-                  {transaction.transaction_type === 'income' ? '+' : '-'}
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-white truncate max-w-32">
-                    {transaction.description || 'Transaction'}
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    {new Date(transaction.created_at).toLocaleDateString()}
-                  </p>
-                </div>
+        {/* Business / Personal split bar */}
+        {transactions.length > 0 && (
+          <div className="mb-3 p-3 rounded-xl bg-slate-800/40 border border-slate-700/30 space-y-2">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Record Breakdown</p>
+            <div className="flex gap-3">
+              <div className="flex-1 bg-blue-500/10 border border-blue-500/30 rounded-lg px-3 py-2 text-center">
+                <p className="text-xs text-blue-300 font-medium">Business</p>
+                <p className="text-sm font-bold text-blue-200">{businessTx.length} records</p>
+                <p className="text-xs text-blue-400/80">{formatCurrency(businessTotal)}</p>
               </div>
-              <div className="text-right">
-                <p className={`text-sm font-bold ${
-                  transaction.transaction_type === 'income' ? 'text-green-300' : 'text-red-300'
-                }`}>
-                  {transaction.transaction_type === 'income' ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount || 0))}
-                </p>
-                <p className="text-xs text-gray-400 capitalize">
-                  {transaction.metadata?.category || 'general'}
-                </p>
+              <div className="flex-1 bg-green-500/10 border border-green-500/30 rounded-lg px-3 py-2 text-center">
+                <p className="text-xs text-green-300 font-medium">Personal</p>
+                <p className="text-sm font-bold text-green-200">{personalTx.length} records</p>
+                <p className="text-xs text-green-400/80">{formatCurrency(personalTotal)}</p>
               </div>
             </div>
-          ))}
+            {/* Split progress bar */}
+            {(businessTotal + personalTotal) > 0 && (
+              <div className="w-full h-1.5 rounded-full bg-slate-700/60 overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all"
+                  style={{ width: `${Math.round((businessTotal / (businessTotal + personalTotal)) * 100)}%` }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="space-y-2 max-h-60 overflow-y-auto">
+          {transactions.slice(0, 10).map((transaction) => {
+            const recCat = transaction.record_category || transaction.metadata?.record_category || 'personal';
+            const isBusiness = recCat === 'business';
+            return (
+              <div key={transaction.id} className="flex items-center justify-between p-3 bg-slate-800/30 rounded-lg border border-slate-700/30">
+                <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                    transaction.transaction_type === 'income'
+                      ? 'bg-green-500/20 text-green-400'
+                      : 'bg-red-500/20 text-red-400'
+                  }`}>
+                    {transaction.transaction_type === 'income' ? '+' : '-'}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-white truncate max-w-32">
+                      {transaction.description || 'Transaction'}
+                    </p>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <p className="text-xs text-gray-400">
+                        {new Date(transaction.created_at).toLocaleDateString()}
+                      </p>
+                      {/* Business / Personal badge */}
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide ${
+                        isBusiness
+                          ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                          : 'bg-green-500/20 text-green-300 border border-green-500/30'
+                      }`}>
+                        {isBusiness ? 'Biz' : 'Personal'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className={`text-sm font-bold ${
+                    transaction.transaction_type === 'income' ? 'text-green-300' : 'text-red-300'
+                  }`}>
+                    {transaction.transaction_type === 'income' ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount || 0))}
+                  </p>
+                  <p className="text-xs text-gray-400 capitalize">
+                    {transaction.metadata?.category || 'general'}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -561,6 +613,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [voiceInterim, setVoiceInterim] = useState('');
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [voicePrefill, setVoicePrefill] = useState('');
+  const [recordInputText, setRecordInputText] = useState('');
   const [voiceSupported] = useState(() => !!(window.SpeechRecognition || window.webkitSpeechRecognition));
   const recognitionRef = useRef(null);
   const voiceTranscriptRef = useRef('');
@@ -2183,6 +2236,35 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     }
   };
 
+  // ====== LOAN / RECORD HELPERS ======
+  // Wide net — catches natural speech and typing
+  const detectLoanInText = (text) =>
+    /\b(loan|loans|borrow|borrowed|borrowing|lend|lent|lending|credit|overdraft|mortgage|financing|finance|advance|salary advance|cash advance|debt|repay|repayment|owe|owed|bank loan|microfinance|money request|need money|get money|take money)\b/i.test(text);
+
+  const extractLoanAmount = (text) => {
+    const m = text.match(/(\d[\d,]*\.?\d*)\s*(million|m\b|k\b|thousand)?/i);
+    if (!m) return '';
+    let val = parseFloat(m[1].replace(/,/g, ''));
+    const suffix = (m[2] || '').toLowerCase();
+    if (suffix.startsWith('m') || suffix === 'million') val *= 1_000_000;
+    else if (suffix === 'k' || suffix === 'thousand') val *= 1_000;
+    return val > 0 ? String(Math.round(val)) : '';
+  };
+
+  // Central submit for both typed and voice input
+  const handleRecordSubmit = (text) => {
+    if (!text || !text.trim()) return;
+    setRecordInputText('');
+    if (detectLoanInText(text)) {
+      const amount = extractLoanAmount(text);
+      if (amount) setLoanAmount(amount);
+      setShowBusinessLoanCalculator(true);
+    } else {
+      setVoicePrefill(text.trim());
+      setShowRecordTypeModal(true);
+    }
+  };
+
   // ====== VOICE RECOGNITION FUNCTIONS ======
   const startVoiceRecognition = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -2234,9 +2316,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       voiceTranscriptRef.current = '';
       setVoiceTranscript('');
       if (finalText) {
-        setVoicePrefill(finalText);
-        // Auto-open the record type modal with the spoken text pre-filled
-        setShowRecordTypeModal(true);
+        // Route: loan phrases → loan calculator; everything else → transaction entry
+        handleRecordSubmit(finalText);
       }
     };
 
@@ -2457,60 +2538,125 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* ====== RECORD EVERY TRANSACTION SECTION ====== */}
       <div className="px-4 py-4">
         <h2 className="text-lg font-bold text-white mb-3">Record Every Transaction</h2>
-        <div className={`w-full flex items-center gap-3 rounded-full px-4 py-3 sm:py-4 shadow-lg transition-all ${
-          isListening
-            ? 'bg-gradient-to-r from-red-700 to-red-600 border border-red-400/60 shadow-red-600/40'
-            : 'bg-gradient-to-r from-purple-700 to-purple-600 border border-purple-500/50 shadow-purple-600/40'
-        }`}>
-          {/* Tappable text area → opens type modal when not listening */}
+
+        {/* ── Quick shortcut chips ── */}
+        <div className="flex gap-2 mb-3 flex-wrap">
+          {/* One-tap Loan button — always visible */}
           <button
             onClick={() => {
-              if (!isListening) setShowRecordTypeModal(true);
+              const amt = extractLoanAmount(recordInputText);
+              if (amt) setLoanAmount(amt);
+              setShowBusinessLoanCalculator(true);
             }}
-            className="flex-1 text-left outline-none"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/20 border border-amber-400/50 hover:bg-amber-500/30 active:scale-95 transition-all text-amber-200 text-xs font-semibold"
           >
-            <span className={`text-sm sm:text-base block truncate ${
-              isListening || voiceInterim || voiceTranscript ? 'text-white' : 'text-gray-300'
-            }`}>
-              {isListening
-                ? (voiceInterim
-                    ? voiceInterim
-                    : voiceTranscript
-                      ? voiceTranscript
-                      : 'Listening... speak now 🎙')
-                : voiceTranscript
-                  ? voiceTranscript
-                  : 'Tap to record or type transaction...'}
-            </span>
+            <span>🏦</span> Loan Calculator
           </button>
-
-          {/* Mic button - toggles voice recognition */}
+          {/* Business record shortcut */}
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              if (isListening) {
-                stopVoiceRecognition();
-              } else {
-                startVoiceRecognition();
-              }
-            }}
-            className={`flex-shrink-0 p-1.5 rounded-full transition-all active:scale-90 ${
-              isListening ? 'bg-white/20 animate-pulse' : 'hover:bg-white/10'
-            }`}
-            title={isListening ? 'Tap to stop recording' : 'Tap to speak'}
+            onClick={() => { setTransactionType('business'); setShowTransactionEntry(true); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-500/20 border border-blue-400/50 hover:bg-blue-500/30 active:scale-95 transition-all text-blue-200 text-xs font-semibold"
           >
-            {isListening
-              ? <MicOff className="w-5 sm:w-6 h-5 sm:h-6 text-red-200" />
-              : <Mic className="w-5 sm:w-6 h-5 sm:h-6 text-white" />}
+            <span>💼</span> Business
+          </button>
+          {/* Personal record shortcut */}
+          <button
+            onClick={() => { setTransactionType('personal'); setShowTransactionEntry(true); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-500/20 border border-green-400/50 hover:bg-green-500/30 active:scale-95 transition-all text-green-200 text-xs font-semibold"
+          >
+            <span>👤</span> Personal
           </button>
         </div>
 
-        {/* Listening hint */}
-        {isListening && (
+        {/* Main input strip — turns amber when loan detected */}
+        {(() => {
+          const loanDetected = !isListening && detectLoanInText(recordInputText);
+          return (
+            <div
+              onClick={() => {
+                // If loan is detected and user taps the strip body, open calculator directly
+                if (loanDetected && recordInputText.trim()) {
+                  handleRecordSubmit(recordInputText.trim());
+                }
+              }}
+              className={`w-full flex items-center gap-3 rounded-full px-4 py-3 sm:py-4 shadow-lg transition-all ${
+                isListening
+                  ? 'bg-gradient-to-r from-red-700 to-red-600 border border-red-400/60 shadow-red-600/40'
+                  : loanDetected
+                    ? 'bg-gradient-to-r from-amber-700 to-amber-600 border-2 border-amber-400/80 shadow-amber-600/50 cursor-pointer'
+                    : 'bg-gradient-to-r from-purple-700 to-purple-600 border border-purple-500/50 shadow-purple-600/40'
+              }`}
+            >
+              {/* Loan detected icon */}
+              {loanDetected && (
+                <span className="text-lg flex-shrink-0">🏦</span>
+              )}
+
+              {/* Editable text input */}
+              <input
+                type="text"
+                value={isListening ? (voiceInterim || voiceTranscript || '') : recordInputText}
+                onChange={(e) => { if (!isListening) setRecordInputText(e.target.value); }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !isListening && recordInputText.trim()) {
+                    handleRecordSubmit(recordInputText.trim());
+                  }
+                }}
+                placeholder={
+                  isListening
+                    ? 'Listening... speak now 🎙'
+                    : 'Type or speak — loan, income, expense...'
+                }
+                readOnly={isListening}
+                onClick={(e) => e.stopPropagation()} // don't double-fire strip click
+                className="flex-1 bg-transparent text-white placeholder-gray-300 outline-none text-sm sm:text-base min-w-0"
+              />
+
+              {/* Submit button */}
+              {!isListening && recordInputText.trim() && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleRecordSubmit(recordInputText.trim()); }}
+                  className={`flex-shrink-0 p-1.5 rounded-full transition-all active:scale-90 ${
+                    loanDetected ? 'bg-white/30 hover:bg-white/40' : 'bg-white/20 hover:bg-white/30'
+                  }`}
+                  title={loanDetected ? 'Open Loan Calculator' : 'Submit'}
+                >
+                  {loanDetected
+                    ? <span className="text-base leading-none">🏦</span>
+                    : <Check className="w-4 h-4 text-white" />}
+                </button>
+              )}
+
+              {/* Mic button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (isListening) stopVoiceRecognition();
+                  else startVoiceRecognition();
+                }}
+                className={`flex-shrink-0 p-1.5 rounded-full transition-all active:scale-90 ${
+                  isListening ? 'bg-white/20 animate-pulse' : 'hover:bg-white/10'
+                }`}
+                title={isListening ? 'Tap to stop recording' : 'Tap to speak'}
+              >
+                {isListening
+                  ? <MicOff className="w-5 sm:w-6 h-5 sm:h-6 text-red-200" />
+                  : <Mic className="w-5 sm:w-6 h-5 sm:h-6 text-white" />}
+              </button>
+            </div>
+          );
+        })()}
+
+        {/* Context hints */}
+        {isListening ? (
           <p className="text-center text-xs text-red-300 mt-2 animate-pulse">
             🎙 Listening... tap the mic to stop
           </p>
-        )}
+        ) : recordInputText.trim() && detectLoanInText(recordInputText) ? (
+          <p className="text-center text-xs text-amber-300 mt-2 font-medium animate-pulse">
+            🏦 Loan detected — tap strip or ✓ to open Loan Calculator
+          </p>
+        ) : null}
       </div>
 
       {/* ====== DETAIL PAGE - SETTINGS ONLY ====== */}
@@ -4718,6 +4864,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             transaction.timestamp = new Date().toISOString();
           }
 
+          // Resolve business-or-personal from the submitted transaction
+          const resolvedCategory = transaction.accountingType || transactionType || 'personal';
+
           // Store transaction locally with proper format
           const formattedTransaction = {
             id: transaction.id || `temp_${Date.now()}`,
@@ -4728,9 +4877,12 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             user_id: userProfile?.id,
             currency: 'UGX',
             status: 'completed',
+            record_category: resolvedCategory,
             metadata: {
               category: transaction.category || 'other',
-              source: 'smart_entry'
+              source: 'smart_entry',
+              record_category: resolvedCategory,
+              accounting_type: transaction.businessAccountingType || null
             }
           };
           setTransactions(prev => [formattedTransaction, ...prev]);
@@ -4752,7 +4904,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   category: transaction.category || 'other',
                   date: transaction.timestamp || new Date().toISOString(),
                   source: 'smart_entry',
-                  currency: 'UGX'
+                  currency: 'UGX',
+                  record_category: resolvedCategory,
+                  accounting_type: transaction.businessAccountingType || null
                 });
 
                 if (result.success) {
