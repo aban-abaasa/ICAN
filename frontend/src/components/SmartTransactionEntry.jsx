@@ -81,16 +81,32 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
   // BUSINESS ACCOUNTING CATEGORIES — Real business logic
   // ─────────────────────────────────────────────────────────
   const businessCategories = {
+    sales: {
+      name: 'Sales Income',
+      // Any "sold" transaction is REVENUE — cash/receivable IN, income recognised
+      keywords: [
+        'sold', 'sale', 'sales', 'selling', 'delivered and paid', 'sold to',
+        'made a sale', 'customer paid', 'client paid', 'received from customer',
+        'received from client', 'invoice paid', 'payment received',
+      ],
+      emoji: '💵',
+      accountingType: 'revenue',
+      isIncome: true,
+      taxNote: 'Taxable income — include in VAT return & income tax',
+    },
     revenue: {
-      name: 'Revenue / Sales',
-      keywords: ['sales', 'revenue', 'income', 'earned', 'received', 'payment received', 'sold', 'commission', 'service fee', 'consultation'],
+      name: 'Revenue / Service Income',
+      keywords: [
+        'revenue', 'earned', 'commission', 'service fee', 'consultation fee',
+        'professional fee', 'rent received', 'interest received', 'royalty',
+      ],
       emoji: '📈',
       accountingType: 'revenue',
       isIncome: true,
+      taxNote: 'Taxable income — declare in annual return',
     },
     cogs: {
       name: 'Stock & Inventory (COGS)',
-      // Buying goods you intend to SELL is a business investment — COGS
       keywords: [
         'stock', 'inventory', 'goods', 'merchandise', 'produce', 'wholesale',
         'raw material', 'materials', 'supplies', 'resell', 'for sale', 'to sell',
@@ -101,10 +117,10 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
       emoji: '📦',
       accountingType: 'cogs',
       isIncome: false,
+      taxNote: 'Deductible cost — reduces taxable profit',
     },
     capital_asset: {
       name: 'Capital Asset',
-      // Fixed assets that grow the business long-term
       keywords: [
         'equipment', 'machinery', 'machine', 'vehicle', 'car', 'van', 'truck',
         'motorcycle', 'boda', 'computer', 'laptop', 'phone for business',
@@ -115,21 +131,60 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
       emoji: '🏭',
       accountingType: 'asset',
       isIncome: false,
+      taxNote: 'Depreciable asset — claim capital allowance',
+    },
+    tax_payment: {
+      name: 'Tax Payment',
+      // Tax paid to revenue authority = deductible business expense
+      keywords: [
+        'tax', 'income tax', 'corporate tax', 'business tax',
+        'ura', 'kra', 'firs', 'sars', 'revenue authority',
+        'withholding tax', 'wht', 'presumptive tax', 'local tax',
+        'trading license', 'business permit fee',
+      ],
+      emoji: '🏛️',
+      accountingType: 'tax_expense',
+      isIncome: false,
+      taxNote: 'Tax payment — record for annual tax reconciliation',
+    },
+    vat_collected: {
+      name: 'VAT / Tax Collected on Sales',
+      // VAT collected from customers is NOT income — it is a liability owed to govt
+      keywords: [
+        'vat collected', 'vat on sales', 'sales tax collected', 'collected vat',
+        'output vat', 'gst collected', 'levied tax',
+      ],
+      emoji: '🧾',
+      accountingType: 'tax_liability',
+      isIncome: false,
+      taxNote: 'VAT collected = liability — must be remitted to revenue authority',
+    },
+    paye: {
+      name: 'PAYE / Payroll Tax',
+      // Tax deducted from employee salaries — employer must remit to govt
+      keywords: [
+        'paye', 'payroll tax', 'employee tax', 'staff tax', 'nssf', 'nhif',
+        'pension contribution', 'social security', 'deducted tax', 'tax withheld',
+      ],
+      emoji: '👷',
+      accountingType: 'paye_liability',
+      isIncome: false,
+      taxNote: 'PAYE — deduct from salary, remit to revenue authority monthly',
     },
     operating_expense: {
       name: 'Operating Expense',
-      // Day-to-day costs of running the business
       keywords: [
         'rent', 'salary', 'wage', 'staff', 'worker', 'employee', 'payroll',
         'electricity', 'water', 'internet', 'airtime', 'data', 'utilities',
         'fuel', 'transport', 'delivery', 'marketing', 'advertising', 'signage',
         'printing', 'stationery', 'repairs', 'maintenance', 'cleaning',
-        'insurance', 'security', 'guard', 'license', 'permit', 'tax payment',
-        'accountant', 'lawyer', 'consultation fee',
+        'insurance', 'security', 'guard', 'license', 'permit',
+        'accountant', 'lawyer',
       ],
       emoji: '💸',
       accountingType: 'expense',
       isIncome: false,
+      taxNote: 'Deductible expense — reduces taxable profit',
     },
     loan: {
       name: 'Loan / Liability',
@@ -139,7 +194,8 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
       ],
       emoji: '🏦',
       accountingType: 'liability',
-      isIncome: true, // cash comes in when you take a loan
+      isIncome: true,
+      taxNote: 'Loan — not income, must be repaid. Interest is deductible',
     },
     loan_repayment: {
       name: 'Loan Repayment',
@@ -147,6 +203,7 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
       emoji: '🔄',
       accountingType: 'liability_payment',
       isIncome: false,
+      taxNote: 'Principal repayment — not deductible. Interest portion is deductible',
     },
     owner_equity: {
       name: 'Owner Investment / Equity',
@@ -154,6 +211,7 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
       emoji: '💼',
       accountingType: 'equity',
       isIncome: true,
+      taxNote: 'Capital contribution — not taxable income',
     },
   };
 
@@ -239,16 +297,54 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
     if (mode === 'business') {
       // ─── BUSINESS RULES ─── priority order matters ───
 
-      // 1. REVENUE — money coming IN from business
-      if (businessCategories.revenue.keywords.some(kw => text.includes(kw))) {
+      // RULE 0: PAYE / PAYROLL TAX — check before salary/wages
+      if (businessCategories.paye.keywords.some(kw => text.includes(kw))) {
+        isIncome = false;
+        detectedType = 'expense';
+        businessAccountingType = 'paye_liability';
+        detectedCategory = 'paye';
+        categoryEmoji = '👷';
+        categoryName = 'PAYE / Payroll Tax';
+      }
+      // RULE 1: VAT COLLECTED ON SALES — check before generic sales (it's not income!)
+      else if (businessCategories.vat_collected.keywords.some(kw => text.includes(kw))) {
+        isIncome = false;
+        detectedType = 'expense';
+        businessAccountingType = 'tax_liability';
+        detectedCategory = 'vat_collected';
+        categoryEmoji = '🧾';
+        categoryName = 'VAT Collected (Tax Liability)';
+      }
+      // RULE 2: TAX PAYMENT — paying tax to govt
+      else if (businessCategories.tax_payment.keywords.some(kw => text.includes(kw))) {
+        isIncome = false;
+        detectedType = 'expense';
+        businessAccountingType = 'tax_expense';
+        detectedCategory = 'tax_payment';
+        categoryEmoji = '🏛️';
+        categoryName = 'Tax Payment';
+      }
+      // RULE 3: SOLD / SALES — HIGHEST priority revenue rule
+      //  "sold X to Y for Z" → always INCOME / REVENUE
+      else if (/\bsold\b|\bsale\b|\bsales\b|\bselling\b|\bmade a sale\b/i.test(text) ||
+               businessCategories.sales.keywords.some(kw => text.includes(kw))) {
+        isIncome = true;
+        detectedType = 'income';
+        businessAccountingType = 'revenue';
+        detectedCategory = 'sales';
+        categoryEmoji = '💵';
+        categoryName = 'Sales Income';
+      }
+      // RULE 4: OTHER REVENUE / SERVICE INCOME
+      else if (businessCategories.revenue.keywords.some(kw => text.includes(kw))) {
         isIncome = true;
         detectedType = 'income';
         businessAccountingType = 'revenue';
         detectedCategory = 'revenue';
         categoryEmoji = '📈';
-        categoryName = 'Revenue / Sales';
+        categoryName = 'Revenue / Service Income';
       }
-      // 2. LOAN RECEIVED — cash in but it's a liability
+      // RULE 5: LOAN RECEIVED — cash in but it's a liability
       else if (businessCategories.loan.keywords.some(kw => text.includes(kw)) &&
                !businessCategories.loan_repayment.keywords.some(kw => text.includes(kw))) {
         isIncome = true;
@@ -258,7 +354,7 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
         categoryEmoji = '🏦';
         categoryName = 'Loan Received (Liability)';
       }
-      // 3. LOAN REPAYMENT — paying back
+      // RULE 6: LOAN REPAYMENT — paying back
       else if (businessCategories.loan_repayment.keywords.some(kw => text.includes(kw))) {
         isIncome = false;
         detectedType = 'expense';
@@ -267,7 +363,7 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
         categoryEmoji = '🔄';
         categoryName = 'Loan Repayment';
       }
-      // 4. CAPITAL ASSET — long-term fixed asset purchase
+      // RULE 7: CAPITAL ASSET — long-term fixed asset purchase
       else if (businessCategories.capital_asset.keywords.some(kw => text.includes(kw))) {
         isIncome = false;
         detectedType = 'investment';
@@ -276,8 +372,7 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
         categoryEmoji = '🏭';
         categoryName = 'Capital Asset';
       }
-      // 5. STOCK / GOODS / INVENTORY (COGS) — buying goods to sell
-      //    This is the KEY insight: buying goods = business investment/COGS
+      // RULE 8: STOCK / GOODS / INVENTORY (COGS) — buying goods to sell
       else if (businessCategories.cogs.keywords.some(kw => text.includes(kw))) {
         isIncome = false;
         detectedType = 'investment';
@@ -286,7 +381,7 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
         categoryEmoji = '📦';
         categoryName = 'Stock / Goods (COGS)';
       }
-      // 6. OWNER EQUITY — owner putting in own money
+      // RULE 9: OWNER EQUITY — owner putting in own money
       else if (businessCategories.owner_equity.keywords.some(kw => text.includes(kw))) {
         isIncome = true;
         detectedType = 'income';
@@ -295,7 +390,7 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
         categoryEmoji = '💼';
         categoryName = 'Owner Investment';
       }
-      // 7. OPERATING EXPENSE — day-to-day running costs
+      // RULE 10: OPERATING EXPENSE — day-to-day running costs
       else if (businessCategories.operating_expense.keywords.some(kw => text.includes(kw))) {
         isIncome = false;
         detectedType = 'expense';
@@ -304,16 +399,14 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
         categoryEmoji = '💸';
         categoryName = 'Operating Expense';
       }
-      // 8. DEFAULT FALLBACK — use amount heuristics
+      // RULE 11: DEFAULT FALLBACK — use amount heuristics
       else {
-        // Large amounts that aren't labelled as expenses = likely asset/investment
         if (amount >= 2000000 && !/(spent|paid for|cost|bill|salary|rent)/i.test(text)) {
           detectedType = 'investment';
           businessAccountingType = 'asset';
           categoryEmoji = '🏭';
           categoryName = 'Possible Asset';
         } else if (/(bought|purchased)/i.test(text)) {
-          // "bought" without clear category — treat as COGS (bought goods to sell)
           detectedType = 'investment';
           businessAccountingType = 'cogs';
           categoryEmoji = '📦';
@@ -346,26 +439,30 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
       else { isIncome = false; detectedType = 'expense'; }
     }
 
-    // Extract source/destination/action
+    // Extract source/destination/action — including "sold to [customer]"
     let source = '';
     let action = '';
 
-    if (text.includes('bought')) {
-      action = 'bought';
-      const boughtMatch = text.match(/bought\s+(?:from\s+)?(.+?)(?:\s+\d+|$)/);
-      source = boughtMatch ? boughtMatch[1].trim() : '';
-    } else if (text.includes('sold')) {
+    const soldMatch = text.match(/\bsold\s+(?:to\s+)?([a-z][a-z\s]{1,20}?)(?:\s+\d|\s+for\s+|\s*$)/i);
+    const boughtFromMatch = text.match(/bought\s+(?:from\s+)([a-z][a-z\s]{1,20}?)(?:\s+\d|\s*$)/i);
+    const fromMatch = text.match(/from\s+([a-z][a-z\s]{1,20}?)(?:\s+\d|\s*$)/i);
+    const atMatch = text.match(/at\s+([a-z][a-z\s]{1,20}?)(?:\s+\d|\s*$)/i);
+    const toMatch = text.match(/to\s+([a-z][a-z\s]{1,20}?)(?:\s+\d|\s*$)/i);
+
+    if (/\bsold\b/i.test(text)) {
       action = 'sold';
-      const soldMatch = text.match(/sold\s+(?:to\s+)?(.+?)(?:\s+\d+|$)/);
-      source = soldMatch ? soldMatch[1].trim() : '';
-    } else if (text.includes('from ')) {
+      if (soldMatch) source = soldMatch[1].trim();
+      else if (toMatch) source = toMatch[1].trim();
+    } else if (/\bbought\b/i.test(text)) {
+      action = 'bought';
+      if (boughtFromMatch) source = boughtFromMatch[1].trim();
+      else if (fromMatch) source = fromMatch[1].trim();
+    } else if (fromMatch) {
       action = 'from';
-      const fromMatch = text.match(/from\s+(.+?)(?:\s+\d+|$)/);
-      source = fromMatch ? fromMatch[1].trim() : '';
-    } else if (text.includes(' at ')) {
+      source = fromMatch[1].trim();
+    } else if (atMatch) {
       action = 'at';
-      const atMatch = text.match(/at\s+(.+?)(?:\s+\d+|$)/);
-      source = atMatch ? atMatch[1].trim() : '';
+      source = atMatch[1].trim();
     }
 
     // Clean up description
@@ -374,9 +471,12 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
     description = description.replace(/\s+/g, ' ').trim();
     description = description.charAt(0).toUpperCase() + description.slice(1);
     if (!description || description.length < 2) {
-      if (detectedType === 'income') description = 'Income received';
+      if (detectedType === 'income' && detectedCategory === 'sales') description = source ? `Sale to ${source}` : 'Sales Revenue';
+      else if (detectedType === 'income') description = 'Income received';
       else if (detectedType === 'investment') description = categoryName || 'Business Investment';
       else if (detectedType === 'loan') description = 'Loan received';
+      else if (businessAccountingType === 'tax_expense') description = 'Tax Payment';
+      else if (businessAccountingType === 'paye_liability') description = 'PAYE / Payroll Tax';
       else description = categoryName || 'Expense';
     }
 
@@ -660,7 +760,7 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
                   isListening
                     ? '🎙 Listening...'
                     : selectedMode === 'business'
-                      ? '"Bought 50 bags maize 500k" • "Sold goods 800k"'
+                      ? '"Sold goods 800k" • "Bought stock 500k" • "Paid tax 200k"'
                       : '"Lunch 15k" • "Salary 800k" • "Bought shoes 120k"'
                 }
                 value={isListening ? voiceInterim : textInput}
@@ -745,13 +845,16 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
 
             // Accounting label (shown under the amount)
             const acctLabel =
-              acctType === 'revenue'           ? 'DR Cash / Accounts Receivable · CR Revenue' :
-              acctType === 'cogs'              ? 'DR Inventory / COGS · CR Cash' :
-              acctType === 'asset'             ? 'DR Fixed Asset · CR Cash' :
-              acctType === 'liability'         ? 'DR Cash · CR Loan Payable' :
-              acctType === 'liability_payment' ? 'DR Loan Payable · CR Cash' :
-              acctType === 'equity'            ? 'DR Cash · CR Owner Equity' :
-              acctType === 'expense'           ? 'DR Operating Expense · CR Cash' : null;
+              acctType === 'revenue'          ? 'DR Cash / Receivable · CR Sales Revenue' :
+              acctType === 'cogs'             ? 'DR Inventory/COGS · CR Cash — deductible' :
+              acctType === 'asset'            ? 'DR Fixed Asset · CR Cash — claim capital allowance' :
+              acctType === 'liability'        ? 'DR Cash · CR Loan Payable — not taxable' :
+              acctType === 'liability_payment'? 'DR Loan Payable · CR Cash — principal not deductible' :
+              acctType === 'equity'           ? 'DR Cash · CR Owner Equity — not taxable income' :
+              acctType === 'expense'          ? 'DR Operating Expense · CR Cash — deductible' :
+              acctType === 'tax_expense'      ? 'DR Tax Expense · CR Cash — declare in tax return' :
+              acctType === 'tax_liability'    ? 'DR Cash · CR VAT Payable — remit to authority' :
+              acctType === 'paye_liability'   ? 'DR Salary Expense · CR PAYE Payable — remit monthly' : null;
 
             return (
               <div className={`rounded-lg p-4 flex flex-col gap-3 transition border-2 ${cardBg}`}>
@@ -762,8 +865,8 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
                     <div className="font-bold text-gray-900 text-sm">{parsedData.description}</div>
                     {parsedData.source && (
                       <div className="text-xs text-gray-600 mt-1">
-                        {parsedData.action === 'bought' && '🛍️ From:'}
-                        {parsedData.action === 'sold'   && '💵 To:'}
+                        {parsedData.action === 'bought' && '� From:'}
+                        {parsedData.action === 'sold'   && '🤝 Customer:'}
                         {parsedData.action === 'from'   && '📤 From:'}
                         {parsedData.action === 'at'     && '📍 At:'}
                         {!parsedData.action && '📌'} {parsedData.source}
@@ -783,6 +886,12 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
                   <div className="bg-white/70 rounded-lg px-3 py-2 flex items-center gap-2 text-sm">
                     <span className="text-lg">{parsedData.categoryEmoji}</span>
                     <span className="font-semibold text-gray-800">{badgeLabel}</span>
+                    {/* Tax note for business compliance */}
+                    {businessCategories[parsedData.detectedCategory]?.taxNote && (
+                      <span className="text-xs text-indigo-600 ml-1 hidden sm:inline">
+                        📌 {businessCategories[parsedData.detectedCategory].taxNote}
+                      </span>
+                    )}
                     {acctType && (
                       <span className={`ml-auto text-xs font-bold px-2 py-0.5 rounded-full ${
                         isCOGS || isAsset     ? 'bg-amber-200 text-amber-800' :
@@ -811,7 +920,7 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
           {!textInput && !isListening && (
             <p className="text-xs text-gray-500 text-center">
               {selectedMode === 'business'
-                ? '� "Bought 100 bags of rice 2m" • "⛏️ Sales 800k" • "💰 Loan from bank 5m" • "Paid salary 1.5m"'
+                ? '💵 "Sold maize 800k" • 📦 "Bought stock 2m" • 🏛️ "Paid tax 300k" • 💸 "Paid salary 1.5m"'
                 : '💡 "Lunch 15k" • "Salary 800k" • "Saved 100k" • "Transport 5k"'}
             </p>
           )}
