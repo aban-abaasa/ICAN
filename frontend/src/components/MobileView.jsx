@@ -59,6 +59,7 @@ import CMMSModule from './CMSSModule';
 import { StatusPage } from './StatusPage';
 import { StatusUploader } from './status/StatusUploader';
 import SearchModal from './SearchModal';
+import { BusinessLoanCalculator } from './BusinessLoanCalculator';
 import { VelocityEngine } from '../utils/velocityEngine';
 import { supabase } from '../lib/supabase/client';
 import { walletAccountService } from '../services/walletAccountService';
@@ -2151,6 +2152,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       setActiveBottomTab('wallet');
     } else if (title === 'Tithe') {
       setShowTithingCalculator(true);
+    } else if (title === 'Reports') {
+      setShowReportingSystem(true);
     }
   };
 
@@ -2455,6 +2458,39 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                        Growth
                     </button>
 
+                    {/* Reports */}
+                    <button
+                      onClick={() => {
+                        setShowReportingSystem(true);
+                        setShowMenuDropdown(false);
+                      }}
+                      className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-rose-500/20 hover:text-rose-300 rounded transition flex items-center gap-2"
+                    >
+                      <span>📊</span> Reports
+                    </button>
+
+                    {/* Tithe */}
+                    <button
+                      onClick={() => {
+                        setShowTithingCalculator(true);
+                        setShowMenuDropdown(false);
+                      }}
+                      className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-yellow-500/20 hover:text-yellow-300 rounded transition flex items-center gap-2"
+                    >
+                      <span>🙏</span> Tithe
+                    </button>
+
+                    {/* Loan Calculator */}
+                    <button
+                      onClick={() => {
+                        setShowBusinessLoanCalculator(true);
+                        setShowMenuDropdown(false);
+                      }}
+                      className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-amber-500/20 hover:text-amber-300 rounded transition flex items-center gap-2"
+                    >
+                      <span>🏦</span> Loan Calculator
+                    </button>
+
                     {/* Settings - Expandable */}
                     <div className="space-y-1">
                       <button
@@ -2541,17 +2577,6 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
         {/* ── Quick shortcut chips ── */}
         <div className="flex gap-2 mb-3 flex-wrap">
-          {/* One-tap Loan button — always visible */}
-          <button
-            onClick={() => {
-              const amt = extractLoanAmount(recordInputText);
-              if (amt) setLoanAmount(amt);
-              setShowBusinessLoanCalculator(true);
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/20 border border-amber-400/50 hover:bg-amber-500/30 active:scale-95 transition-all text-amber-200 text-xs font-semibold"
-          >
-            <span>🏦</span> Loan Calculator
-          </button>
           {/* Business record shortcut */}
           <button
             onClick={() => { setTransactionType('business'); setShowTransactionEntry(true); }}
@@ -4845,6 +4870,216 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Tithe Calculator Modal ─────────────────────────────────── */}
+      {showTithingCalculator && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-start justify-center p-3 overflow-y-auto">
+          <div className="bg-gradient-to-br from-yellow-50 to-amber-50 rounded-2xl w-full max-w-2xl shadow-2xl my-4">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-yellow-600 to-amber-500 rounded-t-2xl px-5 py-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-white">🙏 Tithe Calculator</h2>
+                <p className="text-yellow-100 text-xs mt-0.5">Steward faithfully — Uganda giving tracker</p>
+              </div>
+              <button onClick={() => setShowTithingCalculator(false)} className="text-white/70 hover:text-white p-1"><X className="w-6 h-6" /></button>
+            </div>
+
+            <div className="p-4 space-y-4">
+              {/* Tab switcher */}
+              <div className="flex gap-2 bg-amber-100 rounded-xl p-1">
+                {['quick', 'business', 'personal'].map(tab => (
+                  <button key={tab} onClick={() => setSelectedTithingTab(tab)}
+                    className={`flex-1 py-2 rounded-lg text-xs font-bold capitalize transition ${selectedTithingTab === tab ? 'bg-white text-amber-700 shadow' : 'text-amber-600 hover:text-amber-800'}`}>
+                    {tab === 'quick' ? '⚡ Quick' : tab === 'business' ? '💼 Business' : '👤 Personal'}
+                  </button>
+                ))}
+              </div>
+
+              {selectedTithingTab === 'quick' && (
+                <div className="space-y-3">
+                  <div className="bg-white rounded-xl p-4 shadow-sm">
+                    <p className="text-xs text-gray-500 mb-1">Based on your last 30 days income</p>
+                    <div className="text-3xl font-bold text-amber-600">UGX {(tithingMetrics.combinedTithe || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
+                    <p className="text-xs text-gray-500 mt-1">Combined tithe due this month</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-white rounded-xl p-4 shadow-sm text-center">
+                      <div className="text-sm text-gray-500">Personal Tithe</div>
+                      <div className="text-xl font-bold text-green-600">UGX {(tithingMetrics.personalTithe || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
+                      <div className="text-xs text-gray-400">{personalTithingRate}% of income</div>
+                    </div>
+                    <div className="bg-white rounded-xl p-4 shadow-sm text-center">
+                      <div className="text-sm text-gray-500">Business Tithe</div>
+                      <div className="text-xl font-bold text-blue-600">UGX {(tithingMetrics.businessTithe || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
+                      <div className="text-xs text-gray-400">{businessTithingRate}% of profit</div>
+                    </div>
+                  </div>
+                  <div className="bg-amber-100 rounded-xl p-3 text-xs text-amber-800 border border-amber-200">
+                    📖 <strong>Malachi 3:10</strong> — "Bring the whole tithe into the storehouse... and see if I will not open the floodgates of heaven."
+                  </div>
+                </div>
+              )}
+
+              {selectedTithingTab === 'business' && (
+                <div className="space-y-3">
+                  <div className="bg-white rounded-xl p-4 shadow-sm">
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Business Tithe Rate (%)</label>
+                    <input type="range" min="5" max="20" value={businessTithingRate}
+                      onChange={e => setBusinessTithingRate(Number(e.target.value))}
+                      className="w-full accent-amber-500" />
+                    <div className="flex justify-between text-xs text-gray-400 mt-1"><span>5%</span><span className="font-bold text-amber-600">{businessTithingRate}%</span><span>20%</span></div>
+                  </div>
+                  <div className="bg-white rounded-xl p-4 shadow-sm">
+                    <div className="flex justify-between text-sm mb-2"><span className="text-gray-500">Business Profit</span><span className="font-semibold">UGX {(tithingMetrics.businessProfit || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                    <div className="flex justify-between text-sm"><span className="text-gray-500">Tithe Due</span><span className="font-bold text-amber-600 text-lg">UGX {(tithingMetrics.businessTithe || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                  </div>
+                </div>
+              )}
+
+              {selectedTithingTab === 'personal' && (
+                <div className="space-y-3">
+                  <div className="bg-white rounded-xl p-4 shadow-sm">
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Personal Tithe Rate (%)</label>
+                    <input type="range" min="5" max="20" value={personalTithingRate}
+                      onChange={e => setPersonalTithingRate(Number(e.target.value))}
+                      className="w-full accent-amber-500" />
+                    <div className="flex justify-between text-xs text-gray-400 mt-1"><span>5%</span><span className="font-bold text-amber-600">{personalTithingRate}%</span><span>20%</span></div>
+                  </div>
+                  <div className="bg-white rounded-xl p-4 shadow-sm">
+                    <div className="flex justify-between text-sm mb-2"><span className="text-gray-500">Personal Income (30d)</span><span className="font-semibold">UGX {(tithingMetrics.personalIncome || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                    <div className="flex justify-between text-sm"><span className="text-gray-500">Tithe Due</span><span className="font-bold text-green-600 text-lg">UGX {(tithingMetrics.personalTithe || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Reports Modal ──────────────────────────────────────────────── */}
+      {showReportingSystem && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-start justify-center p-3 overflow-y-auto">
+          <div className="bg-gradient-to-br from-slate-900 to-indigo-950 rounded-2xl w-full max-w-3xl shadow-2xl my-4 border border-purple-500/30">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-rose-700 to-pink-600 rounded-t-2xl px-5 py-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-white">📊 Financial Reports</h2>
+                <p className="text-rose-100 text-xs mt-0.5">AI-powered reports — Uganda compliant</p>
+              </div>
+              <button onClick={() => setShowReportingSystem(false)} className="text-white/70 hover:text-white p-1"><X className="w-6 h-6" /></button>
+            </div>
+
+            <div className="p-4 space-y-4">
+              {/* Report type dropdown */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Report Type</label>
+                <select
+                  value={selectedReportType}
+                  onChange={e => setSelectedReportType(e.target.value)}
+                  className="w-full bg-white text-gray-900 border-2 border-purple-400 rounded-xl px-4 py-3 text-sm font-semibold focus:ring-2 focus:ring-purple-500 focus:border-purple-500 cursor-pointer shadow-sm"
+                >
+                  {Object.entries(reportTypes).map(([key, cfg]) => (
+                    <option key={key} value={key}>
+                      {cfg.icon || '📄'} {cfg.name.trim()}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Report summary panel */}
+              <div className="space-y-3">
+                <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-2xl">{reportTypes[selectedReportType]?.icon || '📄'}</span>
+                    <div>
+                      <h3 className="text-white font-bold text-sm">{reportTypes[selectedReportType]?.name?.trim()}</h3>
+                      <p className="text-gray-400 text-xs">{reportTypes[selectedReportType]?.desc}</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm"><span className="text-gray-400">Total Income (30d)</span><span className="text-green-400 font-semibold">UGX {(reportSummary.metrics.totalIncome || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                    <div className="flex justify-between text-sm"><span className="text-gray-400">Total Expenses (30d)</span><span className="text-red-400 font-semibold">UGX {(reportSummary.metrics.totalExpenses || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                    <div className="flex justify-between text-sm border-t border-white/10 pt-2"><span className="text-gray-300 font-medium">Net Profit</span><span className={`font-bold ${reportSummary.metrics.netProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>UGX {(reportSummary.metrics.netProfit || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                    <div className="flex justify-between text-sm"><span className="text-gray-400">Savings Rate</span><span className="text-purple-400 font-semibold">{(reportSummary.metrics.savingsRate || 0).toFixed(1)}%</span></div>
+                    <div className="flex justify-between text-sm"><span className="text-gray-400">Net Worth</span><span className="text-yellow-400 font-semibold">UGX {(reportSummary.metrics.netWorth || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                  </div>
+                </div>
+
+                {/* Country selector for tax reports */}
+                {reportTypes[selectedReportType]?.requiresCountry && (
+                  <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+                    <p className="text-xs font-semibold text-gray-400 mb-2">🌍 Tax Jurisdiction</p>
+                    <div className="flex gap-2 flex-wrap">
+                      {countries.map(c => (
+                        <button key={c.code} onClick={() => setSelectedCountry(c.code)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${selectedCountry === c.code ? 'bg-purple-600 border-purple-400 text-white' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'}`}>
+                          {c.flag} {c.name} ({c.tax})
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Generate button */}
+                <button
+                  onClick={() => {
+                    setIsGeneratingReport(true);
+                    setTimeout(() => {
+                      setGeneratedReportData(reportSummary);
+                      setIsGeneratingReport(false);
+                    }, 1800);
+                  }}
+                  disabled={isGeneratingReport}
+                  className="w-full py-3 rounded-xl font-bold text-white text-sm transition active:scale-95 disabled:opacity-60"
+                  style={{background: 'linear-gradient(135deg, #e11d48, #9333ea)'}}
+                >
+                  {isGeneratingReport ? '⏳ Generating...' : '🚀 Generate Report'}
+                </button>
+
+                {generatedReportData && !isGeneratingReport && (
+                  <div className="bg-green-900/30 border border-green-500/40 rounded-xl p-3">
+                    <p className="text-green-400 font-semibold text-xs">✅ Report ready — {generatedReportData.generated}</p>
+                    <p className="text-gray-400 text-xs mt-1">{generatedReportData.reportName?.trim()} generated for {countries.find(c => c.code === selectedCountry)?.name || 'Uganda'}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Business Loan Calculator — real extracted component */}
+      {showBusinessLoanCalculator && (
+        <BusinessLoanCalculator
+          isOpen={showBusinessLoanCalculator}
+          onClose={() => setShowBusinessLoanCalculator(false)}
+          preFilledAmount={loanAmount}
+          onAddLoan={(loan) => {
+            const formattedLoan = {
+              id: `loan_${Date.now()}`,
+              amount: loan.amount,
+              transaction_type: 'expense',
+              description: `Business Loan — ${loan.purpose || 'business-expansion'}`,
+              created_at: new Date().toISOString(),
+              user_id: userProfile?.id,
+              currency: 'UGX',
+              status: 'completed',
+              record_category: 'business',
+              metadata: {
+                category: 'cashflow',
+                source: 'loan_calculator',
+                record_category: 'business',
+                accounting_type: 'liability',
+                monthly_payment: loan.monthlyPayment,
+                interest_rate: loan.interestRate,
+                term_years: loan.term,
+              }
+            };
+            setTransactions(prev => [formattedLoan, ...prev]);
+            setShowBusinessLoanCalculator(false);
+          }}
+        />
       )}
 
       {/* Smart Transaction Entry Modal */}

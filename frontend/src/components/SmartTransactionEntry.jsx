@@ -394,7 +394,7 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
 
       {/* Input Bar - Bottom */}
       <div className={`${selectedMode === 'business' ? 'bg-gradient-to-r from-slate-50 to-blue-50' : 'bg-white'} border-t-2 ${selectedMode === 'business' ? 'border-blue-400' : 'border-purple-400'} shadow-2xl`}>
-        <div className="p-4 space-y-3">
+        <div className="p-3 pb-safe space-y-3" style={{paddingBottom: 'max(12px, env(safe-area-inset-bottom))'}}>
           {/* Mode Selector */}
           {!transactionType && (
             <div className="flex gap-2">
@@ -466,73 +466,62 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
           )}
 
           {/* Input Field */}
-          <div className="flex items-center gap-2">
-            <div className={`flex-1 flex items-center gap-2 border-2 rounded-lg px-3 transition-all ${
+          <div className="flex items-center gap-2 w-full">
+            {/* Text input with mic inside */}
+            <div className={`flex-1 min-w-0 flex items-center border-2 rounded-xl px-3 transition-all ${
               isListening
-                ? 'border-red-400 bg-red-50 shadow-red-100 shadow-md'
+                ? 'border-red-400 bg-red-50'
                 : selectedMode === 'business'
                   ? 'border-blue-300 bg-white focus-within:ring-2 focus-within:ring-blue-400'
                   : 'border-gray-300 bg-white focus-within:ring-2 focus-within:ring-purple-400'
             }`}>
-              {/* Live voice interim text overlay */}
-              {isListening && (
-                <span className="text-xs text-red-400 animate-pulse flex-shrink-0">🎙</span>
-              )}
               <input
                 ref={inputRef}
                 type="text"
                 placeholder={
                   isListening
-                    ? 'Listening... speak now 🎙'
+                    ? '🎙 Listening...'
                     : selectedMode === 'business'
-                      ? 'e.g. "Bought equipment 500k" or tap 🎙'
-                      : 'e.g. "Lunch 8k" • "Salary 500k" or tap 🎙'
+                      ? '"Bought equipment 500k"'
+                      : '"Lunch 15k" • "Salary 800k"'
                 }
                 value={isListening ? voiceInterim : textInput}
                 onChange={(e) => { if (!isListening) handleSmartInput(e); }}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !isListening) handleKeyPress(e); }}
                 readOnly={isListening}
                 autoComplete="off"
-                className="flex-1 py-3 text-base text-gray-900 bg-transparent focus:outline-none"
+                className="flex-1 min-w-0 py-3 text-base text-gray-900 bg-transparent focus:outline-none"
               />
+              {/* Mic button — inside the input box, right side */}
+              {voiceSupported && (
+                <button
+                  type="button"
+                  onClick={() => isListening ? stopVoiceRecognition() : startVoiceRecognition()}
+                  title={isListening ? 'Stop' : 'Speak'}
+                  className={`flex-shrink-0 ml-1 p-2 rounded-lg transition active:scale-90 ${
+                    isListening
+                      ? 'text-red-500 animate-pulse'
+                      : 'text-gray-400 hover:text-gray-600'
+                  }`}
+                >
+                  {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                </button>
+              )}
             </div>
 
-            {/* Mic button */}
-            {voiceSupported && (
-              <button
-                type="button"
-                onClick={() => isListening ? stopVoiceRecognition() : startVoiceRecognition()}
-                title={isListening ? 'Stop recording' : 'Speak your transaction'}
-                className={`p-3 rounded-lg transition active:scale-90 flex-shrink-0 ${
-                  isListening
-                    ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-200'
-                    : selectedMode === 'business'
-                      ? 'bg-blue-100 text-blue-600 hover:bg-blue-200'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-              </button>
-            )}
-
-            {/* Submit button */}
+            {/* Send button — always fully visible */}
             <button
               onClick={handleSubmit}
               disabled={!parsedData?.isValid || isAnalyzing || isListening}
-              className={`p-3 rounded-lg font-bold transition flex items-center gap-2 flex-shrink-0 ${
+              className={`flex-shrink-0 w-12 h-12 rounded-xl font-bold transition flex items-center justify-center ${
                 parsedData?.isValid && !isAnalyzing && !isListening
-                  ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:shadow-lg active:scale-95'
+                  ? 'bg-gradient-to-br from-blue-500 to-cyan-500 text-white shadow-md active:scale-95'
                   : 'bg-gray-200 text-gray-400 cursor-not-allowed'
               }`}
             >
-              {isAnalyzing ? (
-                <>
-                  <Loader className="w-5 h-5 animate-spin" />
-                  <span className="text-xs">Analyzing...</span>
-                </>
-              ) : (
-                <Send className="w-5 h-5" />
-              )}
+              {isAnalyzing
+                ? <Loader className="w-5 h-5 animate-spin" />
+                : <Send className="w-5 h-5" />}
             </button>
           </div>
 
