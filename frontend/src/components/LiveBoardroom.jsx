@@ -33,6 +33,8 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
   const [incomingCall, setIncomingCall] = useState(null);
   const [callAccepted, setCallAccepted] = useState(false);
   const [boardroomMode, setBoardroomMode] = useState(null); // null = picker | 'chat' | 'live'
+  const [isCalling, setIsCalling] = useState(false); // host is ringing members
+  const [callingTimer, setCallingTimer] = useState(0); // seconds since call started
 
   const videoRef = useRef(null);
   const meetingTimerRef = useRef(null);
@@ -44,6 +46,7 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
   const touchStartX = useRef(0);
   const callChannelRef = useRef(null);
   const localStreamRef = useRef(null);
+  const callingTimerRef = useRef(null);
 
   const supabase = getSupabaseClient();
 
@@ -284,6 +287,18 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
           console.log('🔌 [CALL CHANNEL] Channel status changed to:', status);
         });
 
+      callBroadcast
+        .on('broadcast', { event: 'call-accepted' }, ({ payload }) => {
+          console.log('✅ [CALL ACCEPTED] Member accepted the call:', payload);
+          // Host: someone accepted, start the meeting!
+          if (payload.acceptedBy !== user?.id) {
+            setIsCalling(false);
+            setMeetingStarted(true);
+            if (callingTimerRef.current) { clearInterval(callingTimerRef.current); callingTimerRef.current = null; }
+            if (audioServiceRef.current) audioServiceRef.current.playSound('memberJoined');
+          }
+        });
+
       callChannelRef.current = callBroadcast;
       console.log('✅ [CALL CHANNEL] Call channel initialized and subscribed');
     } catch (err) {
@@ -444,9 +459,14 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
   };
 
   const startMeeting = async () => {
-    setMeetingStarted(true);
+    // Don't start meeting yet — ring the members first
+    setIsCalling(true);
+    setCallingTimer(0);
     
-    console.log('🎬 Host starting meeting, broadcasting call...');
+    // Start a ring timer so user can see how long they've been calling
+    callingTimerRef.current = setInterval(() => setCallingTimer(t => t + 1), 1000);
+    
+    console.log('📞 Host initiating call, ringing members...');
     
     // Broadcast call started to all members
     if (callChannelRef.current && isHost) {
@@ -467,18 +487,63 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
       }
     }
     
-    // Notify other members of incoming call
+    // Play outgoing call ringtone
+    if (audioServiceRef.current) {
+      audioServiceRef.current.playRingtone('outgoingCall', 30);
+    }
+    
+    // Notify other members of incoming call via chat
     if (supabase && groupId && isHost) {
       try {
         await supabase.from('boarding_room_chat').insert({
           group_id: groupId,
           user_id: user?.id,
           user_email: user?.email,
-          message: `${user?.email || 'Host'} started the call`,
+          message: `📞 ${user?.email || 'Host'} is calling...`,
           is_system: true
         });
       } catch (err) {
         console.warn('Error logging meeting start:', err);
+      }
+    }
+    
+    // Auto-cancel after 60 seconds if no one answers
+    setTimeout(() => {
+      setIsCalling(prev => {
+        if (prev) {
+          console.log('⏱ Call timed out — no one answered');
+          cancelCall();
+        }
+        return false;
+      });
+    }, 60000);
+  };
+
+  const cancelCall = async () => {
+    console.log('❌ Host cancelled the call');
+    setIsCalling(false);
+    setCallingTimer(0);
+    if (callingTimerRef.current) { clearInterval(callingTimerRef.current); callingTimerRef.current = null; }
+    
+    // Stop ringtone
+    if (audioServiceRef.current) {
+      audioServiceRef.current.stopAll?.();
+    }
+    
+    // Broadcast call ended
+    if (callChannelRef.current) {
+      try {
+        await callChannelRef.current.send({
+          type: 'broadcast',
+          event: 'call-ended',
+          payload: {
+            hostId: user?.id,
+            groupId: groupId,
+            timestamp: new Date().toISOString()
+          }
+        });
+      } catch (err) {
+        console.warn('Error broadcasting call-ended:', err);
       }
     }
   };
@@ -490,6 +555,25 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
     setIsVideoOn(true);
     setIncomingCall(null);
     
+    // Broadcast call-accepted so the HOST knows to start the meeting
+    if (callChannelRef.current) {
+      try {
+        await callChannelRef.current.send({
+          type: 'broadcast',
+          event: 'call-accepted',
+          payload: {
+            acceptedBy: user?.id,
+            acceptedEmail: user?.email,
+            groupId: groupId,
+            timestamp: new Date().toISOString()
+          }
+        });
+        console.log('✅ Call-accepted broadcast sent to host');
+      } catch (err) {
+        console.warn('Error broadcasting call-accepted:', err);
+      }
+    }
+    
     // Log call acceptance
     if (supabase) {
       try {
@@ -497,7 +581,7 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
           group_id: groupId,
           user_id: user?.id,
           user_email: user?.email,
-          message: `${user?.email || 'Member'} accepted the call`,
+          message: `✅ ${user?.email || 'Member'} joined the call`,
           is_system: true
         });
       } catch (err) {
@@ -587,34 +671,43 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
   if (incomingCall && !isHost && !callAccepted) {
     console.log('🔔 [INCOMING CALL] Rendering incoming call screen - incomingCall:', !!incomingCall, 'isHost:', isHost, 'callAccepted:', callAccepted);
     return (
-      <div className="w-full h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      <div className="w-full h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center p-4 sm:p-6 pb-20 sm:pb-4 relative overflow-hidden">
         <div className="absolute inset-0 opacity-30">
           <div className="absolute top-0 -left-40 w-80 h-80 bg-red-500 rounded-full blur-3xl animate-pulse"></div>
           <div className="absolute bottom-0 -right-40 w-80 h-80 bg-orange-500 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
         </div>
         
-        <div className="relative z-10 text-center max-w-md">
-          <div className="w-32 h-32 bg-gradient-to-br from-red-500 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-8 shadow-2xl animate-pulse">
-            <Phone className="w-16 h-16 text-white" />
+        <div className="relative z-10 text-center max-w-md w-full px-2 sm:px-0">
+          {/* Animated incoming call icon */}
+          <div className="w-24 h-24 sm:w-32 sm:h-32 bg-gradient-to-br from-red-500 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-6 sm:mb-8 shadow-2xl animate-pulse">
+            <Phone className="w-12 h-12 sm:w-16 sm:h-16 text-white animate-bounce" style={{ animationDelay: '0.3s' }} />
           </div>
           
-          <h2 className="text-4xl font-bold text-white mb-2">{groupName}</h2>
-          <p className="text-xl text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-orange-400 mb-2">{typeof incomingCall === 'object' ? `${incomingCall.hostEmail || 'Host'} is calling` : 'Incoming Call...'}</p>
-          <p className="text-gray-400 mb-8">Group Call</p>
+          <h2 className="text-2xl sm:text-4xl font-bold text-white mb-1 sm:mb-2 break-words">{groupName}</h2>
+          <p className="text-base sm:text-xl text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-orange-400 mb-2 sm:mb-3 font-semibold">{typeof incomingCall === 'object' ? `${incomingCall.hostEmail || 'Host'} is calling` : 'Incoming Call...'}</p>
+          <p className="text-xs sm:text-sm text-gray-400 mb-6 sm:mb-8">Group Call</p>
           
-          <div className="flex gap-4 justify-center mt-12">
+          {/* Ringing indicator */}
+          <div className="flex items-center justify-center gap-2 mb-8 sm:mb-12">
+            <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-red-500 rounded-full animate-pulse"></div>
+            <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-red-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+            <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-red-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+          </div>
+          
+          {/* Buttons */}
+          <div className="flex gap-3 sm:gap-4 justify-center flex-col sm:flex-row w-full">
             <button
               onClick={() => acceptCall()}
-              className="px-8 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-2xl font-bold transition-all transform hover:scale-105 active:scale-95 shadow-2xl flex items-center gap-2"
+              className="flex-1 sm:flex-none px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 active:from-green-800 active:to-emerald-800 text-white rounded-xl sm:rounded-2xl font-bold transition-all transform hover:scale-105 active:scale-95 shadow-2xl flex items-center gap-2 sm:gap-3 justify-center text-sm sm:text-base"
             >
-              <Phone className="w-5 h-5" />
+              <Phone className="w-4 h-4 sm:w-5 sm:h-5" />
               Accept
             </button>
             <button
               onClick={() => rejectCall()}
-              className="px-8 py-3 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white rounded-2xl font-bold transition-all transform hover:scale-105 active:scale-95 shadow-2xl flex items-center gap-2"
+              className="flex-1 sm:flex-none px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 active:from-red-800 active:to-rose-800 text-white rounded-xl sm:rounded-2xl font-bold transition-all transform hover:scale-105 active:scale-95 shadow-2xl flex items-center gap-2 sm:gap-3 justify-center text-sm sm:text-base"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4 sm:w-5 sm:h-5" />
               Decline
             </button>
           </div>
@@ -745,6 +838,65 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
               <Send className="w-4 h-4" />
             </button>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Calling screen (host ringing members) ──────────────────────────
+  if (isCalling && isHost && !meetingStarted) {
+    return (
+      <div className="w-full h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center p-4 sm:p-6 pb-20 sm:pb-4 relative overflow-hidden">
+        <div className="absolute inset-0 opacity-30">
+          <div className="absolute top-0 -left-40 w-80 h-80 bg-blue-500 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute bottom-0 -right-40 w-80 h-80 bg-purple-500 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+        </div>
+        
+        <div className="relative z-10 text-center max-w-md w-full px-2 sm:px-0">
+          {/* Animated phone icon */}
+          <div className="w-24 h-24 sm:w-32 sm:h-32 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-6 sm:mb-8 shadow-2xl animate-bounce">
+            <Phone className="w-12 h-12 sm:w-16 sm:h-16 text-white" />
+          </div>
+          
+          <h2 className="text-3xl sm:text-4xl font-bold text-white mb-1 sm:mb-2 word-break">{groupName}</h2>
+          <p className="text-lg sm:text-xl text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 mb-6 sm:mb-8">Calling members...</p>
+          
+          {/* Timer showing how long they've been calling */}
+          <div className="text-4xl sm:text-5xl font-mono font-bold text-white mb-6 sm:mb-8 tabular-nums">{formatTime(callingTimer)}</div>
+          
+          {/* Show group members being called */}
+          <div className="mb-8 sm:mb-10">
+            <p className="text-xs sm:text-sm text-gray-400 mb-3 sm:mb-4">Ringing {groupMembers?.length || 0} member{groupMembers?.length !== 1 ? 's' : ''}:</p>
+            <div className="flex justify-center gap-2 sm:gap-3 flex-wrap max-h-32 sm:max-h-40 overflow-y-auto">
+              {groupMembers && groupMembers.length > 0 ? (
+                groupMembers.map((m, i) => (
+                  <div key={i} className="flex flex-col items-center flex-shrink-0">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-lg mb-1.5 sm:mb-2 animate-pulse shadow-lg ring-2 ring-blue-400/30">
+                      {m?.user_email?.charAt(0).toUpperCase()}
+                    </div>
+                    <p className="text-xs text-gray-400 max-w-[50px] sm:max-w-[60px] truncate">{m?.user_email?.split('@')[0]}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs sm:text-sm text-gray-500 italic">No members to call</p>
+              )}
+            </div>
+          </div>
+          
+          {/* Status indicator */}
+          <div className="flex items-center justify-center gap-2 mb-6 sm:mb-8">
+            <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-blue-400 rounded-full animate-pulse"></div>
+            <p className="text-xs sm:text-sm text-gray-400">Waiting for response...</p>
+          </div>
+          
+          {/* Cancel button */}
+          <button
+            onClick={() => cancelCall()}
+            className="w-full sm:w-auto px-8 sm:px-12 py-3 sm:py-4 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 active:from-red-800 active:to-red-900 text-white rounded-xl sm:rounded-2xl font-bold transition-all transform hover:scale-105 active:scale-95 shadow-2xl flex items-center gap-2 sm:gap-3 mx-auto text-sm sm:text-base"
+          >
+            <Phone className="w-4 h-4 sm:w-5 sm:h-5" />
+            Cancel Call
+          </button>
         </div>
       </div>
     );
