@@ -61,7 +61,7 @@ export const StatusFeed = () => {
   }
 
   return (
-    <div className="min-h-screen bg-white/30 backdrop-blur-md">
+    <div className="min-h-screen bg-transparent">
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* My Statuses Section */}
         {myStatuses.length > 0 && (
@@ -71,7 +71,7 @@ export const StatusFeed = () => {
               className="mb-6 flex items-center gap-2 text-xl font-bold text-white hover:text-purple-300 transition-colors group w-full"
             >
               <div className="w-1 h-6 bg-gradient-to-b from-purple-500 to-pink-500 rounded"></div>
-              <span>Updates</span>
+              <span>My Updates</span>
               <ChevronDown 
                 className={`w-5 h-5 transition-transform duration-300 ${myStatusesCollapsed ? '-rotate-90' : ''}`}
               />
@@ -89,34 +89,43 @@ export const StatusFeed = () => {
                     className="relative w-full aspect-[9/16] bg-black rounded-2xl overflow-hidden"
                   >
                     {status.media_type === 'image' ? (
-                      <img
-                        src={status.media_url}
-                        alt="Status"
-                        className="w-full h-full object-cover group-hover:brightness-75 transition-all"
-                      />
+                      <>
+                        <img
+                          src={status.media_url}
+                          alt="Status"
+                          className="w-full h-full object-cover group-hover:brightness-75 transition-all"
+                        />
+                        {status.caption && (
+                          <div className="absolute bottom-10 left-0 right-0 px-3 pb-2">
+                            <p className="text-white text-center text-xs font-medium drop-shadow-lg bg-black/30 backdrop-blur-sm rounded-lg px-2 py-1 line-clamp-2">{status.caption}</p>
+                          </div>
+                        )}
+                      </>
                     ) : status.media_type === 'video' ? (
-                      <video
-                        src={status.media_url}
-                        className="w-full h-full object-cover group-hover:brightness-75 transition-all"
-                      />
+                      <>
+                        <video
+                          src={status.media_url}
+                          className="w-full h-full object-cover group-hover:brightness-75 transition-all"
+                        />
+                        {status.caption && (
+                          <div className="absolute bottom-10 left-0 right-0 px-3 pb-2">
+                            <p className="text-white text-center text-xs font-medium drop-shadow-lg bg-black/30 backdrop-blur-sm rounded-lg px-2 py-1 line-clamp-2">{status.caption}</p>
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <div
                         style={{ backgroundColor: status.background_color }}
                         className="w-full h-full flex items-center justify-center p-4"
-                      />
-                    )}
-
-                    {/* Caption overlay */}
-                    {status.caption && (
-                      <div className="absolute inset-0 flex items-end justify-start bg-gradient-to-t from-black/70 to-transparent p-4">
-                        <p className="text-white text-sm font-medium line-clamp-2">
+                      >
+                        <p className="text-white text-center text-lg font-medium">
                           {status.caption}
                         </p>
                       </div>
                     )}
 
                     {/* Overlay with actions */}
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center gap-4 opacity-0 group-hover:opacity-100 z-10">
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center gap-4 opacity-0 group-hover:opacity-100">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -204,34 +213,43 @@ export const StatusFeed = () => {
                   {/* Thumbnail */}
                   <div className="relative w-full aspect-[9/16] bg-black rounded-2xl overflow-hidden">
                     {status.media_type === 'image' ? (
-                      <img
-                        src={status.media_url}
-                        alt="Status"
-                        className="w-full h-full object-cover group-hover:brightness-75 transition-all"
-                      />
+                      <>
+                        <img
+                          src={status.media_url}
+                          alt="Status"
+                          className="w-full h-full object-cover group-hover:brightness-75 transition-all"
+                        />
+                        {status.caption && (
+                          <div className="absolute bottom-10 left-0 right-0 px-3 pb-2">
+                            <p className="text-white text-center text-xs font-medium drop-shadow-lg bg-black/30 backdrop-blur-sm rounded-lg px-2 py-1 line-clamp-2">{status.caption}</p>
+                          </div>
+                        )}
+                      </>
                     ) : status.media_type === 'video' ? (
-                      <video
-                        src={status.media_url}
-                        className="w-full h-full object-cover group-hover:brightness-75 transition-all"
-                      />
+                      <>
+                        <video
+                          src={status.media_url}
+                          className="w-full h-full object-cover group-hover:brightness-75 transition-all"
+                        />
+                        {status.caption && (
+                          <div className="absolute bottom-10 left-0 right-0 px-3 pb-2">
+                            <p className="text-white text-center text-xs font-medium drop-shadow-lg bg-black/30 backdrop-blur-sm rounded-lg px-2 py-1 line-clamp-2">{status.caption}</p>
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <div
                         style={{ backgroundColor: status.background_color }}
                         className="w-full h-full flex items-center justify-center p-4"
-                      />
-                    )}
-
-                    {/* Caption overlay */}
-                    {status.caption && (
-                      <div className="absolute inset-0 flex items-end justify-start bg-gradient-to-t from-black/70 to-transparent p-4">
-                        <p className="text-white text-sm font-medium line-clamp-2">
+                      >
+                        <p className="text-white text-center text-lg font-medium">
                           {status.caption}
                         </p>
                       </div>
                     )}
 
                     {/* User badge */}
-                    <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-sm px-3 py-1 rounded-full flex items-center gap-2 z-10">
+                    <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-sm px-3 py-1 rounded-full flex items-center gap-2">
                       <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-xs font-bold text-white">
                         {status.user_id.slice(0, 1).toUpperCase()}
                       </div>
@@ -254,7 +272,7 @@ export const StatusFeed = () => {
               <div className="w-20 h-20 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-full mx-auto mb-4 flex items-center justify-center">
                 <Eye className="w-10 h-10 text-purple-400" />
               </div>
-              <h3 className="text-2xl font-bold text-white mb-2">No Statuses Yet</h3>
+              <h3 className="text-2xl font-bold text-white mb-2">No Updates Yet</h3>
               <p className="text-gray-400">Be the first to share a status! Tap your avatar to get started.</p>
             </div>
           </div>

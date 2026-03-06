@@ -22,9 +22,9 @@ export const StatusPage = ({ onGoBack }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen bg-slate-900">
       {/* Simplified Transparent Overlay Header */}
-      <div className="sticky top-0 z-20 backdrop-blur-md bg-black/40">
+      <div className="sticky top-0 z-20 backdrop-blur-md bg-transparent border-b border-white/10">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <button
             onClick={onGoBack}
