@@ -820,6 +820,72 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [includeAIAnalysis, setIncludeAIAnalysis] = useState(true);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [generatedReportData, setGeneratedReportData] = useState(null);
+
+  // Report date filter: 'today' | 'week' | 'month' | 'year' | 'custom'
+  const [reportDateFilter, setReportDateFilter] = useState('month');
+  const [reportCustomStart, setReportCustomStart] = useState('');
+  const [reportCustomEnd,   setReportCustomEnd]   = useState('');
+  const [reportFilteredMetrics, setReportFilteredMetrics] = useState(null);
+  const [isLoadingReportMetrics, setIsLoadingReportMetrics] = useState(false);
+
+  // Compute ISO start/end for the chosen filter
+  const getReportDateRange = (filter = reportDateFilter, customStart = reportCustomStart, customEnd = reportCustomEnd) => {
+    const now = new Date();
+    let start, end;
+    if (filter === 'today') {
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      end   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    } else if (filter === 'week') {
+      const day = now.getDay();
+      start = new Date(now); start.setDate(now.getDate() - day); start.setHours(0,0,0,0);
+      end   = new Date(now); end.setDate(now.getDate() + (6 - day)); end.setHours(23,59,59,999);
+    } else if (filter === 'year') {
+      start = new Date(now.getFullYear(), 0, 1);
+      end   = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+    } else if (filter === 'custom') {
+      start = customStart ? new Date(customStart) : new Date(now.getFullYear(), now.getMonth(), 1);
+      end   = customEnd   ? new Date(new Date(customEnd).setHours(23,59,59,999)) : new Date();
+    } else {
+      // month (default)
+      start = new Date(now.getFullYear(), now.getMonth(), 1);
+      end   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    }
+    return { start: start.toISOString(), end: end.toISOString() };
+  };
+
+  // Fetch real income/expense totals from Supabase for the chosen period
+  const fetchReportMetrics = async (filter = reportDateFilter, customStart = reportCustomStart, customEnd = reportCustomEnd) => {
+    setIsLoadingReportMetrics(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { start, end } = getReportDateRange(filter, customStart, customEnd);
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('amount, transaction_type, category, description, created_at')
+        .eq('user_id', user.id)
+        .gte('created_at', start)
+        .lte('created_at', end)
+        .order('created_at', { ascending: false });
+      if (error) { console.error('Report fetch error:', error); return; }
+      const income   = (data || []).filter(t => t.transaction_type === 'income').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+      const expenses = (data || []).filter(t => t.transaction_type !== 'income').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+      // Category breakdown
+      const catMap = {};
+      (data || []).forEach(t => {
+        const cat = t.category || 'Uncategorized';
+        if (!catMap[cat]) catMap[cat] = { income: 0, expense: 0, count: 0 };
+        if (t.transaction_type === 'income') catMap[cat].income += parseFloat(t.amount) || 0;
+        else catMap[cat].expense += parseFloat(t.amount) || 0;
+        catMap[cat].count++;
+      });
+      setReportFilteredMetrics({ income, expenses, netProfit: income - expenses, count: (data || []).length, categories: catMap, transactions: data || [], start, end });
+    } catch (e) {
+      console.error('fetchReportMetrics error:', e);
+    } finally {
+      setIsLoadingReportMetrics(false);
+    }
+  };
   // Calculate Tithing Metrics
   const calculateTithingMetrics = () => {
     const totalIncome = parseFloat(monthlyRevenue) || 0;
@@ -897,6 +963,14 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   };
 
   const reportSummary = generateReportSummary();
+
+  // Auto-load Supabase metrics when Reports modal opens or date filter changes
+  useEffect(() => {
+    if (showReportingSystem) {
+      fetchReportMetrics(reportDateFilter, reportCustomStart, reportCustomEnd);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showReportingSystem]);
 
   // Initialize AI chat with welcome message
   useEffect(() => {
@@ -4985,7 +5059,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 <h2 className="text-xl font-bold text-white">📊 Financial Reports</h2>
                 <p className="text-rose-100 text-xs mt-0.5">AI-powered reports — Uganda compliant</p>
               </div>
-              <button onClick={() => setShowReportingSystem(false)} className="text-white/70 hover:text-white p-1"><X className="w-6 h-6" /></button>
+              <button onClick={() => { setShowReportingSystem(false); setReportFilteredMetrics(null); setGeneratedReportData(null); }} className="text-white/70 hover:text-white p-1"><X className="w-6 h-6" /></button>
             </div>
 
             <div className="p-4 space-y-4">
@@ -5005,6 +5079,88 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 </select>
               </div>
 
+              {/* ── DATE FILTER ── */}
+              <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-3">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">📅 Period</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {[{ id:'today', label:'Today' }, { id:'week', label:'Week' }, { id:'month', label:'Month' }, { id:'year', label:'Year' }].map(f => (
+                    <button
+                      key={f.id}
+                      onClick={() => {
+                        setReportDateFilter(f.id);
+                        setReportFilteredMetrics(null);
+                        fetchReportMetrics(f.id, reportCustomStart, reportCustomEnd);
+                      }}
+                      className={`py-2 rounded-lg text-xs font-bold transition ${
+                        reportDateFilter === f.id
+                          ? 'bg-purple-600 text-white shadow'
+                          : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                      }`}
+                    >{f.label}</button>
+                  ))}
+                </div>
+                {/* Custom range */}
+                <div>
+                  <button
+                    onClick={() => {
+                      setReportDateFilter('custom');
+                      setReportFilteredMetrics(null);
+                    }}
+                    className={`text-xs font-semibold transition ${
+                      reportDateFilter === 'custom' ? 'text-purple-300' : 'text-gray-500 hover:text-gray-300'
+                    }`}
+                  >🗓️ Custom range {reportDateFilter === 'custom' ? '▲' : '▼'}</button>
+                  {reportDateFilter === 'custom' && (
+                    <div className="flex gap-2 mt-2">
+                      <input type="date" value={reportCustomStart} onChange={e => setReportCustomStart(e.target.value)}
+                        className="flex-1 bg-white/10 text-white text-xs rounded-lg px-2 py-1.5 border border-white/20 focus:outline-none focus:border-purple-400" />
+                      <span className="text-gray-400 self-center text-xs">to</span>
+                      <input type="date" value={reportCustomEnd} onChange={e => setReportCustomEnd(e.target.value)}
+                        className="flex-1 bg-white/10 text-white text-xs rounded-lg px-2 py-1.5 border border-white/20 focus:outline-none focus:border-purple-400" />
+                      <button
+                        onClick={() => fetchReportMetrics('custom', reportCustomStart, reportCustomEnd)}
+                        className="px-3 py-1.5 bg-purple-600 text-white text-xs font-bold rounded-lg hover:bg-purple-500 transition"
+                      >Go</button>
+                    </div>
+                  )}
+                </div>
+                {/* Live metrics for the period */}
+                {isLoadingReportMetrics && (
+                  <div className="flex items-center gap-2 text-xs text-purple-300">
+                    <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                    </svg>
+                    Loading period data...
+                  </div>
+                )}
+                {reportFilteredMetrics && !isLoadingReportMetrics && (
+                  <div className="grid grid-cols-3 gap-2 pt-1">
+                    <div className="bg-green-900/30 border border-green-500/30 rounded-lg p-2 text-center">
+                      <p className="text-green-400 font-bold text-xs">{reportFilteredMetrics.income.toLocaleString(undefined, {maximumFractionDigits:0})}</p>
+                      <p className="text-gray-500 text-xs">Income</p>
+                    </div>
+                    <div className="bg-red-900/30 border border-red-500/30 rounded-lg p-2 text-center">
+                      <p className="text-red-400 font-bold text-xs">{reportFilteredMetrics.expenses.toLocaleString(undefined, {maximumFractionDigits:0})}</p>
+                      <p className="text-gray-500 text-xs">Expenses</p>
+                    </div>
+                    <div className={`border rounded-lg p-2 text-center ${
+                      reportFilteredMetrics.netProfit >= 0
+                        ? 'bg-blue-900/30 border-blue-500/30'
+                        : 'bg-orange-900/30 border-orange-500/30'
+                    }`}>
+                      <p className={`font-bold text-xs ${
+                        reportFilteredMetrics.netProfit >= 0 ? 'text-blue-300' : 'text-orange-400'
+                      }`}>{reportFilteredMetrics.netProfit.toLocaleString(undefined, {maximumFractionDigits:0})}</p>
+                      <p className="text-gray-500 text-xs">Net</p>
+                    </div>
+                  </div>
+                )}
+                {reportFilteredMetrics && !isLoadingReportMetrics && (
+                  <p className="text-gray-600 text-xs">{reportFilteredMetrics.count} transactions in period</p>
+                )}
+              </div>
+
               {/* Report summary panel */}
               <div className="space-y-3">
                 <div className="bg-white/5 border border-white/10 rounded-xl p-4">
@@ -5016,11 +5172,24 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <div className="flex justify-between text-sm"><span className="text-gray-400">Total Income (30d)</span><span className="text-green-400 font-semibold">UGX {(reportSummary.metrics.totalIncome || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
-                    <div className="flex justify-between text-sm"><span className="text-gray-400">Total Expenses (30d)</span><span className="text-red-400 font-semibold">UGX {(reportSummary.metrics.totalExpenses || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
-                    <div className="flex justify-between text-sm border-t border-white/10 pt-2"><span className="text-gray-300 font-medium">Net Profit</span><span className={`font-bold ${reportSummary.metrics.netProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>UGX {(reportSummary.metrics.netProfit || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
-                    <div className="flex justify-between text-sm"><span className="text-gray-400">Savings Rate</span><span className="text-purple-400 font-semibold">{(reportSummary.metrics.savingsRate || 0).toFixed(1)}%</span></div>
-                    <div className="flex justify-between text-sm"><span className="text-gray-400">Net Worth</span><span className="text-yellow-400 font-semibold">UGX {(reportSummary.metrics.netWorth || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                    {/* Use filtered metrics when available, else fall back to velocityMetrics */}
+                    {(() => {
+                      const fm = reportFilteredMetrics;
+                      const inc  = fm ? fm.income   : (reportSummary.metrics.totalIncome  || 0);
+                      const exp  = fm ? fm.expenses : (reportSummary.metrics.totalExpenses || 0);
+                      const net  = fm ? fm.netProfit: (reportSummary.metrics.netProfit     || 0);
+                      const rate = inc > 0 ? ((net / inc) * 100) : 0;
+                      const label = fm ? ({ today:'Today', week:'This Week', month:'This Month', year:'This Year', custom:'Custom Period' }[reportDateFilter] || reportDateFilter) : '30d';
+                      return (
+                        <>
+                          <div className="flex justify-between text-sm"><span className="text-gray-400">Income ({label})</span><span className="text-green-400 font-semibold">UGX {inc.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                          <div className="flex justify-between text-sm"><span className="text-gray-400">Expenses ({label})</span><span className="text-red-400 font-semibold">UGX {exp.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                          <div className="flex justify-between text-sm border-t border-white/10 pt-2"><span className="text-gray-300 font-medium">Net Profit</span><span className={`font-bold ${net >= 0 ? 'text-green-400' : 'text-red-400'}`}>UGX {net.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                          <div className="flex justify-between text-sm"><span className="text-gray-400">Margin</span><span className="text-purple-400 font-semibold">{rate.toFixed(1)}%</span></div>
+                          <div className="flex justify-between text-sm"><span className="text-gray-400">Net Worth</span><span className="text-yellow-400 font-semibold">UGX {(reportSummary.metrics.netWorth || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -5066,10 +5235,13 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     setIsGeneratingReport(true);
                     setGeneratedReportData(null);
                     try {
-                      const income   = velocityMetrics?.income30Days    || 0;
-                      const expenses = velocityMetrics?.expenses30Days  || 0;
-                      const netWorth = velocityMetrics?.netWorth         || 0;
+                      // Use real Supabase-filtered data when available
+                      const fm       = reportFilteredMetrics;
+                      const income   = fm ? fm.income   : (velocityMetrics?.income30Days   || 0);
+                      const expenses = fm ? fm.expenses : (velocityMetrics?.expenses30Days || 0);
+                      const netWorth = velocityMetrics?.netWorth || 0;
                       const userId   = userProfile?.id;
+                      const { start: periodStart, end: periodEnd } = getReportDateRange();
                       const fd = {
                         revenue: income,
                         costOfGoodsSold: expenses * 0.4,
@@ -5083,6 +5255,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         income, expenses, netProfit: income - expenses,
                         savingsRate: income > 0 ? ((income - expenses) / income * 100) : 0,
                         netWorth,
+                        periodFilter: reportDateFilter,
+                        periodStart,
+                        periodEnd,
+                        transactionCount: fm?.count || 0,
+                        categoryBreakdown: fm?.categories || {},
                       };
                       let result;
                       if (selectedReportType === 'tax-filing') {
