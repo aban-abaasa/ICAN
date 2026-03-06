@@ -671,7 +671,7 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
   if (incomingCall && !isHost && !callAccepted) {
     console.log('🔔 [INCOMING CALL] Rendering incoming call screen - incomingCall:', !!incomingCall, 'isHost:', isHost, 'callAccepted:', callAccepted);
     return (
-      <div className="w-full h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center p-4 sm:p-6 pb-20 sm:pb-4 relative overflow-hidden">
+      <div className="w-full h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center p-4 sm:p-6 pb-32 sm:pb-8 relative overflow-hidden">
         <div className="absolute inset-0 opacity-30">
           <div className="absolute top-0 -left-40 w-80 h-80 bg-red-500 rounded-full blur-3xl animate-pulse"></div>
           <div className="absolute bottom-0 -right-40 w-80 h-80 bg-orange-500 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
@@ -846,13 +846,13 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
   // ── Calling screen (host ringing members) ──────────────────────────
   if (isCalling && isHost && !meetingStarted) {
     return (
-      <div className="w-full h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center p-4 sm:p-6 pb-20 sm:pb-4 relative overflow-hidden">
+      <div className="w-full h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center p-4 sm:p-6 pb-32 sm:pb-8 relative overflow-hidden">
         <div className="absolute inset-0 opacity-30">
           <div className="absolute top-0 -left-40 w-80 h-80 bg-blue-500 rounded-full blur-3xl animate-pulse"></div>
           <div className="absolute bottom-0 -right-40 w-80 h-80 bg-purple-500 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
         </div>
         
-        <div className="relative z-10 text-center max-w-md w-full px-2 sm:px-0">
+        <div className="relative z-10 text-center max-w-md w-full px-2 sm:px-0 overflow-y-auto max-h-[calc(100vh-140px)] sm:max-h-none">
           {/* Animated phone icon */}
           <div className="w-24 h-24 sm:w-32 sm:h-32 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-6 sm:mb-8 shadow-2xl animate-bounce">
             <Phone className="w-12 h-12 sm:w-16 sm:h-16 text-white" />
