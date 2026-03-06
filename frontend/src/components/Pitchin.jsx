@@ -70,6 +70,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
   const [editingProfile, setEditingProfile] = useState(null);
   const [likedPitches, setLikedPitches] = useState(new Set());
   const [investedPitches, setInvestedPitches] = useState(new Set()); // track pitches user showed interest in
+  const [viewingPitcher, setViewingPitcher] = useState(null); // { name, business_profile_id, user_id } | null
   const [showComments, setShowComments] = useState(null); // pitch id for comments modal
   const [comments, setComments] = useState({});
   const [newComment, setNewComment] = useState('');
@@ -184,6 +185,13 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
   // Handle tab changes and smart search with relevance scoring
   useEffect(() => {
     let filtered = [];
+
+    // If viewing a specific pitcher's videos, filter by their business_profile_id
+    if (viewingPitcher) {
+      filtered = pitches.filter(p => p.business_profile_id === viewingPitcher.business_profile_id);
+      setFilteredPitches(filtered);
+      return;
+    }
     
     if (activeTab === 'feed') {
       // Show ALL published pitches in feed - free to view for everyone
@@ -258,7 +266,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
     }
     
     setFilteredPitches(filtered);
-  }, [activeTab, pitches, currentUser, likedPitches, investedPitches, searchQuery, selectedCategory, minFunding, maxFunding, minEquity, maxEquity, hasIPOnly, sortBy]);
+  }, [activeTab, pitches, currentUser, likedPitches, investedPitches, searchQuery, selectedCategory, minFunding, maxFunding, minEquity, maxEquity, hasIPOnly, sortBy, viewingPitcher]);
 
   // Set up real-time metrics subscription
   useEffect(() => {
@@ -1208,15 +1216,20 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                         <span className="text-pink-300 text-[9px] font-bold drop-shadow-lg">Create</span>
                       </button>
 
+                      {/* Pitcher Avatar — tap to view all their pitches */}
                       <button
-                        onClick={() => setShowProfileSelector(true)}
+                        onClick={() => setViewingPitcher({
+                          name: pitch.business_profiles?.business_name || pitch.business_profiles?.name || 'Pitcher',
+                          business_profile_id: pitch.business_profile_id,
+                          user_id: pitch.user_id,
+                        })}
                         className="flex flex-col items-center gap-0.5"
-                        title="Profile"
+                        title="See all from this pitcher"
                       >
-                        <div className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm flex items-center justify-center transition-all">
-                          <Building2 className="w-4 h-4 text-white drop-shadow-lg" />
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-pink-500 to-orange-400 flex items-center justify-center text-white font-bold text-sm border border-white/30 transition-all hover:scale-110">
+                          {(pitch.business_profiles?.business_name || pitch.business_profiles?.name || 'P').charAt(0).toUpperCase()}
                         </div>
-                        <span className="text-white text-[9px] font-bold drop-shadow-lg">Profile</span>
+                        <span className="text-pink-300 text-[9px] font-bold drop-shadow-lg">Pitcher</span>
                       </button>
                     </div>
                   </div>
@@ -1266,16 +1279,24 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
       ) : (
         // Feed Page - With header and navigation
         <>
-      {/* Clean Header - Pure Text Transparent */}
+      {/* Single-row Header */}
       <div className="sticky top-0 z-40 bg-transparent">
-        {/* Top Row - Branding & Search */}
-        <div className="px-4 py-3 flex items-center justify-between gap-4">
-          {/* Left - Pitchin Branding (Text Only) */}
-          <h1 className="text-lg font-bold text-white whitespace-nowrap">Pitchin</h1>
+        <div className="px-4 py-3 flex items-center gap-3">
 
-          {/* Center - Search with Category Filter */}
-          <div className="flex-1 max-w-2xl flex items-center gap-2">
-            {/* Search Input - Transparent */}
+          {/* Left - "For You" tab (replaces Pitchin branding) */}
+          <button
+            onClick={() => { setActiveTab('feed'); setSelectedCategory('all'); }}
+            className={`text-sm font-bold whitespace-nowrap transition-colors ${
+              activeTab === 'feed'
+                ? 'text-white border-b-2 border-pink-500 pb-0.5'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            For You
+          </button>
+
+          {/* Center - Search */}
+          <div className="flex-1 flex items-center gap-2 min-w-0">
             <div className="flex-1 relative">
               <input
                 type="text"
@@ -1283,49 +1304,37 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
-                  if (e.target.value.trim()) {
-                    setActiveTab('search');
-                  }
+                  if (e.target.value.trim()) setActiveTab('search');
                 }}
                 onKeyPress={(e) => {
-                  if (e.key === 'Enter' && searchQuery.trim()) {
-                    setActiveTab('search');
-                  }
+                  if (e.key === 'Enter' && searchQuery.trim()) setActiveTab('search');
                 }}
                 className="w-full px-0 py-1 bg-transparent border-0 border-b border-gray-600 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-gray-400 focus:ring-0"
               />
               <Search className="absolute right-0 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
             </div>
 
-            {/* Category Filter - Transparent */}
+            {/* Category + sort filters — only when searching */}
             {searchQuery.trim() && (
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="px-1 py-1 bg-transparent border-0 border-b border-gray-600 text-sm text-white focus:outline-none focus:border-gray-400 focus:ring-0 whitespace-nowrap appearance-none cursor-pointer"
-                style={{
-                  backgroundColor: 'transparent',
-                  backgroundImage: 'none',
-                  color: 'white'
-                }}
-              >
-                <option value="all" style={{ backgroundColor: '#1e293b', color: 'white', padding: '4px' }}>All Categories</option>
-                <option value="Technology" style={{ backgroundColor: '#1e293b', color: 'white', padding: '4px' }}>Technology</option>
-                <option value="Finance" style={{ backgroundColor: '#1e293b', color: 'white', padding: '4px' }}>Finance</option>
-                <option value="Healthcare" style={{ backgroundColor: '#1e293b', color: 'white', padding: '4px' }}>Healthcare</option>
-                <option value="E-commerce" style={{ backgroundColor: '#1e293b', color: 'white', padding: '4px' }}>E-commerce</option>
-                <option value="Education" style={{ backgroundColor: '#1e293b', color: 'white', padding: '4px' }}>Education</option>
-                <option value="Real Estate" style={{ backgroundColor: '#1e293b', color: 'white', padding: '4px' }}>Real Estate</option>
-              </select>
-            )}
-
-            {/* Advanced Filters - Show when searching */}
-            {searchQuery.trim() && (
-              <div className="flex items-center gap-2">
+              <>
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="px-1 py-1 bg-transparent border-0 border-b border-gray-600 text-sm text-white focus:outline-none focus:border-gray-400 focus:ring-0 appearance-none cursor-pointer"
+                  style={{ backgroundColor: 'transparent', backgroundImage: 'none', color: 'white' }}
+                >
+                  <option value="all" style={{ backgroundColor: '#1e293b', color: 'white' }}>All</option>
+                  <option value="Technology" style={{ backgroundColor: '#1e293b', color: 'white' }}>Technology</option>
+                  <option value="Finance" style={{ backgroundColor: '#1e293b', color: 'white' }}>Finance</option>
+                  <option value="Healthcare" style={{ backgroundColor: '#1e293b', color: 'white' }}>Healthcare</option>
+                  <option value="E-commerce" style={{ backgroundColor: '#1e293b', color: 'white' }}>E-commerce</option>
+                  <option value="Education" style={{ backgroundColor: '#1e293b', color: 'white' }}>Education</option>
+                  <option value="Real Estate" style={{ backgroundColor: '#1e293b', color: 'white' }}>Real Estate</option>
+                </select>
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
-                  className="px-1 py-1 bg-transparent border-0 border-b border-gray-600 text-sm text-white focus:outline-none focus:border-gray-400 focus:ring-0 whitespace-nowrap appearance-none cursor-pointer"
+                  className="px-1 py-1 bg-transparent border-0 border-b border-gray-600 text-sm text-white focus:outline-none focus:border-gray-400 focus:ring-0 appearance-none cursor-pointer"
                   style={{ backgroundColor: 'transparent', backgroundImage: 'none', color: 'white' }}
                 >
                   <option value="relevance" style={{ backgroundColor: '#1e293b', color: 'white' }}>Relevance</option>
@@ -1335,95 +1344,38 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                   <option value="equity-high" style={{ backgroundColor: '#1e293b', color: 'white' }}>Equity ↓</option>
                   <option value="equity-low" style={{ backgroundColor: '#1e293b', color: 'white' }}>Equity ↑</option>
                 </select>
-
-                <label className="flex items-center gap-1 text-white text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={hasIPOnly}
-                    onChange={(e) => setHasIPOnly(e.target.checked)}
-                    className="w-4 h-4"
-                  />
-                  Has IP
-                </label>
-              </div>
+              </>
             )}
           </div>
 
-          {/* Right - Create & Profile */}
+          {/* Right - My Pitches + Profile */}
           <div className="flex items-center gap-4 min-w-max">
             <button
-              onClick={() => {
-                handleCreatePitchClick();
-              }}
-              className="text-white text-sm font-semibold flex items-center gap-2 hover:text-pink-400 transition-colors whitespace-nowrap"
-            >
-              <Plus className="w-4 h-4" />
-              Create
-            </button>
-
-            <button
-              onClick={() => setShowProfileSelector(true)}
-              title="Business Profiles"
-              className="text-gray-400 hover:text-white transition-colors"
-            >
-              <Building2 className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Tab Row - Pure Text */}
-        <div className="px-4 py-3 flex items-center gap-6 overflow-x-auto">
-          <button
-            onClick={() => {
-              setActiveTab('feed');
-              setSelectedCategory('all');
-            }}
-            className={`text-sm font-medium whitespace-nowrap ${
-              activeTab === 'feed'
-                ? 'text-white border-b-2 border-pink-500 pb-1'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            For You
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab('myPitches');
-              setSelectedCategory('all');
-            }}
-            className={`text-sm font-medium whitespace-nowrap ${
-              activeTab === 'myPitches'
-                ? 'text-white border-b-2 border-purple-500 pb-1'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            My Pitches
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab('interested');
-              setSelectedCategory('all');
-            }}
-            className={`text-sm font-medium whitespace-nowrap ${
-              activeTab === 'interested'
-                ? 'text-white border-b-2 border-blue-500 pb-1'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Pending Votes
-          </button>
-          {searchQuery.trim() && (
-            <button
-              onClick={() => setActiveTab('search')}
-              className={`text-sm font-medium whitespace-nowrap ${
-                activeTab === 'search'
-                  ? 'text-white border-b-2 border-green-500 pb-1'
+              onClick={() => { setActiveTab('myPitches'); setSelectedCategory('all'); }}
+              className={`text-sm font-semibold whitespace-nowrap transition-colors ${
+                activeTab === 'myPitches'
+                  ? 'text-white border-b-2 border-purple-500 pb-0.5'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              Search Results
+              My Pitches
             </button>
-          )}
+
+            {/* Current User avatar — shows logged-in user's initials */}
+            <button
+              onClick={() => setShowProfileSelector(true)}
+              title="My Profile / Switch Business"
+              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+            >
+              {currentUser ? (
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                  {(currentUser.user_metadata?.full_name || currentUser.email || 'U').charAt(0).toUpperCase()}
+                </div>
+              ) : (
+                <Building2 className="w-5 h-5 text-gray-400" />
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Advanced Filters Row - Funding & Equity Range */}
@@ -1497,6 +1449,22 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
           </div>
         )}
       </div>
+
+      {/* Viewing Pitcher Banner — shown when user tapped a pitcher's avatar */}
+      {viewingPitcher && (
+        <div className="sticky top-0 z-39 flex items-center gap-3 px-4 py-2 bg-black/60 backdrop-blur-sm border-b border-white/10">
+          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-pink-500 to-orange-400 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+            {(viewingPitcher.name || 'P').charAt(0).toUpperCase()}
+          </div>
+          <span className="text-white text-xs font-semibold flex-1 truncate">{viewingPitcher.name}'s Pitches</span>
+          <button
+            onClick={() => setViewingPitcher(null)}
+            className="text-slate-400 hover:text-white text-xs font-medium transition-colors flex items-center gap-1"
+          >
+            ← Back to Feed
+          </button>
+        </div>
+      )}
 
       {/* Business Profile Section - Minimal Collapsed View - HIDDEN */}
       {/* Now accessible via overlay icon in video feed */}
@@ -1838,16 +1806,20 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                           <span className="text-pink-300 text-[9px] font-bold drop-shadow-lg">Create</span>
                         </button>
 
-                        {/* Profile Button */}
+                        {/* Pitcher Avatar — tap to view all their pitches */}
                         <button
-                          onClick={() => setShowProfileSelector(true)}
+                          onClick={() => setViewingPitcher({
+                            name: pitch.business_profiles?.business_name || pitch.business_profiles?.name || 'Pitcher',
+                            business_profile_id: pitch.business_profile_id,
+                            user_id: pitch.user_id,
+                          })}
                           className="flex flex-col items-center gap-0.5"
-                          title="Profile"
+                          title="See all from this pitcher"
                         >
-                          <div className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm flex items-center justify-center transition-all">
-                            <Building2 className="w-4 h-4 text-white drop-shadow-lg" />
+                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-pink-500 to-orange-400 flex items-center justify-center text-white font-bold text-sm border border-white/30 transition-all hover:scale-110">
+                            {(pitch.business_profiles?.business_name || pitch.business_profiles?.name || 'P').charAt(0).toUpperCase()}
                           </div>
-                          <span className="text-white text-[9px] font-bold drop-shadow-lg">Profile</span>
+                          <span className="text-pink-300 text-[9px] font-bold drop-shadow-lg">Pitcher</span>
                         </button>
                       </div>
 

@@ -858,30 +858,32 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
     setIsLoadingReportMetrics(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) { setIsLoadingReportMetrics(false); return; }
       const { start, end } = getReportDateRange(filter, customStart, customEnd);
       const { data, error } = await supabase
-        .from('transactions')
-        .select('amount, transaction_type, category, description, created_at')
+        .from('ican_transactions')
+        .select('amount, transaction_type, description, created_at, metadata')
         .eq('user_id', user.id)
         .gte('created_at', start)
         .lte('created_at', end)
         .order('created_at', { ascending: false });
-      if (error) { console.error('Report fetch error:', error); return; }
-      const income   = (data || []).filter(t => t.transaction_type === 'income').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
-      const expenses = (data || []).filter(t => t.transaction_type !== 'income').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
-      // Category breakdown
+      if (error) { console.error('Report fetch error:', error); }
+      const rows = data || [];
+      const income   = rows.filter(t => t.transaction_type === 'income').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+      const expenses = rows.filter(t => t.transaction_type !== 'income').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+      // Category breakdown — category lives in metadata
       const catMap = {};
-      (data || []).forEach(t => {
-        const cat = t.category || 'Uncategorized';
+      rows.forEach(t => {
+        const cat = t.metadata?.category || t.metadata?.record_category || 'Uncategorized';
         if (!catMap[cat]) catMap[cat] = { income: 0, expense: 0, count: 0 };
         if (t.transaction_type === 'income') catMap[cat].income += parseFloat(t.amount) || 0;
         else catMap[cat].expense += parseFloat(t.amount) || 0;
         catMap[cat].count++;
       });
-      setReportFilteredMetrics({ income, expenses, netProfit: income - expenses, count: (data || []).length, categories: catMap, transactions: data || [], start, end });
+      setReportFilteredMetrics({ income, expenses, netProfit: income - expenses, count: rows.length, categories: catMap, transactions: rows, start, end });
     } catch (e) {
       console.error('fetchReportMetrics error:', e);
+      setReportFilteredMetrics({ income: 0, expenses: 0, netProfit: 0, count: 0, categories: {}, transactions: [], start: '', end: '' });
     } finally {
       setIsLoadingReportMetrics(false);
     }
@@ -5175,18 +5177,21 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     {/* Use filtered metrics when available, else fall back to velocityMetrics */}
                     {(() => {
                       const fm = reportFilteredMetrics;
-                      const inc  = fm ? fm.income   : (reportSummary.metrics.totalIncome  || 0);
-                      const exp  = fm ? fm.expenses : (reportSummary.metrics.totalExpenses || 0);
-                      const net  = fm ? fm.netProfit: (reportSummary.metrics.netProfit     || 0);
+                      const inc  = fm ? fm.income    : (velocityMetrics?.income30Days  || 0);
+                      const exp  = fm ? fm.expenses  : (velocityMetrics?.expenses30Days || 0);
+                      const net  = fm ? fm.netProfit : (inc - exp);
                       const rate = inc > 0 ? ((net / inc) * 100) : 0;
-                      const label = fm ? ({ today:'Today', week:'This Week', month:'This Month', year:'This Year', custom:'Custom Period' }[reportDateFilter] || reportDateFilter) : '30d';
+                      // Always derive label from the chosen filter — never hardcode '30d'
+                      const periodLabels = { today:'Today', week:'This Week', month:'This Month', year:'This Year', custom:'Custom Period' };
+                      const label = periodLabels[reportDateFilter] || 'Period';
                       return (
                         <>
                           <div className="flex justify-between text-sm"><span className="text-gray-400">Income ({label})</span><span className="text-green-400 font-semibold">UGX {inc.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
                           <div className="flex justify-between text-sm"><span className="text-gray-400">Expenses ({label})</span><span className="text-red-400 font-semibold">UGX {exp.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
                           <div className="flex justify-between text-sm border-t border-white/10 pt-2"><span className="text-gray-300 font-medium">Net Profit</span><span className={`font-bold ${net >= 0 ? 'text-green-400' : 'text-red-400'}`}>UGX {net.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
                           <div className="flex justify-between text-sm"><span className="text-gray-400">Margin</span><span className="text-purple-400 font-semibold">{rate.toFixed(1)}%</span></div>
-                          <div className="flex justify-between text-sm"><span className="text-gray-400">Net Worth</span><span className="text-yellow-400 font-semibold">UGX {(reportSummary.metrics.netWorth || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                          <div className="flex justify-between text-sm"><span className="text-gray-400">Net Worth</span><span className="text-yellow-400 font-semibold">UGX {(velocityMetrics?.netWorth || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                          {fm && !isLoadingReportMetrics && <div className="text-gray-600 text-xs pt-1">{fm.count} transaction{fm.count !== 1 ? 's' : ''} in period</div>}
                         </>
                       );
                     })()}
