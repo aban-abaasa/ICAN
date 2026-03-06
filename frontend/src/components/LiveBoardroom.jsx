@@ -260,6 +260,7 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
         config: { broadcast: { self: true } }
       });
 
+      // Chain ALL listeners BEFORE subscribing
       callBroadcast
         .on('broadcast', { event: 'call-started' }, ({ payload }) => {
           console.log('📞 [CALL RECEIVED] CALL STARTED broadcast received:', payload);
@@ -283,11 +284,6 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
           console.log('📞 [CALL ENDED] Call ended:', payload);
           setIncomingCall(null);
         })
-        .subscribe((status) => {
-          console.log('🔌 [CALL CHANNEL] Channel status changed to:', status);
-        });
-
-      callBroadcast
         .on('broadcast', { event: 'call-accepted' }, ({ payload }) => {
           console.log('✅ [CALL ACCEPTED] Member accepted the call:', payload);
           // Host: someone accepted, start the meeting!
@@ -296,6 +292,12 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
             setMeetingStarted(true);
             if (callingTimerRef.current) { clearInterval(callingTimerRef.current); callingTimerRef.current = null; }
             if (audioServiceRef.current) audioServiceRef.current.playSound('memberJoined');
+          }
+        })
+        .subscribe((status) => {
+          console.log('🔌 [CALL CHANNEL] Channel status changed to:', status);
+          if (status === 'SUBSCRIBED') {
+            console.log('✅ [CALL CHANNEL] Successfully subscribed to call channel');
           }
         });
 
@@ -471,7 +473,8 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
     // Broadcast call started to all members
     if (callChannelRef.current && isHost) {
       try {
-        await callChannelRef.current.send({
+        console.log('📡 Attempting to broadcast call-started event...');
+        const broadcastResult = await callChannelRef.current.send({
           type: 'broadcast',
           event: 'call-started',
           payload: {
@@ -481,14 +484,17 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
             timestamp: new Date().toISOString()
           }
         });
-        console.log('✅ Call broadcast sent to all members');
+        console.log('✅ Call broadcast sent to all members, result:', broadcastResult);
       } catch (err) {
-        console.warn('Error broadcasting call:', err);
+        console.error('❌ Error broadcasting call:', err);
       }
+    } else {
+      console.warn('⚠️ Cannot broadcast - callChannelRef not ready or not host', { hasChannel: !!callChannelRef.current, isHost });
     }
     
     // Play outgoing call ringtone
     if (audioServiceRef.current) {
+      console.log('🔊 Playing outgoing ringtone...');
       audioServiceRef.current.playRingtone('outgoingCall', 30);
     }
     
