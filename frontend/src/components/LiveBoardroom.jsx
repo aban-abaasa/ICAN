@@ -32,6 +32,7 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [incomingCall, setIncomingCall] = useState(null);
   const [callAccepted, setCallAccepted] = useState(false);
+  const [boardroomMode, setBoardroomMode] = useState(null); // null = picker | 'chat' | 'live'
 
   const videoRef = useRef(null);
   const meetingTimerRef = useRef(null);
@@ -179,7 +180,7 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
   // Load chat history and set up real-time chat
   useEffect(() => {
     const setupChat = async () => {
-      if (!supabase || !groupId || !meetingStarted) return;
+      if (!supabase || !groupId || (!meetingStarted && boardroomMode !== 'chat')) return;
 
       try {
         // Load recent messages
@@ -242,7 +243,7 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
         chatSubscriptionRef.current.unsubscribe();
       }
     };
-  }, [groupId, supabase, meetingStarted, user]);
+  }, [groupId, supabase, meetingStarted, boardroomMode, user]);
 
   // Set up call broadcast channel for incoming/outgoing call notifications
   // This must run immediately and persist for the entire session
@@ -624,15 +625,143 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
     console.log('🔔 [INCOMING CALL] Not showing screen - isHost:', isHost, 'callAccepted:', callAccepted, 'incomingCall:', !!incomingCall);
   }
 
-  // Pre-meeting screen
+  // ── Mode picker ──────────────────────────────────────────────────
+  if (!meetingStarted && boardroomMode === null) {
+    return (
+      <div className="w-full h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center p-6 pb-28 sm:pb-6 relative overflow-hidden">
+        <div className="absolute inset-0 opacity-20 pointer-events-none">
+          <div className="absolute top-0 -left-40 w-80 h-80 bg-blue-500 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute bottom-0 -right-40 w-80 h-80 bg-purple-500 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+        </div>
+        <div className="relative z-10 w-full max-w-sm">
+          <h2 className="text-2xl sm:text-3xl font-bold text-white text-center mb-1">{groupName}</h2>
+          <p className="text-center text-slate-400 text-sm mb-8">What would you like to do?</p>
+
+          <div className="flex flex-col gap-4">
+            {/* Message option */}
+            <button
+              onClick={() => setBoardroomMode('chat')}
+              className="flex items-center gap-4 w-full bg-slate-800/70 hover:bg-slate-700/80 border border-slate-600/50 hover:border-purple-500/50 rounded-2xl p-5 transition-all group active:scale-95"
+            >
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-600 to-violet-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-purple-500/30 group-hover:scale-110 transition-transform">
+                <MessageCircle className="w-7 h-7 text-white" />
+              </div>
+              <div className="text-left">
+                <p className="text-white font-bold text-base">Send a Message</p>
+                <p className="text-slate-400 text-xs mt-0.5">Group chat — read & send messages</p>
+              </div>
+            </button>
+
+            {/* Live option */}
+            <button
+              onClick={() => setBoardroomMode('live')}
+              className="flex items-center gap-4 w-full bg-slate-800/70 hover:bg-slate-700/80 border border-slate-600/50 hover:border-blue-500/50 rounded-2xl p-5 transition-all group active:scale-95"
+            >
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-blue-500/30 group-hover:scale-110 transition-transform">
+                <Video className="w-7 h-7 text-white" />
+              </div>
+              <div className="text-left">
+                <p className="text-white font-bold text-base">{isHost ? 'Start Live' : 'Join Live'}</p>
+                <p className="text-slate-400 text-xs mt-0.5">{isHost ? 'Start a video call for the group' : 'Join a live video meeting'}</p>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Standalone group chat mode ────────────────────────────────────
+  if (!meetingStarted && boardroomMode === 'chat') {
+    return (
+      <div className="w-full h-full flex flex-col bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+        {/* Chat header */}
+        <div className="flex-shrink-0 flex items-center gap-3 px-4 py-3 border-b border-slate-700/60 bg-slate-900/80">
+          <button onClick={() => setBoardroomMode(null)} className="p-1.5 hover:bg-slate-700 rounded-lg transition text-slate-400 hover:text-white">
+            <X className="w-5 h-5" />
+          </button>
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-600 to-violet-600 flex items-center justify-center flex-shrink-0">
+            <MessageCircle className="w-4 h-4 text-white" />
+          </div>
+          <div>
+            <p className="text-white font-bold text-sm leading-tight">{groupName}</p>
+            <p className="text-slate-400 text-xs">Group Chat</p>
+          </div>
+        </div>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2 sm:space-y-3">
+          {chatMessages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-2">
+              <MessageCircle className="w-10 h-10 text-slate-600" />
+              <p className="text-sm text-slate-500">No messages yet. Say hi! 👋</p>
+            </div>
+          ) : (
+            chatMessages.map((msg) => (
+              <div key={msg.id} className="flex flex-col gap-0.5">
+                {msg.isSystem ? (
+                  <div className="flex items-center gap-1.5 py-1.5 px-2 bg-slate-800/40 rounded-lg border border-slate-700/30">
+                    <div className="w-1 h-1 rounded-full bg-blue-400 flex-shrink-0"></div>
+                    <p className="text-xs text-gray-400 italic">{msg.message}</p>
+                  </div>
+                ) : (
+                  <div className={`flex gap-2 ${msg.isThis ? 'flex-row-reverse' : ''}`}>
+                    <div className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${msg.isThis ? 'bg-blue-600' : 'bg-purple-600'}`}>
+                      {msg.sender.charAt(0).toUpperCase()}
+                    </div>
+                    <div className={`flex flex-col gap-0.5 ${msg.isThis ? 'items-end' : 'items-start'} flex-1 min-w-0`}>
+                      <p className="text-xs text-gray-400 px-2">{msg.isThis ? 'You' : msg.sender.split('@')[0]}</p>
+                      <div className={`px-3 py-2 rounded-2xl max-w-[78%] text-sm break-words ${
+                        msg.isThis
+                          ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-br-none'
+                          : 'bg-slate-800/80 text-gray-100 rounded-bl-none border border-slate-700/50'
+                      }`}>
+                        {msg.message}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Input */}
+        <div className="flex-shrink-0 px-3 pt-3 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4 border-t border-slate-700/60 bg-slate-900/80">
+          <div className="flex gap-2 items-center">
+            <input
+              type="text"
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+              placeholder="Message..."
+              className="flex-1 bg-slate-800 text-white text-sm px-4 py-2.5 rounded-full border border-slate-600/50 focus:border-purple-500/50 focus:outline-none placeholder-slate-500 min-w-0"
+            />
+            <button
+              onClick={sendMessage}
+              disabled={!newMessage.trim()}
+              className="w-10 h-10 flex items-center justify-center bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-slate-700 disabled:to-slate-700 text-white rounded-full transition-all active:scale-95 flex-shrink-0"
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Pre-meeting: boardroomMode === 'live' ─────────────────────────
   if (!meetingStarted) {
     return (
-      <div className="w-full h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center p-4 sm:p-6 relative overflow-hidden">
+      <div className="w-full h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center p-4 pb-28 sm:pb-6 sm:p-6 relative overflow-hidden">
         <div className="absolute inset-0 opacity-20">
           <div className="absolute top-0 -left-40 w-80 h-80 bg-blue-500 rounded-full blur-3xl animate-pulse"></div>
           <div className="absolute bottom-0 -right-40 w-80 h-80 bg-purple-500 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
         </div>
         <div className="relative z-10 text-center max-w-md w-full px-2">
+          <button onClick={() => setBoardroomMode(null)} className="mb-4 text-slate-400 hover:text-white text-xs flex items-center gap-1 mx-auto transition">
+            ← Back
+          </button>
           <div className="w-16 h-16 sm:w-24 sm:h-24 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-6 sm:mb-8 shadow-2xl">
             {isHost ? <Video className="w-8 h-8 sm:w-12 sm:h-12 text-white" /> : <Eye className="w-8 h-8 sm:w-12 sm:h-12 text-white" />}
           </div>
@@ -641,7 +770,6 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
           {isHost ? (
             <>
               <p className="text-sm sm:text-base text-gray-300 mb-6 sm:mb-8">Ready to start?</p>
-              {/* Show actual group members */}
               <div className="flex gap-2 sm:gap-3 justify-center mb-6 sm:mb-8 items-center flex-wrap">
                 <div className="flex -space-x-2 sm:-space-x-3">
                   {groupMembers?.slice(0, 3).map((m, i) => (
@@ -657,8 +785,8 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
                 </div>
                 <span className="text-sm sm:text-base text-gray-400">{groupMembers?.length || 0} members</span>
               </div>
-              <button 
-                onClick={startMeeting} 
+              <button
+                onClick={startMeeting}
                 className="px-8 sm:px-12 py-3 sm:py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-2xl font-bold text-base sm:text-lg transition-all transform hover:scale-105 active:scale-95 shadow-2xl flex items-center gap-2 sm:gap-3 mx-auto w-full sm:w-auto justify-center"
               >
                 <Video className="w-5 h-5 sm:w-6 sm:h-6" />

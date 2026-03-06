@@ -8,22 +8,14 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase/client';
 import {
   DollarSign,
-  Plus,
-  Vote,
-  AlertCircle,
-  CheckCircle,
-  Clock,
-  TrendingUp,
-  FileText,
-  MessageSquare
+  Plus
 } from 'lucide-react';
 
 const TrustLoanManagement = ({ groupId, groupName, onClose }) => {
   const { user } = useAuth();
-  const [activeSubTab, setActiveSubTab] = useState('apply'); // apply, pending, voting, approved
+  const [activeSubTab, setActiveSubTab] = useState('apply'); // apply only
   const [showApplicationForm, setShowApplicationForm] = useState(false);
-  const [loanApplications, setLoanApplications] = useState([]); // Will load from backend
-  const [votingApplications, setVotingApplications] = useState([]);
+  const [loanApplications, setLoanApplications] = useState([]);
   const [message, setMessage] = useState({ type: '', text: '' });
   
   // Form state
@@ -374,35 +366,8 @@ const TrustLoanManagement = ({ groupId, groupName, onClose }) => {
         </div>
       )}
 
-      {/* Sub-tabs for Loan Management */}
-      <div className="flex gap-2 bg-slate-800/50 p-2 rounded-lg overflow-x-auto">
-        {[
-          { id: 'apply', label: '💰 Apply', icon: Plus },
-          { id: 'pending', label: '⏳ Pending Review', icon: Clock },
-          { id: 'voting', label: '🗳️ Voting', icon: Vote },
-          { id: 'approved', label: '✅ Approved', icon: CheckCircle }
-        ].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveSubTab(tab.id)}
-            className={`px-3 py-2 rounded-lg font-semibold text-xs sm:text-sm whitespace-nowrap transition-all ${
-              activeSubTab === tab.id
-                ? 'bg-blue-600 text-white'
-                : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Sub-tab Content */}
-      <div>
-        {activeSubTab === 'apply' && renderApplyForLoan()}
-        {activeSubTab === 'pending' && renderPendingReview()}
-        {activeSubTab === 'voting' && renderVoting()}
-        {activeSubTab === 'approved' && renderApproved()}
-      </div>
+      {/* Apply for Loan — direct, no sub-tabs */}
+      {renderApplyForLoan()}
     </div>
   );
 };

@@ -457,8 +457,8 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur flex items-center justify-center z-50 p-2 md:p-4">
-      <div className="bg-slate-800 rounded-2xl w-full md:max-w-2xl max-h-[95vh] overflow-y-auto border border-slate-700">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur flex items-center justify-center z-50 p-2 pb-24 md:p-4 md:pb-4">
+      <div className="bg-slate-800 rounded-2xl w-full md:max-w-2xl max-h-[calc(100svh-6.5rem)] sm:max-h-[90vh] overflow-y-auto border border-slate-700">
         {/* Header - Mobile Optimized */}
         <div className="sticky top-0 bg-slate-900 border-b border-slate-700 p-4 md:p-6 flex items-center justify-between">
           <div className="flex-1">
@@ -487,7 +487,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
           <p className="text-xs text-slate-400 mt-2 text-center">{Math.round(progressPercent)}%</p>
         </div>
 
-        <div className="p-4 md:p-6">
+        <div className="p-4 md:p-6 pb-6">
 
           {/* Step 1: Business Information */}
           {step === 'business' && (
