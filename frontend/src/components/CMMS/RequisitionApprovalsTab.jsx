@@ -109,8 +109,13 @@ const RequisitionApprovalsTab = ({ userRole, companyId, cmmsData, setCmmsData })
 
   const queue = useMemo(() => {
     const requisitions = cmmsData.requisitions || [];
-    return requisitions.filter((req) => ['pending_department_head', 'pending_finance'].includes(req.status));
-  }, [cmmsData.requisitions]);
+    return requisitions.filter((req) => {
+      if (!['pending_department_head', 'pending_finance'].includes(req.status)) return false;
+      // Finance-only users see only finance-stage items
+      if (userRole === 'finance' && req.status !== 'pending_finance') return false;
+      return true;
+    });
+  }, [cmmsData.requisitions, userRole]);
 
   const processed = useMemo(() => {
     const requisitions = cmmsData.requisitions || [];
@@ -345,7 +350,9 @@ const RequisitionApprovalsTab = ({ userRole, companyId, cmmsData, setCmmsData })
                       </>
                     ) : (
                       <div className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2">
-                        Your role can view this stage but cannot submit this decision.
+                        {userRole === 'finance' && isDepartmentStage
+                          ? 'Waiting for admin/coordinator approval before finance can act.'
+                          : 'Your role can view this stage but cannot submit this decision.'}
                       </div>
                     )}
                   </div>

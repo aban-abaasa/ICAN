@@ -197,6 +197,26 @@ BEGIN
     RAISE EXCEPTION 'Not authenticated';
   END IF;
 
+  -- Enforce workflow: finance can only act on requisitions already approved by department
+  IF p_approver_role = 'finance' THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM public.cmms_requisitions
+      WHERE id = p_requisition_id AND status = 'pending_finance'
+    ) THEN
+      RAISE EXCEPTION 'Finance can only approve/reject requisitions that have been approved by admin/coordinator first (status must be pending_finance).';
+    END IF;
+  END IF;
+
+  -- Enforce workflow: department_head can only act on pending_department_head
+  IF p_approver_role = 'department_head' THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM public.cmms_requisitions
+      WHERE id = p_requisition_id AND status = 'pending_department_head'
+    ) THEN
+      RAISE EXCEPTION 'This requisition is not at the department review stage.';
+    END IF;
+  END IF;
+
   IF p_approver_role = 'department_head' THEN
     UPDATE public.cmms_requisitions
     SET status = p_status,

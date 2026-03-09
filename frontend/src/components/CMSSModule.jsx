@@ -26,7 +26,9 @@ import {
   CheckCircle2,
   MoreVertical,
   X,
-  Clipboard
+  Clipboard,
+  Edit2,
+  Save
 } from 'lucide-react';
 
 // Import Supabase CMMS service
@@ -1536,10 +1538,11 @@ const CMMSModule = ({
     };
 
     const generateRequisitionReport = () => {
-      const pending = cmmsData.requisitions.filter(r => r.status.includes('pending')).length;
-      const approved = cmmsData.requisitions.filter(r => r.status === 'finance-approved').length;
+      const pending = cmmsData.requisitions.filter(r => String(r.status).includes('pending')).length;
+      const approved = cmmsData.requisitions.filter(r => r.status === 'approved' || r.status === 'pending_finance').length;
+      const rejected = cmmsData.requisitions.filter(r => String(r.status).startsWith('rejected')).length;
       const completed = cmmsData.requisitions.filter(r => r.status === 'completed').length;
-      const totalCost = cmmsData.requisitions.reduce((sum, r) => sum + r.estimatedCost, 0);
+      const totalCost = cmmsData.requisitions.reduce((sum, r) => sum + (r.estimatedCost || 0), 0);
 
       return {
         title: 'Requisition Status Report',
@@ -1547,6 +1550,7 @@ const CMMSModule = ({
         totalRequisitions: cmmsData.requisitions.length,
         pending,
         approved,
+        rejected,
         completed,
         totalEstimatedCost: totalCost
       };
@@ -1554,6 +1558,159 @@ const CMMSModule = ({
 
     const inventoryReport = generateInventoryReport();
     const requisitionReport = generateRequisitionReport();
+
+    const formatUgx = (val) => `UGX ${Number(val || 0).toLocaleString()}`;
+    const reportDate = new Date().toLocaleDateString('en-UG', { year: 'numeric', month: 'long', day: 'numeric' });
+    const companyName = cmmsData.companyProfile?.company_name || 'CMMS Company';
+
+    const downloadInventoryPdf = async () => {
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF();
+      const items = cmmsData.inventory || [];
+
+      doc.setFontSize(18);
+      doc.text(companyName, 14, 20);
+      doc.setFontSize(14);
+      doc.text('Inventory Status Report', 14, 30);
+      doc.setFontSize(10);
+      doc.text(`Generated: ${reportDate}`, 14, 38);
+
+      doc.setFontSize(11);
+      doc.text(`Total Items: ${inventoryReport.totalItems}`, 14, 50);
+      doc.text(`Low Stock Alerts: ${inventoryReport.lowStockAlerts}`, 14, 57);
+      doc.text(`Total Value: ${formatUgx(inventoryReport.totalValue)}`, 14, 64);
+      doc.text(`Average Cost: ${formatUgx(inventoryReport.averageCost)}`, 14, 71);
+
+      if (items.length > 0) {
+        doc.setFontSize(12);
+        doc.text('Item Details', 14, 85);
+
+        const headers = ['Item Name', 'Code', 'Qty', 'Reorder Lvl', 'Unit Price', 'Stock Value'];
+        const colX = [14, 64, 104, 124, 148, 176];
+        let y = 93;
+
+        doc.setFontSize(8);
+        doc.setFont(undefined, 'bold');
+        headers.forEach((h, i) => doc.text(h, colX[i], y));
+        doc.setFont(undefined, 'normal');
+        y += 6;
+
+        items.forEach((item) => {
+          if (y > 275) { doc.addPage(); y = 20; }
+          const qty = item.quantity_in_stock || 0;
+          const price = item.unit_price || 0;
+          doc.text(String(item.item_name || '').slice(0, 28), colX[0], y);
+          doc.text(String(item.item_code || '-').slice(0, 18), colX[1], y);
+          doc.text(String(qty), colX[2], y);
+          doc.text(String(item.reorder_level || 0), colX[3], y);
+          doc.text(formatUgx(price), colX[4], y);
+          doc.text(formatUgx(qty * price), colX[5], y);
+          y += 5;
+        });
+      }
+
+      doc.save(`Inventory_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
+    };
+
+    const downloadRequisitionPdf = async () => {
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF();
+      const reqs = cmmsData.requisitions || [];
+
+      doc.setFontSize(18);
+      doc.text(companyName, 14, 20);
+      doc.setFontSize(14);
+      doc.text('Requisition Status Report', 14, 30);
+      doc.setFontSize(10);
+      doc.text(`Generated: ${reportDate}`, 14, 38);
+
+      doc.setFontSize(11);
+      doc.text(`Total Requisitions: ${requisitionReport.totalRequisitions}`, 14, 50);
+      doc.text(`Pending: ${requisitionReport.pending}`, 14, 57);
+      doc.text(`Approved: ${requisitionReport.approved}`, 14, 64);
+      doc.text(`Completed: ${requisitionReport.completed}`, 14, 71);
+      doc.text(`Total Estimated Cost: ${formatUgx(requisitionReport.totalEstimatedCost)}`, 14, 78);
+
+      if (reqs.length > 0) {
+        doc.setFontSize(12);
+        doc.text('Requisition Details', 14, 92);
+
+        const headers = ['Req #', 'Title', 'Status', 'Priority', 'Est. Cost', 'Requested By'];
+        const colX = [14, 48, 98, 132, 156, 182];
+        let y = 100;
+
+        doc.setFontSize(8);
+        doc.setFont(undefined, 'bold');
+        headers.forEach((h, i) => doc.text(h, colX[i], y));
+        doc.setFont(undefined, 'normal');
+        y += 6;
+
+        reqs.forEach((req) => {
+          if (y > 275) { doc.addPage(); y = 20; }
+          doc.text(String(req.requisitionNumber || '').slice(0, 18), colX[0], y);
+          doc.text(String(req.title || '').slice(0, 28), colX[1], y);
+          doc.text(String(req.status || '').replace(/_/g, ' ').slice(0, 18), colX[2], y);
+          doc.text(String(req.priority || 'normal'), colX[3], y);
+          doc.text(formatUgx(req.estimatedCost), colX[4], y);
+          doc.text(String(req.createdByName || '').slice(0, 14), colX[5], y);
+          y += 5;
+        });
+      }
+
+      doc.save(`Requisition_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
+    };
+
+    const exportToExcel = async () => {
+      const XLSX = await import('xlsx');
+      const wb = XLSX.utils.book_new();
+
+      // Inventory sheet
+      const invRows = (cmmsData.inventory || []).map((item) => ({
+        'Item Name': item.item_name || '',
+        'Item Code': item.item_code || '',
+        'Category': item.category || '',
+        'Qty In Stock': item.quantity_in_stock || 0,
+        'Reorder Level': item.reorder_level || 0,
+        'Unit Price (UGX)': item.unit_price || 0,
+        'Stock Value (UGX)': (item.quantity_in_stock || 0) * (item.unit_price || 0),
+        'Supplier': item.supplier_name || '',
+        'Location': item.storage_location || '',
+        'Status': (item.quantity_in_stock || 0) <= 0 ? 'OUT OF STOCK' : (item.quantity_in_stock || 0) <= (item.reorder_level || 0) ? 'LOW STOCK' : 'IN STOCK'
+      }));
+      const invSheet = XLSX.utils.json_to_sheet(invRows.length > 0 ? invRows : [{ 'Info': 'No inventory items' }]);
+      XLSX.utils.book_append_sheet(wb, invSheet, 'Inventory');
+
+      // Requisitions sheet
+      const reqRows = (cmmsData.requisitions || []).map((req) => ({
+        'Requisition #': req.requisitionNumber || '',
+        'Title': req.title || '',
+        'Description': req.description || '',
+        'Status': (req.status || '').replace(/_/g, ' '),
+        'Priority': req.priority || 'normal',
+        'Estimated Cost (UGX)': req.estimatedCost || 0,
+        'Requested By': req.createdByName || '',
+        'Date': req.createdAt ? new Date(req.createdAt).toLocaleDateString() : ''
+      }));
+      const reqSheet = XLSX.utils.json_to_sheet(reqRows.length > 0 ? reqRows : [{ 'Info': 'No requisitions' }]);
+      XLSX.utils.book_append_sheet(wb, reqSheet, 'Requisitions');
+
+      // Summary sheet
+      const summaryRows = [
+        { 'Report': 'Inventory', 'Metric': 'Total Items', 'Value': inventoryReport.totalItems },
+        { 'Report': 'Inventory', 'Metric': 'Low Stock Alerts', 'Value': inventoryReport.lowStockAlerts },
+        { 'Report': 'Inventory', 'Metric': 'Total Value (UGX)', 'Value': inventoryReport.totalValue },
+        { 'Report': 'Inventory', 'Metric': 'Avg Cost (UGX)', 'Value': Math.round(inventoryReport.averageCost) },
+        { 'Report': 'Requisitions', 'Metric': 'Total', 'Value': requisitionReport.totalRequisitions },
+        { 'Report': 'Requisitions', 'Metric': 'Pending', 'Value': requisitionReport.pending },
+        { 'Report': 'Requisitions', 'Metric': 'Approved', 'Value': requisitionReport.approved },
+        { 'Report': 'Requisitions', 'Metric': 'Completed', 'Value': requisitionReport.completed },
+        { 'Report': 'Requisitions', 'Metric': 'Total Est. Cost (UGX)', 'Value': requisitionReport.totalEstimatedCost },
+      ];
+      const summarySheet = XLSX.utils.json_to_sheet(summaryRows);
+      XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
+
+      XLSX.writeFile(wb, `CMMS_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    };
 
     return (
       <div className="space-y-4 md:space-y-6">
@@ -1617,13 +1774,13 @@ const CMMSModule = ({
         <div className="glass-card p-4 md:p-6">
           <h3 className="text-base md:text-lg font-bold text-white mb-4">Export Reports</h3>
           <div className="flex gap-2 md:gap-3 flex-wrap">
-            <button className="px-3 md:px-4 py-2 bg-blue-500 bg-opacity-30 text-blue-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold text-xs md:text-sm">
+            <button onClick={downloadInventoryPdf} className="px-3 md:px-4 py-2 bg-blue-500 bg-opacity-30 text-blue-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold text-xs md:text-sm">
               📄 Download Inventory Report (PDF)
             </button>
-            <button className="px-3 md:px-4 py-2 bg-purple-500 bg-opacity-30 text-purple-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold text-xs md:text-sm">
+            <button onClick={downloadRequisitionPdf} className="px-3 md:px-4 py-2 bg-purple-500 bg-opacity-30 text-purple-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold text-xs md:text-sm">
               📄 Download Requisition Report (PDF)
             </button>
-            <button className="px-3 md:px-4 py-2 bg-green-500 bg-opacity-30 text-green-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold text-xs md:text-sm">
+            <button onClick={exportToExcel} className="px-3 md:px-4 py-2 bg-green-500 bg-opacity-30 text-green-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold text-xs md:text-sm">
               📊 Export to Excel
             </button>
           </div>
@@ -3346,6 +3503,10 @@ const CMMSModule = ({
     const [departments, setDepartments] = useState([]);
     const [storemen, setStoremen] = useState([]);
     const [isLoadingDepts, setIsLoadingDepts] = useState(false);
+    const [editingItemId, setEditingItemId] = useState(null);
+    const [editForm, setEditForm] = useState({});
+    const [isSavingEdit, setIsSavingEdit] = useState(false);
+    const [editError, setEditError] = useState(null);
 
     const toggleExpandItem = (itemId) => {
       setExpandedItems(prev => ({
@@ -3506,6 +3667,54 @@ const CMMSModule = ({
         setAddItemError(`❌ Error: ${err.message}`);
       } finally {
         setIsAddingItem(false);
+      }
+    };
+
+    const handleStartEdit = (item) => {
+      setEditingItemId(item.id);
+      setEditError(null);
+      setEditForm({
+        item_name: item.item_name || '',
+        category: item.category || 'Spare Parts',
+        quantity_in_stock: item.quantity_in_stock ?? 0,
+        minimum_stock_level: item.minimum_stock_level ?? 0,
+        unit_cost: item.unit_cost ?? 0,
+        supplier_name: item.supplier_name || '',
+        storage_location: item.storage_location || '',
+        department_id: item.department_id || '',
+        assigned_storeman_id: item.assigned_storeman_id || ''
+      });
+    };
+
+    const handleCancelEdit = () => {
+      setEditingItemId(null);
+      setEditForm({});
+      setEditError(null);
+    };
+
+    const handleSaveEdit = async (itemId) => {
+      if (!editForm.item_name?.trim()) {
+        setEditError('Item name is required');
+        return;
+      }
+      setIsSavingEdit(true);
+      setEditError(null);
+      try {
+        const { data, error } = await cmmsService.updateInventoryItem(itemId, editForm);
+        if (error) throw error;
+        setCmmsData(prev => ({
+          ...prev,
+          inventory: prev.inventory.map(it =>
+            it.id === itemId ? { ...it, ...editForm, updated_at: new Date().toISOString() } : it
+          )
+        }));
+        setEditingItemId(null);
+        setEditForm({});
+      } catch (err) {
+        console.error('Failed to update item:', err);
+        setEditError(err.message || 'Failed to save changes');
+      } finally {
+        setIsSavingEdit(false);
       }
     };
 
@@ -3812,6 +4021,135 @@ const CMMSModule = ({
                   {/* Expanded View - Full Details */}
                   {isExpanded && (
                     <div className="mt-4 pt-4 border-t border-white border-opacity-10 space-y-3">
+                      {editingItemId === item.id && canEditInventory ? (
+                        /* ---- EDIT MODE ---- */
+                        <div className="space-y-3">
+                          {editError && (
+                            <div className="text-red-400 text-xs bg-red-500 bg-opacity-10 p-2 rounded">{editError}</div>
+                          )}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                            <div>
+                              <label className="text-gray-400 text-xs uppercase tracking-wider">Item Name</label>
+                              <input
+                                type="text"
+                                value={editForm.item_name}
+                                onChange={e => setEditForm(f => ({ ...f, item_name: e.target.value }))}
+                                className="w-full mt-1 px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm focus:outline-none focus:border-blue-400"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-gray-400 text-xs uppercase tracking-wider">Category</label>
+                              <select
+                                value={editForm.category}
+                                onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))}
+                                className="w-full mt-1 px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm focus:outline-none focus:border-blue-400"
+                              >
+                                <option value="Spare Parts">Spare Parts</option>
+                                <option value="Consumables">Consumables</option>
+                                <option value="Tools">Tools</option>
+                                <option value="Safety Equipment">Safety Equipment</option>
+                                <option value="Raw Materials">Raw Materials</option>
+                                <option value="Other">Other</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-gray-400 text-xs uppercase tracking-wider">Current Stock</label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={editForm.quantity_in_stock}
+                                onChange={e => setEditForm(f => ({ ...f, quantity_in_stock: Number(e.target.value) }))}
+                                className="w-full mt-1 px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm focus:outline-none focus:border-blue-400"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-gray-400 text-xs uppercase tracking-wider">Minimum Stock Level</label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={editForm.minimum_stock_level}
+                                onChange={e => setEditForm(f => ({ ...f, minimum_stock_level: Number(e.target.value) }))}
+                                className="w-full mt-1 px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm focus:outline-none focus:border-blue-400"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-gray-400 text-xs uppercase tracking-wider">Unit Cost (UGX)</label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={editForm.unit_cost}
+                                onChange={e => setEditForm(f => ({ ...f, unit_cost: Number(e.target.value) }))}
+                                className="w-full mt-1 px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm focus:outline-none focus:border-blue-400"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-gray-400 text-xs uppercase tracking-wider">Supplier Name</label>
+                              <input
+                                type="text"
+                                value={editForm.supplier_name}
+                                onChange={e => setEditForm(f => ({ ...f, supplier_name: e.target.value }))}
+                                className="w-full mt-1 px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm focus:outline-none focus:border-blue-400"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-gray-400 text-xs uppercase tracking-wider">Storage Location</label>
+                              <input
+                                type="text"
+                                value={editForm.storage_location}
+                                onChange={e => setEditForm(f => ({ ...f, storage_location: e.target.value }))}
+                                className="w-full mt-1 px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm focus:outline-none focus:border-blue-400"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-gray-400 text-xs uppercase tracking-wider">Department</label>
+                              <select
+                                value={editForm.department_id}
+                                onChange={e => setEditForm(f => ({ ...f, department_id: e.target.value, assigned_storeman_id: '' }))}
+                                className="w-full mt-1 px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm focus:outline-none focus:border-blue-400"
+                              >
+                                <option value="">-- Select Department --</option>
+                                {(departments.length > 0 ? departments : cmmsData.departments || []).map(d => (
+                                  <option key={d.id} value={d.id}>{d.department_name || d.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="md:col-span-2">
+                              <label className="text-gray-400 text-xs uppercase tracking-wider">Assigned Storeman</label>
+                              <select
+                                value={editForm.assigned_storeman_id}
+                                onChange={e => setEditForm(f => ({ ...f, assigned_storeman_id: e.target.value }))}
+                                className="w-full mt-1 px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm focus:outline-none focus:border-blue-400"
+                              >
+                                <option value="">-- Select Storeman --</option>
+                                {getStoremenForDepartment(editForm.department_id).map(u => (
+                                  <option key={u.id} value={u.id}>{u.name || u.user_name}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                          {/* Save / Cancel */}
+                          <div className="flex gap-2 pt-2">
+                            <button
+                              onClick={() => handleSaveEdit(item.id)}
+                              disabled={isSavingEdit}
+                              className="flex-1 px-3 py-2 bg-green-500 bg-opacity-20 text-green-300 text-xs rounded hover:bg-opacity-40 transition-all font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+                            >
+                              {isSavingEdit ? <Loader className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                              {isSavingEdit ? 'Saving...' : 'Save Changes'}
+                            </button>
+                            <button
+                              onClick={handleCancelEdit}
+                              disabled={isSavingEdit}
+                              className="flex-1 px-3 py-2 bg-gray-500 bg-opacity-20 text-gray-300 text-xs rounded hover:bg-opacity-40 transition-all font-semibold flex items-center justify-center gap-2"
+                            >
+                              <X className="w-3 h-3" />
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        /* ---- VIEW MODE ---- */
+                        <>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                         {/* Basic Info */}
                         <div>
@@ -3904,6 +4242,13 @@ const CMMSModule = ({
                       {canEditInventory && (
                         <div className="mt-4 pt-4 border-t border-white border-opacity-10 flex gap-2">
                           <button
+                            onClick={() => handleStartEdit(item)}
+                            className="flex-1 px-3 py-2 bg-blue-500 bg-opacity-20 text-blue-300 text-xs rounded hover:bg-opacity-40 transition-all font-semibold flex items-center justify-center gap-2"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                            Edit Item
+                          </button>
+                          <button
                             onClick={() => handleDeleteItem(item.id)}
                             className="flex-1 px-3 py-2 bg-red-500 bg-opacity-20 text-red-300 text-xs rounded hover:bg-opacity-40 transition-all font-semibold flex items-center justify-center gap-2"
                           >
@@ -3911,6 +4256,8 @@ const CMMSModule = ({
                             Delete Item
                           </button>
                         </div>
+                      )}
+                        </>
                       )}
                     </div>
                   )}

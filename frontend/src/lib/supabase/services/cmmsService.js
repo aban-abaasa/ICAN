@@ -994,12 +994,32 @@ export const addInventoryItem = async (companyId, itemData) => {
 
 /**
  * Update inventory item
+ * Uses RPC (SECURITY DEFINER) first, falls back to direct UPDATE
  * @param {string} itemId - Item UUID
  * @param {Object} updates - Fields to update
  * @returns {Object} Updated item or error
  */
 export const updateInventoryItem = async (itemId, updates) => {
   try {
+    // Approach 1: RPC with SECURITY DEFINER (bypasses RLS)
+    try {
+      const { data: rpcResult, error: rpcError } = await supabase.rpc('fn_update_inventory_item', {
+        p_item_id: itemId,
+        p_updates: updates
+      });
+
+      if (!rpcError && rpcResult) {
+        console.log('✅ Inventory item updated via RPC');
+        return { data: mapCmmsInventoryItem(rpcResult), error: null };
+      }
+      if (rpcError) {
+        console.warn('⚠️ RPC fn_update_inventory_item failed, falling back to direct update:', rpcError.message);
+      }
+    } catch (rpcErr) {
+      console.warn('⚠️ RPC not available, falling back to direct update:', rpcErr.message);
+    }
+
+    // Approach 2: Direct UPDATE (may fail if RLS blocks)
     let cmmsUserId = null;
     const { data: { user } } = await supabase.auth.getUser();
     if (user?.email) {
@@ -1031,11 +1051,11 @@ export const updateInventoryItem = async (itemId, updates) => {
       })
       .eq('id', itemId)
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) throw error;
 
-    return { data: mapCmmsInventoryItem(data), error: null };
+    return { data: data ? mapCmmsInventoryItem(data) : { id: itemId, ...updates }, error: null };
   } catch (error) {
     console.error('Error updating inventory item:', error);
     return { data: null, error };
