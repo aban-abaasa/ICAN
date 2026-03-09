@@ -1321,35 +1321,52 @@ export const getCompanyRequisitions = async (companyId) => {
   try {
     console.log(`Fetching requisitions for company: ${companyId}`);
 
-    const { data: requisitions, error } = await supabase
-      .from('cmms_requisitions')
-      .select(`
-        id,
-        cmms_company_id,
-        requisition_number,
-        requisition_date,
-        requested_by,
-        requested_by_name,
-        requested_by_email,
-        requested_by_role,
-        purpose,
-        justification,
-        urgency_level,
-        required_by_date,
-        status,
-        total_estimated_cost,
-        budget_sufficient,
-        dept_head_approved_at,
-        dept_head_decision_notes,
-        finance_approved_at,
-        finance_decision_notes,
-        order_placed_date,
-        po_number,
-        expected_delivery_date,
-        actual_delivery_date
-      `)
-      .eq('cmms_company_id', companyId)
-      .order('requisition_date', { ascending: false });
+    // Try RPC first (bypasses RLS)
+    let requisitions = null;
+    let error = null;
+
+    const { data: rpcData, error: rpcError } = await supabase.rpc('fn_get_company_requisitions', {
+      p_company_id: companyId
+    });
+
+    if (!rpcError && rpcData) {
+      requisitions = rpcData;
+      console.log('Requisitions loaded via RPC');
+    } else {
+      if (rpcError) console.warn('RPC fn_get_company_requisitions failed, falling back:', rpcError.message);
+      const { data: directData, error: directError } = await supabase
+        .from('cmms_requisitions')
+        .select(`
+          id,
+          cmms_company_id,
+          requisition_number,
+          requisition_date,
+          requested_by,
+          requested_by_name,
+          requested_by_email,
+          requested_by_role,
+          purpose,
+          justification,
+          urgency_level,
+          required_by_date,
+          status,
+          total_estimated_cost,
+          budget_sufficient,
+          dept_head_approved_at,
+          dept_head_decision_notes,
+          finance_approved_at,
+          finance_decision_notes,
+          order_placed_date,
+          po_number,
+          expected_delivery_date,
+          actual_delivery_date
+        `)
+        .eq('cmms_company_id', companyId)
+        .order('requisition_date', { ascending: false });
+
+      requisitions = directData;
+      error = directError;
+    }
 
     if (error) {
       console.error('Error fetching requisitions:', error);
@@ -1411,45 +1428,88 @@ export const getCompanyRequisitions = async (companyId) => {
 
 /**
  * Create a new maintenance requisition
- * Automatically sent to department head for approval
+ * Uses RPC function (SECURITY DEFINER) to bypass RLS, falls back to direct insert
  */
 export const createRequisition = async (companyId, departmentId, requisitionData, userId) => {
   try {
     console.log(`Creating requisition for company: ${companyId}`);
     console.log('Department ID:', departmentId);
-    console.log('User ID:', userId);
+    console.log('User ID (auth):', userId);
     console.log('Requisition Data:', requisitionData);
 
-    const requisitionNumber = `REQ-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-
-    const insertData = {
-      cmms_company_id: companyId,
-      department_id: departmentId,
-      requisition_number: requisitionNumber,
-      requested_by: userId,
-      requested_by_name: requisitionData.requesterName || 'Unknown',
-      requested_by_email: requisitionData.requesterEmail,
-      requested_by_role: requisitionData.requesterRole,
-      purpose: requisitionData.purpose || 'maintenance',
-      justification: requisitionData.description,
-      urgency_level: requisitionData.priority || 'normal',
-      required_by_date: requisitionData.requiredByDate,
-      total_estimated_cost: requisitionData.estimatedCost || 0,
-      status: 'pending_department_head',
-      budget_sufficient: requisitionData.budgetSufficient !== false
-    };
-
-    const { data, error } = await supabase
-      .from('cmms_requisitions')
-      .insert(insertData)
-      .select();
-
-    if (error) {
-      console.error('Error creating requisition:', error);
-      return { data: null, error };
+    // Resolve cmms_users.id from email (auth.uid != cmms_users.id)
+    let cmmsUserId = null;
+    const requesterEmail = requisitionData.requesterEmail;
+    if (companyId && requesterEmail) {
+      try {
+        cmmsUserId = await resolveCmmsUserIdByEmail(companyId, requesterEmail);
+        console.log('Resolved cmms_users.id:', cmmsUserId);
+      } catch (e) {
+        console.warn('Could not resolve cmms_users.id by email:', e.message);
+      }
     }
 
-    const createdRequisition = data?.[0] || null;
+    if (!cmmsUserId) {
+      console.error('No cmms_users entry found for this email/company. The user must be added to CMMS first.');
+      return { data: null, error: { code: 'CMMS_USER_NOT_FOUND', message: 'Your account is not registered as a CMMS user for this company. Ask an admin to add you to the CMMS users list.' } };
+    }
+
+    let createdRequisition = null;
+
+    // Try RPC function first (bypasses RLS)
+    const { data: rpcResult, error: rpcError } = await supabase.rpc('fn_create_requisition', {
+      p_company_id: companyId,
+      p_department_id: departmentId,
+      p_requested_by: cmmsUserId,
+      p_requested_by_name: requisitionData.requesterName || 'Unknown',
+      p_requested_by_email: requisitionData.requesterEmail || null,
+      p_requested_by_role: requisitionData.requesterRole || null,
+      p_purpose: requisitionData.purpose || 'maintenance',
+      p_justification: requisitionData.description || null,
+      p_urgency_level: requisitionData.priority || 'normal',
+      p_required_by_date: requisitionData.requiredByDate || null,
+      p_total_estimated_cost: requisitionData.estimatedCost || 0,
+      p_budget_sufficient: requisitionData.budgetSufficient !== false
+    });
+
+    if (!rpcError && rpcResult) {
+      createdRequisition = rpcResult;
+      console.log('Requisition created via RPC:', createdRequisition);
+    } else {
+      // Fallback to direct insert
+      if (rpcError) console.warn('RPC fn_create_requisition failed, falling back to direct insert:', rpcError.message);
+
+      const requisitionNumber = `REQ-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+
+      const insertData = {
+        cmms_company_id: companyId,
+        department_id: departmentId,
+        requisition_number: requisitionNumber,
+        requested_by: cmmsUserId,
+        requested_by_name: requisitionData.requesterName || 'Unknown',
+        requested_by_email: requisitionData.requesterEmail,
+        requested_by_role: requisitionData.requesterRole,
+        purpose: requisitionData.purpose || 'maintenance',
+        justification: requisitionData.description,
+        urgency_level: requisitionData.priority || 'normal',
+        required_by_date: requisitionData.requiredByDate,
+        total_estimated_cost: requisitionData.estimatedCost || 0,
+        status: 'pending_department_head',
+        budget_sufficient: requisitionData.budgetSufficient !== false
+      };
+
+      const { data, error } = await supabase
+        .from('cmms_requisitions')
+        .insert(insertData)
+        .select();
+
+      if (error) {
+        console.error('Error creating requisition:', error);
+        return { data: null, error };
+      }
+
+      createdRequisition = data?.[0] || null;
+    }
 
     if (createdRequisition && Array.isArray(requisitionData.items) && requisitionData.items.length > 0) {
       const lineItemRows = requisitionData.items
@@ -1499,32 +1559,49 @@ export const updateRequisitionStatus = async (requisitionId, newStatus, approver
   try {
     console.log(`Updating requisition ${requisitionId} to status: ${newStatus}`);
 
-    const nowIso = new Date().toISOString();
-    const updateData = {
-      status: newStatus,
-      updated_at: nowIso
-    };
+    let updatedRow = null;
 
-    if (approverRole === 'department_head') {
-      updateData.dept_head_approved_at = nowIso;
-      updateData.dept_head_decision_notes = approverNotes || null;
-    } else if (approverRole === 'finance') {
-      updateData.finance_approved_at = nowIso;
-      updateData.finance_decision_notes = approverNotes || null;
+    // Try RPC first (bypasses RLS)
+    const { data: rpcResult, error: rpcError } = await supabase.rpc('fn_update_requisition_status', {
+      p_requisition_id: requisitionId,
+      p_status: newStatus,
+      p_approver_role: approverRole,
+      p_decision_notes: approverNotes || null
+    });
+
+    if (!rpcError && rpcResult) {
+      updatedRow = rpcResult;
+      console.log('Requisition updated via RPC');
+    } else {
+      if (rpcError) console.warn('RPC fn_update_requisition_status failed, falling back:', rpcError.message);
+
+      const nowIso = new Date().toISOString();
+      const updateData = {
+        status: newStatus,
+        updated_at: nowIso
+      };
+
+      if (approverRole === 'department_head') {
+        updateData.dept_head_approved_at = nowIso;
+        updateData.dept_head_decision_notes = approverNotes || null;
+      } else if (approverRole === 'finance') {
+        updateData.finance_approved_at = nowIso;
+        updateData.finance_decision_notes = approverNotes || null;
+      }
+
+      const { data, error } = await supabase
+        .from('cmms_requisitions')
+        .update(updateData)
+        .eq('id', requisitionId)
+        .select();
+
+      if (error) {
+        console.error('Error updating requisition:', error);
+        return { data: null, error };
+      }
+
+      updatedRow = data?.[0] || null;
     }
-
-    const { data, error } = await supabase
-      .from('cmms_requisitions')
-      .update(updateData)
-      .eq('id', requisitionId)
-      .select();
-
-    if (error) {
-      console.error('Error updating requisition:', error);
-      return { data: null, error };
-    }
-
-    const updatedRow = data?.[0] || null;
 
     try {
       const decision = String(newStatus).startsWith('rejected') ? 'rejected' : 'approved';

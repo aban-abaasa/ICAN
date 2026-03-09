@@ -4601,57 +4601,39 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           <ChevronDown className={`w-5 h-5 text-purple-400 transition-transform ${expandedSections.walletAccounts ? 'rotate-180' : ''}`} />
         </button>
 
-        {/* Expanded Content - Beautiful Card Layout */}
+        {/* Expanded Content - Compact Row Layout */}
         {expandedSections.walletAccounts && (
-          <div className="mt-4">
-            <div className="grid grid-cols-2 gap-4">
-              {walletTabs.map((tab, idx) => {
-                const tabKey = getWalletTabKey(tab.name);
-                const account = walletAccounts[tabKey];
-                
-                if (!account?.exists) return null;
+          <div className="mt-3 space-y-2">
+            {walletTabs.map((tab, idx) => {
+              const tabKey = getWalletTabKey(tab.name);
+              const account = walletAccounts[tabKey];
+              
+              if (!account?.exists) return null;
 
-                // Wallet colors
-                const walletColors = {
-                  personal: 'from-purple-600 to-purple-500',
-                  business: 'from-blue-600 to-blue-500',
-                  trust: 'from-indigo-600 to-indigo-500',
-                  agent: 'from-pink-600 to-pink-500',
-                  ican: 'from-yellow-600 to-yellow-500'
-                };
-
-                const selectedColor = walletColors[tabKey] || walletColors.personal;
-                
-                return (
-                  <button
-                    key={idx}
-                    onClick={() => {
-                      setActiveWalletTab(tabKey);
-                      setShowWalletAccounts(true);
-                    }}
-                    className={`p-6 rounded-3xl bg-gradient-to-br ${selectedColor} border border-white/20 hover:border-white/40 transition-all hover:shadow-xl hover:scale-105 flex flex-col items-center text-center`}
-                  >
-                    {/* Icon Circle */}
-                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mb-3 border border-white/30">
-                      <tab.icon className="w-6 h-6 text-white" />
-                    </div>
-
-                    {/* Wallet Name */}
-                    <p className="text-white font-bold text-sm capitalize mb-2">{tab.name}</p>
-
-                    {/* Amount */}
-                    <p className="text-white font-bold text-lg mb-1">
+              return (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    setActiveWalletTab(tabKey);
+                    setShowWalletAccounts(true);
+                  }}
+                  className="w-full flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
+                >
+                  <div className="flex items-center gap-3">
+                    <tab.icon className="w-5 h-5 text-purple-400" />
+                    <span className="text-white text-sm font-medium capitalize">{tab.name}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-white font-bold text-sm">
                       {account?.loading ? '...' : formatWalletBalanceByTab(tabKey, account?.balance || 0)}
-                    </p>
-
-                    {/* Currency */}
-                    <p className="text-white/80 text-xs font-medium">
+                    </span>
+                    <span className="text-white/50 text-xs ml-1">
                       {tabKey === 'ican' ? 'ICAN' : account?.currency || 'UGX'}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
@@ -4661,20 +4643,20 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
       {/* ====== UPDATES SECTION - HORIZONTAL SCROLLING ====== */}
       <div className="px-4 py-6">
-        {/* Section Header */}
-        <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-          <Eye className="w-6 h-6 text-indigo-400" />
-          Updates
-        </h2>
-
         {loadingStatuses ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-indigo-500"></div>
+          <div className="relative rounded-2xl overflow-hidden border-2 border-indigo-500/50 bg-gradient-to-br from-indigo-600/30 to-indigo-700/20 p-8">
+            <h2 className="absolute top-3 left-4 text-lg font-bold text-white/90 z-10">Updates</h2>
+            <div className="flex items-center justify-center py-4">
+              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-indigo-500"></div>
+            </div>
           </div>
         ) : userStatuses.length > 0 ? (
-          <>
+          <div className="relative">
+            {/* "Updates" overlay label */}
+            <h2 className="absolute top-3 left-4 text-lg font-bold text-white/90 z-10 drop-shadow-lg">Updates</h2>
+
             {/* Horizontal Scrolling Updates */}
-            <div className="overflow-x-auto pb-4 -mr-4 pr-4 scrollbar-hide">
+            <div className="overflow-x-auto pb-4 -mr-4 pr-4 scrollbar-hide pt-10">
               <div className="flex gap-3 min-w-min">
                 {userStatuses.map(status => (
                   <div
@@ -4710,10 +4692,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       </div>
                     )}
 
-                    {/* Gradient Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
-                      <Eye className="w-5 h-5 text-white" />
-                    </div>
+                    {/* Gradient Overlay on hover */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-all"></div>
 
                     {/* Duration Badge */}
                     <div className="absolute top-2 right-2 bg-black/70 backdrop-blur-sm px-2 py-1 rounded-full text-xs text-white font-medium">
@@ -4727,23 +4707,26 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             {/* View All Updates Button */}
             <button
               onClick={() => setShowStatusPage(true)}
-              className="w-full bg-gradient-to-r from-indigo-600/30 to-indigo-700/20 border-2 border-indigo-500/50 hover:border-indigo-400/80 rounded-2xl py-3 flex items-center justify-center gap-2 transition-all hover:from-indigo-600/50 hover:to-indigo-700/40 group mt-4"
+              className="w-full bg-gradient-to-r from-indigo-600/30 to-indigo-700/20 border-2 border-indigo-500/50 hover:border-indigo-400/80 rounded-2xl py-3 flex items-center justify-center gap-2 transition-all hover:from-indigo-600/50 hover:to-indigo-700/40 group mt-2"
             >
               <span className="text-sm font-medium text-indigo-300 group-hover:text-indigo-200">View All Updates ({userStatuses.length})</span>
               <ChevronRight className="w-4 h-4 text-indigo-400" />
             </button>
-          </>
+          </div>
         ) : (
-          /* No Updates State */
+          /* No Updates State - "Updates" as overlay on container */
           <button
             onClick={() => setShowStatusUploader(true)}
-            className="w-full bg-gradient-to-br from-indigo-600/30 to-indigo-700/20 border-2 border-indigo-500/50 hover:border-indigo-400/80 rounded-2xl p-6 flex flex-col items-center gap-4 transition-all hover:from-indigo-600/50 hover:to-indigo-700/40 group"
+            className="relative w-full bg-gradient-to-br from-indigo-600/30 to-indigo-700/20 border-2 border-indigo-500/50 hover:border-indigo-400/80 rounded-2xl p-6 flex flex-col items-center gap-4 transition-all hover:from-indigo-600/50 hover:to-indigo-700/40 group"
           >
-            <div className="w-16 h-16 bg-indigo-500/30 rounded-full flex items-center justify-center group-hover:bg-indigo-500/50 transition">
+            {/* "Updates" overlay label */}
+            <span className="absolute top-3 left-4 text-lg font-bold text-white/90 drop-shadow-lg">Updates</span>
+
+            <div className="w-16 h-16 bg-indigo-500/30 rounded-full flex items-center justify-center group-hover:bg-indigo-500/50 transition mt-4">
               <Plus className="w-8 h-8 text-indigo-400 group-hover:text-indigo-300 transition" />
             </div>
             <div className="text-center">
-              <h3 className="text-lg font-bold text-white group-hover:text-indigo-100 transition">Create Your First Status</h3>
+              <h3 className="text-lg font-bold text-white group-hover:text-indigo-100 transition">Any Updates</h3>
               <p className="text-sm text-gray-400 group-hover:text-gray-300 transition mt-1">Share a moment with your community</p>
             </div>
             <div className="flex items-center gap-2 text-indigo-400 group-hover:text-indigo-300 transition">
@@ -4882,6 +4865,29 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           <div className="fixed inset-0 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <StatusPage onGoBack={() => setShowStatusPage(false)} />
           </div>
+        </div>
+      )}
+
+      {/* Status Uploader Modal */}
+      {showStatusUploader && (
+        <div className="fixed inset-0 z-[140]">
+          <StatusUploader
+            onClose={() => setShowStatusUploader(false)}
+            onStatusCreated={() => {
+              setShowStatusUploader(false);
+              // Refresh statuses after creating a new one
+              (async () => {
+                try {
+                  const { statuses: allStats } = await getActiveStatuses();
+                  const userOwnStatuses = allStats?.filter(s => s.user_id === userProfile?.id) || [];
+                  const otherStatuses = allStats?.filter(s => s.user_id !== userProfile?.id) || [];
+                  setUserStatuses([...userOwnStatuses, ...otherStatuses]);
+                } catch (e) {
+                  console.error('Error refreshing statuses:', e);
+                }
+              })();
+            }}
+          />
         </div>
       )}
 
