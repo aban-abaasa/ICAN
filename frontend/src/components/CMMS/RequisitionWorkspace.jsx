@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Clipboard, Loader, Package, Plus, Search } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Clipboard, Loader, Package, Plus, Search } from 'lucide-react';
 import cmmsService from '../../lib/supabase/services/cmmsService';
 
 const STATUS_META = {
@@ -92,6 +92,7 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
   const [statusFilter, setStatusFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [expandedReqId, setExpandedReqId] = useState(null);
   const hasLoaded = useRef(false);
   const pendingRequiredAmount = (Number(itemQuantity) || 0) * (Number(itemCost) || 0);
 
@@ -616,79 +617,87 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
           <div className="space-y-3">
             {filteredRequisitions.map((req) => {
               const status = STATUS_META[req.status] || STATUS_META.pending_department_head;
+              const isExpanded = expandedReqId === req.id;
               return (
                 <article
                   key={req.id}
-                  className="rounded-xl border border-white/10 bg-gradient-to-br from-slate-950/65 to-slate-900/45 p-4"
+                  onClick={() => setExpandedReqId(isExpanded ? null : req.id)}
+                  className="rounded-xl border border-white/10 bg-gradient-to-br from-slate-950/65 to-slate-900/45 p-4 cursor-pointer transition-all hover:border-white/20"
                 >
-                  <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center flex-wrap gap-2 mb-1">
-                        <h4 className="text-base font-semibold text-white">{req.title}</h4>
-                        <span className="rounded-md bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
-                          {req.requisitionNumber || req.id}
-                        </span>
-                        <span className={`rounded-md border px-2 py-0.5 text-xs ${status.badgeClass}`}>
-                          {status.label}
-                        </span>
+                  {/* Always visible: title row */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center flex-wrap gap-2 min-w-0">
+                      <h4 className="text-base font-semibold text-white truncate">{req.title}</h4>
+                      <span className="rounded-md bg-slate-800 px-2 py-0.5 text-xs text-slate-300 flex-shrink-0">
+                        {req.requisitionNumber || req.id}
+                      </span>
+                      <span className={`rounded-md border px-2 py-0.5 text-xs flex-shrink-0 ${status.badgeClass}`}>
+                        {status.label}
+                      </span>
+                    </div>
+                    <ChevronDown className={`w-5 h-5 text-slate-400 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                  </div>
+
+                  {/* Expanded details */}
+                  {isExpanded && (
+                    <div className="mt-4">
+                      <p className="text-sm text-slate-300 mb-3">{req.description}</p>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs text-slate-400">Estimated Cost</span>
+                        <span className="text-base font-bold text-amber-300">{formatUgx(req.estimatedCost)}</span>
                       </div>
-                      <p className="text-sm text-slate-300">{req.description}</p>
-                    </div>
-                    <div className="text-left md:text-right">
-                      <p className="text-xs text-slate-400">Estimated Cost</p>
-                      <p className="text-base font-bold text-amber-300">{formatUgx(req.estimatedCost)}</p>
-                    </div>
-                  </div>
 
-                  <div className="mt-3 grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                    <div className="rounded-lg bg-slate-900/60 border border-white/5 p-2">
-                      <p className="text-[11px] uppercase tracking-wide text-slate-500">Priority</p>
-                      <p className="text-sm text-white">{PRIORITY_META[req.priority] || 'Normal'}</p>
-                    </div>
-                    <div className="rounded-lg bg-slate-900/60 border border-white/5 p-2">
-                      <p className="text-[11px] uppercase tracking-wide text-slate-500">Requested By</p>
-                      <p className="text-sm text-white">{req.createdByName || 'Unknown'}</p>
-                    </div>
-                    <div className="rounded-lg bg-slate-900/60 border border-white/5 p-2">
-                      <p className="text-[11px] uppercase tracking-wide text-slate-500">Created</p>
-                      <p className="text-sm text-white">{new Date(req.createdAt).toLocaleDateString()}</p>
-                    </div>
-                    <div className="rounded-lg bg-slate-900/60 border border-white/5 p-2">
-                      <p className="text-[11px] uppercase tracking-wide text-slate-500">Required By</p>
-                      <p className="text-sm text-white">
-                        {req.requiredByDate ? new Date(req.requiredByDate).toLocaleDateString() : 'Not set'}
-                      </p>
-                    </div>
-                  </div>
+                      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                        <div className="rounded-lg bg-slate-900/60 border border-white/5 p-2">
+                          <p className="text-[11px] uppercase tracking-wide text-slate-500">Priority</p>
+                          <p className="text-sm text-white">{PRIORITY_META[req.priority] || 'Normal'}</p>
+                        </div>
+                        <div className="rounded-lg bg-slate-900/60 border border-white/5 p-2">
+                          <p className="text-[11px] uppercase tracking-wide text-slate-500">Requested By</p>
+                          <p className="text-sm text-white">{req.createdByName || 'Unknown'}</p>
+                        </div>
+                        <div className="rounded-lg bg-slate-900/60 border border-white/5 p-2">
+                          <p className="text-[11px] uppercase tracking-wide text-slate-500">Created</p>
+                          <p className="text-sm text-white">{new Date(req.createdAt).toLocaleDateString()}</p>
+                        </div>
+                        <div className="rounded-lg bg-slate-900/60 border border-white/5 p-2">
+                          <p className="text-[11px] uppercase tracking-wide text-slate-500">Required By</p>
+                          <p className="text-sm text-white">
+                            {req.requiredByDate ? new Date(req.requiredByDate).toLocaleDateString() : 'Not set'}
+                          </p>
+                        </div>
+                      </div>
 
-                  {Array.isArray(req.items) && req.items.length > 0 && (
-                    <div className="mt-3 rounded-lg border border-white/10 bg-slate-950/40 p-2.5">
-                      <p className="text-[11px] uppercase tracking-wide text-slate-400 mb-2">Line Items</p>
-                      <div className="space-y-2">
-                        {req.items.map((item, index) => (
-                          <div key={item.id || `${req.id}-item-${index}`} className="rounded-md border border-white/10 bg-slate-900/60 p-2">
-                            <p className="text-sm text-white truncate">{item.equipment || item.item_name || 'Inventory item'}</p>
-                            <div className="mt-1.5 grid grid-cols-2 sm:grid-cols-4 gap-2">
-                              <div>
-                                <p className="text-[10px] uppercase tracking-wide text-slate-500">Required Qty</p>
-                                <p className="text-sm text-white">{Number(item.quantity || 0)}</p>
+                      {Array.isArray(req.items) && req.items.length > 0 && (
+                        <div className="mt-3 rounded-lg border border-white/10 bg-slate-950/40 p-2.5">
+                          <p className="text-[11px] uppercase tracking-wide text-slate-400 mb-2">Line Items</p>
+                          <div className="space-y-2">
+                            {req.items.map((item, index) => (
+                              <div key={item.id || `${req.id}-item-${index}`} className="rounded-md border border-white/10 bg-slate-900/60 p-2">
+                                <p className="text-sm text-white truncate">{item.equipment || item.item_name || 'Inventory item'}</p>
+                                <div className="mt-1.5 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                  <div>
+                                    <p className="text-[10px] uppercase tracking-wide text-slate-500">Required Qty</p>
+                                    <p className="text-sm text-white">{Number(item.quantity || 0)}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] uppercase tracking-wide text-slate-500">Unit Cost</p>
+                                    <p className="text-sm text-white">{formatUgx(item.costPerUnit)}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] uppercase tracking-wide text-slate-500">Condition</p>
+                                    <p className="text-sm text-white">{item.condition || 'Not specified'}</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-[10px] uppercase tracking-wide text-slate-500">Required Amount</p>
+                                    <p className="text-sm font-semibold text-amber-300">{formatUgx(item.totalCost)}</p>
+                                  </div>
+                                </div>
                               </div>
-                              <div>
-                                <p className="text-[10px] uppercase tracking-wide text-slate-500">Unit Cost</p>
-                                <p className="text-sm text-white">{formatUgx(item.costPerUnit)}</p>
-                              </div>
-                              <div>
-                                <p className="text-[10px] uppercase tracking-wide text-slate-500">Condition</p>
-                                <p className="text-sm text-white">{item.condition || 'Not specified'}</p>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-[10px] uppercase tracking-wide text-slate-500">Required Amount</p>
-                                <p className="text-sm font-semibold text-amber-300">{formatUgx(item.totalCost)}</p>
-                              </div>
-                            </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </article>

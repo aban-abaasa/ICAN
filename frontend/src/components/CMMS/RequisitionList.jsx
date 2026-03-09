@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Clipboard, RefreshCw } from 'lucide-react';
+import { ChevronDown, Clipboard, RefreshCw } from 'lucide-react';
 
 const RequisitionList = ({
   requisitions = [],
@@ -144,22 +144,22 @@ const RequisitionList = ({
             : 'border-white/20 bg-white/5 hover:bg-white/10'
         } ${isExpanded ? 'ring-2 ring-blue-400' : ''}`}
       >
-        {/* Header */}
-        <div className="flex justify-between items-start mb-3">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <h4 className="text-white font-bold text-lg">{req.title}</h4>
-              <span className="text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded">
-                {req.requisitionNumber || `REQ-${req.id.slice(0, 8)}`}
-              </span>
-            </div>
-            <p className="text-gray-400 text-sm line-clamp-2">{req.description}</p>
+        {/* Header - Always visible */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center flex-wrap gap-2 min-w-0">
+            <h4 className="text-white font-bold text-lg truncate">{req.title}</h4>
+            <span className="text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded flex-shrink-0">
+              {req.requisitionNumber || `REQ-${req.id.slice(0, 8)}`}
+            </span>
+            <div className={`text-xs font-bold text-${sConfig.color}-300 flex-shrink-0`}>{sConfig.icon} {sConfig.label}</div>
           </div>
-          <div className="text-right ml-4">
-            <div className="text-3xl mb-1">{sConfig.icon}</div>
-            <div className={`text-xs font-bold text-${sConfig.color}-300 text-right`}>{sConfig.label}</div>
-          </div>
+          <ChevronDown className={`w-5 h-5 text-gray-400 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
         </div>
+
+        {/* Expanded Details */}
+        {isExpanded && (
+        <div className="mt-4">
+        <p className="text-gray-400 text-sm mb-3">{req.description}</p>
 
         {/* Details Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 pb-4 border-b border-white/10">
@@ -223,7 +223,7 @@ const RequisitionList = ({
         )}
 
         {/* Action Buttons (Expanded View) */}
-        {isExpanded && (
+        {
           <div className="border-t border-white/10 pt-4 mt-4 space-y-2">
             {/* Admin Approval Button */}
             {userRole === 'admin' && (req.status === 'pending_confirmations' || req.status === 'pending_department_head') && (
@@ -271,6 +271,8 @@ const RequisitionList = ({
               </div>
             )}
           </div>
+        }
+        </div>
         )}
       </div>
     );

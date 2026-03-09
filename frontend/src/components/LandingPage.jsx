@@ -516,24 +516,24 @@ const LandingPage = ({ onGetStarted }) => {
 
       {/* Navigation */}
       <nav className="fixed top-0 w-full z-50 bg-slate-950/50 backdrop-blur-md border-b border-purple-500/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+        <div className="max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-12 py-4 2xl:py-5 flex justify-between items-center">
           <div className="flex items-center space-x-3">
-            <div className="text-3xl md:text-4xl font-black bg-gradient-to-r from-yellow-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-              ICANera
+            <div className="text-3xl md:text-4xl 2xl:text-5xl font-black bg-gradient-to-r from-yellow-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+              IcanEra
             </div>
             <div className="hidden sm:flex flex-col">
-              <p className="text-xs md:text-sm font-semibold text-gray-300">Financial Ecosystem</p>
-              <p className="text-xs text-purple-300">Wealth Platform</p>
+              <p className="text-xs md:text-sm 2xl:text-base font-semibold text-gray-300">Financial Ecosystem</p>
+              <p className="text-xs 2xl:text-sm text-purple-300">Wealth Platform</p>
             </div>
           </div>
-          <div className="hidden md:flex space-x-8">
-            <a href="#features" className="text-sm md:text-base font-medium hover:text-purple-400 transition">Features</a>
-            <a href="#platforms" className="text-sm md:text-base font-medium hover:text-purple-400 transition">Platforms</a>
-            <a href="#testimonials" className="text-sm md:text-base font-medium hover:text-purple-400 transition">Testimonials</a>
+          <div className="hidden md:flex space-x-8 2xl:space-x-12">
+            <a href="#features" className="text-sm md:text-base 2xl:text-lg font-medium hover:text-purple-400 transition">Features</a>
+            <a href="#platforms" className="text-sm md:text-base 2xl:text-lg font-medium hover:text-purple-400 transition">Platforms</a>
+            <a href="#testimonials" className="text-sm md:text-base 2xl:text-lg font-medium hover:text-purple-400 transition">Testimonials</a>
           </div>
           <button
             onClick={onGetStarted}
-            className="bg-gradient-to-r from-purple-500 to-pink-500 px-6 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-purple-500/50 transition transform hover:scale-105 text-sm md:text-base"
+            className="bg-gradient-to-r from-purple-500 to-pink-500 px-6 py-2 2xl:px-8 2xl:py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-purple-500/50 transition transform hover:scale-105 text-sm md:text-base 2xl:text-lg"
           >
             Get Started
           </button>
@@ -541,12 +541,12 @@ const LandingPage = ({ onGetStarted }) => {
       </nav>
 
       {/* Hero Section */}
-      <div className="relative pt-16 md:pt-20 pb-12 md:pb-16 px-4 sm:px-6 lg:px-8 overflow-visible">
+      <div className="relative pt-16 md:pt-20 2xl:pt-28 pb-12 md:pb-16 2xl:pb-24 px-4 sm:px-6 lg:px-8 2xl:px-16 overflow-visible">
         {/* Decorative elements */}
         <div className="absolute top-10 left-5 w-32 h-32 bg-purple-500/5 rounded-full blur-3xl"></div>
         <div className="absolute bottom-10 right-10 w-40 h-40 bg-pink-500/5 rounded-full blur-3xl"></div>
         
-        <div className="max-w-7xl mx-auto grid md:grid-cols-2 gap-6 md:gap-8 lg:gap-12 items-center relative">
+        <div className="max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] mx-auto grid md:grid-cols-2 gap-6 md:gap-8 lg:gap-12 2xl:gap-16 items-center relative">
           {/* Left Content - Collapsed to Icon */}
           <div className="flex items-center justify-center md:justify-start animate-fadeInUp relative z-40 w-full md:w-auto">
             <div className="w-full md:w-auto">
@@ -593,21 +593,21 @@ const LandingPage = ({ onGetStarted }) => {
               </div>
 
               {/* Desktop: Always Visible Full Container */}
-              <div className="hidden md:block bg-gradient-to-br from-slate-900/95 to-slate-950/95 border border-purple-500/40 rounded-2xl p-6 md:p-8 space-y-5 shadow-2xl shadow-purple-500/30 backdrop-blur-xl w-full md:w-full lg:max-w-2xl">
+              <div className="hidden md:block bg-gradient-to-br from-slate-900/95 to-slate-950/95 border border-purple-500/40 rounded-2xl p-6 md:p-8 2xl:p-10 space-y-5 2xl:space-y-7 shadow-2xl shadow-purple-500/30 backdrop-blur-xl w-full md:w-full lg:max-w-2xl 2xl:max-w-3xl">
                 {/* Tag */}
                 <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-400/30 rounded-full px-4 py-2">
                   <Zap className="w-4 h-4 text-purple-300 flex-shrink-0" />
-                  <span className="text-sm md:text-base text-purple-200 font-medium">From Volatility to Global Capital → Your Path to Prosperity</span>
+                  <span className="text-sm md:text-base 2xl:text-lg text-purple-200 font-medium">From Volatility to Global Capital → Your Path to Prosperity</span>
                 </div>
                 
                 {/* Headline */}
-                <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-purple-300 via-pink-300 to-blue-300 bg-clip-text text-transparent leading-tight">
+                <h2 className="text-2xl md:text-3xl lg:text-4xl 2xl:text-5xl 3xl:text-6xl font-bold bg-gradient-to-r from-purple-300 via-pink-300 to-blue-300 bg-clip-text text-transparent leading-tight">
                   Build Generational Wealth Together
                 </h2>
                 
                 {/* Description */}
-                <div className="text-sm md:text-base text-gray-300 leading-relaxed space-y-3">
-                  <span className="block font-semibold text-purple-200 text-base md:text-lg">Empower Your Financial Future:</span>
+                <div className="text-sm md:text-base 2xl:text-lg text-gray-300 leading-relaxed space-y-3">
+                  <span className="block font-semibold text-purple-200 text-base md:text-lg 2xl:text-xl">Empower Your Financial Future:</span>
                   <p>Harness the transformative power of democratic savings groups, secure wallet management, intelligent financial tracking for income and expenses, spiritual wealth growth through tithing, and blockchain-verified transactions. Join thousands building generational wealth through collaboration, transparency, and prosperity—designed for personal liberation and unstoppable business growth.</p>
                 </div>
                 
@@ -627,14 +627,14 @@ const LandingPage = ({ onGetStarted }) => {
           </div>
 
           {/* Right - Feature Image Showcase Carousel */}
-          <div className="relative animate-fadeInDown hidden md:flex items-center justify-center h-full min-h-96 z-0">
-            <div className="relative w-full max-w-lg group">
+          <div className="relative animate-fadeInDown hidden md:flex items-center justify-center h-full min-h-96 2xl:min-h-[500px] z-0">
+            <div className="relative w-full max-w-lg 2xl:max-w-2xl group">
               {/* Image container with carousel */}
               <div className="relative rounded-3xl overflow-hidden">
                 {/* Content - Animated Carousel */}
                 <div className="relative space-y-6">
                   {/* Image with slide transition */}
-                  <div className="relative h-80 rounded-2xl overflow-hidden shadow-lg group/image">
+                  <div className="relative h-80 2xl:h-[450px] 3xl:h-[520px] rounded-2xl overflow-hidden shadow-lg group/image">
                     <img 
                       src={heroSlides[currentHeroSlide].image}
                       alt={heroSlides[currentHeroSlide].title}
@@ -648,7 +648,7 @@ const LandingPage = ({ onGetStarted }) => {
                   {/* Label with animation */}
                   <div key={`hero-${currentHeroSlide}`} className="text-center space-y-2 animate-fadeIn">
                     <p className="text-xs text-yellow-300 font-semibold uppercase tracking-wider">✨ {heroSlides[currentHeroSlide].subtitle}</p>
-                    <h3 className="text-xl font-bold bg-gradient-to-r from-purple-200 via-pink-200 to-purple-200 bg-clip-text text-transparent">{heroSlides[currentHeroSlide].title}</h3>
+                    <h3 className="text-xl 2xl:text-2xl font-bold bg-gradient-to-r from-purple-200 via-pink-200 to-purple-200 bg-clip-text text-transparent">{heroSlides[currentHeroSlide].title}</h3>
                     <p className="text-[11px] text-gray-500 uppercase tracking-[0.14em]">
                       Slide {currentHeroSlide + 1} of {heroSlides.length}
                     </p>
@@ -739,8 +739,8 @@ const LandingPage = ({ onGetStarted }) => {
       */}
 
       {/* Image Carousel Section */}
-      <section id="platforms" className="relative py-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
+      <section id="platforms" className="relative py-20 2xl:py-28 px-4 sm:px-6 lg:px-8 2xl:px-16">
+        <div className="max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] mx-auto">
           {/* Animated Badge Section */}
           <div className="text-center mb-12 md:mb-16">
             {/* Main Badge Container */}
@@ -758,7 +758,7 @@ const LandingPage = ({ onGetStarted }) => {
                   <div className="relative space-y-2 min-h-24 md:min-h-20 flex flex-col justify-center">
                     {/* Animated Title */}
                     <div className="relative">
-                      <h2 className="text-2xl md:text-4xl lg:text-5xl font-bold mb-2 md:mb-3 leading-tight min-h-16 md:min-h-14 flex items-center justify-center">
+                      <h2 className="text-2xl md:text-4xl lg:text-5xl 2xl:text-6xl font-bold mb-2 md:mb-3 leading-tight min-h-16 md:min-h-14 flex items-center justify-center">
                         <span 
                           key={currentBadgeInfo}
                           className="bg-gradient-to-r from-yellow-300 via-purple-300 to-pink-300 bg-clip-text text-transparent animate-fadeIn"
@@ -772,7 +772,7 @@ const LandingPage = ({ onGetStarted }) => {
                     <div className="relative min-h-12 flex items-center justify-center">
                       <p 
                         key={`desc-${currentBadgeInfo}`}
-                        className="text-gray-300 text-sm md:text-base max-w-3xl mx-auto leading-relaxed animate-fadeIn"
+                        className="text-gray-300 text-sm md:text-base 2xl:text-lg max-w-3xl 2xl:max-w-4xl mx-auto leading-relaxed animate-fadeIn"
                       >
                         {badgeInfo[currentBadgeInfo].description}
                       </p>
@@ -805,7 +805,7 @@ const LandingPage = ({ onGetStarted }) => {
               {/* Inner Content */}
               <div className="relative rounded-3xl overflow-hidden">
                 {/* Main Image - Full Screen */}
-                <div className="relative h-96 md:h-[600px] lg:h-[700px] overflow-hidden shadow-2xl">
+                <div className="relative h-96 md:h-[600px] lg:h-[700px] 2xl:h-[850px] 3xl:h-[950px] overflow-hidden shadow-2xl">
                   <img
                     src={slides[currentSlide].image}
                     alt={slides[currentSlide].title}
@@ -816,18 +816,18 @@ const LandingPage = ({ onGetStarted }) => {
                   />
 
                   {/* Text Overlay - concise title/subtitle */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/35 to-slate-950/20 flex items-end p-4 md:p-8">
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/35 to-slate-950/20 flex items-end p-4 md:p-8 2xl:p-12">
                     <div
                       key={`platform-slide-${currentSlide}`}
-                      className="w-full max-w-2xl rounded-2xl border border-white/20 bg-slate-950/45 backdrop-blur-md p-4 md:p-6 space-y-2 animate-fadeIn"
+                      className="w-full max-w-2xl 2xl:max-w-3xl rounded-2xl border border-white/20 bg-slate-950/45 backdrop-blur-md p-4 md:p-6 2xl:p-8 space-y-2 2xl:space-y-3 animate-fadeIn"
                     >
-                      <p className="text-[11px] md:text-xs text-yellow-200/90 font-semibold uppercase tracking-[0.12em]">
+                      <p className="text-[11px] md:text-xs 2xl:text-sm text-yellow-200/90 font-semibold uppercase tracking-[0.12em]">
                         {slides[currentSlide].subtitle}
                       </p>
-                      <h3 className="text-xl md:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-yellow-300 via-purple-300 to-pink-300 bg-clip-text text-transparent leading-tight">
+                      <h3 className="text-xl md:text-3xl lg:text-4xl 2xl:text-5xl font-bold bg-gradient-to-r from-yellow-300 via-purple-300 to-pink-300 bg-clip-text text-transparent leading-tight">
                         {slides[currentSlide].title}
                       </h3>
-                      <p className="text-[11px] md:text-xs text-purple-200/85 uppercase tracking-[0.12em]">
+                      <p className="text-[11px] md:text-xs 2xl:text-sm text-purple-200/85 uppercase tracking-[0.12em]">
                         Slide {currentSlide + 1} of {slides.length}
                       </p>
                     </div>
@@ -855,8 +855,8 @@ const LandingPage = ({ onGetStarted }) => {
                   <ChevronRight className="w-5 h-5 md:w-6 md:h-6 group-hover:translate-x-1 transition" />
                 </button>
 
-                {/* Slide indicators */}
-                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-1.5 md:gap-2 z-20 bg-slate-950/80 px-3 md:px-4 py-2.5 md:py-3 rounded-full backdrop-blur-md border border-yellow-500/30 shadow-lg shadow-yellow-500/20">
+                {/* Slide indicators - Hidden on Mobile */}
+                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 hidden md:flex gap-1.5 md:gap-2 z-20 bg-slate-950/80 px-3 md:px-4 py-2.5 md:py-3 rounded-full backdrop-blur-md border border-yellow-500/30 shadow-lg shadow-yellow-500/20">
                   {slides.map((_, index) => (
                     <button
                       key={index}
@@ -874,7 +874,7 @@ const LandingPage = ({ onGetStarted }) => {
           </div>
 
           {/* Platform Icons Grid - Single Row, Text on Hover */}
-          <div className="flex justify-center gap-3 md:gap-5 mt-6 md:mt-8 overflow-x-auto px-4 pb-2">
+          <div className="flex justify-center gap-3 md:gap-5 2xl:gap-6 mt-6 md:mt-8 2xl:mt-10 overflow-x-auto px-4 pb-2">
             {slides.map((slide, index) => (
               <button
                 key={index}
@@ -885,7 +885,7 @@ const LandingPage = ({ onGetStarted }) => {
                     : 'hover:bg-purple-500/10'
                 }`}
               >
-                <div className="w-8 h-8 md:w-10 md:h-10 rounded-md overflow-hidden border border-purple-500/40">
+                <div className="w-8 h-8 md:w-10 md:h-10 2xl:w-14 2xl:h-14 rounded-md overflow-hidden border border-purple-500/40">
                   <img
                     src={slide.image}
                     alt={slide.title}
@@ -901,34 +901,34 @@ const LandingPage = ({ onGetStarted }) => {
           </div>
 
           {/* Call-to-Action Buttons and Stats Section */}
-          <div className="mt-4 md:mt-12 space-y-3 md:space-y-8 text-center">
+          <div className="mt-4 md:mt-12 2xl:mt-16 space-y-3 md:space-y-8 text-center">
             {/* Buttons */}
             <div className="flex flex-col sm:flex-row gap-2 md:gap-4 justify-center">
               <button
                 onClick={onGetStarted}
-                className="group bg-gradient-to-r from-purple-500 to-pink-500 px-4 md:px-8 py-2 md:py-4 rounded-lg font-bold text-sm md:text-lg flex items-center justify-center space-x-2 hover:shadow-lg hover:shadow-purple-500/50 transition transform hover:scale-105"
+                className="group bg-gradient-to-r from-purple-500 to-pink-500 px-4 md:px-8 2xl:px-10 py-2 md:py-4 2xl:py-5 rounded-lg font-bold text-sm md:text-lg 2xl:text-xl flex items-center justify-center space-x-2 hover:shadow-lg hover:shadow-purple-500/50 transition transform hover:scale-105"
               >
                 <span>Start Your Journey</span>
-                <ArrowRight className="w-4 h-4 md:w-5 md:h-5 group-hover:translate-x-1 transition" />
+                <ArrowRight className="w-4 h-4 md:w-5 md:h-5 2xl:w-6 2xl:h-6 group-hover:translate-x-1 transition" />
               </button>
-              <button className="border-2 border-purple-400 px-4 md:px-8 py-2 md:py-4 rounded-lg font-bold text-sm md:text-lg hover:bg-purple-500/10 transition">
+              <button className="border-2 border-purple-400 px-4 md:px-8 2xl:px-10 py-2 md:py-4 2xl:py-5 rounded-lg font-bold text-sm md:text-lg 2xl:text-xl hover:bg-purple-500/10 transition">
                 Learn More
               </button>
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-3 gap-2 md:gap-4 pt-3 md:pt-8 border-t border-purple-500/20">
+            <div className="grid grid-cols-3 gap-2 md:gap-4 2xl:gap-8 pt-3 md:pt-8 2xl:pt-12 border-t border-purple-500/20">
               <div className="text-center">
-                <p className="text-lg md:text-4xl font-bold text-purple-400">10K+</p>
-                <p className="text-gray-400 text-xs md:text-base">Active Users</p>
+                <p className="text-lg md:text-4xl 2xl:text-5xl font-bold text-purple-400">10K+</p>
+                <p className="text-gray-400 text-xs md:text-base 2xl:text-lg">Active Users</p>
               </div>
               <div className="text-center">
-                <p className="text-lg md:text-4xl font-bold text-pink-400">$50M+</p>
-                <p className="text-gray-400 text-xs md:text-base">Volume Managed</p>
+                <p className="text-lg md:text-4xl 2xl:text-5xl font-bold text-pink-400">$50M+</p>
+                <p className="text-gray-400 text-xs md:text-base 2xl:text-lg">Volume Managed</p>
               </div>
               <div className="text-center">
-                <p className="text-lg md:text-4xl font-bold text-blue-400">99.9%</p>
-                <p className="text-gray-400 text-xs md:text-base">Uptime</p>
+                <p className="text-lg md:text-4xl 2xl:text-5xl font-bold text-blue-400">99.9%</p>
+                <p className="text-gray-400 text-xs md:text-base 2xl:text-lg">Uptime</p>
               </div>
             </div>
           </div>
@@ -936,15 +936,15 @@ const LandingPage = ({ onGetStarted }) => {
       </section>
 
       {/* Testimonials Section - Compact Animated Badge */}
-      <section id="testimonials" className="relative py-6 md:py-8 lg:py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-6xl mx-auto">
+      <section id="testimonials" className="relative py-6 md:py-8 lg:py-12 2xl:py-16 px-4 sm:px-6 lg:px-8 2xl:px-16">
+        <div className="max-w-6xl 2xl:max-w-[1400px] mx-auto">
           {/* Compact Testimonial Badge - Horizontal */}
           <div className="relative group">
             {/* Animated Glow */}
             <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/20 via-purple-500/20 to-pink-500/20 rounded-2xl blur-xl group-hover:opacity-100 opacity-50 transition duration-500 animate-pulse"></div>
             
             {/* Badge Container - Compact Horizontal */}
-            <div className="relative bg-gradient-to-br from-slate-900/90 to-slate-950/90 border border-cyan-500/30 rounded-2xl px-4 md:px-8 py-4 md:py-6 backdrop-blur-xl shadow-lg shadow-cyan-500/10">
+            <div className="relative bg-gradient-to-br from-slate-900/90 to-slate-950/90 border border-cyan-500/30 rounded-2xl px-4 md:px-8 2xl:px-12 py-4 md:py-6 2xl:py-8 backdrop-blur-xl shadow-lg shadow-cyan-500/10">
               {/* Animated Border */}
               <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-cyan-500/0 via-purple-500/20 to-pink-500/0 animate-pulse pointer-events-none"></div>
               
@@ -955,10 +955,10 @@ const LandingPage = ({ onGetStarted }) => {
                   key={`user-${currentTestimonial}`}
                   className="flex items-center gap-3 md:gap-4 min-w-max animate-fadeIn"
                 >
-                  <span className="text-3xl md:text-4xl flex-shrink-0">{testimonials[currentTestimonial].avatar}</span>
+                  <span className="text-3xl md:text-4xl 2xl:text-5xl flex-shrink-0">{testimonials[currentTestimonial].avatar}</span>
                   <div className="text-left">
-                    <p className="font-bold text-sm md:text-base text-white">{testimonials[currentTestimonial].name}</p>
-                    <p className="text-xs md:text-sm bg-gradient-to-r from-cyan-300 to-purple-300 bg-clip-text text-transparent font-semibold">{testimonials[currentTestimonial].role}</p>
+                    <p className="font-bold text-sm md:text-base 2xl:text-lg text-white">{testimonials[currentTestimonial].name}</p>
+                    <p className="text-xs md:text-sm 2xl:text-base bg-gradient-to-r from-cyan-300 to-purple-300 bg-clip-text text-transparent font-semibold">{testimonials[currentTestimonial].role}</p>
                   </div>
                 </div>
 
@@ -966,7 +966,7 @@ const LandingPage = ({ onGetStarted }) => {
                 <div className="flex-grow text-center md:text-left">
                   <p 
                     key={`quote-${currentTestimonial}`}
-                    className="text-gray-300 italic text-xs md:text-sm leading-relaxed line-clamp-2 animate-fadeIn"
+                    className="text-gray-300 italic text-xs md:text-sm 2xl:text-base leading-relaxed line-clamp-2 animate-fadeIn"
                   >
                     "{testimonials[currentTestimonial].text}"
                   </p>
@@ -1019,18 +1019,18 @@ const LandingPage = ({ onGetStarted }) => {
       </section>
 
       {/* CTA Section */}
-      <section className="relative py-8 md:py-12 lg:py-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-gradient-to-r from-purple-900/40 via-pink-900/40 to-blue-900/40 border border-purple-500/30 rounded-xl md:rounded-2xl p-4 md:p-8 lg:p-16 text-center">
-            <h2 className="text-xl md:text-3xl lg:text-5xl font-bold mb-3 md:mb-4 lg:mb-6 leading-tight">
+      <section className="relative py-8 md:py-12 lg:py-20 2xl:py-28 px-4 sm:px-6 lg:px-8 2xl:px-16">
+        <div className="max-w-4xl 2xl:max-w-6xl mx-auto">
+          <div className="bg-gradient-to-r from-purple-900/40 via-pink-900/40 to-blue-900/40 border border-purple-500/30 rounded-xl md:rounded-2xl 2xl:rounded-3xl p-4 md:p-8 lg:p-16 2xl:p-20 text-center">
+            <h2 className="text-xl md:text-3xl lg:text-5xl 2xl:text-6xl font-bold mb-3 md:mb-4 lg:mb-6 leading-tight">
               Ready to Transform Your Capital?
             </h2>
-            <p className="text-xs md:text-sm lg:text-xl text-gray-300 mb-4 md:mb-6 lg:mb-8 leading-relaxed">
+            <p className="text-xs md:text-sm lg:text-xl 2xl:text-2xl text-gray-300 mb-4 md:mb-6 lg:mb-8 2xl:mb-10 leading-relaxed">
               Join the revolution and take control of your financial future today.
             </p>
             <button
               onClick={onGetStarted}
-              className="group bg-gradient-to-r from-purple-500 to-pink-500 px-4 md:px-8 lg:px-10 py-2 md:py-3 lg:py-4 rounded-lg font-bold text-xs md:text-sm lg:text-lg inline-flex items-center space-x-2 hover:shadow-lg hover:shadow-purple-500/50 transition transform hover:scale-105"
+              className="group bg-gradient-to-r from-purple-500 to-pink-500 px-4 md:px-8 lg:px-10 2xl:px-12 py-2 md:py-3 lg:py-4 2xl:py-5 rounded-lg font-bold text-xs md:text-sm lg:text-lg 2xl:text-xl inline-flex items-center space-x-2 hover:shadow-lg hover:shadow-purple-500/50 transition transform hover:scale-105"
             >
               <span>Get Started Now</span>
               <ArrowRight className="w-4 h-4 md:w-5 md:h-5 group-hover:translate-x-1 transition" />
@@ -1040,8 +1040,8 @@ const LandingPage = ({ onGetStarted }) => {
       </section>
 
       {/* Footer */}
-      <footer className="relative border-t border-purple-500/10 py-6 md:py-10 lg:py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
+      <footer className="relative border-t border-purple-500/10 py-6 md:py-10 lg:py-12 2xl:py-16 px-4 sm:px-6 lg:px-8 2xl:px-16">
+        <div className="max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] mx-auto">
           {/* Footer Navigation - Simple List */}
           <div className="flex flex-wrap gap-3 md:gap-6 mb-8 md:mb-12 justify-center md:justify-start">
             {/* About */}
@@ -1200,9 +1200,9 @@ const LandingPage = ({ onGetStarted }) => {
           {/* Bottom Footer */}
           <div className="border-t border-purple-500/10 pt-4 md:pt-6 lg:pt-8 flex flex-col md:flex-row justify-between items-center text-gray-400 text-xs md:text-sm gap-3">
             <div className="text-center md:text-left">
-              <p className="font-bold bg-gradient-to-r from-yellow-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">ICANera</p>
+              <p className="font-bold bg-gradient-to-r from-yellow-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">IcanEra</p>
               <p className="text-gray-400 text-xs">Transform Volatility to Global Capital</p>
-              <p>&copy; 2026 ICANera. All rights reserved.</p>
+              <p>&copy; 2026 IcanEra. All rights reserved.</p>
             </div>
             <div className="flex space-x-4 md:space-x-6">
               <a href="https://twitter.com/icaneraera" target="_blank" rel="noopener noreferrer" className="hover:text-purple-400 transition flex items-center space-x-1">

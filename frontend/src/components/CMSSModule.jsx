@@ -27,6 +27,7 @@ import {
   MoreVertical,
   X,
   Clipboard,
+  ChevronDown,
   Edit2,
   Save
 } from 'lucide-react';
@@ -760,6 +761,7 @@ const CMMSModule = ({
     const [itemCost, setItemCost] = useState(0);  // NEW: For item cost
     
     const [loadingRequisitions, setLoadingRequisitions] = useState(false);
+    const [expandedReqId, setExpandedReqId] = useState(null);
     const [isSubmittingRequisition, setIsSubmittingRequisition] = useState(false);
     const hasLoadedRequisitions = useRef(false);  // Track if already loaded to prevent blinking
     
@@ -1412,23 +1414,23 @@ const CMMSModule = ({
                 const sConfig = statusConfig[req.status] || statusConfig.pending_department_head;
 
                 return (
-                  <div key={req.id} className="border border-white/20 rounded-lg p-4 bg-white/5 hover:bg-white/10 transition-all">
-                    {/* Header */}
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h4 className="text-white font-bold text-lg">{req.title}</h4>
-                          <span className="text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded">
-                            {req.requisitionNumber || `REQ-${req.id.slice(0, 8)}`}
-                          </span>
-                        </div>
-                        <p className="text-gray-400 text-sm">{req.description}</p>
+                  <div key={req.id} onClick={() => setExpandedReqId(expandedReqId === req.id ? null : req.id)} className="border border-white/20 rounded-lg p-4 bg-white/5 hover:bg-white/10 transition-all cursor-pointer">
+                    {/* Header - Always visible */}
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center flex-wrap gap-2 min-w-0">
+                        <h4 className="text-white font-bold text-lg truncate">{req.title}</h4>
+                        <span className="text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded flex-shrink-0">
+                          {req.requisitionNumber || `REQ-${req.id.slice(0, 8)}`}
+                        </span>
+                        <div className={`text-xs font-bold text-${sConfig.color}-300 flex-shrink-0`}>{sConfig.icon} {sConfig.label}</div>
                       </div>
-                      <div className="text-right ml-4">
-                        <div className="text-3xl mb-1">{sConfig.icon}</div>
-                        <div className={`text-xs font-bold text-${sConfig.color}-300`}>{sConfig.label}</div>
-                      </div>
+                      <ChevronDown className={`w-5 h-5 text-gray-400 flex-shrink-0 transition-transform ${expandedReqId === req.id ? 'rotate-180' : ''}`} />
                     </div>
+
+                    {/* Expanded Details */}
+                    {expandedReqId === req.id && (
+                    <div className="mt-4">
+                    <p className="text-gray-400 text-sm mb-3">{req.description}</p>
 
                     {/* Details Grid */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 pb-4 border-b border-white/10">
@@ -1487,6 +1489,8 @@ const CMMSModule = ({
                       <div className={`text-xs px-3 py-2 rounded ${req.budgetSufficient ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
                         {req.budgetSufficient ? '✅ Budget Available' : '❌ Budget Insufficient - May require additional approval'}
                       </div>
+                    )}
+                    </div>
                     )}
                   </div>
                 );

@@ -2247,9 +2247,13 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     showTrustPanel ||
     showCmmsPanel;
 
-  const showDashboardHeader = !isWebDashboard || !isOverlayPanelOpen;
+  const showDashboardHeader = isWebDashboard ? true : !isOverlayPanelOpen;
   const headerNavTabs = [
     { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
+    { id: 'pitchin', label: 'Pitchin', icon: Briefcase },
+    { id: 'wallet', label: 'Wallet', icon: Wallet },
+    { id: 'trust', label: 'Trust', icon: Lock },
+    { id: 'cmms', label: 'CMMS', icon: Settings },
     { id: 'security', label: 'Security', icon: Shield },
     { id: 'readiness', label: 'Readiness', icon: Globe },
     { id: 'growth', label: 'Growth', icon: TrendingUp },
@@ -2426,22 +2430,22 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
   return (
     <div className={`min-h-screen text-white overflow-x-hidden ${
       isWebDashboard
-        ? `bg-gradient-to-br from-slate-950 via-violet-950 to-slate-950 pb-32 ${showDashboardHeader ? 'pt-36 md:pt-40' : ''}`
+        ? `bg-gradient-to-br from-slate-950 via-violet-950 to-slate-950 pb-32 ${showDashboardHeader ? 'pt-[120px] md:pt-[130px]' : ''}`
         : 'bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 pb-28'
     }`}>
       {/* ====== HEADER ====== */}
       {showDashboardHeader && (
       <div className={`${isWebDashboard ? 'fixed top-0 left-0 right-0 z-[70]' : 'sticky top-0 z-40'} border-b ${
         isWebDashboard
-          ? 'bg-gradient-to-r from-slate-950/95 via-purple-900/80 to-slate-950/95 backdrop-blur-xl border-purple-400/30 shadow-[0_12px_30px_rgba(8,6,24,0.45)]'
+          ? 'bg-gradient-to-r from-slate-950 via-purple-950/95 to-slate-950 backdrop-blur-xl border-purple-500/20 shadow-[0_4px_30px_rgba(8,6,24,0.6)]'
           : 'bg-gradient-to-b from-slate-950/95 to-purple-950/80 backdrop-blur-md border-purple-500/20'
       }`}>
-        <div className={`px-3 py-2.5 sm:px-4 sm:py-3 relative ${isWebDashboard ? 'max-w-7xl mx-auto' : ''}`}>
-          <div className={isWebDashboard ? 'rounded-2xl border border-purple-400/25 bg-slate-900/55 px-3 py-2 shadow-[0_10px_28px_rgba(16,10,34,0.4)]' : ''}>
+        <div className={`px-3 py-2.5 sm:px-4 sm:py-3 relative ${isWebDashboard ? 'w-full px-4 sm:px-6 lg:px-8 2xl:px-12' : ''}`}>
+          <div className={isWebDashboard ? '' : ''}>
           {/* Header Row - IcanEra, Search, Menu */}
-          <div className={`flex items-center w-full gap-3 ${isWebDashboard ? 'min-h-[54px]' : ''}`}>
+          <div className={`flex items-center w-full gap-3 ${isWebDashboard ? 'min-h-[48px]' : ''}`}>
             {/* IcanEra Branding - Left aligned */}
-            <h1 className={`${isWebDashboard ? 'text-3xl md:text-4xl' : 'text-2xl sm:text-3xl'} font-serif font-bold text-transparent bg-gradient-to-r from-amber-200 via-yellow-100 to-amber-300 bg-clip-text tracking-wide sm:tracking-wider leading-tight`}>
+            <h1 className={`${isWebDashboard ? 'text-2xl md:text-3xl 2xl:text-4xl' : 'text-2xl sm:text-3xl'} font-serif font-bold text-transparent bg-gradient-to-r from-amber-200 via-yellow-100 to-amber-300 bg-clip-text tracking-wide sm:tracking-wider leading-tight flex-shrink-0`}>
               IcanEra
             </h1>
 
@@ -2459,10 +2463,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
             {/* Header Menu Actions - RIGHT */}
             {isWebDashboard ? (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 md:gap-3">
                 <button
                   onClick={() => setSelectedDetail({ tab: 'profile', item: 'My Profile' })}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-cyan-300/40 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-100 text-xs font-semibold transition"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 rounded-full border border-cyan-400/30 bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 text-xs md:text-sm font-semibold transition hover:shadow-lg hover:shadow-cyan-500/10"
                   title="Open my profile"
                 >
                   <User className="w-4 h-4" />
@@ -2470,7 +2474,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 </button>
                 <button
                   onClick={() => setShowStatusPage(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-purple-300/40 bg-purple-500/20 hover:bg-purple-500/30 text-purple-100 text-xs font-semibold transition"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 rounded-full border border-purple-400/30 bg-purple-500/15 hover:bg-purple-500/25 text-purple-200 text-xs md:text-sm font-semibold transition hover:shadow-lg hover:shadow-purple-500/10"
                   title="Open status viewer"
                 >
                   <Eye className="w-4 h-4" />
@@ -2478,7 +2482,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 </button>
                 <button
                   onClick={() => setShowStatusUploader(true)}
-                  className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-indigo-300/40 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-100 transition"
+                  className="inline-flex items-center justify-center w-8 h-8 md:w-9 md:h-9 rounded-full border border-indigo-400/30 bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-200 transition"
                   title="Add status"
                 >
                   <Plus className="w-4 h-4" />
@@ -2629,20 +2633,22 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           </div>
 
           {isWebDashboard && (
-            <div className="mt-2">
-              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            <div className="mt-2 border-t border-purple-500/10 pt-2">
+              <div className="flex items-center gap-1.5 md:gap-2 overflow-x-auto pb-1 scrollbar-hide">
                 {headerNavTabs.map((tab) => {
                   const isActive = activeHeaderTab === tab.id;
+                  const TabIcon = tab.icon;
                   return (
                     <button
                       key={tab.id}
                       onClick={() => handleHeaderTabClick(tab.id)}
-                      className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap border transition ${
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 2xl:px-5 2xl:py-2.5 rounded-lg text-xs md:text-sm 2xl:text-base font-semibold whitespace-nowrap border transition-all duration-200 ${
                         isActive
-                          ? 'bg-purple-500/30 text-white border-purple-300/60 shadow-[0_0_12px_rgba(168,85,247,0.35)]'
-                          : 'bg-slate-900/50 text-gray-300 border-slate-700 hover:text-white hover:border-purple-400/50'
+                          ? 'bg-purple-500/25 text-white border-purple-400/50 shadow-[0_0_14px_rgba(168,85,247,0.3)]'
+                          : 'bg-transparent text-gray-400 border-transparent hover:text-white hover:bg-purple-500/10 hover:border-purple-500/20'
                       }`}
                     >
+                      <TabIcon className={`w-3.5 h-3.5 md:w-4 md:h-4 ${isActive ? 'text-purple-300' : 'text-gray-500'}`} />
                       {tab.label}
                     </button>
                   );
@@ -4740,6 +4746,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* ====== COMMENTED OUT - ALL SECTIONS BELOW REMOVED FOR CLEANUP ====== */}
 
       {/* ====== FIXED BOTTOM NAVIGATION - ALWAYS ON TOP ====== */}
+      {!isWebDashboard && (
       <div className={`fixed bottom-0 left-0 right-0 z-50 transition-all ${
         showPitchinPanel 
           ? 'bg-transparent' 
@@ -4812,12 +4819,13 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           </button>
         </div>
       </div>
+      )}
 
       {/* Pitchin Panel - Full Screen Video */}
       {showPitchinPanel && (
         <div
-          className="fixed inset-x-0 top-0 z-30 bg-black overflow-hidden"
-          style={{ bottom: overlayPanelBottomInset }}
+          className={`fixed inset-x-0 z-30 bg-black overflow-hidden ${isWebDashboard ? 'top-[120px] md:top-[130px]' : 'top-0'}`}
+          style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
           <Pitchin />
         </div>
@@ -4826,8 +4834,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* Trust Panel - Full Web Trust System UI */}
       {showTrustPanel && (
         <div
-          className="fixed inset-x-0 top-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto"
-          style={{ bottom: overlayPanelBottomInset }}
+          className={`fixed inset-x-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto ${isWebDashboard ? 'top-[120px] md:top-[130px]' : 'top-0'}`}
+          style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
           <div className="pt-2 px-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
             <TrustSystem currentUser={authUser || userProfile} />
@@ -4838,8 +4846,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* Wallet Panel - Full Web Wallet UI */}
       {showWalletPanel && (
         <div
-          className="fixed inset-x-0 top-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto"
-          style={{ bottom: overlayPanelBottomInset }}
+          className={`fixed inset-x-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto ${isWebDashboard ? 'top-[120px] md:top-[130px]' : 'top-0'}`}
+          style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
           <div className="pt-2 px-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
             <ICANWallet />
@@ -4850,8 +4858,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* CMMS Panel - Full Web CMMS UI */}
       {showCmmsPanel && (
         <div
-          className="fixed inset-x-0 top-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto"
-          style={{ bottom: overlayPanelBottomInset }}
+          className={`fixed inset-x-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto ${isWebDashboard ? 'top-[120px] md:top-[130px]' : 'top-0'}`}
+          style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
           <div className="pt-2 px-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
             <CMMSModule user={userProfile} />
