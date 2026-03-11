@@ -24,15 +24,15 @@ const supabase = createClient(
 );
 
 const config = {
-  // Authentication credentials (from environment variables)
-  subscriptionKey: () => process.env.MOMO_SUBSCRIPTION_KEY || '8b59afc46b7a43b0a32856e709af1de3',
-  apiUser: () => process.env.MOMO_API_USER_ID || 'ICAN_PRIMARY_USER',
-  apiKey: () => process.env.MOMO_API_SECRET_KEY || '0c83153ce97f40c68622c16a2d69d69e',
+  // Authentication credentials (from environment variables - NEVER hardcode secrets)
+  subscriptionKey: () => process.env.MOMO_SUBSCRIPTION_KEY || '',
+  apiUser: () => process.env.MOMO_API_USER_ID || '',
+  apiKey: () => process.env.MOMO_API_SECRET_KEY || '',
   
   // Disbursement credentials
-  disbursementSubscriptionKey: () => process.env.MOMO_DISBURSEMENT_SUBSCRIPTION_KEY || '084b11d7b90a49349977be0c744fa450',
-  disbursementApiUser: () => process.env.MOMO_DISBURSEMENT_API_USER || 'ICAN_DISBURSEMENT_USER',
-  disbursementApiKey: () => process.env.MOMO_DISBURSEMENT_API_KEY || 'pending',
+  disbursementSubscriptionKey: () => process.env.MOMO_DISBURSEMENT_SUBSCRIPTION_KEY || '',
+  disbursementApiUser: () => process.env.MOMO_DISBURSEMENT_API_USER || '',
+  disbursementApiKey: () => process.env.MOMO_DISBURSEMENT_API_KEY || '',
   
   // Base URL (sandbox for testing, production for live)
   baseUrl: () => process.env.MOMO_BASE_URL || 'https://sandbox.momodeveloper.mtn.com',
