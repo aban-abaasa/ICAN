@@ -143,11 +143,11 @@ CREATE POLICY "Service role manages tokens" ON public.mtn_momo_tokens
 
 -- =============================================
 -- INSERT DEFAULT CREDENTIALS
--- ⚠️  IMPORTANT INSTRUCTIONS:
+-- âš ï¸  IMPORTANT INSTRUCTIONS:
 -- 
 -- New Credentials (Updated):
--- Primary key (subscription_key): 8b59afc46b7a43b0a32856e709af1de3
--- Secondary key (api_secret_key): 7bd511260f764defa2bde723ad81939b
+-- Primary key (subscription_key): YOUR_SUBSCRIPTION_KEY_HERE
+-- Secondary key (api_secret_key): YOUR_SECONDARY_KEY_HERE
 -- Collection Widget: Receive mobile money payments on your website through a USSD or QR code
 -- =============================================
 
@@ -165,9 +165,9 @@ INSERT INTO public.mtn_momo_config (
 ) VALUES (
     'MTN MOMO Primary - ICAN Collection',
     'Primary MTN MOMO Collection Widget credential set - Receive mobile money payments on your website through a USSD or QR code',
-    '8b59afc46b7a43b0a32856e709af1de3',      -- PRIMARY SUBSCRIPTION KEY (UPDATED)
+    'YOUR_SUBSCRIPTION_KEY_HERE',      -- PRIMARY SUBSCRIPTION KEY (UPDATED)
     'ican-momo-' || gen_random_uuid()::text, -- UNIQUE API USER ID (Dynamic UUID)
-    '7bd511260f764defa2bde723ad81939b',      -- SECONDARY API SECRET KEY (UPDATED)
+    'YOUR_SECONDARY_KEY_HERE',      -- SECONDARY API SECRET KEY (UPDATED)
     'sandbox',                                -- ENVIRONMENT
     'https://sandbox.momodeveloper.mtn.com', -- BASE URL
     true,                                     -- IS ACTIVE
@@ -175,7 +175,7 @@ INSERT INTO public.mtn_momo_config (
 ) ON CONFLICT (subscription_key) DO UPDATE SET
     name = 'MTN MOMO Primary - ICAN Collection',
     description = 'Primary MTN MOMO Collection Widget credential set - Receive mobile money payments on your website through a USSD or QR code',
-    api_secret_key = '7bd511260f764defa2bde723ad81939b',
+    api_secret_key = 'YOUR_SECONDARY_KEY_HERE',
     is_active = true,
     is_primary = true,
     updated_at = NOW();
@@ -293,10 +293,10 @@ SELECT
     user_id,
     created_at,
     CASE 
-        WHEN status = 'success' THEN '✅'
-        WHEN status = 'failed' THEN '❌'
-        WHEN status = 'pending' THEN '⏳'
-        WHEN status = 'error' THEN '⚠️'
+        WHEN status = 'success' THEN 'âœ…'
+        WHEN status = 'failed' THEN 'âŒ'
+        WHEN status = 'pending' THEN 'â³'
+        WHEN status = 'error' THEN 'âš ï¸'
     END as status_icon
 FROM public.mtn_momo_logs
 ORDER BY created_at DESC

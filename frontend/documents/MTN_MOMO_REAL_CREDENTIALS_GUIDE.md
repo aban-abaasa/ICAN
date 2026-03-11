@@ -1,7 +1,7 @@
 # MTN MOMO API - REAL Credentials & Authentication Guide
 
 **Document Date:** January 20, 2026  
-**Status:** ✅ Real Implementation - All Credentials Verified  
+**Status:** âœ… Real Implementation - All Credentials Verified  
 **Source:** Supabase `mtn_momo_config` table
 
 ---
@@ -12,9 +12,9 @@ These are REAL credentials from your MTN MOMO Developer Account, stored in Supab
 
 | Credential Name | Value | Format | Purpose |
 |-----------------|-------|--------|---------|
-| **Subscription Key** | `8b59afc46b7a43b0a32856e709af1de3` | 32-char hex | Identifies your app to MTN |
+| **Subscription Key** | `YOUR_SUBSCRIPTION_KEY_HERE` | 32-char hex | Identifies your app to MTN |
 | **API User ID** | `550e8400-e29b-41d4-a716-446655440000` | UUID | Authenticates your identity |
-| **API Secret Key** | `0c83153ce97f40c68622c16a2d69d69e` | 32-char hex | Proves you're authorized |
+| **API Secret Key** | `YOUR_API_SECRET_HERE` | 32-char hex | Proves you're authorized |
 
 ---
 
@@ -22,18 +22,18 @@ These are REAL credentials from your MTN MOMO Developer Account, stored in Supab
 
 ### 1. Subscription Key (API Key)
 ```
-8b59afc46b7a43b0a32856e709af1de3
+YOUR_SUBSCRIPTION_KEY_HERE
 ```
 
 **What it is:** Your application's unique identifier with MTN  
-**Where it comes from:** MTN Developer Portal → API Keys section  
+**Where it comes from:** MTN Developer Portal â†’ API Keys section  
 **Used in:** EVERY single API request  
 **How:** HTTP Header `Ocp-Apim-Subscription-Key`  
 **Example:**
 ```
 GET /collection/token/
 Headers: {
-  'Ocp-Apim-Subscription-Key': '8b59afc46b7a43b0a32856e709af1de3'
+  'Ocp-Apim-Subscription-Key': 'YOUR_SUBSCRIPTION_KEY_HERE'
 }
 ```
 
@@ -58,7 +58,7 @@ Auth: {
 
 ### 3. API Secret Key
 ```
-0c83153ce97f40c68622c16a2d69d69e
+YOUR_API_SECRET_HERE
 ```
 
 **What it is:** Your password for the API User ID  
@@ -71,7 +71,7 @@ Auth: {
 POST /collection/token/
 Auth: {
   username: [your API User ID],
-  password: '0c83153ce97f40c68622c16a2d69d69e'
+  password: 'YOUR_API_SECRET_HERE'
 }
 ```
 
@@ -86,7 +86,7 @@ You                          MTN MOMO API
  |                                 |
  |-- POST /collection/token/ ----->|
  |  Headers:                        |
- |  - Ocp-Apim-Subscription-Key: 8b59afc46b7a43b0a32856e709af1de3
+ |  - Ocp-Apim-Subscription-Key: YOUR_SUBSCRIPTION_KEY_HERE
  |  - X-Reference-Id: [UUID]       |
  |  Auth: (550e8400-..., 0c83153...)
  |                                  |
@@ -168,9 +168,9 @@ const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
 
 // Your credentials from Supabase
-const SUBSCRIPTION_KEY = '8b59afc46b7a43b0a32856e709af1de3';
+const SUBSCRIPTION_KEY = 'YOUR_SUBSCRIPTION_KEY_HERE';
 const API_USER = '550e8400-e29b-41d4-a716-446655440000';
-const API_SECRET = '0c83153ce97f40c68622c16a2d69d69e';
+const API_SECRET = 'YOUR_API_SECRET_HERE';
 const BASE_URL = 'https://sandbox.momodeveloper.mtn.com';
 
 // STEP 1: Get Bearer Token
@@ -253,9 +253,9 @@ Your credentials are stored in:
 SELECT 
   id,
   name,
-  subscription_key,    -- 8b59afc46b7a43b0a32856e709af1de3
+  subscription_key,    -- YOUR_SUBSCRIPTION_KEY_HERE
   api_user_id,         -- 550e8400-e29b-41d4-a716-446655440000
-  api_secret_key,      -- 0c83153ce97f40c68622c16a2d69d69e
+  api_secret_key,      -- YOUR_API_SECRET_HERE
   environment,         -- 'sandbox'
   is_active,           -- true
   is_primary           -- true
@@ -269,15 +269,15 @@ Your application reads credentials from:
 
 ```env
 # Backend (.env)
-MOMO_SUBSCRIPTION_KEY=8b59afc46b7a43b0a32856e709af1de3
+MOMO_SUBSCRIPTION_KEY=YOUR_SUBSCRIPTION_KEY_HERE
 MOMO_API_USER_DB=550e8400-e29b-41d4-a716-446655440000
-MOMO_API_KEY_DB=0c83153ce97f40c68622c16a2d69d69e
+MOMO_API_KEY_DB=YOUR_API_SECRET_HERE
 MOMO_BASE_URL=https://sandbox.momodeveloper.mtn.com
 ```
 
 ### Security Best Practices
 
-✅ **DO:**
+âœ… **DO:**
 - Store credentials in Supabase (encrypted at rest)
 - Use environment variables for sensitive data
 - Cache Bearer Tokens (don't request new one for every call)
@@ -285,7 +285,7 @@ MOMO_BASE_URL=https://sandbox.momodeveloper.mtn.com
 - Use HTTPS only (never HTTP)
 - Rotate API Secret Key periodically
 
-❌ **DON'T:**
+âŒ **DON'T:**
 - Store credentials in code or version control
 - Log full credentials anywhere
 - Expose API Secret Key in frontend
@@ -304,11 +304,11 @@ node backend/services/mtnMomoCredentialValidator.js
 ```
 
 This will verify:
-- ✅ Credentials exist in Supabase
-- ✅ Credential format is valid
-- ✅ MTN API authentication works
-- ✅ API calls succeed
-- ✅ All three credentials are properly configured
+- âœ… Credentials exist in Supabase
+- âœ… Credential format is valid
+- âœ… MTN API authentication works
+- âœ… API calls succeed
+- âœ… All three credentials are properly configured
 
 ---
 
@@ -349,21 +349,21 @@ This will verify:
 
 | Item | Your Value |
 |------|-----------|
-| **Subscription Key** | `8b59afc46b7a43b0a32856e709af1de3` |
+| **Subscription Key** | `YOUR_SUBSCRIPTION_KEY_HERE` |
 | **API User ID** | `550e8400-e29b-41d4-a716-446655440000` |
-| **API Secret Key** | `0c83153ce97f40c68622c16a2d69d69e` |
+| **API Secret Key** | `YOUR_API_SECRET_HERE` |
 | **Environment** | `sandbox` |
 | **Base URL** | `https://sandbox.momodeveloper.mtn.com` |
-| **Status** | ✅ VERIFIED & WORKING |
+| **Status** | âœ… VERIFIED & WORKING |
 
 **You are ready to:**
-- ✅ Request money (Collections)
-- ✅ Send money (Disbursements)
-- ✅ Check transaction status
-- ✅ Log transactions to Supabase
-- ✅ Build full ICAN payment system
+- âœ… Request money (Collections)
+- âœ… Send money (Disbursements)
+- âœ… Check transaction status
+- âœ… Log transactions to Supabase
+- âœ… Build full ICAN payment system
 
 ---
 
 **Last Updated:** January 20, 2026  
-**Verified:** ✅ Real credentials tested with MTN API
+**Verified:** âœ… Real credentials tested with MTN API

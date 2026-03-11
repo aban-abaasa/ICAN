@@ -12,7 +12,7 @@ The MTN MOMO API's `bc-authorize` endpoint requires **Basic Authentication**, no
 ### Raw Credentials (DO NOT USE DIRECTLY IN HEADERS)
 ```
 API_User_ID:  550e8400-e29b-41d4-a716-446655440000
-API_Key:      0c83153ce97f40c68622c16a2d69d69e
+API_Key:      YOUR_API_SECRET_HERE
 ```
 
 ### Base64 Encoding
@@ -32,7 +32,7 @@ Authorization: Basic UzUwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwOjBjODMxNTN
 
 ## Implementation
 
-### Node.js / JavaScript (Correct ✅)
+### Node.js / JavaScript (Correct âœ…)
 ```javascript
 // Option 1: Automatic encoding (Recommended)
 const credentials = `${apiUser}:${apiKey}`;
@@ -56,13 +56,13 @@ const response = await axios.post(
 );
 ```
 
-### Python (Correct ✅)
+### Python (Correct âœ…)
 ```python
 import base64
 import requests
 
 api_user = "550e8400-e29b-41d4-a716-446655440000"
-api_key = "0c83153ce97f40c68622c16a2d69d69e"
+api_key = "YOUR_API_SECRET_HERE"
 subscription_key = "bc94878b6776497da38d09c302c4380c"
 
 # Create Basic Auth header
@@ -83,7 +83,7 @@ response = requests.post(
 )
 ```
 
-### cURL (Correct ✅)
+### cURL (Correct âœ…)
 ```bash
 curl -X POST https://sandbox.momodeveloper.mtn.com/collection/token/ \
   -H "Authorization: Basic UzUwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwOjBjODMxNTNjZTk3ZjQwYzY4NjIyYzE2YTJkNjlkNjll" \
@@ -93,9 +93,9 @@ curl -X POST https://sandbox.momodeveloper.mtn.com/collection/token/ \
 
 ---
 
-## Common Mistakes ❌
+## Common Mistakes âŒ
 
-### ❌ WRONG: Using UUID directly as Bearer token
+### âŒ WRONG: Using UUID directly as Bearer token
 ```javascript
 // INCORRECT - This will fail with 401 Unauthorized
 headers: {
@@ -103,25 +103,25 @@ headers: {
 }
 ```
 
-### ❌ WRONG: Using API Key directly
+### âŒ WRONG: Using API Key directly
 ```javascript
 // INCORRECT - Missing the API_User_ID
 headers: {
-  'Authorization': 'Basic 0c83153ce97f40c68622c16a2d69d69e'
+  'Authorization': 'Basic YOUR_API_SECRET_HERE'
 }
 ```
 
-### ❌ WRONG: Forgetting to concatenate with colon
+### âŒ WRONG: Forgetting to concatenate with colon
 ```javascript
 // INCORRECT - Should be API_User_ID:API_Key (with colon)
 const credentials = `${apiUser}${apiKey}`;  // Missing ":"
 ```
 
-### ❌ WRONG: Not encoding in Base64
+### âŒ WRONG: Not encoding in Base64
 ```javascript
 // INCORRECT - Raw credentials in header
 headers: {
-  'Authorization': `Basic 550e8400-e29b-41d4-a716-446655440000:0c83153ce97f40c68622c16a2d69d69e`
+  'Authorization': `Basic 550e8400-e29b-41d4-a716-446655440000:YOUR_API_SECRET_HERE`
 }
 ```
 
@@ -133,7 +133,7 @@ headers: {
 ```env
 MOMO_SUBSCRIPTION_KEY=bc94878b6776497da38d09c302c4380c
 MOMO_API_USER=550e8400-e29b-41d4-a716-446655440000
-MOMO_API_KEY=0c83153ce97f40c68622c16a2d69d69e
+MOMO_API_KEY=YOUR_API_SECRET_HERE
 MOMO_BASIC_AUTH_ENCODED=UzUwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwOjBjODMxNTNjZTk3ZjQwYzY4NjIyYzE2YTJkNjlkNjll
 MOMO_AUTH_HEADER=Basic UzUwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwOjBjODMxNTNjZTk3ZjQwYzY4NjIyYzE2YTJkNjlkNjll
 MOMO_BASE_URL=https://sandbox.momodeveloper.mtn.com
@@ -173,10 +173,10 @@ curl -i -X POST https://sandbox.momodeveloper.mtn.com/collection/token/ \
 ```
 
 **Error Response (401) - Usually means:**
-- ❌ Invalid credentials
-- ❌ Credentials not properly Base64 encoded
-- ❌ Wrong subscription key
-- ❌ Credentials not formatted as `ID:Key` before encoding
+- âŒ Invalid credentials
+- âŒ Credentials not properly Base64 encoded
+- âŒ Wrong subscription key
+- âŒ Credentials not formatted as `ID:Key` before encoding
 
 ---
 
@@ -185,7 +185,7 @@ curl -i -X POST https://sandbox.momodeveloper.mtn.com/collection/token/ \
 | Item | Value |
 |------|-------|
 | **API_User_ID** | 550e8400-e29b-41d4-a716-446655440000 |
-| **API_Key** | 0c83153ce97f40c68622c16a2d69d69e |
+| **API_Key** | YOUR_API_SECRET_HERE |
 | **Subscription Key** | bc94878b6776497da38d09c302c4380c |
 | **Base64 Encoded** | UzUwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwOjBjODMxNTNjZTk3ZjQwYzY4NjIyYzE2YTJkNjlkNjll |
 | **Auth Header** | Basic UzUwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwOjBjODMxNTNjZTk3ZjQwYzY4NjIyYzE2YTJkNjlkNjll |

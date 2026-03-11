@@ -1,13 +1,13 @@
 /**
- * 🏦 MOMO Collections Service
+ * ðŸ¦ MOMO Collections Service
  * Handles fee collections and charges on mobile services
  * 
  * Collections:
- * Primary Key: 8b59afc46b7a43b0a32856e709af1de3
- * Secondary Key: 7bd511260f764defa2bde723ad81939b
+ * Primary Key: YOUR_SUBSCRIPTION_KEY_HERE
+ * Secondary Key: YOUR_SECONDARY_KEY_HERE
  * 
  * Disbursements:
- * Primary Key: 084b11d7b90a49349977be0c744fa450
+ * Primary Key: YOUR_DISBURSEMENT_KEY_HERE
  * Secondary Key: 847aa902f16748a2bd6a84070c8b9f80
  * 
  * Purpose: Collect fees and charges on mobile services
@@ -16,12 +16,12 @@
 class MOmoCollectionsService {
   constructor() {
     // Collections API Configuration
-    this.primaryKey = '8b59afc46b7a43b0a32856e709af1de3';
-    this.secondaryKey = '7bd511260f764defa2bde723ad81939b';
+    this.primaryKey = 'YOUR_SUBSCRIPTION_KEY_HERE';
+    this.secondaryKey = 'YOUR_SECONDARY_KEY_HERE';
     this.currentKey = this.primaryKey;
     
     // Disbursements API Configuration
-    this.disbursementPrimaryKey = '084b11d7b90a49349977be0c744fa450';
+    this.disbursementPrimaryKey = 'YOUR_DISBURSEMENT_KEY_HERE';
     this.disbursementSecondaryKey = '847aa902f16748a2bd6a84070c8b9f80';
     this.disbursementCurrentKey = this.disbursementPrimaryKey;
     
@@ -30,8 +30,8 @@ class MOmoCollectionsService {
     // Mock mode for development
     this.useMockMode = import.meta.env.VITE_MOMO_USE_MOCK === 'true';
     
-    const mode = this.useMockMode ? '🧪 MOCK' : '🟢 LIVE';
-    console.log(`✅ MOMO Collections Service Initialized (${mode})`);
+    const mode = this.useMockMode ? 'ðŸ§ª MOCK' : 'ðŸŸ¢ LIVE';
+    console.log(`âœ… MOMO Collections Service Initialized (${mode})`);
     console.log(`   Collections - Primary Key: ${this.primaryKey.substring(0, 8)}...`);
     console.log(`   Collections - Secondary Key: ${this.secondaryKey.substring(0, 8)}...`);
     console.log(`   Disbursements - Primary Key: ${this.disbursementPrimaryKey.substring(0, 8)}...`);
@@ -51,7 +51,7 @@ class MOmoCollectionsService {
   rotateToSecondaryKey() {
     if (this.currentKey === this.primaryKey) {
       this.currentKey = this.secondaryKey;
-      console.log('🔄 Rotating to Secondary Collections Key: ' + this.secondaryKey);
+      console.log('ðŸ”„ Rotating to Secondary Collections Key: ' + this.secondaryKey);
       return true;
     }
     return false;
@@ -91,7 +91,7 @@ class MOmoCollectionsService {
     try {
       const url = `${this.apiUrl}${endpoint}`;
       
-      console.log(`📡 Collections API Request [${this.getCurrentKey()}]:`);
+      console.log(`ðŸ“¡ Collections API Request [${this.getCurrentKey()}]:`);
       console.log(`   URL: ${url}`);
       console.log(`   Method: ${method}`);
       console.log(`   Payload:`, payload);
@@ -110,16 +110,16 @@ class MOmoCollectionsService {
       }
 
       const data = await response.json();
-      console.log('✅ Collections API Response:', data);
+      console.log('âœ… Collections API Response:', data);
       return data;
     } catch (error) {
-      console.error(`❌ Collections API Error [${this.getCurrentKey()}]:`, error.message);
+      console.error(`âŒ Collections API Error [${this.getCurrentKey()}]:`, error.message);
       throw error;
     }
   }
 
   /**
-   * 💰 Collect Fee/Charge
+   * ðŸ’° Collect Fee/Charge
    * @param {Object} params - Collection parameters
    * @param {number} params.amount - Amount to collect
    * @param {string} params.currency - Currency code
@@ -133,7 +133,7 @@ class MOmoCollectionsService {
 
     try {
       const mode = this.useMockMode ? 'MOCK' : 'LIVE';
-      console.log(`💳 Collecting Fee with ${this.getCurrentKey()} Key (${mode} Mode):`, {
+      console.log(`ðŸ’³ Collecting Fee with ${this.getCurrentKey()} Key (${mode} Mode):`, {
         amount,
         currency,
         phoneNumber: this.formatPhoneNumber(phoneNumber),
@@ -142,7 +142,7 @@ class MOmoCollectionsService {
 
       // Mock mode - skip real API call
       if (this.useMockMode) {
-        console.log('🧪 Mock Mode: Simulating successful fee collection');
+        console.log('ðŸ§ª Mock Mode: Simulating successful fee collection');
         await new Promise(resolve => setTimeout(resolve, 800));
 
         this.resetToPrimaryKey();
@@ -156,7 +156,7 @@ class MOmoCollectionsService {
           timestamp: new Date().toISOString(),
           activeKey: 'PRIMARY (Mock)',
           mode: 'MOCK',
-          message: `✅ [MOCK MODE] Successfully collected ${amount} ${currency} fee (${feeType})`
+          message: `âœ… [MOCK MODE] Successfully collected ${amount} ${currency} fee (${feeType})`
         };
       }
 
@@ -193,7 +193,7 @@ class MOmoCollectionsService {
       } catch (error) {
         // Attempt failover to secondary key
         if (this.rotateToSecondaryKey()) {
-          console.log('⚠️ Primary key failed, retrying with Secondary Key...');
+          console.log('âš ï¸ Primary key failed, retrying with Secondary Key...');
           payload.apiKey = this.currentKey;
 
           try {
@@ -219,7 +219,7 @@ class MOmoCollectionsService {
         throw error;
       }
     } catch (error) {
-      console.error('❌ Fee Collection failed:', error);
+      console.error('âŒ Fee Collection failed:', error);
       this.resetToPrimaryKey();
       return {
         success: false,
@@ -230,23 +230,23 @@ class MOmoCollectionsService {
         message: error.message.includes('Both PRIMARY and SECONDARY')
           ? 'Both collection keys failed. Please check your internet connection or contact support.'
           : error.message.includes('ERR_NAME_NOT_RESOLVED')
-          ? '⚠️ Cannot connect to Collections API. Set VITE_MOMO_USE_MOCK=true in .env to use mock mode for development.'
+          ? 'âš ï¸ Cannot connect to Collections API. Set VITE_MOMO_USE_MOCK=true in .env to use mock mode for development.'
           : 'Failed to process fee collection. Please try again.'
       };
     }
   }
 
   /**
-   * 📊 Get Collection Status
+   * ðŸ“Š Get Collection Status
    * @param {string} transactionId - Transaction ID to check
    * @returns {Promise<Object>} - Status information
    */
   async getCollectionStatus(transactionId) {
     try {
-      console.log(`🔍 Checking collection status for: ${transactionId}`);
+      console.log(`ðŸ” Checking collection status for: ${transactionId}`);
 
       if (this.useMockMode) {
-        console.log('🧪 Mock Mode: Returning simulated status');
+        console.log('ðŸ§ª Mock Mode: Returning simulated status');
         return {
           transactionId: transactionId,
           status: 'COMPLETED',
@@ -257,7 +257,7 @@ class MOmoCollectionsService {
       const response = await this.makeRequest(`/collections/${transactionId}`, 'GET');
       return response;
     } catch (error) {
-      console.error('❌ Failed to get collection status:', error);
+      console.error('âŒ Failed to get collection status:', error);
       return {
         success: false,
         error: error.message
@@ -266,7 +266,7 @@ class MOmoCollectionsService {
   }
 
   /**
-   * 🔄 Reverse Collection (Refund)
+   * ðŸ”„ Reverse Collection (Refund)
    * @param {string} originalTransactionId - Original transaction ID to reverse
    * @param {string} reason - Reason for reversal
    * @returns {Promise<Object>} - Reversal result
@@ -274,13 +274,13 @@ class MOmoCollectionsService {
   async reverseCollection(originalTransactionId, reason = 'Customer request') {
     try {
       const mode = this.useMockMode ? 'MOCK' : 'LIVE';
-      console.log(`⏮️ Reversing collection with ${this.getCurrentKey()} Key (${mode} Mode):`, {
+      console.log(`â®ï¸ Reversing collection with ${this.getCurrentKey()} Key (${mode} Mode):`, {
         originalTransactionId,
         reason
       });
 
       if (this.useMockMode) {
-        console.log('🧪 Mock Mode: Simulating successful reversal');
+        console.log('ðŸ§ª Mock Mode: Simulating successful reversal');
         await new Promise(resolve => setTimeout(resolve, 800));
 
         this.resetToPrimaryKey();
@@ -291,7 +291,7 @@ class MOmoCollectionsService {
           status: 'REVERSED',
           timestamp: new Date().toISOString(),
           mode: 'MOCK',
-          message: `✅ [MOCK MODE] Successfully reversed collection`
+          message: `âœ… [MOCK MODE] Successfully reversed collection`
         };
       }
 
@@ -314,7 +314,7 @@ class MOmoCollectionsService {
         message: 'Collection successfully reversed'
       };
     } catch (error) {
-      console.error('❌ Reversal failed:', error);
+      console.error('âŒ Reversal failed:', error);
       this.resetToPrimaryKey();
       return {
         success: false,

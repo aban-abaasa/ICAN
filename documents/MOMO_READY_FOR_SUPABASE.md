@@ -1,22 +1,22 @@
-# ✅ MTN MOMO Setup - READY FOR EXECUTION
+# âœ… MTN MOMO Setup - READY FOR EXECUTION
 
-## Updated Credentials 🔑
+## Updated Credentials ðŸ”‘
 
 ```
 Primary Subscription Key: 7307f0bb655542248f520187b63b12d5
-Secondary API Key:        0c83153ce97f40c68622c16a2d69d69e
+Secondary API Key:        YOUR_API_SECRET_HERE
 API User ID (UUID):       550e8400-e29b-41d4-a716-446655440000
 Environment:              sandbox
 Base URL:                 https://sandbox.momodeveloper.mtn.com
 ```
 
-## ✅ What's Been Done
+## âœ… What's Been Done
 
-1. ✅ SQL file updated with new credentials
-2. ✅ .env file updated with new credentials
-3. ✅ All configuration tables ready
+1. âœ… SQL file updated with new credentials
+2. âœ… .env file updated with new credentials
+3. âœ… All configuration tables ready
 
-## 🚀 NEXT STEP: Run SQL Migration
+## ðŸš€ NEXT STEP: Run SQL Migration
 
 ### In Supabase Dashboard:
 
@@ -28,11 +28,11 @@ Base URL:                 https://sandbox.momodeveloper.mtn.com
 6. Paste into Supabase
 7. Click **Execute**
 
-## ✅ Expected Result
+## âœ… Expected Result
 
 After running the SQL, you should see:
 ```
-✅ Success - No errors
+âœ… Success - No errors
 ```
 
 Then verify by running this query:
@@ -45,9 +45,9 @@ WHERE is_primary = true;
 You should see **ONE ROW** with:
 - subscription_key: `7307f0bb655542248f520187b63b12d5`
 - api_user_id: `550e8400-e29b-41d4-a716-446655440000`
-- api_secret_key: `0c83153ce97f40c68622c16a2d69d69e`
+- api_secret_key: `YOUR_API_SECRET_HERE`
 
-## 🧪 Test the Integration
+## ðŸ§ª Test the Integration
 
 Once SQL is done, restart your backend:
 ```bash
@@ -68,6 +68,6 @@ curl -X POST http://localhost:3000/api/momo/request-payment \
 
 ---
 
-**Status**: ✅ Ready for Supabase migration  
+**Status**: âœ… Ready for Supabase migration  
 **Next**: Run SQL in Supabase  
 **Time**: ~2 minutes

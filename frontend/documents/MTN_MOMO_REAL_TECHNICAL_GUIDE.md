@@ -10,8 +10,8 @@
 | Credential | Value |
 |-----------|-------|
 | **API User ID** | `550e8400-e29b-41d4-a716-446655440000` |
-| **API Key** | `0c83153ce97f40c68622c16a2d69d69e` |
-| **Subscription Key** | `8b59afc46b7a43b0a32856e709af1de3` |
+| **API Key** | `YOUR_API_SECRET_HERE` |
+| **Subscription Key** | `YOUR_SUBSCRIPTION_KEY_HERE` |
 | **Environment** | `sandbox` |
 | **Base URL** | `https://sandbox.momodeveloper.mtn.com` |
 
@@ -26,12 +26,12 @@
 **What You Send:**
 ```
 Headers:
-  Ocp-Apim-Subscription-Key: 8b59afc46b7a43b0a32856e709af1de3
+  Ocp-Apim-Subscription-Key: YOUR_SUBSCRIPTION_KEY_HERE
   X-Reference-Id: [random UUID]
 
 Auth (HTTP Basic):
   username: 550e8400-e29b-41d4-a716-446655440000
-  password: 0c83153ce97f40c68622c16a2d69d69e
+  password: YOUR_API_SECRET_HERE
 ```
 
 **How Axios Handles It:**
@@ -71,7 +71,7 @@ auth: {
 ```
 Headers:
   Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...
-  Ocp-Apim-Subscription-Key: 8b59afc46b7a43b0a32856e709af1de3
+  Ocp-Apim-Subscription-Key: YOUR_SUBSCRIPTION_KEY_HERE
   X-Reference-Id: [different random UUID for each request]
 
 Body (JSON):
@@ -112,7 +112,7 @@ Body (JSON):
 ```
 Headers:
   Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...
-  Ocp-Apim-Subscription-Key: 8b59afc46b7a43b0a32856e709af1de3
+  Ocp-Apim-Subscription-Key: YOUR_SUBSCRIPTION_KEY_HERE
   X-Reference-Id: [another unique UUID]
 ```
 
@@ -130,8 +130,8 @@ Headers:
 
 **Possible Status Values:**
 - `PENDING` - Transaction still being processed
-- `SUCCESSFUL` - Money received ✅
-- `FAILED` - Transaction failed ❌
+- `SUCCESSFUL` - Money received âœ…
+- `FAILED` - Transaction failed âŒ
 - `EXPIRED` - Request expired before customer responded
 
 ---
@@ -139,45 +139,45 @@ Headers:
 ## The Complete Real Workflow
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    YOUR APPLICATION                             │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-    ┌──────────────────────────────────────────────────────┐
-    │ STEP 1: Authenticate                                 │
-    │ POST https://sandbox.momodeveloper.mtn.com/collection/token/
-    │                                                       │
-    │ Send: API User + API Key                             │
-    │ Get: Bearer Token (valid 3600 seconds)               │
-    └──────────────────────────────────────────────────────┘
-                              │
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                    YOUR APPLICATION                             â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                              â”‚
+                              â–¼
+    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+    â”‚ STEP 1: Authenticate                                 â”‚
+    â”‚ POST https://sandbox.momodeveloper.mtn.com/collection/token/
+    â”‚                                                       â”‚
+    â”‚ Send: API User + API Key                             â”‚
+    â”‚ Get: Bearer Token (valid 3600 seconds)               â”‚
+    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                              â”‚
                     Save token in cache
-                              │
-                              ▼
-    ┌──────────────────────────────────────────────────────┐
-    │ STEP 2: Request Money                                │
-    │ POST /collection/v1_0/requesttopay                   │
-    │                                                       │
-    │ Send: Bearer Token + Phone + Amount                  │
-    │ Get: Reference ID + Status (PENDING)                 │
-    └──────────────────────────────────────────────────────┘
-                              │
+                              â”‚
+                              â–¼
+    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+    â”‚ STEP 2: Request Money                                â”‚
+    â”‚ POST /collection/v1_0/requesttopay                   â”‚
+    â”‚                                                       â”‚
+    â”‚ Send: Bearer Token + Phone + Amount                  â”‚
+    â”‚ Get: Reference ID + Status (PENDING)                 â”‚
+    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                              â”‚
                     Save reference ID
-                              │
-                              ▼
-    ┌──────────────────────────────────────────────────────┐
-    │ STEP 3: Wait & Check Status                          │
-    │ GET /collection/v1_0/requesttopay/{referenceId}      │
-    │                                                       │
-    │ Send: Bearer Token + Reference ID                    │
-    │ Get: Final Status (SUCCESSFUL/FAILED/PENDING)        │
-    └──────────────────────────────────────────────────────┘
-                              │
+                              â”‚
+                              â–¼
+    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+    â”‚ STEP 3: Wait & Check Status                          â”‚
+    â”‚ GET /collection/v1_0/requesttopay/{referenceId}      â”‚
+    â”‚                                                       â”‚
+    â”‚ Send: Bearer Token + Reference ID                    â”‚
+    â”‚ Get: Final Status (SUCCESSFUL/FAILED/PENDING)        â”‚
+    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                              â”‚
                     Update database with result
-                              │
-                              ▼
-                        ✅ DONE or ❌ FAILED
+                              â”‚
+                              â–¼
+                        âœ… DONE or âŒ FAILED
 ```
 
 ---
@@ -189,8 +189,8 @@ const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
 
 const API_USER = '550e8400-e29b-41d4-a716-446655440000';
-const API_KEY = '0c83153ce97f40c68622c16a2d69d69e';
-const SUBSCRIPTION_KEY = '8b59afc46b7a43b0a32856e709af1de3';
+const API_KEY = 'YOUR_API_SECRET_HERE';
+const SUBSCRIPTION_KEY = 'YOUR_SUBSCRIPTION_KEY_HERE';
 const BASE_URL = 'https://sandbox.momodeveloper.mtn.com';
 
 // STEP 1: Get Bearer Token
@@ -261,20 +261,20 @@ async function main() {
   try {
     // Get token
     const token = await getToken();
-    console.log('✅ Got Bearer Token');
+    console.log('âœ… Got Bearer Token');
 
     // Request money
     const result = await requestMoney(token, '256701234567', 50000);
-    console.log('✅ Money Requested:', result);
+    console.log('âœ… Money Requested:', result);
 
     // Wait 2 seconds
     await new Promise(r => setTimeout(r, 2000));
 
     // Check status
     const status = await checkStatus(token, result.referenceId);
-    console.log('✅ Status:', status);
+    console.log('âœ… Status:', status);
   } catch (error) {
-    console.error('❌ Error:', error.message);
+    console.error('âŒ Error:', error.message);
   }
 }
 
@@ -348,4 +348,4 @@ node backend/services/realMTNMomoAuth.js
 ---
 
 **Last Updated:** January 20, 2026  
-**Status:** ✅ Real Implementation (No Foolishness)
+**Status:** âœ… Real Implementation (No Foolishness)

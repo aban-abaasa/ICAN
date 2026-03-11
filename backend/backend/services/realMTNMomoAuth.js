@@ -16,11 +16,11 @@ const axios = require('axios');
  * You have THREE pieces of information:
  * 
  * 1. API_User (from database):        550e8400-e29b-41d4-a716-446655440000
- * 2. API_Key (from database):         0c83153ce97f40c68622c16a2d69d69e
- * 3. Subscription_Key (primary key):  8b59afc46b7a43b0a32856e709af1de3
+ * 2. API_Key (from database):         YOUR_API_SECRET_HERE
+ * 3. Subscription_Key (primary key):  YOUR_SUBSCRIPTION_KEY_HERE
  * 
  * WHAT EACH IS FOR:
- * ─────────────────────────────────────────────────────────
+ * â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  * API_User + API_Key:     Used to AUTHENTICATE and get a Bearer Token
  *                         (sent via axios auth field, not manually encoded)
  * 
@@ -39,50 +39,50 @@ const axios = require('axios');
  * ============================================================
  * 
  * FLOW DIAGRAM:
- * ═════════════════════════════════════════════════════════
+ * â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
  * 
  *  YOUR APP                                    MTN MOMO API
- *  ────────                                    ─────────────
+ *  â”€â”€â”€â”€â”€â”€â”€â”€                                    â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  * 
  *  [1] POST /token/
  *      Headers:
- *      - Ocp-Apim-Subscription-Key: 8b59afc46b7a43b0a32856e709af1de3
+ *      - Ocp-Apim-Subscription-Key: YOUR_SUBSCRIPTION_KEY_HERE
  *      - X-Reference-Id: [UUID]
  *      Auth: (API_User, API_Key)
- *                          ──────────────────────>
+ *                          â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€>
  *                          
  *                          [MTN validates your credentials]
  *                          [Returns Bearer Token]
  *                          
  *      access_token: eyJ0eXAiOiJKV1QiLCJhbGc...
  *      expires_in: 3600
- *                          <──────────────────────
+ *                          <â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  *
  *  [2] POST /collection/v1_0/requesttopay
  *      Headers:
  *      - Authorization: Bearer [token from step 1]
- *      - Ocp-Apim-Subscription-Key: 8b59afc46b7a43b0a32856e709af1de3
+ *      - Ocp-Apim-Subscription-Key: YOUR_SUBSCRIPTION_KEY_HERE
  *      - X-Reference-Id: [DIFFERENT UUID]
  *      Body: { amount, payer, ... }
- *                          ──────────────────────>
+ *                          â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€>
  *                          
  *                          [MTN processes the request]
  *                          [Returns result]
  *                          
  *      Status: 202 Accepted
- *                          <──────────────────────
+ *                          <â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  *
  *  [3] GET /collection/v1_0/requesttopay/[reference-id]
  *      Headers:
  *      - Authorization: Bearer [same token]
- *      - Ocp-Apim-Subscription-Key: 8b59afc46b7a43b0a32856e709af1de3
+ *      - Ocp-Apim-Subscription-Key: YOUR_SUBSCRIPTION_KEY_HERE
  *      - X-Reference-Id: [ANOTHER UUID]
- *                          ──────────────────────>
+ *                          â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€>
  *                          
  *                          [MTN returns transaction status]
  *                          
  *      Status: SUCCESSFUL / FAILED / PENDING
- *                          <──────────────────────
+ *                          <â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  */
 
 /**
@@ -95,8 +95,8 @@ class RealMTNMomoAuth {
   constructor() {
     // These are REAL credentials from your database
     this.apiUser = process.env.MOMO_API_USER_DB;      // 550e8400-e29b-41d4-a716-446655440000
-    this.apiKey = process.env.MOMO_API_KEY_DB;        // 0c83153ce97f40c68622c16a2d69d69e
-    this.subscriptionKey = process.env.MOMO_SUBSCRIPTION_KEY;  // 8b59afc46b7a43b0a32856e709af1de3
+    this.apiKey = process.env.MOMO_API_KEY_DB;        // YOUR_API_SECRET_HERE
+    this.subscriptionKey = process.env.MOMO_SUBSCRIPTION_KEY;  // YOUR_SUBSCRIPTION_KEY_HERE
     
     this.baseUrl = 'https://sandbox.momodeveloper.mtn.com';
     this.tokenCache = {};
@@ -112,23 +112,23 @@ class RealMTNMomoAuth {
    */
   async getBearerToken(productType = 'collection') {
     try {
-      console.log(`\n🔐 STEP 1: Getting Bearer Token for ${productType}...`);
+      console.log(`\nðŸ” STEP 1: Getting Bearer Token for ${productType}...`);
       
       // Check if we have cached token that's still valid
       if (this.tokenCache[productType]) {
         const { token, expiresAt } = this.tokenCache[productType];
         if (new Date() < expiresAt) {
-          console.log(`✅ Using cached token (valid until ${expiresAt.toLocaleTimeString()})`);
+          console.log(`âœ… Using cached token (valid until ${expiresAt.toLocaleTimeString()})`);
           return token;
         }
       }
 
-      console.log(`📍 Endpoint: ${this.baseUrl}/${productType}/token/`);
-      console.log(`📍 Method: POST`);
-      console.log(`📍 Headers:`);
+      console.log(`ðŸ“ Endpoint: ${this.baseUrl}/${productType}/token/`);
+      console.log(`ðŸ“ Method: POST`);
+      console.log(`ðŸ“ Headers:`);
       console.log(`   - Ocp-Apim-Subscription-Key: ${this.subscriptionKey}`);
       console.log(`   - X-Reference-Id: [UUID]`);
-      console.log(`📍 Auth: (username: ${this.apiUser}, password: [hidden])`);
+      console.log(`ðŸ“ Auth: (username: ${this.apiUser}, password: [hidden])`);
 
       const { v4: uuidv4 } = require('uuid');
 
@@ -155,7 +155,7 @@ class RealMTNMomoAuth {
 
       const { access_token, expires_in, token_type } = response.data;
 
-      console.log(`\n✅ SUCCESS - Bearer Token Received!`);
+      console.log(`\nâœ… SUCCESS - Bearer Token Received!`);
       console.log(`   Token Type: ${token_type}`);
       console.log(`   Expires In: ${expires_in} seconds (${Math.round(expires_in / 60)} minutes)`);
       console.log(`   Token (first 50 chars): ${access_token.substring(0, 50)}...`);
@@ -170,7 +170,7 @@ class RealMTNMomoAuth {
 
       return access_token;
     } catch (error) {
-      console.error(`\n❌ FAILED to get Bearer Token`);
+      console.error(`\nâŒ FAILED to get Bearer Token`);
       console.error(`   Status: ${error.response?.status}`);
       console.error(`   Error: ${error.response?.data?.error || error.message}`);
       console.error(`   Details: ${JSON.stringify(error.response?.data, null, 2)}`);
@@ -185,7 +185,7 @@ class RealMTNMomoAuth {
    */
   async requestMoney(phoneNumber, amount) {
     try {
-      console.log(`\n💰 STEP 2: Requesting Money...`);
+      console.log(`\nðŸ’° STEP 2: Requesting Money...`);
       
       // Get valid token (from cache or new)
       const token = await this.getBearerToken('collection');
@@ -205,13 +205,13 @@ class RealMTNMomoAuth {
         payeeNote: 'Payment received'
       };
 
-      console.log(`\n📍 Endpoint: ${this.baseUrl}/collection/v1_0/requesttopay`);
-      console.log(`📍 Method: POST`);
-      console.log(`📍 Headers:`);
+      console.log(`\nðŸ“ Endpoint: ${this.baseUrl}/collection/v1_0/requesttopay`);
+      console.log(`ðŸ“ Method: POST`);
+      console.log(`ðŸ“ Headers:`);
       console.log(`   - Authorization: Bearer ${token.substring(0, 30)}...`);
       console.log(`   - Ocp-Apim-Subscription-Key: ${this.subscriptionKey}`);
       console.log(`   - X-Reference-Id: ${transactionId}`);
-      console.log(`📍 Body:`, JSON.stringify(payload, null, 2));
+      console.log(`ðŸ“ Body:`, JSON.stringify(payload, null, 2));
 
       const response = await axios.post(
         `${this.baseUrl}/collection/v1_0/requesttopay`,
@@ -227,7 +227,7 @@ class RealMTNMomoAuth {
         }
       );
 
-      console.log(`\n✅ SUCCESS - Request Sent!`);
+      console.log(`\nâœ… SUCCESS - Request Sent!`);
       console.log(`   Status: ${response.status} (${response.statusText})`);
       console.log(`   Response:`, JSON.stringify(response.data, null, 2));
 
@@ -239,7 +239,7 @@ class RealMTNMomoAuth {
         message: response.data
       };
     } catch (error) {
-      console.error(`\n❌ FAILED to request money`);
+      console.error(`\nâŒ FAILED to request money`);
       console.error(`   Status: ${error.response?.status}`);
       console.error(`   Error: ${error.response?.data?.error || error.message}`);
       console.error(`   Details: ${JSON.stringify(error.response?.data, null, 2)}`);
@@ -254,14 +254,14 @@ class RealMTNMomoAuth {
    */
   async checkStatus(referenceId) {
     try {
-      console.log(`\n📊 STEP 3: Checking Transaction Status...`);
+      console.log(`\nðŸ“Š STEP 3: Checking Transaction Status...`);
       
       const token = await this.getBearerToken('collection');
       const { v4: uuidv4 } = require('uuid');
 
-      console.log(`\n📍 Endpoint: ${this.baseUrl}/collection/v1_0/requesttopay/${referenceId}`);
-      console.log(`📍 Method: GET`);
-      console.log(`📍 Headers:`);
+      console.log(`\nðŸ“ Endpoint: ${this.baseUrl}/collection/v1_0/requesttopay/${referenceId}`);
+      console.log(`ðŸ“ Method: GET`);
+      console.log(`ðŸ“ Headers:`);
       console.log(`   - Authorization: Bearer ${token.substring(0, 30)}...`);
       console.log(`   - Ocp-Apim-Subscription-Key: ${this.subscriptionKey}`);
       console.log(`   - X-Reference-Id: ${uuidv4()}`);
@@ -279,13 +279,13 @@ class RealMTNMomoAuth {
         }
       );
 
-      console.log(`\n✅ SUCCESS - Status Retrieved!`);
+      console.log(`\nâœ… SUCCESS - Status Retrieved!`);
       console.log(`   Status: ${response.status} (${response.statusText})`);
       console.log(`   Response:`, JSON.stringify(response.data, null, 2));
 
       return response.data;
     } catch (error) {
-      console.error(`\n❌ FAILED to check status`);
+      console.error(`\nâŒ FAILED to check status`);
       console.error(`   Status: ${error.response?.status}`);
       console.error(`   Error: ${error.response?.data?.error || error.message}`);
       console.error(`   Details: ${JSON.stringify(error.response?.data, null, 2)}`);
@@ -304,28 +304,28 @@ async function runRealTest() {
   try {
     const auth = new RealMTNMomoAuth();
 
-    console.log('╔════════════════════════════════════════════════════════════╗');
-    console.log('║        REAL MTN MOMO API AUTHENTICATION & WORKFLOW         ║');
-    console.log('╚════════════════════════════════════════════════════════════╝');
+    console.log('â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—');
+    console.log('â•‘        REAL MTN MOMO API AUTHENTICATION & WORKFLOW         â•‘');
+    console.log('â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
 
-    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('\nâ”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”');
     console.log('CREDENTIALS:');
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”');
     console.log(`API User:        ${auth.apiUser}`);
     console.log(`API Key:         ${auth.apiKey}`);
     console.log(`Subscription:    ${auth.subscriptionKey}`);
     console.log(`Base URL:        ${auth.baseUrl}`);
 
     // Step 1: Get token
-    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('\nâ”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”');
     const token = await auth.getBearerToken('collection');
 
     // Step 2: Request money
-    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('\nâ”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”');
     const result = await auth.requestMoney('256701234567', 50000);
 
     // Step 3: Check status
-    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('\nâ”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”');
     console.log('Waiting 2 seconds before checking status...');
     await new Promise(r => setTimeout(r, 2000));
     
@@ -333,11 +333,11 @@ async function runRealTest() {
       await auth.checkStatus(result.referenceId);
     }
 
-    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('✅ WORKFLOW COMPLETE');
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('\nâ”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”');
+    console.log('âœ… WORKFLOW COMPLETE');
+    console.log('â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”');
   } catch (error) {
-    console.error('\n❌ WORKFLOW FAILED');
+    console.error('\nâŒ WORKFLOW FAILED');
     console.error(error.message);
   }
 }
