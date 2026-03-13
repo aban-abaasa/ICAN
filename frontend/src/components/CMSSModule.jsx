@@ -219,6 +219,94 @@ const CMMSModule = ({
     return resolvedRole;
   };
 
+  const getCmmsMembershipStorageKey = (userEmail) => {
+    const normalizedEmail = String(userEmail || '').trim().toLowerCase();
+    return normalizedEmail ? `cmms_active_company::${normalizedEmail}` : 'cmms_company_id';
+  };
+
+  const getStoredActiveCompanyId = (userEmail) => {
+    const scopedCompanyId = localStorage.getItem(getCmmsMembershipStorageKey(userEmail));
+    return scopedCompanyId || localStorage.getItem('cmms_company_id');
+  };
+
+  const persistActiveCompanyId = (userEmail, companyId) => {
+    if (!companyId) return;
+    localStorage.setItem('cmms_company_id', companyId);
+
+    const storageKey = getCmmsMembershipStorageKey(userEmail);
+    if (storageKey) {
+      localStorage.setItem(storageKey, companyId);
+    }
+  };
+
+  const chooseActiveMembership = (memberships, userEmail, preferredCompanyId = null) => {
+    if (!Array.isArray(memberships) || memberships.length === 0) {
+      return null;
+    }
+
+    const storedCompanyId = preferredCompanyId || getStoredActiveCompanyId(userEmail);
+    if (storedCompanyId) {
+      const storedMembership = memberships.find((membership) => membership.cmms_company_id === storedCompanyId);
+      if (storedMembership) {
+        return storedMembership;
+      }
+    }
+
+    const adminMembership = memberships.find((membership) => (
+      membership.is_creator || resolveUserRole(membership.effective_role, membership.role_labels) === 'admin'
+    ));
+
+    return adminMembership || memberships[0];
+  };
+
+  const resetCompanyScopedData = () => {
+    setCmmsData((prev) => ({
+      ...prev,
+      companyProfile: null,
+      users: [],
+      departments: [],
+      workOrders: [],
+      inventory: [],
+      serviceProviders: [],
+      maintenancePlans: [],
+      requisitions: [],
+      reports: []
+    }));
+  };
+
+  const applyActiveMembership = async (membership, options = {}) => {
+    if (!membership?.cmms_company_id) {
+      return;
+    }
+
+    const resolvedRole = resolveUserRole(membership.effective_role, membership.role_labels);
+    const creatorFlag = Boolean(membership.is_creator);
+    const shouldReload = options.reloadData !== false;
+
+    persistActiveCompanyId(user?.email || membership.email, membership.cmms_company_id);
+    localStorage.setItem('cmms_user_profile', 'true');
+    localStorage.setItem('cmms_user_role', resolvedRole);
+
+    if (creatorFlag && membership.email) {
+      localStorage.setItem('cmms_company_owner_email', membership.email);
+    } else {
+      localStorage.removeItem('cmms_company_owner_email');
+    }
+
+    setUserCompanyId(membership.cmms_company_id);
+    setNotificationCompanyId(membership.cmms_company_id);
+    setUserRole(resolvedRole);
+    setIsCreator(creatorFlag);
+    setHasBusinessProfile(true);
+    setIsAuthorized(true);
+    setAccessDeniedReason('');
+
+    if (shouldReload) {
+      resetCompanyScopedData();
+      await loadCompanyData(membership.cmms_company_id);
+    }
+  };
+
   // ============================================
   // CHECK USER AUTHORIZATION & LOAD COMPANY DATA
   // ============================================
@@ -233,7 +321,7 @@ const CMMSModule = ({
   const checkAuthorizationAndLoadCompanyData = async () => {
     try {
       // Check 1: User must exist (or have cached data)
-      const cachedCompanyId = localStorage.getItem('cmms_company_id');
+      const cachedCompanyId = getStoredActiveCompanyId(user?.email);
       const cachedRole = localStorage.getItem('cmms_user_role');
       
       if (!user && !cachedCompanyId) {
@@ -242,133 +330,58 @@ const CMMSModule = ({
         return;
       }
 
-      // If user is logged in, check if they're in the cmms_users table
+      // If user is logged in, load all company memberships for this email.
       if (user?.email) {
-        console.log('ðŸ” Searching for user in CMMS database:', user.email);
-        
-        // Step 1: Find user in cmms_users table (case-insensitive search)
-        const { data: cmmsUsers, error: userError } = await supabase
-          .from('cmms_users')
-          .select('id, email, cmms_company_id, is_active')
-          .ilike('email', user.email);
+        console.log('ðŸ” Loading CMMS company memberships for:', user.email);
 
-        if (userError) {
-          console.error('Error querying cmms_users:', userError);
+        const { data: membershipRows, error: membershipError } = await supabase
+          .from('cmms_users_with_roles')
+          .select('id, cmms_company_id, email, is_active, created_at, effective_role, role_labels, is_creator')
+          .ilike('email', user.email)
+          .eq('is_active', true)
+          .order('created_at', { ascending: true });
+
+        if (membershipError) {
+          console.error('Error querying cmms_users_with_roles:', membershipError);
         }
 
-        if (cmmsUsers && cmmsUsers.length > 0) {
-          const cmmsUser = cmmsUsers[0];
-          console.log('âœ… User found in CMMS database:', cmmsUser.email);
-          console.log('âœ… User company ID:', cmmsUser.cmms_company_id);
-          
-          // Save company ID to localStorage and state
-          localStorage.setItem('cmms_company_id', cmmsUser.cmms_company_id);
-          setUserCompanyId(cmmsUser.cmms_company_id);
-          setNotificationCompanyId(cmmsUser.cmms_company_id);  // For welcome page notifications
+        if (membershipRows && membershipRows.length > 0) {
+          const companyIds = [...new Set(membershipRows.map((membership) => membership.cmms_company_id).filter(Boolean))];
+          let companyNameMap = new Map();
 
-          // Step 2: Query cmms_users_with_roles view which has built-in creator detection
-          const { data: userWithRole, error: viewError } = await supabase
-            .from('cmms_users_with_roles')
-            .select('effective_role, role_labels, is_creator')
-            .eq('id', cmmsUser.id)
-            .maybeSingle();
+          if (companyIds.length > 0) {
+            const { data: companyProfiles, error: companyProfileError } = await supabase
+              .from('cmms_company_profiles')
+              .select('id, company_name')
+              .in('id', companyIds);
 
-          if (!viewError && userWithRole) {
-            // Use effective_role from the view (already checks if creator in DB)
-            let effectiveRole = resolveUserRole(userWithRole.effective_role, userWithRole.role_labels);
-            let isUserCreator = userWithRole.is_creator || false;
-            
-            // Additional RPC check: Verify admin status using cmms_is_company_admin()
-            try {
-              const { data: isAdminResult, error: adminCheckError } = await supabase.rpc(
-                'cmms_is_company_admin',
-                { p_company_id: cmmsUser.cmms_company_id }
-              );
-              
-              if (!adminCheckError && isAdminResult) {
-                console.log('âœ… RPC verified: User is admin');
-                effectiveRole = 'admin';
-                isUserCreator = true;
-              }
-            } catch (rpcError) {
-              console.log('â„¹ï¸ Admin RPC check skipped (not critical):', rpcError.message);
-            }
-            
-            console.log(`ðŸ“‹ User effective role from view:`, effectiveRole);
-            console.log(`ðŸ‘‘ User is creator:`, isUserCreator);
-            console.log(`âœ… User authorized with effective role: ${effectiveRole}`);
-            
-            localStorage.setItem('cmms_user_role', effectiveRole);
-            localStorage.setItem('cmms_user_is_creator', isUserCreator);
-            setUserRole(effectiveRole);
-            setIsCreator(isUserCreator);
-            setHasBusinessProfile(true);
-            setIsAuthorized(true);
-            setAccessDeniedReason('');
-            console.log('ðŸ”“ hasBusinessProfile set to TRUE - should load dashboard');
-          } else {
-            // Fallback: Check user roles the old way
-            const { data: userRoles } = await supabase
-              .from('cmms_user_roles')
-              .select('cmms_role_id, cmms_roles(role_name)')
-              .eq('cmms_user_id', cmmsUser.id)
-              .eq('is_active', true);
-
-            if (userRoles && userRoles.length > 0) {
-              const roleNames = userRoles
-                .map(ur => ur.cmms_roles?.role_name)
-                .filter(Boolean);
-              
-              const primaryRole = resolveUserRole(roleNames[0], roleNames.join(', '));
-              
-              console.log(`ðŸ“‹ User roles found (fallback):`, roleNames);
-              console.log(`âœ… User authorized with primary role: ${primaryRole}`);
-              
-              localStorage.setItem('cmms_user_role', primaryRole);
-              setUserRole(primaryRole);
-              setHasBusinessProfile(true);
-              setIsAuthorized(true);
-              setAccessDeniedReason('');
-              console.log('ðŸ”“ hasBusinessProfile set to TRUE - should load dashboard');
+            if (companyProfileError) {
+              console.warn('âš ï¸ Failed to load company names for memberships:', companyProfileError.message);
             } else {
-              console.log('âš ï¸ User in CMMS but no active roles assigned');
-              
-              // Try RPC admin check as final verification
-              try {
-                const { data: isAdminResult, error: adminCheckError } = await supabase.rpc(
-                  'cmms_is_company_admin',
-                  { p_company_id: cmmsUser.cmms_company_id }
-                );
-                
-                if (!adminCheckError && isAdminResult) {
-                  console.log('âœ… RPC verified: User is admin despite no roles showing');
-                  localStorage.setItem('cmms_user_role', 'admin');
-                  localStorage.setItem('cmms_user_is_creator', 'true');
-                  setUserRole('admin');
-                  setIsCreator(true);
-                  setHasBusinessProfile(true);
-                  setIsAuthorized(true);
-                  setAccessDeniedReason('');
-                  return;
-                }
-              } catch (rpcError) {
-                console.log('â„¹ï¸ Admin RPC check skipped');
-              }
-              
-              const defaultRole = 'guest';
-              console.log(`ðŸ”‘ Assigning default role: ${defaultRole}`);
-              localStorage.setItem('cmms_user_role', defaultRole);
-              setUserRole(defaultRole);
-              setHasBusinessProfile(true);
-              setIsAuthorized(true);
-              setAccessDeniedReason('');
-              console.log('ðŸ”“ hasBusinessProfile set to TRUE - should load dashboard');
+              companyNameMap = new Map((companyProfiles || []).map((profile) => [profile.id, profile.company_name]));
             }
           }
 
-          // Load company data
-          console.log('ðŸ“‚ Loading company data for company_id:', cmmsUser.cmms_company_id);
-          await loadCompanyData(cmmsUser.cmms_company_id);  // Pass company ID directly
+          const memberships = membershipRows.map((membership) => ({
+            ...membership,
+            company_name: companyNameMap.get(membership.cmms_company_id) || null
+          }));
+
+          setCompanyMemberships(memberships);
+
+          const activeMembership = chooseActiveMembership(memberships, user.email);
+          if (!activeMembership) {
+            throw new Error('Unable to resolve an active CMMS company membership');
+          }
+
+          console.log('âœ… Active CMMS membership resolved:', {
+            companyId: activeMembership.cmms_company_id,
+            companyName: activeMembership.company_name,
+            role: activeMembership.effective_role,
+            memberships: memberships.length
+          });
+
+          await applyActiveMembership(activeMembership);
           return;
         } else if (user?.email) {
           // User not found in cmms_users table - check if they're a company creator
@@ -641,6 +654,8 @@ const CMMSModule = ({
   // ============================================
   const [userCompanyId, setUserCompanyId] = useState(null);  // Track user's company
   const [notificationCompanyId, setNotificationCompanyId] = useState(null);  // For welcome page notifications
+  const [companyMemberships, setCompanyMemberships] = useState([]);
+  const [isSwitchingCompany, setIsSwitchingCompany] = useState(false);
   
   const [cmmsData, setCmmsData] = useState({
     companyProfile: null,
@@ -659,7 +674,31 @@ const CMMSModule = ({
   const [newlyAddedUserId, setNewlyAddedUserId] = useState(null);  // Track newly added user for UI highlight
   
   // Calculate companyId from localStorage and user state
-  const companyIdToUse = localStorage.getItem('cmms_company_id') || userCompanyId;
+  const companyIdToUse = userCompanyId || getStoredActiveCompanyId(user?.email);
+
+  const handleSwitchCompany = async (event) => {
+    const nextCompanyId = event.target.value;
+
+    if (!nextCompanyId || nextCompanyId === userCompanyId) {
+      return;
+    }
+
+    const nextMembership = companyMemberships.find((membership) => membership.cmms_company_id === nextCompanyId);
+    if (!nextMembership) {
+      alert('âŒ Selected company membership was not found for this user.');
+      return;
+    }
+
+    setIsSwitchingCompany(true);
+    try {
+      await applyActiveMembership(nextMembership);
+    } catch (error) {
+      console.error('âŒ Error switching CMMS company:', error);
+      alert(`âŒ Failed to switch company: ${error.message || 'Unknown error'}`);
+    } finally {
+      setIsSwitchingCompany(false);
+    }
+  };
   
   // Profile creation form state - moved to top to avoid hook order issues
   const [profileFormData, setProfileFormData] = useState({
@@ -4572,12 +4611,29 @@ const CMMSModule = ({
         // Step 4: Store auth state in localStorage (Supabase is source of truth for profile data)
         localStorage.setItem('cmms_user_profile', 'true');
         localStorage.setItem('cmms_user_role', 'admin');
-        localStorage.setItem('cmms_company_id', companyData.id);
+        persistActiveCompanyId(ownerEmail || user?.email, companyData.id);
         if (ownerEmail) {
           localStorage.setItem('cmms_company_owner_email', ownerEmail);
           console.log('💾 Stored owner email in localStorage:', ownerEmail);
         }
         localStorage.setItem('cmms_company_owner_id', adminUserData.id);
+
+        setCompanyMemberships((prev) => {
+          const nextMembership = {
+            id: adminUserData.id,
+            cmms_company_id: companyData.id,
+            email: ownerEmail || profileFormData.email,
+            effective_role: 'admin',
+            role_labels: 'admin',
+            is_creator: true,
+            company_name: companyData.company_name || companyData.companyName || profileFormData.companyName,
+            is_active: true,
+            created_at: adminUserData.created_at || new Date().toISOString()
+          };
+
+          const existingMemberships = prev.filter((membership) => membership.cmms_company_id !== companyData.id);
+          return [...existingMemberships, nextMembership];
+        });
 
         // Step 4: Update component state with Supabase data
         setCmmsData(prev => ({
@@ -4887,11 +4943,36 @@ const CMMSModule = ({
           </button>
           <div className="min-w-0">
             <h2 className="text-xl sm:text-2xl font-bold text-white truncate">CMMS</h2>
-            <p className="text-gray-300 text-xs sm:text-sm mt-1">Management System</p>
+            <p className="text-gray-300 text-xs sm:text-sm mt-1 truncate">
+              {cmmsData.companyProfile?.company_name || 'Management System'}
+            </p>
           </div>
         </div>
         
         <div className="flex items-center gap-2 sm:gap-4 flex-wrap justify-end w-full sm:w-auto">
+          {companyMemberships.length > 1 && (
+            <div className="min-w-[220px]">
+              <label className="block text-[10px] uppercase tracking-wide text-gray-400 mb-1">Active Company</label>
+              <select
+                value={userCompanyId || ''}
+                onChange={handleSwitchCompany}
+                disabled={isSwitchingCompany}
+                className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white text-sm focus:border-blue-400 transition-all disabled:opacity-60"
+              >
+                {companyMemberships.map((membership) => {
+                  const membershipRole = resolveUserRole(membership.effective_role, membership.role_labels);
+                  const companyLabel = membership.company_name || `Company ${membership.cmms_company_id.slice(0, 8)}`;
+
+                  return (
+                    <option key={membership.cmms_company_id} value={membership.cmms_company_id}>
+                      {companyLabel} • {membershipRole}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          )}
+
           {/* Notifications Bell */}
           {userCompanyId && (
             <NotificationsPanel 
@@ -4905,7 +4986,7 @@ const CMMSModule = ({
           )}
           
           <span className="bg-blue-500 bg-opacity-30 text-blue-200 px-3 md:px-4 py-1.5 md:py-2 rounded-full text-xs font-semibold whitespace-nowrap">
-            🔑 {userRole?.toUpperCase()}
+            {isSwitchingCompany ? '⏳ SWITCHING...' : `🔑 ${userRole?.toUpperCase()}`}
           </span>
         </div>
       </div>
