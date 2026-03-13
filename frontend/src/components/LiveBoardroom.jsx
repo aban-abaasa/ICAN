@@ -1872,7 +1872,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
           )}
 
           {/* TOP CONTROLS - Transparent - Responsive for mobile */}
-          <div className="absolute top-0 left-0 right-0 h-16 sm:h-20 bg-gradient-to-b from-black/60 via-black/30 to-transparent flex items-center justify-between px-3 sm:px-6 transition-opacity duration-300 opacity-0 group-hover:opacity-100">
+          <div className="absolute top-0 left-0 right-0 h-16 sm:h-20 bg-gradient-to-b from-black/60 via-black/30 to-transparent flex items-center justify-between px-3 sm:px-6 transition-opacity duration-300 opacity-0 group-hover:opacity-100 z-20">
             <div className="flex items-center gap-2 sm:gap-4">
               <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1 sm:py-2 bg-black/40 backdrop-blur-md rounded-full">
                 <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
@@ -2080,7 +2080,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
       {showChat && (
         <>
           {/* Mobile overlay */}
-          <div className="absolute right-0 top-0 bottom-0 w-full sm:w-96 z-40 sm:z-0 sm:pb-0 pb-20">
+          <div className="absolute right-0 top-0 bottom-0 w-full sm:w-96 z-50 sm:z-0 sm:pb-0 pb-20">
             {/* Backdrop overlay for mobile */}
             <div 
               onClick={() => setShowChat(false)}
@@ -2090,7 +2090,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
             {/* Chat sidebar - slides in from right */}
             <div className="absolute right-0 top-0 sm:bottom-0 bottom-20 w-4/5 sm:w-full bg-black/95 backdrop-blur-lg border-l border-purple-500/20 flex flex-col shadow-2xl z-50 animate-in slide-in-from-right">
               {/* Chat Header */}
-              <div className="flex-shrink-0 p-3 sm:p-4 border-b border-purple-500/20 flex items-center justify-between bg-gradient-to-r from-slate-900 via-purple-900/20 to-black backdrop-blur-md">
+              <div className="flex-shrink-0 p-3 sm:p-4 border-b border-purple-500/20 flex items-center justify-between bg-gradient-to-r from-slate-900 via-purple-900/20 to-black backdrop-blur-md relative z-50">
                 <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
                   <div className="p-1.5 sm:p-2 bg-purple-500/20 rounded-lg flex-shrink-0">
                     <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" />
@@ -2110,7 +2110,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
               </div>
 
               {/* Messages Container - Improved scrolling for mobile */}
-              <div className="flex-1 overflow-y-auto p-2 sm:p-4 space-y-2 sm:space-y-3 bg-gradient-to-b from-black/50 to-black/30 scrollbar-hide">
+              <div className="flex-1 overflow-y-auto p-2 sm:p-4 space-y-2.5 sm:space-y-3 bg-gradient-to-b from-black/50 to-black/30 scrollbar-hide">
                 {chatMessages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-gray-500">
                     <MessageCircle className="w-6 h-6 sm:w-12 sm:h-12 text-gray-600 mb-1 sm:mb-2 opacity-50" />
@@ -2118,23 +2118,33 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
                   </div>
                 ) : (
                   chatMessages.map((msg) => (
-                    <div key={msg.id} className="flex flex-col gap-0.5">
+                    <div key={msg.id} className="group hover:bg-black/30 rounded-lg transition-colors px-1 py-1.5 sm:px-2 sm:py-2">
                       {msg.isSystem ? (
-                        <div className="flex items-center gap-1.5 py-1.5 px-2 sm:px-3 bg-gradient-to-r from-slate-800/40 to-transparent rounded-lg border border-slate-700/30 backdrop-blur-sm">
-                          <div className="w-1 h-1 rounded-full bg-blue-400 flex-shrink-0"></div>
-                          <p className="text-xs text-gray-400 italic flex-1 break-words">{msg.message}</p>
+                        <div className="flex items-center gap-2 sm:gap-2.5 py-2 px-2.5 sm:px-3.5 bg-gradient-to-r from-slate-800/50 via-slate-800/40 to-slate-900/30 rounded-lg border border-slate-700/40 backdrop-blur-sm hover:border-slate-600/60 transition-colors">
+                          <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center flex-shrink-0 shadow-md shadow-blue-500/30">
+                            <span className="text-white text-[8px] sm:text-[10px] font-bold">•</span>
+                          </div>
+                          <p className="text-xs sm:text-sm text-gray-300 flex-1 break-words leading-relaxed">{msg.message}</p>
+                          <span className="text-[10px] sm:text-xs text-gray-500 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
                         </div>
                       ) : (
-                        <div className={`flex gap-1.5 sm:gap-2 ${msg.isThis ? 'flex-row-reverse' : ''}`}>
-                          <div className={`h-5 w-5 sm:h-7 sm:w-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${msg.isThis ? 'bg-blue-600' : 'bg-purple-600'}`}>
+                        <div className={`flex gap-2 sm:gap-2.5 ${msg.isThis ? 'flex-row-reverse' : ''}`}>
+                          <div className={`h-6 w-6 sm:h-8 sm:w-8 rounded-lg flex items-center justify-center text-xs sm:text-sm font-bold flex-shrink-0 shadow-lg transition-transform group-hover:scale-110 ${msg.isThis ? 'bg-gradient-to-br from-blue-600 to-blue-500 text-white' : 'bg-gradient-to-br from-purple-600 to-violet-600 text-white'}`}>
                             {msg.sender.charAt(0).toUpperCase()}
                           </div>
-                          <div className={`flex flex-col gap-0.5 ${msg.isThis ? 'items-end' : 'items-start'} flex-1 min-w-0`}>
-                            <p className="text-xs text-gray-400 px-1.5 sm:px-2">{msg.sender.split('@')[0]}</p>
-                            <div className={`px-2 sm:px-3 py-1 sm:py-2 rounded-2xl max-w-xs text-xs sm:text-sm break-words backdrop-blur-sm ${
+                          <div className={`flex flex-col gap-1 ${msg.isThis ? 'items-end' : 'items-start'} flex-1 min-w-0`}>
+                            <div className={`flex items-center gap-2 px-1 ${msg.isThis ? 'flex-row-reverse' : ''}`}>
+                              <p className="text-xs sm:text-sm font-semibold text-gray-200">{msg.isThis ? 'You' : msg.sender.split('@')[0]}</p>
+                              <span className="text-[10px] sm:text-xs text-gray-500 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                                {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            <div className={`max-w-xs sm:max-w-md px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl text-xs sm:text-sm break-words backdrop-blur-sm shadow-lg transition-all group-hover:shadow-xl ${
                               msg.isThis 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-br-none shadow-lg shadow-blue-500/20' 
-                                : 'bg-slate-800/80 text-gray-100 rounded-bl-none border border-slate-700/50'
+                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-br-lg shadow-blue-500/20 hover:shadow-blue-500/40' 
+                                : 'bg-gradient-to-br from-slate-800 to-slate-750 text-gray-100 rounded-bl-lg border border-slate-700/60 hover:border-slate-600/80 hover:bg-gradient-to-br hover:from-slate-750 hover:to-slate-700'
                             }`}>
                               {msg.message}
                             </div>
@@ -2146,29 +2156,33 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
                 )}
               </div>
 
-              {/* Message Input - Improved for mobile */}
-              <div className="flex-shrink-0 p-2 sm:p-4 border-t border-purple-500/20 bg-gradient-to-r from-black via-slate-900/20 to-black backdrop-blur-md">
-                <div className="flex gap-1.5 sm:gap-2">
-                  <input 
-                    type="text" 
-                    value={newMessage} 
-                    onChange={(e) => setNewMessage(e.target.value)} 
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        sendMessage();
-                      }
-                    }}
-                    placeholder="Message..." 
-                    className="flex-1 bg-slate-800/60 hover:bg-slate-800/80 focus:bg-slate-800 text-white text-xs sm:text-sm px-2.5 sm:px-4 py-1.5 sm:py-2.5 rounded-full border border-slate-700/50 focus:border-purple-500/50 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-all placeholder-gray-500 backdrop-blur-sm" 
-                  />
+              {/* Message Input - Enhanced with icons and better UX */}
+              <div className="flex-shrink-0 p-2.5 sm:p-4 border-t border-purple-500/30 bg-gradient-to-r from-black via-slate-950/40 to-black backdrop-blur-md shadow-2xl shadow-black/50">
+                <div className="flex gap-2 sm:gap-2.5 items-center">
+                  <div className="flex-1 flex items-center bg-slate-800/50 hover:bg-slate-800/70 focus-within:bg-slate-800 rounded-full border border-slate-700/40 focus-within:border-purple-500/60 transition-all duration-200 px-3.5 sm:px-4 py-1.5 sm:py-2.5 shadow-lg shadow-black/30 focus-within:shadow-purple-500/20 group">
+                    <MessageCircle className="w-4 h-4 text-gray-500 group-focus-within:text-purple-400 flex-shrink-0 mr-2 transition-colors" />
+                    <input 
+                      type="text" 
+                      value={newMessage} 
+                      onChange={(e) => setNewMessage(e.target.value)} 
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          sendMessage();
+                        }
+                      }}
+                      placeholder="Type your message..." 
+                      className="flex-1 bg-transparent text-white text-xs sm:text-sm focus:outline-none placeholder-gray-500 font-medium tracking-wide" 
+                    />
+                  </div>
                   <button 
                     onClick={sendMessage} 
                     disabled={!newMessage.trim()}
-                    className="p-1.5 sm:p-2.5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-slate-700 disabled:to-slate-700 text-white rounded-full transition-all transform active:scale-95 disabled:scale-100 shadow-lg shadow-purple-500/20 disabled:shadow-none flex-shrink-0"
-                    title="Send message"
+                    className="relative p-2 sm:p-2.5 bg-gradient-to-br from-purple-600 via-purple-500 to-blue-600 hover:from-purple-700 hover:via-purple-600 hover:to-blue-700 disabled:from-slate-700 disabled:via-slate-600 disabled:to-slate-700 text-white rounded-full transition-all transform hover:scale-110 active:scale-95 disabled:scale-100 disabled:hover:scale-100 shadow-2xl shadow-purple-500/30 disabled:shadow-slate-700/30 flex-shrink-0 group"
+                    title={newMessage.trim() ? 'Send message (Enter)' : 'Type a message first'}
                   >
-                    <Send className="w-4 h-4 sm:w-4 sm:h-4" />
+                    <Send className="w-4 h-4 sm:w-5 sm:h-5 transition-all transform group-hover:-translate-x-0.5 group-hover:translate-y-0" />
+                    {newMessage.trim() && <div className="absolute inset-0 rounded-full border border-white/30 animate-ping opacity-50"></div>}
                   </button>
                 </div>
               </div>
