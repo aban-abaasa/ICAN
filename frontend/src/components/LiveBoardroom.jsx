@@ -3,17 +3,25 @@
  * Features: Live member presence, real-time chat sync, member status tracking
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getSupabaseClient } from '../lib/supabase/client';
 import { getAudioNotificationService } from '../services/audioNotificationService';
 import {
   X, Video, Mic, MicOff, VideoOff, Phone, Users, Share2, Send,
-  MessageCircle, Eye, Wifi, WifiOff, Circle, Volume2, VolumeX
+  MessageCircle, Eye, Wifi, WifiOff, Circle, Volume2, VolumeX, MoreVertical
 } from 'lucide-react';
 
-const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) => {
+const EMPTY_MEMBERS = [];
+
+const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose = () => {} }) => {
   const { user } = useAuth();
+  const userId = user?.id;
+  const userEmail = user?.email;
+  const normalizedMembers = useMemo(
+    () => (Array.isArray(members) ? members : EMPTY_MEMBERS),
+    [members]
+  );
   const [isVideoOn, setIsVideoOn] = useState(false);
   const [isMicOn, setIsMicOn] = useState(true);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
@@ -25,16 +33,18 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
   const [showChat, setShowChat] = useState(true);
   const [hoveredControl, setHoveredControl] = useState(null);
   const [connectedMembers, setConnectedMembers] = useState([]);
-  const [groupMembers, setGroupMembers] = useState(members);
+  const [groupMembers, setGroupMembers] = useState(normalizedMembers);
   const [isOnline, setIsOnline] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [soundVolume, setSoundVolume] = useState(0.7);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [incomingCall, setIncomingCall] = useState(null);
   const [callAccepted, setCallAccepted] = useState(false);
+  const [hasActiveCall, setHasActiveCall] = useState(false);
   const [boardroomMode, setBoardroomMode] = useState(null); // null = picker | 'chat' | 'live'
   const [isCalling, setIsCalling] = useState(false); // host is ringing members
   const [callingTimer, setCallingTimer] = useState(0); // seconds since call started
+  const [remoteStreams, setRemoteStreams] = useState([]); // [{ userId, email, stream }]
 
   const videoRef = useRef(null);
   const meetingTimerRef = useRef(null);
@@ -45,10 +55,18 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
   const previousMembersRef = useRef([]);
   const touchStartX = useRef(0);
   const callChannelRef = useRef(null);
+  const webrtcChannelRef = useRef(null);
   const localStreamRef = useRef(null);
+  const peerConnectionsRef = useRef(new Map());
   const callingTimerRef = useRef(null);
+  const onCloseRef = useRef(onClose);
 
-  const supabase = getSupabaseClient();
+  const supabase = useMemo(() => getSupabaseClient(), []);
+
+  const getRemoteStreamByUserId = useCallback(
+    (userId) => remoteStreams.find((s) => s.userId === userId)?.stream,
+    [remoteStreams]
+  );
 
   // Initialize audio notification service
   useEffect(() => {
@@ -68,6 +86,11 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
       audioServiceRef.current.setVolume(soundVolume);
     }
   }, [soundEnabled, soundVolume]);
+
+  // Keep latest close handler without forcing channel re-subscription on each render.
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   // Monitor member joins/leaves and play sounds
   useEffect(() => {
@@ -100,8 +123,8 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
   // Initialize host status
   useEffect(() => {
     if (user && creatorId === user?.id) setIsHost(true);
-    else if (!creatorId && (!members || members.length === 0)) setIsHost(true);
-  }, [members, user, creatorId]);
+    else if (!creatorId && (!normalizedMembers || normalizedMembers.length === 0)) setIsHost(true);
+  }, [normalizedMembers, user, creatorId]);
 
   // Load group members and set up real-time connections
   useEffect(() => {
@@ -110,9 +133,9 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
 
       try {
         // First, use the members prop if available and has data
-        if (members && Array.isArray(members) && members.length > 0) {
-          console.log('Using members from props:', members);
-          const transformedMembers = members.map(m => ({
+        if (normalizedMembers.length > 0) {
+          console.log('Using members from props:', normalizedMembers);
+          const transformedMembers = normalizedMembers.map(m => ({
             id: m.id || m.user_id,
             user_email: m.email || m.user_email || 'Unknown',
             email: m.email || m.user_email,
@@ -150,25 +173,32 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
         const userIds = memberData.map(m => m.user_id);
         console.log('User IDs to fetch:', userIds);
         
-        const { data: usersData, error: usersError } = await supabase
-          .from('users')
-          .select('id, email')
+        // Prefer public profiles table (RLS-safe) instead of users table.
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('profiles')
+          .select('id, email, full_name')
           .in('id', userIds);
 
-        if (usersError) {
-          console.warn('Error fetching users:', usersError);
-          return;
+        if (profilesError) {
+          console.warn('Error fetching profiles:', profilesError);
         }
 
-        console.log('Fetched users data:', usersData);
-        console.log('Users data length:', usersData?.length);
-        
-        const transformedMembers = (usersData || []).map(u => ({
-          id: u.id,
-          user_email: u.email || 'Unknown',
-          email: u.email,
-          status: 'member'
-        }));
+        console.log('Fetched profiles data:', profilesData);
+        console.log('Profiles data length:', profilesData?.length || 0);
+
+        // Fallback for IDs that are not readable in profiles due to policy/state.
+        const profileById = new Map((profilesData || []).map(p => [p.id, p]));
+        const transformedMembers = userIds.map((id) => {
+          const profile = profileById.get(id);
+          const fallbackLabel = `member-${String(id).slice(0, 6)}`;
+          const resolvedEmail = profile?.email || profile?.full_name || fallbackLabel;
+          return {
+            id,
+            user_email: resolvedEmail,
+            email: resolvedEmail,
+            status: 'member'
+          };
+        });
         
         console.log('Transformed members:', transformedMembers);
         setGroupMembers(transformedMembers);
@@ -178,7 +208,7 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
     };
 
     loadGroupMembers();
-  }, [groupId, supabase, members]);
+  }, [groupId, supabase, normalizedMembers]);
 
   // Load chat history and set up real-time chat
   useEffect(() => {
@@ -251,7 +281,7 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
   // Set up call broadcast channel for incoming/outgoing call notifications
   // This must run immediately and persist for the entire session
   useEffect(() => {
-    if (!supabase || !groupId || !user) return;
+    if (!supabase || !groupId || !user?.id) return;
 
     console.log('🔌 [CALL CHANNEL] Initializing call channel for group:', groupId);
 
@@ -283,6 +313,24 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
         .on('broadcast', { event: 'call-ended' }, ({ payload }) => {
           console.log('📞 [CALL ENDED] Call ended:', payload);
           setIncomingCall(null);
+          setIsCalling(false);
+          setCallAccepted(false);
+          setMeetingStarted(false);
+          setIsVideoOn(false);
+          setMeetingTime(0);
+          setConnectedMembers([]);
+          if (callingTimerRef.current) {
+            clearInterval(callingTimerRef.current);
+            callingTimerRef.current = null;
+          }
+          if (audioServiceRef.current) {
+            audioServiceRef.current.stopAllSounds();
+            audioServiceRef.current.playSound('callEnded');
+          }
+          // Participants should exit boardroom when host ends the call.
+          if (payload?.hostId && payload.hostId !== user?.id) {
+            onCloseRef.current?.();
+          }
         })
         .on('broadcast', { event: 'call-accepted' }, ({ payload }) => {
           console.log('✅ [CALL ACCEPTED] Member accepted the call:', payload);
@@ -313,7 +361,60 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
         callChannelRef.current.unsubscribe();
       }
     };
-  }, [groupId, supabase, user]);
+  }, [groupId, supabase, user?.id]);
+
+  // Recover missed call-start/call-end broadcasts by checking recent system events.
+  useEffect(() => {
+    const probeRecentCallState = async () => {
+      if (!supabase || !groupId || !user?.id || isHost || meetingStarted) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('boarding_room_chat')
+          .select('message, created_at, user_id, user_email, is_system')
+          .eq('group_id', groupId)
+          .eq('is_system', true)
+          .order('created_at', { ascending: false })
+          .limit(30);
+
+        if (error) {
+          console.warn('Call-state probe failed:', error);
+          return;
+        }
+
+        const events = data || [];
+        const startEvent = events.find((e) => /is calling/i.test(e.message || ''));
+        const endEvent = events.find((e) => /call ended|left the meeting/i.test(e.message || ''));
+
+        const startTs = startEvent ? new Date(startEvent.created_at).getTime() : 0;
+        const endTs = endEvent ? new Date(endEvent.created_at).getTime() : 0;
+        const now = Date.now();
+        const callStillFresh = startTs > 0 && now - startTs < 70_000;
+        const active = Boolean(startTs && startTs > endTs && callStillFresh);
+
+        setHasActiveCall(active);
+
+        if (active && !incomingCall) {
+          setIncomingCall({
+            hostId: startEvent?.user_id,
+            hostEmail: startEvent?.user_email,
+            groupId,
+            timestamp: startEvent?.created_at
+          });
+        }
+
+        if (!active && incomingCall) {
+          setIncomingCall(null);
+        }
+      } catch (err) {
+        console.warn('Error probing recent call state:', err);
+      }
+    };
+
+    probeRecentCallState();
+    const interval = setInterval(probeRecentCallState, 10_000);
+    return () => clearInterval(interval);
+  }, [supabase, groupId, user?.id, isHost, meetingStarted, incomingCall]);
 
   // Monitor for incoming calls from host
   useEffect(() => {
@@ -431,20 +532,207 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
     return () => { if (meetingTimerRef.current) clearInterval(meetingTimerRef.current); };
   }, [meetingStarted]);
 
-  // Camera access
-  useEffect(() => {
-    if (meetingStarted && isVideoOn && videoRef.current) {
-      navigator.mediaDevices
-        .getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: isMicOn })
-        .then((stream) => { if (videoRef.current) videoRef.current.srcObject = stream; })
-        .catch((error) => { console.error('Camera error:', error); setIsVideoOn(false); });
+  const ensureLocalStream = useCallback(async () => {
+    if (localStreamRef.current) return localStreamRef.current;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: true
+      });
+      localStreamRef.current = stream;
+      return stream;
+    } catch (error) {
+      console.error('Camera/microphone access error:', error);
+      return null;
     }
-    return () => {
-      if (videoRef.current?.srcObject) {
-        videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
+  }, []);
+
+  const updateLocalTrackState = useCallback(() => {
+    const stream = localStreamRef.current;
+    if (!stream) return;
+    stream.getVideoTracks().forEach((track) => {
+      track.enabled = isVideoOn;
+    });
+    stream.getAudioTracks().forEach((track) => {
+      track.enabled = isMicOn;
+    });
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [isVideoOn, isMicOn]);
+
+  useEffect(() => {
+    if (!meetingStarted) return;
+    ensureLocalStream().then(() => updateLocalTrackState());
+  }, [meetingStarted, ensureLocalStream, updateLocalTrackState]);
+
+  useEffect(() => {
+    updateLocalTrackState();
+  }, [isVideoOn, isMicOn, updateLocalTrackState]);
+
+  const createPeerConnection = useCallback(async (peerUserId, peerEmail = '') => {
+    if (!peerUserId || peerUserId === userId) return null;
+    if (peerConnectionsRef.current.has(peerUserId)) {
+      return peerConnectionsRef.current.get(peerUserId);
+    }
+
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    });
+
+    pc.onicecandidate = async (event) => {
+      if (!event.candidate || !webrtcChannelRef.current) return;
+      try {
+        await webrtcChannelRef.current.send({
+          type: 'broadcast',
+          event: 'webrtc-signal',
+          payload: {
+            signalType: 'ice-candidate',
+            from: userId,
+            fromEmail: userEmail,
+            target: peerUserId,
+            candidate: event.candidate
+          }
+        });
+      } catch (err) {
+        console.warn('Failed to send ICE candidate:', err);
       }
     };
-  }, [meetingStarted, isVideoOn, isMicOn]);
+
+    pc.ontrack = (event) => {
+      const [stream] = event.streams;
+      if (!stream) return;
+      setRemoteStreams((prev) => {
+        const withoutPeer = prev.filter((s) => s.userId !== peerUserId);
+        return [...withoutPeer, { userId: peerUserId, email: peerEmail, stream }];
+      });
+    };
+
+    pc.onconnectionstatechange = () => {
+      if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) {
+        setRemoteStreams((prev) => prev.filter((s) => s.userId !== peerUserId));
+      }
+    };
+
+    const localStream = await ensureLocalStream();
+    if (localStream) {
+      localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+      updateLocalTrackState();
+    }
+
+    peerConnectionsRef.current.set(peerUserId, pc);
+    return pc;
+  }, [ensureLocalStream, updateLocalTrackState, userId, userEmail]);
+
+  const closeAllPeerConnections = useCallback(() => {
+    peerConnectionsRef.current.forEach((pc) => {
+      try { pc.close(); } catch (_) {}
+    });
+    peerConnectionsRef.current.clear();
+    setRemoteStreams([]);
+  }, []);
+
+  // WebRTC signaling channel
+  useEffect(() => {
+    if (!supabase || !groupId || !userId || !meetingStarted) return;
+
+    const signalingChannel = supabase.channel(`boardroom-webrtc:${groupId}`, {
+      config: { broadcast: { self: true } }
+    });
+
+    signalingChannel
+      .on('broadcast', { event: 'webrtc-signal' }, async ({ payload }) => {
+        if (!payload || payload.target !== userId || payload.from === userId) return;
+
+        const { signalType, from, fromEmail, offer, answer, candidate } = payload;
+        let pc = peerConnectionsRef.current.get(from);
+
+        if (!pc) {
+          pc = await createPeerConnection(from, fromEmail);
+          if (!pc) return;
+        }
+
+        try {
+          if (signalType === 'offer' && offer) {
+            await pc.setRemoteDescription(new RTCSessionDescription(offer));
+            const createdAnswer = await pc.createAnswer();
+            await pc.setLocalDescription(createdAnswer);
+
+            await signalingChannel.send({
+              type: 'broadcast',
+              event: 'webrtc-signal',
+              payload: {
+                signalType: 'answer',
+                from: userId,
+                fromEmail: userEmail,
+                target: from,
+                answer: createdAnswer
+              }
+            });
+          } else if (signalType === 'answer' && answer) {
+            await pc.setRemoteDescription(new RTCSessionDescription(answer));
+          } else if (signalType === 'ice-candidate' && candidate) {
+            await pc.addIceCandidate(new RTCIceCandidate(candidate));
+          }
+        } catch (err) {
+          console.warn('WebRTC signal handling error:', err);
+        }
+      })
+      .subscribe();
+
+    webrtcChannelRef.current = signalingChannel;
+
+    return () => {
+      if (webrtcChannelRef.current) {
+        webrtcChannelRef.current.unsubscribe();
+        webrtcChannelRef.current = null;
+      }
+      closeAllPeerConnections();
+    };
+  }, [supabase, groupId, userId, userEmail, meetingStarted, createPeerConnection, closeAllPeerConnections]);
+
+  // Create offers to visible connected peers (single initiator rule avoids glare)
+  useEffect(() => {
+    const createOffersToPeers = async () => {
+      if (!meetingStarted || !webrtcChannelRef.current || !userId) return;
+
+      for (const member of connectedMembers || []) {
+        const peerId = member?.userId;
+        if (!peerId || peerId === userId) continue;
+
+        let pc = peerConnectionsRef.current.get(peerId);
+        if (!pc) {
+          pc = await createPeerConnection(peerId, member?.email || '');
+        }
+        if (!pc) continue;
+
+        if (pc.signalingState !== 'stable') continue;
+
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          await webrtcChannelRef.current.send({
+            type: 'broadcast',
+            event: 'webrtc-signal',
+            payload: {
+              signalType: 'offer',
+              from: userId,
+              fromEmail: userEmail,
+              target: peerId,
+              offer
+            }
+          });
+        } catch (err) {
+          console.warn('Failed to create/send offer:', err);
+        }
+      }
+    };
+
+    createOffersToPeers();
+  }, [connectedMembers, meetingStarted, userId, userEmail, createPeerConnection]);
 
   const formatTime = (seconds) => {
     const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
@@ -453,16 +741,30 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
     return `${h}:${m}:${s}`;
   };
 
-  const toggleVideo = () => {
-    if (isVideoOn && videoRef.current?.srcObject) {
-      videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
+  const memberTileVariant = (seed = '') => {
+    const variants = [
+      'from-indigo-600 to-blue-700 border-indigo-300/30',
+      'from-fuchsia-600 to-violet-700 border-fuchsia-300/30',
+      'from-emerald-600 to-teal-700 border-emerald-300/30',
+      'from-amber-600 to-orange-700 border-amber-300/30',
+      'from-rose-600 to-pink-700 border-rose-300/30'
+    ];
+    let hash = 0;
+    for (let i = 0; i < seed.length; i += 1) {
+      hash = (hash << 5) - hash + seed.charCodeAt(i);
+      hash |= 0;
     }
+    return variants[Math.abs(hash) % variants.length];
+  };
+
+  const toggleVideo = () => {
     setIsVideoOn(!isVideoOn);
   };
 
   const startMeeting = async () => {
     // Don't start meeting yet — ring the members first
     setIsCalling(true);
+    setIsVideoOn(true);
     setCallingTimer(0);
     
     // Start a ring timer so user can see how long they've been calling
@@ -470,16 +772,16 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
     
     console.log('📞 Host initiating call, ringing members...');
     
-    // Broadcast call started to all members
-    if (callChannelRef.current && isHost) {
+    // Broadcast call started to all members (any member can initiate)
+    if (callChannelRef.current) {
       try {
         console.log('📡 Attempting to broadcast call-started event...');
         const broadcastResult = await callChannelRef.current.send({
           type: 'broadcast',
           event: 'call-started',
           payload: {
-            hostId: user?.id,
-            hostEmail: user?.email,
+            hostId: userId,
+            hostEmail: userEmail,
             groupId: groupId,
             timestamp: new Date().toISOString()
           }
@@ -489,7 +791,7 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
         console.error('❌ Error broadcasting call:', err);
       }
     } else {
-      console.warn('⚠️ Cannot broadcast - callChannelRef not ready or not host', { hasChannel: !!callChannelRef.current, isHost });
+      console.warn('⚠️ Cannot broadcast - callChannelRef not ready', { hasChannel: !!callChannelRef.current });
     }
     
     // Play outgoing call ringtone
@@ -499,13 +801,13 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
     }
     
     // Notify other members of incoming call via chat
-    if (supabase && groupId && isHost) {
+    if (supabase && groupId) {
       try {
         await supabase.from('boarding_room_chat').insert({
           group_id: groupId,
-          user_id: user?.id,
-          user_email: user?.email,
-          message: `📞 ${user?.email || 'Host'} is calling...`,
+          user_id: userId,
+          user_email: userEmail,
+          message: `📞 ${userEmail || 'Host'} is calling...`,
           is_system: true
         });
       } catch (err) {
@@ -543,13 +845,28 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
           type: 'broadcast',
           event: 'call-ended',
           payload: {
-            hostId: user?.id,
+            hostId: userId,
             groupId: groupId,
             timestamp: new Date().toISOString()
           }
         });
       } catch (err) {
         console.warn('Error broadcasting call-ended:', err);
+      }
+    }
+
+    // Persist call-end marker so members who missed broadcast don't stay on waiting screen.
+    if (supabase && groupId && isHost) {
+      try {
+        await supabase.from('boarding_room_chat').insert({
+          group_id: groupId,
+          user_id: userId,
+          user_email: userEmail,
+          message: '📵 Call ended',
+          is_system: true
+        });
+      } catch (err) {
+        console.warn('Error logging call end:', err);
       }
     }
   };
@@ -568,8 +885,8 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
           type: 'broadcast',
           event: 'call-accepted',
           payload: {
-            acceptedBy: user?.id,
-            acceptedEmail: user?.email,
+            acceptedBy: userId,
+            acceptedEmail: userEmail,
             groupId: groupId,
             timestamp: new Date().toISOString()
           }
@@ -585,9 +902,9 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
       try {
         await supabase.from('boarding_room_chat').insert({
           group_id: groupId,
-          user_id: user?.id,
-          user_email: user?.email,
-          message: `✅ ${user?.email || 'Member'} joined the call`,
+          user_id: userId,
+          user_email: userEmail,
+          message: `✅ ${userEmail || 'Member'} joined the call`,
           is_system: true
         });
       } catch (err) {
@@ -602,8 +919,10 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
   };
 
   const endMeeting = async () => {
-    if (videoRef.current?.srcObject) {
-      videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
+    closeAllPeerConnections();
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((track) => track.stop());
+      localStreamRef.current = null;
     }
     
     console.log('🔴 Ending meeting, broadcasting call-ended...');
@@ -615,7 +934,7 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
           type: 'broadcast',
           event: 'call-ended',
           payload: {
-            hostId: user?.id,
+            hostId: userId,
             groupId: groupId,
             timestamp: new Date().toISOString()
           }
@@ -635,23 +954,52 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
     setIsVideoOn(false);
     setMeetingTime(0);
     setConnectedMembers([]);
+    setRemoteStreams([]);
     setIncomingCall(null);
+    setCallAccepted(false);
+    setIsCalling(false);
+    if (callingTimerRef.current) {
+      clearInterval(callingTimerRef.current);
+      callingTimerRef.current = null;
+    }
 
     // Log meeting end
     if (supabase) {
       try {
         await supabase.from('boarding_room_chat').insert({
           group_id: groupId,
-          user_id: user?.id,
-          user_email: user?.email,
-          message: `${user?.email || 'Member'} left the meeting`,
+          user_id: userId,
+          user_email: userEmail,
+          message: `${userEmail || 'Member'} left the meeting`,
           is_system: true
         });
+        if (isHost) {
+          await supabase.from('boarding_room_chat').insert({
+            group_id: groupId,
+            user_id: userId,
+            user_email: userEmail,
+            message: '📵 Call ended',
+            is_system: true
+          });
+        }
       } catch (err) {
         console.warn('Error logging meeting end:', err);
       }
     }
+
+    // Close boardroom for the host as well after ending.
+    onClose();
   };
+
+  useEffect(() => {
+    return () => {
+      closeAllPeerConnections();
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach((track) => track.stop());
+        localStreamRef.current = null;
+      }
+    };
+  }, [closeAllPeerConnections]);
 
   const sendMessage = async () => {
     if (!newMessage.trim() || !supabase) return;
@@ -674,7 +1022,7 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
   };
 
   // Incoming call screen
-  if (incomingCall && !isHost && !callAccepted) {
+  if (incomingCall && !callAccepted) {
     console.log('🔔 [INCOMING CALL] Rendering incoming call screen - incomingCall:', !!incomingCall, 'isHost:', isHost, 'callAccepted:', callAccepted);
     return (
       <div className="w-full h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center p-4 sm:p-6 pb-32 sm:pb-8 relative overflow-hidden">
@@ -925,42 +1273,34 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
           </div>
           <h2 className="text-3xl sm:text-4xl font-bold text-white mb-2 sm:mb-3">{groupName}</h2>
           <p className="text-lg sm:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 mb-4 sm:mb-6">Live Boardroom</p>
-          {isHost ? (
-            <>
-              <p className="text-sm sm:text-base text-gray-300 mb-6 sm:mb-8">Ready to start?</p>
-              <div className="flex gap-2 sm:gap-3 justify-center mb-6 sm:mb-8 items-center flex-wrap">
-                <div className="flex -space-x-2 sm:-space-x-3">
-                  {groupMembers?.slice(0, 3).map((m, i) => (
-                    <div key={i} title={m?.user_email} className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center border-2 border-slate-900 text-xs font-bold hover:scale-110 transition-transform cursor-pointer text-white">
-                      {m?.user_email?.charAt(0).toUpperCase()}
-                    </div>
-                  ))}
-                  {groupMembers?.length > 3 && (
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-slate-600 to-slate-700 rounded-full flex items-center justify-center border-2 border-slate-900 text-xs font-bold text-white">
-                      +{groupMembers.length - 3}
-                    </div>
-                  )}
-                </div>
-                <span className="text-sm sm:text-base text-gray-400">{groupMembers?.length || 0} members</span>
+          <>
+            <p className="text-sm sm:text-base text-gray-300 mb-6 sm:mb-8">Ready to start?</p>
+            <div className="flex gap-2 sm:gap-3 justify-center mb-4 sm:mb-6 items-center flex-wrap">
+              <div className="flex -space-x-2 sm:-space-x-3">
+                {groupMembers?.slice(0, 3).map((m, i) => (
+                  <div key={i} title={m?.user_email} className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center border-2 border-slate-900 text-xs font-bold hover:scale-110 transition-transform cursor-pointer text-white">
+                    {m?.user_email?.charAt(0).toUpperCase()}
+                  </div>
+                ))}
+                {groupMembers?.length > 3 && (
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-slate-600 to-slate-700 rounded-full flex items-center justify-center border-2 border-slate-900 text-xs font-bold text-white">
+                    +{groupMembers.length - 3}
+                  </div>
+                )}
               </div>
-              <button
-                onClick={startMeeting}
-                className="px-8 sm:px-12 py-3 sm:py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-2xl font-bold text-base sm:text-lg transition-all transform hover:scale-105 active:scale-95 shadow-2xl flex items-center gap-2 sm:gap-3 mx-auto w-full sm:w-auto justify-center"
-              >
-                <Video className="w-5 h-5 sm:w-6 sm:h-6" />
-                Start Meeting
-              </button>
-            </>
-          ) : (
-            <>
-              <p className="text-sm sm:text-base text-gray-400 mb-6 sm:mb-8">Waiting for host to start the meeting...</p>
-              <div className="flex gap-2 justify-center">
-                <div className="w-2 h-2 sm:w-3 sm:h-3 bg-blue-400 rounded-full animate-pulse"></div>
-                <div className="w-2 h-2 sm:w-3 sm:h-3 bg-blue-400 rounded-full animate-pulse" style={{ animationDelay: '0.3s' }}></div>
-                <div className="w-2 h-2 sm:w-3 sm:h-3 bg-blue-400 rounded-full animate-pulse" style={{ animationDelay: '0.6s' }}></div>
-              </div>
-            </>
-          )}
+              <span className="text-sm sm:text-base text-gray-400">{groupMembers?.length || 0} members</span>
+            </div>
+            <p className="text-xs sm:text-sm text-gray-400 mb-6 sm:mb-8">
+              {hasActiveCall ? 'Incoming call detected. You can also start a new call.' : 'Any member can start a new meeting call.'}
+            </p>
+            <button
+              onClick={startMeeting}
+              className="px-8 sm:px-12 py-3 sm:py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-2xl font-bold text-base sm:text-lg transition-all transform hover:scale-105 active:scale-95 shadow-2xl flex items-center gap-2 sm:gap-3 mx-auto w-full sm:w-auto justify-center"
+            >
+              <Video className="w-5 h-5 sm:w-6 sm:h-6" />
+              Start Meeting
+            </button>
+          </>
         </div>
       </div>
     );
@@ -982,14 +1322,14 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
                   <div className="w-16 h-16 sm:w-32 sm:h-32 bg-gradient-to-br from-slate-700 to-slate-800 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-6">
                     <VideoOff className="w-8 h-8 sm:w-16 sm:h-16 text-red-500" />
                   </div>
-                  <p className="text-lg sm:text-3xl text-white font-bold mb-2">Camera Disabled</p>
-                  <p className="text-gray-400 text-sm sm:text-lg mb-4 sm:mb-6">Enable camera to be visible</p>
+                  <p className="hidden sm:block text-lg sm:text-3xl text-white font-bold mb-2">Camera Disabled</p>
+                  <p className="hidden sm:block text-gray-400 text-sm sm:text-lg mb-4 sm:mb-6">Enable camera to be visible</p>
                   <button 
                     onClick={toggleVideo} 
                     className="px-6 sm:px-8 py-2 sm:py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg sm:rounded-xl font-bold transition-all flex items-center gap-2 sm:gap-3 mx-auto text-sm sm:text-base"
                   >
                     <Video className="w-4 h-4 sm:w-5 sm:h-5" />
-                    Enable Camera
+                    <span className="hidden sm:inline">Enable Camera</span>
                   </button>
                 </div>
               </div>
@@ -998,7 +1338,7 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
             {/* Local User Badge */}
             <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-lg flex items-center gap-2 border border-white/20">
               <div className="w-2 h-2 rounded-full bg-green-500"></div>
-              <span className="text-xs sm:text-sm text-white font-semibold">You</span>
+              <span className="hidden sm:inline text-xs sm:text-sm text-white font-semibold">You</span>
             </div>
 
             {/* Mobile Status Bar - Top */}
@@ -1014,15 +1354,31 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
             </div>
           </div>
 
-          {/* Participants Gallery - Grid of other connected members */}
+          {/* Participants Gallery - Compact on mobile to keep video area dominant */}
           {connectedMembers && connectedMembers.length > 0 && (
-            <div className="h-24 sm:h-32 bg-black/80 border-t border-slate-700/50 overflow-x-auto flex gap-2 p-2 backdrop-blur-sm">
+            <div className="h-16 sm:h-32 bg-black/75 border-t border-slate-700/50 overflow-x-auto flex gap-2 p-2 backdrop-blur-sm">
               {connectedMembers.map((member, idx) => (
                 <div
                   key={idx}
-                  className="flex-shrink-0 w-20 h-20 sm:w-28 sm:h-28 bg-gradient-to-br from-purple-600 to-blue-600 rounded-lg relative flex items-center justify-center overflow-hidden shadow-lg hover:shadow-2xl transition-all border border-purple-400/30 group/member"
+                  className={`flex-shrink-0 w-12 h-12 sm:w-28 sm:h-28 bg-gradient-to-br ${memberTileVariant(member?.email || member?.userId || String(idx))} rounded-lg relative flex items-center justify-center overflow-hidden shadow-lg hover:shadow-2xl transition-all border group/member`}
                 >
-                  <span className="text-white font-bold text-lg sm:text-2xl">{member?.email?.charAt(0).toUpperCase()}</span>
+                  {getRemoteStreamByUserId(member?.userId) ? (
+                    <video
+                      autoPlay
+                      playsInline
+                      muted
+                      ref={(el) => {
+                        if (!el) return;
+                        const stream = getRemoteStreamByUserId(member?.userId);
+                        if (stream && el.srcObject !== stream) {
+                          el.srcObject = stream;
+                        }
+                      }}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-white font-bold text-sm sm:text-2xl">{member?.email?.charAt(0).toUpperCase()}</span>
+                  )}
                   
                   {/* Member Status Indicators */}
                   <div className="absolute top-1 right-1 flex gap-0.5">
@@ -1035,8 +1391,8 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
                   </div>
 
                   {/* Member Name */}
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-1.5 py-1 text-center">
-                    <p className="text-white text-xs font-semibold truncate">{member?.email?.split('@')[0]}</p>
+                  <div className="hidden sm:block absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-1 py-0.5 sm:px-1.5 sm:py-1 text-center">
+                    <p className="text-white text-[10px] sm:text-xs font-semibold truncate">{member?.email?.split('@')[0]}</p>
                   </div>
                 </div>
               ))}
@@ -1111,55 +1467,70 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
             </div>
           </div>
 
-          {/* Mobile Controls - Transparent Glassmorphism Design */}
-          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 sm:hidden flex flex-row gap-2 bg-black/40 backdrop-blur-xl p-3 rounded-2xl border border-white/20 z-40 shadow-2xl shadow-black/50">
-            {/* Mute Microphone - Glassmorphism */}
-            <button 
-              onClick={() => setIsMicOn(!isMicOn)} 
-              className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all ${isMicOn ? 'bg-gradient-to-br from-green-400/50 to-emerald-600/50 text-green-100 shadow-lg shadow-green-500/40 border border-green-300/30' : 'bg-gradient-to-br from-red-400/50 to-red-600/50 text-red-100 shadow-lg shadow-red-500/40 border border-red-300/30'}`} 
-              title={isMicOn ? 'Mute Microphone' : 'Unmute Microphone'}
-            >
-              {isMicOn ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
-            </button>
-            
-            {/* Toggle Camera - Glassmorphism */}
-            <button 
-              onClick={toggleVideo} 
-              className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all ${isVideoOn ? 'bg-gradient-to-br from-blue-400/50 to-cyan-600/50 text-blue-100 shadow-lg shadow-blue-500/40 border border-blue-300/30' : 'bg-gradient-to-br from-slate-400/50 to-slate-600/50 text-slate-100 shadow-lg shadow-slate-500/40 border border-slate-300/30'}`} 
-              title={isVideoOn ? 'Turn off Camera' : 'Turn on Camera'}
-            >
-              {isVideoOn ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
-            </button>
-            
-            {/* Toggle Sound Notifications - Glassmorphism */}
-            <button 
-              onClick={() => setSoundEnabled(!soundEnabled)} 
-              className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all ${soundEnabled ? 'bg-gradient-to-br from-amber-400/50 to-yellow-600/50 text-amber-100 shadow-lg shadow-amber-500/40 border border-amber-300/30' : 'bg-gradient-to-br from-slate-400/50 to-slate-600/50 text-slate-100 shadow-lg shadow-slate-500/40 border border-slate-300/30'}`} 
-              title={soundEnabled ? 'Mute Notifications' : 'Unmute Notifications'}
-            >
-              {soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
-            </button>
-            
-            {/* Toggle Chat - Glassmorphism */}
-            <button 
-              onClick={() => setShowChat(!showChat)} 
-              className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all relative ${showChat ? 'bg-gradient-to-br from-purple-400/50 to-violet-600/50 text-purple-100 shadow-lg shadow-purple-500/40 border border-purple-300/30' : 'bg-gradient-to-br from-slate-400/50 to-slate-600/50 text-slate-100 shadow-lg shadow-slate-500/40 border border-slate-300/30'}`} 
-              title={showChat ? 'Hide Chat' : 'Show Chat'}
-            >
-              <MessageCircle className="w-5 h-5" />
-              {chatMessages.length > 0 && !showChat && (
-                <span className="absolute -top-2 -right-2 bg-gradient-to-br from-red-400 to-red-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold shadow-lg shadow-red-500/40 border border-red-300/30">{Math.min(chatMessages.length, 9)}</span>
-              )}
-            </button>
-            
-            {/* End Meeting - Glassmorphism */}
-            <button 
-              onClick={endMeeting} 
-              className="w-11 h-11 rounded-xl flex items-center justify-center transition-all bg-gradient-to-br from-red-500/60 to-red-700/60 text-red-100 shadow-lg shadow-red-500/40 border border-red-300/30" 
-              title="End Meeting"
-            >
-              <Phone className="w-5 h-5" />
-            </button>
+          {/* Mobile Controls - Meet-like compact primary bar with expandable actions */}
+          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 sm:hidden z-40 flex flex-col items-center gap-2">
+            {showMobileMenu && (
+              <div className="flex gap-2 bg-black/55 backdrop-blur-xl p-2.5 rounded-2xl border border-white/20 shadow-2xl shadow-black/50">
+                <button
+                  onClick={() => setSoundEnabled(!soundEnabled)}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${soundEnabled ? 'bg-gradient-to-br from-amber-400/50 to-yellow-600/50 text-amber-100 shadow-lg shadow-amber-500/40 border border-amber-300/30' : 'bg-gradient-to-br from-slate-400/50 to-slate-600/50 text-slate-100 shadow-lg shadow-slate-500/40 border border-slate-300/30'}`}
+                  title={soundEnabled ? 'Mute Notifications' : 'Unmute Notifications'}
+                >
+                  {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+                </button>
+                <button
+                  onClick={() => setShowChat(!showChat)}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all relative ${showChat ? 'bg-gradient-to-br from-purple-400/50 to-violet-600/50 text-purple-100 shadow-lg shadow-purple-500/40 border border-purple-300/30' : 'bg-gradient-to-br from-slate-400/50 to-slate-600/50 text-slate-100 shadow-lg shadow-slate-500/40 border border-slate-300/30'}`}
+                  title={showChat ? 'Hide Chat' : 'Show Chat'}
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  {chatMessages.length > 0 && !showChat && (
+                    <span className="absolute -top-2 -right-2 bg-gradient-to-br from-red-400 to-red-600 text-white text-[10px] rounded-full w-4.5 h-4.5 flex items-center justify-center font-bold shadow-lg shadow-red-500/40 border border-red-300/30">{Math.min(chatMessages.length, 9)}</span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setIsScreenSharing(!isScreenSharing)}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isScreenSharing ? 'bg-gradient-to-br from-emerald-400/50 to-teal-600/50 text-emerald-100 shadow-lg shadow-emerald-500/40 border border-emerald-300/30' : 'bg-gradient-to-br from-slate-400/50 to-slate-600/50 text-slate-100 shadow-lg shadow-slate-500/40 border border-slate-300/30'}`}
+                  title={isScreenSharing ? 'Stop Sharing' : 'Share Screen'}
+                >
+                  <Share2 className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 bg-black/55 backdrop-blur-xl p-2.5 rounded-2xl border border-white/20 shadow-2xl shadow-black/50">
+              <button
+                onClick={() => setIsMicOn(!isMicOn)}
+                className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all ${isMicOn ? 'bg-gradient-to-br from-green-400/50 to-emerald-600/50 text-green-100 shadow-lg shadow-green-500/40 border border-green-300/30' : 'bg-gradient-to-br from-red-400/50 to-red-600/50 text-red-100 shadow-lg shadow-red-500/40 border border-red-300/30'}`}
+                title={isMicOn ? 'Mute Microphone' : 'Unmute Microphone'}
+              >
+                {isMicOn ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
+              </button>
+
+              <button
+                onClick={toggleVideo}
+                className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all ${isVideoOn ? 'bg-gradient-to-br from-blue-400/50 to-cyan-600/50 text-blue-100 shadow-lg shadow-blue-500/40 border border-blue-300/30' : 'bg-gradient-to-br from-slate-400/50 to-slate-600/50 text-slate-100 shadow-lg shadow-slate-500/40 border border-slate-300/30'}`}
+                title={isVideoOn ? 'Turn off Camera' : 'Turn on Camera'}
+              >
+                {isVideoOn ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
+              </button>
+
+              <button
+                onClick={() => setShowMobileMenu((prev) => !prev)}
+                className="w-11 h-11 rounded-xl flex items-center justify-center transition-all bg-gradient-to-br from-slate-500/50 to-slate-700/50 text-slate-100 shadow-lg shadow-slate-500/40 border border-slate-300/30"
+                title={showMobileMenu ? 'Collapse controls' : 'More controls'}
+              >
+                <MoreVertical className="w-5 h-5" />
+              </button>
+
+              <button
+                onClick={endMeeting}
+                className="w-11 h-11 rounded-xl flex items-center justify-center transition-all bg-gradient-to-br from-red-500/60 to-red-700/60 text-red-100 shadow-lg shadow-red-500/40 border border-red-300/30"
+                title="End Meeting"
+              >
+                <Phone className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
           {/* Participants Sidebar - Right - Shows connected members with status */}
@@ -1167,7 +1538,23 @@ const LiveBoardroom = ({ groupId, groupName, members = [], creatorId = null }) =
             {connectedMembers && connectedMembers.length > 0 ? (
               connectedMembers.map((member, idx) => (
                 <div key={idx} className="w-full aspect-square bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg hover:shadow-2xl transition-all cursor-pointer transform hover:scale-110 relative group/member">
-                  <span className="text-white font-bold text-lg">{member?.email?.charAt(0).toUpperCase()}</span>
+                  {getRemoteStreamByUserId(member?.userId) ? (
+                    <video
+                      autoPlay
+                      playsInline
+                      muted
+                      ref={(el) => {
+                        if (!el) return;
+                        const stream = getRemoteStreamByUserId(member?.userId);
+                        if (stream && el.srcObject !== stream) {
+                          el.srcObject = stream;
+                        }
+                      }}
+                      className="w-full h-full object-cover rounded-xl"
+                    />
+                  ) : (
+                    <span className="text-white font-bold text-lg">{member?.email?.charAt(0).toUpperCase()}</span>
+                  )}
                   
                   {/* Status indicators */}
                   <div className="absolute bottom-1 right-1 flex gap-0.5">

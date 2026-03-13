@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Users,
   Plus,
@@ -118,7 +118,15 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
   const [incomingCallData, setIncomingCallData] = useState(null); // { groupId, hostEmail, hostId }
   const globalCallChannelsRef = React.useRef([]);
 
+  const handleCloseBoardroom = useCallback(() => {
+    setBoardroomGroupId(null);
+  }, []);
+
   const supabaseClient = getSupabaseClient();
+  const activeBoardroomGroup = useMemo(
+    () => myGroups.find(g => g.id === boardroomGroupId) || groups.find(g => g.id === boardroomGroupId) || null,
+    [myGroups, groups, boardroomGroupId]
+  );
 
   // ── Global incoming-call listener across ALL user groups ──────────
   // This runs even when LiveBoardroom is NOT open so the user sees
@@ -131,9 +139,6 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
     globalCallChannelsRef.current = [];
 
     myGroups.forEach(group => {
-      // Don't duplicate if the boardroom for this group is already open
-      if (boardroomGroupId === group.id) return;
-
       const ch = supabaseClient.channel(`boardroom-calls:${group.id}`, {
         config: { broadcast: { self: false } }
       });
@@ -146,6 +151,10 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
       })
       .on('broadcast', { event: 'call-ended' }, () => {
         setIncomingCallData(prev => prev?.groupId === group.id ? null : prev);
+        // Ensure boardroom closes even if local listener missed the event.
+        if (boardroomGroupId === group.id) {
+          setBoardroomGroupId(null);
+        }
       })
       .subscribe();
 
@@ -2752,10 +2761,10 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
           <div className="flex items-center justify-between p-4 bg-slate-900 border-b border-slate-700">
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
               <Video className="text-blue-400" />
-              {(myGroups.find(g => g.id === boardroomGroupId) || groups.find(g => g.id === boardroomGroupId))?.name} - Live Boardroom
+              {activeBoardroomGroup?.name} - Live Boardroom
             </h2>
             <button
-              onClick={() => setBoardroomGroupId(null)}
+              onClick={handleCloseBoardroom}
               className="p-2 hover:bg-slate-800 rounded-lg transition text-slate-400 hover:text-white"
             >
               <X size={24} />
@@ -2764,9 +2773,10 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
           <div className="flex-1 overflow-hidden">
             <LiveBoardroom
               groupId={boardroomGroupId}
-              groupName={(myGroups.find(g => g.id === boardroomGroupId) || groups.find(g => g.id === boardroomGroupId))?.name}
-              members={(myGroups.find(g => g.id === boardroomGroupId) || groups.find(g => g.id === boardroomGroupId))?.members || selectedGroup?.members || []}
-              creatorId={(myGroups.find(g => g.id === boardroomGroupId) || groups.find(g => g.id === boardroomGroupId))?.creator_id || selectedGroup?.creator_id || null}
+              groupName={activeBoardroomGroup?.name}
+              members={activeBoardroomGroup?.members || selectedGroup?.members}
+              creatorId={activeBoardroomGroup?.creator_id || selectedGroup?.creator_id || null}
+              onClose={handleCloseBoardroom}
             />
           </div>
         </div>
