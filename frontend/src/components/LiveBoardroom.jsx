@@ -43,6 +43,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
   const [featuredParticipantId, setFeaturedParticipantId] = useState(null);
   const [screenShareUnsupported, setScreenShareUnsupported] = useState(false);
   const [screenShareUnsupportedMessage, setScreenShareUnsupportedMessage] = useState('Screen sharing is not supported in this browser');
+  const [isCameraPresentation, setIsCameraPresentation] = useState(false);
   const [incomingCall, setIncomingCall] = useState(null);
   const [callAccepted, setCallAccepted] = useState(false);
   const [hasActiveCall, setHasActiveCall] = useState(false);
@@ -78,7 +79,19 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
   );
 
   const requestDisplayMedia = useCallback(async (constraints) => {
+    const isAndroid = /Android/i.test(navigator?.userAgent || '');
+    
     if (navigator?.mediaDevices?.getDisplayMedia) {
+      if (isAndroid) {
+        try {
+          return await navigator.mediaDevices.getDisplayMedia({
+            video: { width: { ideal: 720 }, height: { ideal: 480 } },
+            audio: false
+          });
+        } catch (androidErr) {
+          // Fallback to normal constraints
+        }
+      }
       return navigator.mediaDevices.getDisplayMedia(constraints);
     }
     if (typeof navigator?.getDisplayMedia === 'function') {
@@ -708,6 +721,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     }
 
     setIsScreenSharing(false);
+    setIsCameraPresentation(false);
     setActiveScreenSharerId((prev) => (prev === userId ? null : prev));
     await broadcastScreenShareState(false);
 
@@ -725,6 +739,37 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
 
     updateLocalTrackState();
   }, [broadcastScreenShareState, ensureLocalStream, replaceOutgoingVideoTrack, updateLocalTrackState, userId]);
+
+  const startCameraPresentation = useCallback(async () => {
+    if (!meetingStarted || !userId) return;
+    try {
+      const cameraStream = await ensureLocalStream();
+      if (!cameraStream) return;
+
+      const cameraTrack = cameraStream.getVideoTracks()?.[0];
+      if (!cameraTrack) return;
+
+      screenStreamRef.current = cameraStream;
+      setIsScreenSharing(true);
+      setActiveScreenSharerId(userId);
+      setIsCameraPresentation(true);
+
+      // Replace outgoing track with camera
+      await replaceOutgoingVideoTrack(cameraTrack, cameraStream);
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = cameraStream;
+      }
+
+      // Broadcast that this user is presenting (even though it's camera, not screen)
+      await broadcastScreenShareState(true);
+    } catch (error) {
+      console.warn('Camera presentation mode failed:', error);
+      setIsScreenSharing(false);
+      setActiveScreenSharerId(null);
+      setIsCameraPresentation(false);
+    }
+  }, [meetingStarted, userId, ensureLocalStream, replaceOutgoingVideoTrack, broadcastScreenShareState]);
 
   const startScreenShare = useCallback(async () => {
     if (!meetingStarted) return;
@@ -762,15 +807,25 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     } catch (error) {
       // NotAllowedError = user denied/cancelled — silent. Other errors are logged.
       const errorName = error?.name;
+      const isAndroid = /Android/i.test(navigator?.userAgent || '');
+      const isIOS = /iPhone|iPad|iPod/i.test(navigator?.userAgent || '');
+
       if (errorName === 'NotSupportedError' || errorName === 'TypeError') {
-        const isMobileBrowser = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator?.userAgent || '');
-        setScreenShareUnsupportedMessage(
-          isMobileBrowser
-            ? 'Screen sharing is not available on this mobile browser. Use desktop Chrome or Edge to present.'
-            : 'Screen sharing is not supported in this browser'
-        );
+        if (isAndroid) {
+          // On Android, try camera presentation mode as fallback
+          setScreenShareUnsupportedMessage('Using camera as presentation mode...');
+          setScreenShareUnsupported(true);
+          setTimeout(() => setScreenShareUnsupported(false), 3000);
+          await startCameraPresentation();
+          return;
+        } else if (isIOS) {
+          setScreenShareUnsupportedMessage('iOS does not support screen sharing. Use an Android device or desktop browser.');
+        } else {
+          setScreenShareUnsupportedMessage('Screen sharing is not supported in this browser');
+        }
+
         setScreenShareUnsupported(true);
-        setTimeout(() => setScreenShareUnsupported(false), 4000);
+        setTimeout(() => setScreenShareUnsupported(false), 5000);
       } else if (errorName !== 'NotAllowedError' && errorName !== 'AbortError') {
         console.warn('Unable to start screen sharing:', error);
       }
@@ -778,7 +833,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
       setActiveScreenSharerId((prev) => (prev === userId ? null : prev));
       setFeaturedParticipantId((prev) => (prev === userId ? null : prev));
     }
-  }, [meetingStarted, replaceOutgoingVideoTrack, stopScreenShare, broadcastScreenShareState, userId, requestDisplayMedia]);
+  }, [meetingStarted, replaceOutgoingVideoTrack, stopScreenShare, broadcastScreenShareState, userId, requestDisplayMedia, startCameraPresentation]);
 
   const toggleScreenShare = useCallback(async () => {
     if (isScreenSharing) {
