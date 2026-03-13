@@ -1467,70 +1467,65 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
             </div>
           </div>
 
-          {/* Mobile Controls - Meet-like compact primary bar with expandable actions */}
-          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 sm:hidden z-40 flex flex-col items-center gap-2">
+          {/* Mobile Controls - collapsed to a single 3-dot trigger */}
+          <div className="absolute bottom-4 right-4 sm:hidden z-40 flex flex-col items-end gap-2">
             {showMobileMenu && (
-              <div className="flex gap-2 bg-black/55 backdrop-blur-xl p-2.5 rounded-2xl border border-white/20 shadow-2xl shadow-black/50">
+              <div className="grid grid-cols-3 gap-2 bg-black/20 backdrop-blur-md p-2 rounded-2xl border border-white/10 shadow-xl">
+                <button
+                  onClick={() => setIsMicOn(!isMicOn)}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isMicOn ? 'bg-emerald-500/25 text-emerald-100 border border-emerald-300/20' : 'bg-rose-500/25 text-rose-100 border border-rose-300/20'}`}
+                  title={isMicOn ? 'Mute Microphone' : 'Unmute Microphone'}
+                >
+                  {isMicOn ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
+                </button>
+                <button
+                  onClick={toggleVideo}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isVideoOn ? 'bg-blue-500/25 text-blue-100 border border-blue-300/20' : 'bg-slate-500/25 text-slate-100 border border-slate-300/20'}`}
+                  title={isVideoOn ? 'Turn off Camera' : 'Turn on Camera'}
+                >
+                  {isVideoOn ? <Video className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}
+                </button>
+                <button
+                  onClick={() => setShowChat(!showChat)}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all relative ${showChat ? 'bg-purple-500/25 text-purple-100 border border-purple-300/20' : 'bg-slate-500/25 text-slate-100 border border-slate-300/20'}`}
+                  title={showChat ? 'Hide Chat' : 'Show Chat'}
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  {chatMessages.length > 0 && !showChat && (
+                    <span className="absolute -top-2 -right-2 bg-red-500/80 text-white text-[10px] rounded-full w-4.5 h-4.5 flex items-center justify-center font-bold border border-red-300/30">{Math.min(chatMessages.length, 9)}</span>
+                  )}
+                </button>
                 <button
                   onClick={() => setSoundEnabled(!soundEnabled)}
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${soundEnabled ? 'bg-gradient-to-br from-amber-400/50 to-yellow-600/50 text-amber-100 shadow-lg shadow-amber-500/40 border border-amber-300/30' : 'bg-gradient-to-br from-slate-400/50 to-slate-600/50 text-slate-100 shadow-lg shadow-slate-500/40 border border-slate-300/30'}`}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${soundEnabled ? 'bg-amber-500/25 text-amber-100 border border-amber-300/20' : 'bg-slate-500/25 text-slate-100 border border-slate-300/20'}`}
                   title={soundEnabled ? 'Mute Notifications' : 'Unmute Notifications'}
                 >
                   {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
                 </button>
                 <button
-                  onClick={() => setShowChat(!showChat)}
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all relative ${showChat ? 'bg-gradient-to-br from-purple-400/50 to-violet-600/50 text-purple-100 shadow-lg shadow-purple-500/40 border border-purple-300/30' : 'bg-gradient-to-br from-slate-400/50 to-slate-600/50 text-slate-100 shadow-lg shadow-slate-500/40 border border-slate-300/30'}`}
-                  title={showChat ? 'Hide Chat' : 'Show Chat'}
-                >
-                  <MessageCircle className="w-4 h-4" />
-                  {chatMessages.length > 0 && !showChat && (
-                    <span className="absolute -top-2 -right-2 bg-gradient-to-br from-red-400 to-red-600 text-white text-[10px] rounded-full w-4.5 h-4.5 flex items-center justify-center font-bold shadow-lg shadow-red-500/40 border border-red-300/30">{Math.min(chatMessages.length, 9)}</span>
-                  )}
-                </button>
-                <button
                   onClick={() => setIsScreenSharing(!isScreenSharing)}
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isScreenSharing ? 'bg-gradient-to-br from-emerald-400/50 to-teal-600/50 text-emerald-100 shadow-lg shadow-emerald-500/40 border border-emerald-300/30' : 'bg-gradient-to-br from-slate-400/50 to-slate-600/50 text-slate-100 shadow-lg shadow-slate-500/40 border border-slate-300/30'}`}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isScreenSharing ? 'bg-teal-500/25 text-teal-100 border border-teal-300/20' : 'bg-slate-500/25 text-slate-100 border border-slate-300/20'}`}
                   title={isScreenSharing ? 'Stop Sharing' : 'Share Screen'}
                 >
                   <Share2 className="w-4 h-4" />
                 </button>
+                <button
+                  onClick={endMeeting}
+                  className="w-10 h-10 rounded-xl flex items-center justify-center transition-all bg-red-500/30 text-red-100 border border-red-300/25"
+                  title="End Meeting"
+                >
+                  <Phone className="w-4 h-4" />
+                </button>
               </div>
             )}
 
-            <div className="flex items-center gap-2 bg-black/55 backdrop-blur-xl p-2.5 rounded-2xl border border-white/20 shadow-2xl shadow-black/50">
-              <button
-                onClick={() => setIsMicOn(!isMicOn)}
-                className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all ${isMicOn ? 'bg-gradient-to-br from-green-400/50 to-emerald-600/50 text-green-100 shadow-lg shadow-green-500/40 border border-green-300/30' : 'bg-gradient-to-br from-red-400/50 to-red-600/50 text-red-100 shadow-lg shadow-red-500/40 border border-red-300/30'}`}
-                title={isMicOn ? 'Mute Microphone' : 'Unmute Microphone'}
-              >
-                {isMicOn ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
-              </button>
-
-              <button
-                onClick={toggleVideo}
-                className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all ${isVideoOn ? 'bg-gradient-to-br from-blue-400/50 to-cyan-600/50 text-blue-100 shadow-lg shadow-blue-500/40 border border-blue-300/30' : 'bg-gradient-to-br from-slate-400/50 to-slate-600/50 text-slate-100 shadow-lg shadow-slate-500/40 border border-slate-300/30'}`}
-                title={isVideoOn ? 'Turn off Camera' : 'Turn on Camera'}
-              >
-                {isVideoOn ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
-              </button>
-
-              <button
-                onClick={() => setShowMobileMenu((prev) => !prev)}
-                className="w-11 h-11 rounded-xl flex items-center justify-center transition-all bg-gradient-to-br from-slate-500/50 to-slate-700/50 text-slate-100 shadow-lg shadow-slate-500/40 border border-slate-300/30"
-                title={showMobileMenu ? 'Collapse controls' : 'More controls'}
-              >
-                <MoreVertical className="w-5 h-5" />
-              </button>
-
-              <button
-                onClick={endMeeting}
-                className="w-11 h-11 rounded-xl flex items-center justify-center transition-all bg-gradient-to-br from-red-500/60 to-red-700/60 text-red-100 shadow-lg shadow-red-500/40 border border-red-300/30"
-                title="End Meeting"
-              >
-                <Phone className="w-5 h-5" />
-              </button>
-            </div>
+            <button
+              onClick={() => setShowMobileMenu((prev) => !prev)}
+              className="w-11 h-11 rounded-xl flex items-center justify-center transition-all bg-black/25 backdrop-blur-md text-slate-100 border border-white/10"
+              title={showMobileMenu ? 'Hide controls' : 'Show controls'}
+            >
+              <MoreVertical className="w-5 h-5" />
+            </button>
           </div>
 
           {/* Participants Sidebar - Right - Shows connected members with status */}
