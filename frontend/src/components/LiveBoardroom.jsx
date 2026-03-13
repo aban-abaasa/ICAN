@@ -768,6 +768,8 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
         console.warn('Unable to start screen sharing:', error);
       }
       setIsScreenSharing(false);
+      setActiveScreenSharerId((prev) => (prev === userId ? null : prev));
+      setFeaturedParticipantId((prev) => (prev === userId ? null : prev));
     }
   }, [meetingStarted, replaceOutgoingVideoTrack, stopScreenShare, broadcastScreenShareState, userId, requestDisplayMedia]);
 
@@ -1043,6 +1045,23 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
       setFeaturedParticipantId(activeScreenSharerId);
     }
   }, [activeScreenSharerId, remoteStreams, userId, getRemoteStreamByUserId]);
+
+  // If a screen-share announcement is received but no remote stream appears,
+  // clear the stale featured state so viewers don't get stuck on "Connecting...".
+  useEffect(() => {
+    if (!activeScreenSharerId || activeScreenSharerId === userId) return;
+    if (getRemoteStreamByUserId(activeScreenSharerId)) return;
+
+    const timeoutId = setTimeout(() => {
+      const stillMissingStream = !getRemoteStreamByUserId(activeScreenSharerId);
+      if (!stillMissingStream) return;
+
+      setActiveScreenSharerId((prev) => (prev === activeScreenSharerId ? null : prev));
+      setFeaturedParticipantId((prev) => (prev === activeScreenSharerId ? null : prev));
+    }, 6000);
+
+    return () => clearTimeout(timeoutId);
+  }, [activeScreenSharerId, userId, remoteStreams, getRemoteStreamByUserId]);
 
   const formatTime = (seconds) => {
     const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
