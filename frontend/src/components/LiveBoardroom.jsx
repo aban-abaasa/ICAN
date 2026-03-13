@@ -41,6 +41,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
   const [showDesktopMenu, setShowDesktopMenu] = useState(false);
   const [activeScreenSharerId, setActiveScreenSharerId] = useState(null);
   const [featuredParticipantId, setFeaturedParticipantId] = useState(null);
+  const [screenShareUnsupported, setScreenShareUnsupported] = useState(false);
   const [incomingCall, setIncomingCall] = useState(null);
   const [callAccepted, setCallAccepted] = useState(false);
   const [hasActiveCall, setHasActiveCall] = useState(false);
@@ -417,8 +418,9 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
           if (!payload?.userId || payload.userId === user?.id) return;
 
           if (payload.isSharing) {
+            // Only mark who is sharing; feature them once their stream actually arrives
+            // (handled by the auto-feature effect below).
             setActiveScreenSharerId(payload.userId);
-            setFeaturedParticipantId(payload.userId);
           } else {
             setActiveScreenSharerId((prev) => (prev === payload.userId ? null : prev));
             setFeaturedParticipantId((prev) => (prev === payload.userId ? null : prev));
@@ -706,12 +708,14 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     if (!meetingStarted) return;
     try {
       if (!navigator?.mediaDevices?.getDisplayMedia) {
-        console.warn('Screen sharing is not supported in this browser.');
+        // Unsupported browser (e.g. iOS Safari) — show a brief toast instead of silently failing.
+        setScreenShareUnsupported(true);
+        setTimeout(() => setScreenShareUnsupported(false), 4000);
         return;
       }
 
       const displayStream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
+        video: { frameRate: { ideal: 15 } },
         audio: false
       });
 
@@ -736,7 +740,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
         videoRef.current.srcObject = displayStream;
       }
     } catch (error) {
-      // User cancel should be silent; other failures are logged for diagnostics.
+      // NotAllowedError = user denied/cancelled — silent. Other errors are logged.
       if (error?.name !== 'NotAllowedError' && error?.name !== 'AbortError') {
         console.warn('Unable to start screen sharing:', error);
       }
@@ -975,16 +979,24 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     return () => clearInterval(retry);
   }, [peerTargets, meetingStarted, userId, userEmail, createPeerConnection, getRemoteStreamByUserId]);
 
+  // Auto-clear featured participant when they disconnect.
   useEffect(() => {
     if (!featuredParticipantId) return;
-
     const stillConnected = connectedMembers.some((member) => member?.userId === featuredParticipantId);
     const stillStreaming = Boolean(getRemoteStreamByUserId(featuredParticipantId));
-
     if (!stillConnected && !stillStreaming) {
       setFeaturedParticipantId(null);
     }
   }, [connectedMembers, featuredParticipantId, getRemoteStreamByUserId]);
+
+  // Auto-feature the active screen sharer as soon as their stream arrives.
+  useEffect(() => {
+    if (!activeScreenSharerId || activeScreenSharerId === userId) return;
+    const stream = getRemoteStreamByUserId(activeScreenSharerId);
+    if (stream) {
+      setFeaturedParticipantId(activeScreenSharerId);
+    }
+  }, [activeScreenSharerId, remoteStreams, userId, getRemoteStreamByUserId]);
 
   const formatTime = (seconds) => {
     const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
@@ -1593,11 +1605,15 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
               ) : (
                 <div className="w-full h-full flex items-center justify-center p-4">
                   <div className="text-center">
-                    <div className="w-16 h-16 sm:w-32 sm:h-32 bg-gradient-to-br from-slate-700 to-slate-800 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-6">
+                    <div className="w-16 h-16 sm:w-32 sm:h-32 bg-gradient-to-br from-slate-700 to-slate-800 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-6 relative">
                       <span className="text-white font-bold text-2xl sm:text-5xl">{featuredRemoteMember?.email?.charAt(0)?.toUpperCase() || '?'}</span>
+                      <div className="absolute inset-0 rounded-full border-4 border-blue-400/40 animate-ping"></div>
                     </div>
                     <p className="text-lg sm:text-3xl text-white font-bold mb-2">{featuredRemoteMember?.email?.split('@')[0] || 'Participant'}</p>
-                    <p className="text-gray-400 text-sm sm:text-lg">Waiting for live video...</p>
+                    {activeScreenSharerId === featuredParticipantId
+                      ? <p className="text-emerald-400 text-sm sm:text-lg animate-pulse">Connecting screen share…</p>
+                      : <p className="text-gray-400 text-sm sm:text-lg animate-pulse">Connecting stream…</p>
+                    }
                   </div>
                 </div>
               )
@@ -1655,6 +1671,13 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
                 />
                 <div className="absolute inset-x-0 bottom-0 bg-black/65 text-white text-[10px] sm:text-xs px-2 py-1 text-left">You</div>
               </button>
+            )}
+
+            {/* Screen-share unsupported toast (iOS Safari etc.) */}
+            {screenShareUnsupported && (
+              <div className="absolute top-14 left-1/2 -translate-x-1/2 z-50 bg-red-900/90 backdrop-blur-md text-red-100 text-xs px-4 py-2 rounded-xl border border-red-400/30 shadow-xl whitespace-nowrap">
+                Screen sharing is not supported in this browser
+              </div>
             )}
 
             {/* Mobile Status Bar - Top */}
@@ -1841,7 +1864,12 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
                   {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
                 </button>
                 <button
-                  onClick={toggleScreenShare}
+                  onClick={() => {
+                    setShowMobileMenu(false);
+                    // Defer by one tick so the menu closes before the browser
+                    // permission dialog opens (required on some Android browsers).
+                    setTimeout(toggleScreenShare, 80);
+                  }}
                   className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isScreenSharing ? 'bg-teal-500/25 text-teal-100 border border-teal-300/20' : 'bg-slate-500/25 text-slate-100 border border-slate-300/20'}`}
                   title={isScreenSharing ? 'Stop Sharing' : 'Share Screen'}
                 >

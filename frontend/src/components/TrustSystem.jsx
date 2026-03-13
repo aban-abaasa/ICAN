@@ -2757,28 +2757,14 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
 
       {/* LIVE BOARDROOM MODAL */}
       {boardroomGroupId && (
-        <div className="fixed inset-0 bg-black/90 z-[60] flex flex-col">
-          <div className="flex items-center justify-between p-4 bg-slate-900 border-b border-slate-700">
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-              <Video className="text-blue-400" />
-              {activeBoardroomGroup?.name} - Live Boardroom
-            </h2>
-            <button
-              onClick={handleCloseBoardroom}
-              className="p-2 hover:bg-slate-800 rounded-lg transition text-slate-400 hover:text-white"
-            >
-              <X size={24} />
-            </button>
-          </div>
-          <div className="flex-1 overflow-hidden">
-            <LiveBoardroom
-              groupId={boardroomGroupId}
-              groupName={activeBoardroomGroup?.name}
-              members={activeBoardroomGroup?.members || selectedGroup?.members}
-              creatorId={activeBoardroomGroup?.creator_id || selectedGroup?.creator_id || null}
-              onClose={handleCloseBoardroom}
-            />
-          </div>
+        <div className="fixed inset-0 bg-black z-[60]">
+          <LiveBoardroom
+            groupId={boardroomGroupId}
+            groupName={activeBoardroomGroup?.name}
+            members={activeBoardroomGroup?.members || selectedGroup?.members}
+            creatorId={activeBoardroomGroup?.creator_id || selectedGroup?.creator_id || null}
+            onClose={handleCloseBoardroom}
+          />
         </div>
       )}
 
