@@ -38,6 +38,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [soundVolume, setSoundVolume] = useState(0.7);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showDesktopMenu, setShowDesktopMenu] = useState(false);
   const [incomingCall, setIncomingCall] = useState(null);
   const [callAccepted, setCallAccepted] = useState(false);
   const [hasActiveCall, setHasActiveCall] = useState(false);
@@ -57,6 +58,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
   const callChannelRef = useRef(null);
   const webrtcChannelRef = useRef(null);
   const localStreamRef = useRef(null);
+  const screenStreamRef = useRef(null);
   const peerConnectionsRef = useRef(new Map());
   const pendingIceCandidatesRef = useRef(new Map());
   const callingTimerRef = useRef(null);
@@ -591,6 +593,92 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     }
   }, [isVideoOn, isMicOn]);
 
+  const replaceOutgoingVideoTrack = useCallback(async (videoTrack) => {
+    if (!videoTrack) return;
+    const peers = Array.from(peerConnectionsRef.current.values());
+    for (const pc of peers) {
+      const sender = pc.getSenders().find((s) => s.track && s.track.kind === 'video');
+      if (!sender) continue;
+      try {
+        await sender.replaceTrack(videoTrack);
+      } catch (err) {
+        console.warn('Failed to replace outgoing video track:', err);
+      }
+    }
+  }, []);
+
+  const stopScreenShare = useCallback(async () => {
+    const activeScreen = screenStreamRef.current;
+    if (activeScreen) {
+      activeScreen.getTracks().forEach((track) => track.stop());
+      screenStreamRef.current = null;
+    }
+
+    setIsScreenSharing(false);
+
+    const cameraStream = await ensureLocalStream();
+    const cameraTrack = cameraStream?.getVideoTracks()?.[0] || null;
+
+    if (cameraTrack) {
+      cameraTrack.enabled = isVideoOnRef.current;
+      await replaceOutgoingVideoTrack(cameraTrack);
+    }
+
+    if (videoRef.current && cameraStream) {
+      videoRef.current.srcObject = cameraStream;
+    }
+
+    updateLocalTrackState();
+  }, [ensureLocalStream, replaceOutgoingVideoTrack, updateLocalTrackState]);
+
+  const startScreenShare = useCallback(async () => {
+    if (!meetingStarted) return;
+    try {
+      if (!navigator?.mediaDevices?.getDisplayMedia) {
+        console.warn('Screen sharing is not supported in this browser.');
+        return;
+      }
+
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: false
+      });
+
+      const screenTrack = displayStream.getVideoTracks()?.[0];
+      if (!screenTrack) {
+        displayStream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+
+      screenStreamRef.current = displayStream;
+      setIsScreenSharing(true);
+
+      screenTrack.onended = () => {
+        stopScreenShare();
+      };
+
+      await replaceOutgoingVideoTrack(screenTrack);
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = displayStream;
+      }
+    } catch (error) {
+      // User cancel should be silent; other failures are logged for diagnostics.
+      if (error?.name !== 'NotAllowedError' && error?.name !== 'AbortError') {
+        console.warn('Unable to start screen sharing:', error);
+      }
+      setIsScreenSharing(false);
+    }
+  }, [meetingStarted, replaceOutgoingVideoTrack, stopScreenShare]);
+
+  const toggleScreenShare = useCallback(async () => {
+    if (isScreenSharing) {
+      await stopScreenShare();
+      return;
+    }
+    await startScreenShare();
+  }, [isScreenSharing, startScreenShare, stopScreenShare]);
+
   useEffect(() => {
     if (!meetingStarted) return;
     ensureLocalStream().then(() => updateLocalTrackState());
@@ -649,13 +737,19 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
 
     const localStream = await ensureLocalStream();
     if (localStream) {
-      localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
-      localStream.getVideoTracks().forEach((track) => {
-        track.enabled = isVideoOnRef.current;
-      });
       localStream.getAudioTracks().forEach((track) => {
         track.enabled = isMicOnRef.current;
+        pc.addTrack(track, localStream);
       });
+
+      const screenTrack = screenStreamRef.current?.getVideoTracks()?.[0];
+      const cameraTrack = localStream.getVideoTracks()?.[0];
+      const outboundVideoTrack = screenTrack || cameraTrack;
+
+      if (outboundVideoTrack) {
+        outboundVideoTrack.enabled = screenTrack ? true : isVideoOnRef.current;
+        pc.addTrack(outboundVideoTrack, screenTrack ? screenStreamRef.current : localStream);
+      }
     }
 
     peerConnectionsRef.current.set(peerUserId, pc);
@@ -993,6 +1087,9 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
   };
 
   const endMeeting = async () => {
+    if (isScreenSharing || screenStreamRef.current) {
+      await stopScreenShare();
+    }
     closeAllPeerConnections();
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -1068,6 +1165,10 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
   useEffect(() => {
     return () => {
       closeAllPeerConnections();
+      if (screenStreamRef.current) {
+        screenStreamRef.current.getTracks().forEach((track) => track.stop());
+        screenStreamRef.current = null;
+      }
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach((track) => track.stop());
         localStreamRef.current = null;
@@ -1511,14 +1612,6 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
                 {hoveredControl === 'video' && <div className="absolute bottom-full mb-3 bg-black/80 backdrop-blur-xl border border-white/20 text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap">{isVideoOn ? 'Turn off Camera' : 'Turn on Camera'}</div>}
               </div>
 
-              {/* Screen Share Button - Glassmorphism */}
-              <div onMouseEnter={() => setHoveredControl('share')} onMouseLeave={() => setHoveredControl(null)} className="relative">
-                <button onClick={() => setIsScreenSharing(!isScreenSharing)} className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold transition-all backdrop-blur-xl border border-white/20 ${isScreenSharing ? 'bg-gradient-to-br from-emerald-400/40 to-teal-600/40 hover:from-emerald-400/50 hover:to-teal-600/50 text-emerald-100 shadow-lg shadow-emerald-500/30' : 'bg-gradient-to-br from-slate-400/40 to-slate-600/40 hover:from-slate-400/50 hover:to-slate-600/50 text-slate-100 shadow-lg shadow-slate-500/30'}`} title={isScreenSharing ? 'Stop Sharing' : 'Share Screen'}>
-                  <Share2 className="w-6 h-6" />
-                </button>
-                {hoveredControl === 'share' && <div className="absolute bottom-full mb-3 bg-black/80 backdrop-blur-xl border border-white/20 text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap">{isScreenSharing ? 'Stop Sharing' : 'Share Screen'}</div>}
-              </div>
-
               {/* Sound Toggle Button - Glassmorphism */}
               <div onMouseEnter={() => setHoveredControl('sound')} onMouseLeave={() => setHoveredControl(null)} className="relative">
                 <button onClick={() => setSoundEnabled(!soundEnabled)} className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold transition-all backdrop-blur-xl border border-white/20 ${soundEnabled ? 'bg-gradient-to-br from-amber-400/40 to-yellow-600/40 hover:from-amber-400/50 hover:to-yellow-600/50 text-amber-100 shadow-lg shadow-amber-500/30' : 'bg-gradient-to-br from-slate-400/40 to-slate-600/40 hover:from-slate-400/50 hover:to-slate-600/50 text-slate-100 shadow-lg shadow-slate-500/30'}`} title={soundEnabled ? 'Mute Notifications' : 'Unmute Notifications'}>
@@ -1533,6 +1626,30 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
                   {showChat ? <MessageCircle className="w-6 h-6" /> : <MessageCircle className="w-6 h-6" />}
                 </button>
                 {hoveredControl === 'chat' && <div className="absolute bottom-full mb-3 bg-black/80 backdrop-blur-xl border border-white/20 text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap">{showChat ? 'Hide Chat' : 'Show Chat'}</div>}
+              </div>
+
+              {/* More Menu (Desktop) - Contains screen sharing */}
+              <div onMouseEnter={() => setHoveredControl('more')} onMouseLeave={() => setHoveredControl(null)} className="relative">
+                <button onClick={() => setShowDesktopMenu((prev) => !prev)} className="w-14 h-14 rounded-2xl flex items-center justify-center font-bold transition-all backdrop-blur-xl border border-white/20 bg-gradient-to-br from-slate-500/40 to-slate-700/40 hover:from-slate-500/50 hover:to-slate-700/50 text-slate-100 shadow-lg shadow-slate-500/30" title={showDesktopMenu ? 'Hide menu' : 'More options'}>
+                  <MoreVertical className="w-6 h-6" />
+                </button>
+                {hoveredControl === 'more' && <div className="absolute bottom-full mb-3 bg-black/80 backdrop-blur-xl border border-white/20 text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap">More options</div>}
+
+                {showDesktopMenu && (
+                  <div className="absolute bottom-full right-0 mb-4 bg-black/70 backdrop-blur-xl border border-white/20 rounded-2xl p-2 shadow-2xl min-w-[180px]">
+                    <button
+                      onClick={async () => {
+                        await toggleScreenShare();
+                        setShowDesktopMenu(false);
+                      }}
+                      className={`w-full px-3 py-2 rounded-xl text-left text-sm transition-all flex items-center gap-2 ${isScreenSharing ? 'bg-teal-500/25 text-teal-100 border border-teal-300/20' : 'bg-slate-500/25 text-slate-100 border border-slate-300/20'}`}
+                      title={isScreenSharing ? 'Stop Sharing' : 'Share Screen'}
+                    >
+                      <Share2 className="w-4 h-4" />
+                      <span>{isScreenSharing ? 'Stop Sharing' : 'Share Screen'}</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* End Call Button - Glassmorphism */}
@@ -1578,7 +1695,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
                   {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
                 </button>
                 <button
-                  onClick={() => setIsScreenSharing(!isScreenSharing)}
+                  onClick={toggleScreenShare}
                   className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isScreenSharing ? 'bg-teal-500/25 text-teal-100 border border-teal-300/20' : 'bg-slate-500/25 text-slate-100 border border-slate-300/20'}`}
                   title={isScreenSharing ? 'Stop Sharing' : 'Share Screen'}
                 >
