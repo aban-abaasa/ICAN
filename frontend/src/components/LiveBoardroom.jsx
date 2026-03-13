@@ -58,8 +58,11 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
   const webrtcChannelRef = useRef(null);
   const localStreamRef = useRef(null);
   const peerConnectionsRef = useRef(new Map());
+  const pendingIceCandidatesRef = useRef(new Map());
   const callingTimerRef = useRef(null);
   const onCloseRef = useRef(onClose);
+  const isVideoOnRef = useRef(false);
+  const isMicOnRef = useRef(true);
 
   const supabase = useMemo(() => getSupabaseClient(), []);
 
@@ -91,6 +94,14 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
   useEffect(() => {
     onCloseRef.current = onClose;
   }, [onClose]);
+
+  useEffect(() => {
+    isVideoOnRef.current = isVideoOn;
+  }, [isVideoOn]);
+
+  useEffect(() => {
+    isMicOnRef.current = isMicOn;
+  }, [isMicOn]);
 
   // Monitor member joins/leaves and play sounds
   useEffect(() => {
@@ -620,18 +631,24 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     const localStream = await ensureLocalStream();
     if (localStream) {
       localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
-      updateLocalTrackState();
+      localStream.getVideoTracks().forEach((track) => {
+        track.enabled = isVideoOnRef.current;
+      });
+      localStream.getAudioTracks().forEach((track) => {
+        track.enabled = isMicOnRef.current;
+      });
     }
 
     peerConnectionsRef.current.set(peerUserId, pc);
     return pc;
-  }, [ensureLocalStream, updateLocalTrackState, userId, userEmail]);
+  }, [ensureLocalStream, userId, userEmail]);
 
   const closeAllPeerConnections = useCallback(() => {
     peerConnectionsRef.current.forEach((pc) => {
       try { pc.close(); } catch (_) {}
     });
     peerConnectionsRef.current.clear();
+    pendingIceCandidatesRef.current.clear();
     setRemoteStreams([]);
   }, []);
 
@@ -658,6 +675,18 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
         try {
           if (signalType === 'offer' && offer) {
             await pc.setRemoteDescription(new RTCSessionDescription(offer));
+
+            // Flush any ICE candidates that arrived before remote description was set.
+            const queued = pendingIceCandidatesRef.current.get(from) || [];
+            for (const queuedCandidate of queued) {
+              try {
+                await pc.addIceCandidate(new RTCIceCandidate(queuedCandidate));
+              } catch (iceErr) {
+                console.warn('Failed to apply queued ICE candidate:', iceErr);
+              }
+            }
+            if (queued.length) pendingIceCandidatesRef.current.delete(from);
+
             const createdAnswer = await pc.createAnswer();
             await pc.setLocalDescription(createdAnswer);
 
@@ -674,8 +703,24 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
             });
           } else if (signalType === 'answer' && answer) {
             await pc.setRemoteDescription(new RTCSessionDescription(answer));
+
+            const queued = pendingIceCandidatesRef.current.get(from) || [];
+            for (const queuedCandidate of queued) {
+              try {
+                await pc.addIceCandidate(new RTCIceCandidate(queuedCandidate));
+              } catch (iceErr) {
+                console.warn('Failed to apply queued ICE candidate:', iceErr);
+              }
+            }
+            if (queued.length) pendingIceCandidatesRef.current.delete(from);
           } else if (signalType === 'ice-candidate' && candidate) {
-            await pc.addIceCandidate(new RTCIceCandidate(candidate));
+            if (pc.remoteDescription) {
+              await pc.addIceCandidate(new RTCIceCandidate(candidate));
+            } else {
+              const existing = pendingIceCandidatesRef.current.get(from) || [];
+              existing.push(candidate);
+              pendingIceCandidatesRef.current.set(from, existing);
+            }
           }
         } catch (err) {
           console.warn('WebRTC signal handling error:', err);
@@ -694,7 +739,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     };
   }, [supabase, groupId, userId, userEmail, meetingStarted, createPeerConnection, closeAllPeerConnections]);
 
-  // Create offers to visible connected peers (single initiator rule avoids glare)
+  // Create offers to visible connected peers.
   useEffect(() => {
     const createOffersToPeers = async () => {
       if (!meetingStarted || !webrtcChannelRef.current || !userId) return;
@@ -710,6 +755,9 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
         if (!pc) continue;
 
         if (pc.signalingState !== 'stable') continue;
+
+        // If we already have a working stream for this peer, skip renegotiation.
+        if (getRemoteStreamByUserId(peerId)) continue;
 
         try {
           const offer = await pc.createOffer();
@@ -732,7 +780,11 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     };
 
     createOffersToPeers();
-  }, [connectedMembers, meetingStarted, userId, userEmail, createPeerConnection]);
+
+    // Retry offers periodically in case one side subscribed late.
+    const retry = setInterval(createOffersToPeers, 5000);
+    return () => clearInterval(retry);
+  }, [connectedMembers, meetingStarted, userId, userEmail, createPeerConnection, getRemoteStreamByUserId]);
 
   const formatTime = (seconds) => {
     const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
