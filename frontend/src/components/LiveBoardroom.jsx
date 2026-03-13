@@ -42,6 +42,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
   const [activeScreenSharerId, setActiveScreenSharerId] = useState(null);
   const [featuredParticipantId, setFeaturedParticipantId] = useState(null);
   const [screenShareUnsupported, setScreenShareUnsupported] = useState(false);
+  const [screenShareUnsupportedMessage, setScreenShareUnsupportedMessage] = useState('Screen sharing is not supported in this browser');
   const [incomingCall, setIncomingCall] = useState(null);
   const [callAccepted, setCallAccepted] = useState(false);
   const [hasActiveCall, setHasActiveCall] = useState(false);
@@ -762,6 +763,12 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
       // NotAllowedError = user denied/cancelled — silent. Other errors are logged.
       const errorName = error?.name;
       if (errorName === 'NotSupportedError' || errorName === 'TypeError') {
+        const isMobileBrowser = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator?.userAgent || '');
+        setScreenShareUnsupportedMessage(
+          isMobileBrowser
+            ? 'Screen sharing is not available on this mobile browser. Use desktop Chrome or Edge to present.'
+            : 'Screen sharing is not supported in this browser'
+        );
         setScreenShareUnsupported(true);
         setTimeout(() => setScreenShareUnsupported(false), 4000);
       } else if (errorName !== 'NotAllowedError' && errorName !== 'AbortError') {
@@ -1740,8 +1747,8 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
 
             {/* Screen-share unsupported toast (iOS Safari etc.) */}
             {screenShareUnsupported && (
-              <div className="absolute top-14 left-1/2 -translate-x-1/2 z-50 bg-red-900/90 backdrop-blur-md text-red-100 text-xs px-4 py-2 rounded-xl border border-red-400/30 shadow-xl whitespace-nowrap">
-                Screen sharing is not supported in this browser
+              <div className="absolute top-14 left-1/2 -translate-x-1/2 z-50 max-w-[90vw] bg-red-900/90 backdrop-blur-md text-red-100 text-xs px-4 py-2 rounded-xl border border-red-400/30 shadow-xl whitespace-normal text-center">
+                {screenShareUnsupportedMessage}
               </div>
             )}
 
