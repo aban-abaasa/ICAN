@@ -673,9 +673,19 @@ const CMMSModule = ({
   const [editingUser, setEditingUser] = useState(null);
   const [newlyAddedUserId, setNewlyAddedUserId] = useState(null);  // Track newly added user for UI highlight
   const [triggerCreateCompany, setTriggerCreateCompany] = useState(0); // Incremented to open create form
+  const [showNewCompanyOverlay, setShowNewCompanyOverlay] = useState(false); // Modal for non-admin new company creation
+  const [isHeaderCreateFlow, setIsHeaderCreateFlow] = useState(false); // Forces create-new mode even when a profile exists
   
   // Calculate companyId from localStorage and user state
   const companyIdToUse = userCompanyId || getStoredActiveCompanyId(user?.email);
+
+    // Privileged roles can view all requisitions; others stay department-scoped
+  const currentUserDeptId =
+    ['admin', 'coordinator', 'finance'].includes(userRole)
+      ? null
+      : cmmsData.users?.find(
+          (u) => u.email?.toLowerCase() === user?.email?.toLowerCase()
+        )?.department_id || null;
 
   const handleSwitchCompany = async (event) => {
     const nextCompanyId = event.target.value;
@@ -748,7 +758,7 @@ const CMMSModule = ({
       technician: ['inventory', 'requisitions'],
       storeman: ['inventory', 'requisitions'],
       finance: ['requisitions', 'approvals', 'reports'],
-      'service-provider': ['requisitions', 'approvals']
+      'service-provider': ['requisitions']
     };
     
     return tabsByRole[userRole] || [];
@@ -1849,6 +1859,11 @@ const CMMSModule = ({
       if (triggerCreateCompany > 0) {
         setShowProfileForm(true);
         setIsEditingProfile(false);
+        setFormData({ companyName: '', companyRegistration: '', location: '', phone: '', email: '', industry: 'Manufacturing', website: '' });
+        setSelectedDepartments([]);
+        setDepartmentForm({ department_name: '', description: '', location: '' });
+        setProfileError('');
+        setDepartmentError('');
       }
     }, [triggerCreateCompany]);
 
@@ -1922,8 +1937,12 @@ const CMMSModule = ({
       setDepartmentForm({ department_name: '', description: '', location: '' });
     }, [cmmsData.companyProfile]);
 
-    // Strict: Only Admin can manage company profile
-    if (!hasPermission('canEditCompany')) {
+    // Non-admin users can only register a new company from the overlay (no view/edit access)
+    const canEditCompany = hasPermission('canEditCompany');
+    const isCreateOnlyMode = showNewCompanyOverlay && !canEditCompany;
+    const isNewCompanyMode = isCreateOnlyMode || isHeaderCreateFlow;
+
+    if (!canEditCompany && !isCreateOnlyMode) {
       return (
         <div className="glass-card p-4 md:p-6 bg-orange-500 bg-opacity-10 border-l-4 border-orange-500">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
@@ -1943,8 +1962,9 @@ const CMMSModule = ({
       setDepartmentError('');
 
       try {
-        // VALIDATE: At least one department is REQUIRED
-        if (selectedDepartments.length === 0) {
+        // VALIDATE: Department required only when creating a new company (not updating)
+        const isUpdatingExisting = !!(cmmsData.companyProfile?.id && !isNewCompanyMode);
+        if (!isUpdatingExisting && selectedDepartments.length === 0) {
           setDepartmentError('Please add at least one department before saving.');
           setIsSavingProfile(false);
           return;
@@ -1953,7 +1973,7 @@ const CMMSModule = ({
         let savedProfile;
         let savedDepartments = [];
 
-        if (isEditingProfile && cmmsData.companyProfile?.id) {
+        if (isUpdatingExisting) {
           console.log('📝 Editing existing company:', cmmsData.companyProfile.id);
           // EDIT EXISTING: Update company profile
           const updateResponse = await cmmsService.updateCompanyProfile(cmmsData.companyProfile.id, formData);
@@ -1981,19 +2001,41 @@ const CMMSModule = ({
           console.log('✅ Company profile updated with new departments');
         } else {
           console.log('🆕 Creating new company with departments:', selectedDepartments);
-          // CREATE NEW: Use atomic function that creates company + departments together
-          const createResponse = await cmmsService.createCompanyWithDepartments(
-            formData, 
-            selectedDepartments
-          );
-          
-          if (createResponse.error) {
-            console.error('❌ Error creating company with departments:', createResponse.error);
-            throw createResponse.error;
-          }
+          // CREATE NEW: Prefer atomic create, fallback to standard create + department inserts.
+          if (typeof cmmsService.createCompanyWithDepartments === 'function') {
+            const createResponse = await cmmsService.createCompanyWithDepartments(
+              formData,
+              selectedDepartments
+            );
 
-          savedProfile = createResponse.data?.company;
-          savedDepartments = createResponse.data?.departments || [];
+            if (createResponse.error) {
+              console.error('❌ Error creating company with departments:', createResponse.error);
+              throw createResponse.error;
+            }
+
+            savedProfile = createResponse.data?.company;
+            savedDepartments = createResponse.data?.departments || [];
+          } else {
+            const createResponse = await cmmsService.createCompanyProfile(formData);
+            if (createResponse.error) throw createResponse.error;
+
+            savedProfile = createResponse.data;
+
+            for (const dept of selectedDepartments) {
+              const deptResult = await cmmsService.createCmmsDepartment(savedProfile.id, {
+                department_name: dept.name || dept.department_name,
+                description: dept.description || '',
+                location: dept.location || ''
+              });
+              if (deptResult.error) {
+                throw new Error(`Failed to create department "${dept.name || dept.department_name}": ${deptResult.error.message}`);
+              }
+            }
+
+            const { data: depts, error: listError } = await cmmsService.getCmmsDepartments(savedProfile.id);
+            if (listError) throw listError;
+            savedDepartments = depts || [];
+          }
 
           console.log('✅ New company created with departments:', {
             companyId: savedProfile?.id,
@@ -2017,6 +2059,8 @@ const CMMSModule = ({
         setSelectedDepartments([]);
         setShowProfileForm(false);
         setIsEditingProfile(false);
+        setShowNewCompanyOverlay(false); // Close overlay after successful company creation
+        setIsHeaderCreateFlow(false);
         if (onDataUpdate && typeof onDataUpdate === 'function') {
           onDataUpdate({ companyProfile: savedProfile || formData });
         }
@@ -2093,7 +2137,7 @@ const CMMSModule = ({
       <div className="space-y-4">
         {(showProfileForm || isEditingProfile || !profile) && (
           <div className="glass-card p-4 md:p-6 space-y-4">
-            <h3 className="text-lg md:text-xl font-bold text-white">{profile ? '🏢 Edit Company Profile' : '🏢 Create Company Profile'}</h3>
+            <h3 className="text-lg md:text-xl font-bold text-white">{(profile && !isNewCompanyMode) ? '🏢 Edit Company Profile' : '🏢 Create Company Profile'}</h3>
 
             {profileError && (
               <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-sm">
@@ -2255,17 +2299,21 @@ const CMMSModule = ({
                 disabled={isSavingProfile}
                 className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-green-600 transition-all text-sm disabled:opacity-50"
               >
-                {isSavingProfile ? 'Saving...' : profile ? 'Save Profile Changes' : 'Create Profile'}
+                {isSavingProfile ? 'Saving...' : (profile && !isNewCompanyMode) ? 'Save Profile Changes' : 'Create Profile'}
               </button>
               {profile && (
                 <button
                   onClick={() => {
                     setShowProfileForm(false);
                     setIsEditingProfile(false);
+                    setIsHeaderCreateFlow(false);
                     setProfileError('');
                     setDepartmentError('');
                     setSelectedDepartments([]);
                     setFormData(mapProfileToForm(cmmsData.companyProfile));
+                    if (showNewCompanyOverlay) {
+                      setShowNewCompanyOverlay(false);
+                    }
                   }}
                   className="px-4 py-2 bg-gray-500 bg-opacity-30 text-gray-300 rounded-lg font-semibold hover:bg-opacity-50 transition-all text-sm"
                 >
@@ -2276,7 +2324,7 @@ const CMMSModule = ({
           </div>
         )}
 
-        {profile && !showProfileForm && !isEditingProfile && (
+        {profile && !showProfileForm && !isEditingProfile && !isNewCompanyMode && (
           <div className="glass-card p-4 md:p-6">
             <h3 className="text-lg md:text-xl font-bold text-white mb-4">📋 Company Profile</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mb-6">
@@ -2303,6 +2351,7 @@ const CMMSModule = ({
                 onClick={() => {
                   setIsEditingProfile(true);
                   setShowProfileForm(true);
+                  setIsHeaderCreateFlow(false);
                   setProfileError('');
                   setDepartmentError('');
                   setFormData(mapProfileToForm(cmmsData.companyProfile));
@@ -2317,6 +2366,7 @@ const CMMSModule = ({
                 onClick={() => {
                   setShowProfileForm(true);
                   setIsEditingProfile(false);
+                  setIsHeaderCreateFlow(true);
                   setFormData({ companyName: '', companyRegistration: '', location: '', phone: '', email: '', industry: 'Manufacturing' });
                   setDepartmentForm({ department_name: '', description: '', location: '' });
                   setSelectedDepartments([]);
@@ -4982,7 +5032,15 @@ const CMMSModule = ({
                 </select>
               </div>
               <button
-                onClick={() => { setActiveTab('company'); setTriggerCreateCompany(prev => prev + 1); }}
+                onClick={() => {
+                  setIsHeaderCreateFlow(true);
+                  if (userRole === 'admin' || isCreator) {
+                    setActiveTab('company');
+                  } else {
+                    setShowNewCompanyOverlay(true);
+                  }
+                  setTriggerCreateCompany(prev => prev + 1);
+                }}
                 title="Create New Company"
                 className="flex-shrink-0 p-2 rounded-lg bg-white bg-opacity-10 border border-white border-opacity-20 text-white hover:bg-opacity-20 hover:border-blue-400 transition-all"
               >
@@ -4999,7 +5057,15 @@ const CMMSModule = ({
 
           {companyMemberships.length <= 1 && (
             <button
-              onClick={() => { setActiveTab('company'); setTriggerCreateCompany(prev => prev + 1); }}
+              onClick={() => {
+                setIsHeaderCreateFlow(true);
+                if (userRole === 'admin' || isCreator) {
+                  setActiveTab('company');
+                } else {
+                  setShowNewCompanyOverlay(true);
+                }
+                setTriggerCreateCompany(prev => prev + 1);
+              }}
               title="Create New Company"
               className="flex-shrink-0 p-2 rounded-lg bg-white bg-opacity-10 border border-white border-opacity-20 text-white hover:bg-opacity-20 hover:border-blue-400 transition-all"
             >
@@ -5099,6 +5165,7 @@ const CMMSModule = ({
             companyId={companyIdToUse}
             cmmsData={cmmsData}
             setCmmsData={setCmmsData}
+            userDepartmentId={currentUserDeptId}
           />
         )}
         {activeTab === 'approvals' && (
@@ -5111,6 +5178,37 @@ const CMMSModule = ({
         )}
         {activeTab === 'reports' && <ReportsManager />}
       </div>
+      {/* New Company Creation Overlay — for non-admin roles, works regardless of active tab */}
+      {showNewCompanyOverlay && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 overflow-y-auto">
+          <div className="min-h-screen flex items-start justify-center p-4">
+            <div className="w-full max-w-2xl mt-8 mb-8">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                    <polyline points="9 22 9 12 15 12 15 22" />
+                    <line x1="19" y1="9" x2="19" y2="4" />
+                    <line x1="21" y1="6" x2="17" y2="6" />
+                  </svg>
+                  <span className="text-white font-semibold text-sm">Register New Company</span>
+                </div>
+                <button
+                  onClick={() => setShowNewCompanyOverlay(false)}
+                  className="text-white/60 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10"
+                  title="Close"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+              <CompanyProfileManager />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

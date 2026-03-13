@@ -12,7 +12,7 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 
-export const BusinessLoanCalculator = ({ isOpen, onClose, preFilledAmount = '', onAddLoan }) => {
+export const BusinessLoanCalculator = ({ isOpen, onClose, preFilledAmount = '', onAddLoan, preFilledRevenue = '', preFilledExpenses = '', registeredLoans = [] }) => {
   const [loanAmount, setLoanAmount]           = useState('');
   const [interestRate, setInterestRate]       = useState('18');
   const [loanTerm, setLoanTerm]               = useState('3');
@@ -30,15 +30,29 @@ export const BusinessLoanCalculator = ({ isOpen, onClose, preFilledAmount = '', 
   const [existingDebts, setExistingDebts]     = useState('400000');
   const [tithePercentage, setTithePercentage] = useState('10');
 
-  // Pre-fill amount when opened via voice / typed loan detection
+  // Pre-fill amount + real financial data when opened
   useEffect(() => {
-    if (isOpen && preFilledAmount) {
-      setLoanAmount(String(preFilledAmount));
-      // Apply sensible defaults for the pre-filled amount
-      const amt = parseFloat(String(preFilledAmount).replace(/,/g, '')) || 0;
-      if (amt > 10_000_000) { setInterestRate('20'); setLoanTerm('5'); }
-      else if (amt > 1_000_000) { setInterestRate('22'); setLoanTerm('3'); }
-      else { setInterestRate('24'); setLoanTerm('2'); }
+    if (isOpen) {
+      if (preFilledAmount) {
+        setLoanAmount(String(preFilledAmount));
+        // Apply sensible defaults for the pre-filled amount
+        const amt = parseFloat(String(preFilledAmount).replace(/,/g, '')) || 0;
+        if (amt > 10_000_000) { setInterestRate('20'); setLoanTerm('5'); }
+        else if (amt > 1_000_000) { setInterestRate('22'); setLoanTerm('3'); }
+        else { setInterestRate('24'); setLoanTerm('2'); }
+      }
+      // Pre-fill real monthly revenue & expenses from VelocityEngine
+      if (preFilledRevenue) setMonthlyRevenue(preFilledRevenue);
+      if (preFilledExpenses) {
+        // Split real expenses across the main cost buckets proportionally
+        const totalExp = parseFloat(preFilledExpenses) || 0;
+        setOperatingExpenses(String(Math.round(totalExp * 0.15)));
+        setEmployeeSalaries(String(Math.round(totalExp * 0.35)));
+        setRentUtilities(String(Math.round(totalExp * 0.12)));
+        setMarketingCosts(String(Math.round(totalExp * 0.08)));
+        setInventoryCosts(String(Math.round(totalExp * 0.20)));
+        setExistingDebts(String(Math.round(totalExp * 0.10)));
+      }
     }
     if (!isOpen) {
       // reset on close so next open is fresh
@@ -52,7 +66,7 @@ export const BusinessLoanCalculator = ({ isOpen, onClose, preFilledAmount = '', 
       setPayeDeductions('100000');
       setExistingDebts('400000');
     }
-  }, [isOpen, preFilledAmount]);
+  }, [isOpen, preFilledAmount, preFilledRevenue, preFilledExpenses]);
 
   // ── Core calculations ──────────────────────────────────────────────────────
   const calculate = () => {
@@ -152,6 +166,29 @@ export const BusinessLoanCalculator = ({ isOpen, onClose, preFilledAmount = '', 
         </div>
 
         <div className="p-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+          {/* ── Registered Loans Banner ── */}
+          {registeredLoans.length > 0 && (
+            <div className="lg:col-span-3 bg-blue-50 border border-blue-200 rounded-xl p-3">
+              <p className="text-xs font-bold text-blue-700 mb-2">📋 Registered Loans ({registeredLoans.length}) — principal pre-loaded</p>
+              <div className="space-y-1 max-h-28 overflow-y-auto">
+                {registeredLoans.map((loan, i) => (
+                  <div key={loan.id || i} className="flex justify-between text-xs text-blue-800 bg-white rounded-lg px-3 py-1.5 border border-blue-100">
+                    <span className="truncate mr-2">{loan.description || `Loan #${i + 1}`}</span>
+                    <span className="font-semibold whitespace-nowrap">UGX {(parseFloat(loan.amount) || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                  </div>
+                ))}
+              </div>
+              {preFilledRevenue && (
+                <p className="text-xs text-blue-600 mt-2">💰 Revenue &amp; expenses auto-filled from your real 30-day transactions.</p>
+              )}
+            </div>
+          )}
+          {!registeredLoans.length && preFilledRevenue && (
+            <div className="lg:col-span-3 bg-green-50 border border-green-200 rounded-xl p-3 text-xs text-green-700">
+              🟢 Revenue and expenses pre-filled from your real 30-day transaction data.
+            </div>
+          )}
 
           {/* ── Left: Inputs ── */}
           <div className="lg:col-span-2 space-y-4">

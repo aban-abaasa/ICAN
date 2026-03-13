@@ -68,6 +68,8 @@ const mapRequisitionFromDb = (req) => ({
   deptHeadApprovedAt: req.dept_head_approved_at,
   financeApprovedAt: req.finance_approved_at,
   requiredByDate: req.required_by_date || '',
+  department_id: req.department_id || null,
+  createdByEmail: req.requested_by_email || '',
   items: Array.isArray(req.items) ? req.items.map(normalizeLineItem) : []
 });
 
@@ -82,7 +84,7 @@ const emptyForm = {
 
 const formatUgx = (value) => `UGX ${Number(value || 0).toLocaleString()}`;
 
-const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData }) => {
+const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData, userDepartmentId }) => {
   const [form, setForm] = useState(emptyForm);
   const [selectedItem, setSelectedItem] = useState('');
   const [itemQuantity, setItemQuantity] = useState(1);
@@ -96,7 +98,9 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
   const hasLoaded = useRef(false);
   const pendingRequiredAmount = (Number(itemQuantity) || 0) * (Number(itemCost) || 0);
 
-  const canCreateRequisition = ['technician', 'supervisor', 'coordinator', 'admin'].includes(userRole);
+  const canCreateRequisition = ['technician', 'service-provider', 'supervisor', 'coordinator', 'admin'].includes(userRole);
+  // Technicians and service-providers can submit only; they cannot browse the register
+  const canViewRequisitionList = !['technician', 'service-provider'].includes(userRole);
 
   const inventoryOptions = useMemo(() => {
     const names = (cmmsData.inventory || [])
@@ -291,10 +295,25 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
 
   const requisitions = cmmsData.requisitions || [];
 
+  // Scope to the user's department (admin sees all when userDepartmentId is null)
+  // Scope: service-providers see only their own submissions; others scoped by department
+  const userScopedRequisitions = useMemo(() => {
+    if (userRole === 'service-provider') {
+      const myEmail = user?.email?.toLowerCase();
+      return requisitions.filter(
+        (req) => req.createdByEmail?.toLowerCase() === myEmail
+      );
+    }
+    if (!userDepartmentId) return requisitions;
+    return requisitions.filter(
+      (req) => !req.department_id || req.department_id === userDepartmentId
+    );
+  }, [requisitions, userDepartmentId, userRole, user?.email]);
+
   const filteredRequisitions = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
 
-    return requisitions.filter((req) => {
+    return userScopedRequisitions.filter((req) => {
       const matchesStatus = statusFilter === 'all' ? true : req.status === statusFilter;
       if (!matchesStatus) return false;
 
@@ -313,21 +332,42 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
 
       return haystack.includes(term);
     });
-  }, [requisitions, searchTerm, statusFilter]);
+  }, [userScopedRequisitions, searchTerm, statusFilter]);
 
   const metrics = useMemo(() => {
-    const all = requisitions.length;
-    const pending = requisitions.filter((req) =>
+    const all = userScopedRequisitions.length;
+    const pending = userScopedRequisitions.filter((req) =>
       ['pending_department_head', 'pending_finance'].includes(req.status)
     ).length;
-    const completed = requisitions.filter((req) => req.status === 'completed').length;
-    const totalEstimated = requisitions.reduce((sum, req) => sum + Number(req.estimatedCost || 0), 0);
+    const completed = userScopedRequisitions.filter((req) => req.status === 'completed').length;
+    const totalEstimated = userScopedRequisitions.reduce((sum, req) => sum + Number(req.estimatedCost || 0), 0);
 
     return { all, pending, completed, totalEstimated };
-  }, [requisitions]);
+  }, [userScopedRequisitions]);
 
   return (
     <div className="space-y-6">
+      {/* Department scope banner */}
+      {/* Department / ownership scope banner */}
+      <div className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border ${
+        userRole === 'service-provider'
+          ? 'bg-violet-500/10 border-violet-500/30 text-violet-300'
+          : userDepartmentId
+            ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-300'
+            : 'bg-slate-700/40 border-slate-600/40 text-slate-300'
+      }`}>
+        <Clipboard className="w-4 h-4 shrink-0" />
+        {userRole === 'service-provider'
+          ? 'Showing: Your submitted requisitions only'
+          : userDepartmentId
+            ? (() => {
+                const dept = cmmsData.departments?.find((d) => d.id === userDepartmentId);
+                return `Showing: ${dept?.name || 'Your Department'} requisitions only`;
+              })()
+            : 'Showing: All Departments'}
+      </div>
+
+      {canViewRequisitionList && (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-4">
           <div className="text-xs uppercase tracking-wide text-cyan-300">Total Requisitions</div>
@@ -346,6 +386,7 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
           <div className="mt-2 text-xl font-bold text-white">UGX {metrics.totalEstimated.toLocaleString()}</div>
         </div>
       </div>
+      )}
 
       {canCreateRequisition ? (
         <section className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/80 via-slate-900/55 to-cyan-900/35 p-5">
@@ -561,6 +602,7 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
         </div>
       )}
 
+      {canViewRequisitionList && (
       <section className="rounded-2xl border border-white/10 bg-slate-900/45 p-5">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
           <h3 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
@@ -706,6 +748,7 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
           </div>
         )}
       </section>
+      )}
     </div>
   );
 };

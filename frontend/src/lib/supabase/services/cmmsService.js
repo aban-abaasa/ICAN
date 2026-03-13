@@ -1359,6 +1359,7 @@ export const getCompanyRequisitions = async (companyId) => {
         .select(`
           id,
           cmms_company_id,
+          department_id,
           requisition_number,
           requisition_date,
           requested_by,
@@ -1670,6 +1671,7 @@ export const updateRequisitionStatus = async (requisitionId, newStatus, approver
 
 export default {
   createCompanyProfile,
+  createCompanyWithDepartments,
   getCompanyProfile,
   updateCompanyProfile,
   createAdminUser,

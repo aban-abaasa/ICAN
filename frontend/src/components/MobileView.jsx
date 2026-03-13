@@ -888,24 +888,29 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
       setIsLoadingReportMetrics(false);
     }
   };
-  // Calculate Tithing Metrics
+  // Calculate Tithing Metrics — driven by REAL transactions from the DB
   const calculateTithingMetrics = () => {
-    const totalIncome = parseFloat(monthlyRevenue) || 0;
-    const personalIncome = velocityMetrics?.income30Days || 0;
-    const businessProfit = (totalIncome - (parseFloat(operatingExpenses) || 0 + parseFloat(inventoryCosts) || 0));
-    
-    const requiredTithe = (totalIncome * tithePercentage) / 100;
-    const personalTithe = (personalIncome * personalTithingRate) / 100;
-    const businessTithe = (Math.max(0, businessProfit) * businessTithingRate) / 100;
-    
+    // Real 30-day figures from VelocityEngine (loaded from ican_transactions)
+    const realIncome   = velocityMetrics?.income30Days   || 0;
+    const realExpenses = velocityMetrics?.expenses30Days || 0;
+    const realNetProfit = realIncome - realExpenses;          // net profit this month
+
+    const personalIncome   = realIncome;
+    const businessProfit   = Math.max(0, realNetProfit);     // tithe on net profit (not gross)
+    const personalTithe    = (personalIncome  * personalTithingRate) / 100;
+    const businessTithe    = (businessProfit  * businessTithingRate) / 100;
+
     return {
-      totalIncome,
-      businessProfit: Math.max(0, businessProfit),
+      totalIncome:    realIncome,
+      realExpenses,
+      netProfit:      realNetProfit,
+      businessProfit,
       personalIncome,
-      requiredTithe,
+      requiredTithe:  personalTithe,      // kept for legacy references
       personalTithe,
       businessTithe,
-      combinedTithe: personalTithe + businessTithe
+      combinedTithe:  personalTithe + businessTithe,
+      hasRealData:    velocityMetrics !== null,
     };
   };
 
@@ -5006,10 +5011,35 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
               {selectedTithingTab === 'quick' && (
                 <div className="space-y-3">
-                  <div className="bg-white rounded-xl p-4 shadow-sm">
-                    <p className="text-xs text-gray-500 mb-1">Based on your last 30 days income</p>
+                  {/* Live data banner */}
+                  <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold ${tithingMetrics.hasRealData ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-gray-50 text-gray-500 border border-gray-200'}`}>
+                    <span>{tithingMetrics.hasRealData ? '🟢 Live' : '⚪ No data'}</span>
+                    <span>{tithingMetrics.hasRealData ? 'Based on your real transactions (last 30 days)' : 'No transactions loaded yet'}</span>
+                  </div>
+
+                  {/* Net profit breakdown */}
+                  <div className="bg-white rounded-xl p-4 shadow-sm space-y-2">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">This Month's Financials</p>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">💰 Income</span>
+                      <span className="font-semibold text-green-600">UGX {(tithingMetrics.totalIncome || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">📉 Expenses</span>
+                      <span className="font-semibold text-red-500">UGX {(tithingMetrics.realExpenses || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
+                    </div>
+                    <div className="flex justify-between text-sm border-t pt-2 mt-1">
+                      <span className="text-gray-700 font-bold">📊 Net Profit</span>
+                      <span className={`font-bold text-base ${(tithingMetrics.netProfit || 0) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                        UGX {(tithingMetrics.netProfit || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Combined tithe */}
+                  <div className="bg-white rounded-xl p-4 shadow-sm text-center">
+                    <p className="text-xs text-gray-500 mb-1">Combined tithe due (on net profit)</p>
                     <div className="text-3xl font-bold text-amber-600">UGX {(tithingMetrics.combinedTithe || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
-                    <p className="text-xs text-gray-500 mt-1">Combined tithe due this month</p>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="bg-white rounded-xl p-4 shadow-sm text-center">
@@ -5020,7 +5050,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     <div className="bg-white rounded-xl p-4 shadow-sm text-center">
                       <div className="text-sm text-gray-500">Business Tithe</div>
                       <div className="text-xl font-bold text-blue-600">UGX {(tithingMetrics.businessTithe || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
-                      <div className="text-xs text-gray-400">{businessTithingRate}% of profit</div>
+                      <div className="text-xs text-gray-400">{businessTithingRate}% of net profit</div>
                     </div>
                   </div>
                   <div className="bg-amber-100 rounded-xl p-3 text-xs text-amber-800 border border-amber-200">
@@ -5031,6 +5061,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
               {selectedTithingTab === 'business' && (
                 <div className="space-y-3">
+                  {/* Live data banner */}
+                  <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold ${tithingMetrics.hasRealData ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-gray-50 text-gray-500 border border-gray-200'}`}>
+                    <span>{tithingMetrics.hasRealData ? '🟢 Live' : '⚪ No data'}</span>
+                    <span>{tithingMetrics.hasRealData ? 'Net profit from real 30-day transactions' : 'No transactions loaded yet'}</span>
+                  </div>
                   <div className="bg-white rounded-xl p-4 shadow-sm">
                     <label className="block text-xs font-semibold text-gray-700 mb-1">Business Tithe Rate (%)</label>
                     <input type="range" min="5" max="20" value={businessTithingRate}
@@ -5038,8 +5073,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       className="w-full accent-amber-500" />
                     <div className="flex justify-between text-xs text-gray-400 mt-1"><span>5%</span><span className="font-bold text-amber-600">{businessTithingRate}%</span><span>20%</span></div>
                   </div>
-                  <div className="bg-white rounded-xl p-4 shadow-sm">
-                    <div className="flex justify-between text-sm mb-2"><span className="text-gray-500">Business Profit</span><span className="font-semibold">UGX {(tithingMetrics.businessProfit || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                  <div className="bg-white rounded-xl p-4 shadow-sm space-y-2">
+                    <div className="flex justify-between text-sm"><span className="text-gray-500">Income (30d)</span><span className="font-semibold text-green-600">UGX {(tithingMetrics.totalIncome || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                    <div className="flex justify-between text-sm"><span className="text-gray-500">Expenses (30d)</span><span className="font-semibold text-red-500">UGX {(tithingMetrics.realExpenses || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                    <div className="flex justify-between text-sm border-t pt-2"><span className="text-gray-700 font-bold">Net Profit</span><span className={`font-bold ${(tithingMetrics.netProfit || 0) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>UGX {(tithingMetrics.businessProfit || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
                     <div className="flex justify-between text-sm"><span className="text-gray-500">Tithe Due</span><span className="font-bold text-amber-600 text-lg">UGX {(tithingMetrics.businessTithe || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
                   </div>
                 </div>
@@ -5047,6 +5084,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
               {selectedTithingTab === 'personal' && (
                 <div className="space-y-3">
+                  {/* Live data banner */}
+                  <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold ${tithingMetrics.hasRealData ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-gray-50 text-gray-500 border border-gray-200'}`}>
+                    <span>{tithingMetrics.hasRealData ? '🟢 Live' : '⚪ No data'}</span>
+                    <span>{tithingMetrics.hasRealData ? 'Income from real 30-day transactions' : 'No transactions loaded yet'}</span>
+                  </div>
                   <div className="bg-white rounded-xl p-4 shadow-sm">
                     <label className="block text-xs font-semibold text-gray-700 mb-1">Personal Tithe Rate (%)</label>
                     <input type="range" min="5" max="20" value={personalTithingRate}
@@ -5495,37 +5537,49 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       )}
 
       {/* Business Loan Calculator — real extracted component */}
-      {showBusinessLoanCalculator && (
-        <BusinessLoanCalculator
-          isOpen={showBusinessLoanCalculator}
-          onClose={() => setShowBusinessLoanCalculator(false)}
-          preFilledAmount={loanAmount}
-          onAddLoan={(loan) => {
-            const formattedLoan = {
-              id: `loan_${Date.now()}`,
-              amount: loan.amount,
-              transaction_type: 'expense',
-              description: `Business Loan — ${loan.purpose || 'business-expansion'}`,
-              created_at: new Date().toISOString(),
-              user_id: userProfile?.id,
-              currency: 'UGX',
-              status: 'completed',
-              record_category: 'business',
-              metadata: {
-                category: 'cashflow',
-                source: 'loan_calculator',
+      {showBusinessLoanCalculator && (() => {
+        // Gather all recorded loan transactions (added via calculator or typed as 'loan')
+        const registeredLoans = transactions.filter(t =>
+          t.transaction_type === 'loan' ||
+          (t.metadata?.accounting_type === 'liability' && t.metadata?.source === 'loan_calculator')
+        );
+        const registeredLoansPrincipal = registeredLoans.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+
+        return (
+          <BusinessLoanCalculator
+            isOpen={showBusinessLoanCalculator}
+            onClose={() => setShowBusinessLoanCalculator(false)}
+            preFilledAmount={registeredLoansPrincipal > 0 ? String(Math.round(registeredLoansPrincipal)) : loanAmount}
+            preFilledRevenue={velocityMetrics?.income30Days > 0 ? String(Math.round(velocityMetrics.income30Days)) : ''}
+            preFilledExpenses={velocityMetrics?.expenses30Days > 0 ? String(Math.round(velocityMetrics.expenses30Days)) : ''}
+            registeredLoans={registeredLoans}
+            onAddLoan={(loan) => {
+              const formattedLoan = {
+                id: `loan_${Date.now()}`,
+                amount: loan.amount,
+                transaction_type: 'expense',
+                description: `Business Loan — ${loan.purpose || 'business-expansion'}`,
+                created_at: new Date().toISOString(),
+                user_id: userProfile?.id,
+                currency: 'UGX',
+                status: 'completed',
                 record_category: 'business',
-                accounting_type: 'liability',
-                monthly_payment: loan.monthlyPayment,
-                interest_rate: loan.interestRate,
-                term_years: loan.term,
-              }
-            };
-            setTransactions(prev => [formattedLoan, ...prev]);
-            setShowBusinessLoanCalculator(false);
-          }}
-        />
-      )}
+                metadata: {
+                  category: 'cashflow',
+                  source: 'loan_calculator',
+                  record_category: 'business',
+                  accounting_type: 'liability',
+                  monthly_payment: loan.monthlyPayment,
+                  interest_rate: loan.interestRate,
+                  term_years: loan.term,
+                }
+              };
+              setTransactions(prev => [formattedLoan, ...prev]);
+              setShowBusinessLoanCalculator(false);
+            }}
+          />
+        );
+      })()}
 
       {/* Smart Transaction Entry Modal */}
       <SmartTransactionEntry
