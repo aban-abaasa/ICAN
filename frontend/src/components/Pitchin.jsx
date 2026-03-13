@@ -54,6 +54,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
   const [maxEquity, setMaxEquity] = useState('100');
   const [hasIPOnly, setHasIPOnly] = useState(false);
   const [sortBy, setSortBy] = useState('relevance');
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
 
   const [showRecorder, setShowRecorder] = useState(false);
   const [currentPitch, setCurrentPitch] = useState(null);
@@ -1297,7 +1298,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
 
           {/* Center - Search */}
           <div className="flex-1 flex items-center gap-2 min-w-0">
-            <div className="flex-1 relative">
+            <div className="hidden md:block flex-1 relative">
               <input
                 type="text"
                 placeholder="Search by title, category, or business..."
@@ -1312,6 +1313,45 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
                 className="w-full px-0 py-1 bg-transparent border-0 border-b border-gray-600 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-gray-400 focus:ring-0"
               />
               <Search className="absolute right-0 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+            </div>
+
+            <div className="md:hidden w-full">
+              {showMobileSearch ? (
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Search..."
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      if (e.target.value.trim()) setActiveTab('search');
+                    }}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && searchQuery.trim()) setActiveTab('search');
+                    }}
+                    className="w-full pr-8 px-0 py-1 bg-transparent border-0 border-b border-gray-600 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-gray-400 focus:ring-0"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowMobileSearch(false)}
+                    className="absolute right-0 top-1/2 transform -translate-y-1/2 text-slate-400"
+                    aria-label="Close search"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowMobileSearch(true)}
+                    className="p-1 text-slate-300 hover:text-white transition-colors"
+                    aria-label="Open search"
+                  >
+                    <Search className="w-5 h-5" />
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Category + sort filters — only when searching */}

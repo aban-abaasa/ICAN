@@ -161,6 +161,10 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
   // Auto-open boardroom when user answers global incoming call
   const answerGlobalCall = () => {
     if (incomingCallData) {
+      const targetGroup = myGroups.find(g => g.id === incomingCallData.groupId)
+        || groups.find(g => g.id === incomingCallData.groupId)
+        || null;
+      setSelectedGroup(targetGroup);
       setBoardroomGroupId(incomingCallData.groupId);
       setIncomingCallData(null);
     }
@@ -1153,7 +1157,10 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
 
                       {/* Boardroom Button */}
                       <button
-                        onClick={() => setBoardroomGroupId(group.id)}
+                        onClick={() => {
+                          setSelectedGroup(group);
+                          setBoardroomGroupId(group.id);
+                        }}
                         title="Join Boardroom"
                         className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors text-sm font-medium hidden sm:flex items-center justify-center gap-1"
                       >
@@ -1161,7 +1168,10 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
                         Boardroom
                       </button>
                       <button
-                        onClick={() => setBoardroomGroupId(group.id)}
+                        onClick={() => {
+                          setSelectedGroup(group);
+                          setBoardroomGroupId(group.id);
+                        }}
                         title="Join Boardroom"
                         className="flex-1 sm:hidden px-2 py-2 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white rounded-lg transition-colors flex items-center justify-center gap-1 relative group"
                       >
@@ -2742,7 +2752,7 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
           <div className="flex items-center justify-between p-4 bg-slate-900 border-b border-slate-700">
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
               <Video className="text-blue-400" />
-              {groups.find(g => g.id === boardroomGroupId)?.name} - Live Boardroom
+              {(myGroups.find(g => g.id === boardroomGroupId) || groups.find(g => g.id === boardroomGroupId))?.name} - Live Boardroom
             </h2>
             <button
               onClick={() => setBoardroomGroupId(null)}
@@ -2754,9 +2764,9 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
           <div className="flex-1 overflow-hidden">
             <LiveBoardroom
               groupId={boardroomGroupId}
-              groupName={groups.find(g => g.id === boardroomGroupId)?.name}
-              members={selectedGroup?.members || []}
-              creatorId={selectedGroup?.creator_id}
+              groupName={(myGroups.find(g => g.id === boardroomGroupId) || groups.find(g => g.id === boardroomGroupId))?.name}
+              members={(myGroups.find(g => g.id === boardroomGroupId) || groups.find(g => g.id === boardroomGroupId))?.members || selectedGroup?.members || []}
+              creatorId={(myGroups.find(g => g.id === boardroomGroupId) || groups.find(g => g.id === boardroomGroupId))?.creator_id || selectedGroup?.creator_id || null}
             />
           </div>
         </div>
