@@ -71,6 +71,25 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     [remoteStreams]
   );
 
+  const peerTargets = useMemo(() => {
+    const peers = new Map();
+
+    (connectedMembers || []).forEach((member) => {
+      if (!member?.userId || member.userId === userId) return;
+      peers.set(member.userId, member.email || '');
+    });
+
+    (groupMembers || []).forEach((member) => {
+      const id = member?.id || member?.user_id;
+      if (!id || id === userId) return;
+      if (!peers.has(id)) {
+        peers.set(id, member?.email || member?.user_email || '');
+      }
+    });
+
+    return Array.from(peers.entries()).map(([id, email]) => ({ id, email }));
+  }, [connectedMembers, groupMembers, userId]);
+
   // Initialize audio notification service
   useEffect(() => {
     try {
@@ -739,18 +758,21 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     };
   }, [supabase, groupId, userId, userEmail, meetingStarted, createPeerConnection, closeAllPeerConnections]);
 
-  // Create offers to visible connected peers.
+  // Create offers to peers from presence + known group membership.
   useEffect(() => {
     const createOffersToPeers = async () => {
       if (!meetingStarted || !webrtcChannelRef.current || !userId) return;
 
-      for (const member of connectedMembers || []) {
-        const peerId = member?.userId;
+      for (const peer of peerTargets) {
+        const peerId = peer.id;
         if (!peerId || peerId === userId) continue;
+
+        // Deterministic initiator avoids offer glare.
+        if (String(userId) > String(peerId)) continue;
 
         let pc = peerConnectionsRef.current.get(peerId);
         if (!pc) {
-          pc = await createPeerConnection(peerId, member?.email || '');
+          pc = await createPeerConnection(peerId, peer?.email || '');
         }
         if (!pc) continue;
 
@@ -784,7 +806,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     // Retry offers periodically in case one side subscribed late.
     const retry = setInterval(createOffersToPeers, 5000);
     return () => clearInterval(retry);
-  }, [connectedMembers, meetingStarted, userId, userEmail, createPeerConnection, getRemoteStreamByUserId]);
+  }, [peerTargets, meetingStarted, userId, userEmail, createPeerConnection, getRemoteStreamByUserId]);
 
   const formatTime = (seconds) => {
     const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
@@ -1418,12 +1440,13 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
                     <video
                       autoPlay
                       playsInline
-                      muted
+                      muted={false}
                       ref={(el) => {
                         if (!el) return;
                         const stream = getRemoteStreamByUserId(member?.userId);
                         if (stream && el.srcObject !== stream) {
                           el.srcObject = stream;
+                          el.play?.().catch(() => {});
                         }
                       }}
                       className="w-full h-full object-cover"
