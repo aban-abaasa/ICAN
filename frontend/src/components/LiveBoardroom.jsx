@@ -76,6 +76,18 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     [remoteStreams]
   );
 
+  const requestDisplayMedia = useCallback(async (constraints) => {
+    if (navigator?.mediaDevices?.getDisplayMedia) {
+      return navigator.mediaDevices.getDisplayMedia(constraints);
+    }
+    if (typeof navigator?.getDisplayMedia === 'function') {
+      return navigator.getDisplayMedia(constraints);
+    }
+    const unsupportedError = new Error('Screen sharing API unavailable');
+    unsupportedError.name = 'NotSupportedError';
+    throw unsupportedError;
+  }, []);
+
   const memberDirectory = useMemo(() => {
     const directory = new Map();
 
@@ -716,14 +728,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
   const startScreenShare = useCallback(async () => {
     if (!meetingStarted) return;
     try {
-      if (!navigator?.mediaDevices?.getDisplayMedia) {
-        // Unsupported browser (e.g. iOS Safari) — show a brief toast instead of silently failing.
-        setScreenShareUnsupported(true);
-        setTimeout(() => setScreenShareUnsupported(false), 4000);
-        return;
-      }
-
-      const displayStream = await navigator.mediaDevices.getDisplayMedia({
+      const displayStream = await requestDisplayMedia({
         video: { frameRate: { ideal: 15 } },
         audio: false
       });
@@ -755,12 +760,16 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
       await broadcastScreenShareState(true);
     } catch (error) {
       // NotAllowedError = user denied/cancelled — silent. Other errors are logged.
-      if (error?.name !== 'NotAllowedError' && error?.name !== 'AbortError') {
+      const errorName = error?.name;
+      if (errorName === 'NotSupportedError' || errorName === 'TypeError') {
+        setScreenShareUnsupported(true);
+        setTimeout(() => setScreenShareUnsupported(false), 4000);
+      } else if (errorName !== 'NotAllowedError' && errorName !== 'AbortError') {
         console.warn('Unable to start screen sharing:', error);
       }
       setIsScreenSharing(false);
     }
-  }, [meetingStarted, replaceOutgoingVideoTrack, stopScreenShare, broadcastScreenShareState, userId]);
+  }, [meetingStarted, replaceOutgoingVideoTrack, stopScreenShare, broadcastScreenShareState, userId, requestDisplayMedia]);
 
   const toggleScreenShare = useCallback(async () => {
     if (isScreenSharing) {
