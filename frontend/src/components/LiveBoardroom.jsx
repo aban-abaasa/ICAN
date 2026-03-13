@@ -39,6 +39,8 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
   const [soundVolume, setSoundVolume] = useState(0.7);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showDesktopMenu, setShowDesktopMenu] = useState(false);
+  const [activeScreenSharerId, setActiveScreenSharerId] = useState(null);
+  const [featuredParticipantId, setFeaturedParticipantId] = useState(null);
   const [incomingCall, setIncomingCall] = useState(null);
   const [callAccepted, setCallAccepted] = useState(false);
   const [hasActiveCall, setHasActiveCall] = useState(false);
@@ -71,6 +73,41 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
   const getRemoteStreamByUserId = useCallback(
     (userId) => remoteStreams.find((s) => s.userId === userId)?.stream,
     [remoteStreams]
+  );
+
+  const memberDirectory = useMemo(() => {
+    const directory = new Map();
+
+    (groupMembers || []).forEach((member) => {
+      const id = member?.id || member?.user_id;
+      if (!id) return;
+      directory.set(id, {
+        userId: id,
+        email: member?.email || member?.user_email || 'Member'
+      });
+    });
+
+    (connectedMembers || []).forEach((member) => {
+      if (!member?.userId) return;
+      directory.set(member.userId, {
+        userId: member.userId,
+        email: member?.email || directory.get(member.userId)?.email || 'Member',
+        videoOn: member?.videoOn,
+        micOn: member?.micOn
+      });
+    });
+
+    return directory;
+  }, [groupMembers, connectedMembers]);
+
+  const featuredRemoteMember = useMemo(
+    () => (featuredParticipantId ? memberDirectory.get(featuredParticipantId) : null),
+    [featuredParticipantId, memberDirectory]
+  );
+
+  const featuredRemoteStream = useMemo(
+    () => (featuredParticipantId ? getRemoteStreamByUserId(featuredParticipantId) : null),
+    [featuredParticipantId, getRemoteStreamByUserId]
   );
 
   const peerTargets = useMemo(() => {
@@ -351,6 +388,8 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
           setIsVideoOn(false);
           setMeetingTime(0);
           setConnectedMembers([]);
+          setActiveScreenSharerId(null);
+          setFeaturedParticipantId(null);
           if (callingTimerRef.current) {
             clearInterval(callingTimerRef.current);
             callingTimerRef.current = null;
@@ -372,6 +411,17 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
             setMeetingStarted(true);
             if (callingTimerRef.current) { clearInterval(callingTimerRef.current); callingTimerRef.current = null; }
             if (audioServiceRef.current) audioServiceRef.current.playSound('memberJoined');
+          }
+        })
+        .on('broadcast', { event: 'screen-share-state' }, ({ payload }) => {
+          if (!payload?.userId || payload.userId === user?.id) return;
+
+          if (payload.isSharing) {
+            setActiveScreenSharerId(payload.userId);
+            setFeaturedParticipantId(payload.userId);
+          } else {
+            setActiveScreenSharerId((prev) => (prev === payload.userId ? null : prev));
+            setFeaturedParticipantId((prev) => (prev === payload.userId ? null : prev));
           }
         })
         .subscribe((status) => {
@@ -607,6 +657,25 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     }
   }, []);
 
+  const broadcastScreenShareState = useCallback(async (isSharing) => {
+    if (!callChannelRef.current) return;
+    try {
+      await callChannelRef.current.send({
+        type: 'broadcast',
+        event: 'screen-share-state',
+        payload: {
+          userId,
+          userEmail,
+          groupId,
+          isSharing,
+          timestamp: new Date().toISOString()
+        }
+      });
+    } catch (err) {
+      console.warn('Error broadcasting screen share state:', err);
+    }
+  }, [groupId, userEmail, userId]);
+
   const stopScreenShare = useCallback(async () => {
     const activeScreen = screenStreamRef.current;
     if (activeScreen) {
@@ -615,6 +684,8 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     }
 
     setIsScreenSharing(false);
+    setActiveScreenSharerId((prev) => (prev === userId ? null : prev));
+    await broadcastScreenShareState(false);
 
     const cameraStream = await ensureLocalStream();
     const cameraTrack = cameraStream?.getVideoTracks()?.[0] || null;
@@ -629,7 +700,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     }
 
     updateLocalTrackState();
-  }, [ensureLocalStream, replaceOutgoingVideoTrack, updateLocalTrackState]);
+  }, [broadcastScreenShareState, ensureLocalStream, replaceOutgoingVideoTrack, updateLocalTrackState, userId]);
 
   const startScreenShare = useCallback(async () => {
     if (!meetingStarted) return;
@@ -652,6 +723,8 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
 
       screenStreamRef.current = displayStream;
       setIsScreenSharing(true);
+      setActiveScreenSharerId(userId);
+      await broadcastScreenShareState(true);
 
       screenTrack.onended = () => {
         stopScreenShare();
@@ -669,7 +742,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
       }
       setIsScreenSharing(false);
     }
-  }, [meetingStarted, replaceOutgoingVideoTrack, stopScreenShare]);
+  }, [meetingStarted, replaceOutgoingVideoTrack, stopScreenShare, broadcastScreenShareState, userId]);
 
   const toggleScreenShare = useCallback(async () => {
     if (isScreenSharing) {
@@ -902,6 +975,17 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     return () => clearInterval(retry);
   }, [peerTargets, meetingStarted, userId, userEmail, createPeerConnection, getRemoteStreamByUserId]);
 
+  useEffect(() => {
+    if (!featuredParticipantId) return;
+
+    const stillConnected = connectedMembers.some((member) => member?.userId === featuredParticipantId);
+    const stillStreaming = Boolean(getRemoteStreamByUserId(featuredParticipantId));
+
+    if (!stillConnected && !stillStreaming) {
+      setFeaturedParticipantId(null);
+    }
+  }, [connectedMembers, featuredParticipantId, getRemoteStreamByUserId]);
+
   const formatTime = (seconds) => {
     const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
     const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
@@ -1126,6 +1210,8 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     setMeetingTime(0);
     setConnectedMembers([]);
     setRemoteStreams([]);
+    setActiveScreenSharerId(null);
+    setFeaturedParticipantId(null);
     setIncomingCall(null);
     setCallAccepted(false);
     setIsCalling(false);
@@ -1487,9 +1573,35 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
       <div className="w-full h-full flex flex-col">
         {/* Video Gallery Container */}
         <div className="flex-1 relative bg-black flex flex-col overflow-hidden">
-          {/* Main Video Area - Local User or First Participant */}
+          {/* Main Video Area - Local or selected remote participant */}
           <div className="flex-1 relative bg-gradient-to-br from-slate-900 to-black flex items-center justify-center overflow-hidden">
-            {isVideoOn ? (
+            {featuredParticipantId ? (
+              featuredRemoteStream ? (
+                <video
+                  autoPlay
+                  playsInline
+                  muted
+                  ref={(el) => {
+                    if (!el || !featuredRemoteStream) return;
+                    if (el.srcObject !== featuredRemoteStream) {
+                      el.srcObject = featuredRemoteStream;
+                      el.play?.().catch(() => {});
+                    }
+                  }}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center p-4">
+                  <div className="text-center">
+                    <div className="w-16 h-16 sm:w-32 sm:h-32 bg-gradient-to-br from-slate-700 to-slate-800 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-6">
+                      <span className="text-white font-bold text-2xl sm:text-5xl">{featuredRemoteMember?.email?.charAt(0)?.toUpperCase() || '?'}</span>
+                    </div>
+                    <p className="text-lg sm:text-3xl text-white font-bold mb-2">{featuredRemoteMember?.email?.split('@')[0] || 'Participant'}</p>
+                    <p className="text-gray-400 text-sm sm:text-lg">Waiting for live video...</p>
+                  </div>
+                </div>
+              )
+            ) : (isVideoOn || isScreenSharing) ? (
               <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center p-4">
@@ -1509,12 +1621,41 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
                 </div>
               </div>
             )}
-            
-            {/* Local User Badge */}
-            <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-lg flex items-center gap-2 border border-white/20">
+
+            {/* Main Stage Badge */}
+            <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-lg flex items-center gap-2 border border-white/20 max-w-[70%]">
               <div className="w-2 h-2 rounded-full bg-green-500"></div>
-              <span className="hidden sm:inline text-xs sm:text-sm text-white font-semibold">You</span>
+              <span className="text-xs sm:text-sm text-white font-semibold truncate">
+                {featuredParticipantId ? (featuredRemoteMember?.email?.split('@')[0] || 'Participant') : 'You'}
+              </span>
+              {(activeScreenSharerId && (activeScreenSharerId === featuredParticipantId || (!featuredParticipantId && activeScreenSharerId === userId))) && (
+                <span className="text-[10px] sm:text-xs uppercase tracking-wide text-emerald-300">Presenting</span>
+              )}
             </div>
+
+            {featuredParticipantId && (isVideoOn || isScreenSharing) && (
+              <button
+                onClick={() => setFeaturedParticipantId(null)}
+                className="absolute bottom-3 right-3 w-20 h-14 sm:w-28 sm:h-20 rounded-xl overflow-hidden border border-white/20 bg-black/50 backdrop-blur-md shadow-xl"
+                title="Return to your feed"
+              >
+                <video
+                  autoPlay
+                  playsInline
+                  muted
+                  ref={(el) => {
+                    if (!el) return;
+                    const localPreviewStream = screenStreamRef.current || localStreamRef.current;
+                    if (localPreviewStream && el.srcObject !== localPreviewStream) {
+                      el.srcObject = localPreviewStream;
+                      el.play?.().catch(() => {});
+                    }
+                  }}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-x-0 bottom-0 bg-black/65 text-white text-[10px] sm:text-xs px-2 py-1 text-left">You</div>
+              </button>
+            )}
 
             {/* Mobile Status Bar - Top */}
             <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/70 to-transparent p-2 sm:p-3 z-30 sm:hidden flex items-center justify-between">
@@ -1533,9 +1674,11 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
           {connectedMembers && connectedMembers.length > 0 && (
             <div className="h-16 sm:h-32 bg-black/75 border-t border-slate-700/50 overflow-x-auto flex gap-2 p-2 backdrop-blur-sm">
               {connectedMembers.map((member, idx) => (
-                <div
+                <button
                   key={idx}
-                  className={`flex-shrink-0 w-12 h-12 sm:w-28 sm:h-28 bg-gradient-to-br ${memberTileVariant(member?.email || member?.userId || String(idx))} rounded-lg relative flex items-center justify-center overflow-hidden shadow-lg hover:shadow-2xl transition-all border group/member`}
+                  onClick={() => setFeaturedParticipantId((prev) => (prev === member?.userId ? null : member?.userId))}
+                  className={`flex-shrink-0 w-12 h-12 sm:w-28 sm:h-28 bg-gradient-to-br ${memberTileVariant(member?.email || member?.userId || String(idx))} rounded-lg relative flex items-center justify-center overflow-hidden shadow-lg hover:shadow-2xl transition-all border group/member ${featuredParticipantId === member?.userId ? 'ring-2 ring-white border-white/60 scale-[1.02]' : 'border-white/10'} ${activeScreenSharerId === member?.userId ? 'ring-2 ring-emerald-400/80' : ''}`}
+                  title={featuredParticipantId === member?.userId ? 'Collapse participant' : 'Expand participant'}
                 >
                   {getRemoteStreamByUserId(member?.userId) ? (
                     <video
@@ -1564,13 +1707,16 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
                     {member.micOn && (
                       <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-blue-500 rounded-full shadow-lg"></div>
                     )}
+                    {activeScreenSharerId === member?.userId && (
+                      <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-emerald-400 rounded-full shadow-lg"></div>
+                    )}
                   </div>
 
                   {/* Member Name */}
                   <div className="hidden sm:block absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-1 py-0.5 sm:px-1.5 sm:py-1 text-center">
                     <p className="text-white text-[10px] sm:text-xs font-semibold truncate">{member?.email?.split('@')[0]}</p>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}
