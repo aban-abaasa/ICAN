@@ -645,16 +645,25 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     }
   }, [isVideoOn, isMicOn]);
 
-  const replaceOutgoingVideoTrack = useCallback(async (videoTrack) => {
+  const replaceOutgoingVideoTrack = useCallback(async (videoTrack, ssStream = null) => {
     if (!videoTrack) return;
     const peers = Array.from(peerConnectionsRef.current.values());
     for (const pc of peers) {
       const sender = pc.getSenders().find((s) => s.track && s.track.kind === 'video');
-      if (!sender) continue;
-      try {
-        await sender.replaceTrack(videoTrack);
-      } catch (err) {
-        console.warn('Failed to replace outgoing video track:', err);
+      if (sender) {
+        try {
+          await sender.replaceTrack(videoTrack);
+        } catch (err) {
+          console.warn('Failed to replace outgoing video track:', err);
+        }
+      } else if (ssStream) {
+        // No video sender exists (e.g. presenter joined with camera off).
+        // Add the track — this fires onnegotiationneeded which re-offers to the remote peer.
+        try {
+          pc.addTrack(videoTrack, ssStream);
+        } catch (err) {
+          console.warn('Failed to add screen track via addTrack:', err);
+        }
       }
     }
   }, []);
@@ -728,17 +737,22 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
       screenStreamRef.current = displayStream;
       setIsScreenSharing(true);
       setActiveScreenSharerId(userId);
-      await broadcastScreenShareState(true);
 
       screenTrack.onended = () => {
         stopScreenShare();
       };
 
-      await replaceOutgoingVideoTrack(screenTrack);
+      // Replace the outgoing track FIRST so remote peers get the screen data
+      // immediately when they receive the broadcast notification below.
+      await replaceOutgoingVideoTrack(screenTrack, displayStream);
 
       if (videoRef.current) {
         videoRef.current.srcObject = displayStream;
       }
+
+      // Broadcast AFTER the track is replaced to avoid a race where viewers
+      // try to feature the presenter before the WebRTC track has updated.
+      await broadcastScreenShareState(true);
     } catch (error) {
       // NotAllowedError = user denied/cancelled — silent. Other errors are logged.
       if (error?.name !== 'NotAllowedError' && error?.name !== 'AbortError') {
@@ -809,6 +823,29 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     pc.onconnectionstatechange = () => {
       if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) {
         setRemoteStreams((prev) => prev.filter((s) => s.userId !== peerUserId));
+      }
+    };
+
+    // Handle renegotiation (triggered by addTrack when no video sender existed, e.g. screen share with camera off)
+    pc.onnegotiationneeded = async () => {
+      if (pc.signalingState !== 'stable' || !webrtcChannelRef.current) return;
+      try {
+        const offer = await pc.createOffer();
+        if (pc.signalingState !== 'stable') return; // guard after async gap
+        await pc.setLocalDescription(offer);
+        await webrtcChannelRef.current.send({
+          type: 'broadcast',
+          event: 'webrtc-signal',
+          payload: {
+            signalType: 'offer',
+            from: userId,
+            fromEmail: userEmail,
+            target: peerUserId,
+            offer
+          }
+        });
+      } catch (err) {
+        console.warn('Renegotiation (onnegotiationneeded) failed:', err);
       }
     };
 
