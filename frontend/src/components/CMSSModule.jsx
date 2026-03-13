@@ -672,6 +672,7 @@ const CMMSModule = ({
   const [activeTab, setActiveTab] = useState('company');
   const [editingUser, setEditingUser] = useState(null);
   const [newlyAddedUserId, setNewlyAddedUserId] = useState(null);  // Track newly added user for UI highlight
+  const [triggerCreateCompany, setTriggerCreateCompany] = useState(0); // Incremented to open create form
   
   // Calculate companyId from localStorage and user state
   const companyIdToUse = userCompanyId || getStoredActiveCompanyId(user?.email);
@@ -1842,6 +1843,14 @@ const CMMSModule = ({
     const [isSavingDepartment, setIsSavingDepartment] = useState(false);
     const [profileError, setProfileError] = useState('');
     const [departmentError, setDepartmentError] = useState('');
+
+    // Open create-company form whenever the header icon triggers it
+    useEffect(() => {
+      if (triggerCreateCompany > 0) {
+        setShowProfileForm(true);
+        setIsEditingProfile(false);
+      }
+    }, [triggerCreateCompany]);
 
     // Department templates by industry
     const departmentsByIndustry = {
@@ -4951,26 +4960,57 @@ const CMMSModule = ({
         
         <div className="flex items-center gap-2 sm:gap-4 flex-wrap justify-end w-full sm:w-auto">
           {companyMemberships.length > 1 && (
-            <div className="min-w-[220px]">
-              <label className="block text-[10px] uppercase tracking-wide text-gray-400 mb-1">Active Company</label>
-              <select
-                value={userCompanyId || ''}
-                onChange={handleSwitchCompany}
-                disabled={isSwitchingCompany}
-                className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white text-sm focus:border-blue-400 transition-all disabled:opacity-60"
-              >
-                {companyMemberships.map((membership) => {
-                  const membershipRole = resolveUserRole(membership.effective_role, membership.role_labels);
-                  const companyLabel = membership.company_name || `Company ${membership.cmms_company_id.slice(0, 8)}`;
+            <div className="flex items-end gap-2">
+              <div className="min-w-[220px]">
+                <label className="block text-[10px] uppercase tracking-wide text-gray-400 mb-1">Active Company</label>
+                <select
+                  value={userCompanyId || ''}
+                  onChange={handleSwitchCompany}
+                  disabled={isSwitchingCompany}
+                  className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white text-sm focus:border-blue-400 transition-all disabled:opacity-60"
+                >
+                  {companyMemberships.map((membership) => {
+                    const membershipRole = resolveUserRole(membership.effective_role, membership.role_labels);
+                    const companyLabel = membership.company_name || `Company ${membership.cmms_company_id.slice(0, 8)}`;
 
-                  return (
-                    <option key={membership.cmms_company_id} value={membership.cmms_company_id}>
-                      {companyLabel} • {membershipRole}
-                    </option>
-                  );
-                })}
-              </select>
+                    return (
+                      <option key={membership.cmms_company_id} value={membership.cmms_company_id}>
+                        {companyLabel} • {membershipRole}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+              <button
+                onClick={() => { setActiveTab('company'); setTriggerCreateCompany(prev => prev + 1); }}
+                title="Create New Company"
+                className="flex-shrink-0 p-2 rounded-lg bg-white bg-opacity-10 border border-white border-opacity-20 text-white hover:bg-opacity-20 hover:border-blue-400 transition-all"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                  <polyline points="9 22 9 12 15 12 15 22" />
+                  <line x1="12" y1="5" x2="12" y2="5" />
+                  <line x1="19" y1="9" x2="19" y2="4" />
+                  <line x1="21" y1="6" x2="17" y2="6" />
+                </svg>
+              </button>
             </div>
+          )}
+
+          {companyMemberships.length <= 1 && (
+            <button
+              onClick={() => { setActiveTab('company'); setTriggerCreateCompany(prev => prev + 1); }}
+              title="Create New Company"
+              className="flex-shrink-0 p-2 rounded-lg bg-white bg-opacity-10 border border-white border-opacity-20 text-white hover:bg-opacity-20 hover:border-blue-400 transition-all"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                <polyline points="9 22 9 12 15 12 15 22" />
+                <line x1="12" y1="5" x2="12" y2="5" />
+                <line x1="19" y1="9" x2="19" y2="4" />
+                <line x1="21" y1="6" x2="17" y2="6" />
+              </svg>
+            </button>
           )}
 
           {/* Notifications Bell */}
