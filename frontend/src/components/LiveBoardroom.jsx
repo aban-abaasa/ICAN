@@ -44,6 +44,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
   const [screenShareUnsupported, setScreenShareUnsupported] = useState(false);
   const [screenShareUnsupportedMessage, setScreenShareUnsupportedMessage] = useState('Screen sharing is not supported in this browser');
   const [isCameraPresentation, setIsCameraPresentation] = useState(false);
+  const [showShareChooser, setShowShareChooser] = useState(false);
   const [incomingCall, setIncomingCall] = useState(null);
   const [callAccepted, setCallAccepted] = useState(false);
   const [hasActiveCall, setHasActiveCall] = useState(false);
@@ -816,12 +817,29 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     }
   }, [meetingStarted, userId, ensureLocalStream, replaceOutgoingVideoTrack, broadcastScreenShareState]);
 
-  const startScreenShare = useCallback(async () => {
+  const startScreenShare = useCallback(async (preferredSurface = 'monitor') => {
     if (!meetingStarted) return;
     try {
+      const shareConstraints = {
+        video: {
+          frameRate: { ideal: 15 },
+          displaySurface: preferredSurface,
+          logicalSurface: true,
+          cursor: 'always'
+        },
+        audio: false,
+        preferCurrentTab: false,
+        selfBrowserSurface: 'exclude',
+        surfaceSwitching: 'include',
+        monitorTypeSurfaces: 'include'
+      };
+
       const displayStream = await requestDisplayMedia({
-        video: { frameRate: { ideal: 15 } },
-        audio: false
+        ...shareConstraints,
+        video: {
+          ...shareConstraints.video,
+          frameRate: { ideal: 15 }
+        }
       });
 
       const screenTrack = displayStream.getVideoTracks()?.[0];
@@ -862,15 +880,10 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
       const isIOS = /iPhone|iPad|iPod/i.test(navigator?.userAgent || '');
 
       if (errorName === 'NotSupportedError' || errorName === 'TypeError') {
-        if (isAndroid) {
-          // On Android, try camera presentation mode as fallback
-          setScreenShareUnsupportedMessage('Using camera as presentation mode...');
-          setScreenShareUnsupported(true);
-          setTimeout(() => setScreenShareUnsupported(false), 3000);
-          await startCameraPresentation();
-          return;
-        } else if (isIOS) {
+        if (isIOS) {
           setScreenShareUnsupportedMessage('iOS does not support screen sharing. Use an Android device or desktop browser.');
+        } else if (isAndroid) {
+          setScreenShareUnsupportedMessage('This browser does not support app/screen capture. Try Chrome on Android and choose an app or Entire screen from the system picker.');
         } else {
           setScreenShareUnsupportedMessage('Screen sharing is not supported in this browser');
         }
@@ -884,15 +897,41 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
       setActiveScreenSharerId((prev) => (prev === userId ? null : prev));
       setFeaturedParticipantId((prev) => (prev === userId ? null : prev));
     }
-  }, [meetingStarted, replaceOutgoingVideoTrack, stopScreenShare, broadcastScreenShareState, userId, requestDisplayMedia, startCameraPresentation]);
+  }, [meetingStarted, replaceOutgoingVideoTrack, stopScreenShare, broadcastScreenShareState, userId, requestDisplayMedia]);
+
+  const openShareChooser = useCallback(() => {
+    if (isScreenSharing) {
+      stopScreenShare();
+      return;
+    }
+    setShowDesktopMenu(false);
+    setShowMobileMenu(false);
+    setShowShareChooser(true);
+  }, [isScreenSharing, stopScreenShare]);
+
+  const handleShareOptionSelect = useCallback(async (mode) => {
+    setShowShareChooser(false);
+
+    if (mode === 'camera') {
+      await startCameraPresentation();
+      return;
+    }
+
+    if (mode === 'app') {
+      await startScreenShare('window');
+      return;
+    }
+
+    await startScreenShare('monitor');
+  }, [startCameraPresentation, startScreenShare]);
 
   const toggleScreenShare = useCallback(async () => {
     if (isScreenSharing) {
       await stopScreenShare();
       return;
     }
-    await startScreenShare();
-  }, [isScreenSharing, startScreenShare, stopScreenShare]);
+    openShareChooser();
+  }, [isScreenSharing, openShareChooser, stopScreenShare]);
 
   useEffect(() => {
     if (!meetingStarted) return;
@@ -2097,6 +2136,43 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
                 >
                   <Phone className="w-4 h-4" />
                 </button>
+              </div>
+            )}
+
+            {showShareChooser && (
+              <div className="fixed inset-0 z-[120] bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-4" onClick={() => setShowShareChooser(false)}>
+                <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl p-4 sm:p-5" onClick={(e) => e.stopPropagation()}>
+                  <h3 className="text-white text-base sm:text-lg font-semibold">Choose what to share</h3>
+                  <p className="text-slate-300 text-xs sm:text-sm mt-1">Your phone will open a system picker where you can select an app/window or the entire screen.</p>
+
+                  <div className="mt-4 space-y-2">
+                    <button
+                      onClick={() => handleShareOptionSelect('app')}
+                      className="w-full text-left px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white transition"
+                    >
+                      Share App or Window
+                    </button>
+                    <button
+                      onClick={() => handleShareOptionSelect('screen')}
+                      className="w-full text-left px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white transition"
+                    >
+                      Share Entire Phone Screen
+                    </button>
+                    <button
+                      onClick={() => handleShareOptionSelect('camera')}
+                      className="w-full text-left px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 transition"
+                    >
+                      Camera Presentation (fallback)
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => setShowShareChooser(false)}
+                    className="mt-3 w-full px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-white transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             )}
 
