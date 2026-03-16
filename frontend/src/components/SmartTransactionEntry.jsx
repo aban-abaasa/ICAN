@@ -99,6 +99,7 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
       keywords: [
         'revenue', 'earned', 'commission', 'service fee', 'consultation fee',
         'professional fee', 'rent received', 'interest received', 'royalty',
+        'dividend received', 'received dividend',
       ],
       emoji: '📈',
       accountingType: 'revenue',
@@ -122,6 +123,7 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
     capital_asset: {
       name: 'Capital Asset',
       keywords: [
+        'investment', 'investments', 'invest in', 'capital', 'capex', 'asset', 'assets',
         'equipment', 'machinery', 'machine', 'vehicle', 'car', 'van', 'truck',
         'motorcycle', 'boda', 'computer', 'laptop', 'phone for business',
         'property', 'land', 'building', 'shop', 'office', 'warehouse',
@@ -213,6 +215,22 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
       isIncome: true,
       taxNote: 'Capital contribution — not taxable income',
     },
+    dividend_income: {
+      name: 'Dividend Income',
+      keywords: ['dividend received', 'received dividend', 'investment dividend', 'share dividend'],
+      emoji: '💹',
+      accountingType: 'dividend_income',
+      isIncome: true,
+      taxNote: 'Dividend received — report as non-operating income',
+    },
+    dividend_payout: {
+      name: 'Dividend Payout',
+      keywords: ['paid dividend', 'dividend payout', 'dividend paid to shareholder', 'shareholder dividend'],
+      emoji: '🧮',
+      accountingType: 'dividend_payout',
+      isIncome: false,
+      taxNote: 'Dividend payout — equity distribution, not operating expense',
+    },
   };
 
   // ─────────────────────────────────────────────────────────
@@ -271,6 +289,33 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
     },
   };
 
+  const amountTokenRegex = /(\d[\d,]*\.?\d*)\s*(million|m\b|k\b|thousand)?/i;
+
+  const sanitizeProductName = (value) => {
+    if (!value) return '';
+    return value
+      .replace(/\b(my|our|the|a|an)\b/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+
+  const extractBusinessProduct = (input, normalizedText) => {
+    const soldPattern = /\bsold\s+(?:my\s+|our\s+|the\s+)?(.+?)(?:\s+to\s+.+?)?(?:\s+for\s+|\s+at\s+|\s+)?\d[\d,]*\.?\d*\s*(?:million|m\b|k\b|thousand)?/i;
+    const boughtPattern = /\b(?:bought|purchased|buy|purchase)\s+(?:stock\s+of\s+)?(?:my\s+|our\s+|the\s+)?(.+?)(?:\s+from\s+.+?)?(?:\s+for\s+|\s+at\s+|\s+)?\d[\d,]*\.?\d*\s*(?:million|m\b|k\b|thousand)?/i;
+
+    if (/\bsold\b/i.test(normalizedText)) {
+      const soldMatch = input.match(soldPattern);
+      if (soldMatch?.[1]) return sanitizeProductName(soldMatch[1]);
+    }
+
+    if (/\bbought\b|\bpurchased\b|\bbuy\b|\bpurchase\b/i.test(normalizedText)) {
+      const boughtMatch = input.match(boughtPattern);
+      if (boughtMatch?.[1]) return sanitizeProductName(boughtMatch[1]);
+    }
+
+    return '';
+  };
+
   // Core parser — mode passed explicitly so it works from voice onend, mode switches, and typing
   const parseSmartInputWithMode = (input, mode) => {
     if (!input || !input.trim()) return null;
@@ -278,7 +323,7 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
     const text = input.toLowerCase();
 
     // Extract amount — supports "500k", "1.5m", "500,000", plain numbers
-    const amountMatch = text.match(/(\d[\d,]*\.?\d*)\s*(million|m\b|k\b|thousand)?/i);
+    const amountMatch = text.match(amountTokenRegex);
     let amount = 0;
     if (amountMatch) {
       amount = parseFloat(amountMatch[1].replace(/,/g, ''));
@@ -296,6 +341,8 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
 
     if (mode === 'business') {
       // ─── BUSINESS RULES ─── priority order matters ───
+      const hasBoughtVerb = /\bbought\b|\bpurchased\b|\bbuy\b|\bpurchase\b/i.test(text);
+      const hasCapitalKeyword = businessCategories.capital_asset.keywords.some(kw => text.includes(kw));
 
       // RULE 0: PAYE / PAYROLL TAX — check before salary/wages
       if (businessCategories.paye.keywords.some(kw => text.includes(kw))) {
@@ -323,6 +370,24 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
         detectedCategory = 'tax_payment';
         categoryEmoji = '🏛️';
         categoryName = 'Tax Payment';
+      }
+      // RULE 2.1: DIVIDEND PAYOUT
+      else if (businessCategories.dividend_payout.keywords.some(kw => text.includes(kw))) {
+        isIncome = false;
+        detectedType = 'expense';
+        businessAccountingType = 'dividend_payout';
+        detectedCategory = 'dividend_payout';
+        categoryEmoji = '🧮';
+        categoryName = 'Dividend Payout';
+      }
+      // RULE 2.2: DIVIDEND INCOME
+      else if (businessCategories.dividend_income.keywords.some(kw => text.includes(kw))) {
+        isIncome = true;
+        detectedType = 'income';
+        businessAccountingType = 'dividend_income';
+        detectedCategory = 'dividend_income';
+        categoryEmoji = '💹';
+        categoryName = 'Dividend Income';
       }
       // RULE 3: SOLD / SALES — HIGHEST priority revenue rule
       //  "sold X to Y for Z" → always INCOME / REVENUE
@@ -363,6 +428,22 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
         categoryEmoji = '🔄';
         categoryName = 'Loan Repayment';
       }
+      // RULE 6.5: ANY BOUGHT/PURCHASED IN BUSINESS MUST BE STOCK OR CAPITAL
+      else if (hasBoughtVerb) {
+        isIncome = false;
+        detectedType = 'investment';
+        if (hasCapitalKeyword) {
+          businessAccountingType = 'asset';
+          detectedCategory = 'capital_asset';
+          categoryEmoji = '🏭';
+          categoryName = 'Capital Asset';
+        } else {
+          businessAccountingType = 'cogs';
+          detectedCategory = 'cogs';
+          categoryEmoji = '📦';
+          categoryName = 'Stock / Goods (COGS)';
+        }
+      }
       // RULE 7: CAPITAL ASSET — long-term fixed asset purchase
       else if (businessCategories.capital_asset.keywords.some(kw => text.includes(kw))) {
         isIncome = false;
@@ -401,7 +482,13 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
       }
       // RULE 11: DEFAULT FALLBACK — use amount heuristics
       else {
-        if (amount >= 2000000 && !/(spent|paid for|cost|bill|salary|rent)/i.test(text)) {
+        if (/\binvestment\b|\binvest\b|\bcapital\b|\bcapex\b|\basset\b/.test(text)) {
+          detectedType = 'investment';
+          businessAccountingType = 'asset';
+          detectedCategory = 'capital_asset';
+          categoryEmoji = '🏭';
+          categoryName = 'Capital Asset';
+        } else if (amount >= 2000000 && !/(spent|paid for|cost|bill|salary|rent)/i.test(text)) {
           detectedType = 'investment';
           businessAccountingType = 'asset';
           categoryEmoji = '🏭';
@@ -465,6 +552,24 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
       source = atMatch[1].trim();
     }
 
+    const productName = mode === 'business' ? extractBusinessProduct(input, text) : '';
+    let reportingBucket = 'general';
+    if (mode === 'business') {
+      if (detectedCategory === 'sales' || detectedCategory === 'revenue') reportingBucket = 'sold_income';
+      else if (detectedCategory === 'cogs') reportingBucket = 'bought_stock';
+      else if (detectedCategory === 'tax_payment') reportingBucket = 'tax_expense';
+      else if (detectedCategory === 'vat_collected') reportingBucket = 'tax_liability';
+      else if (detectedCategory === 'paye') reportingBucket = 'paye_liability';
+      else if (detectedCategory === 'operating_expense' && /salary|wage|payroll|staff|employee/i.test(text)) reportingBucket = 'salary_expense';
+      else if (detectedCategory === 'operating_expense') reportingBucket = 'operating_expense';
+      else if (detectedCategory === 'capital_asset') reportingBucket = 'capital_asset';
+      else if (detectedCategory === 'loan') reportingBucket = 'loan_inflow';
+      else if (detectedCategory === 'loan_repayment') reportingBucket = 'loan_repayment';
+      else if (detectedCategory === 'owner_equity') reportingBucket = 'owner_equity';
+      else if (detectedCategory === 'dividend_income') reportingBucket = 'dividend_income';
+      else if (detectedCategory === 'dividend_payout') reportingBucket = 'dividend_payout';
+    }
+
     // Clean up description
     let description = input.replace(/(\d[\d,]*\.?\d*)\s*(million|m\b|k\b|thousand)?/gi, '').trim();
     if (source) description = description.replace(new RegExp(`(?:from|at|bought|sold)\\s+${source}`, 'i'), '').trim();
@@ -492,6 +597,11 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
       categoryEmoji,
       categoryName,
       accountingType: mode,
+      reportingBucket,
+      productName,
+      productAction: action === 'sold' || action === 'bought' ? action : null,
+      ledgerSide: isIncome ? 'cash_in' : 'cash_out',
+      originalText: input.trim(),
       isValid: amount > 0,
     };
   };
@@ -563,6 +673,11 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
           categoryName: parsedData.categoryName,
           categoryEmoji: parsedData.categoryEmoji,
           businessAccountingType: parsedData.businessAccountingType,
+          reportingBucket: parsedData.reportingBucket,
+          productName: parsedData.productName || null,
+          productAction: parsedData.productAction,
+          ledgerSide: parsedData.ledgerSide,
+          originalText: parsedData.originalText,
           aiConfidence: 0.95,
           auditTrail: `Categorized as ${parsedData.categoryName || 'General'} (${parsedData.businessAccountingType || 'expense'})`
         };

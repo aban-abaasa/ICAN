@@ -826,6 +826,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [reportDateFilter, setReportDateFilter] = useState('month');
   const [reportCustomStart, setReportCustomStart] = useState('');
   const [reportCustomEnd,   setReportCustomEnd]   = useState('');
+  const [reportRecordScope, setReportRecordScope] = useState('business'); // business | personal | all
   const [reportFilteredMetrics, setReportFilteredMetrics] = useState(null);
   const [isLoadingReportMetrics, setIsLoadingReportMetrics] = useState(false);
 
@@ -855,7 +856,12 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   };
 
   // Fetch real income/expense totals from Supabase for the chosen period
-  const fetchReportMetrics = async (filter = reportDateFilter, customStart = reportCustomStart, customEnd = reportCustomEnd) => {
+  const fetchReportMetrics = async (
+    filter = reportDateFilter,
+    customStart = reportCustomStart,
+    customEnd = reportCustomEnd,
+    scope = reportRecordScope
+  ) => {
     setIsLoadingReportMetrics(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -870,21 +876,187 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
         .order('created_at', { ascending: false });
       if (error) { console.error('Report fetch error:', error); }
       const rows = data || [];
-      const income   = rows.filter(t => t.transaction_type === 'income').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
-      const expenses = rows.filter(t => t.transaction_type !== 'income').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+      const scopedRows = rows.filter((t) => {
+        const category = t.record_category || t.metadata?.record_category || 'personal';
+        if (scope === 'business') return category === 'business';
+        if (scope === 'personal') return category !== 'business';
+        return true;
+      });
+
+      const inferReportingBucket = (t) => {
+        const explicit = t.metadata?.reporting_bucket;
+        if (explicit) return explicit;
+
+        const accountingType = (t.metadata?.accounting_type || '').toLowerCase();
+        if (accountingType === 'cogs') return 'bought_stock';
+        if (accountingType === 'asset') return 'capital_asset';
+        if (accountingType === 'liability') return 'loan_inflow';
+        if (accountingType === 'liability_payment') return 'loan_repayment';
+        if (accountingType === 'tax_liability') return 'tax_liability';
+        if (accountingType === 'paye_liability') return 'paye_liability';
+        if (accountingType === 'tax_expense') return 'tax_expense';
+        if (accountingType === 'dividend_income') return 'dividend_income';
+        if (accountingType === 'dividend_payout') return 'dividend_payout';
+        if (accountingType === 'equity') return 'owner_equity';
+        if (accountingType === 'revenue') return 'sold_income';
+
+        const desc = (t.description || '').toLowerCase();
+        const cat = (t.metadata?.category || '').toLowerCase();
+        const text = `${desc} ${cat}`;
+        if (/\bsold\b|\bsale\b|\brevenue\b/.test(text)) return 'sold_income';
+        if (/\bbought\b|\bpurchased\b|\bbuy\b|\bpurchase\b/.test(text)) {
+          if (/\binvestment\b|\binvest\b|\bcapital\b|\bcapex\b|\basset\b|\bequipment\b|\bmachinery\b|\bvehicle\b|\bproperty\b|\bland\b|\bbuilding\b/.test(text)) {
+            return 'capital_asset';
+          }
+          return 'bought_stock';
+        }
+        if (/\bstock\b|\binventory\b|\bgoods\b|\bmerchandise\b|\bcogs\b/.test(text)) return 'bought_stock';
+        if (/\binvestment\b|\binvest\b|\bcapital\b|\basset\b|\bcapex\b|\bequipment\b|\bmachinery\b/.test(text)) return 'capital_asset';
+        if (/\bloan\b|\bdebt\b|\boverdraft\b/.test(text) && t.transaction_type === 'income') return 'loan_inflow';
+        if (/\bloan\b|\bdebt\b|\binstallment\b|\brepayment\b/.test(text) && t.transaction_type !== 'income') return 'loan_repayment';
+        if (/\bdividend\b/.test(text) && t.transaction_type === 'income') return 'dividend_income';
+        if (/\bdividend\b/.test(text) && t.transaction_type !== 'income') return 'dividend_payout';
+        if (/\btax\b|\bvat\b|\bpaye\b/.test(text)) return 'tax_expense';
+
+        return null;
+      };
+
+      const rowsWithBucket = scopedRows.map((t) => ({ ...t, _bucket: inferReportingBucket(t) }));
+
+      const totalIncome = rowsWithBucket.filter(t => t.transaction_type === 'income').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+      const totalOutflows = rowsWithBucket.filter(t => t.transaction_type !== 'income').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+      const soldIncome = rowsWithBucket
+        .filter(t => t._bucket === 'sold_income')
+        .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+      const boughtStock = rowsWithBucket
+        .filter(t => t._bucket === 'bought_stock')
+        .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+      const capitalInvestments = rowsWithBucket
+        .filter(t => t._bucket === 'capital_asset')
+        .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+      const liabilityInflow = rowsWithBucket
+        .filter(t => t._bucket === 'loan_inflow')
+        .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+      const liabilityRepayment = rowsWithBucket
+        .filter(t => t._bucket === 'loan_repayment')
+        .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+      const taxLiabilityRemit = rowsWithBucket
+        .filter(t => t._bucket === 'tax_liability')
+        .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+      const payeLiabilityRemit = rowsWithBucket
+        .filter(t => t._bucket === 'paye_liability')
+        .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+      const dividendIncome = rowsWithBucket
+        .filter(t => t._bucket === 'dividend_income')
+        .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+      const dividendPayout = rowsWithBucket
+        .filter(t => t._bucket === 'dividend_payout')
+        .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+      const ownerEquityInflow = rowsWithBucket
+        .filter(t => t._bucket === 'owner_equity')
+        .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+      const taxExpense = rowsWithBucket
+        .filter(t => t._bucket === 'tax_expense')
+        .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+      const salaryExpense = rowsWithBucket
+        .filter(t => t._bucket === 'salary_expense')
+        .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+      const liabilitiesOutflow = liabilityRepayment + taxLiabilityRemit + payeLiabilityRemit;
+      const financingIncome = liabilityInflow + ownerEquityInflow;
+      const operatingIncome = Math.max(0, totalIncome - financingIncome);
+      const operatingExpenses = Math.max(0, totalOutflows - boughtStock - capitalInvestments - liabilitiesOutflow - dividendPayout);
+      const netProfit = operatingIncome - (operatingExpenses + boughtStock + capitalInvestments) + dividendIncome;
+      const productBuckets = rowsWithBucket.reduce((acc, t) => {
+        const bucket = t._bucket;
+        const product = t.metadata?.product_name?.trim();
+        if (!product || (bucket !== 'sold_income' && bucket !== 'bought_stock')) return acc;
+
+        const collection = bucket === 'sold_income' ? acc.sold : acc.bought;
+        if (!collection[product]) collection[product] = { name: product, amount: 0, count: 0 };
+        collection[product].amount += parseFloat(t.amount) || 0;
+        collection[product].count += 1;
+        return acc;
+      }, { sold: {}, bought: {} });
+
+      const topSoldProducts = Object.values(productBuckets.sold)
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 4);
+      const topBoughtProducts = Object.values(productBuckets.bought)
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 4);
+      const trackedProductNames = Array.from(new Set([
+        ...Object.keys(productBuckets.sold),
+        ...Object.keys(productBuckets.bought)
+      ])).slice(0, 10);
       // Category breakdown — category lives in metadata
       const catMap = {};
-      rows.forEach(t => {
+      scopedRows.forEach(t => {
         const cat = t.metadata?.category || t.metadata?.record_category || 'Uncategorized';
         if (!catMap[cat]) catMap[cat] = { income: 0, expense: 0, count: 0 };
         if (t.transaction_type === 'income') catMap[cat].income += parseFloat(t.amount) || 0;
         else catMap[cat].expense += parseFloat(t.amount) || 0;
         catMap[cat].count++;
       });
-      setReportFilteredMetrics({ income, expenses, netProfit: income - expenses, count: rows.length, categories: catMap, transactions: rows, start, end });
+      setReportFilteredMetrics({
+        income: operatingIncome,
+        expenses: operatingExpenses,
+        totalIncome,
+        totalOutflows,
+        netProfit,
+        count: scopedRows.length,
+        categories: catMap,
+        transactions: scopedRows,
+        start,
+        end,
+        scope,
+        soldIncome,
+        boughtStock,
+        capitalInvestments,
+        liabilitiesOutflow,
+        liabilityInflow,
+        liabilityRepayment,
+        taxLiabilityRemit,
+        payeLiabilityRemit,
+        dividendIncome,
+        dividendPayout,
+        ownerEquityInflow,
+        taxExpense,
+        salaryExpense,
+        topSoldProducts,
+        topBoughtProducts,
+        trackedProductNames
+      });
     } catch (e) {
       console.error('fetchReportMetrics error:', e);
-      setReportFilteredMetrics({ income: 0, expenses: 0, netProfit: 0, count: 0, categories: {}, transactions: [], start: '', end: '' });
+      setReportFilteredMetrics({
+        income: 0,
+        expenses: 0,
+        totalIncome: 0,
+        totalOutflows: 0,
+        netProfit: 0,
+        count: 0,
+        categories: {},
+        transactions: [],
+        start: '',
+        end: '',
+        scope,
+        soldIncome: 0,
+        boughtStock: 0,
+        capitalInvestments: 0,
+        liabilitiesOutflow: 0,
+        liabilityInflow: 0,
+        liabilityRepayment: 0,
+        taxLiabilityRemit: 0,
+        payeLiabilityRemit: 0,
+        dividendIncome: 0,
+        dividendPayout: 0,
+        ownerEquityInflow: 0,
+        taxExpense: 0,
+        salaryExpense: 0,
+        topSoldProducts: [],
+        topBoughtProducts: [],
+        trackedProductNames: []
+      });
     } finally {
       setIsLoadingReportMetrics(false);
     }
@@ -975,7 +1147,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   // Auto-load Supabase metrics when Reports modal opens or date filter changes
   useEffect(() => {
     if (showReportingSystem) {
-      fetchReportMetrics(reportDateFilter, reportCustomStart, reportCustomEnd);
+      fetchReportMetrics(reportDateFilter, reportCustomStart, reportCustomEnd, reportRecordScope);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showReportingSystem]);
@@ -5242,6 +5414,31 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
               {/* ── DATE FILTER ── */}
               <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-3">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">🧾 Record Scope</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'business', label: 'Business' },
+                    { id: 'personal', label: 'Personal' },
+                    { id: 'all', label: 'Combined' }
+                  ].map((scope) => (
+                    <button
+                      key={scope.id}
+                      onClick={() => {
+                        setReportRecordScope(scope.id);
+                        setReportFilteredMetrics(null);
+                        fetchReportMetrics(reportDateFilter, reportCustomStart, reportCustomEnd, scope.id);
+                      }}
+                      className={`py-2 rounded-lg text-xs font-bold transition ${
+                        reportRecordScope === scope.id
+                          ? 'bg-rose-600 text-white shadow'
+                          : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                      }`}
+                    >
+                      {scope.label}
+                    </button>
+                  ))}
+                </div>
+
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">📅 Period</p>
                 <div className="grid grid-cols-4 gap-2">
                   {[{ id:'today', label:'Today' }, { id:'week', label:'Week' }, { id:'month', label:'Month' }, { id:'year', label:'Year' }].map(f => (
@@ -5250,7 +5447,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       onClick={() => {
                         setReportDateFilter(f.id);
                         setReportFilteredMetrics(null);
-                        fetchReportMetrics(f.id, reportCustomStart, reportCustomEnd);
+                        fetchReportMetrics(f.id, reportCustomStart, reportCustomEnd, reportRecordScope);
                       }}
                       className={`py-2 rounded-lg text-xs font-bold transition ${
                         reportDateFilter === f.id
@@ -5279,7 +5476,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       <input type="date" value={reportCustomEnd} onChange={e => setReportCustomEnd(e.target.value)}
                         className="flex-1 bg-white/10 text-white text-xs rounded-lg px-2 py-1.5 border border-white/20 focus:outline-none focus:border-purple-400" />
                       <button
-                        onClick={() => fetchReportMetrics('custom', reportCustomStart, reportCustomEnd)}
+                        onClick={() => fetchReportMetrics('custom', reportCustomStart, reportCustomEnd, reportRecordScope)}
                         className="px-3 py-1.5 bg-purple-600 text-white text-xs font-bold rounded-lg hover:bg-purple-500 transition"
                       >Go</button>
                     </div>
@@ -5299,11 +5496,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   <div className="grid grid-cols-3 gap-2 pt-1">
                     <div className="bg-green-900/30 border border-green-500/30 rounded-lg p-2 text-center">
                       <p className="text-green-400 font-bold text-xs">{reportFilteredMetrics.income.toLocaleString(undefined, {maximumFractionDigits:0})}</p>
-                      <p className="text-gray-500 text-xs">Income</p>
+                      <p className="text-gray-500 text-xs">Income (Ops)</p>
                     </div>
                     <div className="bg-red-900/30 border border-red-500/30 rounded-lg p-2 text-center">
                       <p className="text-red-400 font-bold text-xs">{reportFilteredMetrics.expenses.toLocaleString(undefined, {maximumFractionDigits:0})}</p>
-                      <p className="text-gray-500 text-xs">Expenses</p>
+                      <p className="text-gray-500 text-xs">Expenses (Ops)</p>
                     </div>
                     <div className={`border rounded-lg p-2 text-center ${
                       reportFilteredMetrics.netProfit >= 0
@@ -5318,7 +5515,85 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   </div>
                 )}
                 {reportFilteredMetrics && !isLoadingReportMetrics && (
-                  <p className="text-gray-600 text-xs">{reportFilteredMetrics.count} transactions in period</p>
+                  <div className="grid grid-cols-3 gap-2 pt-2">
+                    <div className="bg-emerald-900/30 border border-emerald-500/30 rounded-lg p-2 text-center">
+                      <p className="text-emerald-300 font-bold text-xs">{(reportFilteredMetrics.soldIncome || 0).toLocaleString(undefined, {maximumFractionDigits:0})}</p>
+                      <p className="text-gray-500 text-xs">Sold Income</p>
+                    </div>
+                    <div className="bg-amber-900/30 border border-amber-500/30 rounded-lg p-2 text-center">
+                      <p className="text-amber-300 font-bold text-xs">{(reportFilteredMetrics.boughtStock || 0).toLocaleString(undefined, {maximumFractionDigits:0})}</p>
+                      <p className="text-gray-500 text-xs">Bought Stock</p>
+                    </div>
+                    <div className="bg-violet-900/30 border border-violet-500/30 rounded-lg p-2 text-center">
+                      <p className="text-violet-300 font-bold text-xs">{(reportFilteredMetrics.capitalInvestments || 0).toLocaleString(undefined, {maximumFractionDigits:0})}</p>
+                      <p className="text-gray-500 text-xs">Capital Invest</p>
+                    </div>
+                  </div>
+                )}
+                {reportFilteredMetrics && !isLoadingReportMetrics && (
+                  <div className="grid grid-cols-2 gap-2 pt-2">
+                    <div className="bg-sky-900/30 border border-sky-500/30 rounded-lg p-2 text-center">
+                      <p className="text-sky-300 font-bold text-xs">{(reportFilteredMetrics.liabilitiesOutflow || 0).toLocaleString(undefined, {maximumFractionDigits:0})}</p>
+                      <p className="text-gray-500 text-xs">Liabilities Paid</p>
+                    </div>
+                    <div className="bg-fuchsia-900/30 border border-fuchsia-500/30 rounded-lg p-2 text-center">
+                      <p className="text-fuchsia-300 font-bold text-xs">{((reportFilteredMetrics.dividendIncome || 0) - (reportFilteredMetrics.dividendPayout || 0)).toLocaleString(undefined, {maximumFractionDigits:0})}</p>
+                      <p className="text-gray-500 text-xs">Dividend Net</p>
+                    </div>
+                  </div>
+                )}
+                {reportFilteredMetrics && !isLoadingReportMetrics && (
+                  <div className="pt-2 space-y-2">
+                    <div className="bg-emerald-900/20 border border-emerald-500/20 rounded-lg p-2">
+                      <p className="text-[11px] font-semibold text-emerald-300 mb-1">Top Sold Products</p>
+                      {reportFilteredMetrics.topSoldProducts?.length ? (
+                        <div className="space-y-1">
+                          {reportFilteredMetrics.topSoldProducts.map((item) => (
+                            <div key={`sold-${item.name}`} className="flex items-center justify-between text-[11px]">
+                              <span className="text-gray-200 truncate pr-2">{item.name}</span>
+                              <span className="text-emerald-200 font-semibold">{item.amount.toLocaleString(undefined, {maximumFractionDigits:0})}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-gray-500">No sold products traced in this period.</p>
+                      )}
+                    </div>
+
+                    <div className="bg-amber-900/20 border border-amber-500/20 rounded-lg p-2">
+                      <p className="text-[11px] font-semibold text-amber-300 mb-1">Top Bought Products</p>
+                      {reportFilteredMetrics.topBoughtProducts?.length ? (
+                        <div className="space-y-1">
+                          {reportFilteredMetrics.topBoughtProducts.map((item) => (
+                            <div key={`bought-${item.name}`} className="flex items-center justify-between text-[11px]">
+                              <span className="text-gray-200 truncate pr-2">{item.name}</span>
+                              <span className="text-amber-200 font-semibold">{item.amount.toLocaleString(undefined, {maximumFractionDigits:0})}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-gray-500">No bought products traced in this period.</p>
+                      )}
+                    </div>
+
+                    <div className="bg-indigo-900/20 border border-indigo-500/20 rounded-lg p-2">
+                      <p className="text-[11px] font-semibold text-indigo-300 mb-1">Tracked Product Names</p>
+                      {reportFilteredMetrics.trackedProductNames?.length ? (
+                        <div className="flex flex-wrap gap-1">
+                          {reportFilteredMetrics.trackedProductNames.map((name) => (
+                            <span key={`tracked-${name}`} className="text-[10px] px-2 py-1 rounded-full bg-indigo-500/20 text-indigo-100 border border-indigo-400/30">
+                              {name}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-gray-500">No product names captured in this period.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {reportFilteredMetrics && !isLoadingReportMetrics && (
+                  <p className="text-gray-600 text-xs">{reportFilteredMetrics.count} transactions in period ({reportFilteredMetrics.scope === 'all' ? 'Combined' : reportFilteredMetrics.scope === 'business' ? 'Business' : 'Personal'})</p>
                 )}
               </div>
 
@@ -5338,6 +5613,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       const fm = reportFilteredMetrics;
                       const inc  = fm ? fm.income    : (velocityMetrics?.income30Days  || 0);
                       const exp  = fm ? fm.expenses  : (velocityMetrics?.expenses30Days || 0);
+                      const stock = fm ? (fm.boughtStock || 0) : 0;
+                      const capital = fm ? (fm.capitalInvestments || 0) : 0;
+                      const liabPaid = fm ? (fm.liabilitiesOutflow || 0) : 0;
+                      const divNet = fm ? ((fm.dividendIncome || 0) - (fm.dividendPayout || 0)) : 0;
                       const net  = fm ? fm.netProfit : (inc - exp);
                       const rate = inc > 0 ? ((net / inc) * 100) : 0;
                       // Always derive label from the chosen filter — never hardcode '30d'
@@ -5347,6 +5626,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         <>
                           <div className="flex justify-between text-sm"><span className="text-gray-400">Income ({label})</span><span className="text-green-400 font-semibold">UGX {inc.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
                           <div className="flex justify-between text-sm"><span className="text-gray-400">Expenses ({label})</span><span className="text-red-400 font-semibold">UGX {exp.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                          <div className="flex justify-between text-sm"><span className="text-gray-400">Stock Purchases</span><span className="text-amber-300 font-semibold">UGX {stock.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                          <div className="flex justify-between text-sm"><span className="text-gray-400">Capital Investments</span><span className="text-violet-300 font-semibold">UGX {capital.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                          <div className="flex justify-between text-sm"><span className="text-gray-400">Liabilities Paid</span><span className="text-sky-300 font-semibold">UGX {liabPaid.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                          <div className="flex justify-between text-sm"><span className="text-gray-400">Dividend Net</span><span className="text-fuchsia-300 font-semibold">UGX {divNet.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
                           <div className="flex justify-between text-sm border-t border-white/10 pt-2"><span className="text-gray-300 font-medium">Net Profit</span><span className={`font-bold ${net >= 0 ? 'text-green-400' : 'text-red-400'}`}>UGX {net.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
                           <div className="flex justify-between text-sm"><span className="text-gray-400">Margin</span><span className="text-purple-400 font-semibold">{rate.toFixed(1)}%</span></div>
                           <div className="flex justify-between text-sm"><span className="text-gray-400">Net Worth</span><span className="text-yellow-400 font-semibold">UGX {(velocityMetrics?.netWorth || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
@@ -5403,21 +5686,40 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       const fm       = reportFilteredMetrics;
                       const income   = fm ? fm.income   : (velocityMetrics?.income30Days   || 0);
                       const expenses = fm ? fm.expenses : (velocityMetrics?.expenses30Days || 0);
+                      const soldIncome = fm ? (fm.soldIncome || 0) : 0;
+                      const boughtStock = fm ? (fm.boughtStock || 0) : 0;
+                      const capitalInvestments = fm ? (fm.capitalInvestments || 0) : 0;
+                      const liabilitiesOutflow = fm ? (fm.liabilitiesOutflow || 0) : 0;
+                      const liabilityInflow = fm ? (fm.liabilityInflow || 0) : 0;
+                      const dividendIncome = fm ? (fm.dividendIncome || 0) : 0;
+                      const dividendPayout = fm ? (fm.dividendPayout || 0) : 0;
+                      const taxExpense = fm ? (fm.taxExpense || 0) : 0;
+                      const salaryExpense = fm ? (fm.salaryExpense || 0) : 0;
                       const netWorth = velocityMetrics?.netWorth || 0;
                       const userId   = userProfile?.id;
                       const { start: periodStart, end: periodEnd } = getReportDateRange();
                       const fd = {
                         revenue: income,
-                        costOfGoodsSold: expenses * 0.4,
-                        operatingExpenses: expenses * 0.6,
+                        costOfGoodsSold: boughtStock,
+                        operatingExpenses: expenses,
                         otherIncome: 0,
                         otherExpenses: 0,
-                        taxExpense: Math.max(0, (income - expenses) * 0.30),
+                        taxExpense,
+                        salaryExpense,
+                        soldIncome,
+                        boughtStock,
+                        capitalInvestments,
+                        liabilityInflow,
+                        liabilitiesOutflow,
+                        dividendIncome,
+                        dividendPayout,
                         assets: { cash: netWorth * 0.3, investments: netWorth * 0.4, equipment: netWorth * 0.2, property: 0, other: netWorth * 0.1 },
-                        liabilities: { loans: expenses * 2, creditCards: 0, payables: expenses * 0.5, other: 0 },
+                        liabilities: { loans: liabilityInflow, creditCards: 0, payables: liabilitiesOutflow, other: 0 },
                         equity: netWorth,
-                        income, expenses, netProfit: income - expenses,
-                        savingsRate: income > 0 ? ((income - expenses) / income * 100) : 0,
+                        income,
+                        expenses,
+                        netProfit: (fm ? fm.netProfit : (income - expenses - boughtStock - capitalInvestments)),
+                        savingsRate: income > 0 ? (((fm ? fm.netProfit : (income - expenses - boughtStock - capitalInvestments)) / income) * 100) : 0,
                         netWorth,
                         periodFilter: reportDateFilter,
                         periodStart,
@@ -5719,7 +6021,13 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               category: transaction.category || 'other',
               source: 'smart_entry',
               record_category: resolvedCategory,
-              accounting_type: transaction.businessAccountingType || null
+              accounting_type: transaction.businessAccountingType || null,
+              reporting_bucket: transaction.reportingBucket || null,
+              product_name: transaction.productName || null,
+              product_action: transaction.productAction || null,
+              ledger_side: transaction.ledgerSide || null,
+              raw_entry_text: transaction.originalText || transaction.rawInput || null,
+              entry_mode: resolvedCategory === 'business' ? 'professional_business' : 'personal_quick'
             }
           };
           setTransactions(prev => [formattedTransaction, ...prev]);
@@ -5743,7 +6051,13 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   source: 'smart_entry',
                   currency: 'UGX',
                   record_category: resolvedCategory,
-                  accounting_type: transaction.businessAccountingType || null
+                  accounting_type: transaction.businessAccountingType || null,
+                  reporting_bucket: transaction.reportingBucket || null,
+                  product_name: transaction.productName || null,
+                  product_action: transaction.productAction || null,
+                  ledger_side: transaction.ledgerSide || null,
+                  raw_entry_text: transaction.originalText || transaction.rawInput || null,
+                  entry_mode: resolvedCategory === 'business' ? 'professional_business' : 'personal_quick'
                 });
 
                 if (result.success) {

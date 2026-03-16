@@ -104,7 +104,13 @@ export class VelocityEngine {
               source: transactionData.source,
               originalDate: transactionData.date,
               record_category: transactionData.record_category || 'personal',
-              accounting_type: transactionData.accounting_type || null
+              accounting_type: transactionData.accounting_type || null,
+              reporting_bucket: transactionData.reporting_bucket || null,
+              product_name: transactionData.product_name || null,
+              product_action: transactionData.product_action || null,
+              ledger_side: transactionData.ledger_side || null,
+              raw_entry_text: transactionData.raw_entry_text || null,
+              entry_mode: transactionData.entry_mode || null
             }
           }
         ])
