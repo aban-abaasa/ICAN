@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { getSupabaseClient } from '../lib/supabase/client';
 import { getAudioNotificationService } from '../services/audioNotificationService';
 import {
-  X, Video, Mic, MicOff, VideoOff, Phone, Users, Share2, Send,
+  X, Video, Mic, MicOff, VideoOff, Phone, Users, Monitor, Send,
   MessageCircle, Eye, Wifi, WifiOff, Circle, Volume2, VolumeX, MoreVertical
 } from 'lucide-react';
 
@@ -80,14 +80,26 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
 
   const requestDisplayMedia = useCallback(async (constraints) => {
     const isAndroid = /Android/i.test(navigator?.userAgent || '');
+    const mobileFriendlyConstraints = {
+      video: {
+        frameRate: { ideal: 15, max: 24 },
+        // Hints for browsers that support advanced screen-capture options.
+        // Unsupported keys are ignored safely by other browsers.
+        displaySurface: 'monitor',
+        logicalSurface: true,
+        cursor: 'always'
+      },
+      audio: false,
+      preferCurrentTab: false,
+      selfBrowserSurface: 'exclude',
+      surfaceSwitching: 'include',
+      monitorTypeSurfaces: 'include'
+    };
     
     if (navigator?.mediaDevices?.getDisplayMedia) {
       if (isAndroid) {
         try {
-          return await navigator.mediaDevices.getDisplayMedia({
-            video: { width: { ideal: 720 }, height: { ideal: 480 } },
-            audio: false
-          });
+          return await navigator.mediaDevices.getDisplayMedia(mobileFriendlyConstraints);
         } catch (androidErr) {
           // Fallback to normal constraints
         }
@@ -832,6 +844,12 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
 
       if (videoRef.current) {
         videoRef.current.srcObject = displayStream;
+      }
+
+      if (isAndroid) {
+        setScreenShareUnsupportedMessage('Screen is live. Open the app you want to show; viewers will see it instantly.');
+        setScreenShareUnsupported(true);
+        setTimeout(() => setScreenShareUnsupported(false), 3800);
       }
 
       // Broadcast AFTER the track is replaced to avoid a race where viewers
@@ -2011,7 +2029,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
                       className={`w-full px-3 py-2 rounded-xl text-left text-sm transition-all flex items-center gap-2 ${isScreenSharing ? 'bg-teal-500/25 text-teal-100 border border-teal-300/20' : 'bg-slate-500/25 text-slate-100 border border-slate-300/20'}`}
                       title={isScreenSharing ? 'Stop Sharing' : 'Share Screen'}
                     >
-                      <Share2 className="w-4 h-4" />
+                      <Monitor className="w-4 h-4" />
                       <span>{isScreenSharing ? 'Stop Sharing' : 'Share Screen'}</span>
                     </button>
                   </div>
@@ -2070,7 +2088,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
                   className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isScreenSharing ? 'bg-teal-500/25 text-teal-100 border border-teal-300/20' : 'bg-slate-500/25 text-slate-100 border border-slate-300/20'}`}
                   title={isScreenSharing ? 'Stop Sharing' : 'Share Screen'}
                 >
-                  <Share2 className="w-4 h-4" />
+                  <Monitor className="w-4 h-4" />
                 </button>
                 <button
                   onClick={endMeeting}
