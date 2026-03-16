@@ -104,9 +104,7 @@ class AudioNotificationService {
 
     try {
       // Resume audio context if suspended (required after user interaction)
-      if (this.audioContext.state === 'suspended') {
-        await this.audioContext.resume();
-      }
+      await this.ensureReady();
 
       const sound = this.sounds[soundType];
       if (!sound) {
@@ -119,6 +117,21 @@ class AudioNotificationService {
       return true;
     } catch (err) {
       console.error('Error playing sound:', err);
+      return false;
+    }
+  }
+
+  // Ensure the audio context is resumed before attempting playback.
+  async ensureReady() {
+    if (!this.audioContext) return false;
+
+    try {
+      if (this.audioContext.state === 'suspended') {
+        await this.audioContext.resume();
+      }
+      return this.audioContext.state === 'running';
+    } catch (err) {
+      console.warn('Audio context resume failed:', err);
       return false;
     }
   }

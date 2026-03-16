@@ -647,6 +647,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
+  const [trustBoardroomOpenRequest, setTrustBoardroomOpenRequest] = useState(null);
   
   // Account Edit State
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -2296,6 +2297,40 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     setShowCmmsPanel(false);
   };
 
+  const getTrustBoardroomGroupIdFromNotification = (notification) => {
+    if (!notification) return null;
+
+    let metadata = notification.raw?.metadata || null;
+    if (typeof metadata === 'string') {
+      try {
+        metadata = JSON.parse(metadata);
+      } catch {
+        metadata = null;
+      }
+    }
+
+    const fromMetadata =
+      metadata?.group_id ||
+      metadata?.groupId ||
+      notification.group_id ||
+      notification.raw?.group_id ||
+      null;
+
+    if (fromMetadata) return String(fromMetadata);
+
+    const actionUrl = notification.action_url;
+    if (actionUrl) {
+      try {
+        const parsed = new URL(actionUrl, window.location.origin);
+        return parsed.searchParams.get('groupId') || parsed.searchParams.get('group_id');
+      } catch {
+        return null;
+      }
+    }
+
+    return null;
+  };
+
   const openHeaderPanel = (panelId) => {
     setShowPitchinPanel(panelId === 'pitchin');
     setShowWalletPanel(panelId === 'wallet');
@@ -3353,10 +3388,20 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                           }
                           // Handle notification action.
                           if (notification.action_tab === 'trust') {
+                            const targetGroupId = getTrustBoardroomGroupIdFromNotification(notification);
+
                             setSelectedDetail(null);
                             closeHeaderPanels();
                             setShowTrustPanel(true);
                             setActiveBottomTab('trust');
+
+                            if (targetGroupId) {
+                              setTrustBoardroomOpenRequest({
+                                groupId: targetGroupId,
+                                requestId: `${notification.id}:${Date.now()}`
+                              });
+                            }
+
                             return;
                           }
 
@@ -4897,7 +4942,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
           <div className="pt-2 px-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-            <TrustSystem currentUser={authUser || userProfile} />
+            <TrustSystem
+              currentUser={authUser || userProfile}
+              boardroomOpenRequest={trustBoardroomOpenRequest}
+              onBoardroomRequestConsumed={() => setTrustBoardroomOpenRequest(null)}
+            />
           </div>
         </div>
       )}

@@ -53,7 +53,11 @@ import CountryService from '../services/countryService';
 import icanCoinService from '../services/icanCoinService';
 import { getSupabaseClient } from '../lib/supabase/client';
 
-const TrustSystem = ({ currentUser: propCurrentUser }) => {
+const TrustSystem = ({
+  currentUser: propCurrentUser,
+  boardroomOpenRequest = null,
+  onBoardroomRequestConsumed = null
+}) => {
   // Use prop currentUser if provided (mobile), otherwise use AuthContext (web)
   const { user: contextUser } = useAuth() || {};
   const currentUser = propCurrentUser || contextUser;
@@ -117,6 +121,7 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
   });
   const [incomingCallData, setIncomingCallData] = useState(null); // { groupId, hostEmail, hostId }
   const globalCallChannelsRef = React.useRef([]);
+  const handledBoardroomRequestRef = React.useRef(null);
 
   const handleCloseBoardroom = useCallback(() => {
     setBoardroomGroupId(null);
@@ -179,6 +184,36 @@ const TrustSystem = ({ currentUser: propCurrentUser }) => {
     }
   };
   const dismissGlobalCall = () => setIncomingCallData(null);
+
+  // Handle external requests (e.g. notification click) to open a specific boardroom.
+  useEffect(() => {
+    if (!boardroomOpenRequest?.groupId) return;
+
+    const requestKey = String(
+      boardroomOpenRequest.requestId || boardroomOpenRequest.groupId
+    );
+
+    if (handledBoardroomRequestRef.current === requestKey) return;
+    handledBoardroomRequestRef.current = requestKey;
+
+    const targetGroupId = String(boardroomOpenRequest.groupId);
+    const targetGroup =
+      myGroups.find((g) => String(g.id) === targetGroupId) ||
+      groups.find((g) => String(g.id) === targetGroupId) ||
+      null;
+
+    if (targetGroup) {
+      setSelectedGroup(targetGroup);
+    }
+
+    setActiveTab('mygroups');
+    setIncomingCallData(null);
+    setBoardroomGroupId(targetGroupId);
+
+    if (typeof onBoardroomRequestConsumed === 'function') {
+      onBoardroomRequestConsumed();
+    }
+  }, [boardroomOpenRequest, groups, myGroups, onBoardroomRequestConsumed]);
 
   // Load user's country, currency, and ICAN wallet
   useEffect(() => {

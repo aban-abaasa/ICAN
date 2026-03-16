@@ -23,6 +23,15 @@ const normalizePriority = (priority) => {
 
 const normalizeNotifications = ({ rows, source }) => {
   return (rows || []).map((row) => {
+    let metadata = row.metadata;
+    if (typeof metadata === 'string') {
+      try {
+        metadata = JSON.parse(metadata);
+      } catch {
+        metadata = null;
+      }
+    }
+
     const title =
       row.title ||
       row.notification_title ||
@@ -72,6 +81,7 @@ const normalizeNotifications = ({ rows, source }) => {
       action_url: row.action_url || row.action_link || null,
       action_label: row.action_label || null,
       action_tab: actionTab,
+      group_id: metadata?.group_id || metadata?.groupId || row.group_id || row.groupId || null,
       created_at: createdAt,
       read_at: row.read_at || null,
       is_read: resolveReadState(row),

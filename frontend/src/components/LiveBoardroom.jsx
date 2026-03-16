@@ -175,6 +175,26 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     }
   }, [soundEnabled, soundVolume]);
 
+  // Warm up/resume audio context after any user interaction so incoming call
+  // sounds can play reliably on browsers with autoplay restrictions.
+  useEffect(() => {
+    const unlockAudio = () => {
+      if (audioServiceRef.current?.ensureReady) {
+        audioServiceRef.current.ensureReady();
+      }
+    };
+
+    window.addEventListener('pointerdown', unlockAudio, { passive: true });
+    window.addEventListener('keydown', unlockAudio, { passive: true });
+    window.addEventListener('touchstart', unlockAudio, { passive: true });
+
+    return () => {
+      window.removeEventListener('pointerdown', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+      window.removeEventListener('touchstart', unlockAudio);
+    };
+  }, []);
+
   // Keep latest close handler without forcing channel re-subscription on each render.
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -388,7 +408,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
 
       // Chain ALL listeners BEFORE subscribing
       callBroadcast
-        .on('broadcast', { event: 'call-started' }, ({ payload }) => {
+        .on('broadcast', { event: 'call-started' }, async ({ payload }) => {
           console.log('📞 [CALL RECEIVED] CALL STARTED broadcast received:', payload);
           console.log('📞 [CALL RECEIVED] Current user ID:', user?.id, 'Is this my call?:', payload.hostId === user?.id);
           
@@ -400,6 +420,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
             // Play ringtone
             if (audioServiceRef.current) {
               console.log('🔊 [CALL RECEIVED] Playing incoming call ringtone...');
+              await audioServiceRef.current.ensureReady?.();
               audioServiceRef.current.playRingtone('incomingCall', 3);
             }
           } else {
@@ -538,6 +559,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
       if (hasHost && !incomingCall) {
         setIncomingCall('Incoming call...');
         if (audioServiceRef.current) {
+          audioServiceRef.current.ensureReady?.();
           audioServiceRef.current.playRingtone('incomingCall', 3);
         }
       }
@@ -1232,6 +1254,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     // Play outgoing call ringtone
     if (audioServiceRef.current) {
       console.log('🔊 Playing outgoing ringtone...');
+      await audioServiceRef.current.ensureReady?.();
       audioServiceRef.current.playRingtone('outgoingCall', 30);
     }
     
@@ -1766,7 +1789,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
                 <video
                   autoPlay
                   playsInline
-                  muted
+                    muted={false}
                   ref={(el) => {
                     if (!el || !featuredRemoteStream) return;
                     if (el.srcObject !== featuredRemoteStream) {
