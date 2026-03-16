@@ -1741,6 +1741,97 @@ export const confirmCashoutProof = async (requestId, confirmationPayload = {}) =
   }
 };
 
+// ============================================
+// COMPANY REPORTING (SHARED BY ALL COMPANY MEMBERS)
+// ============================================
+
+/**
+ * Get company-written reports from all members.
+ * Uses RPC first, falls back to direct select.
+ */
+export const getCompanyReports = async (companyId) => {
+  try {
+    if (!companyId) {
+      return { data: [], error: null };
+    }
+
+    const { data: rpcData, error: rpcError } = await supabase.rpc('fn_get_company_reports', {
+      p_company_id: companyId
+    });
+
+    if (!rpcError) {
+      return { data: rpcData || [], error: null };
+    }
+
+    console.warn('fn_get_company_reports RPC failed, using direct table fallback:', rpcError.message);
+
+    const { data, error } = await supabase
+      .from('cmms_company_reports')
+      .select('*')
+      .eq('cmms_company_id', companyId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('Error fetching company reports:', error);
+    return { data: [], error };
+  }
+};
+
+/**
+ * Create a company report authored by any CMMS company member.
+ * Uses RPC first, falls back to direct insert.
+ */
+export const createCompanyReport = async (companyId, reportData = {}) => {
+  try {
+    if (!companyId) {
+      throw new Error('Company ID is required');
+    }
+
+    const { data: rpcData, error: rpcError } = await supabase.rpc('fn_create_company_report', {
+      p_company_id: companyId,
+      p_report_title: reportData.report_title || reportData.title || 'Company Report',
+      p_report_category: reportData.report_category || reportData.category || 'general',
+      p_severity: reportData.severity || 'medium',
+      p_report_body: reportData.report_body || reportData.body || reportData.description || '',
+      p_department_id: reportData.department_id || null,
+      p_reporter_name: reportData.reporter_name || reportData.reporterName || null,
+      p_reporter_email: reportData.reporter_email || reportData.reporterEmail || null,
+      p_reporter_role: reportData.reporter_role || reportData.reporterRole || null
+    });
+
+    if (!rpcError) {
+      return { data: rpcData, error: null };
+    }
+
+    console.warn('fn_create_company_report RPC failed, using direct table fallback:', rpcError.message);
+
+    const { data, error } = await supabase
+      .from('cmms_company_reports')
+      .insert({
+        cmms_company_id: companyId,
+        department_id: reportData.department_id || null,
+        report_title: reportData.report_title || reportData.title || 'Company Report',
+        report_category: reportData.report_category || reportData.category || 'general',
+        severity: reportData.severity || 'medium',
+        report_body: reportData.report_body || reportData.body || reportData.description || '',
+        reporter_name: reportData.reporter_name || reportData.reporterName || null,
+        reporter_email: reportData.reporter_email || reportData.reporterEmail || null,
+        reporter_role: reportData.reporter_role || reportData.reporterRole || null,
+        status: reportData.status || 'open'
+      })
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error creating company report:', error);
+    return { data: null, error };
+  }
+};
+
 export default {
   createCompanyProfile,
   createCompanyWithDepartments,
@@ -1774,7 +1865,9 @@ export default {
   updateRequisitionStatus,
   initiateCashoutProof,
   getMyCashoutProofRequests,
-  confirmCashoutProof
+  confirmCashoutProof,
+  getCompanyReports,
+  createCompanyReport
 };
 
 

@@ -315,7 +315,7 @@ const CMMSModule = ({
       await checkAuthorizationAndLoadCompanyData();
     };
     initializeUser();
-  }, [user]);
+  }, [user?.id, user?.email]);
 
     // Check authorization and load company data from database
   const checkAuthorizationAndLoadCompanyData = async () => {
@@ -614,6 +614,24 @@ const CMMSModule = ({
           inventory: []
         }));
       }
+
+      if (canViewCompanyReportsByRole(userRole)) {
+        // Fetch company-written reports only for roles allowed to read them
+        const { data: companyReports, error: reportsError } = await cmmsService.getCompanyReports(companyIdToUse);
+        if (!reportsError) {
+          setCmmsData(prev => ({
+            ...prev,
+            reports: companyReports || []
+          }));
+        } else {
+          console.error('❌ Error loading company reports:', reportsError);
+        }
+      } else {
+        setCmmsData(prev => ({
+          ...prev,
+          reports: Array.isArray(prev.reports) && prev.reports.length > 0 ? [] : prev.reports
+        }));
+      }
     } catch (err) {
       console.error('âŒ Exception loading company data from Supabase:', err);
     }
@@ -622,6 +640,8 @@ const CMMSModule = ({
   // ============================================
   // PERMISSION CHECK FUNCTION
   // ============================================
+  const canViewCompanyReportsByRole = (role) => ['admin', 'coordinator', 'supervisor', 'finance'].includes(role);
+
   const hasPermission = (permission) => {
     if (!isAuthorized || !userRole) return false;
     
@@ -668,6 +688,8 @@ const CMMSModule = ({
     requisitions: [],
     reports: []  // NEW: For role-based reports
   });
+  const reportsInitialLoadKeyRef = useRef('');
+  const reportsSyncInFlightRef = useRef(false);
 
   const [activeTab, setActiveTab] = useState('company');
   const [editingUser, setEditingUser] = useState(null);
@@ -755,10 +777,10 @@ const CMMSModule = ({
       admin: ['company', 'departments', 'users', 'inventory', 'requisitions', 'approvals', 'reports'],
       coordinator: ['departments', 'users', 'inventory', 'requisitions', 'approvals', 'reports'],
       supervisor: ['inventory', 'requisitions', 'approvals', 'reports'],
-      technician: ['inventory', 'requisitions'],
-      storeman: ['inventory', 'requisitions'],
+      technician: ['inventory', 'requisitions', 'reports'],
+      storeman: ['inventory', 'requisitions', 'reports'],
       finance: ['requisitions', 'approvals', 'reports'],
-      'service-provider': ['requisitions']
+      'service-provider': ['requisitions', 'reports']
     };
     
     return tabsByRole[userRole] || [];
@@ -1557,21 +1579,165 @@ const CMMSModule = ({
   // REPORTS & ANALYTICS (ROLE-BASED)
   // ============================================
   const ReportsManager = () => {
-    const canViewReports = hasPermission('canViewFinancials') || hasPermission('canManageUsers');
+    const canViewAnalytics = hasPermission('canViewFinancials') || hasPermission('canManageUsers');
+    const canViewCompanyReports = canViewCompanyReportsByRole(userRole);
+    const [isSubmittingCompanyReport, setIsSubmittingCompanyReport] = useState(false);
+    const [isRefreshingReports, setIsRefreshingReports] = useState(false);
+    const [expandedReportId, setExpandedReportId] = useState(null);
+    const [reportDraft, setReportDraft] = useState({
+      title: '',
+      category: 'operations',
+      severity: 'medium',
+      description: '',
+      department_id: currentUserDeptId || ''
+    });
 
-    if (!canViewReports) {
-      return (
-        <div className="glass-card p-4 md:p-6 bg-orange-500 bg-opacity-10 border-l-4 border-orange-500">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-orange-400 flex-shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0">
-              <p className="text-orange-300 font-semibold text-sm md:text-base">🔒 Reports Access Restricted</p>
-              <p className="text-gray-400 text-xs md:text-sm mt-1">Your role: <span className="text-blue-300 font-bold uppercase">{userRole}</span> does not have report access.</p>
-            </div>
-          </div>
-        </div>
-      );
-    }
+    const companyReports = Array.isArray(cmmsData.reports) ? cmmsData.reports : [];
+
+    const categoryOptions = [
+      { id: 'operations', label: 'Operations' },
+      { id: 'maintenance', label: 'Maintenance' },
+      { id: 'safety', label: 'Safety' },
+      { id: 'inventory', label: 'Inventory' },
+      { id: 'finance', label: 'Finance' },
+      { id: 'incident', label: 'Incident' },
+      { id: 'other', label: 'Other' }
+    ];
+
+    const severityOptions = [
+      { id: 'low', label: 'Low' },
+      { id: 'medium', label: 'Medium' },
+      { id: 'high', label: 'High' },
+      { id: 'critical', label: 'Critical' }
+    ];
+
+    const refreshCompanyReports = useCallback(async ({ silent = false, force = false } = {}) => {
+      if (!companyIdToUse || !canViewCompanyReports) return;
+      if (reportsSyncInFlightRef.current && !force) return;
+
+      reportsSyncInFlightRef.current = true;
+      if (!silent) {
+        setIsRefreshingReports(true);
+      }
+
+      try {
+        const { data, error } = await cmmsService.getCompanyReports(companyIdToUse);
+        if (error) {
+          console.error('Error refreshing company reports:', error);
+          return;
+        }
+
+        const nextReports = Array.isArray(data) ? data : [];
+        setCmmsData((prev) => {
+          const prevReports = Array.isArray(prev.reports) ? prev.reports : [];
+          const sameLength = prevReports.length === nextReports.length;
+          const sameItems = sameLength && prevReports.every((report, index) => {
+            const next = nextReports[index];
+            return next && report.id === next.id && report.updated_at === next.updated_at;
+          });
+
+          if (sameItems) {
+            return prev;
+          }
+
+          return {
+            ...prev,
+            reports: nextReports
+          };
+        });
+      } finally {
+        reportsSyncInFlightRef.current = false;
+        if (!silent) {
+          setIsRefreshingReports(false);
+        }
+      }
+    }, [companyIdToUse, canViewCompanyReports]);
+
+    useEffect(() => {
+      if (!canViewCompanyReports) {
+        reportsInitialLoadKeyRef.current = '';
+        setCmmsData((prev) => ({
+          ...prev,
+          reports: Array.isArray(prev.reports) && prev.reports.length > 0 ? [] : prev.reports
+        }));
+        return;
+      }
+
+      if (activeTab === 'reports' && companyIdToUse) {
+        const loadKey = `${companyIdToUse}:${userRole || 'member'}`;
+        if (reportsInitialLoadKeyRef.current !== loadKey) {
+          reportsInitialLoadKeyRef.current = loadKey;
+          refreshCompanyReports({ silent: true, force: true });
+        }
+      }
+    }, [activeTab, companyIdToUse, canViewCompanyReports, refreshCompanyReports, userRole]);
+
+    useEffect(() => {
+      if (activeTab !== 'reports' || !companyIdToUse || !canViewCompanyReports) return;
+
+      const intervalId = setInterval(() => {
+        refreshCompanyReports({ silent: true });
+      }, 15000);
+
+      return () => clearInterval(intervalId);
+    }, [activeTab, companyIdToUse, canViewCompanyReports, refreshCompanyReports]);
+
+    const handleSubmitCompanyReport = async () => {
+      if (!companyIdToUse) {
+        alert('❌ Company profile is required before writing reports.');
+        return;
+      }
+
+      if (!reportDraft.title.trim() || !reportDraft.description.trim()) {
+        alert('⚠️ Please provide a report title and report details.');
+        return;
+      }
+
+      setIsSubmittingCompanyReport(true);
+      try {
+        const payload = {
+          title: reportDraft.title.trim(),
+          category: reportDraft.category,
+          severity: reportDraft.severity,
+          description: reportDraft.description.trim(),
+          department_id: reportDraft.department_id || null,
+          reporterName: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'CMMS Member',
+          reporterEmail: user?.email || null,
+          reporterRole: userRole || 'member'
+        };
+
+        const { data, error } = await cmmsService.createCompanyReport(companyIdToUse, payload);
+        if (error) {
+          console.error('Error creating company report:', error);
+          alert(`❌ Failed to submit report: ${error.message || 'Unknown error'}`);
+          return;
+        }
+
+        if (canViewCompanyReports) {
+          setCmmsData((prev) => {
+            const existing = Array.isArray(prev.reports) ? prev.reports : [];
+            const deduped = [data, ...existing.filter((item) => item.id !== data.id)];
+            return {
+              ...prev,
+              reports: deduped
+            };
+          });
+        }
+
+        setReportDraft({
+          title: '',
+          category: 'operations',
+          severity: 'medium',
+          description: '',
+          department_id: currentUserDeptId || ''
+        });
+      } finally {
+        setIsSubmittingCompanyReport(false);
+      }
+    };
+
+    const openReportsCount = companyReports.filter((report) => (report.status || 'open') === 'open').length;
+    const highSeverityCount = companyReports.filter((report) => ['high', 'critical'].includes(String(report.severity || '').toLowerCase())).length;
 
     const generateInventoryReport = () => {
       const lowStockCount = cmmsData.inventory.filter(i => i.quantity_in_stock <= (i.reorder_level || 0)).length;
@@ -1768,6 +1934,189 @@ const CMMSModule = ({
 
     return (
       <div className="space-y-4 md:space-y-6">
+        {!companyIdToUse && (
+          <div className="glass-card p-4 md:p-6 bg-orange-500 bg-opacity-10 border-l-4 border-orange-500">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-orange-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-orange-300 font-semibold text-sm md:text-base">Company profile missing</p>
+                <p className="text-gray-300 text-xs md:text-sm mt-1">Create/select a CMMS company first to write and view shared company reports.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="glass-card p-4 md:p-6">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h3 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
+              <Clipboard className="w-5 h-5 md:w-6 md:h-6 text-emerald-400" />
+              Company Report Board
+            </h3>
+            <button
+              onClick={() => refreshCompanyReports({ force: true })}
+              disabled={isRefreshingReports || !companyIdToUse || !canViewCompanyReports}
+              className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-xs text-white"
+            >
+              {isRefreshingReports ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
+
+          <p className="text-gray-300 text-xs md:text-sm mb-4">
+            Every company member can write reports here so operations, incidents, and maintenance updates are captured in one shared place. Report visibility is role-based.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+            <input
+              type="text"
+              value={reportDraft.title}
+              onChange={(e) => setReportDraft((prev) => ({ ...prev, title: e.target.value }))}
+              placeholder="Report title"
+              className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white text-sm"
+            />
+            <select
+              value={reportDraft.category}
+              onChange={(e) => setReportDraft((prev) => ({ ...prev, category: e.target.value }))}
+              className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white text-sm"
+            >
+              {categoryOptions.map((opt) => (
+                <option key={opt.id} value={opt.id}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+            <select
+              value={reportDraft.severity}
+              onChange={(e) => setReportDraft((prev) => ({ ...prev, severity: e.target.value }))}
+              className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white text-sm"
+            >
+              {severityOptions.map((opt) => (
+                <option key={opt.id} value={opt.id}>{opt.label} Severity</option>
+              ))}
+            </select>
+            <select
+              value={reportDraft.department_id || ''}
+              onChange={(e) => setReportDraft((prev) => ({ ...prev, department_id: e.target.value }))}
+              className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white text-sm"
+            >
+              <option value="">All Departments</option>
+              {(cmmsData.departments || []).map((dept) => (
+                <option key={dept.id} value={dept.id}>{dept.department_name}</option>
+              ))}
+            </select>
+          </div>
+
+          <textarea
+            value={reportDraft.description}
+            onChange={(e) => setReportDraft((prev) => ({ ...prev, description: e.target.value }))}
+            placeholder="Write your report details here..."
+            rows={4}
+            className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white text-sm"
+          />
+
+          <div className="mt-3 flex items-center justify-between gap-2">
+            <span className="text-xs text-gray-400">Writer role: <span className="text-blue-300 uppercase font-semibold">{userRole || 'member'}</span></span>
+            <button
+              onClick={handleSubmitCompanyReport}
+              disabled={isSubmittingCompanyReport || !companyIdToUse}
+              className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-semibold"
+            >
+              {isSubmittingCompanyReport ? 'Submitting...' : 'Submit Report'}
+            </button>
+          </div>
+        </div>
+
+        {canViewCompanyReports ? (
+          <div className="glass-card p-4 md:p-6">
+            <h3 className="text-base md:text-lg font-bold text-white mb-3">Recent Company Reports</h3>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+              <div className="bg-white bg-opacity-5 p-3 rounded-lg">
+                <div className="text-xs text-gray-400">Total Reports</div>
+                <div className="text-xl font-bold text-blue-300">{companyReports.length}</div>
+              </div>
+              <div className="bg-white bg-opacity-5 p-3 rounded-lg">
+                <div className="text-xs text-gray-400">Open</div>
+                <div className="text-xl font-bold text-yellow-300">{openReportsCount}</div>
+              </div>
+              <div className="bg-white bg-opacity-5 p-3 rounded-lg">
+                <div className="text-xs text-gray-400">High/Critical</div>
+                <div className="text-xl font-bold text-red-300">{highSeverityCount}</div>
+              </div>
+              <div className="bg-white bg-opacity-5 p-3 rounded-lg">
+                <div className="text-xs text-gray-400">Resolved</div>
+                <div className="text-xl font-bold text-green-300">{companyReports.filter((r) => (r.status || '').toLowerCase() === 'resolved').length}</div>
+              </div>
+            </div>
+
+            {companyReports.length === 0 ? (
+              <div className="text-center py-6 text-gray-400 text-sm">No reports yet. Be the first member to write one.</div>
+            ) : (
+              <div className="space-y-3 max-h-[26rem] overflow-y-auto pr-1">
+                {companyReports.map((report) => {
+                  const severity = String(report.severity || 'medium').toLowerCase();
+                  const titleText = String(report.report_title || 'Untitled report').trim();
+                  const collapsedTitleWord = titleText.split(/\s+/)[0] || 'Untitled';
+                  const isExpanded = expandedReportId === report.id;
+                  const severityStyles = {
+                    low: 'bg-blue-500/20 text-blue-300',
+                    medium: 'bg-yellow-500/20 text-yellow-300',
+                    high: 'bg-orange-500/20 text-orange-300',
+                    critical: 'bg-red-500/20 text-red-300'
+                  };
+
+                  return (
+                    <div key={report.id} className="bg-white bg-opacity-5 border border-white border-opacity-10 rounded-lg overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedReportId((prev) => (prev === report.id ? null : report.id))}
+                        className="w-full px-3 md:px-4 py-3 flex items-center justify-between gap-3 text-left hover:bg-white/5 transition-colors"
+                      >
+                        <div className="min-w-0">
+                          <h4 className="text-white font-semibold text-sm md:text-base truncate">{isExpanded ? titleText : collapsedTitleWord}</h4>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className={`px-2 py-1 rounded text-[10px] md:text-xs font-semibold uppercase ${severityStyles[severity] || severityStyles.medium}`}>
+                            {severity}
+                          </span>
+                          <ChevronDown className={`w-4 h-4 text-gray-300 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                        </div>
+                      </button>
+
+                      {isExpanded && (
+                        <div className="px-3 md:px-4 pb-3 md:pb-4 border-t border-white border-opacity-10">
+                          <p className="text-gray-300 text-xs mt-2 break-words">{report.report_body}</p>
+
+                          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400">
+                            <span>Category: <span className="text-cyan-300">{report.report_category || 'general'}</span></span>
+                            <span>Status: <span className="text-emerald-300">{report.status || 'open'}</span></span>
+                            <span>By: <span className="text-purple-300">{report.reporter_name || report.reporter_email || 'Member'}</span></span>
+                            <span>{new Date(report.created_at).toLocaleString()}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="glass-card p-4 md:p-6 bg-slate-800/30 border border-slate-700">
+            <h3 className="text-base md:text-lg font-bold text-white mb-2">Recent Company Reports</h3>
+            <p className="text-gray-300 text-sm">Your role can submit reports but cannot view submitted reports.</p>
+          </div>
+        )}
+
+        {!canViewAnalytics && (
+          <div className="glass-card p-4 md:p-6 bg-blue-500/10 border-l-4 border-blue-500">
+            <p className="text-blue-300 font-semibold text-sm md:text-base">Analytics are limited for your role</p>
+            <p className="text-gray-300 text-xs md:text-sm mt-1">You can still create company reports, but report visibility and export analytics remain role-based.</p>
+          </div>
+        )}
+
+        {canViewAnalytics && (
+          <>
         {/* Inventory Report */}
         <div className="glass-card p-4 md:p-6">
           <h3 className="text-lg md:text-xl font-bold text-white mb-4 flex items-center gap-2">
@@ -1839,6 +2188,8 @@ const CMMSModule = ({
             </button>
           </div>
         </div>
+          </>
+        )}
       </div>
     );
   };
