@@ -1669,6 +1669,78 @@ export const updateRequisitionStatus = async (requisitionId, newStatus, approver
   }
 };
 
+/**
+ * Finance/admin initiates a cash payout proof request for recipient phone confirmation.
+ */
+export const initiateCashoutProof = async (
+  requisitionId,
+  recipientLookup,
+  amount = null,
+  currency = 'UGX',
+  requestNotes = ''
+) => {
+  try {
+    const { data, error } = await supabase.rpc('fn_initiate_cmms_cashout_proof', {
+      p_requisition_id: requisitionId,
+      p_recipient_lookup: recipientLookup,
+      p_amount: amount,
+      p_currency: currency,
+      p_request_notes: requestNotes || null
+    });
+
+    if (error) {
+      console.error('Error initiating cashout proof:', error);
+      return { data: null, error };
+    }
+
+    return { data, error: null };
+  } catch (error) {
+    console.error('Exception initiating cashout proof:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Get pending cash proof confirmations for currently logged-in recipient.
+ */
+export const getMyCashoutProofRequests = async () => {
+  try {
+    const { data, error } = await supabase.rpc('fn_get_my_cmms_cashout_proofs');
+
+    if (error) {
+      console.error('Error fetching my cashout proof requests:', error);
+      return { data: [], error };
+    }
+
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('Exception fetching my cashout proof requests:', error);
+    return { data: [], error };
+  }
+};
+
+/**
+ * Recipient confirms pending cash proof request from their phone.
+ */
+export const confirmCashoutProof = async (requestId, confirmationPayload = {}) => {
+  try {
+    const { data, error } = await supabase.rpc('fn_confirm_cmms_cashout_proof', {
+      p_request_id: requestId,
+      p_confirmation_payload: confirmationPayload
+    });
+
+    if (error) {
+      console.error('Error confirming cashout proof:', error);
+      return { data: null, error };
+    }
+
+    return { data, error: null };
+  } catch (error) {
+    console.error('Exception confirming cashout proof:', error);
+    return { data: null, error };
+  }
+};
+
 export default {
   createCompanyProfile,
   createCompanyWithDepartments,
@@ -1699,7 +1771,10 @@ export default {
   markCompanyCreator,
   getCompanyRequisitions,
   createRequisition,
-  updateRequisitionStatus
+  updateRequisitionStatus,
+  initiateCashoutProof,
+  getMyCashoutProofRequests,
+  confirmCashoutProof
 };
 
 

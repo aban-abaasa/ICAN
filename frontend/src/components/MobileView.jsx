@@ -81,7 +81,7 @@ import {
   getNotificationIcon,
   getNotificationColor,
   formatTimeAgo
-} from '../services/investmentNotificationsService';
+} from '../services/universalNotificationsService';
 import { getUserTrustGroups } from '../services/trustService';
 import { getUserStatuses, getActiveStatuses } from '../services/statusService';
 import { CountryService } from '../services/countryService';
@@ -1004,7 +1004,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     }
   }, [showAIChat]);
 
-  // Load notifications when notifications detail opens
+  // Load universal notifications when notifications detail opens
   useEffect(() => {
     const loadNotifications = async () => {
       if (selectedDetail?.tab === 'security' && selectedDetail?.item === 'Notifications' && userProfile?.id) {
@@ -1025,6 +1025,17 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
     loadNotifications();
   }, [selectedDetail, userProfile?.id]);
+
+  // Keep unread badge updated for the global header bell.
+  useEffect(() => {
+    const syncUnreadCount = async () => {
+      if (!userProfile?.id) return;
+      const { count } = await getUnreadNotificationCount(userProfile.id);
+      setUnreadCount(count || 0);
+    };
+
+    syncUnreadCount();
+  }, [userProfile?.id]);
 
   // Reset danger-zone inputs when the panel is opened
   useEffect(() => {
@@ -2463,6 +2474,31 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               <Search className="w-5 sm:w-6 h-5 sm:h-6 text-gray-300 hover:text-white" />
             </button>
 
+            <button
+              onClick={() => {
+                const isNotificationsOpen =
+                  selectedDetail?.tab === 'security' && selectedDetail?.item === 'Notifications';
+
+                if (isNotificationsOpen) {
+                  setSelectedDetail(null);
+                } else {
+                  closeHeaderPanels();
+                  setSelectedDetail({ tab: 'security', item: 'Notifications' });
+                }
+
+                setShowMenuDropdown(false);
+              }}
+              className="relative p-1.5 sm:p-2 hover:bg-purple-500/20 rounded-lg transition active:scale-95 flex-shrink-0"
+              title="Universal Notifications"
+            >
+              <Bell className="w-5 sm:w-6 h-5 sm:h-6 text-gray-300 hover:text-white" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full border border-slate-950 flex items-center justify-center">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </button>
+
             {/* Spacer */}
             <div className="flex-1"></div>
 
@@ -2781,8 +2817,14 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
       {/* ====== DETAIL PAGE - SETTINGS ONLY ====== */}
       {selectedDetail && (
-        <div className="fixed inset-0 bg-black/60 z-40 flex items-end">
-          <div className="bg-gradient-to-br from-slate-900 to-purple-900 w-full rounded-t-2xl pl-6 pr-8 pt-6 pb-[calc(7rem+env(safe-area-inset-bottom))] max-h-[90vh] overflow-y-auto">
+        <div
+          className="fixed inset-0 bg-black/60 z-40 flex items-end"
+          onClick={() => setSelectedDetail(null)}
+        >
+          <div
+            className="bg-gradient-to-br from-slate-900 to-purple-900 w-full rounded-t-2xl pl-6 pr-8 pt-6 pb-[calc(7rem+env(safe-area-inset-bottom))] max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header - Settings Only */}
             {!(selectedDetail.tab === 'profile' && selectedDetail.item === 'My Profile') && (
               <div className="flex items-center justify-between mb-6 pb-4 border-b border-purple-500/20">
@@ -2793,9 +2835,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               </div>
               <button
                 onClick={() => setSelectedDetail(null)}
-                className="text-2xl text-gray-400 hover:text-white transition"
+                className="text-2xl leading-none text-gray-400 hover:text-white transition"
+                aria-label="Close details"
               >
-                
+                ×
               </button>
               </div>
             )}
@@ -3255,7 +3298,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   {unreadCount > 0 && (
                     <button
                       onClick={async () => {
-                        const result = await markAllNotificationsAsRead(userProfile?.id);
+                        const result = await markAllNotificationsAsRead(userProfile?.id, notifications);
                         if (result.success) {
                           setUnreadCount(0);
                           setNotifications(prev =>
@@ -3298,7 +3341,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         onClick={async () => {
                           // Mark as read
                           if (!notification.is_read) {
-                            await markNotificationAsRead(notification.id);
+                            await markNotificationAsRead(notification);
                             setUnreadCount(prev => Math.max(0, prev - 1));
                             setNotifications(prev =>
                               prev.map(n =>
@@ -3308,9 +3351,16 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                               )
                             );
                           }
-                          // Navigate if has action
+                          // Handle notification action.
+                          if (notification.action_tab === 'trust') {
+                            setSelectedDetail(null);
+                            closeHeaderPanels();
+                            setShowTrustPanel(true);
+                            setActiveBottomTab('trust');
+                            return;
+                          }
+
                           if (notification.action_url) {
-                            // Handle navigation
                             console.log('Navigate to:', notification.action_url);
                           }
                         }}
@@ -3332,7 +3382,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                             `}
                           >
                             <span className="text-lg">
-                              {getNotificationIcon(notification.notification_type)}
+                              {getNotificationIcon(notification.notification_type, notification.source)}
                             </span>
                           </div>
 
@@ -3353,6 +3403,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                             <p className="text-white/50 text-xs mt-1">
                               {notification.message}
                             </p>
+
+                            <div className="mt-1 text-[10px] text-cyan-300/80 uppercase tracking-wide">
+                              {notification.source_label || 'System'}
+                            </div>
 
                             <div className="flex items-center justify-between mt-2">
                               <span className="text-white/30 text-[10px]">

@@ -62,6 +62,7 @@ const mapRequisitionFromDb = (req) => ({
   priority: req.urgency_level || 'normal',
   estimatedCost: Number(req.total_estimated_cost || 0),
   requisitionNumber: req.requisition_number || '',
+  financePaymentMethod: req.finance_payment_method || null,
   items: Array.isArray(req.items) ? req.items.map(normalizeLineItem) : []
 });
 
@@ -69,11 +70,19 @@ const RequisitionApprovalsTab = ({ userRole, companyId, cmmsData, setCmmsData })
   const [isLoading, setIsLoading] = useState(false);
   const [decisionTargetId, setDecisionTargetId] = useState(null);
   const [notesById, setNotesById] = useState({});
+  const [myCashProofs, setMyCashProofs] = useState([]);
+  const [isLoadingCashProofs, setIsLoadingCashProofs] = useState(false);
+  const [confirmingCashProofId, setConfirmingCashProofId] = useState(null);
+  const [payingRequisitionId, setPayingRequisitionId] = useState(null);
+  const [payoutRecipientById, setPayoutRecipientById] = useState({});
+  const [expandedProcessedId, setExpandedProcessedId] = useState(null);
+  const [financeCashoutMethod, setFinanceCashoutMethod] = useState('cash');
   const hasLoaded = useRef(false);
 
   const canUseApprovalsTab = APPROVAL_TAB_ROLES.includes(userRole);
   const canHandleDepartmentStage = DEPARTMENT_STAGE_ROLES.includes(userRole);
-  const canHandleFinanceStage = FINANCE_STAGE_ROLES.includes(userRole);
+  const isFinanceOfficer = userRole === 'finance';
+  const canHandleFinanceStage = isFinanceOfficer;
 
   const loadRequisitions = useCallback(
     async (force = false) => {
@@ -102,10 +111,32 @@ const RequisitionApprovalsTab = ({ userRole, companyId, cmmsData, setCmmsData })
     [canUseApprovalsTab, companyId, setCmmsData]
   );
 
+  const loadMyCashProofs = useCallback(async () => {
+    if (!companyId || !canUseApprovalsTab) return;
+
+    setIsLoadingCashProofs(true);
+    try {
+      const { data, error } = await cmmsService.getMyCashoutProofRequests();
+      if (error) {
+        console.error('Failed to load recipient cash proof requests:', error);
+        return;
+      }
+      setMyCashProofs(data || []);
+    } catch (error) {
+      console.error('Error loading recipient cash proof requests:', error);
+    } finally {
+      setIsLoadingCashProofs(false);
+    }
+  }, [canUseApprovalsTab, companyId]);
+
   useEffect(() => {
     hasLoaded.current = false;
     loadRequisitions(false);
   }, [companyId, loadRequisitions]);
+
+  useEffect(() => {
+    loadMyCashProofs();
+  }, [loadMyCashProofs]);
 
   const queue = useMemo(() => {
     const requisitions = cmmsData.requisitions || [];
@@ -121,6 +152,25 @@ const RequisitionApprovalsTab = ({ userRole, companyId, cmmsData, setCmmsData })
     const requisitions = cmmsData.requisitions || [];
     return requisitions.filter((req) => !['pending_department_head', 'pending_finance'].includes(req.status));
   }, [cmmsData.requisitions]);
+
+  const approvedForPayout = useMemo(() => {
+    return (processed || []).filter((req) => req.status === 'approved');
+  }, [processed]);
+
+  const pendingProofs = useMemo(() => {
+    return (myCashProofs || []).filter((proof) => proof.status !== 'confirmed');
+  }, [myCashProofs]);
+
+  const proofByRequisitionId = useMemo(() => {
+    const map = {};
+    for (const proof of myCashProofs || []) {
+      if (!proof?.requisition_id) continue;
+      if (!map[proof.requisition_id]) {
+        map[proof.requisition_id] = proof;
+      }
+    }
+    return map;
+  }, [myCashProofs]);
 
   const decide = async (req, approved) => {
     let nextStatus = '';
@@ -147,6 +197,7 @@ const RequisitionApprovalsTab = ({ userRole, companyId, cmmsData, setCmmsData })
     setDecisionTargetId(req.id);
     try {
       const decisionNotes = notesById[req.id] || '';
+
       const { error } = await cmmsService.updateRequisitionStatus(
         req.id,
         nextStatus,
@@ -162,12 +213,102 @@ const RequisitionApprovalsTab = ({ userRole, companyId, cmmsData, setCmmsData })
 
       hasLoaded.current = false;
       await loadRequisitions(true);
+      await loadMyCashProofs();
       setNotesById((prev) => ({ ...prev, [req.id]: '' }));
     } catch (error) {
       console.error('Error submitting approval decision:', error);
       alert('An unexpected error occurred while saving the decision.');
     } finally {
       setDecisionTargetId(null);
+    }
+  };
+
+  const handleConfirmCashProof = async (requestId) => {
+    setConfirmingCashProofId(requestId);
+    try {
+      const confirmationPayload = {
+        confirmed_from: 'cmms_approvals_tab',
+        confirmed_at: new Date().toISOString(),
+        confirmation_device: 'mobile_phone'
+      };
+
+      const { data, error } = await cmmsService.confirmCashoutProof(requestId, confirmationPayload);
+      if (error || !data?.success) {
+        console.error('Failed to confirm cash proof request:', error || data);
+        alert(data?.message || error?.message || 'Failed to confirm cash proof request.');
+        return;
+      }
+
+      hasLoaded.current = false;
+      await loadRequisitions(true);
+      await loadMyCashProofs();
+      alert('Cash proof confirmed. Blockchain payout evidence recorded.');
+    } catch (error) {
+      console.error('Error confirming cash proof request:', error);
+      alert('An unexpected error occurred while confirming cash proof request.');
+    } finally {
+      setConfirmingCashProofId(null);
+    }
+  };
+
+  const handlePayApprovedRequisition = async (req) => {
+    if (!isFinanceOfficer || req.status !== 'approved') return;
+
+    setPayingRequisitionId(req.id);
+    try {
+      if (financeCashoutMethod === 'cash') {
+        const recipientLookup = String(payoutRecipientById[req.id] || '').trim();
+        if (!recipientLookup) {
+          alert('Enter recipient surname or email to initiate cash payout proof.');
+          return;
+        }
+
+        const { data, error } = await cmmsService.initiateCashoutProof(
+          req.id,
+          recipientLookup,
+          Number(req.estimatedCost || 0),
+          'UGX',
+          'Cash payout initiated after requisition approval'
+        );
+
+        if (error || !data?.success) {
+          console.error('Failed to initiate approved requisition cash payout:', error || data);
+          const serverMessage = data?.message || error?.message || '';
+          if (String(serverMessage).toLowerCase().includes('pending cash payout confirmation already exists')) {
+            await loadMyCashProofs();
+            alert('A payout request is already pending for this requisition. Check the messages section below.');
+            return;
+          }
+          alert(data?.message || error?.message || 'Failed to initiate cash payout proof request.');
+          return;
+        }
+
+        alert('Cash payout request sent. Recipient must confirm on phone to complete payment.');
+      } else {
+        const { error } = await cmmsService.updateRequisitionStatus(
+          req.id,
+          'completed',
+          'ICAN wallet payout completed after approval',
+          'finance'
+        );
+
+        if (error) {
+          console.error('Failed to mark approved requisition as completed after wallet payout:', error);
+          alert('Failed to complete ICAN wallet payout.');
+          return;
+        }
+
+        alert('ICAN wallet payout completed. Requisition marked as completed.');
+      }
+
+      hasLoaded.current = false;
+      await loadRequisitions(true);
+      await loadMyCashProofs();
+    } catch (error) {
+      console.error('Error while paying approved requisition:', error);
+      alert('An unexpected error occurred while processing payout.');
+    } finally {
+      setPayingRequisitionId(null);
     }
   };
 
@@ -197,6 +338,7 @@ const RequisitionApprovalsTab = ({ userRole, companyId, cmmsData, setCmmsData })
             onClick={() => {
               hasLoaded.current = false;
               loadRequisitions(true);
+              loadMyCashProofs();
             }}
             disabled={isLoading}
             className="px-3 py-2 rounded-lg border border-emerald-500/40 bg-emerald-500/15 text-sm font-semibold text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-60"
@@ -231,6 +373,41 @@ const RequisitionApprovalsTab = ({ userRole, companyId, cmmsData, setCmmsData })
             </div>
           </div>
         </div>
+
+        {isFinanceOfficer && (
+          <div className="mt-4 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3">
+            <p className="text-xs text-cyan-200 uppercase tracking-wide mb-2">Cashout Method Tabs (Finance)</p>
+            <div className="inline-flex rounded-lg border border-white/15 bg-slate-900/40 p-1 gap-1">
+              <button
+                type="button"
+                onClick={() => setFinanceCashoutMethod('cash')}
+                className={`px-3 py-1.5 rounded-md text-xs md:text-sm font-semibold transition-all ${
+                  financeCashoutMethod === 'cash'
+                    ? 'bg-amber-500/30 text-amber-100 border border-amber-400/40'
+                    : 'text-slate-300 hover:bg-slate-700/50'
+                }`}
+              >
+                By Cash
+              </button>
+              <button
+                type="button"
+                onClick={() => setFinanceCashoutMethod('ican_wallet')}
+                className={`px-3 py-1.5 rounded-md text-xs md:text-sm font-semibold transition-all ${
+                  financeCashoutMethod === 'ican_wallet'
+                    ? 'bg-cyan-500/30 text-cyan-100 border border-cyan-400/40'
+                    : 'text-slate-300 hover:bg-slate-700/50'
+                }`}
+              >
+                ICAN Wallet
+              </button>
+            </div>
+            <p className="text-xs text-slate-300 mt-2">
+              {financeCashoutMethod === 'cash'
+                ? 'Cash mode: after approval, recipient must confirm on phone to complete payout.'
+                : 'ICAN Wallet mode: after approval, finance can complete payout instantly.'}
+            </p>
+          </div>
+        )}
       </section>
 
       <section className="rounded-2xl border border-white/10 bg-slate-900/45 p-5">
@@ -363,25 +540,130 @@ const RequisitionApprovalsTab = ({ userRole, companyId, cmmsData, setCmmsData })
         )}
       </section>
 
+      {isFinanceOfficer && approvedForPayout.length > 0 && (
+        <section className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5">
+          <h4 className="text-base font-semibold text-white mb-3">Approved Requisitions Ready For Payment</h4>
+          <div className="space-y-3">
+            {approvedForPayout.map((req) => (
+              <article
+                key={`payout-${req.id}`}
+                className="rounded-lg border border-white/15 bg-slate-950/50 p-3"
+              >
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold text-white">{req.title}</p>
+                    <p className="text-xs text-slate-400">{req.requisitionNumber || req.id}</p>
+                    <p className="text-sm font-bold text-emerald-300 mt-1">Amount: {formatUgx(req.estimatedCost)}</p>
+                  </div>
+
+                  <div className="w-full md:w-auto md:min-w-[320px]">
+                    {financeCashoutMethod === 'cash' && (
+                      <input
+                        type="text"
+                        value={payoutRecipientById[req.id] || ''}
+                        onChange={(e) =>
+                          setPayoutRecipientById((prev) => ({
+                            ...prev,
+                            [req.id]: e.target.value
+                          }))
+                        }
+                        placeholder="Recipient surname or email"
+                        className="w-full rounded-lg border border-white/15 bg-slate-950/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/60"
+                      />
+                    )}
+
+                    <button
+                      onClick={() => handlePayApprovedRequisition(req)}
+                      disabled={payingRequisitionId === req.id}
+                      className="mt-2 w-full rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
+                    >
+                      {payingRequisitionId === req.id
+                        ? 'Processing Payment...'
+                        : financeCashoutMethod === 'cash'
+                          ? 'Initiate Cash Payout'
+                          : 'Complete Wallet Payout'}
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {pendingProofs.length > 0 && (
+        <section className="rounded-2xl border border-white/10 bg-slate-900/45 p-5">
+          <h4 className="text-base font-semibold text-white mb-3">Pending Payout Confirmations</h4>
+
+          {isLoadingCashProofs ? (
+            <div className="py-8 text-center">
+              <Loader className="w-6 h-6 text-cyan-300 mx-auto animate-spin" />
+              <p className="text-sm text-slate-400 mt-2">Loading phone confirmations...</p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {pendingProofs.map((proof) => (
+                <article key={proof.id} className="rounded-md border border-cyan-500/25 bg-cyan-500/5 px-2.5 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-slate-200 truncate">• {proof.requisition_number || proof.requisition_id} - Pending - {formatUgx(proof.amount)}</p>
+                    {proof.can_confirm ? (
+                      <button
+                        onClick={() => handleConfirmCashProof(proof.id)}
+                        disabled={confirmingCashProofId === proof.id}
+                        className="rounded-md bg-emerald-600 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
+                      >
+                        {confirmingCashProofId === proof.id ? '...' : 'Confirm'}
+                      </button>
+                    ) : (
+                      <span className="text-[11px] text-cyan-200">Waiting</span>
+                    )}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
       {processed.length > 0 && (
         <section className="rounded-2xl border border-white/10 bg-slate-900/45 p-5">
           <h4 className="text-base font-semibold text-white mb-3">Recently Processed</h4>
-          <div className="space-y-2">
+          <div className="space-y-1">
             {processed.slice(0, 8).map((req) => {
               const status = STATUS_META[req.status] || STATUS_META.approved;
+              const relatedProof = proofByRequisitionId[req.id];
               return (
-                <div
-                  key={req.id}
-                  className="rounded-lg border border-white/10 bg-slate-950/45 px-3 py-2 flex items-center justify-between gap-2"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm text-white truncate">{req.title}</p>
-                    <p className="text-xs text-slate-400">{req.requisitionNumber || req.id}</p>
-                  </div>
-                  <span className={`rounded-md border px-2 py-0.5 text-xs whitespace-nowrap ${status.chipClass}`}>
-                    {status.label}
-                  </span>
-                </div>
+                <article key={req.id} className="rounded-md border border-white/10 bg-slate-950/45 px-2.5 py-2">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedProcessedId((prev) => (prev === req.id ? null : req.id))}
+                    className="w-full text-left flex items-center justify-between gap-2"
+                  >
+                    <p className="text-xs text-slate-200 truncate">• {req.title} - {req.requisitionNumber || req.id}</p>
+                    <span className={`rounded-md border px-2 py-0.5 text-[10px] whitespace-nowrap ${status.chipClass}`}>
+                      {status.label}
+                    </span>
+                  </button>
+
+                  {expandedProcessedId === req.id && (
+                    <div className="mt-2 pl-3 border-l border-white/15 space-y-1">
+                      <p className="text-xs text-slate-300">Amount: {formatUgx(req.estimatedCost)}</p>
+                      <p className="text-xs text-slate-300">
+                        Method: {req.financePaymentMethod === 'cash'
+                          ? 'By Cash'
+                          : req.financePaymentMethod === 'ican_wallet'
+                            ? 'ICAN Wallet'
+                            : 'Not captured'}
+                      </p>
+                      <p className="text-xs text-slate-300">
+                        By: {relatedProof?.requested_by_name || relatedProof?.requested_by_email || 'Finance'}
+                      </p>
+                      {relatedProof?.recipient_confirmed_at && (
+                        <p className="text-xs text-slate-300">Confirmed at: {new Date(relatedProof.recipient_confirmed_at).toLocaleString()}</p>
+                      )}
+                    </div>
+                  )}
+                </article>
               );
             })}
           </div>

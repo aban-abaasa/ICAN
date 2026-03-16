@@ -642,6 +642,17 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     return () => { if (meetingTimerRef.current) clearInterval(meetingTimerRef.current); };
   }, [meetingStarted]);
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && showChat) {
+        setShowChat(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showChat]);
+
   const ensureLocalStream = useCallback(async () => {
     if (localStreamRef.current) return localStreamRef.current;
     try {
@@ -1152,6 +1163,39 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     setIsVideoOn(!isVideoOn);
   };
 
+  const notifyMembersOfIncomingBoardroomCall = useCallback(async () => {
+    if (!supabase || !groupId || !userId) return;
+
+    const recipients = (groupMembers || [])
+      .map((m) => m?.id || m?.user_id)
+      .filter((id) => Boolean(id) && id !== userId);
+
+    if (!recipients.length) return;
+
+    const payload = recipients.map((recipientId) => ({
+      recipient_id: recipientId,
+      notification_type: 'trust_boardroom_call',
+      title: `Incoming Live Boardroom Call: ${groupName || 'Trust Group'}`,
+      message: `${userEmail || 'A group member'} is calling your trust group now. Join the live boardroom.`,
+      action_tab: 'trust',
+      action_label: 'Open Trust',
+      action_url: `/trust?groupId=${groupId}&boardroom=1`,
+      status: 'unread',
+      metadata: {
+        group_id: groupId,
+        group_name: groupName || null,
+        host_id: userId,
+        host_email: userEmail || null,
+        event: 'call-started'
+      }
+    }));
+
+    const { error } = await supabase.from('notifications').insert(payload);
+    if (error) {
+      console.warn('Could not create trust boardroom notifications:', error);
+    }
+  }, [groupId, groupMembers, groupName, supabase, userEmail, userId]);
+
   const startMeeting = async () => {
     // Don't start meeting yet — ring the members first
     setIsCalling(true);
@@ -1205,6 +1249,9 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
         console.warn('Error logging meeting start:', err);
       }
     }
+
+    // Push in-app notifications so trust members receive call alerts in the universal bell.
+    await notifyMembersOfIncomingBoardroomCall();
     
     // Auto-cancel after 60 seconds if no one answers
     setTimeout(() => {
@@ -2079,8 +2126,8 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
       {/* Chat Sidebar - Responsive drawer for mobile */}
       {showChat && (
         <>
-          {/* Mobile overlay */}
-          <div className="absolute right-0 top-0 bottom-0 w-full sm:w-96 z-50 sm:z-0 sm:pb-0 pb-20">
+          {/* Mobile/Web overlay */}
+          <div className="fixed sm:absolute right-0 top-0 bottom-0 w-full sm:w-96 z-50 sm:pb-0 pb-20 sm:top-0 sm:right-0">
             {/* Backdrop overlay for mobile */}
             <div 
               onClick={() => setShowChat(false)}
@@ -2088,7 +2135,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
             />
             
             {/* Chat sidebar - slides in from right */}
-            <div className="absolute right-0 top-0 sm:bottom-0 bottom-20 w-4/5 sm:w-full bg-black/95 backdrop-blur-lg border-l border-purple-500/20 flex flex-col shadow-2xl z-50 animate-in slide-in-from-right">
+            <div className="fixed sm:absolute right-0 top-0 sm:bottom-0 bottom-20 w-4/5 sm:w-96 bg-black/95 backdrop-blur-lg border-l border-purple-500/20 flex flex-col shadow-2xl z-50 animate-in slide-in-from-right h-screen sm:h-full">
               {/* Chat Header */}
               <div className="flex-shrink-0 p-3 sm:p-4 border-b border-purple-500/20 flex items-center justify-between bg-gradient-to-r from-slate-900 via-purple-900/20 to-black backdrop-blur-md relative z-50">
                 <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
@@ -2102,10 +2149,10 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
                 </div>
                 <button 
                   onClick={() => setShowChat(false)} 
-                  className="p-1.5 hover:bg-slate-800/50 rounded-lg transition-colors flex-shrink-0"
-                  title="Close chat"
+                  className="p-2 hover:bg-purple-500/30 rounded-lg transition-all flex-shrink-0 hover:scale-110"
+                  title="Close chat (ESC)"
                 >
-                  <X className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 hover:text-gray-300" />
+                  <X className="w-5 h-5 sm:w-6 sm:h-6 text-gray-300 hover:text-white" />
                 </button>
               </div>
 
