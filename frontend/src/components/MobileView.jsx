@@ -616,6 +616,11 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [showRecordPanel, setShowRecordPanel] = useState(false);
   const [showExpenseIncomePanel, setShowExpenseIncomePanel] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
+  const [demoPromptState, setDemoPromptState] = useState({
+    isOpen: false,
+    moduleKey: null,
+    onConfirm: null
+  });
 
   // ====== VOICE RECOGNITION STATE ======
   const [isListening, setIsListening] = useState(false);
@@ -2406,39 +2411,61 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     trust: 'Create smart savings groups, contribute together, and borrow fairly.'
   };
 
-  const buildComingSoonMessage = (moduleKey) => {
-    const description = demoModuleDescriptions[moduleKey];
-    if (!description) {
-      return 'Coming soon. Do you want to see the demo module?';
+  const getDemoPromptCopy = (moduleKey) => {
+    const description = demoModuleDescriptions[moduleKey] || 'This experience is almost ready.';
+    return {
+      title: 'IcanEra Live',
+      message: `Comming soon. ${description} Open the live demo now?`
+    };
+  };
+
+  const closeDemoPrompt = () => {
+    setDemoPromptState({
+      isOpen: false,
+      moduleKey: null,
+      onConfirm: null
+    });
+  };
+
+  const requestDemoModuleOpen = (moduleKey, onConfirm) => {
+    if (!['pitchin', 'wallet', 'trust'].includes(moduleKey)) {
+      onConfirm?.();
+      return;
     }
 
-    return `Coming soon. ${description}\n\nDo you want to see the demo module?`;
+    setDemoPromptState({
+      isOpen: true,
+      moduleKey,
+      onConfirm
+    });
+  };
+
+  const handleDemoPromptConfirm = () => {
+    const confirmAction = demoPromptState.onConfirm;
+    closeDemoPrompt();
+    if (typeof confirmAction === 'function') {
+      confirmAction();
+    }
   };
 
   const handleFeatureExplore = (title, action) => {
     console.log(`Exploring ${title} - Action: ${action}`);
 
-    const shouldOpenDemoModule = (moduleName) => {
-      const moduleKey = String(moduleName).toLowerCase();
-      if (!['pitchin', 'wallet', 'trust'].includes(moduleKey)) {
-        return true;
-      }
-
-      return window.confirm(buildComingSoonMessage(moduleKey));
-    };
-
     if (title === 'Pitchin') {
-      if (!shouldOpenDemoModule('Pitchin')) return;
-      setShowPitchinPanel(true);
-      setActiveBottomTab('pitchin');
+      requestDemoModuleOpen('pitchin', () => {
+        setShowPitchinPanel(true);
+        setActiveBottomTab('pitchin');
+      });
     } else if (title === 'Wallet') {
-      if (!shouldOpenDemoModule('Wallet')) return;
-      setShowWalletPanel(true);
-      setActiveBottomTab('wallet');
+      requestDemoModuleOpen('wallet', () => {
+        setShowWalletPanel(true);
+        setActiveBottomTab('wallet');
+      });
     } else if (title === 'Trust') {
-      if (!shouldOpenDemoModule('Trust')) return;
-      setShowTrustPanel(true);
-      setActiveBottomTab('trust');
+      requestDemoModuleOpen('trust', () => {
+        setShowTrustPanel(true);
+        setActiveBottomTab('trust');
+      });
     } else if (title === 'CMMS') {
       setShowCmmsPanel(true);
       setActiveBottomTab('cmms');
@@ -2538,14 +2565,6 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     setActiveBottomTab(panelId);
   };
 
-  const confirmDemoModuleOpen = (panelId) => {
-    if (!['pitchin', 'wallet', 'trust'].includes(panelId)) {
-      return true;
-    }
-
-    return window.confirm(buildComingSoonMessage(panelId));
-  };
-
   const handleHeaderTabClick = (tabId) => {
     setShowMenuDropdown(false);
 
@@ -2557,10 +2576,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     }
 
     if (tabId === 'pitchin' || tabId === 'wallet' || tabId === 'trust' || tabId === 'cmms') {
-      if (!confirmDemoModuleOpen(tabId)) return;
-      setSelectedDetail(null);
-      setShowProfilePanel(false);
-      openHeaderPanel(tabId);
+      requestDemoModuleOpen(tabId, () => {
+        setSelectedDetail(null);
+        setShowProfilePanel(false);
+        openHeaderPanel(tabId);
+      });
       return;
     }
 
@@ -5089,9 +5109,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           {/* Pitchin */}
           <button
             onClick={() => {
-              if (!confirmDemoModuleOpen('pitchin')) return;
-              setShowPitchinPanel(!showPitchinPanel);
-              setActiveBottomTab('pitchin');
+              requestDemoModuleOpen('pitchin', () => {
+                setShowPitchinPanel(!showPitchinPanel);
+                setActiveBottomTab('pitchin');
+              });
             }}
             className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 transition ${
               showPitchinPanel ? 'opacity-80' : 'opacity-100'
@@ -5104,9 +5125,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           {/* Wallet */}
           <button
             onClick={() => {
-              if (!confirmDemoModuleOpen('wallet')) return;
-              setShowWalletPanel(!showWalletPanel);
-              setActiveBottomTab('wallet');
+              requestDemoModuleOpen('wallet', () => {
+                setShowWalletPanel(!showWalletPanel);
+                setActiveBottomTab('wallet');
+              });
             }}
             className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 transition ${
               showPitchinPanel ? 'opacity-40' : 'opacity-100'
@@ -5119,9 +5141,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           {/* Trust */}
           <button
             onClick={() => {
-              if (!confirmDemoModuleOpen('trust')) return;
-              setShowTrustPanel(!showTrustPanel);
-              setActiveBottomTab('trust');
+              requestDemoModuleOpen('trust', () => {
+                setShowTrustPanel(!showTrustPanel);
+                setActiveBottomTab('trust');
+              });
             }}
             className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 transition ${
               showPitchinPanel ? 'opacity-40' : 'opacity-100'
@@ -5245,6 +5268,41 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           // 'transactions' and 'ai-copilot' stay on home screen
         }}
       />
+
+      {/* IcanEra Live Demo Prompt */}
+      {demoPromptState.isOpen && (
+        <div className="fixed inset-0 z-[145] bg-black/65 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-3xl border border-emerald-400/35 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950/60 shadow-[0_25px_60px_rgba(16,185,129,0.25)] overflow-hidden animate-[fadeIn_200ms_ease-out]">
+            <div className="px-6 pt-6 pb-4">
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/30 bg-emerald-500/15 px-3 py-1 text-xs text-emerald-200 mb-4">
+                <span className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse"></span>
+                IcanEra
+              </div>
+              <h3 className="text-xl font-bold text-white mb-2">
+                {getDemoPromptCopy(demoPromptState.moduleKey).title}
+              </h3>
+              <p className="text-sm text-slate-200 leading-relaxed">
+                {getDemoPromptCopy(demoPromptState.moduleKey).message}
+              </p>
+            </div>
+
+            <div className="px-4 pb-4 pt-2 grid grid-cols-2 gap-3">
+              <button
+                onClick={closeDemoPrompt}
+                className="rounded-xl border border-slate-600/60 bg-slate-800/70 hover:bg-slate-700/80 text-slate-200 py-3 text-sm font-semibold transition"
+              >
+                Not now
+              </button>
+              <button
+                onClick={handleDemoPromptConfirm}
+                className="rounded-xl border border-emerald-300/50 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 py-3 text-sm font-bold transition"
+              >
+                Open Demo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Record Type Selection Modal */}
       {showRecordTypeModal && (
