@@ -2400,15 +2400,31 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     }
   ];
 
+  const demoModuleDescriptions = {
+    pitchin: 'Invest in ventures, raise side-business capital, and earn returns.',
+    wallet: 'Move money instantly, manage multiple wallets, and track transfers.',
+    trust: 'Create smart savings groups, contribute together, and borrow fairly.'
+  };
+
+  const buildComingSoonMessage = (moduleKey) => {
+    const description = demoModuleDescriptions[moduleKey];
+    if (!description) {
+      return 'Coming soon. Do you want to see the demo module?';
+    }
+
+    return `Coming soon. ${description}\n\nDo you want to see the demo module?`;
+  };
+
   const handleFeatureExplore = (title, action) => {
     console.log(`Exploring ${title} - Action: ${action}`);
 
     const shouldOpenDemoModule = (moduleName) => {
-      if (!['Pitchin', 'Wallet', 'Trust'].includes(moduleName)) {
+      const moduleKey = String(moduleName).toLowerCase();
+      if (!['pitchin', 'wallet', 'trust'].includes(moduleKey)) {
         return true;
       }
 
-      return window.confirm('Coming soon. Do you want to see the demo module?');
+      return window.confirm(buildComingSoonMessage(moduleKey));
     };
 
     if (title === 'Pitchin') {
@@ -2527,7 +2543,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       return true;
     }
 
-    return window.confirm('Coming soon. Do you want to see the demo module?');
+    return window.confirm(buildComingSoonMessage(panelId));
   };
 
   const handleHeaderTabClick = (tabId) => {
