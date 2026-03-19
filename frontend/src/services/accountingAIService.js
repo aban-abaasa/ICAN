@@ -19,6 +19,11 @@ KEY RULES:
    - "bought equipment" = Fixed Asset (capitalize over 3 years)
    - "bought property" = Fixed Asset (capitalize over 50 years)
 
+1b. BUSINESS STOCK PURCHASES: Any stock/inventory/goods/raw materials bought for resale are INVENTORY/CAPITAL (not operating expense)
+  - "bought stock" = Inventory (capital tied in stock)
+  - "bought goods to sell" = Inventory/COGS bucket
+  - Never classify business "bought" stock as normal operating expense
+
 2. PERSONAL PURCHASES: Groceries, clothes, meals are EXPENSES (not assets!)
    - "bought food" = Expense
    - "bought shirt" = Expense
@@ -49,6 +54,73 @@ RESPOND ONLY IN THIS JSON FORMAT - NO OTHER TEXT:
   "displayFormat": "how to show in UI"
 }`;
 
+const buildGuardrailAwarePrompt = (transaction) => {
+  const bucket = transaction.reportingBucket || 'none';
+  const acctType = transaction.businessAccountingType || 'none';
+  const mode = transaction.accountingType || 'personal';
+  const product = transaction.productName || 'none';
+
+  return ACCOUNTING_PROMPT.replace(
+    '{transaction}',
+    `${transaction.description} - ${transaction.amount} in ${transaction.type}\n` +
+    `Context: mode=${mode}, reporting_bucket=${bucket}, accounting_type=${acctType}, product=${product}`
+  );
+};
+
+const applyBusinessGuardrails = (transaction, result) => {
+  const text = `${transaction.description || ''} ${transaction.rawInput || ''}`.toLowerCase();
+  const mode = transaction.accountingType || 'personal';
+  const bucket = transaction.reportingBucket || '';
+  const acctType = transaction.businessAccountingType || '';
+  const isBoughtLike = /\bbought\b|\bpurchased\b|\bbuy\b|\bpurchase\b/.test(text);
+  const isCapitalLike = /\binvestment\b|\binvest\b|\bcapital\b|\bcapex\b|\basset\b|\bequipment\b|\bmachinery\b|\bvehicle\b|\bproperty\b|\bland\b|\bbuilding\b/.test(text);
+  const isStockLike = /\bstock\b|\binventory\b|\bgoods\b|\bmerchandise\b|\braw material\b|\bsupplies\b|\bfor sale\b|\bto sell\b/.test(text);
+
+  if (mode !== 'business') return result;
+
+  // Capital asset bucket must never become Expense in business mode.
+  if (bucket === 'capital_asset' || acctType === 'asset' || (isBoughtLike && isCapitalLike)) {
+    return {
+      ...result,
+      accountingAnalysis: {
+        ...result.accountingAnalysis,
+        classification: 'Asset',
+        account: result.accountingAnalysis?.account || 'Property, Plant & Equipment',
+        shouldCapitalize: true,
+        displayType: 'Asset',
+        displayIcon: '🏭',
+        displaySign: 'neutral',
+        displayColor: 'blue',
+        justification: `Business guardrail: capital purchase classified as asset. ${result.accountingAnalysis?.justification || ''}`.trim()
+      },
+      amountSign: 'neutral',
+      displayAmount: `UGX ${transaction.amount?.toLocaleString() || '0'}`
+    };
+  }
+
+  // Stock/inventory purchases are investment/stock, not operating expense.
+  if (bucket === 'bought_stock' || acctType === 'cogs' || (isBoughtLike && isStockLike)) {
+    return {
+      ...result,
+      accountingAnalysis: {
+        ...result.accountingAnalysis,
+        classification: 'Investment',
+        account: 'Inventory / Stock',
+        shouldCapitalize: true,
+        displayType: 'Asset',
+        displayIcon: '📦',
+        displaySign: 'neutral',
+        displayColor: 'blue',
+        justification: `Business guardrail: stock purchase classified as inventory capital. ${result.accountingAnalysis?.justification || ''}`.trim()
+      },
+      amountSign: 'neutral',
+      displayAmount: `UGX ${transaction.amount?.toLocaleString() || '0'}`
+    };
+  }
+
+  return result;
+};
+
 
 /**
  * Analyze transaction using OpenAI's accounting expertise
@@ -67,10 +139,7 @@ export const analyzeTransactionWithAI = async (transaction) => {
           },
           {
             role: 'user',
-            content: ACCOUNTING_PROMPT.replace(
-              '{transaction}',
-              `${transaction.description} - ${transaction.amount} in ${transaction.type}`
-            )
+            content: buildGuardrailAwarePrompt(transaction)
           }
         ],
         temperature: 0.3,
@@ -119,7 +188,7 @@ export const analyzeTransactionWithAI = async (transaction) => {
       displayColor = 'orange';
     }
     
-    return {
+    const aiResult = {
       ...transaction,
       accountingAnalysis: {
         classification: analysis.classification,
@@ -143,9 +212,11 @@ export const analyzeTransactionWithAI = async (transaction) => {
         `UGX ${transaction.amount?.toLocaleString() || '0'}`,
       amountSign: displaySign
     };
+
+    return applyBusinessGuardrails(transaction, aiResult);
   } catch (error) {
     console.error('❌ AI Analysis failed:', error);
-    return fallbackCategorization(transaction);
+    return applyBusinessGuardrails(transaction, fallbackCategorization(transaction));
   }
 };
 
@@ -189,6 +260,20 @@ const fallbackCategorization = (transaction) => {
     shouldCapitalize = true;
     displayIcon = '📦';
     displaySign = '+';
+    displayColor = 'blue';
+  } else if (text.includes('stock') || text.includes('inventory') || text.includes('goods') || text.includes('merchandise') || text.includes('raw material')) {
+    classification = 'Investment';
+    account = 'Inventory / Stock';
+    shouldCapitalize = true;
+    displayIcon = '📦';
+    displaySign = 'neutral';
+    displayColor = 'blue';
+  } else if (text.includes('bought') || text.includes('purchased') || text.includes('buy')) {
+    classification = 'Investment';
+    account = 'Inventory / Capital Purchase';
+    shouldCapitalize = true;
+    displayIcon = '📦';
+    displaySign = 'neutral';
     displayColor = 'blue';
   } else if (text.includes('salary') || text.includes('wage')) {
     classification = 'Expense';

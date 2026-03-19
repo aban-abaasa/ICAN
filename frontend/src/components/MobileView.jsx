@@ -2403,13 +2403,24 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
   const handleFeatureExplore = (title, action) => {
     console.log(`Exploring ${title} - Action: ${action}`);
 
+    const shouldOpenDemoModule = (moduleName) => {
+      if (!['Pitchin', 'Wallet', 'Trust'].includes(moduleName)) {
+        return true;
+      }
+
+      return window.confirm('Coming soon. Do you want to see the demo module?');
+    };
+
     if (title === 'Pitchin') {
+      if (!shouldOpenDemoModule('Pitchin')) return;
       setShowPitchinPanel(true);
       setActiveBottomTab('pitchin');
     } else if (title === 'Wallet') {
+      if (!shouldOpenDemoModule('Wallet')) return;
       setShowWalletPanel(true);
       setActiveBottomTab('wallet');
     } else if (title === 'Trust') {
+      if (!shouldOpenDemoModule('Trust')) return;
       setShowTrustPanel(true);
       setActiveBottomTab('trust');
     } else if (title === 'CMMS') {
@@ -2511,6 +2522,14 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     setActiveBottomTab(panelId);
   };
 
+  const confirmDemoModuleOpen = (panelId) => {
+    if (!['pitchin', 'wallet', 'trust'].includes(panelId)) {
+      return true;
+    }
+
+    return window.confirm('Coming soon. Do you want to see the demo module?');
+  };
+
   const handleHeaderTabClick = (tabId) => {
     setShowMenuDropdown(false);
 
@@ -2522,6 +2541,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     }
 
     if (tabId === 'pitchin' || tabId === 'wallet' || tabId === 'trust' || tabId === 'cmms') {
+      if (!confirmDemoModuleOpen(tabId)) return;
       setSelectedDetail(null);
       setShowProfilePanel(false);
       openHeaderPanel(tabId);
@@ -5052,7 +5072,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
           {/* Pitchin */}
           <button
-            onClick={() => { setShowPitchinPanel(!showPitchinPanel); setActiveBottomTab('pitchin'); }}
+            onClick={() => {
+              if (!confirmDemoModuleOpen('pitchin')) return;
+              setShowPitchinPanel(!showPitchinPanel);
+              setActiveBottomTab('pitchin');
+            }}
             className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 transition ${
               showPitchinPanel ? 'opacity-80' : 'opacity-100'
             }`}
@@ -5063,7 +5087,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
           {/* Wallet */}
           <button
-            onClick={() => { setShowWalletPanel(!showWalletPanel); setActiveBottomTab('wallet'); }}
+            onClick={() => {
+              if (!confirmDemoModuleOpen('wallet')) return;
+              setShowWalletPanel(!showWalletPanel);
+              setActiveBottomTab('wallet');
+            }}
             className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 transition ${
               showPitchinPanel ? 'opacity-40' : 'opacity-100'
             }`}
@@ -5074,7 +5102,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
           {/* Trust */}
           <button
-            onClick={() => { setShowTrustPanel(!showTrustPanel); setActiveBottomTab('trust'); }}
+            onClick={() => {
+              if (!confirmDemoModuleOpen('trust')) return;
+              setShowTrustPanel(!showTrustPanel);
+              setActiveBottomTab('trust');
+            }}
             className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 transition ${
               showPitchinPanel ? 'opacity-40' : 'opacity-100'
             }`}
@@ -5531,7 +5563,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   </div>
                 )}
                 {reportFilteredMetrics && !isLoadingReportMetrics && (
-                  <div className="grid grid-cols-2 gap-2 pt-2">
+                  <div className="grid grid-cols-3 gap-2 pt-2">
                     <div className="bg-sky-900/30 border border-sky-500/30 rounded-lg p-2 text-center">
                       <p className="text-sky-300 font-bold text-xs">{(reportFilteredMetrics.liabilitiesOutflow || 0).toLocaleString(undefined, {maximumFractionDigits:0})}</p>
                       <p className="text-gray-500 text-xs">Liabilities Paid</p>
@@ -5539,6 +5571,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     <div className="bg-fuchsia-900/30 border border-fuchsia-500/30 rounded-lg p-2 text-center">
                       <p className="text-fuchsia-300 font-bold text-xs">{((reportFilteredMetrics.dividendIncome || 0) - (reportFilteredMetrics.dividendPayout || 0)).toLocaleString(undefined, {maximumFractionDigits:0})}</p>
                       <p className="text-gray-500 text-xs">Dividend Net</p>
+                    </div>
+                    <div className="bg-cyan-900/30 border border-cyan-500/30 rounded-lg p-2 text-center">
+                      <p className="text-cyan-300 font-bold text-xs">{(reportFilteredMetrics.ownerEquityInflow || 0).toLocaleString(undefined, {maximumFractionDigits:0})}</p>
+                      <p className="text-gray-500 text-xs">Owner Equity</p>
                     </div>
                   </div>
                 )}
@@ -5616,7 +5652,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       const stock = fm ? (fm.boughtStock || 0) : 0;
                       const capital = fm ? (fm.capitalInvestments || 0) : 0;
                       const liabPaid = fm ? (fm.liabilitiesOutflow || 0) : 0;
+                      const ownerEquity = fm ? (fm.ownerEquityInflow || 0) : 0;
                       const divNet = fm ? ((fm.dividendIncome || 0) - (fm.dividendPayout || 0)) : 0;
+                      const capitalEquityPosition = ownerEquity - capital;
                       const net  = fm ? fm.netProfit : (inc - exp);
                       const rate = inc > 0 ? ((net / inc) * 100) : 0;
                       // Always derive label from the chosen filter — never hardcode '30d'
@@ -5628,6 +5666,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                           <div className="flex justify-between text-sm"><span className="text-gray-400">Expenses ({label})</span><span className="text-red-400 font-semibold">UGX {exp.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
                           <div className="flex justify-between text-sm"><span className="text-gray-400">Stock Purchases</span><span className="text-amber-300 font-semibold">UGX {stock.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
                           <div className="flex justify-between text-sm"><span className="text-gray-400">Capital Investments</span><span className="text-violet-300 font-semibold">UGX {capital.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                          <div className="flex justify-between text-sm"><span className="text-gray-400">Owner Equity</span><span className="text-cyan-300 font-semibold">UGX {ownerEquity.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                          <div className="flex justify-between text-sm"><span className="text-gray-400">Capital-Equity Position</span><span className={`font-semibold ${capitalEquityPosition >= 0 ? 'text-cyan-300' : 'text-orange-300'}`}>UGX {capitalEquityPosition.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
                           <div className="flex justify-between text-sm"><span className="text-gray-400">Liabilities Paid</span><span className="text-sky-300 font-semibold">UGX {liabPaid.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
                           <div className="flex justify-between text-sm"><span className="text-gray-400">Dividend Net</span><span className="text-fuchsia-300 font-semibold">UGX {divNet.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
                           <div className="flex justify-between text-sm border-t border-white/10 pt-2"><span className="text-gray-300 font-medium">Net Profit</span><span className={`font-bold ${net >= 0 ? 'text-green-400' : 'text-red-400'}`}>UGX {net.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
@@ -5691,6 +5731,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       const capitalInvestments = fm ? (fm.capitalInvestments || 0) : 0;
                       const liabilitiesOutflow = fm ? (fm.liabilitiesOutflow || 0) : 0;
                       const liabilityInflow = fm ? (fm.liabilityInflow || 0) : 0;
+                      const ownerEquityInflow = fm ? (fm.ownerEquityInflow || 0) : 0;
                       const dividendIncome = fm ? (fm.dividendIncome || 0) : 0;
                       const dividendPayout = fm ? (fm.dividendPayout || 0) : 0;
                       const taxExpense = fm ? (fm.taxExpense || 0) : 0;
@@ -5709,6 +5750,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         soldIncome,
                         boughtStock,
                         capitalInvestments,
+                        ownerEquityInflow,
                         liabilityInflow,
                         liabilitiesOutflow,
                         dividendIncome,
