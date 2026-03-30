@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { CountryService } from '../../services/countryService';
+import IcanEraLogo from '../../IcanEra.png';
 
 const SignUp = ({ onSwitchToSignIn, onSuccess }) => {
   const { signUp } = useAuth();
@@ -125,11 +126,30 @@ const SignUp = ({ onSwitchToSignIn, onSuccess }) => {
       <div className="max-w-md w-full bg-slate-800/80 backdrop-blur-xl rounded-2xl shadow-2xl p-8 border border-purple-500/20">
         {/* Logo/Brand */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-purple-500/30">
-            <span className="text-2xl font-bold text-white">IC</span>
+          <div className={`w-16 h-16 mx-auto mb-4 rounded-xl flex items-center justify-center relative transition-all duration-500 ${
+            loading
+              ? 'bg-gradient-to-r from-blue-500 to-purple-500 shadow-lg shadow-blue-500/50 animate-spin'
+              : 'bg-gradient-to-r from-purple-600 to-pink-600 shadow-lg shadow-purple-500/30'
+          }`} style={{
+            animation: loading ? 'spin 2s linear infinite' : 'logoFloat 4.5s ease-in-out infinite'
+          }}>
+            {loading && (
+              <div className="absolute inset-0 bg-blue-500 rounded-xl opacity-30 blur-lg animate-pulse"></div>
+            )}
+            <img src={IcanEraLogo} alt="IcanEra" className="w-10 h-10 object-contain relative z-10" />
           </div>
-          <h2 className="text-2xl font-bold text-white">Join ICAN Capital Engine</h2>
+          <h2 className="text-2xl font-bold text-white flex items-center justify-center gap-2">
+            Join IcanEra
+            {loading && (
+              <div className="flex gap-1">
+                <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></span>
+                <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }}></span>
+                <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></span>
+              </div>
+            )}
+          </h2>
           <p className="text-gray-400 text-sm mt-2">Transform volatility into global capital</p>
+          {loading && <p className="text-xs text-blue-300 animate-pulse mt-2">Creating your account...</p>}
         </div>
 
         {/* Error Message */}
@@ -433,6 +453,26 @@ const SignUp = ({ onSwitchToSignIn, onSuccess }) => {
           </div>
         </div>
       </div>
+
+      <style>{`
+        @keyframes spin {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
+        }
+
+        @keyframes logoFloat {
+          0%, 100% {
+            transform: translateY(0px);
+          }
+          50% {
+            transform: translateY(-8px);
+          }
+        }
+      `}</style>
     </div>
   );
 };

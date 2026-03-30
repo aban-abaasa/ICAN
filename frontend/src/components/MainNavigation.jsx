@@ -23,6 +23,7 @@ import {
   X,
   Wallet
 } from 'lucide-react'
+import IcanEraLogo from '../IcanEra.png'
 
 export default function MainNavigation({ onTrustClick, onShareClick, onWalletClick }) {
   const [activeSection, setActiveSection] = useState('dashboard')
@@ -149,13 +150,20 @@ export default function MainNavigation({ onTrustClick, onShareClick, onWalletCli
           {/* Desktop: Logo and Title + Menu */}
           <div className="hidden md:block">
             {/* Logo and Title */}
-            <div className="flex items-center gap-4 mb-6">
-              <div className="p-3 rounded-lg bg-blue-500/30 border border-blue-400/50">
-                <Shield className="w-6 h-6 text-blue-400" />
+            <div className="flex items-center gap-4 mb-6 group">
+              {/* Dynamic Logo with Glow Effect */}
+              <div className="relative transition-all duration-300 group-hover:scale-110">
+                {/* Subtle glow background */}
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg opacity-0 group-hover:opacity-30 blur-lg transition-all duration-300"></div>
+                
+                {/* Logo container */}
+                <div className="relative bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-lg p-1.5 hover:bg-gradient-to-r hover:from-blue-500/30 hover:to-purple-500/30 transition-all duration-300 group-hover:shadow-lg group-hover:shadow-blue-500/50">
+                  <img src={IcanEraLogo} alt="IcanEra" className="w-12 h-12 object-contain transition-transform duration-300 group-hover:scale-105" />
+                </div>
               </div>
+              
               <div>
-                <p className="text-white font-bold text-xl">ICAN Capital Engine</p>
-                <p className="text-blue-300 text-sm">From Volatility to Global Capital</p>
+                <p className="text-white font-bold text-xl group-hover:drop-shadow-[0_0_8px_rgba(59,130,246,0.5)] transition-all duration-300">IcanEra</p>
               </div>
             </div>
 

@@ -196,7 +196,7 @@ const LandingPage = ({ onGetStarted }) => {
       features: ['Smart contracts', 'Automation', 'Advanced controls']
     },
     {
-      image: '/images/ICANera1.png',
+      image: new URL('../IcanEra.png', import.meta.url).href,
       title: 'ICAN Ecosystem',
       subtitle: 'All-in-One Platform',
       description: 'Complete financial ecosystem with all tools integrated seamlessly',
@@ -555,7 +555,7 @@ const LandingPage = ({ onGetStarted }) => {
                 <button 
                   onClick={() => setIsHeroExpanded(!isHeroExpanded)}
                   className="inline-flex items-center space-x-3 px-6 py-3 bg-gradient-to-r from-purple-500/90 via-pink-500/90 to-purple-600/90 hover:from-purple-500 hover:via-pink-500 hover:to-purple-600 rounded-full border border-purple-300/40 backdrop-blur-sm shadow-lg hover:shadow-2xl hover:shadow-purple-500/50 transition-all duration-300 transform hover:scale-110 w-full justify-center"
-                  title="About ICAN Capital Engine"
+                  title="About IcanEra"
                 >
                   <Zap className="w-5 h-5 text-white drop-shadow-lg animate-pulse flex-shrink-0" />
                   <span className="text-sm font-bold text-white">Learn More</span>

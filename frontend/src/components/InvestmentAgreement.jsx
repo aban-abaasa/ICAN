@@ -203,7 +203,7 @@ const InvestmentAgreement = ({
       const credential = await navigator.credentials.create({
         publicKey: {
           challenge,
-          rp: { name: "ICAN Capital Engine" },
+          rp: { name: "IcanEra" },
           user: {
             id: new Uint8Array(16),
             name: currentUser?.email || 'user',
@@ -400,7 +400,7 @@ const InvestmentAgreement = ({
       
       const mou = `
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                     ICAN CAPITAL ENGINE                                       ║
+║                     ICANERA                                                    ║
 ║                  INVESTMENT AGREEMENT (MOU)                                   ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
@@ -525,7 +525,7 @@ Contract Hash: ${btoa(contractId + JSON.stringify(allSigners)).substring(0, 32)}
 
 ════════════════════════════════════════════════════════════════════════════════
             This document is legally binding once all parties have signed.
-         ICAN Capital Engine • Powered by Blockchain • ${new Date().getFullYear()}
+         IcanEra • Powered by Blockchain • ${new Date().getFullYear()}
 ════════════════════════════════════════════════════════════════════════════════
       `.trim();
       

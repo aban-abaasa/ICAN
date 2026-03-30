@@ -11,6 +11,7 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
+  const isAuthenticating = loading || googleLoading;
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -47,14 +48,46 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 px-4">
-      <div className="max-w-md w-full bg-slate-800/80 backdrop-blur-xl rounded-2xl shadow-2xl p-8 border border-purple-500/20">
+      <div className={`max-w-md w-full bg-slate-800/80 backdrop-blur-xl rounded-2xl shadow-2xl p-8 border transition-all duration-500 ${isAuthenticating ? 'border-purple-400/50 scale-[1.01]' : 'border-purple-500/20'}`}>
+        <style>{`
+          @keyframes logoFloat {
+            0%, 100% { transform: translateY(0px) scale(1); }
+            50% { transform: translateY(-5px) scale(1.015); }
+          }
+
+          @keyframes logoPulse {
+            0%, 100% { transform: scale(1); filter: brightness(1); }
+            50% { transform: scale(1.08); filter: brightness(1.15); }
+          }
+
+          @keyframes logoSpin {
+            from { rotate: 0deg; }
+            to { rotate: 360deg; }
+          }
+        `}</style>
+
         {/* Logo/Brand */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-purple-500/30">
-            <span className="text-2xl font-bold text-white">IC</span>
+          <div className="relative w-24 h-24 mx-auto mb-4">
+            <div className={`absolute inset-0 rounded-2xl bg-gradient-to-r from-violet-600/45 to-purple-500/45 blur-md transition-all duration-500 ${isAuthenticating ? 'opacity-95 scale-110' : 'opacity-70'}`} />
+            {isAuthenticating && (
+              <div className="absolute -inset-2 rounded-2xl border border-purple-300/40 animate-spin" />
+            )}
+            <img
+              src={new URL('../../IcanEra.png', import.meta.url).href}
+              alt="IcanEra logo"
+              className="relative z-10 w-full h-full object-contain"
+              style={{
+                animation: isAuthenticating
+                  ? 'logoPulse 1.2s ease-in-out infinite'
+                  : 'logoFloat 4.5s ease-in-out infinite'
+              }}
+            />
           </div>
           <h2 className="text-2xl font-bold text-white">Welcome Back</h2>
-          <p className="text-gray-400 text-sm mt-2">Sign in to your Capital Engine</p>
+          <p className="text-gray-400 text-sm mt-2 transition-all duration-300">
+            {isAuthenticating ? 'Authenticating with IcanEra...' : 'Sign in to IcanEra'}
+          </p>
         </div>
 
         {/* Error Message */}
@@ -128,7 +161,7 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                Signing In...
+                Entering IcanEra...
               </>
             ) : (
               <>

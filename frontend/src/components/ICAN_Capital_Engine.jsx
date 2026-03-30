@@ -78,6 +78,7 @@ import {
   Plus,
   Edit2
 } from 'lucide-react';
+import IcanEraLogo from '../IcanEra.png';
 
 // AI Spending Advice Modal
 const AIAdviceModal = ({ isOpen, advice, transaction, onConfirm, onCancel }) => {
@@ -9193,13 +9194,48 @@ Data Freshness: ${reportData.metadata.dataFreshness}
         <div className={`flex items-center gap-4 ${activeTab === 'dashboard' ? 'justify-end' : 'justify-between'}`}>
           {activeTab !== 'dashboard' && (
             <div className="flex items-center gap-3">
-              <Shield className="w-8 h-8 text-blue-400" />
+              <div className={`relative flex-shrink-0 ${isLoading ? 'animate-spin' : ''}`} style={{
+                animation: isLoading ? 'spin 2s linear infinite' : 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              }}>
+                {/* Glow effect during loading */}
+                {isLoading && (
+                  <div className="absolute inset-0 animate-pulse">
+                    <div className="w-10 h-10 bg-blue-500 rounded-lg opacity-30 blur-lg"></div>
+                  </div>
+                )}
+                
+                {/* Logo with dynamic glow */}
+                <div className={`relative w-10 h-10 flex items-center justify-center rounded-lg transition-all duration-500 ${
+                  isLoading 
+                    ? 'bg-gradient-to-r from-blue-500 to-purple-500 shadow-lg shadow-blue-500/50' 
+                    : 'bg-gradient-to-r from-blue-500/30 to-purple-500/30'
+                }`}>
+                  <img src={IcanEraLogo} alt="IcanEra" className={`w-8 h-8 object-contain transition-transform duration-500 ${isLoading ? 'scale-110' : 'scale-100'}`} />
+                </div>
+              </div>
+              
               <div>
-                <h1 className="text-xl font-bold gradient-text">ICAN Capital Engine - Dashboard</h1>
-                <p className="text-xs text-gray-300">From Volatility to Global Capital</p>
+                <h1 className="text-xl font-bold gradient-text flex items-center gap-2">
+                  IcanEra
+                  {isLoading && (
+                    <div className="flex gap-1">
+                      <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></span>
+                      <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }}></span>
+                      <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></span>
+                    </div>
+                  )}
+                </h1>
+                {isLoading && <p className="text-xs text-blue-300 animate-pulse">Loading financial data...</p>}
               </div>
             </div>
           )}
+          
+          <style>{`
+            @keyframes spin {
+              from { transform: rotate(0deg); }
+              to { transform: rotate(360deg); }
+            }
+          `}</style>
 
           {/* Status Carousel in Top-Right (WhatsApp style) */}
           <div className="flex gap-2 items-center flex-nowrap min-w-0 ml-auto">
