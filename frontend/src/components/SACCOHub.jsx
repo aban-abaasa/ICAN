@@ -11,7 +11,7 @@
  * 6. Manage admin panel for their groups
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
   Plus,
@@ -49,6 +49,8 @@ import TrustLoanManagement from './TrustLoanManagement';
 const SACCOHub = ({ onClose }) => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('explore');
+  const isRestoringTrustHistoryRef = useRef(false);
+  const hasHydratedTrustHistoryRef = useRef(false);
   
   // Main data
   const [allGroups, setAllGroups] = useState([]);
@@ -77,6 +79,95 @@ const SACCOHub = ({ onClose }) => {
     monthlyContribution: 100,
     maxMembers: 30
   });
+
+  const VALID_TRUST_TABS = ['explore', 'my-groups', 'voting', 'applications', 'admin'];
+
+  const findGroupById = (groupId) => {
+    if (!groupId) return null;
+    const combinedGroups = [...allGroups, ...myJoinedGroups, ...myCreatedGroups];
+    return combinedGroups.find((group) => group.id === groupId) || null;
+  };
+
+  useEffect(() => {
+    const trustState = {
+      activeTab,
+      showCreateForm,
+      showApplicationForm,
+      showLoanForm,
+      selectedGroupForApplicationId: selectedGroupForApplication?.id || null,
+      selectedGroupForLoanId: selectedGroupForLoan?.id || null,
+      selectedAdminGroupId: selectedAdminGroup?.id || null,
+      selectedGroupDetailsId: selectedGroupDetails?.id || null,
+    };
+
+    const payload = {
+      ...(window.history.state || {}),
+      __icanTrust: trustState,
+    };
+
+    if (isRestoringTrustHistoryRef.current) {
+      window.history.replaceState(payload, '', window.location.href);
+      return;
+    }
+
+    const current = window.history.state?.__icanTrust;
+    const sameState =
+      current &&
+      current.activeTab === trustState.activeTab &&
+      Boolean(current.showCreateForm) === trustState.showCreateForm &&
+      Boolean(current.showApplicationForm) === trustState.showApplicationForm &&
+      Boolean(current.showLoanForm) === trustState.showLoanForm &&
+      (current.selectedGroupForApplicationId || null) === trustState.selectedGroupForApplicationId &&
+      (current.selectedGroupForLoanId || null) === trustState.selectedGroupForLoanId &&
+      (current.selectedAdminGroupId || null) === trustState.selectedAdminGroupId &&
+      (current.selectedGroupDetailsId || null) === trustState.selectedGroupDetailsId;
+
+    if (!hasHydratedTrustHistoryRef.current) {
+      window.history.replaceState(payload, '', window.location.href);
+      hasHydratedTrustHistoryRef.current = true;
+      return;
+    }
+
+    if (!sameState) {
+      window.history.pushState(payload, '', window.location.href);
+    }
+  }, [
+    activeTab,
+    showCreateForm,
+    showApplicationForm,
+    showLoanForm,
+    selectedGroupForApplication,
+    selectedGroupForLoan,
+    selectedAdminGroup,
+    selectedGroupDetails,
+  ]);
+
+  useEffect(() => {
+    const handlePopState = (event) => {
+      const historyState = event.state?.__icanTrust;
+      if (!historyState) return;
+
+      isRestoringTrustHistoryRef.current = true;
+      hasHydratedTrustHistoryRef.current = true;
+
+      setActiveTab(VALID_TRUST_TABS.includes(historyState.activeTab) ? historyState.activeTab : 'explore');
+      setShowCreateForm(Boolean(historyState.showCreateForm));
+      setShowApplicationForm(Boolean(historyState.showApplicationForm));
+      setShowLoanForm(Boolean(historyState.showLoanForm));
+
+      setSelectedGroupForApplication(findGroupById(historyState.selectedGroupForApplicationId));
+      setSelectedGroupForLoan(findGroupById(historyState.selectedGroupForLoanId));
+      setSelectedAdminGroup(findGroupById(historyState.selectedAdminGroupId));
+      setSelectedGroupDetails(findGroupById(historyState.selectedGroupDetailsId));
+
+      window.setTimeout(() => {
+        isRestoringTrustHistoryRef.current = false;
+      }, 0);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [allGroups, myJoinedGroups, myCreatedGroups]);
 
   // Load all data on mount
   useEffect(() => {

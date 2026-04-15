@@ -922,15 +922,15 @@ const TrustSystem = ({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-4 sm:py-8 px-3 sm:px-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-blue-50 to-emerald-50 py-4 sm:py-8 px-3 sm:px-4 trust-creative-skin">
       {/* Header */}
       <div className="max-w-7xl mx-auto mb-6 sm:mb-8">
         <div className="flex items-center justify-between mb-4 sm:mb-6 gap-2">
           <div className="flex items-center gap-2 sm:gap-3">
             <Shield className="w-7 h-7 sm:w-10 sm:h-10 text-amber-500 flex-shrink-0" />
             <div className="min-w-0">
-              <h1 className="text-lg sm:text-4xl font-bold text-white truncate">🏦 SACCO HUB</h1>
-              <p className="text-xs sm:text-base text-amber-300 mt-0 sm:mt-1 truncate">Cooperative Savings Groups</p>
+              <h1 className="text-lg sm:text-4xl font-bold text-slate-900 truncate">🏦 SACCO HUB</h1>
+              <p className="text-xs sm:text-base text-amber-700 mt-0 sm:mt-1 truncate">Cooperative Savings Groups</p>
             </div>
           </div>
         </div>
@@ -965,13 +965,13 @@ const TrustSystem = ({
 
         {/* Tabs - Desktop View */}
         <div className="hidden sm:flex gap-4 border-b border-slate-700 py-0">
-          <button onClick={() => { setActiveTab('explore'); setShowMobileMenu(false); }} className={`px-6 py-4 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap relative ${activeTab === 'explore' ? 'text-amber-500 border-b-2 border-amber-500' : 'text-slate-400 hover:text-slate-300'}`}>🔍 Explore</button>
-          <button onClick={() => { setActiveTab('mygroups'); setShowMobileMenu(false); }} className={`px-6 py-4 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap relative ${activeTab === 'mygroups' ? 'text-amber-500 border-b-2 border-amber-500' : 'text-slate-400 hover:text-slate-300'}`}>👥 My Trusts</button>
-          <button onClick={() => { setActiveTab('voting'); setShowMobileMenu(false); }} className={`px-6 py-4 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap relative ${activeTab === 'voting' ? 'text-amber-500 border-b-2 border-amber-500' : 'text-slate-400 hover:text-slate-300'}`}>🗳️ Vote {votingApplications.length > 0 && <span className="ml-1 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full font-bold">{votingApplications.length}</span>}</button>
-          <button onClick={() => { setActiveTab('applications'); setShowMobileMenu(false); }} className={`px-6 py-4 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap relative ${activeTab === 'applications' ? 'text-amber-500 border-b-2 border-amber-500' : 'text-slate-400 hover:text-slate-300'}`}>📮 Applications {myApplications.length > 0 && <span className="ml-1 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full font-bold">{myApplications.length}</span>}</button>
-          <button onClick={() => { setActiveTab('create'); setShowMobileMenu(false); }} className={`px-6 py-4 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap relative ${activeTab === 'create' ? 'text-amber-500 border-b-2 border-amber-500' : 'text-slate-400 hover:text-slate-300'}`}>✨ Create</button>
+          <button onClick={() => { setActiveTab('explore'); setShowMobileMenu(false); }} className={`px-6 py-3 mt-1 mb-1 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap rounded-lg border-2 ${activeTab === 'explore' ? 'text-white border-emerald-500 bg-emerald-500' : 'text-emerald-800 bg-emerald-100 border-emerald-300 hover:bg-emerald-200'}`}>🔍 Explore</button>
+          <button onClick={() => { setActiveTab('mygroups'); setShowMobileMenu(false); }} className={`px-6 py-3 mt-1 mb-1 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap rounded-lg border-2 ${activeTab === 'mygroups' ? 'text-white border-blue-500 bg-blue-500' : 'text-blue-800 bg-blue-100 border-blue-300 hover:bg-blue-200'}`}>👥 My Trusts</button>
+          <button onClick={() => { setActiveTab('voting'); setShowMobileMenu(false); }} className={`px-6 py-3 mt-1 mb-1 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap rounded-lg border-2 ${activeTab === 'voting' ? 'text-white border-orange-500 bg-orange-500' : 'text-orange-800 bg-orange-100 border-orange-300 hover:bg-orange-200'}`}>🗳️ Vote {votingApplications.length > 0 && <span className="ml-1 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full font-bold">{votingApplications.length}</span>}</button>
+          <button onClick={() => { setActiveTab('applications'); setShowMobileMenu(false); }} className={`px-6 py-3 mt-1 mb-1 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap rounded-lg border-2 ${activeTab === 'applications' ? 'text-white border-violet-500 bg-violet-500' : 'text-violet-800 bg-violet-100 border-violet-300 hover:bg-violet-200'}`}>📮 Applications {myApplications.length > 0 && <span className="ml-1 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full font-bold">{myApplications.length}</span>}</button>
+          <button onClick={() => { setActiveTab('create'); setShowMobileMenu(false); }} className={`px-6 py-3 mt-1 mb-1 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap rounded-lg border-2 ${activeTab === 'create' ? 'text-white border-amber-500 bg-amber-500' : 'text-amber-800 bg-amber-100 border-amber-300 hover:bg-amber-200'}`}>✨ Create</button>
           {myGroups.some(g => g.creator_id === currentUser?.id) && (
-            <button onClick={() => { setActiveTab('admin'); setShowMobileMenu(false); }} className={`px-6 py-4 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap relative ${activeTab === 'admin' ? 'text-amber-500 border-b-2 border-amber-500' : 'text-slate-400 hover:text-slate-300'}`}>👑 Admin Panel</button>
+            <button onClick={() => { setActiveTab('admin'); setShowMobileMenu(false); }} className={`px-6 py-3 mt-1 mb-1 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap rounded-lg border-2 ${activeTab === 'admin' ? 'text-white border-fuchsia-400 bg-fuchsia-500/20' : 'text-fuchsia-300 border-fuchsia-500/40 hover:border-fuchsia-400'}`}>👑 Admin Panel</button>
           )}
         </div>
 
@@ -1013,7 +1013,7 @@ const TrustSystem = ({
                   placeholder="Search groups..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2 sm:py-3 bg-slate-800 border border-slate-700 rounded-lg text-sm sm:text-base text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                  className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2 sm:py-3 bg-white border-2 border-dotted border-amber-500/70 rounded-lg text-sm sm:text-base text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500"
                 />
               </div>
             </div>
@@ -1033,15 +1033,15 @@ const TrustSystem = ({
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredGroups.map(group => (
-                  <div key={group.id} className="bg-gradient-to-br from-slate-800 to-slate-800/50 border border-slate-700 rounded-lg p-4 sm:p-5 flex flex-col">
+                  <div key={group.id} className="bg-gradient-to-br from-white to-emerald-50 border-2 border-emerald-500/55 rounded-lg p-4 sm:p-5 flex flex-col shadow-lg shadow-emerald-900/10">
                     {/* Group Name & Description */}
                     <div className="mb-4 flex-1">
-                      <h3 className="text-lg sm:text-xl font-bold text-white mb-2">{group.name}</h3>
-                      <p className="text-slate-400 text-xs sm:text-sm line-clamp-2">{group.description}</p>
+                      <h3 className="text-lg sm:text-xl font-bold text-slate-900 mb-2">{group.name}</h3>
+                      <p className="text-slate-600 text-xs sm:text-sm line-clamp-2">{group.description}</p>
                     </div>
 
                     {/* Member Count Card */}
-                    <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-3">
+                    <div className="bg-blue-500/10 border-2 border-dotted border-blue-400/70 rounded-lg p-3 mb-3">
                       <p className="text-blue-300 text-xs font-semibold flex items-center gap-1">
                         <Users size={14} />
                         Group Members
@@ -1052,12 +1052,12 @@ const TrustSystem = ({
 
                     {/* Monthly Contribution & Total Saved */}
                     <div className="space-y-2 mb-4 text-xs sm:text-sm">
-                      <p className="text-slate-300">
-                        <span className="text-slate-400">Monthly:</span> <span className="font-semibold text-amber-400">₿{group.monthly_contribution} ICAN</span>
+                      <p className="text-slate-700">
+                        <span className="text-slate-500">Monthly:</span> <span className="font-semibold text-amber-600">₿{group.monthly_contribution} ICAN</span>
                       </p>
                       {group.members && Array.isArray(group.members) && group.members.length > 0 && (
-                        <p className="text-emerald-300">
-                          <span className="text-slate-400">Group Savings:</span> <span className="font-semibold">₿{(group.members.reduce((sum, m) => sum + (parseFloat(m.total_contributed) || 0), 0)).toFixed(8)}</span>
+                        <p className="text-emerald-700">
+                          <span className="text-slate-500">Group Savings:</span> <span className="font-semibold">₿{(group.members.reduce((sum, m) => sum + (parseFloat(m.total_contributed) || 0), 0)).toFixed(8)}</span>
                         </p>
                       )}
                     </div>
@@ -1067,7 +1067,7 @@ const TrustSystem = ({
                       <button
                         onClick={() => handleJoinGroup(group)}
                         disabled={loading || (group.member_count || 0) >= group.max_members}
-                        className="w-full px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 active:bg-emerald-700 text-white rounded-lg transition-colors text-xs sm:text-sm font-medium"
+                        className="w-full px-3 py-2 bg-gradient-to-r from-emerald-600 to-orange-500 hover:from-emerald-500 hover:to-orange-400 disabled:bg-slate-300 disabled:text-slate-500 active:from-emerald-700 active:to-orange-600 text-white rounded-lg transition-all text-xs sm:text-sm font-semibold border-2 border-orange-300/70"
                       >
                         {(group.member_count || 0) >= group.max_members ? 'Full' : 'Join'}
                       </button>
@@ -1235,43 +1235,43 @@ const TrustSystem = ({
         {/* CREATE GROUP TAB */}
         {activeTab === 'create' && (
           <div className="max-w-2xl mx-auto">
-            <div className="bg-gradient-to-br from-slate-800 to-slate-800/50 border border-slate-700 rounded-lg p-8">
+            <div className="bg-gradient-to-br from-emerald-950/80 via-emerald-900/70 to-teal-900/70 border-4 border-green-400 rounded-xl p-8 shadow-xl shadow-green-900/30">
               <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-                <Plus className="text-amber-500" />
+                <Plus className="text-green-300" />
                 Create a New TRUST Group
               </h2>
 
               <form onSubmit={handleCreateGroup} className="space-y-6">
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-2">Group Name *</label>
+                  <label className="block text-white font-semibold mb-2">Group Name *</label>
                   <input
                     type="text"
                     required
                     value={groupForm.name}
                     onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })}
                     placeholder="e.g., Summer Savings Circle"
-                    className="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                    className="w-full px-4 py-3 bg-emerald-950/70 border-2 border-green-400/80 rounded-lg text-white placeholder-slate-300/70 focus:outline-none focus:border-lime-300"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-2">Description</label>
+                  <label className="block text-white font-semibold mb-2">Description</label>
                   <textarea
                     value={groupForm.description}
                     onChange={(e) => setGroupForm({ ...groupForm, description: e.target.value })}
                     placeholder="Describe your TRUST group's purpose and goals..."
                     rows={4}
-                    className="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 resize-none"
+                    className="w-full px-4 py-3 bg-emerald-950/70 border-2 border-green-400/80 rounded-lg text-white placeholder-slate-300/70 focus:outline-none focus:border-lime-300 resize-none"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-slate-300 font-semibold mb-2">Max Members</label>
+                    <label className="block text-white font-semibold mb-2">Max Members</label>
                     <select
                       value={groupForm.maxMembers}
                       onChange={(e) => setGroupForm({ ...groupForm, maxMembers: parseInt(e.target.value) })}
-                      className="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-amber-500"
+                      className="w-full px-4 py-3 bg-emerald-950/70 border-2 border-green-400/80 rounded-lg text-white focus:outline-none focus:border-lime-300"
                     >
                       {[5, 10, 15, 20, 25, 30].map(num => (
                         <option key={num} value={num}>{num} Members</option>
@@ -1280,17 +1280,17 @@ const TrustSystem = ({
                   </div>
 
                   <div>
-                    <label className="block text-slate-300 font-semibold mb-2">Currency (ICAN Coins Only)</label>
-                    <div className="w-full px-4 py-3 bg-gradient-to-r from-amber-900/30 to-amber-900/10 border border-amber-600/50 rounded-lg text-amber-300 font-semibold">
+                    <label className="block text-white font-semibold mb-2">Currency (ICAN Coins Only)</label>
+                    <div className="w-full px-4 py-3 bg-gradient-to-r from-green-700/35 to-emerald-700/15 border-2 border-green-300/75 rounded-lg text-white font-semibold">
                       ₿ ICAN - ICAN Coins
                     </div>
                   </div>
                 </div>
 
                 <div>
-                    <label className="block text-slate-300 font-semibold mb-2">Monthly Contribution Amount (ICAN Coins) *</label>
+                    <label className="block text-white font-semibold mb-2">Monthly Contribution Amount (ICAN Coins) *</label>
                     <div className="relative">
-                      <span className="absolute left-3 top-3 text-amber-400 font-bold">₿</span>
+                      <span className="absolute left-3 top-3 text-green-300 font-bold">₿</span>
                       <input
                         type="number"
                         required
@@ -1299,22 +1299,22 @@ const TrustSystem = ({
                         value={groupForm.monthlyContribution}
                         onChange={(e) => setGroupForm({ ...groupForm, monthlyContribution: parseFloat(e.target.value) })}
                         placeholder="100"
-                        className="w-full pl-10 pr-4 py-3 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                        className="w-full pl-10 pr-4 py-3 bg-emerald-950/70 border-2 border-green-400/80 rounded-lg text-white placeholder-slate-300/70 focus:outline-none focus:border-lime-300"
                       />
                     </div>
-                    <p className="text-slate-400 text-sm mt-2">Each member contributes this amount in ICAN coins monthly</p>
+                    <p className="text-slate-100 text-sm mt-2">Each member contributes this amount in ICAN coins monthly</p>
                 </div>
 
                 {/* Trust ICAN Wallet Setup */}
-                <div className="border-2 border-amber-500/30 rounded-lg p-4 bg-amber-900/10">
+                <div className="border-4 border-green-400/80 rounded-xl p-4 bg-gradient-to-r from-green-900/45 to-emerald-900/25">
                   <h3 className="text-white font-bold mb-3 flex items-center gap-2">
-                    <Wallet size={20} className="text-amber-400" />
+                    <Wallet size={20} className="text-green-300" />
                     Trust ICAN Wallet Setup (Required)
                   </h3>
                   
                   {!groupForm.walletCreated ? (
                     <div className="space-y-3">
-                      <p className="text-slate-300 text-sm">Every trust group needs a dedicated ICAN wallet for member transactions and withdrawals.</p>
+                      <p className="text-slate-100 text-sm">Every trust group needs a dedicated ICAN wallet for member transactions and withdrawals.</p>
                       <button
                         type="button"
                         onClick={() => {
@@ -1325,26 +1325,26 @@ const TrustSystem = ({
                             groupWalletAddress: `ICAN-GROUP-${currentUser?.id?.substring(0, 8)}-${Date.now()}`
                           });
                         }}
-                        className="w-full px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors font-medium text-sm"
+                        className="w-full px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white rounded-lg transition-all font-semibold text-sm border-2 border-lime-300/80"
                       >
                         + Create Trust ICAN Wallet
                       </button>
                     </div>
                   ) : (
-                    <div className="space-y-2 bg-slate-900/50 p-3 rounded border border-emerald-500/30">
+                    <div className="space-y-2 bg-emerald-950/50 p-3 rounded border-2 border-green-300/60">
                       <div className="flex items-center gap-2 text-emerald-400">
                         <CheckCircle size={18} />
                         <span className="font-semibold">Wallet Created!</span>
                       </div>
-                      <p className="text-slate-400 text-xs break-all">{groupForm.groupWalletAddress}</p>
+                      <p className="text-slate-100 text-xs break-all">{groupForm.groupWalletAddress}</p>
                       <p className="text-emerald-300/70 text-xs mt-2">✓ All member contributions will go to this wallet</p>
                     </div>
                   )}
                 </div>
 
-                <div className="bg-slate-900/50 border border-amber-500/20 rounded-lg p-4">
-                  <p className="text-amber-400 text-sm flex items-start gap-2">
-                    <Shield size={16} className="flex-shrink-0 mt-0.5" />
+                <div className="bg-emerald-950/45 border-2 border-green-300/40 rounded-lg p-4">
+                  <p className="text-slate-100 text-sm flex items-start gap-2">
+                    <Shield size={16} className="flex-shrink-0 mt-0.5 text-green-300" />
                     <span>All transactions are verified and recorded on the blockchain for transparency and security.</span>
                   </p>
                 </div>
@@ -1352,7 +1352,7 @@ const TrustSystem = ({
                 <button
                   type="submit"
                   disabled={loading || !groupForm.name || !groupForm.monthlyContribution || !groupForm.walletCreated}
-                  className="w-full px-6 py-3 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-semibold flex items-center justify-center gap-2"
+                  className="w-full px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-500 hover:from-green-500 hover:to-emerald-400 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-lg transition-all font-semibold flex items-center justify-center gap-2 border-2 border-green-200/80"
                 >
                   {!groupForm.walletCreated ? (
                     <>
@@ -1724,7 +1724,6 @@ const TrustSystem = ({
 
 
       </div>
-
       {/* GROUP DETAILS MODAL - Only for My Groups (members viewing their own groups) */}
       {selectedGroup && selectedGroupTab === 'mygroups' && !showGroupModal && !showContributeModal && !showManageModal && (
         <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-[100]">

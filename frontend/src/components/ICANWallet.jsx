@@ -193,8 +193,93 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [icanBalance, setIcanBalance] = useState(0);
   const [balanceLoading, setBalanceLoading] = useState(false);
+  const isRestoringWalletHistoryRef = useRef(false);
+  const hasHydratedWalletHistoryRef = useRef(false);
 
   const dropdownRef = useRef(null);
+
+  const VALID_WALLET_TABS = ['overview', 'transactions', 'deposit', 'withdraw', 'agent', 'cards', 'business', 'trust', 'settings'];
+  const VALID_TRADE_TABS = ['wallet', 'chart', 'buy', 'sell', 'history'];
+
+  useEffect(() => {
+    const walletState = {
+      activeTab,
+      activeModal,
+      showTradeModal,
+      activeTradeTab,
+      showAddCardModal,
+      showReceiveMoneyModal,
+      showApprovalModal,
+      showSettingsPanel,
+    };
+
+    const payload = {
+      ...(window.history.state || {}),
+      __icanWallet: walletState,
+    };
+
+    if (isRestoringWalletHistoryRef.current) {
+      window.history.replaceState(payload, '', window.location.href);
+      return;
+    }
+
+    const current = window.history.state?.__icanWallet;
+    const sameState =
+      current &&
+      current.activeTab === walletState.activeTab &&
+      (current.activeModal || null) === (walletState.activeModal || null) &&
+      Boolean(current.showTradeModal) === walletState.showTradeModal &&
+      current.activeTradeTab === walletState.activeTradeTab &&
+      Boolean(current.showAddCardModal) === walletState.showAddCardModal &&
+      Boolean(current.showReceiveMoneyModal) === walletState.showReceiveMoneyModal &&
+      Boolean(current.showApprovalModal) === walletState.showApprovalModal &&
+      Boolean(current.showSettingsPanel) === walletState.showSettingsPanel;
+
+    if (!hasHydratedWalletHistoryRef.current) {
+      window.history.replaceState(payload, '', window.location.href);
+      hasHydratedWalletHistoryRef.current = true;
+      return;
+    }
+
+    if (!sameState) {
+      window.history.pushState(payload, '', window.location.href);
+    }
+  }, [
+    activeTab,
+    activeModal,
+    showTradeModal,
+    activeTradeTab,
+    showAddCardModal,
+    showReceiveMoneyModal,
+    showApprovalModal,
+    showSettingsPanel,
+  ]);
+
+  useEffect(() => {
+    const handlePopState = (event) => {
+      const historyState = event.state?.__icanWallet;
+      if (!historyState) return;
+
+      isRestoringWalletHistoryRef.current = true;
+      hasHydratedWalletHistoryRef.current = true;
+
+      setActiveTab(VALID_WALLET_TABS.includes(historyState.activeTab) ? historyState.activeTab : 'overview');
+      setActiveModal(historyState.activeModal || null);
+      setShowTradeModal(Boolean(historyState.showTradeModal));
+      setActiveTradeTab(VALID_TRADE_TABS.includes(historyState.activeTradeTab) ? historyState.activeTradeTab : 'wallet');
+      setShowAddCardModal(Boolean(historyState.showAddCardModal));
+      setShowReceiveMoneyModal(Boolean(historyState.showReceiveMoneyModal));
+      setShowApprovalModal(Boolean(historyState.showApprovalModal));
+      setShowSettingsPanel(Boolean(historyState.showSettingsPanel));
+
+      window.setTimeout(() => {
+        isRestoringWalletHistoryRef.current = false;
+      }, 0);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Close mobile menu when modal closes
   useEffect(() => {
@@ -2491,9 +2576,230 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
     });
   };
 
+  const walletUi = {
+    headerCard: {
+      border: '2px solid transparent',
+      backgroundImage: 'linear-gradient(var(--color-bgSecondary), var(--color-bgSecondary)), linear-gradient(120deg, #22c55e, #f59e0b)',
+      backgroundOrigin: 'border-box',
+      backgroundClip: 'padding-box, border-box',
+      boxShadow: '0 10px 24px rgba(0, 0, 0, 0.16)'
+    },
+    headerIcon: {
+      background: 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))',
+      border: '1px solid var(--color-border)',
+      boxShadow: '0 10px 24px rgba(0, 0, 0, 0.25)'
+    },
+    title: {
+      background: 'linear-gradient(120deg, #16a34a, #f59e0b)',
+      WebkitBackgroundClip: 'text',
+      backgroundClip: 'text',
+      color: 'transparent'
+    },
+    subtitle: { color: '#15803d', fontWeight: 500 },
+    tabOverviewActive: {
+      background: 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))',
+      color: 'var(--color-bg)',
+      border: '2px solid #22c55e',
+      boxShadow: '0 8px 18px rgba(0, 0, 0, 0.22)'
+    },
+    tabOthersActive: {
+      background: 'linear-gradient(135deg, #10b981, #06b6d4)',
+      color: '#ffffff',
+      border: '2px solid #f59e0b',
+      boxShadow: '0 8px 18px rgba(16, 185, 129, 0.28)'
+    },
+    tabInactive: {
+      background: 'var(--color-bgSecondary)',
+      color: 'var(--color-textSecondary)',
+      border: '1px solid rgba(34, 197, 94, 0.35)',
+      boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)'
+    },
+    tabOverviewInactive: {
+      background: 'var(--color-bgSecondary)',
+      color: '#15803d',
+      border: '1px solid rgba(34, 197, 94, 0.5)',
+      boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)'
+    },
+    tabOthersInactive: {
+      background: 'var(--color-bgSecondary)',
+      color: '#c2410c',
+      border: '1px solid rgba(249, 115, 22, 0.45)',
+      boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)'
+    },
+    dropdownMenu: {
+      background: 'var(--color-bgSecondary)',
+      border: '1px solid var(--color-border)',
+      boxShadow: '0 14px 28px rgba(0, 0, 0, 0.35)'
+    },
+    dropdownActiveItem: {
+      background: 'var(--color-primaryLight)',
+      color: 'var(--color-text)'
+    },
+    dropdownItem: { color: 'var(--color-textSecondary)' },
+    balanceCard: {
+      background: 'linear-gradient(145deg, var(--color-bgSecondary), var(--color-primaryLight))',
+      border: '1px solid var(--color-border)'
+    },
+    balanceCardUnique: {
+      border: '3px solid transparent',
+      backgroundImage: 'linear-gradient(var(--color-bgSecondary), var(--color-bgSecondary)), linear-gradient(125deg, #0ea5e9, #22c55e, #f59e0b)',
+      backgroundOrigin: 'border-box',
+      backgroundClip: 'padding-box, border-box',
+      boxShadow: '0 14px 30px rgba(0, 0, 0, 0.18)'
+    },
+    balanceLabel: {
+      color: '#cbd5e1',
+      letterSpacing: '0.02em'
+    },
+    balanceAmount: {
+      background: 'linear-gradient(120deg, #38bdf8, #22c55e)',
+      WebkitBackgroundClip: 'text',
+      backgroundClip: 'text',
+      color: 'transparent'
+    },
+    balanceCurrency: {
+      color: '#16a34a',
+      fontWeight: 700
+    },
+    eyeButton: {
+      background: 'var(--color-bgSecondary)',
+      border: '2px dotted rgba(56, 189, 248, 0.75)'
+    },
+    actionButtonsWrap: {
+      border: '2px dotted rgba(245, 158, 11, 0.7)',
+      borderRadius: '14px',
+      padding: '10px',
+      background: 'linear-gradient(145deg, rgba(255,255,255,0.02), rgba(255,255,255,0.06))'
+    },
+    containerCard: {
+      border: '1px solid var(--color-border)',
+      background: 'linear-gradient(145deg, var(--color-bgSecondary), var(--color-bg))'
+    },
+    accountCardUnique: {
+      border: '3px solid transparent',
+      backgroundImage: 'linear-gradient(var(--color-bgSecondary), var(--color-bgSecondary)), linear-gradient(125deg, #22c55e, #f59e0b)',
+      backgroundOrigin: 'border-box',
+      backgroundClip: 'padding-box, border-box',
+      boxShadow: '0 14px 30px rgba(0, 0, 0, 0.18)'
+    },
+    accountHeading: {
+      background: 'linear-gradient(120deg, #16a34a, #f59e0b)',
+      WebkitBackgroundClip: 'text',
+      backgroundClip: 'text',
+      color: 'transparent'
+    },
+    editButton: {
+      background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
+      color: '#ffffff',
+      border: '2px solid #fb923c',
+      boxShadow: '0 8px 16px rgba(245, 158, 11, 0.24)'
+    },
+    accountNumberContainer: {
+      background: 'var(--color-bgSecondary)',
+      border: '2px dotted rgba(249, 115, 22, 0.85)'
+    },
+    copyButton: {
+      background: 'linear-gradient(135deg, #16a34a, #15803d)',
+      color: '#ffffff',
+      border: '2px solid #4ade80'
+    },
+    subContainer: {
+      background: 'var(--color-bgSecondary)',
+      border: '2px dotted rgba(34, 197, 94, 0.7)'
+    },
+    securityContainer: {
+      background: 'linear-gradient(145deg, var(--color-primaryLight), var(--color-bgSecondary))',
+      border: '2px dotted rgba(245, 158, 11, 0.75)'
+    },
+    securityTitle: {
+      color: '#c2410c',
+      fontWeight: 700
+    },
+    securityLabel: {
+      color: 'var(--color-textSecondary)'
+    },
+    securityEnabled: {
+      color: '#16a34a',
+      fontWeight: 700
+    },
+    actionButtons: {
+      send: {
+        background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+        border: '1px solid #60a5fa',
+        boxShadow: '0 10px 18px rgba(37, 99, 235, 0.28)'
+      },
+      receive: {
+        background: 'linear-gradient(135deg, #0ea5e9, #0284c7)',
+        border: '1px solid #67e8f9',
+        boxShadow: '0 10px 18px rgba(14, 165, 233, 0.26)'
+      },
+      topUp: {
+        background: 'linear-gradient(135deg, #22c55e, #16a34a)',
+        border: '1px solid #86efac',
+        boxShadow: '0 10px 18px rgba(34, 197, 94, 0.26)'
+      },
+      trade: {
+        background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
+        border: '1px solid #fdba74',
+        boxShadow: '0 10px 18px rgba(245, 158, 11, 0.28)'
+      }
+    }
+  };
+
   return (
-    <div className="w-full space-y-6">
+    <div className="wallet-creative-skin w-full space-y-6">
       <style>{`
+        .wallet-creative-skin .solid-card,
+        .wallet-creative-skin .glass-card {
+          border: 3px solid transparent !important;
+          background-image: linear-gradient(var(--color-bgSecondary), var(--color-bgSecondary)), linear-gradient(120deg, #22c55e, #f59e0b) !important;
+          background-origin: border-box;
+          background-clip: padding-box, border-box;
+          box-shadow: 0 14px 30px rgba(0, 0, 0, 0.16);
+        }
+
+        .wallet-creative-skin .solid-card h3,
+        .wallet-creative-skin .glass-card h3 {
+          color: var(--color-text);
+        }
+
+        .wallet-creative-skin .solid-card .rounded-lg,
+        .wallet-creative-skin .glass-card .rounded-lg {
+          border-width: 2px;
+          border-style: dotted;
+        }
+
+        .wallet-creative-skin .solid-card .rounded-lg:nth-of-type(odd),
+        .wallet-creative-skin .glass-card .rounded-lg:nth-of-type(odd) {
+          border-color: rgba(34, 197, 94, 0.7);
+        }
+
+        .wallet-creative-skin .solid-card .rounded-lg:nth-of-type(even),
+        .wallet-creative-skin .glass-card .rounded-lg:nth-of-type(even) {
+          border-color: rgba(249, 115, 22, 0.72);
+        }
+
+        .wallet-creative-skin .solid-card button,
+        .wallet-creative-skin .glass-card button {
+          border-width: 2px;
+          border-style: solid;
+          border-color: rgba(34, 197, 94, 0.55);
+          box-shadow: 0 8px 16px rgba(0, 0, 0, 0.14);
+        }
+
+        .wallet-creative-skin .solid-card button:hover,
+        .wallet-creative-skin .glass-card button:hover {
+          border-color: rgba(249, 115, 22, 0.8);
+          transform: translateY(-1px);
+        }
+
+        .wallet-creative-skin input,
+        .wallet-creative-skin select,
+        .wallet-creative-skin textarea {
+          border: 2px dotted rgba(56, 189, 248, 0.7) !important;
+          border-radius: 10px !important;
+        }
+
         /* Buy/Sell components in modal styling */
         .trade-tab-content .ican-trading-container {
           max-width: 100%;
@@ -3128,15 +3434,15 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
           }
         }
       `}</style>{/* Header Card */}
-      <div className="solid-card p-4 md:p-6">
+      <div className="solid-card p-4 md:p-6" style={walletUi.headerCard}>
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
           <div className="flex items-center gap-4">
-            <div className="p-3 rounded-lg bg-gradient-to-br from-green-600 to-emerald-700 border border-green-500/50 shadow-lg shadow-green-500/20">
+            <div className="p-3 rounded-lg" style={walletUi.headerIcon}>
               <Wallet className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h2 className="text-2xl md:text-3xl font-bold text-white">ICAN Wallet</h2>
-              <p className="text-sm md:text-base text-gray-300">Your mobile money platform with multi-currency support</p>
+              <h2 className="text-2xl md:text-3xl font-bold" style={walletUi.title}>ICAN Wallet</h2>
+              <p className="text-sm md:text-base" style={walletUi.subtitle}>Manage global currency with confidence</p>
             </div>
           </div>
         </div>
@@ -3147,9 +3453,10 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
             onClick={() => setActiveTab('overview')}
             className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
               activeTab === 'overview'
-                ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg shadow-green-500/30'
-                : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
+                ? 'text-white'
+                : 'hover:opacity-90'
             }`}
+            style={activeTab === 'overview' ? walletUi.tabOverviewActive : walletUi.tabOverviewInactive}
           >
             <Wallet className="w-4 h-4" />
             Overview
@@ -3160,9 +3467,10 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
             <button
               className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
                 ['transactions', 'withdraw', 'agent', 'cards', 'business', 'trust', 'settings'].includes(activeTab)
-                  ? 'bg-gradient-to-r from-slate-600 to-slate-700 text-white shadow-lg shadow-slate-500/30'
-                  : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
+                  ? 'text-white'
+                  : 'hover:opacity-90'
               }`}
+              style={['transactions', 'withdraw', 'agent', 'cards', 'business', 'trust', 'settings'].includes(activeTab) ? walletUi.tabOthersActive : walletUi.tabOthersInactive}
             >
               <Menu className="w-4 h-4" />
               Others
@@ -3170,14 +3478,15 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
             </button>
 
             {/* Dropdown Menu */}
-            <div className="absolute left-0 mt-1 w-48 bg-slate-800 border border-slate-600 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+            <div className="absolute left-0 mt-1 w-48 rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50" style={walletUi.dropdownMenu}>
               <button
                 onClick={() => setActiveTab('transactions')}
                 className={`w-full px-4 py-2 text-left flex items-center gap-2 transition-all ${
                   activeTab === 'transactions'
-                    ? 'bg-blue-500/30 text-blue-300'
-                    : 'text-gray-300 hover:bg-slate-700'
+                    ? ''
+                    : 'hover:opacity-90'
                 }`}
+                style={activeTab === 'transactions' ? walletUi.dropdownActiveItem : walletUi.dropdownItem}
               >
                 <History className="w-4 h-4" />
                 Transactions
@@ -3200,9 +3509,10 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
                 onClick={() => setActiveTab('withdraw')}
                 className={`w-full px-4 py-2 text-left flex items-center gap-2 transition-all ${
                   activeTab === 'withdraw'
-                    ? 'bg-red-500/30 text-red-300'
-                    : 'text-gray-300 hover:bg-slate-700'
+                    ? ''
+                    : 'hover:opacity-90'
                 }`}
+                style={activeTab === 'withdraw' ? walletUi.dropdownActiveItem : walletUi.dropdownItem}
               >
                 <Upload className="w-4 h-4" />
                 Withdraw
@@ -3214,9 +3524,10 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
                   onClick={() => setActiveTab('agent')}
                   className={`w-full px-4 py-2 text-left flex items-center gap-2 transition-all ${
                     activeTab === 'agent'
-                      ? 'bg-purple-500/30 text-purple-300'
-                      : 'text-gray-300 hover:bg-slate-700'
+                      ? ''
+                      : 'hover:opacity-90'
                   }`}
+                  style={activeTab === 'agent' ? walletUi.dropdownActiveItem : walletUi.dropdownItem}
                 >
                   <Store className="w-4 h-4" />
                   🏪 Agent Terminal
@@ -3236,9 +3547,10 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
                 onClick={() => setActiveTab('cards')}
                 className={`w-full px-4 py-2 text-left flex items-center gap-2 transition-all ${
                   activeTab === 'cards'
-                    ? 'bg-purple-500/30 text-purple-300'
-                    : 'text-gray-300 hover:bg-slate-700'
+                    ? ''
+                    : 'hover:opacity-90'
                 }`}
+                style={activeTab === 'cards' ? walletUi.dropdownActiveItem : walletUi.dropdownItem}
               >
                 <CreditCard className="w-4 h-4" />
                 Cards
@@ -3248,9 +3560,10 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
                 onClick={() => setActiveTab('business')}
                 className={`w-full px-4 py-2 text-left flex items-center gap-2 transition-all ${
                   activeTab === 'business'
-                    ? 'bg-cyan-500/30 text-cyan-300'
-                    : 'text-gray-300 hover:bg-slate-700'
+                    ? ''
+                    : 'hover:opacity-90'
                 }`}
+                style={activeTab === 'business' ? walletUi.dropdownActiveItem : walletUi.dropdownItem}
               >
                 <Store className="w-4 h-4" />
                 Business Accounts
@@ -3260,9 +3573,10 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
                 onClick={() => setActiveTab('trust')}
                 className={`w-full px-4 py-2 text-left flex items-center gap-2 transition-all ${
                   activeTab === 'trust'
-                    ? 'bg-violet-500/30 text-violet-300'
-                    : 'text-gray-300 hover:bg-slate-700'
+                    ? ''
+                    : 'hover:opacity-90'
                 }`}
+                style={activeTab === 'trust' ? walletUi.dropdownActiveItem : walletUi.dropdownItem}
               >
                 <Lock className="w-4 h-4" />
                 Trust Account
@@ -3272,9 +3586,10 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
                 onClick={() => setActiveTab('settings')}
                 className={`w-full px-4 py-2 text-left flex items-center gap-2 transition-all ${
                   activeTab === 'settings'
-                    ? 'bg-orange-500/30 text-orange-300'
-                    : 'text-gray-300 hover:bg-slate-700'
+                    ? ''
+                    : 'hover:opacity-90'
                 }`}
+                style={activeTab === 'settings' ? walletUi.dropdownActiveItem : walletUi.dropdownItem}
               >
                 <Settings className="w-4 h-4" />
                 Settings
@@ -3288,51 +3603,56 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
       {activeTab === 'overview' && (
       <div className="space-y-6">
         {/* Balance Card */}
-        <div className="solid-card p-6 bg-gradient-to-br from-green-900 to-emerald-900 border border-green-500/30">
+        <div className="solid-card p-6" style={walletUi.balanceCardUnique}>
           <div className="mb-6">
-            <p className="text-gray-300 mb-2 text-sm font-medium">Total Balance</p>
+            <p className="mb-2 text-sm font-medium" style={walletUi.balanceLabel}>Total Balance</p>
             <div className="flex items-center gap-4 mb-6">
-              <div className="text-5xl font-bold text-white">
+              <div className="text-5xl font-bold" style={walletUi.balanceAmount}>
                 {showBalance ? `${currentWallet.flag} ${currentWallet.balance.toLocaleString()}` : '••••••••'}
               </div>
               <button
                 onClick={() => setShowBalance(!showBalance)}
-                className="p-3 rounded-lg bg-slate-700 hover:bg-slate-600 transition-all border border-slate-600"
+                className="p-3 rounded-lg hover:opacity-90 transition-all"
+                style={walletUi.eyeButton}
               >
                 {showBalance ? <Eye className="w-5 h-5 text-gray-300" /> : <EyeOff className="w-5 h-5 text-gray-300" />}
               </button>
             </div>
-            <p className="text-green-400 text-lg font-semibold">{currentWallet.currency}</p>
+            <p className="text-lg" style={walletUi.balanceCurrency}>{currentWallet.currency}</p>
           </div>
 
           {/* Action Buttons */}
-          <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-4 gap-2 sm:gap-3">
+          <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-4 gap-2 sm:gap-3" style={walletUi.actionButtonsWrap}>
             <button 
               onClick={() => setActiveModal('send')}
-              className="bg-gradient-to-br from-blue-600 to-blue-700 border border-blue-500 hover:border-blue-400 rounded-lg py-2 sm:py-3 px-2 sm:px-4 flex flex-col items-center gap-1 sm:gap-2 transition-all"
+              className="rounded-lg py-2 sm:py-3 px-2 sm:px-4 flex flex-col items-center gap-1 sm:gap-2 transition-all hover:translate-y-[-1px]"
+              style={walletUi.actionButtons.send}
             >
-              <Send className="w-4 sm:w-5 h-4 sm:h-5 text-blue-200" />
+              <Send className="w-4 sm:w-5 h-4 sm:h-5 text-white/90" />
               <span className="text-xs sm:text-sm font-medium text-white">Send</span>
             </button>
             <button 
               onClick={() => setShowReceiveMoneyModal(true)}
-              className="bg-gradient-to-br from-cyan-600 to-cyan-700 border border-cyan-500 hover:border-cyan-400 rounded-lg py-2 sm:py-3 px-2 sm:px-4 flex flex-col items-center gap-1 sm:gap-2 transition-all"
+              className="rounded-lg py-2 sm:py-3 px-2 sm:px-4 flex flex-col items-center gap-1 sm:gap-2 transition-all hover:translate-y-[-1px]"
+              style={walletUi.actionButtons.receive}
             >
-              <ArrowDownLeft className="w-4 sm:w-5 h-4 sm:h-5 text-cyan-200" />
+              <ArrowDownLeft className="w-4 sm:w-5 h-4 sm:h-5 text-white/90" />
               <span className="text-xs sm:text-sm font-medium text-white">Receive</span>
             </button>
             <button 
               onClick={() => setActiveModal('topup')}
-              className="bg-gradient-to-br from-green-600 to-green-700 border border-green-500 hover:border-green-400 rounded-lg py-2 sm:py-3 px-2 sm:px-4 flex flex-col items-center gap-1 sm:gap-2 transition-all"
+              className="rounded-lg py-2 sm:py-3 px-2 sm:px-4 flex flex-col items-center gap-1 sm:gap-2 transition-all hover:translate-y-[-1px]"
+              style={walletUi.actionButtons.topUp}
             >
-              <Plus className="w-4 sm:w-5 h-4 sm:h-5 text-green-200" />
+              <Plus className="w-4 sm:w-5 h-4 sm:h-5 text-white/90" />
               <span className="text-xs sm:text-sm font-medium text-white">Top Up</span>
             </button>
             <button 
               onClick={() => setShowTradeModal(true)}
-              className="bg-gradient-to-br from-orange-600 to-red-700 border border-orange-500 hover:border-orange-400 rounded-lg py-2 sm:py-3 px-2 sm:px-4 flex flex-col items-center gap-1 sm:gap-2 transition-all"
+              className="rounded-lg py-2 sm:py-3 px-2 sm:px-4 flex flex-col items-center gap-1 sm:gap-2 transition-all hover:translate-y-[-1px]"
+              style={walletUi.actionButtons.trade}
             >
-              <TrendingUp className="w-4 sm:w-5 h-4 sm:h-5 text-orange-200" />
+              <TrendingUp className="w-4 sm:w-5 h-4 sm:h-5 text-white/90" />
               <span className="text-xs sm:text-sm font-medium text-white">Trade</span>
             </button>
           </div>
@@ -3342,7 +3662,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
         <div className="space-y-4">
           {!userAccount ? (
           // ✅ NO ACCOUNT - SHOW CREATE BUTTON
-          <div className="solid-card p-6 border-2 border-gradient-to-r from-cyan-400 to-blue-400 bg-gradient-to-br from-cyan-500/20 to-blue-500/10">
+          <div className="solid-card p-6" style={walletUi.containerCard}>
             <div className="flex flex-col items-center text-center space-y-4">
               <div className="p-4 bg-cyan-500/30 rounded-full">
                 <Wallet className="w-8 h-8 text-cyan-400" />
@@ -3361,9 +3681,9 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
           </div>
         ) : (
           // ✅ ACCOUNT EXISTS - SHOW ACCOUNT INFO
-          <div className="solid-card p-6 border border-purple-500/50">
+          <div className="solid-card p-6" style={walletUi.accountCardUnique}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+              <h3 className="text-lg font-semibold flex items-center gap-2" style={walletUi.accountHeading}>
                 💳 Account Information
               </h3>
               <button
@@ -3376,14 +3696,15 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
                   });
                   setShowAccountEdit(true);
                 }}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-purple-100 rounded-lg text-sm font-medium transition-all border border-purple-400"
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:translate-y-[-1px]"
+                style={walletUi.editButton}
               >
                 ✏️ Edit
               </button>
             </div>
             <div className="space-y-3">
               {/* Account Number */}
-              <div className="bg-slate-700 rounded-lg p-4 border border-purple-500/40">
+              <div className="rounded-lg p-4" style={walletUi.accountNumberContainer}>
                 <p className="text-gray-400 text-sm mb-1">Account Number</p>
                 <div className="flex items-center justify-between">
                   <p className="text-white font-mono text-lg font-bold">{userAccount.account_number}</p>
@@ -3392,7 +3713,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
                       navigator.clipboard.writeText(userAccount.account_number);
                       alert('Account number copied!');
                     }}
-                    className="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-purple-100 rounded text-sm transition-all"
+                    className="px-3 py-1 rounded text-sm transition-all hover:translate-y-[-1px]"
+                    style={walletUi.copyButton}
                   >
                     📋 Copy
                   </button>
@@ -3401,34 +3723,34 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
 
               {/* Account Holder */}
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-slate-700/50 rounded-lg p-3 border border-purple-500/20">
+                <div className="rounded-lg p-3" style={walletUi.subContainer}>
                   <p className="text-gray-400 text-xs mb-1">Account Holder</p>
                   <p className="text-white font-medium">{userAccount.account_holder_name}</p>
                 </div>
-                <div className="bg-slate-700/50 rounded-lg p-3 border border-purple-500/20">
+                <div className="rounded-lg p-3" style={walletUi.subContainer}>
                   <p className="text-gray-400 text-xs mb-1">Status</p>
                   <p className="text-green-400 font-medium">✓ {userAccount.status.toUpperCase()}</p>
                 </div>
               </div>
 
               {/* Security Info */}
-              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
-                <p className="text-blue-400 font-semibold mb-3 text-sm">🔐 Security Settings</p>
+              <div className="rounded-lg p-4" style={walletUi.securityContainer}>
+                <p className="mb-3 text-sm" style={walletUi.securityTitle}>🔐 Security Settings</p>
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-300">PIN Protection</span>
-                    <span className="text-green-400 font-semibold">✓ Enabled</span>
+                    <span style={walletUi.securityLabel}>PIN Protection</span>
+                    <span style={walletUi.securityEnabled}>✓ Enabled</span>
                   </div>
                   {userAccount.fingerprint_enabled && (
                     <div className="flex items-center justify-between">
-                      <span className="text-gray-300">Fingerprint</span>
-                      <span className="text-green-400 font-semibold">✓ Enabled</span>
+                      <span style={walletUi.securityLabel}>Fingerprint</span>
+                      <span style={walletUi.securityEnabled}>✓ Enabled</span>
                     </div>
                   )}
                   {userAccount.phone_pin_enabled && (
                     <div className="flex items-center justify-between">
-                      <span className="text-gray-300">Phone PIN</span>
-                      <span className="text-green-400 font-semibold">✓ Enabled</span>
+                      <span style={walletUi.securityLabel}>Phone PIN</span>
+                      <span style={walletUi.securityEnabled}>✓ Enabled</span>
                     </div>
                   )}
                 </div>

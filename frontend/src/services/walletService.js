@@ -315,7 +315,11 @@ class WalletService {
   async getBalance(currency) {
     try {
       // In real implementation, fetch from Supabase
-      const transactions = await walletTransactionService.getTransactions({ currency });
+      const transactions = await walletTransactionService.getTransactions({
+        currency,
+        includeArchived: true,
+        limit: 1000
+      });
       
       let balance = 0;
       transactions.forEach(tx => {
@@ -355,7 +359,7 @@ class WalletService {
    */
   async getTransaction(transactionId) {
     try {
-      const transactions = await walletTransactionService.getTransactions({});
+      const transactions = await walletTransactionService.getTransactions({ includeArchived: true, limit: 1000 });
       const transaction = transactions.find(tx => tx.id === transactionId);
       
       if (!transaction) {

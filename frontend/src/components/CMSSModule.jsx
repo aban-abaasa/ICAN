@@ -1656,10 +1656,17 @@ const CMMSModule = ({
     useEffect(() => {
       if (!canViewCompanyReports) {
         reportsInitialLoadKeyRef.current = '';
-        setCmmsData((prev) => ({
-          ...prev,
-          reports: Array.isArray(prev.reports) && prev.reports.length > 0 ? [] : prev.reports
-        }));
+        setCmmsData((prev) => {
+          const prevReports = Array.isArray(prev.reports) ? prev.reports : [];
+          if (prevReports.length === 0) {
+            return prev;
+          }
+
+          return {
+            ...prev,
+            reports: []
+          };
+        });
         return;
       }
 
@@ -4756,6 +4763,16 @@ const CMMSModule = ({
 
     const accessibleTabs = allTabs.filter(tab => getTabs().includes(tab.id));
 
+    const tabPalette = {
+      company: { activeBg: 'linear-gradient(135deg, #2563eb, #1d4ed8)', inactiveBg: 'rgba(37, 99, 235, 0.14)', border: 'rgba(96, 165, 250, 0.55)', inactiveText: '#bfdbfe' },
+      departments: { activeBg: 'linear-gradient(135deg, #0ea5e9, #0284c7)', inactiveBg: 'rgba(14, 165, 233, 0.14)', border: 'rgba(103, 232, 249, 0.55)', inactiveText: '#bae6fd' },
+      users: { activeBg: 'linear-gradient(135deg, #8b5cf6, #7c3aed)', inactiveBg: 'rgba(139, 92, 246, 0.14)', border: 'rgba(196, 181, 253, 0.55)', inactiveText: '#ddd6fe' },
+      inventory: { activeBg: 'linear-gradient(135deg, #16a34a, #15803d)', inactiveBg: 'rgba(34, 197, 94, 0.14)', border: 'rgba(134, 239, 172, 0.55)', inactiveText: '#bbf7d0' },
+      requisitions: { activeBg: 'linear-gradient(135deg, #f59e0b, #d97706)', inactiveBg: 'rgba(245, 158, 11, 0.14)', border: 'rgba(253, 186, 116, 0.55)', inactiveText: '#fde68a' },
+      approvals: { activeBg: 'linear-gradient(135deg, #f97316, #ea580c)', inactiveBg: 'rgba(249, 115, 22, 0.14)', border: 'rgba(253, 186, 116, 0.55)', inactiveText: '#fed7aa' },
+      reports: { activeBg: 'linear-gradient(135deg, #14b8a6, #0f766e)', inactiveBg: 'rgba(20, 184, 166, 0.14)', border: 'rgba(94, 234, 212, 0.55)', inactiveText: '#99f6e4' }
+    };
+
     // Track window resize for mobile detection
     useEffect(() => {
       const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -4783,7 +4800,7 @@ const CMMSModule = ({
         <div className="mb-6 border-b border-white border-opacity-10 -mx-4 px-4 py-3">
           <div className="flex items-center justify-between gap-2">
             {/* Current active tab display */}
-            <div className="text-sm font-semibold text-blue-300">
+            <div className="text-sm font-semibold" style={{ color: tabPalette[activeTab]?.inactiveText || '#bfdbfe' }}>
               {accessibleTabs.find(t => t.id === activeTab)?.label || '🏢 Company'}
             </div>
 
@@ -4807,12 +4824,15 @@ const CMMSModule = ({
 
               {/* Mobile Dropdown Menu */}
               {menuOpen && (
-                <div className="absolute right-0 top-full mt-2 bg-slate-800 border border-blue-500 border-opacity-50 rounded-lg shadow-2xl z-30 min-w-64 animate-in fade-in zoom-in-95 duration-200">
+                <div className="absolute right-0 top-full mt-2 bg-slate-900/95 border border-slate-600 rounded-lg shadow-2xl z-30 min-w-64 animate-in fade-in zoom-in-95 duration-200">
                   <div className="px-4 py-3 border-b border-slate-700 text-slate-300 text-xs font-semibold bg-slate-900 rounded-t-lg">
                     📋 NAVIGATION
                   </div>
                   <div className="divide-y divide-slate-700">
                     {accessibleTabs.map(tab => (
+                      (() => {
+                        const palette = tabPalette[tab.id] || tabPalette.company;
+                        return (
                       <button
                         key={tab.id}
                         onClick={() => {
@@ -4821,18 +4841,21 @@ const CMMSModule = ({
                         }}
                         className={`
                           w-full px-4 py-3.5 text-sm font-medium transition-all text-left flex items-center gap-3
-                          ${activeTab === tab.id
-                            ? 'bg-blue-600 bg-opacity-50 text-blue-100'
-                            : 'text-slate-300 active:bg-slate-700 active:text-white'
-                          }
+                          ${activeTab === tab.id ? 'text-white' : 'text-slate-200'}
                         `}
+                        style={activeTab === tab.id
+                          ? { background: palette.activeBg, borderLeft: `3px solid ${palette.border}` }
+                          : { background: palette.inactiveBg }
+                        }
                       >
                         <span className="text-lg">{tab.label.split(' ')[0]}</span>
                         <span className="flex-1">{tab.label}</span>
                         {activeTab === tab.id && (
-                          <span className="text-blue-300">✓</span>
+                          <span className="text-white">✓</span>
                         )}
                       </button>
+                        );
+                      })()
                     ))}
                   </div>
                 </div>
@@ -4851,17 +4874,22 @@ const CMMSModule = ({
           {/* All Tabs */}
           <div className="flex gap-1 md:gap-2 items-center overflow-x-auto flex-1">
             {accessibleTabs.map(tab => (
+              (() => {
+                const palette = tabPalette[tab.id] || tabPalette.company;
+                return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm font-semibold transition-all whitespace-nowrap border-b-2 ${
-                  activeTab === tab.id
-                    ? 'text-blue-300 border-blue-500'
-                    : 'text-gray-400 border-transparent hover:text-white'
-                }`}
+                className={`px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm font-semibold transition-all whitespace-nowrap rounded-lg border ${activeTab === tab.id ? 'text-white' : 'hover:brightness-110'}`}
+                style={activeTab === tab.id
+                  ? { background: palette.activeBg, borderColor: palette.border, boxShadow: '0 8px 18px rgba(0, 0, 0, 0.2)' }
+                  : { background: palette.inactiveBg, borderColor: palette.border, color: palette.inactiveText }
+                }
               >
                 {tab.label}
               </button>
+                );
+              })()
             ))}
           </div>
         </div>
@@ -5279,9 +5307,40 @@ const CMMSModule = ({
   // MAIN CMMS INTERFACE FOR AUTHORIZED USERS
   // ============================================
   return (
-    <div className="glass-card p-4 md:p-6 lg:p-8">
+    <div className="p-4 md:p-6 lg:p-8 cmms-clean-shell">
+      <style>{`
+        .cmms-clean-shell {
+          background: transparent;
+          border: none;
+          box-shadow: none;
+        }
+
+        .cmms-clean-shell .cmms-top-header {
+          border-bottom-color: rgba(148, 163, 184, 0.35);
+          background: linear-gradient(120deg, rgba(30, 64, 175, 0.18), rgba(13, 148, 136, 0.14));
+          border-radius: 14px;
+          padding: 14px;
+        }
+
+        .cmms-clean-shell .cmms-role-badge {
+          background: linear-gradient(135deg, rgba(37, 99, 235, 0.28), rgba(20, 184, 166, 0.24));
+          border: 1px solid rgba(125, 211, 252, 0.45);
+          color: #dbeafe;
+        }
+
+        .cmms-clean-shell .cmms-title {
+          background: linear-gradient(120deg, #22c55e, #0ea5e9, #f59e0b);
+          -webkit-background-clip: text;
+          background-clip: text;
+          color: transparent;
+        }
+
+        .cmms-clean-shell .cmms-subtitle {
+          color: #67e8f9;
+        }
+      `}</style>
       {/* Responsive Header with Icon */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 md:mb-8 pb-4 md:pb-6 border-b border-white border-opacity-20 gap-4">
+      <div className="cmms-top-header flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 md:mb-8 pb-4 md:pb-6 border-b border-white border-opacity-20 gap-4">
         <div className="flex items-center gap-2 sm:gap-4 flex-1">
           <button
             onClick={() => setShowCompanyDetails(!showCompanyDetails)}
@@ -5299,8 +5358,8 @@ const CMMSModule = ({
             <span className="text-xs text-white font-bold text-center leading-tight">Company</span>
           </button>
           <div className="min-w-0">
-            <h2 className="text-xl sm:text-2xl font-bold text-white truncate">CMMS</h2>
-            <p className="text-gray-300 text-xs sm:text-sm mt-1 truncate">
+            <h2 className="cmms-title text-xl sm:text-2xl font-bold truncate">CMMS</h2>
+            <p className="cmms-subtitle text-xs sm:text-sm mt-1 truncate">
               {cmmsData.companyProfile?.company_name || 'Management System'}
             </p>
           </div>
@@ -5389,7 +5448,7 @@ const CMMSModule = ({
             />
           )}
           
-          <span className="bg-blue-500 bg-opacity-30 text-blue-200 px-3 md:px-4 py-1.5 md:py-2 rounded-full text-xs font-semibold whitespace-nowrap">
+          <span className="cmms-role-badge px-3 md:px-4 py-1.5 md:py-2 rounded-full text-xs font-semibold whitespace-nowrap">
             {isSwitchingCompany ? '⏳ SWITCHING...' : `🔑 ${userRole?.toUpperCase()}`}
           </span>
         </div>

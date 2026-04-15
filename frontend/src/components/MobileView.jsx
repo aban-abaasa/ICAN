@@ -48,7 +48,8 @@ import {
   Globe,
   Target,
   Clock,
-  Percent
+  Percent,
+  Sparkles
 } from 'lucide-react';
 import SmartTransactionEntry from './SmartTransactionEntry';
 import { ProfilePage } from './auth/ProfilePage';
@@ -59,6 +60,8 @@ import CMMSModule from './CMSSModule';
 import { StatusPage } from './StatusPage';
 import { StatusUploader } from './status/StatusUploader';
 import SearchModal from './SearchModal';
+import ThemeSwitcher from './ThemeSwitcher';
+import { useTheme } from '../context/ThemeContext';
 import { BusinessLoanCalculator } from './BusinessLoanCalculator';
 import { jsPDF } from 'jspdf';
 import * as XLSX from 'xlsx';
@@ -336,7 +339,7 @@ const FeatureCardWithSlideshow = ({
             />
           ))}
 
-          <div className="absolute inset-0 bg-gradient-to-b from-black/75 via-black/20 to-black/85 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/56 via-black/12 to-black/62 pointer-events-none" />
 
           <div className="absolute inset-x-0 top-0 p-4">
             <div className="flex items-start justify-between gap-3">
@@ -382,7 +385,7 @@ const FeatureCardWithSlideshow = ({
           <div className="absolute inset-x-0 bottom-5 px-4 space-y-3">
             <div
               key={`${card.title}-${currentImageIndex}`}
-              className="inline-flex items-center rounded-full border border-white/35 bg-black/45 backdrop-blur-md px-4 py-2 animate-fadeIn"
+              className="inline-flex items-center rounded-full border border-white/40 bg-slate-950/55 backdrop-blur-md px-4 py-2 animate-fadeIn"
             >
               <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white">
                 {activeSlideWord}
@@ -394,7 +397,7 @@ const FeatureCardWithSlideshow = ({
                 {quickTags.map((feature, fIdx) => (
                   <span
                     key={fIdx}
-                    className="inline-flex items-center px-2.5 py-1 rounded-full bg-black/45 border border-white/25 text-[11px] text-slate-100 backdrop-blur-sm"
+                    className="inline-flex items-center px-2.5 py-1 rounded-full bg-slate-950/52 border border-white/30 text-[11px] text-slate-100 backdrop-blur-sm"
                   >
                     {feature}
                   </span>
@@ -468,13 +471,13 @@ const FeatureCardWithSlideshow = ({
           ))}
 
           {/* Gradient overlay for text readability */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-black/20 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-black/16 pointer-events-none" />
 
           {/* Slide word badge that updates with each image */}
           <div className="absolute inset-x-0 bottom-4 px-4 md:px-5">
             <div
               key={`${card.title}-${currentImageIndex}`}
-              className="inline-flex items-center rounded-full border border-white/35 bg-black/45 backdrop-blur-md px-4 py-2 animate-fadeIn"
+              className="inline-flex items-center rounded-full border border-white/40 bg-slate-950/50 backdrop-blur-md px-4 py-2 animate-fadeIn"
             >
               <span className="text-[11px] md:text-xs font-semibold uppercase tracking-[0.08em] text-white">
                 {activeSlideWord}
@@ -511,7 +514,7 @@ const FeatureCardWithSlideshow = ({
           )}
 
           {/* Image counter */}
-          <div className="absolute top-3 right-3 bg-black/55 backdrop-blur-sm px-2.5 py-1 rounded-full text-white text-[11px] font-medium">
+          <div className="absolute top-3 right-3 bg-slate-950/52 backdrop-blur-sm px-2.5 py-1 rounded-full text-white text-[11px] font-medium border border-white/20">
             {Math.min(currentImageIndex + 1, availableImages.length)} / {availableImages.length}
           </div>
         </div>
@@ -548,6 +551,7 @@ const FeatureCardWithSlideshow = ({
 };
 
 const MobileView = ({ userProfile, isWebDashboard = false }) => {
+  const { actualTheme } = useTheme();
   const [authUser, setAuthUser] = useState(null);
   
   // Get the actual Supabase auth user
@@ -640,6 +644,60 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
     walletAccounts: false,
     exploreStatus: false
   });
+
+  const creativePalette = {
+    dark: {
+      sectionBg: 'linear-gradient(135deg, rgba(17,24,39,0.86) 0%, rgba(30,58,138,0.22) 100%)',
+      sectionBorder: 'rgba(96,165,250,0.35)',
+      heading: 'linear-gradient(90deg, #dbeafe 0%, #a5b4fc 55%, #93c5fd 100%)',
+      businessChip: 'linear-gradient(135deg, rgba(30,58,138,0.48) 0%, rgba(59,130,246,0.3) 100%)',
+      personalChip: 'linear-gradient(135deg, rgba(55,48,163,0.45) 0%, rgba(129,140,248,0.28) 100%)',
+      progressCard: 'linear-gradient(135deg, rgba(30,64,175,0.32) 0%, rgba(59,130,246,0.2) 100%)',
+      analyticsCard: 'linear-gradient(135deg, rgba(79,70,229,0.3) 0%, rgba(129,140,248,0.2) 100%)',
+      updatesCard: 'linear-gradient(135deg, rgba(17,24,39,0.9) 0%, rgba(30,58,138,0.28) 100%)'
+    },
+    light: {
+      sectionBg: 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(219,234,254,0.78) 100%)',
+      sectionBorder: 'rgba(99,102,241,0.32)',
+      heading: 'linear-gradient(90deg, #312e81 0%, #4f46e5 55%, #1d4ed8 100%)',
+      businessChip: 'linear-gradient(135deg, rgba(224,231,255,0.96) 0%, rgba(191,219,254,0.88) 100%)',
+      personalChip: 'linear-gradient(135deg, rgba(237,233,254,0.96) 0%, rgba(224,231,255,0.88) 100%)',
+      progressCard: 'linear-gradient(135deg, rgba(219,234,254,0.92) 0%, rgba(191,219,254,0.78) 100%)',
+      analyticsCard: 'linear-gradient(135deg, rgba(238,242,255,0.94) 0%, rgba(224,231,255,0.8) 100%)',
+      updatesCard: 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(239,246,255,0.9) 100%)'
+    },
+    purple: {
+      sectionBg: 'linear-gradient(135deg, rgba(45,27,94,0.88) 0%, rgba(88,28,135,0.42) 100%)',
+      sectionBorder: 'rgba(192,132,252,0.42)',
+      heading: 'linear-gradient(90deg, #f5d0fe 0%, #e9d5ff 50%, #c4b5fd 100%)',
+      businessChip: 'linear-gradient(135deg, rgba(109,40,217,0.45) 0%, rgba(168,85,247,0.34) 100%)',
+      personalChip: 'linear-gradient(135deg, rgba(126,34,206,0.45) 0%, rgba(192,132,252,0.32) 100%)',
+      progressCard: 'linear-gradient(135deg, rgba(91,33,182,0.38) 0%, rgba(139,92,246,0.26) 100%)',
+      analyticsCard: 'linear-gradient(135deg, rgba(107,33,168,0.38) 0%, rgba(192,132,252,0.24) 100%)',
+      updatesCard: 'linear-gradient(135deg, rgba(45,27,94,0.9) 0%, rgba(88,28,135,0.38) 100%)'
+    },
+    green: {
+      sectionBg: 'linear-gradient(135deg, rgba(19,78,74,0.88) 0%, rgba(6,78,59,0.42) 100%)',
+      sectionBorder: 'rgba(110,231,183,0.35)',
+      heading: 'linear-gradient(90deg, #bbf7d0 0%, #86efac 50%, #6ee7b7 100%)',
+      businessChip: 'linear-gradient(135deg, rgba(5,150,105,0.44) 0%, rgba(16,185,129,0.3) 100%)',
+      personalChip: 'linear-gradient(135deg, rgba(6,95,70,0.5) 0%, rgba(52,211,153,0.24) 100%)',
+      progressCard: 'linear-gradient(135deg, rgba(6,95,70,0.38) 0%, rgba(16,185,129,0.2) 100%)',
+      analyticsCard: 'linear-gradient(135deg, rgba(4,120,87,0.38) 0%, rgba(52,211,153,0.22) 100%)',
+      updatesCard: 'linear-gradient(135deg, rgba(19,78,74,0.9) 0%, rgba(6,95,70,0.34) 100%)'
+    },
+    ocean: {
+      sectionBg: 'linear-gradient(135deg, rgba(12,45,68,0.9) 0%, rgba(8,47,73,0.45) 100%)',
+      sectionBorder: 'rgba(56,189,248,0.36)',
+      heading: 'linear-gradient(90deg, #e0f2fe 0%, #bae6fd 50%, #7dd3fc 100%)',
+      businessChip: 'linear-gradient(135deg, rgba(3,105,161,0.44) 0%, rgba(14,165,233,0.3) 100%)',
+      personalChip: 'linear-gradient(135deg, rgba(8,145,178,0.44) 0%, rgba(56,189,248,0.26) 100%)',
+      progressCard: 'linear-gradient(135deg, rgba(3,105,161,0.36) 0%, rgba(14,165,233,0.22) 100%)',
+      analyticsCard: 'linear-gradient(135deg, rgba(8,145,178,0.36) 0%, rgba(56,189,248,0.2) 100%)',
+      updatesCard: 'linear-gradient(135deg, rgba(12,45,68,0.9) 0%, rgba(8,47,73,0.32) 100%)'
+    }
+  };
+  const modePalette = creativePalette[actualTheme] || creativePalette.dark;
 
   const toggleSection = (section) => {
     setExpandedSections(prev => ({
@@ -834,6 +892,253 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [reportRecordScope, setReportRecordScope] = useState('business'); // business | personal | all
   const [reportFilteredMetrics, setReportFilteredMetrics] = useState(null);
   const [isLoadingReportMetrics, setIsLoadingReportMetrics] = useState(false);
+  const isRestoringMobileHistoryRef = useRef(false);
+  const hasHydratedMobileHistoryRef = useRef(false);
+  const hasSeededMobileRootRef = useRef(false);
+  const lastMobileStateRef = useRef(null);
+
+  const selectedDetailKey = selectedDetail
+    ? `${selectedDetail.tab || ''}:${selectedDetail.item || ''}`
+    : '';
+
+  const isSameCalendarDay = (a, b) => (
+    a.getFullYear() === b.getFullYear()
+    && a.getMonth() === b.getMonth()
+    && a.getDate() === b.getDate()
+  );
+
+  const todayTransactions = transactions.filter((transaction) => {
+    const value = transaction?.created_at || transaction?.date || transaction?.timestamp || transaction?.transaction_date;
+    if (!value) return false;
+    const txDate = new Date(value);
+    if (Number.isNaN(txDate.getTime())) return false;
+    return isSameCalendarDay(txDate, new Date());
+  });
+
+  const archivedTransactionCount = Math.max(0, transactions.length - todayTransactions.length);
+
+  useEffect(() => {
+    const mobileState = {
+      activeBottomTab,
+      selectedDetail,
+      treasurySubTab,
+      activeWalletTab,
+      showTransactionEntry,
+      transactionType,
+      showRecordTypeModal,
+      showProfilePanel,
+      showPitchinPanel,
+      showWalletPanel,
+      showTrustPanel,
+      showCmmsPanel,
+      showRecordPanel,
+      showExpenseIncomePanel,
+      showMenuDropdown,
+      showSearchModal,
+      showStatusPage,
+      showStatusUploader,
+      showApprovalsModal,
+      showAvatarModal,
+      showAvatarView,
+      showJourneyDetails,
+      showFinancialAnalytics,
+      showBusinessLoanCalculator,
+      showWalletAccounts,
+      showTithingCalculator,
+      showReportingSystem,
+      showAIChat,
+    };
+
+    lastMobileStateRef.current = mobileState;
+
+    const payload = {
+      ...(window.history.state || {}),
+      __icanMobile: mobileState,
+    };
+
+    if (isRestoringMobileHistoryRef.current) {
+      window.history.replaceState(payload, '', window.location.href);
+      return;
+    }
+
+    const current = window.history.state?.__icanMobile;
+    const sameSelectedDetail =
+      (current?.selectedDetail?.tab || '') === (mobileState.selectedDetail?.tab || '') &&
+      (current?.selectedDetail?.item || '') === (mobileState.selectedDetail?.item || '');
+
+    const sameState =
+      current &&
+      current.activeBottomTab === mobileState.activeBottomTab &&
+      sameSelectedDetail &&
+      (current.treasurySubTab || 'account') === (mobileState.treasurySubTab || 'account') &&
+      (current.activeWalletTab || 'ican') === (mobileState.activeWalletTab || 'ican') &&
+      Boolean(current.showTransactionEntry) === mobileState.showTransactionEntry &&
+      (current.transactionType || null) === (mobileState.transactionType || null) &&
+      Boolean(current.showRecordTypeModal) === mobileState.showRecordTypeModal &&
+      Boolean(current.showProfilePanel) === mobileState.showProfilePanel &&
+      Boolean(current.showPitchinPanel) === mobileState.showPitchinPanel &&
+      Boolean(current.showWalletPanel) === mobileState.showWalletPanel &&
+      Boolean(current.showTrustPanel) === mobileState.showTrustPanel &&
+      Boolean(current.showCmmsPanel) === mobileState.showCmmsPanel &&
+      Boolean(current.showRecordPanel) === mobileState.showRecordPanel &&
+      Boolean(current.showExpenseIncomePanel) === mobileState.showExpenseIncomePanel &&
+      Boolean(current.showMenuDropdown) === mobileState.showMenuDropdown &&
+      Boolean(current.showSearchModal) === mobileState.showSearchModal &&
+      Boolean(current.showStatusPage) === mobileState.showStatusPage &&
+      Boolean(current.showStatusUploader) === mobileState.showStatusUploader &&
+      Boolean(current.showApprovalsModal) === mobileState.showApprovalsModal &&
+      Boolean(current.showAvatarModal) === mobileState.showAvatarModal &&
+      Boolean(current.showAvatarView) === mobileState.showAvatarView &&
+      Boolean(current.showJourneyDetails) === mobileState.showJourneyDetails &&
+      Boolean(current.showFinancialAnalytics) === mobileState.showFinancialAnalytics &&
+      Boolean(current.showBusinessLoanCalculator) === mobileState.showBusinessLoanCalculator &&
+      Boolean(current.showWalletAccounts) === mobileState.showWalletAccounts &&
+      Boolean(current.showTithingCalculator) === mobileState.showTithingCalculator &&
+      Boolean(current.showReportingSystem) === mobileState.showReportingSystem &&
+      Boolean(current.showAIChat) === mobileState.showAIChat;
+
+    if (!hasHydratedMobileHistoryRef.current) {
+      window.history.replaceState(payload, '', window.location.href);
+
+      if (!hasSeededMobileRootRef.current) {
+        window.history.pushState(
+          {
+            ...payload,
+            __icanMobileRoot: true,
+          },
+          '',
+          window.location.href
+        );
+        hasSeededMobileRootRef.current = true;
+      }
+
+      hasHydratedMobileHistoryRef.current = true;
+      return;
+    }
+
+    if (!sameState) {
+      window.history.pushState(payload, '', window.location.href);
+    }
+  }, [
+    activeBottomTab,
+    selectedDetailKey,
+    treasurySubTab,
+    activeWalletTab,
+    showTransactionEntry,
+    transactionType,
+    showRecordTypeModal,
+    showProfilePanel,
+    showPitchinPanel,
+    showWalletPanel,
+    showTrustPanel,
+    showCmmsPanel,
+    showRecordPanel,
+    showExpenseIncomePanel,
+    showMenuDropdown,
+    showSearchModal,
+    showStatusPage,
+    showStatusUploader,
+    showApprovalsModal,
+    showAvatarModal,
+    showAvatarView,
+    showJourneyDetails,
+    showFinancialAnalytics,
+    showBusinessLoanCalculator,
+    showWalletAccounts,
+    showTithingCalculator,
+    showReportingSystem,
+    showAIChat,
+  ]);
+
+  useEffect(() => {
+    const handlePopState = (event) => {
+      const historyState = event.state?.__icanMobile;
+
+      if (!historyState) {
+        const fallbackState = lastMobileStateRef.current || {
+          activeBottomTab: 'home',
+          selectedDetail: null,
+          treasurySubTab: 'account',
+          activeWalletTab: 'ican',
+          showTransactionEntry: false,
+          transactionType: null,
+          showRecordTypeModal: false,
+          showProfilePanel: false,
+          showPitchinPanel: false,
+          showWalletPanel: false,
+          showTrustPanel: false,
+          showCmmsPanel: false,
+          showRecordPanel: false,
+          showExpenseIncomePanel: false,
+          showMenuDropdown: false,
+          showSearchModal: false,
+          showStatusPage: false,
+          showStatusUploader: false,
+          showApprovalsModal: false,
+          showAvatarModal: false,
+          showAvatarView: false,
+          showJourneyDetails: false,
+          showFinancialAnalytics: false,
+          showBusinessLoanCalculator: false,
+          showWalletAccounts: false,
+          showTithingCalculator: false,
+          showReportingSystem: false,
+          showAIChat: false,
+        };
+
+        window.history.pushState(
+          {
+            ...(window.history.state || {}),
+            __icanMobile: fallbackState,
+            __icanMobileRecovered: true,
+          },
+          '',
+          window.location.href
+        );
+
+        return;
+      }
+
+      isRestoringMobileHistoryRef.current = true;
+      hasHydratedMobileHistoryRef.current = true;
+
+      setActiveBottomTab(historyState.activeBottomTab || 'home');
+      setSelectedDetail(historyState.selectedDetail || null);
+      setTreasurySubTab(historyState.treasurySubTab || 'account');
+      setActiveWalletTab(historyState.activeWalletTab || 'ican');
+      setShowTransactionEntry(Boolean(historyState.showTransactionEntry));
+      setTransactionType(historyState.transactionType || null);
+      setShowRecordTypeModal(Boolean(historyState.showRecordTypeModal));
+      setShowProfilePanel(Boolean(historyState.showProfilePanel));
+      setShowPitchinPanel(Boolean(historyState.showPitchinPanel));
+      setShowWalletPanel(Boolean(historyState.showWalletPanel));
+      setShowTrustPanel(Boolean(historyState.showTrustPanel));
+      setShowCmmsPanel(Boolean(historyState.showCmmsPanel));
+      setShowRecordPanel(Boolean(historyState.showRecordPanel));
+      setShowExpenseIncomePanel(Boolean(historyState.showExpenseIncomePanel));
+      setShowMenuDropdown(Boolean(historyState.showMenuDropdown));
+      setShowSearchModal(Boolean(historyState.showSearchModal));
+      setShowStatusPage(Boolean(historyState.showStatusPage));
+      setShowStatusUploader(Boolean(historyState.showStatusUploader));
+      setShowApprovalsModal(Boolean(historyState.showApprovalsModal));
+      setShowAvatarModal(Boolean(historyState.showAvatarModal));
+      setShowAvatarView(Boolean(historyState.showAvatarView));
+      setShowJourneyDetails(Boolean(historyState.showJourneyDetails));
+      setShowFinancialAnalytics(Boolean(historyState.showFinancialAnalytics));
+      setShowBusinessLoanCalculator(Boolean(historyState.showBusinessLoanCalculator));
+      setShowWalletAccounts(Boolean(historyState.showWalletAccounts));
+      setShowTithingCalculator(Boolean(historyState.showTithingCalculator));
+      setShowReportingSystem(Boolean(historyState.showReportingSystem));
+      setShowAIChat(Boolean(historyState.showAIChat));
+
+      window.setTimeout(() => {
+        isRestoringMobileHistoryRef.current = false;
+      }, 0);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Compute ISO start/end for the chosen filter
   const getReportDateRange = (filter = reportDateFilter, customStart = reportCustomStart, customEnd = reportCustomEnd) => {
@@ -2453,30 +2758,25 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
     if (title === 'Pitchin') {
       requestDemoModuleOpen('pitchin', () => {
-        setShowPitchinPanel(true);
-        setActiveBottomTab('pitchin');
+        openFeaturePanel('pitchin');
       });
     } else if (title === 'Wallet') {
       requestDemoModuleOpen('wallet', () => {
-        setShowWalletPanel(true);
-        setActiveBottomTab('wallet');
+        openFeaturePanel('wallet');
       });
     } else if (title === 'Trust') {
       requestDemoModuleOpen('trust', () => {
-        setShowTrustPanel(true);
-        setActiveBottomTab('trust');
+        openFeaturePanel('trust');
       });
     } else if (title === 'CMMS') {
-      setShowCmmsPanel(true);
-      setActiveBottomTab('cmms');
+      openFeaturePanel('cmms');
     } else if (title === 'Expense & Income') {
       setShowExpenseIncomePanel(true);
       setShowTransactionEntry(true);
       setTransactionType('personal');
       setActiveBottomTab('expenses');
     } else if (title === 'Trade') {
-      setShowWalletPanel(true);
-      setActiveBottomTab('wallet');
+      openFeaturePanel('wallet');
     } else if (title === 'Tithe') {
       setShowTithingCalculator(true);
     } else if (title === 'Reports') {
@@ -2497,10 +2797,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     { id: 'wallet', label: 'Wallet', icon: Wallet },
     { id: 'trust', label: 'Trust', icon: Lock },
     { id: 'cmms', label: 'CMMS', icon: Settings },
-    { id: 'security', label: 'Security', icon: Shield },
-    { id: 'readiness', label: 'Readiness', icon: Globe },
-    { id: 'growth', label: 'Growth', icon: TrendingUp },
-    { id: 'settings', label: 'Settings', icon: Settings }
+    { id: 'extension', label: 'Extension', icon: Sparkles }
   ];
 
   const activeHeaderTab =
@@ -2508,10 +2805,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     showWalletPanel ? 'wallet' :
     showTrustPanel ? 'trust' :
     showCmmsPanel ? 'cmms' :
-    selectedDetail?.tab === 'security' ? 'security' :
-    selectedDetail?.tab === 'readiness' ? 'readiness' :
-    selectedDetail?.tab === 'growth' ? 'growth' :
-    selectedDetail?.tab === 'settings' ? 'settings' :
+    ['security', 'readiness', 'growth', 'settings'].includes(selectedDetail?.tab) ? 'extension' :
     'dashboard';
   const overlayPanelBottomInset = 'calc(5.5rem + env(safe-area-inset-bottom))';
 
@@ -2521,6 +2815,72 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     setShowWalletPanel(false);
     setShowTrustPanel(false);
     setShowCmmsPanel(false);
+  };
+
+  const closeAuxiliaryOverlays = () => {
+    setShowSearchModal(false);
+    setShowStatusPage(false);
+    setShowStatusUploader(false);
+    setShowApprovalsModal(false);
+    setShowAvatarModal(false);
+    setShowAvatarView(false);
+    setShowMenuDropdown(false);
+  };
+
+  const isFeaturePanelOpen = (panelId) => {
+    if (panelId === 'pitchin') return showPitchinPanel;
+    if (panelId === 'wallet') return showWalletPanel;
+    if (panelId === 'trust') return showTrustPanel;
+    if (panelId === 'cmms') return showCmmsPanel;
+    return false;
+  };
+
+  const openFeaturePanel = (panelId) => {
+    closeHeaderPanels();
+    setSelectedDetail(null);
+    closeAuxiliaryOverlays();
+    setShowPitchinPanel(panelId === 'pitchin');
+    setShowWalletPanel(panelId === 'wallet');
+    setShowTrustPanel(panelId === 'trust');
+    setShowCmmsPanel(panelId === 'cmms');
+    setActiveBottomTab(panelId);
+  };
+
+  const openDetailView = (tab, item) => {
+    closeHeaderPanels();
+    closeAuxiliaryOverlays();
+    setSelectedDetail({ tab, item });
+  };
+
+  const openSearchOverlay = () => {
+    closeHeaderPanels();
+    setSelectedDetail(null);
+    closeAuxiliaryOverlays();
+    setShowSearchModal(true);
+  };
+
+  const openStatusViewer = () => {
+    closeHeaderPanels();
+    setSelectedDetail(null);
+    closeAuxiliaryOverlays();
+    setShowStatusPage(true);
+  };
+
+  const openStatusComposer = () => {
+    closeHeaderPanels();
+    setSelectedDetail(null);
+    closeAuxiliaryOverlays();
+    setShowStatusUploader(true);
+  };
+
+  const toggleFeaturePanel = (panelId) => {
+    if (isFeaturePanelOpen(panelId)) {
+      closeHeaderPanels();
+      setActiveBottomTab('home');
+      return;
+    }
+
+    openFeaturePanel(panelId);
   };
 
   const getTrustBoardroomGroupIdFromNotification = (notification) => {
@@ -2558,11 +2918,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
   };
 
   const openHeaderPanel = (panelId) => {
-    setShowPitchinPanel(panelId === 'pitchin');
-    setShowWalletPanel(panelId === 'wallet');
-    setShowTrustPanel(panelId === 'trust');
-    setShowCmmsPanel(panelId === 'cmms');
-    setActiveBottomTab(panelId);
+    openFeaturePanel(panelId);
   };
 
   const handleHeaderTabClick = (tabId) => {
@@ -2570,6 +2926,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
     if (tabId === 'dashboard') {
       closeHeaderPanels();
+      closeAuxiliaryOverlays();
       setSelectedDetail(null);
       setActiveBottomTab('home');
       return;
@@ -2586,23 +2943,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
     closeHeaderPanels();
 
-    if (tabId === 'security') {
-      setSelectedDetail({ tab: 'security', item: 'Security' });
-      return;
-    }
-
-    if (tabId === 'readiness') {
-      setSelectedDetail({ tab: 'readiness', item: 'Readiness' });
-      return;
-    }
-
-    if (tabId === 'growth') {
-      setSelectedDetail({ tab: 'growth', item: 'Growth' });
-      return;
-    }
-
-    if (tabId === 'settings') {
-      setSelectedDetail({ tab: 'settings', item: 'Readiness Pillars' });
+    if (tabId === 'extension') {
+      openDetailView('settings', 'Readiness Pillars');
     }
   };
 
@@ -2709,14 +3051,14 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
   return (
     <div className={`min-h-screen text-white overflow-x-hidden ${
       isWebDashboard
-        ? `bg-gradient-to-br from-slate-950 via-violet-950 to-slate-950 pb-32 ${showDashboardHeader ? 'pt-[120px] md:pt-[130px]' : ''}`
+        ? `bg-gradient-to-br from-slate-950 via-violet-950 to-slate-950 pb-32 ${showDashboardHeader ? 'pt-[132px] md:pt-[146px]' : ''}`
         : 'bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 pb-28'
     }`}>
       {/* ====== HEADER ====== */}
       {showDashboardHeader && (
       <div className={`${isWebDashboard ? 'fixed top-0 left-0 right-0 z-[70]' : 'sticky top-0 z-40'} border-b ${
         isWebDashboard
-          ? 'bg-gradient-to-r from-slate-950 via-purple-950/95 to-slate-950 backdrop-blur-xl border-purple-500/20 shadow-[0_4px_30px_rgba(8,6,24,0.6)]'
+          ? 'bg-gradient-to-r from-slate-950/92 via-slate-900/88 to-slate-950/92 backdrop-blur-xl border-slate-700/60 shadow-[0_10px_30px_rgba(2,6,23,0.45)]'
           : 'bg-gradient-to-b from-slate-950/95 to-purple-950/80 backdrop-blur-md border-purple-500/20'
       }`}>
         <div className={`px-3 py-2.5 sm:px-4 sm:py-3 relative ${isWebDashboard ? 'w-full px-4 sm:px-6 lg:px-8 2xl:px-12' : ''}`}>
@@ -2724,17 +3066,23 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           {/* Header Row - IcanEra, Search, Menu */}
           <div className={`flex items-center w-full gap-3 ${isWebDashboard ? 'min-h-[48px]' : ''}`}>
             {/* IcanEra Branding - Left aligned */}
-            <h1 className={`${isWebDashboard ? 'text-2xl md:text-3xl 2xl:text-4xl' : 'text-2xl sm:text-3xl'} font-serif font-bold text-transparent bg-gradient-to-r from-amber-200 via-yellow-100 to-amber-300 bg-clip-text tracking-wide sm:tracking-wider leading-tight flex-shrink-0`}>
+            <h1
+              className={`${isWebDashboard ? 'text-2xl md:text-3xl 2xl:text-4xl' : 'text-2xl sm:text-3xl'} font-serif font-bold tracking-wide sm:tracking-wider leading-tight flex-shrink-0`}
+              style={{
+                color: isWebDashboard ? '#818cf8' : 'var(--color-secondary)',
+                textShadow: isWebDashboard ? '0 2px 12px rgba(129, 140, 248, 0.32)' : '0 0 10px rgba(129, 140, 248, 0.35)'
+              }}
+            >
               IcanEra
             </h1>
 
             {/* Search Icon */}
             <button
-              onClick={() => setShowSearchModal(true)}
-              className="p-1.5 sm:p-2 hover:bg-purple-500/20 rounded-lg transition active:scale-95 flex-shrink-0"
+              onClick={openSearchOverlay}
+              className={`p-1.5 sm:p-2 rounded-lg transition active:scale-95 flex-shrink-0 ${isWebDashboard ? 'hover:bg-slate-700/45' : 'hover:bg-purple-500/20'}`}
               title="Search and AI Assistant"
             >
-              <Search className="w-5 sm:w-6 h-5 sm:h-6 text-gray-300 hover:text-white" />
+              <Search className={`w-5 sm:w-6 h-5 sm:h-6 ${isWebDashboard ? 'text-slate-300 hover:text-white' : 'text-gray-300 hover:text-white'}`} />
             </button>
 
             <button
@@ -2745,16 +3093,15 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 if (isNotificationsOpen) {
                   setSelectedDetail(null);
                 } else {
-                  closeHeaderPanels();
-                  setSelectedDetail({ tab: 'security', item: 'Notifications' });
+                  openDetailView('security', 'Notifications');
                 }
 
                 setShowMenuDropdown(false);
               }}
-              className="relative p-1.5 sm:p-2 hover:bg-purple-500/20 rounded-lg transition active:scale-95 flex-shrink-0"
+              className={`relative p-1.5 sm:p-2 rounded-lg transition active:scale-95 flex-shrink-0 ${isWebDashboard ? 'hover:bg-slate-700/45' : 'hover:bg-purple-500/20'}`}
               title="Universal Notifications"
             >
-              <Bell className="w-5 sm:w-6 h-5 sm:h-6 text-gray-300 hover:text-white" />
+              <Bell className={`w-5 sm:w-6 h-5 sm:h-6 ${isWebDashboard ? 'text-slate-300 hover:text-white' : 'text-gray-300 hover:text-white'}`} />
               {unreadCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full border border-slate-950 flex items-center justify-center">
                   {unreadCount > 99 ? '99+' : unreadCount}
@@ -2768,32 +3115,23 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             {/* Header Menu Actions - RIGHT */}
             {isWebDashboard ? (
               <div className="flex items-center gap-2 md:gap-3">
+                <div className="rounded-full border border-slate-600/70 bg-transparent px-2 py-1">
+                  <ThemeSwitcher />
+                </div>
                 <button
-                  onClick={() => setSelectedDetail({ tab: 'profile', item: 'My Profile' })}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 rounded-full border border-cyan-400/30 bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 text-xs md:text-sm font-semibold transition hover:shadow-lg hover:shadow-cyan-500/10"
+                  onClick={() => openDetailView('profile', 'My Profile')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 rounded-full border border-cyan-400/35 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-200 text-xs md:text-sm font-semibold transition"
                   title="Open my profile"
                 >
                   <User className="w-4 h-4" />
                   Profile
                 </button>
-                <button
-                  onClick={() => setShowStatusPage(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 rounded-full border border-purple-400/30 bg-purple-500/15 hover:bg-purple-500/25 text-purple-200 text-xs md:text-sm font-semibold transition hover:shadow-lg hover:shadow-purple-500/10"
-                  title="Open status viewer"
-                >
-                  <Eye className="w-4 h-4" />
-                  Status
-                </button>
-                <button
-                  onClick={() => setShowStatusUploader(true)}
-                  className="inline-flex items-center justify-center w-8 h-8 md:w-9 md:h-9 rounded-full border border-indigo-400/30 bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-200 transition"
-                  title="Add status"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
               </div>
             ) : (
               <div className="flex items-center gap-1">
+              <div className="scale-90">
+                <ThemeSwitcher />
+              </div>
               <div className="relative">
               <button 
                 onClick={() => setShowMenuDropdown(!showMenuDropdown)}
@@ -2809,7 +3147,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     {/* My profile */}
                     <button
                       onClick={() => {
-                        setSelectedDetail({ tab: 'profile', item: 'My Profile' });
+                        openDetailView('profile', 'My Profile');
                         setShowMenuDropdown(false);
                       }}
                       className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-purple-500/20 hover:text-purple-300 rounded transition"
@@ -2820,7 +3158,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     {/* Security */}
                     <button
                       onClick={() => {
-                        setSelectedDetail({ tab: 'security', item: 'Security' });
+                        openDetailView('security', 'Security');
                         setShowMenuDropdown(false);
                       }}
                       className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-purple-500/20 hover:text-purple-300 rounded transition"
@@ -2831,7 +3169,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     {/* Readiness */}
                     <button
                       onClick={() => {
-                        setSelectedDetail({ tab: 'readiness', item: 'Readiness' });
+                        openDetailView('readiness', 'Readiness');
                         setShowMenuDropdown(false);
                       }}
                       className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-purple-500/20 hover:text-purple-300 rounded transition"
@@ -2842,7 +3180,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     {/* Growth */}
                     <button
                       onClick={() => {
-                        setSelectedDetail({ tab: 'growth', item: 'Growth' });
+                        openDetailView('growth', 'Growth');
                         setShowMenuDropdown(false);
                       }}
                       className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-purple-500/20 hover:text-purple-300 rounded transition"
@@ -2853,6 +3191,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     {/* Reports */}
                     <button
                       onClick={() => {
+                        closeHeaderPanels();
+                        setSelectedDetail(null);
+                        closeAuxiliaryOverlays();
                         setShowReportingSystem(true);
                         setShowMenuDropdown(false);
                       }}
@@ -2864,6 +3205,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     {/* Tithe */}
                     <button
                       onClick={() => {
+                        closeHeaderPanels();
+                        setSelectedDetail(null);
+                        closeAuxiliaryOverlays();
                         setShowTithingCalculator(true);
                         setShowMenuDropdown(false);
                       }}
@@ -2875,6 +3219,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     {/* Loan Calculator */}
                     <button
                       onClick={() => {
+                        closeHeaderPanels();
+                        setSelectedDetail(null);
+                        closeAuxiliaryOverlays();
                         setShowBusinessLoanCalculator(true);
                         setShowMenuDropdown(false);
                       }}
@@ -2898,7 +3245,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         <div className="pl-4 space-y-1">
                           <button
                             onClick={() => {
-                              setSelectedDetail({ tab: 'settings', item: 'Readiness Pillars' });
+                              openDetailView('settings', 'Readiness Pillars');
                               setShowMenuDropdown(false);
                             }}
                             className="w-full px-4 py-2 text-left text-xs text-gray-400 hover:bg-purple-500/10 hover:text-purple-200 rounded transition"
@@ -2908,7 +3255,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
                           <button
                             onClick={() => {
-                              setSelectedDetail({ tab: 'settings', item: 'Profile Configuration' });
+                              openDetailView('settings', 'Profile Configuration');
                               setShowMenuDropdown(false);
                             }}
                             className="w-full px-4 py-2 text-left text-xs text-gray-400 hover:bg-purple-500/10 hover:text-purple-200 rounded transition"
@@ -2918,7 +3265,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
                           <button
                             onClick={() => {
-                              setSelectedDetail({ tab: 'settings', item: 'Danger Zone' });
+                              openDetailView('settings', 'Danger Zone');
                               setShowMenuDropdown(false);
                             }}
                             className="w-full px-4 py-2 text-left text-xs text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded transition"
@@ -2937,8 +3284,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           </div>
 
           {isWebDashboard && (
-            <div className="mt-2 border-t border-purple-500/10 pt-2">
-              <div className="flex items-center gap-1.5 md:gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            <div className="mt-2 border-t border-slate-700/60 pt-2">
+              <div className="flex flex-nowrap items-center gap-1.5 md:gap-2 overflow-x-auto pb-1 scrollbar-hide">
                 {headerNavTabs.map((tab) => {
                   const isActive = activeHeaderTab === tab.id;
                   const TabIcon = tab.icon;
@@ -2948,11 +3295,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       onClick={() => handleHeaderTabClick(tab.id)}
                       className={`inline-flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 2xl:px-5 2xl:py-2.5 rounded-lg text-xs md:text-sm 2xl:text-base font-semibold whitespace-nowrap border transition-all duration-200 ${
                         isActive
-                          ? 'bg-purple-500/25 text-white border-purple-400/50 shadow-[0_0_14px_rgba(168,85,247,0.3)]'
-                          : 'bg-transparent text-gray-400 border-transparent hover:text-white hover:bg-purple-500/10 hover:border-purple-500/20'
+                          ? 'bg-indigo-500/25 text-indigo-100 border-indigo-300/50 shadow-[0_8px_16px_rgba(99,102,241,0.22)]'
+                          : 'bg-transparent text-slate-300 border-slate-600/60 hover:text-white hover:bg-slate-700/35 hover:border-slate-400/70'
                       }`}
                     >
-                      <TabIcon className={`w-3.5 h-3.5 md:w-4 md:h-4 ${isActive ? 'text-purple-300' : 'text-gray-500'}`} />
+                      <TabIcon className={`w-3.5 h-3.5 md:w-4 md:h-4 ${isActive ? 'text-indigo-300' : 'text-slate-500'}`} />
                       {tab.label}
                     </button>
                   );
@@ -2966,22 +3313,51 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       )}
 
       {/* ====== RECORD EVERY TRANSACTION SECTION ====== */}
-      <div className="px-4 py-4">
-        <h2 className="text-lg font-bold text-white mb-3">Record Every Transaction</h2>
+      <div
+        className="mx-4 mt-4 mb-2 p-4 rounded-2xl border backdrop-blur-sm"
+        style={{
+          background: modePalette.sectionBg,
+          borderColor: modePalette.sectionBorder,
+          boxShadow: '0 10px 30px rgba(0,0,0,0.18)'
+        }}
+      >
+        <h2
+          className="text-lg font-extrabold mb-3 tracking-tight"
+          style={{
+            backgroundImage: modePalette.heading,
+            WebkitBackgroundClip: 'text',
+            backgroundClip: 'text',
+            color: 'transparent'
+          }}
+        >
+          Record Every Transaction
+        </h2>
 
         {/* ── Quick shortcut chips ── */}
         <div className="flex gap-2 mb-3 flex-wrap">
           {/* Business record shortcut */}
           <button
             onClick={() => { setTransactionType('business'); setShowTransactionEntry(true); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-500/20 border border-blue-400/50 hover:bg-blue-500/30 active:scale-95 transition-all text-blue-200 text-xs font-semibold"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border active:scale-95 transition-all text-xs font-semibold"
+            style={{
+              background: modePalette.businessChip,
+              borderColor: 'var(--color-primary)',
+              color: 'var(--color-text)',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.12)'
+            }}
           >
             <span>💼</span> Business
           </button>
           {/* Personal record shortcut */}
           <button
             onClick={() => { setTransactionType('personal'); setShowTransactionEntry(true); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-500/20 border border-green-400/50 hover:bg-green-500/30 active:scale-95 transition-all text-green-200 text-xs font-semibold"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border active:scale-95 transition-all text-xs font-semibold"
+            style={{
+              background: modePalette.personalChip,
+              borderColor: 'var(--color-secondary)',
+              color: 'var(--color-text)',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.12)'
+            }}
           >
             <span>👤</span> Personal
           </button>
@@ -3000,11 +3376,27 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               }}
               className={`w-full flex items-center gap-3 rounded-full px-4 py-3 sm:py-4 shadow-lg transition-all ${
                 isListening
-                  ? 'bg-gradient-to-r from-red-700 to-red-600 border border-red-400/60 shadow-red-600/40'
+                  ? 'border'
                   : loanDetected
-                    ? 'bg-gradient-to-r from-amber-700 to-amber-600 border-2 border-amber-400/80 shadow-amber-600/50 cursor-pointer'
-                    : 'bg-gradient-to-r from-purple-700 to-purple-600 border border-purple-500/50 shadow-purple-600/40'
+                    ? 'border-2 cursor-pointer'
+                    : 'border'
               }`}
+              style={
+                isListening
+                  ? {
+                      background: 'linear-gradient(135deg, var(--color-bgSecondary) 0%, var(--color-secondary) 100%)',
+                      borderColor: 'var(--color-secondary)'
+                    }
+                  : loanDetected
+                    ? {
+                        background: 'linear-gradient(135deg, var(--color-bgSecondary) 0%, var(--color-accent) 100%)',
+                        borderColor: 'var(--color-accent)'
+                      }
+                    : {
+                        background: modePalette.sectionBg,
+                        borderColor: 'var(--color-border)'
+                      }
+              }
             >
               {/* Loan detected icon */}
               {loanDetected && (
@@ -3028,21 +3420,23 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 }
                 readOnly={isListening}
                 onClick={(e) => e.stopPropagation()} // don't double-fire strip click
-                className="flex-1 bg-transparent text-white placeholder-gray-300 outline-none text-sm sm:text-base min-w-0"
+                className="flex-1 bg-transparent outline-none text-sm sm:text-base min-w-0 placeholder:text-[var(--color-textSecondary)]"
+                style={{ color: 'var(--color-text)' }}
               />
 
               {/* Submit button */}
               {!isListening && recordInputText.trim() && (
                 <button
                   onClick={(e) => { e.stopPropagation(); handleRecordSubmit(recordInputText.trim()); }}
-                  className={`flex-shrink-0 p-1.5 rounded-full transition-all active:scale-90 ${
+                  className={`flex-shrink-0 p-1.5 rounded-full border transition-all active:scale-90 ${
                     loanDetected ? 'bg-white/30 hover:bg-white/40' : 'bg-white/20 hover:bg-white/30'
                   }`}
+                  style={{ borderColor: 'rgba(255,255,255,0.35)' }}
                   title={loanDetected ? 'Open Loan Calculator' : 'Submit'}
                 >
                   {loanDetected
                     ? <span className="text-base leading-none">🏦</span>
-                    : <Check className="w-4 h-4 text-white" />}
+                    : <Check className="w-4 h-4" style={{ color: 'var(--color-text)' }} />}
                 </button>
               )}
 
@@ -3053,14 +3447,15 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   if (isListening) stopVoiceRecognition();
                   else startVoiceRecognition();
                 }}
-                className={`flex-shrink-0 p-1.5 rounded-full transition-all active:scale-90 ${
+                className={`flex-shrink-0 p-1.5 rounded-full border transition-all active:scale-90 ${
                   isListening ? 'bg-white/20 animate-pulse' : 'hover:bg-white/10'
                 }`}
+                style={{ borderColor: 'rgba(255,255,255,0.3)' }}
                 title={isListening ? 'Tap to stop recording' : 'Tap to speak'}
               >
                 {isListening
                   ? <MicOff className="w-5 sm:w-6 h-5 sm:h-6 text-red-200" />
-                  : <Mic className="w-5 sm:w-6 h-5 sm:h-6 text-white" />}
+                  : <Mic className="w-5 sm:w-6 h-5 sm:h-6" style={{ color: 'var(--color-text)' }} />}
               </button>
             </div>
           );
@@ -3072,7 +3467,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             🎙 Listening... tap the mic to stop
           </p>
         ) : recordInputText.trim() && detectLoanInText(recordInputText) ? (
-          <p className="text-center text-xs text-amber-300 mt-2 font-medium animate-pulse">
+          <p className="text-center text-xs mt-2 font-medium animate-pulse" style={{ color: 'var(--color-accent)' }}>
             🏦 Loan detected — tap strip or ✓ to open Loan Calculator
           </p>
         ) : null}
@@ -3619,9 +4014,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                             const targetGroupId = getTrustBoardroomGroupIdFromNotification(notification);
 
                             setSelectedDetail(null);
-                            closeHeaderPanels();
-                            setShowTrustPanel(true);
-                            setActiveBottomTab('trust');
+                            openFeaturePanel('trust');
 
                             if (targetGroupId) {
                               setTrustBoardroomOpenRequest({
@@ -4533,37 +4926,39 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       )}
 
       {/* ====== PROGRESS & ANALYTICS ROW ====== */}
-      <div className="px-4 py-4 grid grid-cols-2 gap-4">
+      <div className="px-4 py-4 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
         {/* PROGRESS BUTTON */}
         <button
           onClick={() => toggleSection('progress')}
-          className={`p-3 rounded-lg border flex items-center justify-between transition-all ${
-            expandedSections.progress
-              ? 'bg-blue-600/30 border-blue-500/60'
-              : 'bg-blue-600/10 border-blue-500/30 hover:bg-blue-600/15'
-          }`}
+          className="p-3 rounded-lg border flex items-center justify-between transition-all"
+          style={{
+            background: expandedSections.progress ? modePalette.progressCard : modePalette.sectionBg,
+            borderColor: expandedSections.progress ? 'var(--color-primary)' : 'var(--color-border)',
+            boxShadow: expandedSections.progress ? '0 0 0 1px var(--color-primary), 0 8px 24px rgba(0,0,0,0.2)' : '0 6px 18px rgba(0,0,0,0.12)'
+          }}
         >
           <div className="flex items-center gap-2">
-            <Building className="w-4 h-4 text-blue-400" />
-            <span className="font-semibold text-white text-sm">Progress</span>
+            <Building className="w-4 h-4" style={{ color: 'var(--color-primary)' }} />
+            <span className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>Progress</span>
           </div>
-          <ChevronDown className={`w-4 h-4 text-blue-400 transition-transform ${expandedSections.progress ? 'rotate-180' : ''}`} />
+          <ChevronDown className={`w-4 h-4 transition-transform ${expandedSections.progress ? 'rotate-180' : ''}`} style={{ color: 'var(--color-primary)' }} />
         </button>
 
         {/* ANALYTICS BUTTON */}
         <button
           onClick={() => toggleSection('analytics')}
-          className={`p-3 rounded-lg border flex items-center justify-between transition-all ${
-            expandedSections.analytics
-              ? 'bg-purple-600/30 border-purple-500/60'
-              : 'bg-purple-600/10 border-purple-500/30 hover:bg-purple-600/15'
-          }`}
+          className="p-3 rounded-lg border flex items-center justify-between transition-all"
+          style={{
+            background: expandedSections.analytics ? modePalette.analyticsCard : modePalette.sectionBg,
+            borderColor: expandedSections.analytics ? 'var(--color-secondary)' : 'var(--color-border)',
+            boxShadow: expandedSections.analytics ? '0 0 0 1px var(--color-secondary), 0 8px 24px rgba(0,0,0,0.2)' : '0 6px 18px rgba(0,0,0,0.12)'
+          }}
         >
           <div className="flex items-center gap-2">
-            <BarChart3 className="w-4 h-4 text-purple-400" />
-            <span className="font-semibold text-white text-sm">Analytics</span>
+            <BarChart3 className="w-4 h-4" style={{ color: 'var(--color-secondary)' }} />
+            <span className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>Analytics</span>
           </div>
-          <ChevronDown className={`w-4 h-4 text-purple-400 transition-transform ${expandedSections.analytics ? 'rotate-180' : ''}`} />
+          <ChevronDown className={`w-4 h-4 transition-transform ${expandedSections.analytics ? 'rotate-180' : ''}`} style={{ color: 'var(--color-secondary)' }} />
         </button>
       </div>
 
@@ -4858,26 +5253,26 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       <div className="px-4 py-4">
         <button
           onClick={() => toggleSection('recentTransactions')}
-          className={`w-full p-3 rounded-lg border flex items-center justify-between transition-all ${
-            expandedSections.recentTransactions
-              ? 'bg-cyan-600/20 border-cyan-500/50'
-              : 'bg-cyan-600/10 border-cyan-500/30 hover:bg-cyan-600/15'
-          }`}
+          className="w-full p-3 rounded-lg border flex items-center justify-between transition-all"
+          style={{
+            background: expandedSections.recentTransactions ? modePalette.progressCard : modePalette.sectionBg,
+            borderColor: expandedSections.recentTransactions ? 'var(--color-primary)' : 'var(--color-border)'
+          }}
         >
           <div className="flex items-center gap-2">
-            <Activity className="w-5 h-5 text-cyan-400" />
-            <span className="font-semibold text-white">Recent Transactions</span>
-            {transactions.length > 0 && <span className="text-xs bg-cyan-500/30 text-cyan-300 px-2 py-1 rounded">{transactions.length}</span>}
+            <Activity className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
+            <span className="font-semibold" style={{ color: 'var(--color-text)' }}>Today&apos;s Transactions</span>
+            {todayTransactions.length > 0 && <span className="text-xs px-2 py-1 rounded" style={{ backgroundColor: 'var(--color-primaryLight)', color: 'var(--color-text)' }}>{todayTransactions.length}</span>}
           </div>
-          <ChevronDown className={`w-5 h-5 text-cyan-400 transition-transform ${expandedSections.recentTransactions ? 'rotate-180' : ''}`} />
+          <ChevronDown className={`w-5 h-5 transition-transform ${expandedSections.recentTransactions ? 'rotate-180' : ''}`} style={{ color: 'var(--color-primary)' }} />
         </button>
 
         {/* Expanded Content */}
         {expandedSections.recentTransactions && (
           <div className="mt-3">
-            {transactions.length > 0 ? (
+            {todayTransactions.length > 0 ? (
               <div className="space-y-2 max-h-64 overflow-y-auto">
-                {transactions.slice(0, 5).map((transaction) => (
+                {todayTransactions.slice(0, 8).map((transaction) => (
                   <div key={transaction.id} className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700/30 hover:border-slate-600/50 transition">
                     <div className="flex items-center gap-3">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
@@ -4888,10 +5283,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         {transaction.transaction_type === 'income' ? <TrendingUp className="w-5 h-5" /> : <DollarSign className="w-5 h-5" />}
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-white truncate max-w-32">
+                        <p className="text-sm font-medium truncate max-w-32" style={{ color: 'var(--color-text)' }}>
                           {transaction.description || 'Transaction'}
                         </p>
-                        <p className="text-xs text-gray-400">
+                        <p className="text-xs" style={{ color: 'var(--color-textSecondary)' }}>
                           {new Date(transaction.created_at).toLocaleDateString()}
                         </p>
                       </div>
@@ -4909,13 +5304,22 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             ) : (
               <div className="text-center py-6">
                 <Activity className="w-10 h-10 text-gray-600 mx-auto mb-2" />
-                <p className="text-gray-400 text-sm">No transactions yet</p>
+                <p className="text-sm" style={{ color: 'var(--color-textSecondary)' }}>No transactions recorded for today yet</p>
                 <button 
                   onClick={() => setShowRecordTypeModal(true)}
-                  className="mt-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition"
+                  className="mt-2 px-4 py-2 rounded-lg text-sm font-medium transition"
+                  style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-text)' }}
                 >
                   Record One
                 </button>
+              </div>
+            )}
+
+            {archivedTransactionCount > 0 && (
+              <div className="mt-3 p-3 rounded-lg border border-dashed" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bgSecondary)' }}>
+                <p className="text-xs" style={{ color: 'var(--color-textSecondary)' }}>
+                  {archivedTransactionCount} older transaction(s) have been archived and are available in Reports.
+                </p>
               </div>
             )}
           </div>
@@ -4926,17 +5330,17 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       <div className="px-4 py-4">
         <button
           onClick={() => toggleSection('walletAccounts')}
-          className={`w-full p-3 rounded-lg border flex items-center justify-between transition-all ${
-            expandedSections.walletAccounts
-              ? 'bg-purple-600/20 border-purple-500/50'
-              : 'bg-purple-600/10 border-purple-500/30 hover:bg-purple-600/15'
-          }`}
+          className="w-full p-3 rounded-lg border flex items-center justify-between transition-all"
+          style={{
+            background: expandedSections.walletAccounts ? modePalette.analyticsCard : modePalette.sectionBg,
+            borderColor: expandedSections.walletAccounts ? 'var(--color-secondary)' : 'var(--color-border)'
+          }}
         >
           <div className="flex items-center gap-2">
-            <Wallet className="w-5 h-5 text-purple-400" />
-            <span className="font-semibold text-white">Wallet Accounts</span>
+            <Wallet className="w-5 h-5" style={{ color: 'var(--color-secondary)' }} />
+            <span className="font-semibold" style={{ color: 'var(--color-text)' }}>Wallet Accounts</span>
           </div>
-          <ChevronDown className={`w-5 h-5 text-purple-400 transition-transform ${expandedSections.walletAccounts ? 'rotate-180' : ''}`} />
+          <ChevronDown className={`w-5 h-5 transition-transform ${expandedSections.walletAccounts ? 'rotate-180' : ''}`} style={{ color: 'var(--color-secondary)' }} />
         </button>
 
         {/* Expanded Content - Compact Row Layout */}
@@ -4956,16 +5360,17 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     setShowWalletAccounts(true);
                   }}
                   className="w-full flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
+                  style={{ backgroundColor: 'var(--color-bgSecondary)', borderColor: 'var(--color-border)' }}
                 >
                   <div className="flex items-center gap-3">
-                    <tab.icon className="w-5 h-5 text-purple-400" />
-                    <span className="text-white text-sm font-medium capitalize">{tab.name}</span>
+                    <tab.icon className="w-5 h-5" style={{ color: 'var(--color-secondary)' }} />
+                    <span className="text-sm font-medium capitalize" style={{ color: 'var(--color-text)' }}>{tab.name}</span>
                   </div>
                   <div className="text-right">
-                    <span className="text-white font-bold text-sm">
+                    <span className="font-bold text-sm" style={{ color: 'var(--color-text)' }}>
                       {account?.loading ? '...' : formatWalletBalanceByTab(tabKey, account?.balance || 0)}
                     </span>
-                    <span className="text-white/50 text-xs ml-1">
+                    <span className="text-xs ml-1" style={{ color: 'var(--color-textSecondary)' }}>
                       {tabKey === 'ican' ? 'ICAN' : account?.currency || 'UGX'}
                     </span>
                   </div>
@@ -4982,16 +5387,16 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* ====== UPDATES SECTION - HORIZONTAL SCROLLING ====== */}
       <div className="px-4 py-6">
         {loadingStatuses ? (
-          <div className="relative rounded-2xl overflow-hidden border-2 border-indigo-500/50 bg-gradient-to-br from-indigo-600/30 to-indigo-700/20 p-8">
-            <h2 className="absolute top-3 left-4 text-lg font-bold text-white/90 z-10">Updates</h2>
+          <div className="relative rounded-2xl overflow-hidden border-2 p-8" style={{ borderColor: 'var(--color-border)', background: modePalette.updatesCard }}>
+            <h2 className="absolute top-3 left-4 text-lg font-bold z-10" style={{ color: 'var(--color-text)' }}>Updates</h2>
             <div className="flex items-center justify-center py-4">
-              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-indigo-500"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2" style={{ borderColor: 'var(--color-primary)' }}></div>
             </div>
           </div>
         ) : userStatuses.length > 0 ? (
           <div className="relative">
             {/* "Updates" overlay label */}
-            <h2 className="absolute top-3 left-4 text-lg font-bold text-white/90 z-10 drop-shadow-lg">Updates</h2>
+            <h2 className="absolute top-3 left-4 text-lg font-bold z-10 drop-shadow-lg" style={{ color: 'var(--color-text)' }}>Updates</h2>
 
             {/* Horizontal Scrolling Updates */}
             <div className="overflow-x-auto pb-4 -mr-4 pr-4 scrollbar-hide pt-10">
@@ -4999,7 +5404,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 {userStatuses.map(status => (
                   <div
                     key={status.id}
-                    onClick={() => setShowStatusPage(true)}
+                    onClick={openStatusViewer}
                     className="group relative rounded-2xl overflow-hidden cursor-pointer w-56 h-32 bg-black flex-shrink-0 hover:scale-105 transition-transform duration-300 border border-white/10"
                   >
                     {/* Update Content */}
@@ -5044,30 +5449,32 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
             {/* View All Updates Button */}
             <button
-              onClick={() => setShowStatusPage(true)}
-              className="w-full bg-gradient-to-r from-indigo-600/30 to-indigo-700/20 border-2 border-indigo-500/50 hover:border-indigo-400/80 rounded-2xl py-3 flex items-center justify-center gap-2 transition-all hover:from-indigo-600/50 hover:to-indigo-700/40 group mt-2"
+              onClick={openStatusViewer}
+              className="w-full border-2 rounded-2xl py-3 flex items-center justify-center gap-2 transition-all group mt-2 hover:scale-[1.01]"
+              style={{ borderColor: modePalette.sectionBorder, background: modePalette.updatesCard }}
             >
-              <span className="text-sm font-medium text-indigo-300 group-hover:text-indigo-200">View All Updates ({userStatuses.length})</span>
-              <ChevronRight className="w-4 h-4 text-indigo-400" />
+              <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>View All Updates ({userStatuses.length})</span>
+              <ChevronRight className="w-4 h-4" style={{ color: 'var(--color-primary)' }} />
             </button>
           </div>
         ) : (
           /* No Updates State - "Updates" as overlay on container */
           <button
-            onClick={() => setShowStatusUploader(true)}
-            className="relative w-full bg-gradient-to-br from-indigo-600/30 to-indigo-700/20 border-2 border-indigo-500/50 hover:border-indigo-400/80 rounded-2xl p-6 flex flex-col items-center gap-4 transition-all hover:from-indigo-600/50 hover:to-indigo-700/40 group"
+            onClick={openStatusComposer}
+            className="relative w-full border-2 rounded-2xl p-6 flex flex-col items-center gap-4 transition-all group"
+            style={{ borderColor: modePalette.sectionBorder, background: modePalette.updatesCard }}
           >
             {/* "Updates" overlay label */}
-            <span className="absolute top-3 left-4 text-lg font-bold text-white/90 drop-shadow-lg">Updates</span>
+            <span className="absolute top-3 left-4 text-lg font-bold drop-shadow-lg" style={{ color: 'var(--color-text)' }}>Updates</span>
 
-            <div className="w-16 h-16 bg-indigo-500/30 rounded-full flex items-center justify-center group-hover:bg-indigo-500/50 transition mt-4">
-              <Plus className="w-8 h-8 text-indigo-400 group-hover:text-indigo-300 transition" />
+            <div className="w-16 h-16 rounded-full flex items-center justify-center transition mt-4" style={{ backgroundColor: 'var(--color-primaryLight)' }}>
+              <Plus className="w-8 h-8 transition" style={{ color: 'var(--color-primary)' }} />
             </div>
             <div className="text-center">
-              <h3 className="text-lg font-bold text-white group-hover:text-indigo-100 transition">Any Updates</h3>
-              <p className="text-sm text-gray-400 group-hover:text-gray-300 transition mt-1">Share a moment with your community</p>
+              <h3 className="text-lg font-bold transition" style={{ color: 'var(--color-text)' }}>Any Updates</h3>
+              <p className="text-sm transition mt-1" style={{ color: 'var(--color-textSecondary)' }}>Share a moment with your community</p>
             </div>
-            <div className="flex items-center gap-2 text-indigo-400 group-hover:text-indigo-300 transition">
+            <div className="flex items-center gap-2 transition" style={{ color: 'var(--color-primary)' }}>
               <span className="text-sm font-medium">Start Now</span>
               <ChevronRight className="w-4 h-4" />
             </div>
@@ -5110,8 +5517,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           <button
             onClick={() => {
               requestDemoModuleOpen('pitchin', () => {
-                setShowPitchinPanel(!showPitchinPanel);
-                setActiveBottomTab('pitchin');
+                toggleFeaturePanel('pitchin');
               });
             }}
             className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 transition ${
@@ -5126,8 +5532,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           <button
             onClick={() => {
               requestDemoModuleOpen('wallet', () => {
-                setShowWalletPanel(!showWalletPanel);
-                setActiveBottomTab('wallet');
+                toggleFeaturePanel('wallet');
               });
             }}
             className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 transition ${
@@ -5142,8 +5547,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           <button
             onClick={() => {
               requestDemoModuleOpen('trust', () => {
-                setShowTrustPanel(!showTrustPanel);
-                setActiveBottomTab('trust');
+                toggleFeaturePanel('trust');
               });
             }}
             className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 transition ${
@@ -5156,7 +5560,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
           {/* CMMS */}
           <button
-            onClick={() => { setShowCmmsPanel(!showCmmsPanel); setActiveBottomTab('cmms'); }}
+            onClick={() => { toggleFeaturePanel('cmms'); }}
             className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 transition ${
               showPitchinPanel ? 'opacity-40' : 'opacity-100'
             }`}
@@ -5171,7 +5575,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* Pitchin Panel - Full Screen Video */}
       {showPitchinPanel && (
         <div
-          className={`fixed inset-x-0 z-30 bg-black overflow-hidden ${isWebDashboard ? 'top-[120px] md:top-[130px]' : 'top-0'}`}
+          className={`fixed inset-x-0 z-30 bg-black overflow-hidden ${isWebDashboard ? 'top-[132px] md:top-[146px]' : 'top-0'}`}
           style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
           <Pitchin />
@@ -5181,7 +5585,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* Trust Panel - Full Web Trust System UI */}
       {showTrustPanel && (
         <div
-          className={`fixed inset-x-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto ${isWebDashboard ? 'top-[120px] md:top-[130px]' : 'top-0'}`}
+          className={`fixed inset-x-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto ${isWebDashboard ? 'top-[132px] md:top-[146px]' : 'top-0'}`}
           style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
           <div className="pt-2 px-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
@@ -5197,7 +5601,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* Wallet Panel - Full Web Wallet UI */}
       {showWalletPanel && (
         <div
-          className={`fixed inset-x-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto ${isWebDashboard ? 'top-[120px] md:top-[130px]' : 'top-0'}`}
+          className={`fixed inset-x-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto ${isWebDashboard ? 'top-[132px] md:top-[146px]' : 'top-0'}`}
           style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
           <div className="pt-2 px-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
@@ -5209,7 +5613,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* CMMS Panel - Full Web CMMS UI */}
       {showCmmsPanel && (
         <div
-          className={`fixed inset-x-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto ${isWebDashboard ? 'top-[120px] md:top-[130px]' : 'top-0'}`}
+          className={`fixed inset-x-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto ${isWebDashboard ? 'top-[132px] md:top-[146px]' : 'top-0'}`}
           style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
           <div className="pt-2 px-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
@@ -5259,12 +5663,17 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         wallets={walletAccounts}
         onNavigate={(featureId) => {
           setShowSearchModal(false);
-          if (featureId === 'wallets' || featureId === 'ican-coin') setShowWalletPanel(true);
-          else if (featureId === 'pitching') setShowPitchinPanel(true);
-          else if (featureId === 'trust') setShowTrustPanel(true);
-          else if (featureId === 'cmms') setShowCmmsPanel(true);
-          else if (featureId === 'profile') setShowProfilePanel(true);
-          else if (featureId === 'reports') setShowReportingSystem(true);
+          if (featureId === 'wallets' || featureId === 'ican-coin') openFeaturePanel('wallet');
+          else if (featureId === 'pitching') openFeaturePanel('pitchin');
+          else if (featureId === 'trust') openFeaturePanel('trust');
+          else if (featureId === 'cmms') openFeaturePanel('cmms');
+          else if (featureId === 'profile') openDetailView('profile', 'My Profile');
+          else if (featureId === 'reports') {
+            closeHeaderPanels();
+            setSelectedDetail(null);
+            closeAuxiliaryOverlays();
+            setShowReportingSystem(true);
+          }
           // 'transactions' and 'ai-copilot' stay on home screen
         }}
       />

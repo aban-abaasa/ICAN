@@ -8,6 +8,115 @@ import { supabase as supabaseClient } from '../lib/supabase/client';
 
 const OPENAI_API_KEY = import.meta.env?.VITE_OPENAI_API_KEY || process.env?.REACT_APP_OPENAI_API_KEY;
 
+const FINANCE_KNOWLEDGE_BRAIN = {
+  pillars: [
+    'Corporate finance',
+    'Investments',
+    'International finance',
+    'Financial institutions'
+  ],
+  corporateFinance: {
+    financialManagementDecisions: [
+      'Capital budgeting',
+      'Capital structure',
+      'Working capital management'
+    ],
+    formsOfOrganization: [
+      'Sole proprietorship',
+      'Partnership',
+      'Corporation'
+    ],
+    goalOfFinancialManagement: 'Maximize current value per share and long-term firm value using risk-adjusted cash flow decisions.',
+    agencyProblemAndControls: [
+      'Manager-owner incentive conflicts',
+      'Performance-based compensation',
+      'Board oversight and governance',
+      'Market for corporate control'
+    ]
+  },
+  analysisToolkit: {
+    methods: [
+      'Trend (horizontal) analysis',
+      'Vertical (common-size) analysis',
+      'Ratio analysis',
+      'Cost-volume-profit and break-even analysis'
+    ],
+    decisionCategories: [
+      'Big bet decisions',
+      'Cross-cutting decisions',
+      'Delegated decisions'
+    ],
+    rapidDecisionPrinciples: [
+      'Clarify decision rights',
+      'Use reversible decision logic where possible',
+      'Use concise pre-reads',
+      'Apply 70% information rule for reversible decisions',
+      'Disagree and commit during execution'
+    ]
+  },
+  personalFinancePrinciples: [
+    'Live below your means',
+    'Build and protect an emergency fund',
+    'Repay high-interest debt quickly',
+    'Invest in human capital'
+  ],
+  learningModules: [
+    'Why study finance',
+    'Financial analysis for firms',
+    'Student money management principles',
+    'Investment risk-return tradeoff'
+  ],
+  businessTermsDeepDive: {
+    accountingAndReporting: [
+      'Income statement',
+      'Balance sheet',
+      'Cash flow statement',
+      'Accrual vs cash accounting'
+    ],
+    valuationAndCapitalAllocation: [
+      'NPV',
+      'IRR',
+      'WACC',
+      'DCF',
+      'Payback period',
+      'Risk-adjusted return'
+    ],
+    performanceAndUnitEconomics: [
+      'Gross margin',
+      'Operating margin',
+      'Net margin',
+      'CAC/LTV/churn',
+      'Burn rate and runway',
+      'Cash conversion cycle'
+    ],
+    strategyAndGovernance: [
+      'SWOT',
+      "Porter\'s Five Forces",
+      'Pricing strategy and elasticity',
+      'Corporate governance',
+      'Risk management and compliance controls'
+    ]
+  ]
+};
+
+const buildFinanceBrainInstruction = (context = {}) => {
+  const financeBrain = JSON.stringify(FINANCE_KNOWLEDGE_BRAIN, null, 2);
+  return `You are an expert financial advisor and tax consultant specializing in East African tax regulations.
+Country: ${context.country || 'Uganda'}.
+Report Type: ${context.reportType || 'General Financial Analysis'}.
+Use the finance brain knowledge below as your reasoning framework and tie insights to practical actions.
+
+FINANCE BRAIN
+${financeBrain}
+
+Output style:
+- Keep recommendations specific, measurable, and compliance-aware.
+- Prioritize cash flow discipline, risk management, and value creation.
+- Use financial analysis methods where relevant: trend, common-size, ratio, or CVP.
+- For business term requests, include: concise definition, formula or framework, interpretation, and practical next action.
+- For reports, include key ratio interpretation and next best actions.`;
+};
+
 // Country Tax Regulations Configuration
 const COUNTRY_REGULATIONS = {
   'UG': {
@@ -146,38 +255,53 @@ const COUNTRY_REGULATIONS = {
  */
 export const callOpenAIForAnalysis = async (prompt, context = {}) => {
   try {
-    if (!OPENAI_API_KEY) {
-      console.warn('OpenAI API key not configured');
-      return null;
-    }
+    const payload = {
+      model: 'gpt-4-turbo-preview',
+      messages: [
+        {
+          role: 'system',
+          content: buildFinanceBrainInstruction(context)
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      temperature: 0.5,
+      max_tokens: 1000
+    };
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    // Prefer server-side proxy route to keep secrets out of the browser.
+    const response = await fetch('/api/ai-analysis', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`
+        'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        model: 'gpt-4-turbo-preview',
-        messages: [
-          {
-            role: 'system',
-            content: `You are an expert financial advisor and tax consultant specializing in East African tax regulations. 
-            Country: ${context.country || 'Uganda'}. 
-            Provide clear, actionable financial insights in simple language. Be creative but practical.`
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 1000
-      })
+      body: JSON.stringify(payload)
     });
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.statusText}`);
+      if (!OPENAI_API_KEY) {
+        console.warn('OpenAI proxy unavailable and no direct OpenAI key configured');
+        return null;
+      }
+
+      // Fallback for local/dev environments where API route may not be mounted.
+      const directResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${OPENAI_API_KEY}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!directResponse.ok) {
+        throw new Error(`OpenAI API error: ${directResponse.statusText}`);
+      }
+
+      const fallbackData = await directResponse.json();
+      return fallbackData.choices[0]?.message?.content || null;
     }
 
     const data = await response.json();
@@ -185,6 +309,328 @@ export const callOpenAIForAnalysis = async (prompt, context = {}) => {
   } catch (error) {
     console.error('Error calling OpenAI API:', error);
     return null;
+  }
+};
+
+const toDate = (value) => {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const toNumber = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const getTransactionKind = (transaction) => {
+  const candidates = [
+    transaction?.type,
+    transaction?.transaction_type,
+    transaction?.category,
+    transaction?.metadata?.reporting_bucket
+  ]
+    .filter(Boolean)
+    .map((v) => String(v).toLowerCase());
+
+  const joined = candidates.join(' ');
+  if (/income|credit|sale|sold|deposit|receive|topup|top_up|cash_in|dividend/.test(joined)) return 'income';
+  if (/expense|debit|purchase|buy|bought|withdraw|cashout|cash_out|fee|cost/.test(joined)) return 'expense';
+  if (/invest|investment|portfolio|share|stock|bond/.test(joined)) return 'investment';
+  return 'other';
+};
+
+export const buildFinancialDataFromTransactions = (transactions = [], options = {}) => {
+  const {
+    startDate,
+    endDate,
+    reportPeriod = 'Monthly'
+  } = options;
+
+  const start = toDate(startDate);
+  const end = toDate(endDate);
+
+  const filtered = (Array.isArray(transactions) ? transactions : []).filter((tx) => {
+    const txDate = toDate(tx?.created_at || tx?.date || tx?.timestamp || tx?.transaction_date);
+    if (!txDate) return !start && !end;
+    if (start && txDate < start) return false;
+    if (end && txDate > end) return false;
+    return true;
+  });
+
+  const totals = filtered.reduce((acc, tx) => {
+    const amount = Math.abs(toNumber(tx?.amount));
+    const kind = getTransactionKind(tx);
+
+    if (kind === 'income') acc.income += amount;
+    else if (kind === 'expense') acc.expenses += amount;
+    else if (kind === 'investment') acc.investments += amount;
+
+    return acc;
+  }, { income: 0, expenses: 0, investments: 0 });
+
+  return {
+    totalIncome: totals.income,
+    totalExpenses: totals.expenses,
+    businessIncome: totals.income * 0.6,
+    investmentIncome: totals.investments,
+    capitalGains: Math.max(0, totals.income - totals.expenses) * 0.1,
+    taxPaid: totals.income * 0.1,
+    deductions: filtered
+      .filter((tx) => getTransactionKind(tx) === 'expense')
+      .map((tx) => ({
+        category: tx.category || tx.transaction_type || 'business_expenses',
+        amount: Math.abs(toNumber(tx.amount)),
+        description: tx.description || tx.note || ''
+      })),
+    netWorth: totals.income - totals.expenses,
+    assets: {
+      cash: totals.income - totals.expenses,
+      investments: totals.investments,
+      equipment: 0,
+      property: 0,
+      other: 0
+    },
+    liabilities: {
+      loans: 0,
+      creditCards: 0,
+      payables: totals.expenses * 0.2,
+      other: 0
+    },
+    revenue: totals.income,
+    costOfGoodsSold: totals.expenses * 0.4,
+    operatingExpenses: totals.expenses * 0.4,
+    otherIncome: 0,
+    otherExpenses: 0,
+    taxExpense: totals.income * 0.1,
+    reportPeriod,
+    transactionCount: filtered.length,
+    periodStart: start ? start.toISOString() : null,
+    periodEnd: end ? end.toISOString() : null
+  };
+};
+
+const getWeekKey = (date) => {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+};
+
+const getPeriodRange = (periodType, anchorDate = new Date()) => {
+  const end = new Date(anchorDate);
+  end.setHours(23, 59, 59, 999);
+
+  const start = new Date(end);
+  if (periodType === 'weekly') {
+    start.setDate(end.getDate() - 6);
+  } else {
+    start.setDate(1);
+  }
+  start.setHours(0, 0, 0, 0);
+
+  const key = periodType === 'weekly'
+    ? getWeekKey(end)
+    : `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}`;
+
+  return { start, end, key };
+};
+
+const getDayKey = (date) => {
+  const d = new Date(date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+const getDayRange = (anchorDate = new Date()) => {
+  const start = new Date(anchorDate);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(anchorDate);
+  end.setHours(23, 59, 59, 999);
+  return { start, end, key: getDayKey(anchorDate) };
+};
+
+const hasAutomatedReportForPeriod = async (userId, periodType, periodKey) => {
+  const { data, error } = await supabaseClient
+    .from('financial_reports')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('report_type', 'income-statement')
+    .contains('tags', ['auto', periodType, periodKey])
+    .limit(1);
+
+  if (error) {
+    console.error('Error checking automated report status:', error);
+    return false;
+  }
+
+  return Array.isArray(data) && data.length > 0;
+};
+
+export const runAutomatedReportingCycle = async ({
+  userId,
+  transactions = [],
+  countryCode = 'UG',
+  periods = ['weekly', 'monthly']
+}) => {
+  if (!userId) return [];
+
+  const normalizedPeriods = periods.filter((period) => period === 'weekly' || period === 'monthly');
+  const outputs = [];
+
+  for (const periodType of normalizedPeriods) {
+    const { start, end, key } = getPeriodRange(periodType);
+    const alreadyGenerated = await hasAutomatedReportForPeriod(userId, periodType, key);
+    if (alreadyGenerated) {
+      outputs.push({ periodType, periodKey: key, status: 'skipped-existing' });
+      continue;
+    }
+
+    const financialData = buildFinancialDataFromTransactions(transactions, {
+      startDate: start,
+      endDate: end,
+      reportPeriod: periodType === 'weekly' ? 'Weekly' : 'Monthly'
+    });
+
+    if (!financialData.transactionCount) {
+      outputs.push({ periodType, periodKey: key, status: 'skipped-no-transactions' });
+      continue;
+    }
+
+    const report = await generateIncomeStatement(financialData, countryCode, userId, {
+      tags: ['auto', periodType, key],
+      status: 'DRAFT',
+      metadata: {
+        automation: true,
+        generatedFor: periodType,
+        periodKey: key,
+        periodStart: start.toISOString(),
+        periodEnd: end.toISOString(),
+        transactionCount: financialData.transactionCount,
+        financeBrainPillars: FINANCE_KNOWLEDGE_BRAIN.pillars
+      }
+    });
+
+    outputs.push({ periodType, periodKey: key, status: 'generated', reportId: report.id });
+  }
+
+  return outputs;
+};
+
+const hasDailyArchiveForKey = async (userId, dayKey) => {
+  const { data, error } = await supabaseClient
+    .from('financial_reports')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('report_type', 'income-statement')
+    .contains('tags', ['auto', 'daily-archive', dayKey])
+    .limit(1);
+
+  if (error) {
+    console.error('Error checking daily archive status:', error);
+    return false;
+  }
+
+  return Array.isArray(data) && data.length > 0;
+};
+
+export const runTransactionArchivingCycle = async ({
+  userId,
+  transactions = [],
+  countryCode = 'UG',
+  lookbackDays = 30
+}) => {
+  if (!userId || !Array.isArray(transactions) || transactions.length === 0) return [];
+
+  const now = new Date();
+  const todayKey = getDayKey(now);
+  const groupedByDay = transactions.reduce((acc, tx) => {
+    const txDate = toDate(tx?.created_at || tx?.date || tx?.timestamp || tx?.transaction_date);
+    if (!txDate) return acc;
+
+    const dayKey = getDayKey(txDate);
+    if (!acc[dayKey]) acc[dayKey] = [];
+    acc[dayKey].push(tx);
+    return acc;
+  }, {});
+
+  const earliestAllowed = new Date(now);
+  earliestAllowed.setDate(now.getDate() - Math.max(1, lookbackDays));
+  const earliestKey = getDayKey(earliestAllowed);
+
+  const archiveKeys = Object.keys(groupedByDay)
+    .filter((dayKey) => dayKey < todayKey && dayKey >= earliestKey)
+    .sort();
+
+  const outputs = [];
+
+  for (const dayKey of archiveKeys) {
+    const alreadyArchived = await hasDailyArchiveForKey(userId, dayKey);
+    if (alreadyArchived) {
+      outputs.push({ dayKey, status: 'skipped-existing' });
+      continue;
+    }
+
+    const dayTransactions = groupedByDay[dayKey] || [];
+    const { start, end } = getDayRange(new Date(`${dayKey}T12:00:00`));
+    const financialData = buildFinancialDataFromTransactions(dayTransactions, {
+      startDate: start,
+      endDate: end,
+      reportPeriod: 'Daily'
+    });
+
+    if (!financialData.transactionCount) {
+      outputs.push({ dayKey, status: 'skipped-no-transactions' });
+      continue;
+    }
+
+    const archiveItems = dayTransactions.map((tx) => ({
+      id: tx.id || null,
+      created_at: tx.created_at || tx.date || tx.timestamp || null,
+      transaction_type: tx.transaction_type || tx.type || 'unknown',
+      amount: toNumber(tx.amount),
+      currency: tx.currency || 'UGX',
+      description: tx.description || tx.note || '',
+      category: tx.category || tx.metadata?.category || null,
+      metadata: tx.metadata || {}
+    }));
+
+    const report = await generateIncomeStatement(financialData, countryCode, userId, {
+      tags: ['auto', 'daily-archive', dayKey],
+      status: 'ARCHIVED',
+      metadata: {
+        archiveType: 'daily-transactions',
+        dayKey,
+        periodStart: start.toISOString(),
+        periodEnd: end.toISOString(),
+        transactionCount: financialData.transactionCount,
+        dailyTransactionItems: archiveItems,
+        financeBrainPillars: FINANCE_KNOWLEDGE_BRAIN.pillars
+      }
+    });
+
+    outputs.push({ dayKey, status: 'archived', reportId: report.id });
+  }
+
+  return outputs;
+};
+
+export const getDailyArchiveReports = async (userId, limit = 31) => {
+  try {
+    const { data, error } = await supabaseClient
+      .from('financial_reports')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('report_type', 'income-statement')
+      .contains('tags', ['daily-archive'])
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching daily archive reports:', error);
+    return [];
   }
 };
 
@@ -227,7 +673,7 @@ export const generateTaxReturn = async (financialData, countryCode = 'UG', userI
     
     Provide 3 key tax optimization strategies specific to ${regulations.name}, considering ${regulations.regulatoryBody} requirements.
     Focus on: maximizing deductions, timing strategies, and compliance.`,
-    { country: regulations.name, year: filingPeriod }
+    { country: regulations.name, year: filingPeriod, reportType: 'Tax Return' }
   );
 
   const taxReturn = {
@@ -394,7 +840,7 @@ export const generateBalanceSheet = async (financialData, countryCode = 'UG', us
     - Current Ratio: ${assets.cash / (totalLiabilities || 1)}
     
     Provide insights on financial health, solvency, and recommendations for improvement in ${regulations.name}.`,
-    { country: regulations.name }
+    { country: regulations.name, reportType: 'Balance Sheet' }
   );
 
   const balanceSheet = {
@@ -497,7 +943,7 @@ export const generateBalanceSheet = async (financialData, countryCode = 'UG', us
 /**
  * Generate Professional Income Statement
  */
-export const generateIncomeStatement = async (financialData, countryCode = 'UG', userId) => {
+export const generateIncomeStatement = async (financialData, countryCode = 'UG', userId, options = {}) => {
   const regulations = COUNTRY_REGULATIONS[countryCode];
 
   const {
@@ -526,7 +972,7 @@ export const generateIncomeStatement = async (financialData, countryCode = 'UG',
     - Net Profit Margin: ${netProfitMargin}%
     
     Provide insights on profitability, expense management, and growth opportunities in ${regulations.name}.`,
-    { country: regulations.name, period: reportPeriod }
+    { country: regulations.name, period: reportPeriod, reportType: 'Income Statement' }
   );
 
   const incomeStatement = {
@@ -609,7 +1055,11 @@ export const generateIncomeStatement = async (financialData, countryCode = 'UG',
     },
 
     generatedDate: new Date().toISOString(),
-    status: 'FINAL'
+    status: options.status || 'FINAL',
+    metadata: {
+      ...(options.metadata || {}),
+      financeBrain: FINANCE_KNOWLEDGE_BRAIN
+    }
   };
 
   // Save to Supabase
@@ -621,6 +1071,8 @@ export const generateIncomeStatement = async (financialData, countryCode = 'UG',
           user_id: userId,
           report_type: 'income-statement',
           country: countryCode,
+          status: options.status || 'DRAFT',
+          tags: options.tags || [],
           data: incomeStatement,
           created_at: new Date().toISOString()
         }]);
@@ -649,7 +1101,7 @@ export const generateCountryComplianceReport = async (financialData, countryCode
     - Required Documents: ${regulations.requirements.join(', ')}
     
     What are the top 5 compliance priorities and how to ensure full adherence to ${regulations.name} tax laws?`,
-    { country: regulations.name }
+    { country: regulations.name, reportType: 'Compliance Report' }
   );
 
   return {
@@ -756,9 +1208,13 @@ export default {
   generateTaxReturn,
   generateBalanceSheet,
   generateIncomeStatement,
+  buildFinancialDataFromTransactions,
+  runAutomatedReportingCycle,
+  runTransactionArchivingCycle,
   generateCountryComplianceReport,
   getSupportedCountries,
   getSavedReports,
+  getDailyArchiveReports,
   exportReport,
   callOpenAIForAnalysis
 };

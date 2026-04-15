@@ -228,13 +228,40 @@ class WalletTransactionService {
     }
 
     try {
-      const { limit = 50, offset = 0 } = options;
+      const {
+        limit = 50,
+        offset = 0,
+        currency,
+        includeArchived = false,
+        archivedOnly = false,
+        day = null
+      } = options;
 
       let query = this.supabase
         .from('ican_transactions')
         .select('*')
         .eq('user_id', this.userId)
         .order('created_at', { ascending: false });
+
+      if (currency) {
+        query = query.eq('currency', currency);
+      }
+
+      const selectedDay = day ? new Date(day) : new Date();
+      if (!Number.isNaN(selectedDay.getTime())) {
+        const dayStart = new Date(selectedDay);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(selectedDay);
+        dayEnd.setHours(23, 59, 59, 999);
+
+        if (archivedOnly) {
+          query = query.lt('created_at', dayStart.toISOString());
+        } else if (!includeArchived) {
+          query = query
+            .gte('created_at', dayStart.toISOString())
+            .lte('created_at', dayEnd.toISOString());
+        }
+      }
 
       if (limit) query = query.limit(limit);
       if (offset) query = query.range(offset, offset + limit - 1);

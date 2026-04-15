@@ -87,9 +87,122 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate }) => {
   );
   const [mutedVideos, setMutedVideos] = useState(new Set()); // track which videos are unmuted (all start muted)
   const [currentVisiblePitch, setCurrentVisiblePitch] = useState(null); // track currently visible pitch for web bottom nav
+  const isRestoringPitchinHistoryRef = useRef(false);
+  const hasHydratedPitchinHistoryRef = useRef(false);
   const videoRefs = useRef({}); // refs to video elements for controlling sound
   const videoScrollRef = useRef(null);
   const metricsUnsubscribeRef = useRef(null); // ref to store real-time unsubscribe function
+
+  const VALID_PITCHIN_TABS = ['feed', 'myPitches', 'interested', 'search'];
+
+  useEffect(() => {
+    const pitchinState = {
+      activeTab,
+      showRecorder,
+      showBusinessForm,
+      showProfileSelector,
+      showProfileDetails,
+      showComments,
+      showMobilePitchDetail,
+      selectedMobilePitchId: selectedMobilePitch?.id || null,
+      viewingPitcherBusinessProfileId: viewingPitcher?.business_profile_id || null,
+      selectedForContractId: selectedForContract?.id || null,
+      selectedForInvestmentId: selectedForInvestment?.id || null,
+    };
+
+    const payload = {
+      ...(window.history.state || {}),
+      __icanPitchin: pitchinState,
+    };
+
+    if (isRestoringPitchinHistoryRef.current) {
+      window.history.replaceState(payload, '', window.location.href);
+      return;
+    }
+
+    const current = window.history.state?.__icanPitchin;
+    const sameState =
+      current &&
+      current.activeTab === pitchinState.activeTab &&
+      Boolean(current.showRecorder) === pitchinState.showRecorder &&
+      Boolean(current.showBusinessForm) === pitchinState.showBusinessForm &&
+      Boolean(current.showProfileSelector) === pitchinState.showProfileSelector &&
+      Boolean(current.showProfileDetails) === pitchinState.showProfileDetails &&
+      (current.showComments || null) === (pitchinState.showComments || null) &&
+      Boolean(current.showMobilePitchDetail) === pitchinState.showMobilePitchDetail &&
+      (current.selectedMobilePitchId || null) === pitchinState.selectedMobilePitchId &&
+      (current.viewingPitcherBusinessProfileId || null) === pitchinState.viewingPitcherBusinessProfileId &&
+      (current.selectedForContractId || null) === pitchinState.selectedForContractId &&
+      (current.selectedForInvestmentId || null) === pitchinState.selectedForInvestmentId;
+
+    if (!hasHydratedPitchinHistoryRef.current) {
+      window.history.replaceState(payload, '', window.location.href);
+      hasHydratedPitchinHistoryRef.current = true;
+      return;
+    }
+
+    if (!sameState) {
+      window.history.pushState(payload, '', window.location.href);
+    }
+  }, [
+    activeTab,
+    showRecorder,
+    showBusinessForm,
+    showProfileSelector,
+    showProfileDetails,
+    showComments,
+    showMobilePitchDetail,
+    selectedMobilePitch,
+    viewingPitcher,
+    selectedForContract,
+    selectedForInvestment,
+  ]);
+
+  useEffect(() => {
+    const handlePopState = (event) => {
+      const historyState = event.state?.__icanPitchin;
+      if (!historyState) return;
+
+      const getPitchById = (pitchId) => {
+        if (!pitchId) return null;
+        return pitches.find((pitch) => pitch.id === pitchId) || null;
+      };
+
+      const getPitcherByBusinessProfileId = (businessProfileId) => {
+        if (!businessProfileId) return null;
+        const matchingPitch = pitches.find((pitch) => pitch.business_profile_id === businessProfileId);
+        if (!matchingPitch) return null;
+        return {
+          name: matchingPitch.business_profiles?.business_name || 'Pitcher',
+          business_profile_id: businessProfileId,
+          user_id: matchingPitch.business_profiles?.user_id || null,
+        };
+      };
+
+      isRestoringPitchinHistoryRef.current = true;
+      hasHydratedPitchinHistoryRef.current = true;
+
+      setActiveTab(VALID_PITCHIN_TABS.includes(historyState.activeTab) ? historyState.activeTab : 'feed');
+      setShowRecorder(Boolean(historyState.showRecorder));
+      setShowBusinessForm(Boolean(historyState.showBusinessForm));
+      setShowProfileSelector(Boolean(historyState.showProfileSelector));
+      setShowProfileDetails(Boolean(historyState.showProfileDetails));
+      setShowComments(historyState.showComments || null);
+      setShowMobilePitchDetail(Boolean(historyState.showMobilePitchDetail));
+      setSelectedMobilePitch(getPitchById(historyState.selectedMobilePitchId));
+      setViewingPitcher(getPitcherByBusinessProfileId(historyState.viewingPitcherBusinessProfileId));
+      setSelectedForContract(getPitchById(historyState.selectedForContractId));
+      setSelectedForInvestment(getPitchById(historyState.selectedForInvestmentId));
+
+      window.setTimeout(() => {
+        isRestoringPitchinHistoryRef.current = false;
+      }, 0);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [pitches]);
+
   // Initialize and load data
   useEffect(() => {
     const initialize = async () => {

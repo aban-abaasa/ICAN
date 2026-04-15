@@ -265,17 +265,26 @@ export const ConsolidatedNavigation = ({
             {/* Logo Section */}
             <div className="flex items-center gap-3 flex-shrink-0 group">
               {/* Dynamic Logo with Professional Effects */}
-              <div className="relative transition-all duration-300 group-hover:scale-110">
+              <div className="relative transition-all duration-300 group-hover:scale-110 rounded-lg overflow-hidden">
                 {/* Animated glow wrapper */}
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg opacity-0 group-hover:opacity-40 blur-lg transition-all duration-300 animate-pulse"></div>
                 
                 {/* Logo container with gradient background */}
-                <div className="relative bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-lg p-1 hover:bg-gradient-to-r hover:from-blue-500/40 hover:to-purple-500/40 transition-all duration-300 group-hover:shadow-lg group-hover:shadow-purple-500/50 border border-blue-400/30 group-hover:border-purple-400/50">
-                  <img src={IcanEraLogo} alt="IcanEra" className="w-10 h-10 object-contain transition-transform duration-300 group-hover:scale-110" />
+                <div className="relative bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-lg p-1.5 hover:bg-gradient-to-r hover:from-blue-500/40 hover:to-purple-500/40 transition-all duration-300 group-hover:shadow-lg group-hover:shadow-purple-500/50 border border-blue-400/30 group-hover:border-purple-400/50 flex items-center justify-center">
+                  <img 
+                    src={IcanEraLogo} 
+                    alt="IcanEra" 
+                    className="w-12 h-12 object-contain transition-transform duration-300 group-hover:scale-110 filter drop-shadow-md"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.parentElement.textContent = '💎';
+                      e.target.parentElement.style.fontSize = '1.5rem';
+                    }}
+                  />
                 </div>
 
                 {/* Animated activity indicator */}
-                <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-400 rounded-full animate-pulse" title="App Active"></div>
+                <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-pulse" title="App Active"></div>
               </div>
               
               <div>
@@ -382,13 +391,22 @@ export const ConsolidatedNavigation = ({
             {/* Logo - Mobile Version with Dynamic Effects */}
             <div className="flex items-center gap-2 flex-shrink-0 min-w-0 group">
               {/* Dynamic Mobile Logo */}
-              <div className="relative transition-all duration-300">
+              <div className="relative transition-all duration-300 rounded-md overflow-hidden">
                 {/* Subtle glow for mobile */}
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-md opacity-0 group-active:opacity-30 blur-md transition-all duration-200"></div>
                 
                 {/* Mobile logo container */}
-                <div className="relative bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-md p-1 group-active:bg-gradient-to-r group-active:from-blue-500/40 group-active:to-purple-500/40 transition-all duration-300">
-                  <img src={IcanEraLogo} alt="IcanEra" className="w-8 h-8 object-contain flex-shrink-0 transition-transform duration-200 group-active:scale-105" />
+                <div className="relative bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-md p-2 group-active:bg-gradient-to-r group-active:from-blue-500/40 group-active:to-purple-500/40 transition-all duration-300 flex items-center justify-center">
+                  <img 
+                    src={IcanEraLogo} 
+                    alt="IcanEra" 
+                    className="w-9 h-9 object-contain flex-shrink-0 transition-transform duration-200 group-active:scale-105 filter drop-shadow-md"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.parentElement.textContent = '💎';
+                      e.target.parentElement.style.fontSize = '1.25rem';
+                    }}
+                  />
                 </div>
               </div>
               

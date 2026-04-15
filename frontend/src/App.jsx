@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from './context/AuthContext';
 import { AuthPage } from './components/auth';
 import CountryCheckMiddleware from './components/auth/CountryCheckMiddleware';
@@ -46,8 +46,14 @@ class ErrorBoundary extends React.Component {
 }
 
 const App = () => {
-  const { user, loading } = useAuth();
+  const { user, loading, isRecoveryMode, clearRecoveryMode } = useAuth();
   const [showLanding, setShowLanding] = useState(!user);
+  const [isResetPasswordPath, setIsResetPasswordPath] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.location.pathname === '/reset-password';
+    }
+    return false;
+  });
   const [isMobile, setIsMobile] = useState(() => {
     // Safe check for window object (SSR compatibility)
     if (typeof window !== 'undefined') {
@@ -56,6 +62,8 @@ const App = () => {
     return false;
   });
   const [appError, setAppError] = useState(null);
+  const isRestoringAppHistoryRef = useRef(false);
+  const lastPublicViewRef = useRef(null);
 
   useEffect(() => {
     const handleResize = () => {
@@ -72,6 +80,15 @@ const App = () => {
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setIsResetPasswordPath(window.location.pathname === '/reset-password');
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   // Global error handler
@@ -94,6 +111,59 @@ const App = () => {
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
     };
   }, []);
+
+  useEffect(() => {
+    if (user || isRecoveryMode || isResetPasswordPath) return;
+
+    const publicView = showLanding ? 'landing' : 'auth';
+
+    if (!isRestoringAppHistoryRef.current && lastPublicViewRef.current !== publicView) {
+      const nextState = {
+        ...(window.history.state || {}),
+        __icanApp: {
+          publicView
+        }
+      };
+
+      if (lastPublicViewRef.current === null) {
+        window.history.replaceState(nextState, '', window.location.href);
+      } else {
+        window.history.pushState(nextState, '', window.location.href);
+      }
+    }
+
+    lastPublicViewRef.current = publicView;
+  }, [user, showLanding, isRecoveryMode, isResetPasswordPath]);
+
+  useEffect(() => {
+    const handlePopState = (event) => {
+      if (user || isRecoveryMode || isResetPasswordPath) return;
+
+      const view = event.state?.__icanApp?.publicView;
+      if (view === 'landing' || view === 'auth') {
+        isRestoringAppHistoryRef.current = true;
+        setShowLanding(view === 'landing');
+        lastPublicViewRef.current = view;
+        window.setTimeout(() => {
+          isRestoringAppHistoryRef.current = false;
+        }, 0);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [user, isRecoveryMode, isResetPasswordPath]);
+
+  const handleRecoveryHandled = () => {
+    clearRecoveryMode();
+    setShowLanding(false);
+
+    if (window.location.pathname === '/reset-password') {
+      window.history.replaceState({}, '', '/');
+    }
+
+    setIsResetPasswordPath(false);
+  };
 
   // Show loading screen while checking auth status
   if (loading) {
@@ -129,7 +199,17 @@ const App = () => {
     );
   }
 
-  // If user is not logged in
+  if (isRecoveryMode || isResetPasswordPath) {
+    return (
+      <ErrorBoundary>
+        <AuthPage
+          initialView="reset-password"
+          onRecoveryHandled={handleRecoveryHandled}
+        />
+      </ErrorBoundary>
+    );
+  }
+
   if (!user) {
     if (showLanding) {
       return (

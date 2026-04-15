@@ -22,6 +22,9 @@ import {
   generateTaxReturn,
   generateBalanceSheet,
   generateIncomeStatement,
+  buildFinancialDataFromTransactions,
+  runAutomatedReportingCycle,
+  runTransactionArchivingCycle,
   generateCountryComplianceReport,
   getSupportedCountries,
   getSavedReports,
@@ -38,12 +41,54 @@ const AdvancedFinancialReports = ({ userId, transactions, userProfile }) => {
   const [savedReports, setSavedReports] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [automationSummary, setAutomationSummary] = useState(null);
 
   // Initialize countries list
   useEffect(() => {
     setSupportedCountries(getSupportedCountries());
     loadSavedReports();
   }, [userId]);
+
+  useEffect(() => {
+    const runAutomation = async () => {
+      if (!userId || !Array.isArray(transactions) || transactions.length === 0) return;
+
+      try {
+        const periodicResult = await runAutomatedReportingCycle({
+          userId,
+          transactions,
+          countryCode: selectedCountry,
+          periods: ['weekly', 'monthly']
+        });
+
+        const archiveResult = await runTransactionArchivingCycle({
+          userId,
+          transactions,
+          countryCode: selectedCountry,
+          lookbackDays: 45
+        });
+
+        const generatedPeriodicCount = periodicResult.filter((item) => item.status === 'generated').length;
+        const generatedArchiveCount = archiveResult.filter((item) => item.status === 'archived').length;
+        const skippedCount = (periodicResult.length - generatedPeriodicCount) + (archiveResult.length - generatedArchiveCount);
+
+        setAutomationSummary({
+          generatedCount: generatedPeriodicCount + generatedArchiveCount,
+          generatedPeriodicCount,
+          generatedArchiveCount,
+          skippedCount
+        });
+
+        if (generatedPeriodicCount > 0 || generatedArchiveCount > 0) {
+          loadSavedReports();
+        }
+      } catch (error) {
+        console.error('Automated report cycle failed:', error);
+      }
+    };
+
+    runAutomation();
+  }, [userId, transactions, selectedCountry]);
 
   const loadSavedReports = async () => {
     if (userId) {
@@ -54,57 +99,12 @@ const AdvancedFinancialReports = ({ userId, transactions, userProfile }) => {
     }
   };
 
-  // Calculate financial data from transactions
-  const calculateFinancialData = () => {
-    const income = transactions
-      .filter(t => t.type === 'income')
-      .reduce((sum, t) => sum + (t.amount || 0), 0);
-
-    const expenses = transactions
-      .filter(t => t.type === 'expense')
-      .reduce((sum, t) => sum + (t.amount || 0), 0);
-
-    const investments = transactions
-      .filter(t => t.category === 'investment')
-      .reduce((sum, t) => sum + (t.amount || 0), 0);
-
-    return {
-      totalIncome: income,
-      totalExpenses: expenses,
-      businessIncome: income * 0.6,
-      investmentIncome: investments,
-      capitalGains: income * 0.1,
-      taxPaid: income * 0.1,
-      deductions: transactions
-        .filter(t => t.type === 'expense')
-        .map(t => ({ category: t.category, amount: t.amount, description: t.description })),
-      netWorth: income - expenses,
-      assets: {
-        cash: income - expenses,
-        investments,
-        equipment: 0,
-        property: 0,
-        other: 0
-      },
-      liabilities: {
-        loans: 0,
-        creditCards: 0,
-        payables: expenses * 0.2,
-        other: 0
-      },
-      revenue: income,
-      costOfGoodsSold: expenses * 0.4,
-      operatingExpenses: expenses * 0.4,
-      otherIncome: 0,
-      otherExpenses: 0,
-      taxExpense: income * 0.1
-    };
-  };
-
   const handleGenerateReport = async () => {
     setIsGenerating(true);
     try {
-      const financialData = calculateFinancialData();
+      const financialData = buildFinancialDataFromTransactions(transactions, {
+        reportPeriod: selectedReportType === 'income-statement' ? 'Monthly' : 'Annual'
+      });
       let report;
 
       switch (selectedReportType) {
@@ -172,6 +172,11 @@ const AdvancedFinancialReports = ({ userId, transactions, userProfile }) => {
           Professional Financial Reports
         </h1>
         <p className="text-gray-600">Generate tax returns, balance sheets, and income statements with AI-powered country compliance</p>
+        {automationSummary && (
+          <p className="text-sm text-blue-700 mt-2">
+            Automated cycle: {automationSummary.generatedCount} new report(s) ({automationSummary.generatedPeriodicCount || 0} weekly/monthly, {automationSummary.generatedArchiveCount || 0} daily archives), {automationSummary.skippedCount} already up to date.
+          </p>
+        )}
       </div>
 
       {/* Tabs */}
@@ -298,6 +303,9 @@ const AdvancedFinancialReports = ({ userId, transactions, userProfile }) => {
                   <div className="flex-1">
                     <h3 className="font-bold text-gray-800 capitalize">{report.report_type.replace('-', ' ')}</h3>
                     <p className="text-sm text-gray-600">{report.country} • {new Date(report.created_at).toLocaleDateString()}</p>
+                    {Array.isArray(report.tags) && report.tags.includes('daily-archive') && (
+                      <p className="text-xs text-purple-700 mt-1">Daily transaction archive • found in Reports only</p>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     <button

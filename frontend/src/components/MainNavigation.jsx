@@ -24,6 +24,7 @@ import {
   Wallet
 } from 'lucide-react'
 import IcanEraLogo from '../IcanEra.png'
+import ThemeSwitcher from './ThemeSwitcher'
 
 export default function MainNavigation({ onTrustClick, onShareClick, onWalletClick }) {
   const [activeSection, setActiveSection] = useState('dashboard')
@@ -152,13 +153,22 @@ export default function MainNavigation({ onTrustClick, onShareClick, onWalletCli
             {/* Logo and Title */}
             <div className="flex items-center gap-4 mb-6 group">
               {/* Dynamic Logo with Glow Effect */}
-              <div className="relative transition-all duration-300 group-hover:scale-110">
+              <div className="relative transition-all duration-300 group-hover:scale-110 rounded-lg overflow-hidden">
                 {/* Subtle glow background */}
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg opacity-0 group-hover:opacity-30 blur-lg transition-all duration-300"></div>
                 
                 {/* Logo container */}
-                <div className="relative bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-lg p-1.5 hover:bg-gradient-to-r hover:from-blue-500/30 hover:to-purple-500/30 transition-all duration-300 group-hover:shadow-lg group-hover:shadow-blue-500/50">
-                  <img src={IcanEraLogo} alt="IcanEra" className="w-12 h-12 object-contain transition-transform duration-300 group-hover:scale-105" />
+                <div className="relative bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-lg p-2 hover:bg-gradient-to-r hover:from-blue-500/30 hover:to-purple-500/30 transition-all duration-300 group-hover:shadow-lg group-hover:shadow-blue-500/50 flex items-center justify-center">
+                  <img 
+                    src={IcanEraLogo} 
+                    alt="IcanEra" 
+                    className="w-14 h-14 object-contain transition-transform duration-300 group-hover:scale-105 filter drop-shadow-md"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.parentElement.textContent = '💎';
+                      e.target.parentElement.style.fontSize = '1.75rem';
+                    }}
+                  />
                 </div>
               </div>
               
@@ -168,13 +178,14 @@ export default function MainNavigation({ onTrustClick, onShareClick, onWalletCli
             </div>
 
             {/* Menu Items */}
-            <div className="flex items-center gap-3 flex-wrap" ref={menuRef}>
-              {menuItems.map((item) => {
-                const Icon = item.icon
-                const isActive = activeSection === item.id
+            <div className="flex items-center gap-3 flex-wrap justify-between" ref={menuRef}>
+              <div className="flex items-center gap-3 flex-wrap">
+                {menuItems.map((item) => {
+                  const Icon = item.icon
+                  const isActive = activeSection === item.id
 
-                return (
-                  <div key={item.id} className="relative">
+                  return (
+                    <div key={item.id} className="relative">
                     <button
                       onClick={() => {
                         setActiveSection(item.id)
@@ -226,6 +237,8 @@ export default function MainNavigation({ onTrustClick, onShareClick, onWalletCli
                   </div>
                 )
               })}
+              </div>
+              <ThemeSwitcher />
             </div>
           </div>
 
@@ -242,12 +255,19 @@ export default function MainNavigation({ onTrustClick, onShareClick, onWalletCli
                   <p className="text-blue-300 text-xs">Global Capital</p>
                 </div>
               </div>
-              <button
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="p-2 rounded-lg bg-slate-700/50 hover:bg-slate-700 text-slate-300 hover:text-white transition-all"
-              >
-                {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-              </button>
+              <div className="flex items-center gap-2">
+                {/* Theme Switcher for Mobile */}
+                <div className="scale-90">
+                  <ThemeSwitcher />
+                </div>
+                {/* Hamburger Menu Button */}
+                <button
+                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                  className="p-2 rounded-lg bg-slate-700/50 hover:bg-slate-700 text-slate-300 hover:text-white transition-all"
+                >
+                  {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                </button>
+              </div>
             </div>
 
             {/* Mobile Menu */}

@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronRight, Play, Zap, Shield, TrendingUp, Users, ArrowRight, ChevronDown } from 'lucide-react';
 import DashboardPreview from './DashboardPreview';
+import ThemeSwitcher from './ThemeSwitcher';
+import { useTheme } from '../context/ThemeContext';
 
 const LandingPage = ({ onGetStarted }) => {
+  const { actualTheme } = useTheme();
+  const isDarkTheme = actualTheme === 'dark';
   const [currentSlide, setCurrentSlide] = useState(0);
   const [currentHeroSlide, setCurrentHeroSlide] = useState(0);
   const [currentBadgeInfo, setCurrentBadgeInfo] = useState(0);
@@ -11,6 +15,22 @@ const LandingPage = ({ onGetStarted }) => {
   const [isHeroExpanded, setIsHeroExpanded] = useState(false);
   const [expandedFooterSection, setExpandedFooterSection] = useState(null);
   const [expandedFooterItem, setExpandedFooterItem] = useState(null);
+  const [failedMainSlideImages, setFailedMainSlideImages] = useState({});
+
+  const scrollToSection = (sectionId) => {
+    const section = document.getElementById(sectionId);
+    if (section) {
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  const handleSignIn = () => {
+    onGetStarted?.('signin');
+  };
+
+  const handleCreateAccount = () => {
+    onGetStarted?.('signup');
+  };
 
   // Handle email click
   const handleEmailClick = (e) => {
@@ -72,169 +92,189 @@ const LandingPage = ({ onGetStarted }) => {
     }
   };
 
-  // Image slides with descriptions (using all 20 images from public/images)
+  // Image slides with descriptions - IMPROVED with real, authentic messaging
   const slides = [
     {
       image: '/images/dairy expense and inacome.png',
-      title: 'Expense & Income Tracker',
-      subtitle: 'Smart Financial Management',
-      description: 'Track every transaction with precision. Smart categorization, real-time insights, and predictive analytics for complete financial control',
-      whyJoin: 'Take control of every shilling—track, analyze, grow',
-      features: ['Real-time tracking', 'Smart categorization', 'Expense reports', 'Budget forecasting', 'AI-powered insights'],
-      highlight: true
+      title: 'Record Every Transaction',
+      subtitle: 'Voice & Manual Entry',
+      description: 'Record transactions effortlessly by speaking or typing. Smart categorization captures every shilling for complete financial clarity.',
+      whyJoin: 'Take control of every transaction—voice or manual, your choice',
+      features: ['Voice recording', 'Smart categorization', 'Real-time updates', 'Expense insights', 'Income tracking'],
+      highlight: true,
+      realMessage: 'Easy transaction logging - the busier you are, the faster you capture'
     },
     {
       image: '/images/ICANera expense.png',
-      title: 'Financial Dashboard',
-      subtitle: 'Advanced Analytics',
-      description: 'Comprehensive financial overview with real-time analytics and performance metrics',
-      whyJoin: 'See your complete financial picture at a glance',
-      features: ['Real-time analytics', 'Performance tracking', 'Financial reports']
+      title: 'Your Financial Picture',
+      subtitle: 'Dashboard & Analytics',
+      description: 'See your complete financial overview at a glance. Real-time analytics show income, expenses, profit, and growth trends.',
+      whyJoin: 'Know exactly where your money is and where it\'s going',
+      features: ['Real-time overview', 'Income tracking', 'Expense analysis', 'Profit calculation', 'Growth trends'],
+      realMessage: 'One dashboard to rule them all - personal, business, and investments'
     },
     {
       image: '/images/icanera wallet.png',
-      title: 'Digital Wallet',
-      subtitle: 'Secure Management',
-      description: 'Manage your accounts, balances & transactions with secure digital wallet management',
-      whyJoin: 'Secure, fast, and simple money management',
-      features: ['Account management', 'Balance tracking', 'Secure transactions']
+      title: 'Personal Finances Separated',
+      subtitle: 'Wallet Management',
+      description: 'Keep personal and business money completely separate. Multi-wallet system gives you clarity and control.',
+      whyJoin: 'Personal savings vs. business profits - crystal clear',
+      features: ['Multi-wallet system', 'Account separation', 'Balance tracking', 'Quick transfers', 'Secure holdings'],
+      realMessage: 'Never mix personal spending with business again'
     },
     {
       image: '/images/ICANwallet.png',
-      title: 'Smart Wallet',
-      subtitle: 'Secure & Fast',
-      description: 'Advanced wallet features with multi-currency support and instant transactions',
-      whyJoin: 'Instant transfers, zero hassles, total peace of mind',
-      features: ['Multi-currency', 'Instant transfers', 'Security verified']
+      title: 'Move Money Instantly',
+      subtitle: 'Global Transfers',
+      description: 'Send money across borders in seconds using ICAN coins. Zero fees, blockchain-backed, completely transparent.',
+      whyJoin: 'Send to Kenya, Uganda, Tanzania instantly - no bank delays',
+      features: ['Instant transfers', 'Zero fees', 'Blockchain secured', 'Multi-currency', 'No delays'],
+      realMessage: 'International transfers that actually work like we promised'
     },
     {
       image: '/images/incaera share.png',
-      title: 'Pitchin',
-      subtitle: 'Investment Hub',
-      description: 'Share your vision, connect with investors and build your business dreams',
-      whyJoin: 'Your idea + our platform = your next big breakthrough',
-      features: ['Business pitches', 'Investor connections', 'Growth opportunities']
+      title: 'Share Your Vision',
+      subtitle: 'PitchIn - Crowdfunding',
+      description: 'Raise capital from your community. Investors see your pitch, funds arrive, your business grows. Democracy in action.',
+      whyJoin: 'Your idea + community support = unstoppable growth',
+      features: ['Business pitches', 'Investor matching', 'Smart contracts', 'Dividend sharing', 'Growth support'],
+      realMessage: 'Stop begging banks - let your community fund your dreams'
     },
     {
       image: '/images/ICANera pitchin.png',
-      title: 'Pitchin Pro',
-      subtitle: 'Professional Platform',
-      description: 'Professional platform for sharing and funding innovative business ideas',
-      whyJoin: 'Connect with investors who believe in your vision',
-      features: ['Pitch templates', 'Investor network', 'Funding support']
+      title: 'Invest In Businesses You Believe In',
+      subtitle: 'PitchIn - Investor View',
+      description: 'Own a piece of promising businesses. See real returns through dividends. Your money works for you.',
+      whyJoin: 'Build wealth by backing businesses you trust',
+      features: ['Browse pitches', 'Evaluate returns', 'Own shares', 'Earn dividends', 'Smart contracts'],
+      realMessage: 'Become an investor - own real businesses, earn real returns'
     },
     {
       image: '/images/ICANera pitchin 8.png',
-      title: 'Pitchin Advanced',
-      subtitle: 'Smart Matching',
-      description: 'AI-powered investor matching and business growth acceleration',
-      whyJoin: 'AI finds the perfect investor match for your dreams',
-      features: ['Smart matching', 'Growth tools', 'Investor support']
+      title: 'AI Finds Perfect Matches',
+      subtitle: 'Smart Investment Matching',
+      description: 'AI analyzes every pitch and matches you with businesses aligned to your financial goals and values.',
+      whyJoin: 'Let AI find the best opportunities for your portfolio',
+      features: ['AI matching', 'Risk analysis', 'Return projections', 'Portfolio diversity', 'Smart recommendations'],
+      realMessage: 'Technology + community = better investment decisions'
     },
     {
       image: '/images/cmms.png',
-      title: 'Treasury Guardian',
-      subtitle: 'Security Platform',
-      description: 'Account security & privacy controls with enterprise-level protection',
-      whyJoin: 'Enterprise security protecting everything you own',
-      features: ['Security controls', 'Privacy protection', 'Account verification']
+      title: 'Run Your Business Smoothly',
+      subtitle: 'Inventory & Operations',
+      description: 'Manage inventory, approvals, and team workflows. No spreadsheets, no confusion - just organized operations.',
+      whyJoin: 'Scale from chaos to organized operations',
+      features: ['Inventory tracking', 'Team approvals', 'Supply management', 'Workflow automation', 'Real-time updates'],
+      realMessage: 'From losing track to complete control of your operations'
     },
     {
       image: '/images/ICANera CMMS.png',
-      title: 'CMMS Platform',
-      subtitle: 'Management System',
-      description: 'Comprehensive management system for operations and resources',
-      whyJoin: 'Organize, optimize, and scale your operations',
-      features: ['Resource mgmt', 'Operations tracking', 'Team coordination']
+      title: 'Manage Teams & Approvals',
+      subtitle: 'Department Workflows',
+      description: 'Set up roles, permissions, and approval chains. Everyone knows what they\'re doing and why.',
+      whyJoin: 'Scale with confidence - organized teams, clear workflows',
+      features: ['Role-based access', 'Approval flows', 'Team management', 'Audit trails', 'Department control'],
+      realMessage: 'Professional operations management built for growth'
     },
     {
       image: '/images/ICANera CMMS1.png',
-      title: 'CMMS Pro',
-      subtitle: 'Enterprise Edition',
-      description: 'Enterprise-grade management and operational excellence',
-      whyJoin: 'Enterprise power at your fingertips, simply executed',
-      features: ['Enterprise tools', 'Analytics', 'Automation']
+      title: 'Enterprise-Grade Operations',
+      subtitle: 'Advanced CMMS',
+      description: 'Advanced features for serious operations. Analytics, automation, and integration for your complex needs.',
+      whyJoin: 'Professional tools for professional operations',
+      features: ['Advanced analytics', 'Automation', 'Deep integration', 'Custom workflows', 'Priority support'],
+      realMessage: 'Enterprise power, built for ambitious operators'
     },
     {
       image: '/images/sacco.png',
-      title: 'Trust Management',
-      subtitle: 'Community Wealth',
-      description: 'Collaborate, contribute, and grow wealth together in SACCO groups',
-      whyJoin: 'Build wealth faster with your trusted circle',
-      features: ['Group collaboration', 'Wealth growth', 'Community benefits']
+      title: 'Save Together, Grow Faster',
+      subtitle: 'TRUST Groups',
+      description: 'Join a democratic savings group. Contribute monthly, earn interest, help each other grow. Interest from the community, not banks.',
+      whyJoin: '8-15% returns vs. 0% from banks - change your life',
+      features: ['Democratic savings', 'Group returns', 'Member loans', 'Shared ownership', 'Transparent management'],
+      realMessage: 'Community savings that actually build wealth'
     },
     {
       image: '/images/ICAN era sacco.png',
-      title: 'SACCO Groups',
-      subtitle: 'Community Finance',
-      description: 'Democratic savings groups with transparent fund management and rapid growth',
-      whyJoin: 'Together we save more, grow faster, achieve more',
-      features: ['Group savings', 'Transparent mgmt', 'Rapid growth']
+      title: 'Groups That Work',
+      subtitle: 'TRUST Management',
+      description: 'Professional SACCO management meets community trust. Transparent fund tracking, voting, and automated distributions.',
+      whyJoin: 'Stop managing groups with phones and notebooks',
+      features: ['Transparent ledger', 'Democratic voting', 'Auto-distributions', 'Analytics', 'Member management'],
+      realMessage: 'Digital SACCO management that respects community values'
     },
     {
       image: '/images/trust.png',
-      title: 'ICAN Opportunities',
-      subtitle: 'Global Access',
-      description: 'Your readiness for global opportunities with comprehensive assessment',
-      whyJoin: 'Unlock global opportunities with your ICAN Opportunity Rating',
-      features: ['Opportunity assessment', 'Readiness evaluation', 'Global access']
+      title: 'Know Your Wealth Potential',
+      subtitle: 'Opportunity Rating',
+      description: 'Get your ICAN Opportunity Rating - a score showing your readiness for global opportunities and investment.',
+      whyJoin: 'Understand your true financial potential',
+      features: ['Financial assessment', 'Opportunity unlocking', 'Growth recommendations', 'Global readiness', 'Custom guidance'],
+      realMessage: 'Your path to global financial opportunities starts here'
     },
     {
       image: '/images/ICANera trust.png',
-      title: 'Trust Platform',
-      subtitle: 'Verified & Secure',
-      description: 'Blockchain-verified trust management with complete transparency',
-      whyJoin: 'Blockchain-backed trust that never lies, always protects',
-      features: ['Blockchain verified', 'Full transparency', 'Secure transfers']
+      title: 'Trust Backed By Blockchain',
+      subtitle: 'Verified Transactions',
+      description: 'Every transaction blockchain-verified. No fraud, no disputes, no hidden fees. Complete transparency.',
+      whyJoin: 'Trust with proof - blockchain never lies',
+      features: ['Blockchain verified', 'Immutable records', 'Zero disputes', 'Transparent fees', 'Proof of ownership'],
+      realMessage: 'Technology that proves trust, not just promises it'
     },
     {
       image: '/images/ICANera trust 2.png',
-      title: 'Trust Pro',
-      subtitle: 'Advanced Features',
-      description: 'Advanced trust management with smart contracts and automation',
-      whyJoin: 'Smart contracts automate trust—no middleman needed',
-      features: ['Smart contracts', 'Automation', 'Advanced controls']
+      title: 'Smart Contracts Automate Trust',
+      subtitle: 'Advanced Trust System',
+      description: 'Smart contracts enforce agreements automatically. No waiting, no lawyers, no middlemen taking their cut.',
+      whyJoin: 'Agreements that execute themselves, fairly and automatically',
+      features: ['Smart contracts', 'Auto-execution', 'No middleman', 'Lower costs', 'Instant settlement'],
+      realMessage: 'Contracts that enforce themselves - welcome to the future'
     },
     {
       image: new URL('../IcanEra.png', import.meta.url).href,
-      title: 'ICAN Ecosystem',
-      subtitle: 'All-in-One Platform',
-      description: 'Complete financial ecosystem with all tools integrated seamlessly',
-      whyJoin: 'Everything you need—one powerful, integrated platform',
-      features: ['Integrated platform', 'All features', 'Unified experience']
+      title: 'Everything You Need In One Place',
+      subtitle: 'Complete Ecosystem',
+      description: 'Wallets, investments, TRUST groups, business management, global transfers - all integrated seamlessly.',
+      whyJoin: 'Stop juggling apps - your entire financial life, one platform',
+      features: ['All features included', 'Beautiful integration', 'Single login', 'Unified dashboard', 'Complete control'],
+      realMessage: 'The platform that thinks like you - holistic financial control'
     },
     {
       image: '/images/ICANera 3.png',
-      title: 'ICAN Premium',
-      subtitle: 'Elite Features',
-      description: 'Premium features for power users and enterprise clients',
-      whyJoin: 'Premium power for ambitious financial champions',
-      features: ['Premium tools', 'Priority support', 'Advanced analytics']
+      title: 'Unlock Premium Features',
+      subtitle: 'ICAN Premium',
+      description: 'Premium features for power users - advanced analytics, priority support, exclusive opportunities.',
+      whyJoin: 'Level up your financial game with elite features',
+      features: ['Advanced analytics', 'Priority support', 'Exclusive deals', 'Higher limits', 'VIP access'],
+      realMessage: 'Premium tools for financial champions'
     },
     {
       image: '/images/ICANera tithe.png',
-      title: 'Tithe Management',
-      subtitle: 'Spiritual Giving',
-      description: 'Give back to your faith community with smart tithe calculations and automatic contributions',
-      whyJoin: 'Align your faith with your finances—giving made sacred',
-      features: ['Tithe calculation', 'Auto-giving', 'Faith tracking', 'Community giving', 'Receipt records'],
-      highlight: true
+      title: 'Align Faith With Finances',
+      subtitle: 'Tithe Management',
+      description: 'Give back meaningfully with automatic tithe calculations and community impact tracking. Your giving, your values, your impact.',
+      whyJoin: 'Support your faith community with confidence and clarity',
+      features: ['Auto tithe calc', 'Community impact', 'Giving history', 'Faith tracking', 'Donation receipts'],
+      highlight: true,
+      realMessage: 'Spiritual giving made simple and transparent'
     },
     {
       image: '/images/ICANera tith2.png',
-      title: 'Tithe Pro',
-      subtitle: 'Advanced Giving',
-      description: 'Professional tithe management with offerings, donations, and spiritual accountability',
-      whyJoin: 'Spiritual accountability through transparent, purposeful giving',
-      features: ['Multiple giving types', 'Donation tracking', 'Spiritual accountability', 'Community support', 'Impact reports']
+      title: 'Generous Giving, Real Impact',
+      subtitle: 'Tithe Pro',
+      description: 'Advanced giving tools for offerings, donations, and community support. See the impact of your generosity.',
+      whyJoin: 'Give with purpose - see how your giving changes lives',
+      features: ['Multiple giving types', 'Impact reports', 'Community feedback', 'Giving analytics', 'Charitable records'],
+      realMessage: 'Your generosity, amplified and tracked'
     },
     {
       image: '/images/ICANera i.png',
-      title: 'ICAN Core',
-      subtitle: 'Foundation Platform',
-      description: 'The core foundation enabling all ICAN financial services and integrations',
-      whyJoin: 'The powerful foundation building your financial future',
-      features: ['Foundation', 'Integration hub', 'Core services']
+      title: 'Built On Solid Foundation',
+      subtitle: 'ICAN Core Technology',
+      description: 'The foundation powering all ICAN features. Secure, scalable, designed for billions of transactions.',
+      whyJoin: 'Trust the bedrock of modern financial technology',
+      features: ['Secure infrastructure', 'Blockchain foundation', 'Scalability', 'Integration hub', 'Future-proof'],
+      realMessage: 'Technology that scales with your ambitions'
     }
   ];
 
@@ -266,13 +306,13 @@ const LandingPage = ({ onGetStarted }) => {
     },
     {
       image: '/images/incaera share.png',
-      title: 'Pitchin',
+      title: 'PitchIn',
       subtitle: 'Investment hub',
       description: 'Share your vision'
     },
     {
       image: '/images/ICANera pitchin.png',
-      title: 'Pitchin Pro',
+      title: 'PitchIn Pro',
       subtitle: 'Professional platform',
       description: 'Connect with investors'
     },
@@ -427,6 +467,49 @@ const LandingPage = ({ onGetStarted }) => {
     }
   ];
 
+  const badgeCardThemes = [
+    {
+      glow: 'from-violet-500/35 via-fuchsia-500/25 to-purple-500/35',
+      card: 'from-violet-950/95 via-violet-900/95 to-fuchsia-950/95',
+      border: 'border-violet-300/70',
+      pulse: 'from-violet-400/0 via-violet-300/25 to-fuchsia-300/0',
+      title: 'text-violet-100',
+      desc: 'text-violet-100/95',
+      indicatorActive: 'bg-violet-300',
+      indicatorInactive: 'bg-violet-400/35 hover:bg-violet-300/70'
+    },
+    {
+      glow: 'from-cyan-500/35 via-sky-500/25 to-blue-500/35',
+      card: 'from-cyan-950/95 via-sky-900/95 to-blue-950/95',
+      border: 'border-cyan-300/70',
+      pulse: 'from-cyan-400/0 via-cyan-300/25 to-blue-300/0',
+      title: 'text-cyan-100',
+      desc: 'text-cyan-100/95',
+      indicatorActive: 'bg-cyan-300',
+      indicatorInactive: 'bg-cyan-400/35 hover:bg-cyan-300/70'
+    },
+    {
+      glow: 'from-emerald-500/35 via-teal-500/25 to-green-500/35',
+      card: 'from-emerald-950/95 via-teal-900/95 to-green-950/95',
+      border: 'border-emerald-300/70',
+      pulse: 'from-emerald-400/0 via-emerald-300/25 to-green-300/0',
+      title: 'text-emerald-100',
+      desc: 'text-emerald-100/95',
+      indicatorActive: 'bg-emerald-300',
+      indicatorInactive: 'bg-emerald-400/35 hover:bg-emerald-300/70'
+    },
+    {
+      glow: 'from-amber-500/35 via-orange-500/25 to-yellow-500/35',
+      card: 'from-amber-950/95 via-orange-900/95 to-yellow-950/95',
+      border: 'border-amber-300/70',
+      pulse: 'from-amber-400/0 via-amber-300/25 to-yellow-300/0',
+      title: 'text-amber-100',
+      desc: 'text-amber-100/95',
+      indicatorActive: 'bg-amber-300',
+      indicatorInactive: 'bg-amber-400/35 hover:bg-amber-300/70'
+    }
+  ];
+
   const testimonials = [
     {
       name: 'Sarah Okoye',
@@ -505,46 +588,139 @@ const LandingPage = ({ onGetStarted }) => {
     setCurrentHeroSlide((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
   };
 
+  const activeBadgeTheme = badgeCardThemes[currentBadgeInfo % badgeCardThemes.length];
+  const badgeWordPalette = [
+    { title: '#b91c1c', desc: '#dc2626' },
+    { title: '#065f46', desc: '#047857' },
+    { title: '#1d4ed8', desc: '#2563eb' },
+    { title: '#6d28d9', desc: '#7c3aed' },
+    { title: '#9a3412', desc: '#c2410c' }
+  ];
+  const activeBadgeWordPalette = badgeWordPalette[currentBadgeInfo % badgeWordPalette.length];
+  const slideWordPalette = [
+    { subtitle: '#7c2d12', title: '#7f1d1d', body: '#991b1b', feature: '#b91c1c' },
+    { subtitle: '#14532d', title: '#166534', body: '#15803d', feature: '#16a34a' },
+    { subtitle: '#1e3a8a', title: '#1d4ed8', body: '#2563eb', feature: '#3b82f6' },
+    { subtitle: '#581c87', title: '#6d28d9', body: '#7c3aed', feature: '#8b5cf6' },
+    { subtitle: '#78350f', title: '#a16207', body: '#ca8a04', feature: '#f59e0b' }
+  ];
+  const activeSlideWordPalette = slideWordPalette[currentSlide % slideWordPalette.length];
+
+  const rainbowTextStyle = {
+    backgroundImage: 'linear-gradient(90deg, #ef4444, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #8b5cf6, #ec4899, #ef4444)',
+    backgroundSize: '300% 300%',
+    WebkitBackgroundClip: 'text',
+    backgroundClip: 'text',
+    color: 'transparent',
+    animation: 'icanRainbowShift 8s linear infinite'
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 text-white overflow-hidden">
+    <div className={`min-h-screen overflow-hidden ${
+      isDarkTheme
+        ? 'bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100'
+        : 'bg-gradient-to-br from-slate-100 via-slate-50 to-slate-100 text-slate-900'
+    }`}>
+      <style>{`
+        @keyframes icanRainbowShift {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        @keyframes icanRainbowFloat {
+          0% { transform: translateY(0px); opacity: 0.18; }
+          50% { transform: translateY(-12px); opacity: 0.3; }
+          100% { transform: translateY(0px); opacity: 0.18; }
+        }
+        .ican-rainbow-text {
+          background-image: linear-gradient(90deg, #ef4444, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #8b5cf6, #ec4899, #ef4444);
+          background-size: 300% 300%;
+          -webkit-background-clip: text;
+          background-clip: text;
+          color: transparent;
+          animation: icanRainbowShift 8s linear infinite;
+        }
+        .ican-rainbow-fill {
+          background-image: linear-gradient(90deg, #7c3aed, #ec4899, #ef4444, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #7c3aed);
+          background-size: 300% 300%;
+          animation: icanRainbowShift 6s linear infinite;
+        }
+        .ican-rainbow-border {
+          border-color: transparent !important;
+          border-image: linear-gradient(90deg, #7c3aed, #ec4899, #ef4444, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #7c3aed) 1;
+          animation: icanRainbowShift 7s linear infinite;
+        }
+      `}</style>
       {/* Animated background elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-blob"></div>
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl animate-blob animation-delay-2000"></div>
-        <div className="absolute top-1/2 right-1/3 w-96 h-96 bg-pink-500/10 rounded-full blur-3xl animate-blob animation-delay-4000"></div>
+        <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'linear-gradient(110deg, rgba(124,58,237,0.18), rgba(236,72,153,0.14), rgba(234,179,8,0.12), rgba(34,197,94,0.12), rgba(59,130,246,0.14), rgba(124,58,237,0.18))', backgroundSize: '260% 260%', animation: 'icanRainbowShift 22s linear infinite' }}></div>
+        <div className={`absolute top-0 left-1/4 w-96 h-96 rounded-full blur-3xl animate-blob ${isDarkTheme ? 'bg-slate-700/20' : 'bg-slate-400/15'}`}></div>
+        <div className={`absolute bottom-0 right-1/4 w-96 h-96 rounded-full blur-3xl animate-blob animation-delay-2000 ${isDarkTheme ? 'bg-blue-900/20' : 'bg-blue-300/15'}`}></div>
+        <div className={`absolute top-1/2 right-1/3 w-96 h-96 rounded-full blur-3xl animate-blob animation-delay-4000 ${isDarkTheme ? 'bg-slate-800/20' : 'bg-slate-300/10'}`}></div>
+        <div className="absolute top-24 right-20 w-72 h-72 rounded-full blur-3xl" style={{ backgroundImage: 'linear-gradient(90deg, rgba(236,72,153,0.25), rgba(59,130,246,0.25), rgba(234,179,8,0.2))', animation: 'icanRainbowFloat 10s ease-in-out infinite' }}></div>
       </div>
 
       {/* Navigation */}
-      <nav className="fixed top-0 w-full z-50 bg-slate-950/50 backdrop-blur-md border-b border-purple-500/10">
+      <nav className={`fixed top-0 w-full z-50 backdrop-blur-md border-b ${isDarkTheme ? 'bg-slate-950/70 border-slate-700/40' : 'bg-white/70 border-slate-300/70'}`}>
         <div className="max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-12 py-4 2xl:py-5 flex justify-between items-center">
           <div className="flex items-center space-x-3">
-            <div className="text-3xl md:text-4xl 2xl:text-5xl font-black bg-gradient-to-r from-yellow-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+            <div
+              className="text-3xl md:text-4xl 2xl:text-5xl font-black tracking-tight"
+              style={{
+                color: 'var(--color-secondary)',
+                textShadow: isDarkTheme ? '0 0 14px rgba(129, 140, 248, 0.35)' : '0 1px 0 rgba(255,255,255,0.5)'
+              }}
+            >
               IcanEra
             </div>
             <div className="hidden sm:flex flex-col">
-              <p className="text-xs md:text-sm 2xl:text-base font-semibold text-gray-300">Financial Ecosystem</p>
-              <p className="text-xs 2xl:text-sm text-purple-300">Wealth Platform</p>
+              <p className="text-xs md:text-sm 2xl:text-base font-semibold" style={{ color: isDarkTheme ? '#cbd5e1' : '#334155' }}>Financial Ecosystem</p>
+              <p className="text-xs 2xl:text-sm" style={{ color: isDarkTheme ? '#93c5fd' : '#1d4ed8' }}>Wealth Platform</p>
             </div>
           </div>
-          <div className="hidden md:flex space-x-8 2xl:space-x-12">
-            <a href="#features" className="text-sm md:text-base 2xl:text-lg font-medium hover:text-purple-400 transition">Features</a>
-            <a href="#platforms" className="text-sm md:text-base 2xl:text-lg font-medium hover:text-purple-400 transition">Platforms</a>
-            <a href="#testimonials" className="text-sm md:text-base 2xl:text-lg font-medium hover:text-purple-400 transition">Testimonials</a>
+          <div className="hidden md:flex items-center gap-3 2xl:gap-4">
+            <button
+              onClick={() => scrollToSection('platforms')}
+              className={`px-4 py-2 ican-cove-tab border-2 text-sm md:text-base 2xl:text-lg font-bold transition-all duration-300 ${isDarkTheme ? 'text-amber-100 border-amber-300/55 bg-amber-900/25 hover:bg-amber-800/35 hover:border-amber-200/80' : 'text-amber-900 border-amber-400/55 bg-amber-100 hover:bg-amber-200/90 hover:border-amber-500/75'}`}
+            >
+              Features
+            </button>
+            <button
+              onClick={() => scrollToSection('platforms')}
+              className={`px-4 py-2 ican-cove-tab border-2 text-sm md:text-base 2xl:text-lg font-bold transition-all duration-300 ${isDarkTheme ? 'text-cyan-100 border-cyan-300/55 bg-cyan-900/25 hover:bg-cyan-800/35 hover:border-cyan-200/80' : 'text-cyan-900 border-cyan-400/55 bg-cyan-100 hover:bg-cyan-200/90 hover:border-cyan-500/75'}`}
+            >
+              Platforms
+            </button>
+            <button
+              onClick={() => scrollToSection('testimonials')}
+              className={`px-4 py-2 ican-cove-tab border-2 text-sm md:text-base 2xl:text-lg font-bold transition-all duration-300 ${isDarkTheme ? 'text-rose-100 border-rose-300/55 bg-rose-900/25 hover:bg-rose-800/35 hover:border-rose-200/80' : 'text-rose-900 border-rose-400/55 bg-rose-100 hover:bg-rose-200/90 hover:border-rose-500/75'}`}
+            >
+              Testimonials
+            </button>
           </div>
-          <button
-            onClick={onGetStarted}
-            className="bg-gradient-to-r from-purple-500 to-pink-500 px-6 py-2 2xl:px-8 2xl:py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-purple-500/50 transition transform hover:scale-105 text-sm md:text-base 2xl:text-lg"
-          >
-            Get Started
-          </button>
+          <div className="flex items-center gap-2 md:gap-3">
+            <ThemeSwitcher />
+            <button
+              onClick={handleSignIn}
+              className="px-3 md:px-5 py-2 rounded-full border-2 ican-rainbow-border bg-purple-900/25 hover:bg-purple-800/40 text-white font-bold transition-all duration-300 text-xs md:text-sm 2xl:text-base"
+            >
+              Sign In
+            </button>
+            <button
+              onClick={handleCreateAccount}
+              className="ican-rainbow-fill border-2 ican-rainbow-border px-3 md:px-5 py-2 rounded-full font-extrabold hover:shadow-2xl hover:shadow-purple-500/55 transition-all duration-300 transform hover:scale-[1.04] text-white text-xs md:text-sm 2xl:text-base"
+            >
+              Create Account
+            </button>
+          </div>
         </div>
       </nav>
 
       {/* Hero Section */}
       <div className="relative pt-16 md:pt-20 2xl:pt-28 pb-12 md:pb-16 2xl:pb-24 px-4 sm:px-6 lg:px-8 2xl:px-16 overflow-visible">
         {/* Decorative elements */}
-        <div className="absolute top-10 left-5 w-32 h-32 bg-purple-500/5 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-10 right-10 w-40 h-40 bg-pink-500/5 rounded-full blur-3xl"></div>
+        <div className="absolute top-10 left-5 w-32 h-32 bg-slate-500/10 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-10 right-10 w-40 h-40 bg-blue-400/10 rounded-full blur-3xl"></div>
         
         <div className="max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] mx-auto grid md:grid-cols-2 gap-6 md:gap-8 lg:gap-12 2xl:gap-16 items-center relative">
           {/* Left Content - Collapsed to Icon */}
@@ -554,7 +730,7 @@ const LandingPage = ({ onGetStarted }) => {
               <div className="md:hidden">
                 <button 
                   onClick={() => setIsHeroExpanded(!isHeroExpanded)}
-                  className="inline-flex items-center space-x-3 px-6 py-3 bg-gradient-to-r from-purple-500/90 via-pink-500/90 to-purple-600/90 hover:from-purple-500 hover:via-pink-500 hover:to-purple-600 rounded-full border border-purple-300/40 backdrop-blur-sm shadow-lg hover:shadow-2xl hover:shadow-purple-500/50 transition-all duration-300 transform hover:scale-110 w-full justify-center"
+                  className="inline-flex items-center space-x-3 px-6 py-3 bg-gradient-to-r from-slate-600/95 via-slate-700/95 to-blue-700/95 hover:from-slate-500 hover:via-slate-600 hover:to-blue-600 rounded-full border border-slate-300/40 backdrop-blur-sm shadow-lg hover:shadow-2xl hover:shadow-slate-500/40 transition-all duration-300 transform hover:scale-110 w-full justify-center"
                   title="About IcanEra"
                 >
                   <Zap className="w-5 h-5 text-white drop-shadow-lg animate-pulse flex-shrink-0" />
@@ -564,19 +740,37 @@ const LandingPage = ({ onGetStarted }) => {
 
                 {/* Mobile Expanded Container */}
                 {isHeroExpanded && (
-                  <div className="mt-4 bg-gradient-to-br from-slate-900/95 to-slate-950/95 border border-purple-500/40 rounded-2xl p-6 space-y-5 shadow-2xl shadow-purple-500/30 backdrop-blur-xl animate-fadeInUp">
-                    <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-400/30 rounded-full px-4 py-2 w-full">
-                      <Zap className="w-4 h-4 text-purple-300 flex-shrink-0" />
-                      <span className="text-sm text-purple-200 font-medium">From Volatility to Global Capital → Your Path to Prosperity</span>
+                  <div className={`mt-4 border ican-cove-card p-6 space-y-5 shadow-2xl backdrop-blur-xl animate-fadeInUp ${isDarkTheme ? 'bg-slate-900/90 border-slate-600/45 shadow-slate-900/50' : 'bg-slate-100/95 border-slate-300/70 shadow-slate-300/45'}`}>
+                    <div className={`inline-flex items-center space-x-2 border ican-cove-tab px-4 py-2 w-full ${isDarkTheme ? 'bg-slate-800/80 border-slate-600/55' : 'bg-white/95 border-slate-300/80'}`}>
+                      <Zap className="w-4 h-4 text-blue-200 flex-shrink-0" />
+                      <span className="text-sm text-slate-200 font-medium">Record • Invest • Grow • Prosper</span>
                     </div>
                     
-                    <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-300 via-pink-300 to-blue-300 bg-clip-text text-transparent leading-tight">
-                      Build Generational Wealth Together
+                    <h2 className="text-2xl font-extrabold text-white leading-tight">
+                      Your Complete Financial Life In One Platform
                     </h2>
                     
-                    <div className="text-sm text-gray-300 leading-relaxed space-y-3">
-                      <span className="block font-semibold text-purple-200 text-base">Empower Your Financial Future:</span>
-                      <p>Harness the transformative power of democratic savings groups, secure wallet management, intelligent financial tracking for income and expenses, spiritual wealth growth through tithing, and blockchain-verified transactions. Join thousands building generational wealth through collaboration, transparency, and prosperity—designed for personal liberation and unstoppable business growth.</p>
+                    <div className="text-sm text-gray-300 leading-relaxed space-y-4">
+                      <div className="space-y-2">
+                        <p className="font-semibold text-yellow-200">Record every transaction effortlessly</p>
+                        <p className="text-xs">Capture income and expenses by voice or manual entry. Smart categorization handles everything.</p>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="font-semibold text-purple-200">Separate personal & business finances</p>
+                        <p className="text-xs">Multi-wallet system keeps everything organized and crystal clear.</p>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="font-semibold text-pink-200">Invest, earn, and grow together</p>
+                        <p className="text-xs">TRUST groups (8-15% returns), business investing via PitchIn, zero-fee global transfers.</p>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="font-semibold text-green-200">Give back with purpose through tithing</p>
+                        <p className="text-xs">Align faith with finances. Automatic calculations, community impact, spiritual accountability.</p>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="font-semibold text-blue-200">Scale your business with confidence</p>
+                        <p className="text-xs">Professional tools for team management, inventory, and automated approvals.</p>
+                      </div>
                     </div>
                     
                     <div className="flex items-center space-x-2 pt-3">
@@ -584,31 +778,58 @@ const LandingPage = ({ onGetStarted }) => {
                       <span className="text-sm text-green-300 font-medium">Blockchain-Secured • Trusted • Transparent</span>
                     </div>
                     
-                    <button className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 rounded-full font-bold text-white transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl hover:shadow-purple-500/50 mt-4 w-full justify-center">
-                      <span>Explore Platforms</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
+                    <div className="space-y-3 pt-2">
+                      <button onClick={onGetStarted} className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-yellow-500 to-yellow-400 hover:from-yellow-400 hover:to-yellow-300 rounded-full font-bold text-slate-900 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl hover:shadow-yellow-500/50 w-full justify-center">
+                        <Zap className="w-4 h-4" />
+                        <span>Start Recording Now</span>
+                      </button>
+                      <button
+                        onClick={() => scrollToSection('platforms')}
+                        className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 rounded-full font-bold text-white transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl hover:shadow-purple-500/50 w-full justify-center"
+                      >
+                        <span>Explore All Platforms</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
 
               {/* Desktop: Always Visible Full Container */}
-              <div className="hidden md:block bg-gradient-to-br from-slate-900/95 to-slate-950/95 border border-purple-500/40 rounded-2xl p-6 md:p-8 2xl:p-10 space-y-5 2xl:space-y-7 shadow-2xl shadow-purple-500/30 backdrop-blur-xl w-full md:w-full lg:max-w-2xl 2xl:max-w-3xl">
+              <div className={`hidden md:block border ican-cove-card p-6 md:p-8 2xl:p-10 space-y-5 2xl:space-y-7 shadow-2xl backdrop-blur-xl w-full md:w-full lg:max-w-2xl 2xl:max-w-3xl ${isDarkTheme ? 'bg-slate-900/90 border-slate-600/45 shadow-slate-900/50' : 'bg-slate-100/95 border-slate-300/70 shadow-slate-300/45'}`}>
                 {/* Tag */}
-                <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-400/30 rounded-full px-4 py-2">
-                  <Zap className="w-4 h-4 text-purple-300 flex-shrink-0" />
-                  <span className="text-sm md:text-base 2xl:text-lg text-purple-200 font-medium">From Volatility to Global Capital → Your Path to Prosperity</span>
+                <div className={`inline-flex items-center space-x-2 border ican-cove-tab px-4 py-2 ${isDarkTheme ? 'bg-slate-800/80 border-slate-600/55' : 'bg-white/95 border-slate-300/80'}`}>
+                  <Zap className="w-4 h-4 text-blue-200 flex-shrink-0" />
+                  <span className="text-sm md:text-base 2xl:text-lg text-slate-200 font-medium">Record • Invest • Grow • Prosper</span>
                 </div>
                 
                 {/* Headline */}
-                <h2 className="text-2xl md:text-3xl lg:text-4xl 2xl:text-5xl 3xl:text-6xl font-bold bg-gradient-to-r from-purple-300 via-pink-300 to-blue-300 bg-clip-text text-transparent leading-tight">
-                  Build Generational Wealth Together
+                <h2 className="text-2xl md:text-3xl lg:text-4xl 2xl:text-5xl 3xl:text-6xl font-extrabold text-white leading-tight">
+                  Your Complete Financial Life In One Platform
                 </h2>
                 
                 {/* Description */}
-                <div className="text-sm md:text-base 2xl:text-lg text-gray-300 leading-relaxed space-y-3">
-                  <span className="block font-semibold text-purple-200 text-base md:text-lg 2xl:text-xl">Empower Your Financial Future:</span>
-                  <p>Harness the transformative power of democratic savings groups, secure wallet management, intelligent financial tracking for income and expenses, spiritual wealth growth through tithing, and blockchain-verified transactions. Join thousands building generational wealth through collaboration, transparency, and prosperity—designed for personal liberation and unstoppable business growth.</p>
+                <div className="text-sm md:text-base 2xl:text-lg text-gray-300 leading-relaxed space-y-4">
+                  <div className="space-y-3">
+                    <p className="font-semibold text-yellow-200">Record every transaction effortlessly</p>
+                    <p>Capture income and expenses by voice or manual entry. Watch our smart system instantly categorize and organize everything for you.</p>
+                  </div>
+                  <div className="space-y-3">
+                    <p className="font-semibold text-purple-200">Separate personal & business finances</p>
+                    <p>Multi-wallet system keeps your personal savings, business profits, group savings, and investments completely organized and crystal clear.</p>
+                  </div>
+                  <div className="space-y-3">
+                    <p className="font-semibold text-pink-200">Invest, earn, and grow together</p>
+                    <p>Build wealth through democratic TRUST groups (8-15% returns), invest in promising businesses via PitchIn, and move money globally with zero fees.</p>
+                  </div>
+                  <div className="space-y-3">
+                    <p className="font-semibold text-green-200">Give back with purpose through tithing</p>
+                    <p>Align your faith with your finances. Automatic tithe calculations, community impact tracking, and spiritual accountability—your generosity tracked and honored.</p>
+                  </div>
+                  <div className="space-y-3">
+                    <p className="font-semibold text-blue-200">Scale your business with confidence</p>
+                    <p>Professional reporting, team management, inventory tracking, and automated approvals. Enterprise-grade tools built for ambitious entrepreneurs.</p>
+                  </div>
                 </div>
                 
                 {/* Trust Badge */}
@@ -617,11 +838,20 @@ const LandingPage = ({ onGetStarted }) => {
                   <span className="text-sm text-green-300 font-medium">Blockchain-Secured • Trusted • Transparent</span>
                 </div>
                 
-                {/* CTA Button */}
-                <button className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 rounded-full font-bold text-white transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl hover:shadow-purple-500/50 mt-4">
-                  <span>Explore Platforms</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
+                {/* CTA Buttons */}
+                <div className="space-y-3 pt-2 flex flex-col lg:flex-row gap-3">
+                  <button onClick={onGetStarted} className="inline-flex items-center space-x-2 px-8 py-3 2xl:py-4 bg-gradient-to-r from-yellow-500 to-yellow-400 hover:from-yellow-400 hover:to-yellow-300 rounded-full font-bold text-slate-900 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl hover:shadow-yellow-500/50 justify-center">
+                    <Zap className="w-5 h-5" />
+                    <span className="text-base 2xl:text-lg">Start Recording Now</span>
+                  </button>
+                  <button
+                    onClick={() => scrollToSection('platforms')}
+                    className="inline-flex items-center space-x-2 px-8 py-3 2xl:py-4 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 rounded-full font-bold text-white transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl hover:shadow-purple-500/50 justify-center"
+                  >
+                    <span className="text-base 2xl:text-lg">Explore All Platforms</span>
+                    <ArrowRight className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -630,11 +860,11 @@ const LandingPage = ({ onGetStarted }) => {
           <div className="relative animate-fadeInDown hidden md:flex items-center justify-center h-full min-h-96 2xl:min-h-[500px] z-0">
             <div className="relative w-full max-w-lg 2xl:max-w-2xl group">
               {/* Image container with carousel */}
-              <div className="relative rounded-3xl overflow-hidden">
+              <div className="relative ican-cove-card overflow-hidden">
                 {/* Content - Animated Carousel */}
                 <div className="relative space-y-6">
                   {/* Image with slide transition */}
-                  <div className="relative h-80 2xl:h-[450px] 3xl:h-[520px] rounded-2xl overflow-hidden shadow-lg group/image">
+                  <div className="relative h-80 2xl:h-[450px] 3xl:h-[520px] ican-cove-panel overflow-hidden shadow-lg group/image">
                     <img 
                       src={heroSlides[currentHeroSlide].image}
                       alt={heroSlides[currentHeroSlide].title}
@@ -648,7 +878,7 @@ const LandingPage = ({ onGetStarted }) => {
                   {/* Label with animation */}
                   <div key={`hero-${currentHeroSlide}`} className="text-center space-y-2 animate-fadeIn">
                     <p className="text-xs text-yellow-300 font-semibold uppercase tracking-wider">✨ {heroSlides[currentHeroSlide].subtitle}</p>
-                    <h3 className="text-xl 2xl:text-2xl font-bold bg-gradient-to-r from-purple-200 via-pink-200 to-purple-200 bg-clip-text text-transparent">{heroSlides[currentHeroSlide].title}</h3>
+                    <h3 className="text-xl 2xl:text-2xl font-bold bg-gradient-to-r from-slate-100 via-blue-100 to-slate-100 bg-clip-text text-transparent">{heroSlides[currentHeroSlide].title}</h3>
                     <p className="text-[11px] text-gray-500 uppercase tracking-[0.14em]">
                       Slide {currentHeroSlide + 1} of {heroSlides.length}
                     </p>
@@ -658,13 +888,13 @@ const LandingPage = ({ onGetStarted }) => {
                   <div className="flex gap-2 justify-center mt-4">
                     <button
                       onClick={prevHeroSlide}
-                      className="p-2 rounded-full bg-purple-500/30 hover:bg-purple-500/60 transition transform hover:scale-110 group/btn"
+                      className="p-2 rounded-full bg-slate-600/40 hover:bg-slate-500/70 transition transform hover:scale-110 group/btn"
                     >
                       <ChevronRight className="w-4 h-4 transform rotate-180 group-hover/btn:translate-x-0.5 transition" />
                     </button>
                     <button
                       onClick={nextHeroSlide}
-                      className="p-2 rounded-full bg-purple-500/30 hover:bg-purple-500/60 transition transform hover:scale-110 group/btn"
+                      className="p-2 rounded-full bg-slate-600/40 hover:bg-slate-500/70 transition transform hover:scale-110 group/btn"
                     >
                       <ChevronRight className="w-4 h-4 group-hover/btn:-translate-x-0.5 transition" />
                     </button>
@@ -679,7 +909,7 @@ const LandingPage = ({ onGetStarted }) => {
                         className={`rounded-full transition transform hover:scale-125 ${
                           index === currentHeroSlide
                             ? 'bg-gradient-to-r from-yellow-500 to-yellow-400 w-4 h-1.5'
-                            : 'bg-purple-500/30 w-1.5 h-1.5 hover:bg-yellow-500/60'
+                            : 'bg-slate-500/40 w-1.5 h-1.5 hover:bg-yellow-500/60'
                         }`}
                       />
                     ))}
@@ -708,7 +938,7 @@ const LandingPage = ({ onGetStarted }) => {
             {features.map((feature, index) => (
               <div
                 key={index}
-                className="group bg-gradient-to-br from-purple-900/20 to-blue-900/20 border border-purple-500/20 rounded-xl p-6 hover:border-purple-500/50 transition transform hover:scale-105 hover:shadow-lg hover:shadow-purple-500/20"
+                className="group bg-gradient-to-br from-purple-900/20 to-blue-900/20 border border-purple-500/20 ican-cove-panel p-6 hover:border-purple-500/50 transition transform hover:scale-105 hover:shadow-lg hover:shadow-purple-500/20"
               >
                 <div className="text-purple-400 mb-4 group-hover:scale-110 transition transform">
                   {feature.icon}
@@ -747,21 +977,24 @@ const LandingPage = ({ onGetStarted }) => {
             <div className="inline-block mb-8">
               <div className="relative group">
                 {/* Glow effect */}
-                <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/30 via-purple-500/20 to-pink-500/30 rounded-3xl blur-2xl group-hover:opacity-100 opacity-70 transition duration-500 animate-pulse"></div>
+                <div className={`absolute inset-0 bg-gradient-to-r ${activeBadgeTheme.glow} ican-cove-card blur-2xl group-hover:opacity-100 opacity-80 transition duration-500 animate-pulse`}></div>
                 
                 {/* Badge */}
-                <div className="relative bg-gradient-to-br from-slate-900/95 to-slate-950/95 border border-yellow-500/40 rounded-3xl px-6 md:px-10 py-4 md:py-6 backdrop-blur-xl shadow-2xl shadow-yellow-500/20">
+                <div className={`relative bg-gradient-to-br ${activeBadgeTheme.card} border-[3px] ${activeBadgeTheme.border} ican-cove-card overflow-hidden px-6 md:px-10 py-4 md:py-6 backdrop-blur-xl shadow-2xl animate-[fadeIn_350ms_ease-out]`}>
                   {/* Animated gradient border */}
-                  <div className="absolute inset-0 rounded-3xl bg-gradient-to-r from-yellow-500/0 via-yellow-500/20 to-pink-500/0 animate-pulse pointer-events-none"></div>
+                  <div className={`absolute inset-0 ican-cove-card bg-gradient-to-r ${activeBadgeTheme.pulse} animate-pulse pointer-events-none`}></div>
+                  <div className="absolute -top-3 right-10 w-7 h-7 rounded-full bg-white/20 blur-md animate-bounce pointer-events-none"></div>
+                  <div className="absolute -bottom-3 left-10 w-6 h-6 rounded-full bg-white/15 blur-md animate-pulse pointer-events-none"></div>
                   
                   {/* Badge Content */}
                   <div className="relative space-y-2 min-h-24 md:min-h-20 flex flex-col justify-center">
                     {/* Animated Title */}
                     <div className="relative">
-                      <h2 className="text-2xl md:text-4xl lg:text-5xl 2xl:text-6xl font-bold mb-2 md:mb-3 leading-tight min-h-16 md:min-h-14 flex items-center justify-center">
+                      <h2 className="text-2xl md:text-4xl lg:text-5xl 2xl:text-6xl font-extrabold mb-2 md:mb-3 leading-tight min-h-16 md:min-h-14 flex items-center justify-center">
                         <span 
                           key={currentBadgeInfo}
-                          className="bg-gradient-to-r from-yellow-300 via-purple-300 to-pink-300 bg-clip-text text-transparent animate-fadeIn"
+                          className="font-black tracking-tight animate-fadeIn"
+                          style={{ color: activeBadgeWordPalette.title }}
                         >
                           {badgeInfo[currentBadgeInfo].title}
                         </span>
@@ -772,7 +1005,8 @@ const LandingPage = ({ onGetStarted }) => {
                     <div className="relative min-h-12 flex items-center justify-center">
                       <p 
                         key={`desc-${currentBadgeInfo}`}
-                        className="text-gray-300 text-sm md:text-base 2xl:text-lg max-w-3xl 2xl:max-w-4xl mx-auto leading-relaxed animate-fadeIn"
+                        className="font-extrabold text-sm md:text-base 2xl:text-lg max-w-3xl 2xl:max-w-4xl mx-auto leading-relaxed animate-fadeIn"
+                        style={{ color: activeBadgeWordPalette.desc }}
                       >
                         {badgeInfo[currentBadgeInfo].description}
                       </p>
@@ -786,8 +1020,8 @@ const LandingPage = ({ onGetStarted }) => {
                           onClick={() => setCurrentBadgeInfo(index)}
                           className={`rounded-full transition transform hover:scale-125 ${
                             index === currentBadgeInfo
-                              ? 'bg-gradient-to-r from-yellow-500 to-pink-500 w-3 h-3 shadow-lg shadow-yellow-500/50'
-                              : 'bg-purple-500/30 w-2 h-2 hover:bg-yellow-500/60'
+                              ? `${activeBadgeTheme.indicatorActive} w-3 h-3 shadow-lg`
+                              : `${activeBadgeTheme.indicatorInactive} w-2 h-2`
                           }`}
                         />
                       ))}
@@ -803,132 +1037,139 @@ const LandingPage = ({ onGetStarted }) => {
             {/* Main Carousel */}
             <div className="relative">
               {/* Inner Content */}
-              <div className="relative rounded-3xl overflow-hidden">
+              <div className="relative ican-cove-card overflow-hidden">
                 {/* Main Image - Full Screen */}
-                <div className="relative h-96 md:h-[600px] lg:h-[700px] 2xl:h-[850px] 3xl:h-[950px] overflow-hidden shadow-2xl">
-                  <img
-                    src={slides[currentSlide].image}
-                    alt={slides[currentSlide].title}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                    }}
-                  />
+                <div className="relative h-96 md:h-[600px] lg:h-[700px] 2xl:h-[850px] 3xl:h-[950px] overflow-hidden shadow-2xl group bg-slate-900">
+                  <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900" />
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-8 text-center">
+                    <p className="text-slate-500/75 text-xl md:text-3xl font-bold tracking-wide">{slides[currentSlide].title}</p>
+                  </div>
+                  {!failedMainSlideImages[currentSlide] && (
+                    <img
+                      src={slides[currentSlide].image}
+                      alt={slides[currentSlide].title}
+                      className="absolute inset-0 w-full h-full object-cover brightness-110 contrast-110 saturate-110 group-hover:scale-105 transition-transform duration-500"
+                      onError={() => setFailedMainSlideImages((prev) => ({ ...prev, [currentSlide]: true }))}
+                    />
+                  )}
 
-                  {/* Text Overlay - concise title/subtitle */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/35 to-slate-950/20 flex items-end p-4 md:p-8 2xl:p-12">
+                  {/* Improved Transparent Overlay - Better readability */}
+                  <div className="absolute inset-0 flex flex-col justify-between p-4 md:p-8 2xl:p-12">
+                    {/* Top: Badge/Featured */}
+                    <div className="flex justify-between items-start">
+                      {/* Featured badge */}
+                      {slides[currentSlide].highlight && (
+                        <div className="px-4 py-2 md:px-5 md:py-3 bg-gradient-to-r from-yellow-500 to-yellow-400 rounded-full shadow-lg shadow-yellow-500/60 animate-bounce">
+                          <p className="text-xs md:text-sm font-bold text-slate-900">⭐ FEATURED</p>
+                        </div>
+                      )}
+                      {/* Slide counter */}
+                      <p className="text-[10px] md:text-xs 2xl:text-sm text-slate-200/90 font-semibold uppercase tracking-widest ml-auto">
+                        {currentSlide + 1} / {slides.length}
+                      </p>
+                    </div>
+
+                    {/* Bottom: Content Overlay - Better hierarchy & readability */}
                     <div
                       key={`platform-slide-${currentSlide}`}
-                      className="w-full max-w-2xl 2xl:max-w-3xl rounded-2xl border border-white/20 bg-slate-950/45 backdrop-blur-md p-4 md:p-6 2xl:p-8 space-y-2 2xl:space-y-3 animate-fadeIn"
+                      className="space-y-3 md:space-y-4 2xl:space-y-5 animate-fadeIn bg-transparent ican-cove-panel p-3 md:p-5 border border-transparent"
                     >
-                      <p className="text-[11px] md:text-xs 2xl:text-sm text-yellow-200/90 font-semibold uppercase tracking-[0.12em]">
-                        {slides[currentSlide].subtitle}
-                      </p>
-                      <h3 className="text-xl md:text-3xl lg:text-4xl 2xl:text-5xl font-bold bg-gradient-to-r from-yellow-300 via-purple-300 to-pink-300 bg-clip-text text-transparent leading-tight">
-                        {slides[currentSlide].title}
+                      {/* Subtitle/Category */}
+                      <div className="inline-flex items-center space-x-2 bg-transparent border border-transparent rounded-full px-0 py-0 w-fit">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: activeSlideWordPalette.subtitle }}></div>
+                        <p className="text-xs md:text-sm 2xl:text-base font-black uppercase tracking-wider" style={{ color: activeSlideWordPalette.subtitle }}>
+                          {slides[currentSlide].subtitle}
+                        </p>
+                      </div>
+
+                      {/* Main Title - Big, Bold, Readable */}
+                      <h3 className="text-2xl md:text-4xl lg:text-5xl 2xl:text-6xl font-black leading-tight max-w-2xl" style={{ color: activeSlideWordPalette.title }}>
+                        <span>
+                          {slides[currentSlide].title}
+                        </span>
                       </h3>
-                      <p className="text-[11px] md:text-xs 2xl:text-sm text-purple-200/85 uppercase tracking-[0.12em]">
-                        Slide {currentSlide + 1} of {slides.length}
+
+                      {/* Real Message - The "why it matters" */}
+                      <p className="text-sm md:text-lg 2xl:text-xl font-black leading-relaxed max-w-2xl italic" style={{ color: activeSlideWordPalette.body }}>
+                        "{slides[currentSlide].realMessage}"
                       </p>
+
+                      {/* Description - Additional context */}
+                      <p className="text-xs md:text-sm 2xl:text-base font-extrabold leading-relaxed max-w-2xl" style={{ color: activeSlideWordPalette.body }}>
+                        {slides[currentSlide].description}
+                      </p>
+
+                      {/* Quick Features TagList */}
+                      {slides[currentSlide].features && (
+                        <div className="flex flex-wrap gap-2 pt-2">
+                          {slides[currentSlide].features.slice(0, 3).map((feature, idx) => (
+                            <span key={idx} className="inline-block px-0 py-0 bg-transparent border border-transparent rounded-full text-xs md:text-sm font-black" style={{ color: activeSlideWordPalette.feature }}>
+                              {feature}
+                            </span>
+                          ))}
+                          {slides[currentSlide].features.length > 3 && (
+                            <span className="inline-block px-0 py-0 bg-transparent border border-transparent rounded-full text-xs md:text-sm font-black" style={{ color: activeSlideWordPalette.feature }}>
+                              +{slides[currentSlide].features.length - 3} more
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
-
-                  {/* Featured badge for Expense & Income Tracker */}
-                  {slides[currentSlide].highlight && (
-                    <div className="absolute top-4 right-4 md:top-6 md:right-6 px-4 py-2 md:px-5 md:py-3 bg-gradient-to-r from-yellow-500 to-yellow-400 rounded-full shadow-lg shadow-yellow-500/60 animate-bounce">
-                      <p className="text-xs md:text-sm font-bold text-slate-900">⭐ FEATURED</p>
-                    </div>
-                  )}
                 </div>
 
                 {/* Navigation Buttons with Golden Accents */}
                 <button
                   onClick={prevSlide}
-                  className="absolute left-4 top-1/2 transform -translate-y-1/2 z-20 bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 rounded-full p-3 md:p-4 transition group shadow-lg shadow-purple-500/50 hover:shadow-xl hover:shadow-yellow-500/30"
+                  className="absolute left-2 md:left-4 top-1/2 transform -translate-y-1/2 z-20 ican-rainbow-fill rounded-full p-2.5 md:p-4 transition group shadow-lg shadow-purple-500/50 hover:shadow-xl hover:shadow-yellow-500/30 hover:scale-110 active:scale-95"
+                  title="Previous slide"
                 >
-                  <ChevronRight className="w-5 h-5 md:w-6 md:h-6 transform rotate-180 group-hover:translate-x-1 transition" />
+                  <ChevronRight className="w-4 h-4 md:w-6 md:h-6 transform rotate-180 group-hover:translate-x-1 transition" />
                 </button>
                 <button
                   onClick={nextSlide}
-                  className="absolute right-4 top-1/2 transform -translate-y-1/2 z-20 bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 rounded-full p-3 md:p-4 transition group shadow-lg shadow-purple-500/50 hover:shadow-xl hover:shadow-yellow-500/30"
+                  className="absolute right-2 md:right-4 top-1/2 transform -translate-y-1/2 z-20 ican-rainbow-fill rounded-full p-2.5 md:p-4 transition group shadow-lg shadow-purple-500/50 hover:shadow-xl hover:shadow-yellow-500/30 hover:scale-110 active:scale-95"
+                  title="Next slide"
                 >
-                  <ChevronRight className="w-5 h-5 md:w-6 md:h-6 group-hover:translate-x-1 transition" />
+                  <ChevronRight className="w-4 h-4 md:w-6 md:h-6 group-hover:translate-x-1 transition" />
                 </button>
 
-                {/* Slide indicators - Hidden on Mobile */}
-                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 hidden md:flex gap-1.5 md:gap-2 z-20 bg-slate-950/80 px-3 md:px-4 py-2.5 md:py-3 rounded-full backdrop-blur-md border border-yellow-500/30 shadow-lg shadow-yellow-500/20">
-                  {slides.map((_, index) => (
-                    <button
-                      key={index}
-                      onClick={() => setCurrentSlide(index)}
-                      className={`rounded-full transition transform hover:scale-125 ${
-                        index === currentSlide
-                          ? 'bg-gradient-to-r from-yellow-500 to-yellow-400 w-6 md:w-8 h-2.5 shadow-lg shadow-yellow-500/60'
-                          : 'bg-purple-500/40 w-2 h-2 md:w-2.5 md:h-2.5 hover:bg-yellow-500/60'
-                      }`}
-                    />
-                  ))}
-                </div>
               </div>
             </div>
           </div>
 
-          {/* Platform Icons Grid - Single Row, Text on Hover */}
-          <div className="flex justify-center gap-3 md:gap-5 2xl:gap-6 mt-6 md:mt-8 2xl:mt-10 overflow-x-auto px-4 pb-2">
-            {slides.map((slide, index) => (
-              <button
-                key={index}
-                onClick={() => setCurrentSlide(index)}
-                className={`group flex flex-col items-center space-y-1 px-0 py-1 rounded-md transition transform hover:scale-110 flex-shrink-0 ${
-                  index === currentSlide
-                    ? 'bg-purple-500/30'
-                    : 'hover:bg-purple-500/10'
-                }`}
-              >
-                <div className="w-8 h-8 md:w-10 md:h-10 2xl:w-14 2xl:h-14 rounded-md overflow-hidden border border-purple-500/40">
-                  <img
-                    src={slide.image}
-                    alt={slide.title}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                    }}
-                  />
-                </div>
-                <p className="font-medium text-[0.5rem] md:text-sm text-center whitespace-nowrap text-purple-200 opacity-0 md:opacity-0 md:group-hover:opacity-100 md:group-[.bg-purple-500/30]:opacity-100 transition-opacity duration-200 h-3 md:h-5 lg:opacity-0 lg:group-hover:opacity-100">{slide.title}</p>
-              </button>
-            ))}
-          </div>
-
           {/* Call-to-Action Buttons and Stats Section */}
-          <div className="mt-4 md:mt-12 2xl:mt-16 space-y-3 md:space-y-8 text-center">
+          <div className="mt-4 md:mt-12 2xl:mt-16 space-y-3 md:space-y-8 text-center animate-[fadeIn_600ms_ease-out]">
             {/* Buttons */}
             <div className="flex flex-col sm:flex-row gap-2 md:gap-4 justify-center">
               <button
                 onClick={onGetStarted}
-                className="group bg-gradient-to-r from-purple-500 to-pink-500 px-4 md:px-8 2xl:px-10 py-2 md:py-4 2xl:py-5 rounded-lg font-bold text-sm md:text-lg 2xl:text-xl flex items-center justify-center space-x-2 hover:shadow-lg hover:shadow-purple-500/50 transition transform hover:scale-105"
+                className="group bg-gradient-to-r from-emerald-500 to-cyan-500 border-2 border-emerald-300/70 px-4 md:px-8 2xl:px-10 py-2 md:py-4 2xl:py-5 ican-cove-panel font-extrabold text-sm md:text-lg 2xl:text-xl flex items-center justify-center space-x-2 text-slate-900 hover:shadow-2xl hover:shadow-emerald-500/45 transition-all duration-300 transform hover:-translate-y-0.5 hover:scale-[1.03]"
               >
                 <span>Start Your Journey</span>
                 <ArrowRight className="w-4 h-4 md:w-5 md:h-5 2xl:w-6 2xl:h-6 group-hover:translate-x-1 transition" />
               </button>
-              <button className="border-2 border-purple-400 px-4 md:px-8 2xl:px-10 py-2 md:py-4 2xl:py-5 rounded-lg font-bold text-sm md:text-lg 2xl:text-xl hover:bg-purple-500/10 transition">
+              <button
+                onClick={() => scrollToSection('testimonials')}
+                className="border-[3px] border-amber-300/65 bg-gradient-to-r from-amber-900/25 to-orange-900/25 px-4 md:px-8 2xl:px-10 py-2 md:py-4 2xl:py-5 ican-cove-panel font-extrabold text-sm md:text-lg 2xl:text-xl text-amber-100 hover:bg-amber-500/20 hover:shadow-xl hover:shadow-amber-500/30 transition-all duration-300 transform hover:-translate-y-0.5"
+              >
                 Learn More
               </button>
             </div>
 
             {/* Stats */}
             <div className="grid grid-cols-3 gap-2 md:gap-4 2xl:gap-8 pt-3 md:pt-8 2xl:pt-12 border-t border-purple-500/20">
-              <div className="text-center">
-                <p className="text-lg md:text-4xl 2xl:text-5xl font-bold text-purple-400">10K+</p>
-                <p className="text-gray-400 text-xs md:text-base 2xl:text-lg">Active Users</p>
+              <div className="text-center ican-cove-panel border-2 border-violet-400/50 bg-violet-950/25 py-3 md:py-4 hover:border-violet-300/80 hover:shadow-lg hover:shadow-violet-500/30 transition-all duration-300 animate-[fadeIn_700ms_ease-out]">
+                <p className="text-lg md:text-4xl 2xl:text-5xl font-black text-purple-300 tracking-tight">10K+</p>
+                <p className="text-gray-300 text-xs md:text-base 2xl:text-lg font-semibold">Active Users</p>
               </div>
-              <div className="text-center">
-                <p className="text-lg md:text-4xl 2xl:text-5xl font-bold text-pink-400">$50M+</p>
-                <p className="text-gray-400 text-xs md:text-base 2xl:text-lg">Volume Managed</p>
+              <div className="text-center ican-cove-panel border-2 border-cyan-400/50 bg-cyan-950/25 py-3 md:py-4 hover:border-cyan-300/80 hover:shadow-lg hover:shadow-cyan-500/30 transition-all duration-300 animate-[fadeIn_850ms_ease-out]">
+                <p className="text-lg md:text-4xl 2xl:text-5xl font-black text-fuchsia-300 tracking-tight">$50M+</p>
+                <p className="text-gray-300 text-xs md:text-base 2xl:text-lg font-semibold">Volume Managed</p>
               </div>
-              <div className="text-center">
-                <p className="text-lg md:text-4xl 2xl:text-5xl font-bold text-blue-400">99.9%</p>
-                <p className="text-gray-400 text-xs md:text-base 2xl:text-lg">Uptime</p>
+              <div className="text-center ican-cove-panel border-2 border-rose-400/50 bg-rose-950/25 py-3 md:py-4 hover:border-rose-300/80 hover:shadow-lg hover:shadow-rose-500/30 transition-all duration-300 animate-[fadeIn_1000ms_ease-out]">
+                <p className="text-lg md:text-4xl 2xl:text-5xl font-black text-violet-300 tracking-tight">99.9%</p>
+                <p className="text-gray-300 text-xs md:text-base 2xl:text-lg font-semibold">Uptime</p>
               </div>
             </div>
           </div>
@@ -941,12 +1182,12 @@ const LandingPage = ({ onGetStarted }) => {
           {/* Compact Testimonial Badge - Horizontal */}
           <div className="relative group">
             {/* Animated Glow */}
-            <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/20 via-purple-500/20 to-pink-500/20 rounded-2xl blur-xl group-hover:opacity-100 opacity-50 transition duration-500 animate-pulse"></div>
+            <div className={`absolute inset-0 ican-cove-panel blur-xl group-hover:opacity-100 opacity-50 transition duration-500 animate-pulse ${isDarkTheme ? 'bg-gradient-to-r from-teal-500/20 via-cyan-500/20 to-blue-500/20' : 'bg-gradient-to-r from-teal-300/35 via-cyan-300/35 to-blue-300/35'}`}></div>
             
             {/* Badge Container - Compact Horizontal */}
-            <div className="relative bg-gradient-to-br from-slate-900/90 to-slate-950/90 border border-cyan-500/30 rounded-2xl px-4 md:px-8 2xl:px-12 py-4 md:py-6 2xl:py-8 backdrop-blur-xl shadow-lg shadow-cyan-500/10">
+            <div className={`relative border-2 ican-cove-panel px-4 md:px-8 2xl:px-12 py-4 md:py-6 2xl:py-8 backdrop-blur-xl shadow-lg ${isDarkTheme ? 'bg-gradient-to-br from-teal-900/35 to-cyan-950/40 border-cyan-300/55 shadow-cyan-500/20' : 'bg-gradient-to-br from-teal-50 to-cyan-100 border-cyan-300/65 shadow-cyan-300/45'}`}>
               {/* Animated Border */}
-              <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-cyan-500/0 via-purple-500/20 to-pink-500/0 animate-pulse pointer-events-none"></div>
+              <div className="absolute inset-0 ican-cove-panel bg-gradient-to-r from-cyan-500/0 via-teal-400/20 to-blue-500/0 animate-pulse pointer-events-none"></div>
               
               {/* Horizontal Layout */}
               <div className="relative flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6">
@@ -977,7 +1218,7 @@ const LandingPage = ({ onGetStarted }) => {
                   {/* Stars */}
                   <div className="flex gap-0.5">
                     {[...Array(5)].map((_, i) => (
-                      <span key={i} className="text-lg md:text-xl">⭐</span>
+                      <span key={i} className="text-lg md:text-xl animate-[pulse_2.4s_ease-in-out_infinite]" style={{ animationDelay: `${i * 120}ms` }}>⭐</span>
                     ))}
                   </div>
                   
@@ -985,13 +1226,13 @@ const LandingPage = ({ onGetStarted }) => {
                   <div className="flex gap-1 md:gap-2">
                     <button
                       onClick={() => setCurrentTestimonial((prev) => (prev - 1 + testimonials.length) % testimonials.length)}
-                      className="p-1.5 md:p-2 rounded-full bg-cyan-500/30 hover:bg-cyan-500/50 transition transform hover:scale-110 group/btn border border-cyan-400/30 hover:border-cyan-400/60"
+                      className="p-1.5 md:p-2 rounded-full bg-purple-600/35 hover:bg-purple-500/50 transition-all duration-300 transform hover:scale-110 group/btn border-2 border-purple-300/45 hover:border-purple-300/75"
                     >
                       <ChevronRight className="w-4 h-4 md:w-5 md:h-5 transform rotate-180" />
                     </button>
                     <button
                       onClick={() => setCurrentTestimonial((prev) => (prev + 1) % testimonials.length)}
-                      className="p-1.5 md:p-2 rounded-full bg-cyan-500/30 hover:bg-cyan-500/50 transition transform hover:scale-110 group/btn border border-cyan-400/30 hover:border-cyan-400/60"
+                      className="p-1.5 md:p-2 rounded-full bg-purple-600/35 hover:bg-purple-500/50 transition-all duration-300 transform hover:scale-110 group/btn border-2 border-purple-300/45 hover:border-purple-300/75"
                     >
                       <ChevronRight className="w-4 h-4 md:w-5 md:h-5" />
                     </button>
@@ -1021,16 +1262,16 @@ const LandingPage = ({ onGetStarted }) => {
       {/* CTA Section */}
       <section className="relative py-8 md:py-12 lg:py-20 2xl:py-28 px-4 sm:px-6 lg:px-8 2xl:px-16">
         <div className="max-w-4xl 2xl:max-w-6xl mx-auto">
-          <div className="bg-gradient-to-r from-purple-900/40 via-pink-900/40 to-blue-900/40 border border-purple-500/30 rounded-xl md:rounded-2xl 2xl:rounded-3xl p-4 md:p-8 lg:p-16 2xl:p-20 text-center">
-            <h2 className="text-xl md:text-3xl lg:text-5xl 2xl:text-6xl font-bold mb-3 md:mb-4 lg:mb-6 leading-tight">
-              Ready to Transform Your Capital?
+          <div className={`border-[3px] ican-cove-card p-4 md:p-8 lg:p-16 2xl:p-20 text-center shadow-2xl animate-[fadeIn_750ms_ease-out] ${isDarkTheme ? 'bg-gradient-to-r from-amber-900/45 via-yellow-900/45 to-emerald-900/45 border-emerald-300/55 shadow-emerald-500/20' : 'bg-gradient-to-r from-amber-100 via-yellow-100 to-emerald-100 border-emerald-400/65 shadow-emerald-300/45'}`}>
+            <h2 className="text-xl md:text-3xl lg:text-5xl 2xl:text-6xl font-black mb-3 md:mb-4 lg:mb-6 leading-tight drop-shadow-[0_2px_12px_rgba(76,29,149,0.6)]">
+              <span style={rainbowTextStyle}>Ready to Transform Your Capital?</span>
             </h2>
             <p className="text-xs md:text-sm lg:text-xl 2xl:text-2xl text-gray-300 mb-4 md:mb-6 lg:mb-8 2xl:mb-10 leading-relaxed">
               Join the revolution and take control of your financial future today.
             </p>
             <button
               onClick={onGetStarted}
-              className="group bg-gradient-to-r from-purple-500 to-pink-500 px-4 md:px-8 lg:px-10 2xl:px-12 py-2 md:py-3 lg:py-4 2xl:py-5 rounded-lg font-bold text-xs md:text-sm lg:text-lg 2xl:text-xl inline-flex items-center space-x-2 hover:shadow-lg hover:shadow-purple-500/50 transition transform hover:scale-105"
+              className={`group border-2 px-4 md:px-8 lg:px-10 2xl:px-12 py-2 md:py-3 lg:py-4 2xl:py-5 ican-cove-panel font-black text-xs md:text-sm lg:text-lg 2xl:text-xl inline-flex items-center space-x-2 transition-all duration-300 transform hover:-translate-y-0.5 hover:scale-[1.03] ${isDarkTheme ? 'bg-gradient-to-r from-emerald-400 to-cyan-500 border-emerald-300/70 text-slate-900 hover:shadow-2xl hover:shadow-emerald-500/50' : 'bg-gradient-to-r from-emerald-300 to-cyan-400 border-emerald-500/55 text-slate-900 hover:shadow-2xl hover:shadow-cyan-400/45'}`}
             >
               <span>Get Started Now</span>
               <ArrowRight className="w-4 h-4 md:w-5 md:h-5 group-hover:translate-x-1 transition" />
@@ -1048,13 +1289,13 @@ const LandingPage = ({ onGetStarted }) => {
             <div className="group">
               <button
                 onClick={() => setExpandedFooterSection(expandedFooterSection === 'about' ? null : 'about')}
-                className="flex items-center gap-2 text-purple-300 hover:text-purple-200 transition font-medium text-sm md:text-base"
+                className={`flex items-center gap-2 transition-all duration-300 font-bold text-sm md:text-base px-3 py-1.5 ican-cove-tab border-2 ${isDarkTheme ? 'text-amber-100 hover:text-white border-amber-300/55 bg-amber-900/20 hover:bg-amber-700/35 hover:border-amber-200/80' : 'text-amber-900 hover:text-amber-950 border-amber-400/55 bg-amber-100 hover:bg-amber-200/90 hover:border-amber-500/75'}`}
               >
                 About
                 <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${expandedFooterSection === 'about' ? 'rotate-180' : ''}`} />
               </button>
               {expandedFooterSection === 'about' && (
-                <div className="mt-2 bg-gradient-to-br from-slate-900/50 to-slate-950/50 border border-purple-500/20 rounded-lg p-3 md:p-4 animate-fadeIn w-80 md:absolute md:left-0 md:z-50">
+                <div className={`mt-2 border ican-cove-panel p-3 md:p-4 animate-fadeIn w-80 md:absolute md:left-0 md:z-50 ${isDarkTheme ? 'bg-gradient-to-br from-amber-900/35 to-orange-950/35 border-amber-300/25' : 'bg-gradient-to-br from-amber-50 to-orange-100 border-amber-300/50'}`}>
                   <p className="text-gray-400 text-xs md:text-sm leading-relaxed">{footerSections.about.content}</p>
                 </div>
               )}
@@ -1064,20 +1305,20 @@ const LandingPage = ({ onGetStarted }) => {
             <div className="group">
               <button
                 onClick={() => setExpandedFooterSection(expandedFooterSection === 'blog' ? null : 'blog')}
-                className="flex items-center gap-2 text-purple-300 hover:text-purple-200 transition font-medium text-sm md:text-base"
+                className={`flex items-center gap-2 transition-all duration-300 font-bold text-sm md:text-base px-3 py-1.5 ican-cove-tab border-2 ${isDarkTheme ? 'text-cyan-100 hover:text-white border-cyan-300/55 bg-cyan-900/20 hover:bg-cyan-700/35 hover:border-cyan-200/80' : 'text-cyan-900 hover:text-cyan-950 border-cyan-400/55 bg-cyan-100 hover:bg-cyan-200/90 hover:border-cyan-500/75'}`}
               >
                 Blog
                 <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${expandedFooterSection === 'blog' ? 'rotate-180' : ''}`} />
               </button>
               {expandedFooterSection === 'blog' && (
-                <div className="mt-2 bg-gradient-to-br from-slate-900/50 to-slate-950/50 border border-purple-500/20 rounded-lg p-3 md:p-4 animate-fadeIn w-80 md:absolute md:left-32 md:z-50 space-y-2">
+                <div className={`mt-2 border ican-cove-panel p-3 md:p-4 animate-fadeIn w-80 md:absolute md:left-32 md:z-50 space-y-2 ${isDarkTheme ? 'bg-gradient-to-br from-cyan-900/35 to-blue-950/35 border-cyan-300/25' : 'bg-gradient-to-br from-cyan-50 to-blue-100 border-cyan-300/50'}`}>
                   <p className="text-gray-400 text-xs md:text-sm leading-relaxed mb-2">{footerSections.blog.content}</p>
                   <ul className="space-y-1">
                     {footerSections.blog.links.map((link, i) => (
                       <li key={i}>
                         <button
                           onClick={() => setExpandedFooterItem(expandedFooterItem === `blog-${i}` ? null : `blog-${i}`)}
-                          className="w-full text-left px-2 py-1 rounded hover:bg-purple-500/20 transition group/item flex items-center justify-between"
+                          className="w-full text-left px-2 py-1 ican-cove-tab-sm hover:bg-white/10 transition group/item flex items-center justify-between"
                         >
                           <span className="text-purple-300 text-xs font-medium hover:text-purple-200">→ {link.title}</span>
                           <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${expandedFooterItem === `blog-${i}` ? 'rotate-180' : ''}`} />
@@ -1098,20 +1339,20 @@ const LandingPage = ({ onGetStarted }) => {
             <div className="group">
               <button
                 onClick={() => setExpandedFooterSection(expandedFooterSection === 'careers' ? null : 'careers')}
-                className="flex items-center gap-2 text-purple-300 hover:text-purple-200 transition font-medium text-sm md:text-base"
+                className={`flex items-center gap-2 transition-all duration-300 font-bold text-sm md:text-base px-3 py-1.5 ican-cove-tab border-2 ${isDarkTheme ? 'text-emerald-100 hover:text-white border-emerald-300/55 bg-emerald-900/20 hover:bg-emerald-700/35 hover:border-emerald-200/80' : 'text-emerald-900 hover:text-emerald-950 border-emerald-400/55 bg-emerald-100 hover:bg-emerald-200/90 hover:border-emerald-500/75'}`}
               >
                 Careers
                 <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${expandedFooterSection === 'careers' ? 'rotate-180' : ''}`} />
               </button>
               {expandedFooterSection === 'careers' && (
-                <div className="mt-2 bg-gradient-to-br from-slate-900/50 to-slate-950/50 border border-purple-500/20 rounded-lg p-3 md:p-4 animate-fadeIn w-80 md:absolute md:left-48 md:z-50 space-y-2">
+                <div className={`mt-2 border ican-cove-panel p-3 md:p-4 animate-fadeIn w-80 md:absolute md:left-48 md:z-50 space-y-2 ${isDarkTheme ? 'bg-gradient-to-br from-emerald-900/35 to-teal-950/35 border-emerald-300/25' : 'bg-gradient-to-br from-emerald-50 to-teal-100 border-emerald-300/50'}`}>
                   <p className="text-gray-400 text-xs md:text-sm leading-relaxed mb-2">{footerSections.careers.content}</p>
                   <ul className="space-y-1">
                     {footerSections.careers.links.map((link, i) => (
                       <li key={i}>
                         <button
                           onClick={() => setExpandedFooterItem(expandedFooterItem === `careers-${i}` ? null : `careers-${i}`)}
-                          className="w-full text-left px-2 py-1 rounded hover:bg-purple-500/20 transition group/item flex items-center justify-between"
+                          className="w-full text-left px-2 py-1 ican-cove-tab-sm hover:bg-white/10 transition group/item flex items-center justify-between"
                         >
                           <span className="text-purple-300 text-xs font-medium hover:text-purple-200">→ {link.title}</span>
                           <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${expandedFooterItem === `careers-${i}` ? 'rotate-180' : ''}`} />
@@ -1132,20 +1373,20 @@ const LandingPage = ({ onGetStarted }) => {
             <div className="group">
               <button
                 onClick={() => setExpandedFooterSection(expandedFooterSection === 'privacy' ? null : 'privacy')}
-                className="flex items-center gap-2 text-purple-300 hover:text-purple-200 transition font-medium text-sm md:text-base"
+                className={`flex items-center gap-2 transition-all duration-300 font-bold text-sm md:text-base px-3 py-1.5 ican-cove-tab border-2 ${isDarkTheme ? 'text-rose-100 hover:text-white border-rose-300/55 bg-rose-900/20 hover:bg-rose-700/35 hover:border-rose-200/80' : 'text-rose-900 hover:text-rose-950 border-rose-400/55 bg-rose-100 hover:bg-rose-200/90 hover:border-rose-500/75'}`}
               >
                 Privacy
                 <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${expandedFooterSection === 'privacy' ? 'rotate-180' : ''}`} />
               </button>
               {expandedFooterSection === 'privacy' && (
-                <div className="mt-2 bg-gradient-to-br from-slate-900/50 to-slate-950/50 border border-purple-500/20 rounded-lg p-3 md:p-4 animate-fadeIn w-80 md:absolute md:left-64 md:z-50 space-y-2">
+                <div className={`mt-2 border ican-cove-panel p-3 md:p-4 animate-fadeIn w-80 md:absolute md:left-64 md:z-50 space-y-2 ${isDarkTheme ? 'bg-gradient-to-br from-rose-900/35 to-pink-950/35 border-rose-300/25' : 'bg-gradient-to-br from-rose-50 to-pink-100 border-rose-300/50'}`}>
                   <p className="text-gray-400 text-xs md:text-sm leading-relaxed mb-2">{footerSections.privacy.content}</p>
                   <ul className="space-y-1">
                     {footerSections.privacy.links.map((link, i) => (
                       <li key={i}>
                         <button
                           onClick={() => setExpandedFooterItem(expandedFooterItem === `privacy-${i}` ? null : `privacy-${i}`)}
-                          className="w-full text-left px-2 py-1 rounded hover:bg-purple-500/20 transition group/item flex items-center justify-between"
+                          className="w-full text-left px-2 py-1 ican-cove-tab-sm hover:bg-white/10 transition group/item flex items-center justify-between"
                         >
                           <span className="text-purple-300 text-xs font-medium hover:text-purple-200">→ {link.title}</span>
                           <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${expandedFooterItem === `privacy-${i}` ? 'rotate-180' : ''}`} />
@@ -1166,20 +1407,20 @@ const LandingPage = ({ onGetStarted }) => {
             <div className="group">
               <button
                 onClick={() => setExpandedFooterSection(expandedFooterSection === 'terms' ? null : 'terms')}
-                className="flex items-center gap-2 text-purple-300 hover:text-purple-200 transition font-medium text-sm md:text-base"
+                className={`flex items-center gap-2 transition-all duration-300 font-bold text-sm md:text-base px-3 py-1.5 ican-cove-tab border-2 ${isDarkTheme ? 'text-indigo-100 hover:text-white border-indigo-300/55 bg-indigo-900/20 hover:bg-indigo-700/35 hover:border-indigo-200/80' : 'text-indigo-900 hover:text-indigo-950 border-indigo-400/55 bg-indigo-100 hover:bg-indigo-200/90 hover:border-indigo-500/75'}`}
               >
                 Terms
                 <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${expandedFooterSection === 'terms' ? 'rotate-180' : ''}`} />
               </button>
               {expandedFooterSection === 'terms' && (
-                <div className="mt-2 bg-gradient-to-br from-slate-900/50 to-slate-950/50 border border-purple-500/20 rounded-lg p-3 md:p-4 animate-fadeIn w-80 md:absolute md:right-0 md:z-50 space-y-2">
+                <div className={`mt-2 border ican-cove-panel p-3 md:p-4 animate-fadeIn w-80 md:absolute md:right-0 md:z-50 space-y-2 ${isDarkTheme ? 'bg-gradient-to-br from-indigo-900/35 to-violet-950/35 border-indigo-300/25' : 'bg-gradient-to-br from-indigo-50 to-violet-100 border-indigo-300/50'}`}>
                   <p className="text-gray-400 text-xs md:text-sm leading-relaxed mb-2">{footerSections.terms.content}</p>
                   <ul className="space-y-1">
                     {footerSections.terms.links.map((link, i) => (
                       <li key={i}>
                         <button
                           onClick={() => setExpandedFooterItem(expandedFooterItem === `terms-${i}` ? null : `terms-${i}`)}
-                          className="w-full text-left px-2 py-1 rounded hover:bg-purple-500/20 transition group/item flex items-center justify-between"
+                          className="w-full text-left px-2 py-1 ican-cove-tab-sm hover:bg-white/10 transition group/item flex items-center justify-between"
                         >
                           <span className="text-purple-300 text-xs font-medium hover:text-purple-200">→ {link.title}</span>
                           <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${expandedFooterItem === `terms-${i}` ? 'rotate-180' : ''}`} />
@@ -1198,32 +1439,40 @@ const LandingPage = ({ onGetStarted }) => {
           </div>
 
           {/* Bottom Footer */}
-          <div className="border-t border-purple-500/10 pt-4 md:pt-6 lg:pt-8 flex flex-col md:flex-row justify-between items-center text-gray-400 text-xs md:text-sm gap-3">
+          <div className={`border-t border-purple-500/10 pt-4 md:pt-6 lg:pt-8 flex flex-col md:flex-row justify-between items-center text-xs md:text-sm gap-3 ${isDarkTheme ? 'text-gray-400' : 'text-slate-600'}`}>
             <div className="text-center md:text-left">
-              <p className="font-bold bg-gradient-to-r from-yellow-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">IcanEra</p>
-              <p className="text-gray-400 text-xs">Transform Volatility to Global Capital</p>
+              <p
+                className="font-bold"
+                style={{
+                  color: 'var(--color-secondary)',
+                  textShadow: isDarkTheme ? '0 0 10px rgba(129, 140, 248, 0.3)' : '0 1px 0 rgba(255,255,255,0.45)'
+                }}
+              >
+                IcanEra
+              </p>
+              <p className={`${isDarkTheme ? 'text-gray-400' : 'text-slate-600'} text-xs`}>Transform Volatility to Global Capital</p>
               <p>&copy; 2026 IcanEra. All rights reserved.</p>
             </div>
-            <div className="flex space-x-4 md:space-x-6">
-              <a href="https://twitter.com/icaneraera" target="_blank" rel="noopener noreferrer" className="hover:text-purple-400 transition flex items-center space-x-1">
+            <div className="flex flex-wrap justify-center md:justify-end gap-2 md:gap-3">
+              <a href="https://twitter.com/icaneraera" target="_blank" rel="noopener noreferrer" className={`transition-all duration-300 flex items-center space-x-1 px-2.5 py-1.5 ican-cove-tab-sm border-2 ${isDarkTheme ? 'hover:text-white border-cyan-300/55 bg-cyan-900/20 hover:border-cyan-200/80 hover:bg-cyan-700/35' : 'text-cyan-900 border-cyan-400/55 bg-cyan-100 hover:bg-cyan-200/90 hover:border-cyan-500/75'}`}>
                 <span>𝕏</span>
                 <span>@icaneraera</span>
               </a>
-              <a href="https://instagram.com/icaneraera" target="_blank" rel="noopener noreferrer" className="hover:text-purple-400 transition flex items-center space-x-1">
+              <a href="https://instagram.com/icaneraera" target="_blank" rel="noopener noreferrer" className={`transition-all duration-300 flex items-center space-x-1 px-2.5 py-1.5 ican-cove-tab-sm border-2 ${isDarkTheme ? 'hover:text-white border-rose-300/55 bg-rose-900/20 hover:border-rose-200/80 hover:bg-rose-700/35' : 'text-rose-900 border-rose-400/55 bg-rose-100 hover:bg-rose-200/90 hover:border-rose-500/75'}`}>
                 <span>📷</span>
                 <span>@icaneraera</span>
               </a>
               <div className="relative">
                 <button
                   onClick={handleEmailClick}
-                  className="hover:text-purple-400 transition flex items-center space-x-1 cursor-pointer"
+                  className={`transition-all duration-300 flex items-center space-x-1 cursor-pointer px-2.5 py-1.5 ican-cove-tab-sm border-2 ${isDarkTheme ? 'hover:text-white border-emerald-300/55 bg-emerald-900/20 hover:border-emerald-200/80 hover:bg-emerald-700/35' : 'text-emerald-900 border-emerald-400/55 bg-emerald-100 hover:bg-emerald-200/90 hover:border-emerald-500/75'}`}
                   title="Click to open Gmail"
                 >
                   <span>✉️</span>
                   <span>Email</span>
                 </button>
               </div>
-              <a href="#" className="hover:text-purple-400 transition">Discord</a>
+              <a href="#" className={`transition-all duration-300 flex items-center px-2.5 py-1.5 ican-cove-tab-sm border-2 ${isDarkTheme ? 'hover:text-white border-amber-300/55 bg-amber-900/20 hover:border-amber-200/80 hover:bg-amber-700/35' : 'text-amber-900 border-amber-400/55 bg-amber-100 hover:bg-amber-200/90 hover:border-amber-500/75'}`}>Discord</a>
             </div>
           </div>
         </div>
@@ -1233,3 +1482,4 @@ const LandingPage = ({ onGetStarted }) => {
 };
 
 export default LandingPage;
+

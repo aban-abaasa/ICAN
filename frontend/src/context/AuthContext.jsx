@@ -8,6 +8,7 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [isRecoveryMode, setIsRecoveryMode] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Get supabase client safely
@@ -192,6 +193,10 @@ export const AuthProvider = ({ children }) => {
 
     // Get initial session - Supabase will automatically process OAuth tokens from URL
     supabase.auth.getSession().then(({ data: { session } }) => {
+      const hashParams = new URLSearchParams((window.location.hash || '').replace(/^#/, ''));
+      const isRecoveryFromUrl = hashParams.get('type') === 'recovery' || window.location.pathname === '/reset-password';
+
+      setIsRecoveryMode(isRecoveryFromUrl);
       setUser(session?.user ?? null);
       if (session?.user) {
         loadProfile(session.user.id);
@@ -210,6 +215,14 @@ export const AuthProvider = ({ children }) => {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        if (event === 'PASSWORD_RECOVERY') {
+          setIsRecoveryMode(true);
+        }
+
+        if (event === 'SIGNED_OUT') {
+          setIsRecoveryMode(false);
+        }
+
         setUser(session?.user ?? null);
         if (session?.user) {
           loadProfile(session.user.id);
@@ -252,9 +265,11 @@ export const AuthProvider = ({ children }) => {
   const signIn = async (email, password) => {
     const supabase = getSupabase();
     if (!supabase) throw new Error('Supabase not initialized');
+
+    const normalizedEmail = String(email || '').trim().toLowerCase();
     
     const { data, error } = await supabase.auth.signInWithPassword({
-      email,
+      email: normalizedEmail,
       password,
     });
 
@@ -282,6 +297,24 @@ export const AuthProvider = ({ children }) => {
 
     if (error) throw error;
     return data;
+  };
+
+  // Update password after recovery link session is established
+  const updatePassword = async (newPassword) => {
+    const supabase = getSupabase();
+    if (!supabase) throw new Error('Supabase not initialized');
+
+    const { data, error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (error) throw error;
+    setIsRecoveryMode(false);
+    return data;
+  };
+
+  const clearRecoveryMode = () => {
+    setIsRecoveryMode(false);
   };
 
   // Sign in with Google - exactly like FARM-AGENT
@@ -312,11 +345,14 @@ export const AuthProvider = ({ children }) => {
   const value = {
     user,
     profile,
+    isRecoveryMode,
     loading,
     signUp,
     signIn,
     signOut,
     resetPassword,
+    updatePassword,
+    clearRecoveryMode,
     signInWithGoogle,
     loadProfile,
     updateProfile,

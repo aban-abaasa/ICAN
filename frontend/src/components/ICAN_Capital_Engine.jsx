@@ -3494,6 +3494,124 @@ const ICANCapitalEngine = () => {
   const [showJourneyDetails, setShowJourneyDetails] = useState(false);
   const [showAIInsights, setShowAIInsights] = useState(false);
   const [showFinancialAnalytics, setShowFinancialAnalytics] = useState(false);
+  const isRestoringHistoryRef = useRef(false);
+
+  const VALID_TABS = ['dashboard', 'security', 'readiness', 'growth', 'settings'];
+
+  const closeFunctionPanels = () => {
+    setShowTRUST(false);
+    setShowSHARE(false);
+    setShowWallet(false);
+  };
+
+  const openFunctionPanel = (panelId) => {
+    setShowTRUST(panelId === 'trust');
+    setShowSHARE(panelId === 'share');
+    setShowWallet(panelId === 'wallet');
+  };
+
+  useEffect(() => {
+    const statePayload = {
+      ...(window.history.state || {}),
+      __icanEngine: {
+        activeTab,
+        showTRUST,
+        showSHARE,
+        showWallet,
+        showProfilePage,
+        showStatusPage,
+        showStatusUploader,
+        showJourneyDetails,
+        showAIInsights,
+        showFinancialAnalytics,
+        showTithingCalculator,
+        showBusinessLoanCalculator,
+        showReportingSystem,
+        showAIChat,
+        showStageModal,
+        showAdviceModal
+      }
+    };
+
+    if (isRestoringHistoryRef.current) {
+      window.history.replaceState(statePayload, '', window.location.href);
+      return;
+    }
+
+    const current = window.history.state?.__icanEngine;
+    const isSameState =
+      current &&
+      current.activeTab === activeTab &&
+      current.showTRUST === showTRUST &&
+      current.showSHARE === showSHARE &&
+      current.showWallet === showWallet &&
+      current.showProfilePage === showProfilePage &&
+      current.showStatusPage === showStatusPage &&
+      current.showStatusUploader === showStatusUploader &&
+      current.showJourneyDetails === showJourneyDetails &&
+      current.showAIInsights === showAIInsights &&
+      current.showFinancialAnalytics === showFinancialAnalytics &&
+      current.showTithingCalculator === showTithingCalculator &&
+      current.showBusinessLoanCalculator === showBusinessLoanCalculator &&
+      current.showReportingSystem === showReportingSystem &&
+      current.showAIChat === showAIChat &&
+      current.showStageModal === showStageModal &&
+      current.showAdviceModal === showAdviceModal;
+
+    if (!isSameState) {
+      window.history.pushState(statePayload, '', window.location.href);
+    }
+  }, [
+    activeTab,
+    showTRUST,
+    showSHARE,
+    showWallet,
+    showProfilePage,
+    showStatusPage,
+    showStatusUploader,
+    showJourneyDetails,
+    showAIInsights,
+    showFinancialAnalytics,
+    showTithingCalculator,
+    showBusinessLoanCalculator,
+    showReportingSystem,
+    showAIChat,
+    showStageModal,
+    showAdviceModal
+  ]);
+
+  useEffect(() => {
+    const handlePopState = (event) => {
+      const historyState = event.state?.__icanEngine;
+      if (!historyState) return;
+
+      isRestoringHistoryRef.current = true;
+
+      setActiveTab(VALID_TABS.includes(historyState.activeTab) ? historyState.activeTab : 'dashboard');
+      setShowTRUST(Boolean(historyState.showTRUST));
+      setShowSHARE(Boolean(historyState.showSHARE));
+      setShowWallet(Boolean(historyState.showWallet));
+      setShowProfilePage(Boolean(historyState.showProfilePage));
+      setShowStatusPage(Boolean(historyState.showStatusPage));
+      setShowStatusUploader(Boolean(historyState.showStatusUploader));
+      setShowJourneyDetails(Boolean(historyState.showJourneyDetails));
+      setShowAIInsights(Boolean(historyState.showAIInsights));
+      setShowFinancialAnalytics(Boolean(historyState.showFinancialAnalytics));
+      setShowTithingCalculator(Boolean(historyState.showTithingCalculator));
+      setShowBusinessLoanCalculator(Boolean(historyState.showBusinessLoanCalculator));
+      setShowReportingSystem(Boolean(historyState.showReportingSystem));
+      setShowAIChat(Boolean(historyState.showAIChat));
+      setShowStageModal(Boolean(historyState.showStageModal));
+      setShowAdviceModal(Boolean(historyState.showAdviceModal));
+
+      window.setTimeout(() => {
+        isRestoringHistoryRef.current = false;
+      }, 0);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Refs for voice/media handling
   const recognitionRef = useRef(null);
@@ -9149,9 +9267,9 @@ Data Freshness: ${reportData.metadata.dataFreshness}
       {/* Main Navigation & Header */}
       {activeTab !== 'dashboard' && (
         <MainNavigation 
-          onTrustClick={() => setShowTRUST(true)} 
-          onShareClick={() => setShowSHARE(true)}
-          onWalletClick={() => setShowWallet(true)}
+          onTrustClick={() => openFunctionPanel('trust')} 
+          onShareClick={() => openFunctionPanel('share')}
+          onWalletClick={() => openFunctionPanel('wallet')}
         />
       )}
 
@@ -9159,19 +9277,19 @@ Data Freshness: ${reportData.metadata.dataFreshness}
       {showTRUST && (
         <div className="fixed inset-0 z-[1000] bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 overflow-y-auto">
           <button
-            onClick={() => setShowTRUST(false)}
+            onClick={closeFunctionPanels}
             className="fixed top-4 right-4 z-[1001] px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg"
           >
             Close
           </button>
-          <SACCOHub onClose={() => setShowTRUST(false)} />
+          <SACCOHub onClose={closeFunctionPanels} />
         </div>
       )}
 
       {/* SHARE Section - Show when SHARE is activated */}
       {showSHARE && (
         <div className="fixed inset-0 z-[1000]">
-          <SHAREHub onClose={() => setShowSHARE(false)} />
+          <SHAREHub onClose={closeFunctionPanels} />
         </div>
       )}
 
@@ -9179,7 +9297,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
       {showWallet && (
         <div className="fixed inset-0 z-[1000] overflow-y-auto">
           <button
-            onClick={() => setShowWallet(false)}
+            onClick={closeFunctionPanels}
             className="fixed top-4 right-4 z-[1001] px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg"
           >
             Close Wallet
@@ -9193,24 +9311,33 @@ Data Freshness: ${reportData.metadata.dataFreshness}
       <nav className="glass-card mx-4 mt-4 p-4 overflow-visible" style={{ overflow: 'visible' }}>
         <div className={`flex items-center gap-4 ${activeTab === 'dashboard' ? 'justify-end' : 'justify-between'}`}>
           {activeTab !== 'dashboard' && (
-            <div className="flex items-center gap-3">
-              <div className={`relative flex-shrink-0 ${isLoading ? 'animate-spin' : ''}`} style={{
+            <div className="flex items-center gap-4">
+              <div className={`relative flex-shrink-0 transition-all duration-500 ${isLoading ? 'animate-spin' : ''}`} style={{
                 animation: isLoading ? 'spin 2s linear infinite' : 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
               }}>
                 {/* Glow effect during loading */}
                 {isLoading && (
                   <div className="absolute inset-0 animate-pulse">
-                    <div className="w-10 h-10 bg-blue-500 rounded-lg opacity-30 blur-lg"></div>
+                    <div className="w-14 h-14 bg-blue-500 rounded-xl opacity-30 blur-lg"></div>
                   </div>
                 )}
                 
                 {/* Logo with dynamic glow */}
-                <div className={`relative w-10 h-10 flex items-center justify-center rounded-lg transition-all duration-500 ${
+                <div className={`relative w-14 h-14 flex items-center justify-center rounded-xl overflow-hidden transition-all duration-500 ${
                   isLoading 
                     ? 'bg-gradient-to-r from-blue-500 to-purple-500 shadow-lg shadow-blue-500/50' 
                     : 'bg-gradient-to-r from-blue-500/30 to-purple-500/30'
                 }`}>
-                  <img src={IcanEraLogo} alt="IcanEra" className={`w-8 h-8 object-contain transition-transform duration-500 ${isLoading ? 'scale-110' : 'scale-100'}`} />
+                  <img 
+                    src={IcanEraLogo} 
+                    alt="IcanEra" 
+                    className={`w-11 h-11 object-contain transition-transform duration-500 filter drop-shadow-lg ${isLoading ? 'scale-110' : 'scale-100'}`}
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.parentElement.textContent = '💎';
+                      e.target.parentElement.style.fontSize = '1.5rem';
+                    }}
+                  />
                 </div>
               </div>
               
@@ -9313,10 +9440,13 @@ Data Freshness: ${reportData.metadata.dataFreshness}
             <button
               key={tab.id}
               onClick={() => {
-                if (tab.id === 'trust') setShowTRUST(true);
-                else if (tab.id === 'share') setShowSHARE(true);
-                else if (tab.id === 'wallet') setShowWallet(true);
-                else setActiveTab(tab.id);
+                if (tab.id === 'trust') openFunctionPanel('trust');
+                else if (tab.id === 'share') openFunctionPanel('share');
+                else if (tab.id === 'wallet') openFunctionPanel('wallet');
+                else {
+                  closeFunctionPanels();
+                  setActiveTab(tab.id);
+                }
               }}
               className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-lg transition-colors whitespace-nowrap text-sm md:text-base ${
                 activeTab === tab.id 

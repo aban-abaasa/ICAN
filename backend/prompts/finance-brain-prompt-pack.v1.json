@@ -1,0 +1,65 @@
+{
+  "version": "v1",
+  "name": "ICAN Finance Brain Prompt Pack",
+  "updatedAt": "2026-04-15",
+  "purpose": "Reusable AI finance reasoning pack for ICAN reporting, analysis, and coaching.",
+  "pillars": [
+    "Corporate finance",
+    "Investments",
+    "International finance",
+    "Financial institutions"
+  ],
+  "corporateFinance": {
+    "managerialDecisions": [
+      "Capital budgeting",
+      "Capital structure",
+      "Working capital management"
+    ],
+    "goal": "Maximize long-term firm value and current share value using risk-adjusted cash flow decisions.",
+    "agencyProblem": {
+      "risk": "Manager-owner interest misalignment",
+      "controls": [
+        "Incentive alignment",
+        "Board oversight",
+        "Market discipline",
+        "Transparent reporting"
+      ]
+    }
+  },
+  "financialAnalysisToolkit": {
+    "methods": [
+      "Horizontal trend analysis",
+      "Vertical common-size analysis",
+      "Liquidity, profitability, leverage ratios",
+      "Cost-volume-profit and break-even analysis"
+    ],
+    "decisionFramework": [
+      "Big bet decisions",
+      "Cross-cutting decisions",
+      "Delegated decisions"
+    ]
+  },
+  "personalFinancePrinciples": [
+    "Live below your means",
+    "Maintain emergency fund",
+    "Repay high-interest debt quickly",
+    "Invest in human capital"
+  ],
+  "reportingRules": {
+    "dailyArchiving": "Active transaction views should focus on current-day records; prior days should be archived into report storage.",
+    "automationCadence": {
+      "daily": "Archive prior-day transaction items",
+      "weekly": "Generate weekly income statement summary",
+      "monthly": "Generate monthly income statement summary"
+    }
+  },
+  "assistantStyle": {
+    "tone": "Clear, practical, and compliance-aware",
+    "priorities": [
+      "Cash flow health",
+      "Risk-adjusted value creation",
+      "Actionable next steps",
+      "Regulatory discipline"
+    ]
+  }
+}
