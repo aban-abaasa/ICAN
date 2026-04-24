@@ -3085,30 +3085,6 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               <Search className={`w-5 sm:w-6 h-5 sm:h-6 ${isWebDashboard ? 'text-slate-300 hover:text-white' : 'text-gray-300 hover:text-white'}`} />
             </button>
 
-            <button
-              onClick={() => {
-                const isNotificationsOpen =
-                  selectedDetail?.tab === 'security' && selectedDetail?.item === 'Notifications';
-
-                if (isNotificationsOpen) {
-                  setSelectedDetail(null);
-                } else {
-                  openDetailView('security', 'Notifications');
-                }
-
-                setShowMenuDropdown(false);
-              }}
-              className={`relative p-1.5 sm:p-2 rounded-lg transition active:scale-95 flex-shrink-0 ${isWebDashboard ? 'hover:bg-slate-700/45' : 'hover:bg-purple-500/20'}`}
-              title="Universal Notifications"
-            >
-              <Bell className={`w-5 sm:w-6 h-5 sm:h-6 ${isWebDashboard ? 'text-slate-300 hover:text-white' : 'text-gray-300 hover:text-white'}`} />
-              {unreadCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full border border-slate-950 flex items-center justify-center">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
-            </button>
-
             {/* Spacer */}
             <div className="flex-1"></div>
 
@@ -3128,16 +3104,17 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-2 sm:gap-3">
               <div className="scale-90">
                 <ThemeSwitcher />
               </div>
               <div className="relative">
               <button 
                 onClick={() => setShowMenuDropdown(!showMenuDropdown)}
-                className="p-1.5 sm:p-2 hover:bg-purple-500/20 rounded-lg transition active:scale-95"
+                className="p-1.5 sm:p-2 hover:bg-purple-500/30 rounded-lg transition active:scale-95 flex-shrink-0"
+                title="Menu options"
               >
-                <MoreVertical className="w-5 sm:w-6 h-5 sm:h-6 text-purple-400" />
+                <MoreVertical className="w-5 sm:w-6 h-5 sm:h-6 text-purple-300 hover:text-white" />
               </button>
 
               {/* Dropdown Menu - Exact Image Layout */}
@@ -3153,6 +3130,33 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-purple-500/20 hover:text-purple-300 rounded transition"
                     >
                        My profile
+                    </button>
+
+                    {/* Notifications */}
+                    <button
+                      onClick={() => {
+                        const isNotificationsOpen =
+                          selectedDetail?.tab === 'security' && selectedDetail?.item === 'Notifications';
+
+                        if (isNotificationsOpen) {
+                          setSelectedDetail(null);
+                        } else {
+                          openDetailView('security', 'Notifications');
+                        }
+
+                        setShowMenuDropdown(false);
+                      }}
+                      className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-blue-500/20 hover:text-blue-300 rounded transition flex items-center justify-between"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Bell className="w-4 h-4" />
+                        Notifications
+                      </span>
+                      {unreadCount > 0 && (
+                        <span className="bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                          {unreadCount > 99 ? '99+' : unreadCount}
+                        </span>
+                      )}
                     </button>
 
                     {/* Security */}

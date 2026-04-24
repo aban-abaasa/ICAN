@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronRight, Play, Zap, Shield, TrendingUp, Users, ArrowRight, ChevronDown } from 'lucide-react';
+import { ChevronRight, Play, Zap, Shield, TrendingUp, Users, ArrowRight, ChevronDown, X, Image as ImageIcon } from 'lucide-react';
 import DashboardPreview from './DashboardPreview';
 import ThemeSwitcher from './ThemeSwitcher';
 import { useTheme } from '../context/ThemeContext';
@@ -16,6 +16,7 @@ const LandingPage = ({ onGetStarted }) => {
   const [expandedFooterSection, setExpandedFooterSection] = useState(null);
   const [expandedFooterItem, setExpandedFooterItem] = useState(null);
   const [failedMainSlideImages, setFailedMainSlideImages] = useState({});
+  const [isImageViewerOpen, setIsImageViewerOpen] = useState(false);
 
   const scrollToSection = (sectionId) => {
     const section = document.getElementById(sectionId);
@@ -572,6 +573,17 @@ const LandingPage = ({ onGetStarted }) => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  useEffect(() => {
+    const handleEscClose = (event) => {
+      if (event.key === 'Escape') {
+        setIsImageViewerOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleEscClose);
+    return () => window.removeEventListener('keydown', handleEscClose);
+  }, []);
+
   const nextSlide = () => {
     setCurrentSlide((prev) => (prev + 1) % slides.length);
   };
@@ -605,6 +617,13 @@ const LandingPage = ({ onGetStarted }) => {
     { subtitle: '#78350f', title: '#a16207', body: '#ca8a04', feature: '#f59e0b' }
   ];
   const activeSlideWordPalette = slideWordPalette[currentSlide % slideWordPalette.length];
+
+  const truncateWords = (text, maxWords) => {
+    if (!text) return '';
+    const words = String(text).trim().split(/\s+/);
+    if (words.length <= maxWords) return text;
+    return `${words.slice(0, maxWords).join(' ')}...`;
+  };
 
   const rainbowTextStyle = {
     backgroundImage: 'linear-gradient(90deg, #ef4444, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #8b5cf6, #ec4899, #ef4444)',
@@ -1048,8 +1067,9 @@ const LandingPage = ({ onGetStarted }) => {
                     <img
                       src={slides[currentSlide].image}
                       alt={slides[currentSlide].title}
-                      className="absolute inset-0 w-full h-full object-cover brightness-110 contrast-110 saturate-110 group-hover:scale-105 transition-transform duration-500"
+                      className="absolute inset-0 w-full h-full object-cover brightness-110 contrast-110 saturate-110 group-hover:scale-105 transition-transform duration-500 cursor-zoom-in"
                       onError={() => setFailedMainSlideImages((prev) => ({ ...prev, [currentSlide]: true }))}
+                      onClick={() => setIsImageViewerOpen(true)}
                     />
                   )}
 
@@ -1063,16 +1083,26 @@ const LandingPage = ({ onGetStarted }) => {
                           <p className="text-xs md:text-sm font-bold text-slate-900">⭐ FEATURED</p>
                         </div>
                       )}
-                      {/* Slide counter */}
-                      <p className="text-[10px] md:text-xs 2xl:text-sm text-slate-200/90 font-semibold uppercase tracking-widest ml-auto">
-                        {currentSlide + 1} / {slides.length}
-                      </p>
+                      <div className="ml-auto flex items-center gap-2">
+                        <button
+                          onClick={() => setIsImageViewerOpen(true)}
+                          className="inline-flex items-center gap-1 rounded-full border border-white/45 bg-slate-900/40 px-2.5 py-1 text-[10px] sm:text-xs font-bold text-white backdrop-blur-md hover:bg-slate-900/60 transition"
+                          title="View image"
+                        >
+                          <ImageIcon className="w-3.5 h-3.5" />
+                          <span className="hidden sm:inline">View image</span>
+                          <span className="sm:hidden">View</span>
+                        </button>
+                        <p className="text-[10px] md:text-xs 2xl:text-sm text-slate-200/90 font-semibold uppercase tracking-widest">
+                          {currentSlide + 1} / {slides.length}
+                        </p>
+                      </div>
                     </div>
 
                     {/* Bottom: Content Overlay - Better hierarchy & readability */}
                     <div
                       key={`platform-slide-${currentSlide}`}
-                      className="space-y-3 md:space-y-4 2xl:space-y-5 animate-fadeIn bg-transparent ican-cove-panel p-3 md:p-5 border border-transparent"
+                      className="space-y-2 md:space-y-4 2xl:space-y-5 animate-fadeIn bg-slate-950/45 ican-cove-panel p-3 md:p-5 border border-white/10 backdrop-blur-sm"
                     >
                       {/* Subtitle/Category */}
                       <div className="inline-flex items-center space-x-2 bg-transparent border border-transparent rounded-full px-0 py-0 w-fit">
@@ -1083,25 +1113,28 @@ const LandingPage = ({ onGetStarted }) => {
                       </div>
 
                       {/* Main Title - Big, Bold, Readable */}
-                      <h3 className="text-2xl md:text-4xl lg:text-5xl 2xl:text-6xl font-black leading-tight max-w-2xl" style={{ color: activeSlideWordPalette.title }}>
+                      <h3 className="text-xl sm:text-2xl md:text-4xl lg:text-5xl 2xl:text-6xl font-black leading-tight max-w-2xl" style={{ color: activeSlideWordPalette.title }}>
                         <span>
                           {slides[currentSlide].title}
                         </span>
                       </h3>
 
                       {/* Real Message - The "why it matters" */}
-                      <p className="text-sm md:text-lg 2xl:text-xl font-black leading-relaxed max-w-2xl italic" style={{ color: activeSlideWordPalette.body }}>
+                      <p className="hidden sm:block text-sm md:text-lg 2xl:text-xl font-black leading-relaxed max-w-2xl italic" style={{ color: activeSlideWordPalette.body }}>
                         "{slides[currentSlide].realMessage}"
                       </p>
 
                       {/* Description - Additional context */}
-                      <p className="text-xs md:text-sm 2xl:text-base font-extrabold leading-relaxed max-w-2xl" style={{ color: activeSlideWordPalette.body }}>
+                      <p className="text-[11px] sm:hidden font-extrabold leading-relaxed max-w-2xl" style={{ color: activeSlideWordPalette.body }}>
+                        {truncateWords(slides[currentSlide].description, 13)}
+                      </p>
+                      <p className="hidden sm:block text-xs md:text-sm 2xl:text-base font-extrabold leading-relaxed max-w-2xl" style={{ color: activeSlideWordPalette.body }}>
                         {slides[currentSlide].description}
                       </p>
 
                       {/* Quick Features TagList */}
                       {slides[currentSlide].features && (
-                        <div className="flex flex-wrap gap-2 pt-2">
+                        <div className="hidden sm:flex flex-wrap gap-2 pt-2">
                           {slides[currentSlide].features.slice(0, 3).map((feature, idx) => (
                             <span key={idx} className="inline-block px-0 py-0 bg-transparent border border-transparent rounded-full text-xs md:text-sm font-black" style={{ color: activeSlideWordPalette.feature }}>
                               {feature}
@@ -1477,6 +1510,36 @@ const LandingPage = ({ onGetStarted }) => {
           </div>
         </div>
       </footer>
+
+      {isImageViewerOpen && (
+        <div
+          className="fixed inset-0 z-[90] bg-slate-950/90 backdrop-blur-md p-4 flex items-center justify-center"
+          onClick={() => setIsImageViewerOpen(false)}
+        >
+          <div className="relative w-full max-w-5xl" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setIsImageViewerOpen(false)}
+              className="absolute -top-3 -right-3 z-10 rounded-full bg-white text-slate-900 p-2 shadow-lg hover:scale-105 transition"
+              title="Close image"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="rounded-2xl overflow-hidden border border-white/20 bg-slate-900 shadow-2xl">
+              <img
+                src={slides[currentSlide].image}
+                alt={slides[currentSlide].title}
+                className="w-full max-h-[82vh] object-contain bg-slate-900"
+              />
+            </div>
+
+            <div className="mt-3 text-center">
+              <p className="text-white text-sm sm:text-base font-semibold">{slides[currentSlide].title}</p>
+              <p className="text-slate-300 text-xs sm:text-sm mt-1">Tap outside image or press Esc to close</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
