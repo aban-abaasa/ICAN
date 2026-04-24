@@ -9,27 +9,27 @@ const FINANCE_STAGE_ROLES = ['admin', 'finance'];
 const STATUS_META = {
   pending_department_head: {
     label: 'Awaiting Department Decision',
-    chipClass: 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+    chipClass: 'bg-amber-100 text-amber-800 border-amber-300'
   },
   pending_finance: {
     label: 'Awaiting Finance Decision',
-    chipClass: 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+    chipClass: 'bg-blue-100 text-blue-800 border-blue-300'
   },
   approved: {
     label: 'Approved',
-    chipClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+    chipClass: 'bg-emerald-100 text-emerald-800 border-emerald-300'
   },
   completed: {
     label: 'Completed',
-    chipClass: 'bg-emerald-700/20 text-emerald-200 border-emerald-700/40'
+    chipClass: 'bg-emerald-200 text-emerald-900 border-emerald-400'
   },
   rejected_by_department_head: {
     label: 'Rejected by Department',
-    chipClass: 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+    chipClass: 'bg-rose-100 text-rose-800 border-rose-300'
   },
   rejected_by_finance: {
     label: 'Rejected by Finance',
-    chipClass: 'bg-rose-700/20 text-rose-200 border-rose-700/40'
+    chipClass: 'bg-rose-200 text-rose-900 border-rose-400'
   }
 };
 
@@ -314,7 +314,7 @@ const RequisitionApprovalsTab = ({ userRole, companyId, cmmsData, setCmmsData })
 
   if (!canUseApprovalsTab) {
     return (
-      <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-5 text-amber-100 text-sm flex items-start gap-2">
+      <div className="rounded-xl border border-amber-300 bg-amber-50 p-5 text-amber-800 text-sm flex items-start gap-2">
         <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
         Your current role does not have access to the approvals tab.
       </div>
@@ -323,14 +323,14 @@ const RequisitionApprovalsTab = ({ userRole, companyId, cmmsData, setCmmsData })
 
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/75 via-slate-900/55 to-emerald-900/30 p-5">
+      <section className="rounded-2xl border border-slate-200 bg-gradient-to-br from-blue-50 via-indigo-50 to-emerald-50 p-5">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
-            <h3 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-emerald-300" />
+            <h3 className="text-lg md:text-xl font-bold text-slate-800 flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-emerald-600" />
               Approval Queue
             </h3>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-600 mt-1">
               Dedicated approvals workflow (including service-provider role access).
             </p>
           </div>
@@ -341,50 +341,50 @@ const RequisitionApprovalsTab = ({ userRole, companyId, cmmsData, setCmmsData })
               loadMyCashProofs();
             }}
             disabled={isLoading}
-            className="px-3 py-2 rounded-lg border border-emerald-500/40 bg-emerald-500/15 text-sm font-semibold text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-60"
+            className="px-3 py-2 rounded-lg border border-emerald-300 bg-emerald-100 text-sm font-semibold text-emerald-700 hover:bg-emerald-200 disabled:opacity-60"
           >
             Refresh Queue
           </button>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
-          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
-            <div className="text-[11px] uppercase tracking-wide text-amber-200">Department Stage</div>
-            <div className="mt-1 text-xl font-bold text-white">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+            <div className="text-[11px] uppercase tracking-wide text-amber-700">Department Stage</div>
+            <div className="mt-1 text-xl font-bold text-slate-800">
               {queue.filter((item) => item.status === 'pending_department_head').length}
             </div>
           </div>
-          <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 p-3">
-            <div className="text-[11px] uppercase tracking-wide text-sky-200">Finance Stage</div>
-            <div className="mt-1 text-xl font-bold text-white">
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+            <div className="text-[11px] uppercase tracking-wide text-blue-700">Finance Stage</div>
+            <div className="mt-1 text-xl font-bold text-slate-800">
               {queue.filter((item) => item.status === 'pending_finance').length}
             </div>
           </div>
-          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3">
-            <div className="text-[11px] uppercase tracking-wide text-emerald-200">Approved</div>
-            <div className="mt-1 text-xl font-bold text-white">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+            <div className="text-[11px] uppercase tracking-wide text-emerald-700">Approved</div>
+            <div className="mt-1 text-xl font-bold text-slate-800">
               {processed.filter((item) => item.status === 'approved').length}
             </div>
           </div>
-          <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3">
-            <div className="text-[11px] uppercase tracking-wide text-rose-200">Rejected</div>
-            <div className="mt-1 text-xl font-bold text-white">
+          <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+            <div className="text-[11px] uppercase tracking-wide text-rose-700">Rejected</div>
+            <div className="mt-1 text-xl font-bold text-slate-800">
               {processed.filter((item) => String(item.status).startsWith('rejected')).length}
             </div>
           </div>
         </div>
 
         {isFinanceOfficer && (
-          <div className="mt-4 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3">
-            <p className="text-xs text-cyan-200 uppercase tracking-wide mb-2">Cashout Method Tabs (Finance)</p>
-            <div className="inline-flex rounded-lg border border-white/15 bg-slate-900/40 p-1 gap-1">
+          <div className="mt-4 rounded-xl border border-cyan-200 bg-cyan-50 p-3">
+            <p className="text-xs text-cyan-800 uppercase tracking-wide mb-2">Cashout Method Tabs (Finance)</p>
+            <div className="inline-flex rounded-lg border border-slate-300 bg-white p-1 gap-1">
               <button
                 type="button"
                 onClick={() => setFinanceCashoutMethod('cash')}
                 className={`px-3 py-1.5 rounded-md text-xs md:text-sm font-semibold transition-all ${
                   financeCashoutMethod === 'cash'
-                    ? 'bg-amber-500/30 text-amber-100 border border-amber-400/40'
-                    : 'text-slate-300 hover:bg-slate-700/50'
+                    ? 'bg-amber-200 text-amber-900 border border-amber-300'
+                    : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
                 By Cash
@@ -394,14 +394,14 @@ const RequisitionApprovalsTab = ({ userRole, companyId, cmmsData, setCmmsData })
                 onClick={() => setFinanceCashoutMethod('ican_wallet')}
                 className={`px-3 py-1.5 rounded-md text-xs md:text-sm font-semibold transition-all ${
                   financeCashoutMethod === 'ican_wallet'
-                    ? 'bg-cyan-500/30 text-cyan-100 border border-cyan-400/40'
-                    : 'text-slate-300 hover:bg-slate-700/50'
+                    ? 'bg-cyan-200 text-cyan-900 border border-cyan-300'
+                    : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
                 ICAN Wallet
               </button>
             </div>
-            <p className="text-xs text-slate-300 mt-2">
+            <p className="text-xs text-slate-700 mt-2">
               {financeCashoutMethod === 'cash'
                 ? 'Cash mode: after approval, recipient must confirm on phone to complete payout.'
                 : 'ICAN Wallet mode: after approval, finance can complete payout instantly.'}
@@ -410,19 +410,19 @@ const RequisitionApprovalsTab = ({ userRole, companyId, cmmsData, setCmmsData })
         )}
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-slate-900/45 p-5">
-        <h4 className="text-lg font-semibold text-white flex items-center gap-2 mb-3">
-          <Clipboard className="w-5 h-5 text-cyan-300" />
+      <section className="rounded-2xl border border-slate-200 bg-blue-50 p-5">
+        <h4 className="text-lg font-semibold text-slate-800 flex items-center gap-2 mb-3">
+          <Clipboard className="w-5 h-5 text-blue-600" />
           Pending Decisions
         </h4>
 
         {isLoading ? (
           <div className="py-10 text-center">
-            <Loader className="w-8 h-8 text-cyan-300 mx-auto animate-spin" />
-            <p className="text-sm text-slate-400 mt-3">Loading approval queue...</p>
+            <Loader className="w-8 h-8 text-blue-600 mx-auto animate-spin" />
+            <p className="text-sm text-slate-600 mt-3">Loading approval queue...</p>
           </div>
         ) : queue.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-600 px-4 py-10 text-center text-slate-300">
+          <div className="rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-slate-600">
             No pending approval decisions.
           </div>
         ) : (
@@ -435,54 +435,54 @@ const RequisitionApprovalsTab = ({ userRole, companyId, cmmsData, setCmmsData })
               return (
                 <article
                   key={req.id}
-                  className="rounded-xl border border-white/10 bg-gradient-to-br from-slate-950/65 to-slate-900/40 p-4"
+                  className="rounded-xl border border-slate-200 bg-white p-4"
                 >
                   <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
                     <div>
                       <div className="flex items-center flex-wrap gap-2 mb-1">
-                        <h5 className="text-base font-semibold text-white">{req.title}</h5>
+                        <h5 className="text-base font-semibold text-slate-800">{req.title}</h5>
                         <span className={`rounded-md border px-2 py-0.5 text-xs ${status.chipClass}`}>
                           {status.label}
                         </span>
-                        <span className="rounded-md bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
+                        <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
                           {req.requisitionNumber || req.id}
                         </span>
                       </div>
-                      <p className="text-sm text-slate-300">{req.description}</p>
+                      <p className="text-sm text-slate-600">{req.description}</p>
                     </div>
                     <div className="text-left md:text-right">
-                      <p className="text-xs text-slate-400">Requested By</p>
-                      <p className="text-sm text-white">{req.createdByName}</p>
-                      <p className="text-xs text-slate-400 mt-2">Estimated Cost</p>
-                      <p className="text-sm font-semibold text-amber-300">
+                      <p className="text-xs text-slate-600">Requested By</p>
+                      <p className="text-sm text-slate-800">{req.createdByName}</p>
+                      <p className="text-xs text-slate-600 mt-2">Estimated Cost</p>
+                      <p className="text-sm font-semibold text-amber-700">
                         {formatUgx(req.estimatedCost)}
                       </p>
                     </div>
                   </div>
 
                   {Array.isArray(req.items) && req.items.length > 0 && (
-                    <div className="mt-3 rounded-lg border border-white/10 bg-slate-950/35 p-2.5">
-                      <p className="text-[11px] uppercase tracking-wide text-slate-400 mb-2">Line Items</p>
+                    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+                      <p className="text-[11px] uppercase tracking-wide text-slate-600 mb-2">Line Items</p>
                       <div className="space-y-2">
                         {req.items.map((item, index) => (
-                          <div key={item.id || `${req.id}-approval-item-${index}`} className="rounded-md border border-white/10 bg-slate-900/50 p-2">
-                            <p className="text-sm text-white truncate">{item.equipment}</p>
+                          <div key={item.id || `${req.id}-approval-item-${index}`} className="rounded-md border border-slate-200 bg-white p-2">
+                            <p className="text-sm text-slate-800 truncate">{item.equipment}</p>
                             <div className="mt-1.5 grid grid-cols-2 sm:grid-cols-4 gap-2">
                               <div>
-                                <p className="text-[10px] uppercase tracking-wide text-slate-500">Required Qty</p>
-                                <p className="text-sm text-white">{item.quantity}</p>
+                                <p className="text-[10px] uppercase tracking-wide text-slate-600">Required Qty</p>
+                                <p className="text-sm text-slate-800">{item.quantity}</p>
                               </div>
                               <div>
-                                <p className="text-[10px] uppercase tracking-wide text-slate-500">Unit Cost</p>
-                                <p className="text-sm text-white">{formatUgx(item.costPerUnit)}</p>
+                                <p className="text-[10px] uppercase tracking-wide text-slate-600">Unit Cost</p>
+                                <p className="text-sm text-slate-800">{formatUgx(item.costPerUnit)}</p>
                               </div>
                               <div>
-                                <p className="text-[10px] uppercase tracking-wide text-slate-500">Condition</p>
-                                <p className="text-sm text-white">{item.condition || 'Not specified'}</p>
+                                <p className="text-[10px] uppercase tracking-wide text-slate-600">Condition</p>
+                                <p className="text-sm text-slate-800">{item.condition || 'Not specified'}</p>
                               </div>
                               <div className="text-right">
-                                <p className="text-[10px] uppercase tracking-wide text-slate-500">Required Amount</p>
-                                <p className="text-sm font-semibold text-amber-300">{formatUgx(item.totalCost)}</p>
+                                <p className="text-[10px] uppercase tracking-wide text-slate-600">Required Amount</p>
+                                <p className="text-sm font-semibold text-amber-700">{formatUgx(item.totalCost)}</p>
                               </div>
                             </div>
                           </div>
@@ -502,7 +502,7 @@ const RequisitionApprovalsTab = ({ userRole, companyId, cmmsData, setCmmsData })
                       }
                       rows={2}
                       placeholder="Decision notes (optional)"
-                      className="w-full rounded-lg border border-white/15 bg-slate-950/50 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/60"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/60"
                     />
                   </div>
 
@@ -512,21 +512,21 @@ const RequisitionApprovalsTab = ({ userRole, companyId, cmmsData, setCmmsData })
                         <button
                           onClick={() => decide(req, true)}
                           disabled={decisionTargetId === req.id}
-                          className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
+                          className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
                         >
                           {decisionTargetId === req.id ? 'Saving...' : 'Approve'}
                         </button>
                         <button
                           onClick={() => decide(req, false)}
                           disabled={decisionTargetId === req.id}
-                          className="rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-500 disabled:opacity-60 flex items-center gap-1"
+                          className="rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60 flex items-center gap-1"
                         >
                           <X className="w-4 h-4" />
                           {decisionTargetId === req.id ? 'Saving...' : 'Reject'}
                         </button>
                       </>
                     ) : (
-                      <div className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2">
+                      <div className="text-xs text-amber-800 bg-amber-100 border border-amber-300 rounded-lg px-3 py-2">
                         {userRole === 'finance' && isDepartmentStage
                           ? 'Waiting for admin/coordinator approval before finance can act.'
                           : 'Your role can view this stage but cannot submit this decision.'}
@@ -541,19 +541,19 @@ const RequisitionApprovalsTab = ({ userRole, companyId, cmmsData, setCmmsData })
       </section>
 
       {isFinanceOfficer && approvedForPayout.length > 0 && (
-        <section className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5">
-          <h4 className="text-base font-semibold text-white mb-3">Approved Requisitions Ready For Payment</h4>
+        <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
+          <h4 className="text-base font-semibold text-slate-800 mb-3">Approved Requisitions Ready For Payment</h4>
           <div className="space-y-3">
             {approvedForPayout.map((req) => (
               <article
                 key={`payout-${req.id}`}
-                className="rounded-lg border border-white/15 bg-slate-950/50 p-3"
+                className="rounded-lg border border-slate-200 bg-white p-3"
               >
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                   <div>
-                    <p className="text-sm font-semibold text-white">{req.title}</p>
-                    <p className="text-xs text-slate-400">{req.requisitionNumber || req.id}</p>
-                    <p className="text-sm font-bold text-emerald-300 mt-1">Amount: {formatUgx(req.estimatedCost)}</p>
+                    <p className="text-sm font-semibold text-slate-800">{req.title}</p>
+                    <p className="text-xs text-slate-600">{req.requisitionNumber || req.id}</p>
+                    <p className="text-sm font-bold text-emerald-700 mt-1">Amount: {formatUgx(req.estimatedCost)}</p>
                   </div>
 
                   <div className="w-full md:w-auto md:min-w-[320px]">
@@ -568,14 +568,14 @@ const RequisitionApprovalsTab = ({ userRole, companyId, cmmsData, setCmmsData })
                           }))
                         }
                         placeholder="Recipient surname or email"
-                        className="w-full rounded-lg border border-white/15 bg-slate-950/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/60"
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/60"
                       />
                     )}
 
                     <button
                       onClick={() => handlePayApprovedRequisition(req)}
                       disabled={payingRequisitionId === req.id}
-                      className="mt-2 w-full rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
+                      className="mt-2 w-full rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
                     >
                       {payingRequisitionId === req.id
                         ? 'Processing Payment...'
@@ -592,13 +592,13 @@ const RequisitionApprovalsTab = ({ userRole, companyId, cmmsData, setCmmsData })
       )}
 
       {pendingProofs.length > 0 && (
-        <section className="rounded-2xl border border-white/10 bg-slate-900/45 p-5">
-          <h4 className="text-base font-semibold text-white mb-3">Pending Payout Confirmations</h4>
+        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+          <h4 className="text-base font-semibold text-slate-800 mb-3">Pending Payout Confirmations</h4>
 
           {isLoadingCashProofs ? (
             <div className="py-8 text-center">
-              <Loader className="w-6 h-6 text-cyan-300 mx-auto animate-spin" />
-              <p className="text-sm text-slate-400 mt-2">Loading phone confirmations...</p>
+              <Loader className="w-6 h-6 text-blue-600 mx-auto animate-spin" />
+              <p className="text-sm text-slate-500 mt-2">Loading phone confirmations...</p>
             </div>
           ) : (
             <div className="space-y-1">
@@ -626,40 +626,40 @@ const RequisitionApprovalsTab = ({ userRole, companyId, cmmsData, setCmmsData })
       )}
 
       {processed.length > 0 && (
-        <section className="rounded-2xl border border-white/10 bg-slate-900/45 p-5">
-          <h4 className="text-base font-semibold text-white mb-3">Recently Processed</h4>
+        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+          <h4 className="text-base font-semibold text-slate-800 mb-3">Recently Processed</h4>
           <div className="space-y-1">
             {processed.slice(0, 8).map((req) => {
               const status = STATUS_META[req.status] || STATUS_META.approved;
               const relatedProof = proofByRequisitionId[req.id];
               return (
-                <article key={req.id} className="rounded-md border border-white/10 bg-slate-950/45 px-2.5 py-2">
+                <article key={req.id} className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
                   <button
                     type="button"
                     onClick={() => setExpandedProcessedId((prev) => (prev === req.id ? null : req.id))}
                     className="w-full text-left flex items-center justify-between gap-2"
                   >
-                    <p className="text-xs text-slate-200 truncate">• {req.title} - {req.requisitionNumber || req.id}</p>
+                    <p className="text-xs text-slate-700 truncate">• {req.title} - {req.requisitionNumber || req.id}</p>
                     <span className={`rounded-md border px-2 py-0.5 text-[10px] whitespace-nowrap ${status.chipClass}`}>
                       {status.label}
                     </span>
                   </button>
 
                   {expandedProcessedId === req.id && (
-                    <div className="mt-2 pl-3 border-l border-white/15 space-y-1">
-                      <p className="text-xs text-slate-300">Amount: {formatUgx(req.estimatedCost)}</p>
-                      <p className="text-xs text-slate-300">
+                    <div className="mt-2 pl-3 border-l border-slate-300 space-y-1">
+                      <p className="text-xs text-slate-700">Amount: {formatUgx(req.estimatedCost)}</p>
+                      <p className="text-xs text-slate-700">
                         Method: {req.financePaymentMethod === 'cash'
                           ? 'By Cash'
                           : req.financePaymentMethod === 'ican_wallet'
                             ? 'ICAN Wallet'
                             : 'Not captured'}
                       </p>
-                      <p className="text-xs text-slate-300">
+                      <p className="text-xs text-slate-700">
                         By: {relatedProof?.requested_by_name || relatedProof?.requested_by_email || 'Finance'}
                       </p>
                       {relatedProof?.recipient_confirmed_at && (
-                        <p className="text-xs text-slate-300">Confirmed at: {new Date(relatedProof.recipient_confirmed_at).toLocaleString()}</p>
+                        <p className="text-xs text-slate-700">Confirmed at: {new Date(relatedProof.recipient_confirmed_at).toLocaleString()}</p>
                       )}
                     </div>
                   )}
