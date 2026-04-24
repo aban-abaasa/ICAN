@@ -39,6 +39,34 @@
       "Delegated decisions"
     ]
   },
+  "businessTermsDeepDive": {
+    "accountingAndStatements": [
+      "Income statement",
+      "Balance sheet",
+      "Cash flow statement",
+      "Accrual vs cash basis"
+    ],
+    "valuationAndInvestment": [
+      "NPV",
+      "IRR",
+      "WACC",
+      "Discounted cash flow (DCF)",
+      "Risk-return tradeoff"
+    ],
+    "performanceAndGrowthMetrics": [
+      "Gross margin, operating margin, net margin",
+      "Unit economics (CAC, LTV, churn)",
+      "Burn rate and runway",
+      "Cash conversion cycle (CCC)"
+    ],
+    "strategyAndGovernance": [
+      "SWOT analysis",
+      "Porter's Five Forces",
+      "Pricing strategy and elasticity",
+      "Corporate governance",
+      "Risk and compliance controls"
+    ]
+  },
   "personalFinancePrinciples": [
     "Live below your means",
     "Maintain emergency fund",

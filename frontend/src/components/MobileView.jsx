@@ -5661,6 +5661,15 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         user={authUser}
         transactions={transactions}
         wallets={walletAccounts}
+        moduleContext={{
+          showPitchinPanel,
+          showTrustPanel,
+          showWalletPanel,
+          activeBottomTab,
+          walletAccountsLoading,
+          currentUserId,
+          lastRefreshAt: new Date().toISOString()
+        }}
         onNavigate={(featureId) => {
           setShowSearchModal(false);
           if (featureId === 'wallets' || featureId === 'ican-coin') openFeaturePanel('wallet');

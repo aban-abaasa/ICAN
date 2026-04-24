@@ -11,7 +11,7 @@ import {
  * Tab 1 — Instant search across features, transactions, wallets
  * Tab 2 — ICAN Copilot: real OpenAI proxy, full financial context
  */
-const SearchModal = ({ isOpen, onClose, user, transactions = [], wallets = [], onNavigate }) => {
+const SearchModal = ({ isOpen, onClose, user, transactions = [], wallets = [], moduleContext = {}, onNavigate }) => {
   const [tab, setTab] = useState('copilot');
 
   /* Search */
@@ -119,6 +119,159 @@ const SearchModal = ({ isOpen, onClose, user, transactions = [], wallets = [], o
     };
   };
 
+  const getWalletEntries = () => {
+    if (Array.isArray(wallets)) return wallets;
+    if (!wallets || typeof wallets !== 'object') return [];
+
+    return Object.entries(wallets).map(([key, value]) => {
+      if (value && typeof value === 'object') {
+        return {
+          wallet_type: key,
+          name: key,
+          ...value
+        };
+      }
+      return {
+        wallet_type: key,
+        name: key,
+        balance: Number(value) || 0
+      };
+    });
+  };
+
+  const toTransactionDate = (tx) => {
+    const candidate = tx?.created_at || tx?.date || tx?.timestamp || tx?.transaction_date;
+    if (!candidate) return null;
+    const d = new Date(candidate);
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
+
+  const getTransactionTimeSummary = () => {
+    const tx = Array.isArray(transactions) ? transactions : [];
+    const dayMap = new Map();
+    const monthMap = new Map();
+    const yearMap = new Map();
+
+    const now = new Date();
+    const nowDayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const nowMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const nowYearKey = `${now.getFullYear()}`;
+
+    const initBucket = () => ({ count: 0, income: 0, expenses: 0, investments: 0, net: 0 });
+
+    tx.forEach((t) => {
+      const d = toTransactionDate(t);
+      if (!d) return;
+
+      const dayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const yearKey = `${d.getFullYear()}`;
+
+      const amount = Number(t?.amount) || 0;
+      const type = String(t?.transaction_type || t?.type || t?.category || '').toLowerCase();
+      const text = `${type} ${String(t?.description || '').toLowerCase()}`;
+
+      const classify = () => {
+        if (/income|credit|deposit|cash_in|topup|sale|received/.test(text)) return 'income';
+        if (/expense|debit|withdraw|cash_out|payment|fee|cost|purchase/.test(text)) return 'expense';
+        if (/invest|investment|share|equity|stock|bond|portfolio/.test(text)) return 'investment';
+        return 'other';
+      };
+
+      const kind = classify();
+      const update = (map, key) => {
+        const bucket = map.get(key) || initBucket();
+        bucket.count += 1;
+        if (kind === 'income') bucket.income += Math.abs(amount);
+        if (kind === 'expense') bucket.expenses += Math.abs(amount);
+        if (kind === 'investment') bucket.investments += Math.abs(amount);
+        bucket.net = bucket.income - bucket.expenses;
+        map.set(key, bucket);
+      };
+
+      update(dayMap, dayKey);
+      update(monthMap, monthKey);
+      update(yearMap, yearKey);
+    });
+
+    const toTopEntries = (map, limit) => {
+      return Array.from(map.entries())
+        .sort((a, b) => (a[0] < b[0] ? 1 : -1))
+        .slice(0, limit)
+        .map(([period, bucket]) => ({ period, ...bucket }));
+    };
+
+    return {
+      current: {
+        day: { period: nowDayKey, ...(dayMap.get(nowDayKey) || initBucket()) },
+        month: { period: nowMonthKey, ...(monthMap.get(nowMonthKey) || initBucket()) },
+        year: { period: nowYearKey, ...(yearMap.get(nowYearKey) || initBucket()) }
+      },
+      latest: {
+        daily: toTopEntries(dayMap, 7),
+        monthly: toTopEntries(monthMap, 6),
+        yearly: toTopEntries(yearMap, 3)
+      }
+    };
+  };
+
+  const getIcanModuleSnapshot = () => {
+    const walletEntries = getWalletEntries();
+    const tx = Array.isArray(transactions) ? transactions : [];
+    const textJoin = (t) => `${t?.description || ''} ${t?.category || ''} ${t?.transaction_type || ''}`.toLowerCase();
+
+    const icanWallet = walletEntries.find((w) => /ican/.test((w.wallet_type || w.name || '').toLowerCase()));
+    const trustWallet = walletEntries.find((w) => /trust|sacco/.test((w.wallet_type || w.name || '').toLowerCase()));
+    const businessWallet = walletEntries.find((w) => /business/.test((w.wallet_type || w.name || '').toLowerCase()));
+    const personalWallet = walletEntries.find((w) => /personal|ugx/.test((w.wallet_type || w.name || '').toLowerCase()));
+
+    const pitchinCount = tx.filter((t) => /(pitch|pitchin|funding|venture|startup)/.test(textJoin(t))).length;
+    const shareCount = tx.filter((t) => /(share|equity|shareholder|ownership|stock)/.test(textJoin(t))).length;
+    const trustCount = tx.filter((t) => /(trust|sacco|group contribution|member contribution)/.test(textJoin(t))).length;
+    const icanCoinTxCount = tx.filter((t) => /(ican coin|ican|token|coin purchase|coin sale|crypto)/.test(textJoin(t))).length;
+    const timeSummary = getTransactionTimeSummary();
+
+    return {
+      refreshedAt: new Date().toISOString(),
+      modules: {
+        transactionMemory: {
+          currentDay: timeSummary.current.day,
+          currentMonth: timeSummary.current.month,
+          currentYear: timeSummary.current.year,
+          latestDaily: timeSummary.latest.daily,
+          latestMonthly: timeSummary.latest.monthly,
+          latestYearly: timeSummary.latest.yearly
+        },
+        wallet: {
+          totalWalletTypes: walletEntries.length,
+          personalBalance: Number(personalWallet?.balance) || 0,
+          businessBalance: Number(businessWallet?.balance) || 0,
+        },
+        trustSacco: {
+          trustBalanceIcan: Number(trustWallet?.balance) || 0,
+          trustLocalValue: Number(trustWallet?.localValue) || 0,
+          trustGroupCount: Number(trustWallet?.groupCount) || 0,
+          trustMemberCount: Number(trustWallet?.memberCount) || 0,
+          transactionSignals: trustCount
+        },
+        icanCoin: {
+          balance: Number(icanWallet?.balance) || 0,
+          transactionSignals: icanCoinTxCount
+        },
+        shareAndPitchin: {
+          shareSignals: shareCount,
+          pitchinSignals: pitchinCount
+        }
+      },
+      uiState: {
+        showPitchinPanel: Boolean(moduleContext?.showPitchinPanel),
+        showTrustPanel: Boolean(moduleContext?.showTrustPanel),
+        showWalletPanel: Boolean(moduleContext?.showWalletPanel),
+        activeBottomTab: moduleContext?.activeBottomTab || null
+      }
+    };
+  };
+
   const normalizeFinanceQuery = (query = '') => {
     let normalized = String(query || '').toLowerCase();
 
@@ -133,6 +286,11 @@ const SearchModal = ({ isOpen, onClose, user, transactions = [], wallets = [], o
       [/\binstitutional\s*finance\b/g, 'financial institutions'],
       [/\bbreakeven\b/g, 'break even'],
       [/\bcost\s*volume\s*profit\b/g, 'cost-volume-profit']
+      ,[/\bsaco\b/g, 'sacco']
+      ,[/\bwallete\b/g, 'wallet']
+      ,[/\bpitchin\b/g, 'pitching']
+      ,[/\btrasactions\b/g, 'transactions']
+      ,[/\binfortion\b/g, 'information']
     ];
 
     replacements.forEach(([pattern, replacement]) => {
@@ -143,7 +301,7 @@ const SearchModal = ({ isOpen, onClose, user, transactions = [], wallets = [], o
   };
 
   const isFinanceQuestion = (normalizedQuery = '') => {
-    return /(finance|financial|corporate|investment|investments|portfolio|asset|equity|stock|bond|roi|return|international|forex|exchange rate|institution|bank|insurance|budget|saving|debt|loan|cash flow|working capital|capital budgeting|capital structure|agency problem|ratio analysis|horizontal analysis|vertical analysis|trend analysis|cvp|break even|business organization|sole proprietorship|partnership|corporation|managerial finance|financial manager|profit|maximize value|shareholder wealth)/.test(normalizedQuery);
+    return /(finance|financial|corporate|investment|investments|portfolio|asset|equity|stock|bond|roi|return|international|forex|exchange rate|institution|bank|insurance|budget|saving|debt|loan|cash flow|working capital|capital budgeting|capital structure|agency problem|ratio analysis|horizontal analysis|vertical analysis|trend analysis|cvp|break even|business organization|sole proprietorship|partnership|corporation|managerial finance|financial manager|profit|maximize value|shareholder wealth|sacco|trust|wallet|ican coin|token|shareholder|share allocation|pitching|pitchin|business funding)/.test(normalizedQuery);
   };
 
   const getBusinessTermResponse = (normalizedQuery = '') => {
@@ -206,9 +364,38 @@ const SearchModal = ({ isOpen, onClose, user, transactions = [], wallets = [], o
 
   const getFinanceTutorResponse = (query) => {
     const q = normalizeFinanceQuery(query);
+    const moduleSnapshot = getIcanModuleSnapshot();
     const investmentIntent = /(invest|investment|investments|invetment|invetments|portfolio|asset allocation)/.test(q);
     const conceptIntent = /(what is|define|meaning|explain|introduction|basics)/.test(q);
+    const operationalIntent = /(my savings|savings|save more|my spending|spending|expenses|budget|wallet|balance|my investments|portfolio summary|top expenses|report|tax)/.test(q);
     const businessTermResponse = getBusinessTermResponse(q);
+
+    if (/(sacco|trust group|trust system|trust wallet)/.test(q)) {
+      return `SACCO/Trust in ICAN:\n• Purpose: group-based contribution, trust-led financial collaboration, and controlled access\n• Current: ${moduleSnapshot.modules.trustSacco.trustGroupCount} group(s), ${moduleSnapshot.modules.trustSacco.trustMemberCount} member signal(s)\n• Balances: ICAN ${moduleSnapshot.modules.trustSacco.trustBalanceIcan.toLocaleString()} | Local ${moduleSnapshot.modules.trustSacco.trustLocalValue.toLocaleString()}\n\nDo you want contribution analysis, group governance, or trust risk controls?`;
+    }
+
+    if (/(wallet|wallets|wallet account|account balance|balance)/.test(q) && /(ican|trust|business|personal|sacco|all)/.test(q)) {
+      return `ICAN wallet structure:\n• Personal wallet: UGX ${moduleSnapshot.modules.wallet.personalBalance.toLocaleString()}\n• Business wallet: UGX ${moduleSnapshot.modules.wallet.businessBalance.toLocaleString()}\n• Trust/SACCO wallet: ICAN ${moduleSnapshot.modules.trustSacco.trustBalanceIcan.toLocaleString()}\n• ICAN coin wallet: ${moduleSnapshot.modules.icanCoin.balance.toLocaleString()} ICAN\n\nWhich wallet should I analyze next?`;
+    }
+
+    if (/(ican coin|ican coins|token|coin trading|coin)/.test(q)) {
+      return `ICAN Coin in this app:\n• Supports buy/sell and wallet-based holding\n• Current balance signal: ${moduleSnapshot.modules.icanCoin.balance.toLocaleString()} ICAN\n• Activity signal: ${moduleSnapshot.modules.icanCoin.transactionSignals} related transaction(s)\n\nDo you want trade performance, risk view, or entry strategy guidance?`;
+    }
+
+    if (/(share|shares|shareholder|equity allocation|ownership)/.test(q)) {
+      return `Shares and shareholder flow:\n• Used for ownership allocation, co-owner permissions, and approval workflows\n• Current share-related activity signal: ${moduleSnapshot.modules.shareAndPitchin.shareSignals}\n• Use case: governance rights, profit participation, and dilution decisions\n\nDo you want help with share pricing, dilution math, or shareholder approvals?`;
+    }
+
+    if (/(pitching|pitchin|pitch|raise capital|funding round|venture funding)/.test(q)) {
+      return `Pitching module:\n• Designed to present ventures and raise business/investor funding\n• Current pitch-related activity signal: ${moduleSnapshot.modules.shareAndPitchin.pitchinSignals}\n• Good practice: define problem, traction, unit economics, and funding use plan\n\nDo you want a pitch scorecard template for your current business?`;
+    }
+
+    if (/(transactions by day|transactions by month|transactions by year|daily transactions|monthly transactions|yearly transactions|day month year|transaction summary|daily buckets|monthly buckets|yearly buckets|latest\s*\d*\s*daily\s*buckets?)/.test(q)) {
+      const d = moduleSnapshot.modules.transactionMemory.currentDay;
+      const m = moduleSnapshot.modules.transactionMemory.currentMonth;
+      const y = moduleSnapshot.modules.transactionMemory.currentYear;
+      return `Transaction memory (live):\n• Day ${d.period}: ${d.count} tx | Income UGX ${d.income.toLocaleString()} | Expenses UGX ${d.expenses.toLocaleString()} | Net UGX ${d.net.toLocaleString()}\n• Month ${m.period}: ${m.count} tx | Income UGX ${m.income.toLocaleString()} | Expenses UGX ${m.expenses.toLocaleString()} | Net UGX ${m.net.toLocaleString()}\n• Year ${y.period}: ${y.count} tx | Income UGX ${y.income.toLocaleString()} | Expenses UGX ${y.expenses.toLocaleString()} | Net UGX ${y.net.toLocaleString()}\n\nAsk: "show latest daily trend" or "compare monthly trend".`;
+    }
 
     if (businessTermResponse) return businessTermResponse;
 
@@ -252,6 +439,11 @@ const SearchModal = ({ isOpen, onClose, user, transactions = [], wallets = [], o
       return `Student money principles:\n• Live below your means and automate saving\n• Build emergency fund (start UGX 500k-1m target)\n• Repay high-interest debt quickly (avalanche first)\n• Invest in human capital: skills, internships, network\n\nWant a weekly student budget plan using your real transactions?`;
     }
 
+    // Do not hijack operational personal-finance queries with generic theory output.
+    if (operationalIntent) {
+      return null;
+    }
+
     if (isFinanceQuestion(q)) {
       return `Finance quick guide:\n• Corporate finance: investment, funding, and cash management decisions\n• Investments: risk-return tradeoff, diversification, portfolio construction\n• International finance: exchange rates, country risk, cross-border flows\n• Financial institutions: banks, insurers, and funds that move capital\n\nWhich topic should I break down first?`;
     }
@@ -268,13 +460,18 @@ const SearchModal = ({ isOpen, onClose, user, transactions = [], wallets = [], o
     const recentTx = (transactions || []).slice(0,10).map(t =>
       `${(t.transaction_type||'').toUpperCase()} UGX ${(t.amount||0).toLocaleString()} - ${t.description||'No description'} (${t.created_at?new Date(t.created_at).toLocaleDateString():'unknown'})`
     ).join('\n') || '(no transactions)';
-    const walletSummary = (wallets||[]).map(w => `${w.wallet_type||w.name}: UGX ${(w.balance||0).toLocaleString()}`).join(', ') || 'No wallet data';
+    const walletEntries = getWalletEntries();
+    const moduleSnapshot = getIcanModuleSnapshot();
+    const walletSummary = walletEntries.map(w => `${w.wallet_type||w.name}: ${(w.currency||'UGX')} ${(w.balance||0).toLocaleString()}`).join(', ') || 'No wallet data';
     return `You are ICAN Copilot, a financial AI assistant and finance tutor. Be SHORT and PRECISE - max 5 bullet points, no long paragraphs.
 
 USER DATA: income UGX ${income.toLocaleString()}, expenses UGX ${expenses.toLocaleString()}, net UGX ${netWorth.toLocaleString()}, ${txCount} transactions.
 INVESTMENTS: ${investmentTx.length} investment records, invested UGX ${totalInvested.toLocaleString()}, returns UGX ${totalReturns.toLocaleString()}, net investment position UGX ${netPosition.toLocaleString()}.
 Wallets: ${walletSummary}.
 Recent: ${recentTx}
+
+ICAN MODULE LIVE SNAPSHOT:
+${JSON.stringify(moduleSnapshot, null, 2)}
 
   Knowledge scope you must handle clearly:
   - Basic areas: Corporate finance, Investments, International finance, Financial institutions
@@ -287,13 +484,14 @@ Recent: ${recentTx}
   - Decision design: big bet, cross-cutting, delegated, rapid decision methods
   - Student/personal finance principles
 
-  Rules: Use UGX for money values. Be direct. 2-6 lines max per response. If asked about investments or portfolio, always include invested amount, returns, and net position. For concept questions, define briefly and end with one next-step question. No filler words.`;
+  Rules: Use UGX for money values unless module currency is explicitly ICAN/USD. Be direct. 2-6 lines max per response. If asked about investments or portfolio, always include invested amount, returns, and net position. If asked about SACCO, trust, wallet, ICAN coin, shares, or pitching, ground the answer in the live module snapshot. For concept questions, define briefly and end with one next-step question. No filler words.`;
   };
 
   /* Local fallback — always responds with real data */
   const localFallback = (query) => {
     const q = normalizeFinanceQuery(query);
     const isInvestmentIntent = /(invest|investment|investments|invetment|invetments|portfolio|asset allocation|return on investment|roi)/.test(q);
+    const moduleSnapshot = getIcanModuleSnapshot();
     const income   = (transactions||[]).filter(t=>t.transaction_type==='income').reduce((s,t)=>s+(t.amount||0),0);
     const expenses = (transactions||[]).filter(t=>t.transaction_type==='expense').reduce((s,t)=>s+(t.amount||0),0);
     const { investmentTx, totalInvested, totalReturns, netPosition, topInvestments } = getInvestmentSnapshot();
@@ -323,9 +521,29 @@ Recent: ${recentTx}
       return `Top expenses:\n${top3.map(t=>`• UGX ${(t.amount||0).toLocaleString()} — ${t.description||'Expense'}`).join('\n')||'• None recorded'}`;
 
     if (q.includes('wallet') || q.includes('balance')) {
-      const ws = (wallets||[]).map(w=>`• ${w.wallet_type||w.name}: UGX ${(w.balance||0).toLocaleString()}`).join('\n')||'• No wallets yet';
+      const ws = getWalletEntries().map(w=>`• ${w.wallet_type||w.name}: ${w.currency||'UGX'} ${(w.balance||0).toLocaleString()}`).join('\n')||'• No wallets yet';
       return `Your wallets:\n${ws}`;
     }
+    if (q.includes('daily trend') || q.includes('latest daily trend') || q.includes('daily buckets') || /latest\s*\d*\s*daily\s*buckets?/.test(q)) {
+      const rows = moduleSnapshot.modules.transactionMemory.latestDaily;
+      return `Latest daily transaction trend:\n${rows.map(r => `• ${r.period}: ${r.count} tx | Net UGX ${r.net.toLocaleString()} (Income ${r.income.toLocaleString()} / Expenses ${r.expenses.toLocaleString()})`).join('\n') || '• No daily transaction data yet'}`;
+    }
+    if (q.includes('monthly trend') || q.includes('latest monthly trend') || q.includes('by month') || q.includes('monthly buckets')) {
+      const rows = moduleSnapshot.modules.transactionMemory.latestMonthly;
+      return `Latest monthly transaction trend:\n${rows.map(r => `• ${r.period}: ${r.count} tx | Net UGX ${r.net.toLocaleString()} (Income ${r.income.toLocaleString()} / Expenses ${r.expenses.toLocaleString()})`).join('\n') || '• No monthly transaction data yet'}`;
+    }
+    if (q.includes('yearly trend') || q.includes('latest yearly trend') || q.includes('by year') || q.includes('yearly buckets')) {
+      const rows = moduleSnapshot.modules.transactionMemory.latestYearly;
+      return `Latest yearly transaction trend:\n${rows.map(r => `• ${r.period}: ${r.count} tx | Net UGX ${r.net.toLocaleString()} (Income ${r.income.toLocaleString()} / Expenses ${r.expenses.toLocaleString()})`).join('\n') || '• No yearly transaction data yet'}`;
+    }
+    if (q.includes('sacco') || q.includes('trust'))
+      return `Trust/SACCO snapshot:\n• Groups: ${moduleSnapshot.modules.trustSacco.trustGroupCount}\n• Members (signal): ${moduleSnapshot.modules.trustSacco.trustMemberCount}\n• Trust ICAN balance: ${moduleSnapshot.modules.trustSacco.trustBalanceIcan.toLocaleString()}\n• Local value: ${moduleSnapshot.modules.trustSacco.trustLocalValue.toLocaleString()}`;
+    if (q.includes('ican coin') || q.includes('token') || q.includes('coin'))
+      return `ICAN coin snapshot:\n• Balance: ${moduleSnapshot.modules.icanCoin.balance.toLocaleString()} ICAN\n• Coin activity signals: ${moduleSnapshot.modules.icanCoin.transactionSignals}`;
+    if (q.includes('share') || q.includes('shareholder'))
+      return `Share/ownership snapshot:\n• Share-related activity signals: ${moduleSnapshot.modules.shareAndPitchin.shareSignals}\n• Ask me for dilution, ownership %, or governance decisions.`;
+    if (q.includes('pitching') || q.includes('pitch'))
+      return `Pitching snapshot:\n• Pitch-related activity signals: ${moduleSnapshot.modules.shareAndPitchin.pitchinSignals}\n• Ask me for pitch structure, valuation ask, and use-of-funds plan.`;
     if (q.includes('report') || q.includes('tax'))
       return `Available reports:\n• Tax Filing (URA compliant)\n• Balance Sheet\n• Income Statement\n• Country Compliance\n\nOpen Reports from the ⋮ menu.`;
 
@@ -336,6 +554,7 @@ Recent: ${recentTx}
     const text = input.trim();
     if (!text || thinking) return;
     const normalizedText = normalizeFinanceQuery(text);
+    const moduleSnapshot = getIcanModuleSnapshot();
     const userMsg = { id: Date.now(), role: 'user', content: text };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
@@ -355,7 +574,7 @@ Recent: ${recentTx}
         messages: [
           { role: 'system', content: buildSystemPrompt() },
           ...history,
-          { role: 'user', content: `${text}\n\nNormalized finance query: ${normalizedText}` }
+          { role: 'user', content: `${text}\n\nNormalized finance query: ${normalizedText}\n\nLive module snapshot: ${JSON.stringify(moduleSnapshot)}` }
         ],
         max_tokens: 600,
         temperature: 0.7,

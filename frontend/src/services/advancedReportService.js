@@ -96,7 +96,7 @@ const FINANCE_KNOWLEDGE_BRAIN = {
       'Corporate governance',
       'Risk management and compliance controls'
     ]
-  ]
+  }
 };
 
 const buildFinanceBrainInstruction = (context = {}) => {
