@@ -1747,7 +1747,9 @@ export const confirmCashoutProof = async (requestId, confirmationPayload = {}) =
 
 /**
  * Get company-written reports from all members.
- * Uses RPC first, falls back to direct select.
+ * ADMIN/FINANCE: all reports
+ * COORDINATOR/SUPERVISOR: departmental + own reports
+ * MEMBERS: own reports only
  */
 export const getCompanyReports = async (companyId) => {
   try {
@@ -1755,27 +1757,201 @@ export const getCompanyReports = async (companyId) => {
       return { data: [], error: null };
     }
 
-    const { data: rpcData, error: rpcError } = await supabase.rpc('fn_get_company_reports', {
+    const { data, error } = await supabase.rpc('fn_get_company_reports', {
       p_company_id: companyId
     });
-
-    if (!rpcError) {
-      return { data: rpcData || [], error: null };
-    }
-
-    console.warn('fn_get_company_reports RPC failed, using direct table fallback:', rpcError.message);
-
-    const { data, error } = await supabase
-      .from('cmms_company_reports')
-      .select('*')
-      .eq('cmms_company_id', companyId)
-      .order('created_at', { ascending: false });
 
     if (error) throw error;
     return { data: data || [], error: null };
   } catch (error) {
     console.error('Error fetching company reports:', error);
     return { data: [], error };
+  }
+};
+
+/**
+ * Get filtered reports with status, category, and department filters.
+ * Respects user role and department assignments.
+ */
+export const getCompanyReportsFiltered = async (companyId, filters = {}) => {
+  try {
+    if (!companyId) {
+      return { data: [], error: null };
+    }
+
+    const { status = null, category = null, department_id = null } = filters;
+
+    const { data, error } = await supabase.rpc('fn_get_company_reports_filtered', {
+      p_company_id: companyId,
+      p_department_id: department_id,
+      p_status: status,
+      p_category: category
+    });
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('Error fetching filtered reports:', error);
+    return { data: [], error };
+  }
+};
+
+/**
+ * Get ALL reports for a company (Admin/Finance only).
+ * This function explicitly returns every report created by anyone in the company.
+ * Access control is enforced at the database level.
+ */
+export const getAllCompanyReports = async (companyId) => {
+  try {
+    if (!companyId) {
+      return { data: [], error: null };
+    }
+
+    const { data, error } = await supabase.rpc('fn_get_all_company_reports', {
+      p_company_id: companyId
+    });
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('Error fetching all company reports:', error);
+    return { data: [], error };
+  }
+};
+
+/**
+ * Get reports for a specific department.
+ * Available to: admin, finance, coordinator, supervisor (of that department)
+ */
+export const getDepartmentReports = async (companyId, departmentId) => {
+  try {
+    if (!companyId || !departmentId) {
+      return { data: [], error: null };
+    }
+
+    const { data, error } = await supabase.rpc('fn_get_department_reports', {
+      p_company_id: companyId,
+      p_department_id: departmentId
+    });
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('Error fetching department reports:', error);
+    return { data: [], error };
+  }
+};
+
+/**
+ * Export a single report for PDF/Word conversion.
+ * Returns formatted report data ready for document export.
+ */
+export const exportReport = async (reportId) => {
+  try {
+    if (!reportId) {
+      throw new Error('Report ID is required');
+    }
+
+    const { data, error } = await supabase.rpc('fn_export_report', {
+      p_report_id: reportId
+    });
+
+    if (error) throw error;
+    
+    if (!data || data.length === 0) {
+      throw new Error('Report not found or access denied');
+    }
+
+    return { data: data[0], error: null };
+  } catch (error) {
+    console.error('Error exporting report:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Export report to PDF format
+ * @param {Object} report - Report data with title, body, etc.
+ * @returns {Promise<Object>} Download info or error
+ */
+export const exportReportToPDF = async (report) => {
+  try {
+    if (!report || !report.id) {
+      throw new Error('Report data is required');
+    }
+
+    // Dynamically import the export module to avoid issues
+    const { exportReportToPDF: exportToPDF } = await import('../../export/reportExport.js');
+    const result = await exportToPDF(report);
+    return { success: true, ...result, error: null };
+  } catch (error) {
+    console.error('Error exporting report to PDF:', error);
+    return { success: false, error };
+  }
+};
+
+/**
+ * Export report to DOCX format
+ * @param {Object} report - Report data with title, body, etc.
+ * @returns {Promise<Object>} Download info or error
+ */
+export const exportReportToDOCX = async (report) => {
+  try {
+    if (!report || !report.id) {
+      throw new Error('Report data is required');
+    }
+
+    // Dynamically import the export module to avoid issues
+    const { exportReportToDOCX: exportToDocx } = await import('../../export/reportExport.js');
+    const result = await exportToDocx(report);
+    return { success: true, ...result, error: null };
+  } catch (error) {
+    console.error('Error exporting report to DOCX:', error);
+    return { success: false, error };
+  }
+};
+
+/**
+ * Export multiple reports to PDF
+ * @param {Array} reports - Array of report data
+ * @param {string} title - Document title
+ * @returns {Promise<Object>} Download info or error
+ */
+export const exportReportsToPDF = async (reports, title = 'Maintenance Reports') => {
+  try {
+    if (!Array.isArray(reports) || reports.length === 0) {
+      throw new Error('Reports array is required and must not be empty');
+    }
+
+    // Dynamically import the export module to avoid issues
+    const { exportReportsToPDF: exportTosPDF } = await import('../../export/reportExport.js');
+    const result = await exportTosPDF(reports, title);
+    return { success: true, ...result, error: null };
+  } catch (error) {
+    console.error('Error exporting reports to PDF:', error);
+    return { success: false, error };
+  }
+};
+
+/**
+ * Export multiple reports to DOCX
+ * @param {Array} reports - Array of report data
+ * @param {string} title - Document title
+ * @returns {Promise<Object>} Download info or error
+ */
+export const exportReportsToDOCX = async (reports, title = 'Maintenance Reports') => {
+  try {
+    if (!Array.isArray(reports) || reports.length === 0) {
+      throw new Error('Reports array is required and must not be empty');
+    }
+
+    // Dynamically import the export module to avoid issues
+    const { exportReportsToDOCX: exportToDocxs } = await import('../../export/reportExport.js');
+    const result = await exportToDocxs(reports, title);
+    return { success: true, ...result, error: null };
+  } catch (error) {
+    console.error('Error exporting reports to DOCX:', error);
+    return { success: false, error };
   }
 };
 
@@ -1867,6 +2043,14 @@ export default {
   getMyCashoutProofRequests,
   confirmCashoutProof,
   getCompanyReports,
+  getCompanyReportsFiltered,
+  getAllCompanyReports,
+  getDepartmentReports,
+  exportReport,
+  exportReportToPDF,
+  exportReportToDOCX,
+  exportReportsToPDF,
+  exportReportsToDOCX,
   createCompanyReport
 };
 

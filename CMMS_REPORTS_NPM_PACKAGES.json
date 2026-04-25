@@ -1,0 +1,19 @@
+{
+  "comments": "Add these dependencies to your package.json devDependencies",
+  "additionalDependencies": {
+    "docx": "^8.5.0",
+    "jspdf": "^2.5.1",
+    "jszip": "^3.10.1"
+  },
+  "installCommand": "npm install docx jspdf jszip",
+  "versionInfo": {
+    "docx": "Version 8.5.0 or higher - For DOCX file generation",
+    "jspdf": "Version 2.5.1 or higher - For PDF generation",
+    "jszip": "Version 3.10.1 or higher - For ZIP archive creation"
+  },
+  "usage": {
+    "step1": "Run: npm install docx jspdf jszip",
+    "step2": "Import in your component or service file",
+    "step3": "Use the export functions from reportExport.js"
+  }
+}

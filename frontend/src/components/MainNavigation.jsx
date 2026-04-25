@@ -21,74 +21,126 @@ import {
   Database,
   Menu,
   X,
-  Wallet
+  Wallet,
+  Bell,
+  FileText,
+  Lightbulb,
+  Calculator,
+  User
 } from 'lucide-react'
 import IcanEraLogo from '../IcanEra.png'
 import ThemeSwitcher from './ThemeSwitcher'
 
-export default function MainNavigation({ onTrustClick, onShareClick, onWalletClick }) {
+export default function MainNavigation({ onTrustClick, onShareClick, onWalletClick, onExtensionClick }) {
   const [activeSection, setActiveSection] = useState('dashboard')
   const [expandedMenu, setExpandedMenu] = useState(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [expandedMobileMenu, setExpandedMobileMenu] = useState(null)
   const menuRef = useRef(null)
 
-  const menuItems = [
+  // Main navigation items (displayed as tabs)
+  const mainMenuItems = [
     {
       id: 'dashboard',
       label: 'Dashboard',
       icon: Home,
-      path: '/dashboard',
-      submenu: [
-        { label: 'Overview', path: '/dashboard', icon: Home },
-        { label: 'Portfolio', path: '/dashboard/portfolio', icon: BarChart3 },
-        { label: 'Analytics', path: '/dashboard/analytics', icon: TrendingUp }
-      ]
+      path: '/dashboard'
     },
     {
-      id: 'security',
-      label: 'Security',
-      icon: Shield,
-      path: '/security',
-      submenu: [
-        { label: 'Account', path: '/security', icon: Lock },
-        { label: 'Privacy', path: '/security/privacy', icon: Lock },
-        { label: 'Verification', path: '/security/verify', icon: Shield }
-      ]
+      id: 'pitchin',
+      label: 'Pitchin',
+      icon: Target,
+      path: '/pitchin',
+      action: onShareClick
+    },
+    {
+      id: 'wallet',
+      label: 'Wallet',
+      icon: Wallet,
+      path: '/wallet',
+      action: onWalletClick
+    },
+    {
+      id: 'trust',
+      label: 'Trust',
+      icon: Banknote,
+      path: '/trust',
+      action: onTrustClick
+    },
+    {
+      id: 'cmms',
+      label: 'CMMS',
+      icon: Database,
+      path: '/cmms'
+    }
+  ]
+
+  // Extension/Additional items (shown in dropdown)
+  const extensionMenuItems = [
+    {
+      id: 'profile',
+      label: 'My Profile',
+      icon: User,
+      path: '/profile'
+    },
+    {
+      id: 'notifications',
+      label: 'Notifications',
+      icon: Bell,
+      path: '/notifications'
     },
     {
       id: 'readiness',
       label: 'Readiness',
       icon: Globe,
-      path: '/readiness',
-      submenu: [
-        { label: 'Status', path: '/readiness', icon: Globe },
-        { label: 'Reports', path: '/readiness/reports', icon: BarChart3 }
-      ]
+      path: '/readiness'
     },
     {
       id: 'growth',
       label: 'Growth',
       icon: TrendingUp,
-      path: '/growth',
-      submenu: [
-        { label: 'Opportunities', path: '/growth', icon: Target },
-        { label: 'Strategies', path: '/growth/strategies', icon: TrendingUp }
-      ]
+      path: '/growth'
     },
     {
-      id: 'trust',
-      label: '🏦 SACCO',
-      icon: Banknote,
-      path: '/trust',
-      submenu: [
-        { label: '🔍 Explore', path: '/trust', icon: Users },
-        { label: '👥 My Trusts', path: '/trust/my', icon: Banknote },
-        { label: '🗳️ Vote', path: '/trust/vote', icon: Target },
-        { label: '📮 Applications', path: '/trust/applications', icon: BarChart3 },
-        { label: '✨ Create', path: '/trust/create', icon: Target }
-      ]
+      id: 'reports',
+      label: 'Reports',
+      icon: FileText,
+      path: '/reports'
     },
+    {
+      id: 'tithe',
+      label: 'Tithe',
+      icon: Heart,
+      path: '/tithe'
+    },
+    {
+      id: 'loan-calculator',
+      label: 'Loan Calculator',
+      icon: Calculator,
+      path: '/loan-calculator'
+    },
+    {
+      id: 'security',
+      label: 'Security',
+      icon: Shield,
+      path: '/security'
+    },
+    {
+      id: 'settings',
+      label: 'Settings',
+      icon: Settings,
+      path: '/settings'
+    }
+  ]
+
+  const extensionMenu = {
+    id: 'extension',
+    label: 'Extension',
+    icon: Lightbulb,
+    submenu: extensionMenuItems
+  }
+
+  const additionalMenuItems = [
     {
       id: 'share',
       label: 'Share',
@@ -121,7 +173,8 @@ export default function MainNavigation({ onTrustClick, onShareClick, onWalletCli
       path: '/settings',
       submenu: [
         { label: 'Profile', path: '/settings/profile', icon: Home },
-        { label: 'Preferences', path: '/settings/preferences', icon: Settings }
+        { label: 'Preferences', path: '/settings/preferences', icon: Settings },
+        { label: 'Security', path: '/settings/security', icon: Shield }
       ]
     }
   ]
@@ -146,8 +199,8 @@ export default function MainNavigation({ onTrustClick, onShareClick, onWalletCli
       </div> */}
 
       {/* Main Navigation */}
-      <nav className="bg-gradient-to-b from-slate-800 to-slate-900 border-b border-slate-700/50 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 md:px-6 py-3 md:py-6">
+      <nav className="bg-gradient-to-b from-slate-800 to-slate-900 border-b border-slate-700/50 backdrop-blur-md sticky top-0 z-50 overflow-visible">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 py-3 md:py-4 min-h-fit">
           {/* Desktop: Logo and Title + Menu */}
           <div className="hidden md:block">
             {/* Logo and Title */}
@@ -178,65 +231,77 @@ export default function MainNavigation({ onTrustClick, onShareClick, onWalletCli
             </div>
 
             {/* Menu Items */}
-            <div className="flex items-center gap-3 flex-wrap justify-between" ref={menuRef}>
-              <div className="flex items-center gap-3 flex-wrap">
-                {menuItems.map((item) => {
+            <div className="flex items-center gap-2 flex-wrap justify-between" ref={menuRef}>
+              <div className="flex items-center gap-2 flex-wrap max-h-fit overflow-y-auto pb-2">
+                {/* Main Menu Items */}
+                {mainMenuItems.map((item) => {
                   const Icon = item.icon
                   const isActive = activeSection === item.id
 
                   return (
                     <div key={item.id} className="relative">
-                    <button
-                      onClick={() => {
-                        setActiveSection(item.id)
-                        if (item.id === 'trust') {
-                          if (onTrustClick) onTrustClick()
-                        } else if (item.id === 'share') {
-                          if (onShareClick) onShareClick()
-                        } else if (item.id === 'wallet') {
-                          if (onWalletClick) onWalletClick()
-                        } else if (item.submenu) {
-                          setExpandedMenu(expandedMenu === item.id ? null : item.id)
-                        }
-                      }}
-                      className={`px-5 py-2.5 rounded-lg font-medium text-sm flex items-center gap-2 transition-all whitespace-nowrap border ${
-                        isActive
-                          ? 'bg-blue-500 text-white border-blue-400 shadow-lg shadow-blue-500/50'
-                          : 'bg-slate-700/50 text-slate-300 border-slate-600 hover:bg-slate-700 hover:text-white hover:border-slate-500'
-                      }`}
-                    >
-                      <Icon className="w-4 h-4" />
-                      {item.label}
-                      {item.submenu && (
-                        <ChevronDown className={`w-4 h-4 transition-transform ${expandedMenu === item.id ? 'rotate-180' : ''}`} />
-                      )}
-                    </button>
+                      <button
+                        onClick={() => {
+                          setActiveSection(item.id)
+                          if (item.action) item.action()
+                        }}
+                        className={`px-4 py-2 rounded-lg font-medium text-xs md:text-sm flex items-center gap-1.5 transition-all whitespace-nowrap border ${
+                          isActive
+                            ? 'bg-blue-500 text-white border-blue-400 shadow-lg shadow-blue-500/50'
+                            : 'bg-slate-700/50 text-slate-300 border-slate-600 hover:bg-slate-700 hover:text-white hover:border-slate-500'
+                        }`}
+                      >
+                        <Icon className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                        <span className="hidden sm:inline">{item.label}</span>
+                      </button>
+                    </div>
+                  )
+                })}
 
-                    {/* Submenu */}
-                    {item.submenu && expandedMenu === item.id && (
-                      <div className="absolute left-0 mt-2 w-56 rounded-xl bg-slate-900 border border-slate-700 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-50">
-                        <div className="p-2 space-y-1">
-                          {item.submenu.map((subitem) => {
-                            const SubIcon = subitem.icon
-                            return (
-                              <button
-                                key={subitem.path}
-                                onClick={() => {
-                                  setExpandedMenu(null)
-                                }}
-                                className="w-full px-3 py-2.5 rounded-lg text-left text-slate-300 hover:text-white hover:bg-blue-500/30 transition-all flex items-center gap-2 text-sm"
-                              >
-                                <SubIcon className="w-4 h-4" />
-                                {subitem.label}
-                              </button>
-                            )
-                          })}
-                        </div>
+                {/* Extension Menu (Dropdown) */}
+                <div className="relative">
+                  <button
+                    onClick={() => {
+                      setExpandedMenu(expandedMenu === 'extension' ? null : 'extension')
+                      if (onExtensionClick && expandedMenu !== 'extension') {
+                        onExtensionClick()
+                      }
+                    }}
+                    className={`px-4 py-2 rounded-lg font-medium text-xs md:text-sm flex items-center gap-1.5 transition-all whitespace-nowrap border ${
+                      expandedMenu === 'extension'
+                        ? 'bg-purple-500 text-white border-purple-400 shadow-lg shadow-purple-500/50'
+                        : 'bg-slate-700/50 text-slate-300 border-slate-600 hover:bg-slate-700 hover:text-white hover:border-slate-500'
+                    }`}
+                  >
+                    <extensionMenu.icon className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                    <span className="hidden sm:inline">{extensionMenu.label}</span>
+                    <ChevronDown className={`w-3 h-3 md:w-4 md:h-4 transition-transform ${expandedMenu === 'extension' ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {/* Extension Submenu */}
+                  {expandedMenu === 'extension' && (
+                    <div className="absolute left-0 mt-2 w-56 rounded-xl bg-slate-900 border border-slate-700 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-[60]">
+                      <div className="p-2 space-y-1 max-h-80 overflow-y-auto">
+                        {extensionMenu.submenu.map((subitem) => {
+                          const SubIcon = subitem.icon
+                          return (
+                            <button
+                              key={subitem.path}
+                              onClick={() => {
+                                setActiveSection(subitem.id)
+                                setExpandedMenu(null)
+                              }}
+                              className="w-full px-3 py-2.5 rounded-lg text-left text-slate-300 hover:text-white hover:bg-blue-500/30 transition-all flex items-center gap-2 text-sm border border-transparent hover:border-blue-500/30"
+                            >
+                              <SubIcon className="w-4 h-4 flex-shrink-0" />
+                              {subitem.label}
+                            </button>
+                          )
+                        })}
                       </div>
-                    )}
-                  </div>
-                )
-              })}
+                    </div>
+                  )}
+                </div>
               </div>
               <ThemeSwitcher />
             </div>
@@ -245,25 +310,25 @@ export default function MainNavigation({ onTrustClick, onShareClick, onWalletCli
           {/* Mobile: Hamburger Menu */}
           <div className="md:hidden">
             {/* Mobile Header */}
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-blue-500/30 border border-blue-400/50">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="p-2 rounded-lg bg-blue-500/30 border border-blue-400/50 flex-shrink-0">
                   <Shield className="w-5 h-5 text-blue-400" />
                 </div>
-                <div>
-                  <p className="text-white font-bold text-lg">ICANera</p>
-                  <p className="text-blue-300 text-xs">Global Capital</p>
+                <div className="min-w-0">
+                  <p className="text-white font-bold text-base md:text-lg truncate">ICANera</p>
+                  <p className="text-blue-300 text-xs truncate">Global Capital</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 flex-shrink-0">
                 {/* Theme Switcher for Mobile */}
-                <div className="scale-90">
+                <div className="scale-75 origin-right">
                   <ThemeSwitcher />
                 </div>
                 {/* Hamburger Menu Button */}
                 <button
                   onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                  className="p-2 rounded-lg bg-slate-700/50 hover:bg-slate-700 text-slate-300 hover:text-white transition-all"
+                  className="p-2 rounded-lg bg-slate-700/50 hover:bg-slate-700 text-slate-300 hover:text-white transition-all flex-shrink-0"
                 >
                   {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
                 </button>
@@ -272,69 +337,70 @@ export default function MainNavigation({ onTrustClick, onShareClick, onWalletCli
 
             {/* Mobile Menu */}
             {mobileMenuOpen && (
-              <div className="space-y-2 pb-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                {menuItems.map((item) => {
+              <div className="mt-4 pt-4 pb-6 max-h-[calc(100vh-200px)] overflow-y-auto space-y-2 animate-in fade-in slide-in-from-top-2 duration-200 border-t border-slate-700/50">
+                {/* Main Menu Items */}
+                {mainMenuItems.map((item) => {
                   const Icon = item.icon
                   const isActive = activeSection === item.id
-                  const isExpanded = expandedMobileMenu === item.id
 
                   return (
-                    <div key={item.id}>
-                      <button
-                        onClick={() => {
-                          setActiveSection(item.id)
-                          if (item.id === 'trust') {
-                            if (onTrustClick) onTrustClick()
-                            setMobileMenuOpen(false)
-                          } else if (item.id === 'share') {
-                            if (onShareClick) onShareClick()
-                            setMobileMenuOpen(false)
-                          } else if (item.id === 'wallet') {
-                            if (onWalletClick) onWalletClick()
-                            setMobileMenuOpen(false)
-                          } else if (item.submenu) {
-                            setExpandedMobileMenu(isExpanded ? null : item.id)
-                          } else {
-                            setMobileMenuOpen(false)
-                          }
-                        }}
-                        className={`w-full px-4 py-3 rounded-lg font-medium text-sm flex items-center gap-2 transition-all border ${
-                          isActive
-                            ? 'bg-blue-500 text-white border-blue-400'
-                            : 'bg-slate-700/50 text-slate-300 border-slate-600'
-                        }`}
-                      >
-                        <Icon className="w-4 h-4 flex-shrink-0" />
-                        <span>{item.label}</span>
-                        {item.submenu && (
-                          <ChevronDown className={`w-4 h-4 ml-auto transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                        )}
-                      </button>
-
-                      {/* Mobile Submenu */}
-                      {item.submenu && isExpanded && (
-                        <div className="mt-1 ml-4 space-y-1 border-l border-slate-600 pl-2">
-                          {item.submenu.map((subitem) => {
-                            const SubIcon = subitem.icon
-                            return (
-                              <button
-                                key={subitem.path}
-                                onClick={() => {
-                                  setExpandedMobileMenu(null)
-                                  setMobileMenuOpen(false)
-                                }}
-                                className="w-full px-3 py-2 rounded-lg text-left text-slate-300 hover:text-white hover:bg-blue-500/30 transition-all flex items-center gap-2 text-xs"
-                              >
-                                <SubIcon className="w-4 h-4 flex-shrink-0" />
-                                {subitem.label}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        setActiveSection(item.id)
+                        if (item.action) item.action()
+                        setMobileMenuOpen(false)
+                      }}
+                      className={`w-full px-4 py-3 rounded-lg font-medium text-sm flex items-center gap-2 transition-all border ${
+                        isActive
+                          ? 'bg-blue-500 text-white border-blue-400 shadow-md shadow-blue-500/30'
+                          : 'bg-slate-700/50 text-slate-300 border-slate-600 hover:bg-slate-700 hover:text-white hover:border-slate-500'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4 flex-shrink-0" />
+                      <span className="flex-1 text-left">{item.label}</span>
+                    </button>
                   )
                 })}
+
+                {/* Extension Menu for Mobile */}
+                <div className="pt-2 mt-2 border-t border-slate-700/50">
+                  <button
+                    onClick={() => setExpandedMobileMenu(expandedMobileMenu === 'extension' ? null : 'extension')}
+                    className={`w-full px-4 py-3 rounded-lg font-medium text-sm flex items-center gap-2 transition-all border ${
+                      expandedMobileMenu === 'extension'
+                        ? 'bg-purple-500 text-white border-purple-400 shadow-md shadow-purple-500/30'
+                        : 'bg-slate-700/50 text-slate-300 border-slate-600 hover:bg-slate-700 hover:text-white hover:border-slate-500'
+                    }`}
+                  >
+                    <extensionMenu.icon className="w-4 h-4 flex-shrink-0" />
+                    <span className="flex-1 text-left">{extensionMenu.label}</span>
+                    <ChevronDown className={`w-4 h-4 transition-transform flex-shrink-0 ${expandedMobileMenu === 'extension' ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {/* Mobile Extension Submenu */}
+                  {expandedMobileMenu === 'extension' && (
+                    <div className="mt-1 ml-2 space-y-1 border-l-2 border-purple-500/50 pl-3 py-1">
+                      {extensionMenu.submenu.map((subitem) => {
+                        const SubIcon = subitem.icon
+                        return (
+                          <button
+                            key={subitem.path}
+                            onClick={() => {
+                              setActiveSection(subitem.id)
+                              setExpandedMobileMenu(null)
+                              setMobileMenuOpen(false)
+                            }}
+                            className="w-full px-3 py-2 rounded-lg text-left text-slate-300 hover:text-white hover:bg-blue-500/30 transition-all flex items-center gap-2 text-xs font-medium border border-transparent hover:border-blue-500/30"
+                          >
+                            <SubIcon className="w-4 h-4 flex-shrink-0" />
+                            <span className="flex-1">{subitem.label}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

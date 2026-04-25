@@ -2230,16 +2230,16 @@ const CMMSModule = ({
 
         {/* Export Reports */}
         <div className="glass-card p-4 md:p-6">
-          <h3 className="text-base md:text-lg font-bold text-white mb-4">Export Reports</h3>
+          <h3 className="text-base md:text-lg font-bold text-white mb-4">📊 Export Reports</h3>
           <div className="flex gap-2 md:gap-3 flex-wrap">
-            <button onClick={downloadInventoryPdf} className="px-3 md:px-4 py-2 bg-blue-500 bg-opacity-30 text-blue-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold text-xs md:text-sm">
-              📄 Download Inventory Report (PDF)
+            <button onClick={downloadInventoryPdf} className="px-4 md:px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 transition-all font-bold text-xs md:text-sm shadow-md hover:shadow-lg">
+              📄 Inventory PDF
             </button>
-            <button onClick={downloadRequisitionPdf} className="px-3 md:px-4 py-2 bg-purple-500 bg-opacity-30 text-purple-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold text-xs md:text-sm">
-              📄 Download Requisition Report (PDF)
+            <button onClick={downloadRequisitionPdf} className="px-4 md:px-5 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 active:scale-95 transition-all font-bold text-xs md:text-sm shadow-md hover:shadow-lg">
+              📄 Requisition PDF
             </button>
-            <button onClick={exportToExcel} className="px-3 md:px-4 py-2 bg-green-500 bg-opacity-30 text-green-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold text-xs md:text-sm">
-              📊 Export to Excel
+            <button onClick={exportToExcel} className="px-4 md:px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 active:scale-95 transition-all font-bold text-xs md:text-sm shadow-md hover:shadow-lg">
+              📊 Excel Export
             </button>
           </div>
         </div>
@@ -4781,14 +4781,14 @@ const CMMSModule = ({
                         <div className="mt-4 pt-4 border-t border-white border-opacity-10 flex gap-2">
                           <button
                             onClick={() => handleStartEdit(item)}
-                            className="flex-1 px-3 py-2 bg-blue-500 bg-opacity-20 text-blue-300 text-xs rounded hover:bg-opacity-40 transition-all font-semibold flex items-center justify-center gap-2"
+                            className="flex-1 px-3 py-2 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 active:scale-95 transition-all font-bold flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
                           >
                             <Edit2 className="w-3 h-3" />
                             Edit Item
                           </button>
                           <button
                             onClick={() => handleDeleteItem(item.id)}
-                            className="flex-1 px-3 py-2 bg-red-500 bg-opacity-20 text-red-300 text-xs rounded hover:bg-opacity-40 transition-all font-semibold flex items-center justify-center gap-2"
+                            className="flex-1 px-3 py-2 bg-red-600 text-white text-xs rounded hover:bg-red-700 active:scale-95 transition-all font-bold flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
                           >
                             <Trash2 className="w-3 h-3" />
                             Delete Item

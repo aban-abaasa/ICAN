@@ -13,6 +13,7 @@ import SHAREHub from './SHAREHub';
 import CMMSModule from './CMSSModule';
 import ICANWallet from './ICANWallet';
 import MobileView from './MobileView';
+import { ExtensionPage } from './ExtensionPage';
 import { EnhancedReportConfiguration } from './EnhancedReportConfiguration';
 import { 
   Shield, 
@@ -9270,6 +9271,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
           onTrustClick={() => openFunctionPanel('trust')} 
           onShareClick={() => openFunctionPanel('share')}
           onWalletClick={() => openFunctionPanel('wallet')}
+          onExtensionClick={() => setActiveTab('extension')}
         />
       )}
 
@@ -9463,10 +9465,15 @@ Data Freshness: ${reportData.metadata.dataFreshness}
       )}
 
       {/* Main Content */}
-      <main className={activeTab === 'dashboard' ? 'p-0' : 'p-4'}>
+      <main className={activeTab === 'dashboard' ? 'p-0' : 'p-4 pt-6'}>
         {activeTab === 'dashboard' && (
-          <section className="w-full min-h-screen overflow-y-auto">
+          <section className="w-full min-h-screen overflow-y-auto pt-4">
             <MobileView userProfile={dashboardUserProfile} isWebDashboard />
+          </section>
+        )}
+        {activeTab === 'extension' && (
+          <section className="w-full min-h-screen overflow-y-auto">
+            <ExtensionPage />
           </section>
         )}
         {activeTab === 'security' && renderSecurityMandate()}

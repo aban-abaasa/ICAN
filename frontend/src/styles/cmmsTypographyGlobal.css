@@ -1,0 +1,336 @@
+/**
+ * Global CMMS Typography & Font Strengthening
+ * Apply these styles to fix weak fonts across all pages
+ */
+
+/* ============================================================
+   BUTTON STYLES - STRONG FONTS
+   ============================================================ */
+
+/* Generic action buttons */
+button[type="button"],
+button[type="submit"],
+.btn,
+.button {
+  font-weight: 600 !important; /* At least semibold */
+}
+
+/* Specific action buttons */
+.edit-btn,
+button.edit,
+[class*="edit-button"],
+[data-action="edit"] {
+  font-weight: 700 !important; /* Bold */
+  letter-spacing: 0.3px;
+}
+
+.delete-btn,
+button.delete,
+[class*="delete-button"],
+[data-action="delete"] {
+  font-weight: 700 !important; /* Bold */
+  letter-spacing: 0.3px;
+}
+
+.export-btn,
+button.export,
+[class*="export-button"],
+[data-action="export"] {
+  font-weight: 700 !important; /* Bold */
+  letter-spacing: 0.3px;
+}
+
+.view-btn,
+button.view,
+[class*="view-button"],
+[data-action="view"] {
+  font-weight: 700 !important; /* Bold */
+}
+
+.add-btn,
+button.add,
+[class*="add-button"],
+[data-action="add"] {
+  font-weight: 700 !important; /* Bold */
+}
+
+/* ============================================================
+   TABLE STYLES - STRONG FONTS
+   ============================================================ */
+
+table thead,
+.table-header,
+[role="columnheader"] {
+  font-weight: 700 !important;
+  color: #1f2937 !important; /* Dark gray on white */
+}
+
+.dark table thead,
+.dark .table-header {
+  color: #f3f4f6 !important; /* Light gray on dark */
+}
+
+table tbody td,
+table tbody tr,
+.table-body {
+  font-weight: 500 !important; /* Medium at least */
+}
+
+/* ============================================================
+   TEXT & LABELS - STRONG FONTS
+   ============================================================ */
+
+label,
+.label {
+  font-weight: 600 !important;
+  color: #1f2937 !important;
+}
+
+.dark label,
+.dark .label {
+  color: #f3f4f6 !important;
+}
+
+/* Inventory labels and text */
+[class*="inventory"] label,
+[class*="inventory"] .label,
+.inventory-item-name,
+.inventory-quantity {
+  font-weight: 700 !important;
+}
+
+/* Report labels and text */
+[class*="report"] label,
+[class*="report"] .label,
+.report-title,
+.report-status {
+  font-weight: 700 !important;
+}
+
+/* ============================================================
+   LINK & ACTION TEXT - STRONG FONTS
+   ============================================================ */
+
+a,
+.link,
+.action-link {
+  font-weight: 600 !important;
+}
+
+a:hover,
+.link:hover,
+.action-link:hover {
+  font-weight: 700 !important;
+}
+
+/* ============================================================
+   HEADINGS - STRONG FONTS
+   ============================================================ */
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700 !important;
+  color: #1f2937 !important; /* Dark gray on white */
+}
+
+.dark h1,
+.dark h2,
+.dark h3,
+.dark h4,
+.dark h5,
+.dark h6 {
+  color: #f3f4f6 !important; /* Light gray on dark */
+}
+
+/* ============================================================
+   STATUS BADGES & PILLS - STRONG FONTS
+   ============================================================ */
+
+.badge,
+.tag,
+.pill,
+[class*="badge"],
+[class*="tag"],
+[class*="status"] {
+  font-weight: 700 !important;
+  letter-spacing: 0.2px;
+}
+
+/* ============================================================
+   FORM INPUTS - STRONG LABELS
+   ============================================================ */
+
+.form-group label,
+.form-field label {
+  font-weight: 700 !important;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+/* ============================================================
+   WHITE MODE FIX - Ensure Contrast
+   ============================================================ */
+
+/* On white backgrounds */
+.bg-white,
+[style*="background-color: white"],
+[style*="background-color: rgb(255, 255, 255)"] {
+  --text-on-white: #1f2937 !important;
+  color: var(--text-on-white) !important;
+}
+
+.bg-white button,
+.bg-white .btn {
+  font-weight: 700 !important;
+}
+
+/* On light gray backgrounds */
+.bg-gray-50,
+.bg-gray-100 {
+  color: #1f2937 !important;
+}
+
+.bg-gray-50 button,
+.bg-gray-100 button {
+  font-weight: 700 !important;
+}
+
+/* ============================================================
+   DARK MODE - Strong Text
+   ============================================================ */
+
+.dark,
+[data-theme="dark"],
+[class*="dark-mode"] {
+  --text-color: #f3f4f6;
+}
+
+.dark button,
+.dark .btn,
+[data-theme="dark"] button {
+  font-weight: 700 !important;
+  color: #ffffff !important;
+}
+
+.dark label,
+.dark .label {
+  font-weight: 700 !important;
+  color: #f3f4f6 !important;
+}
+
+/* ============================================================
+   INVENTORY PAGE SPECIFIC
+   ============================================================ */
+
+.inventory-table td,
+.inventory-item,
+.inventory-action {
+  font-weight: 500 !important;
+}
+
+.inventory-table button,
+.inventory-item button,
+.inventory-action button {
+  font-weight: 700 !important;
+}
+
+.inventory-edit,
+.inventory-delete,
+.inventory-move {
+  font-weight: 700 !important;
+}
+
+/* ============================================================
+   REPORTS PAGE SPECIFIC
+   ============================================================ */
+
+.reports-table td,
+.report-item,
+.report-action {
+  font-weight: 500 !important;
+}
+
+.reports-table button,
+.report-item button,
+.report-action button {
+  font-weight: 700 !important;
+}
+
+.report-export,
+.report-download,
+.report-view {
+  font-weight: 700 !important;
+}
+
+/* ============================================================
+   NAVIGATION - Strong Fonts
+   ============================================================ */
+
+.nav,
+nav,
+.navbar,
+.sidebar {
+  --nav-font-weight: 600 !important;
+}
+
+nav button,
+nav a,
+.navbar button,
+.navbar a,
+.sidebar button,
+.sidebar a {
+  font-weight: 700 !important;
+}
+
+/* ============================================================
+   MODALS & DIALOGS - Strong Text
+   ============================================================ */
+
+.modal-header,
+.dialog-header {
+  font-weight: 700 !important;
+}
+
+.modal button,
+.dialog button {
+  font-weight: 700 !important;
+}
+
+/* ============================================================
+   FOCUS & HOVER STATES
+   ============================================================ */
+
+button:focus,
+button:hover,
+a:focus,
+a:hover {
+  font-weight: 700 !important;
+}
+
+/* ============================================================
+   UTILITY CLASSES FOR MANUAL USE
+   ============================================================ */
+
+.font-strong {
+  font-weight: 700 !important;
+}
+
+.font-bold-white {
+  font-weight: 700 !important;
+  color: #1f2937 !important;
+}
+
+.font-bold-dark {
+  font-weight: 700 !important;
+  color: #f3f4f6 !important;
+}
+
+.text-visible {
+  font-weight: 700 !important;
+  letter-spacing: 0.3px;
+}
+
+.button-text-strong {
+  font-weight: 700 !important;
+  font-size: 0.95rem;
+  letter-spacing: 0.2px;
+}
