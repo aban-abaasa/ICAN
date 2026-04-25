@@ -2861,7 +2861,10 @@ const CMMSModule = ({
       );
 
     const handleCreateDepartmentInline = async () => {
+      const msgCompanyNotReady = 'IcanEra notice: Company workspace is still loading. Please wait a moment and try again.';
       if (!userCompanyId) {
+        alert(msgCompanyNotReady);
+        return;
         alert('âŒ Company not loaded yet.');
         return;
       }
@@ -2968,21 +2971,29 @@ const CMMSModule = ({
 
     const handleAddUser = async () => {
       if (!newUser.email) {
+        alert('IcanEra notice: Search for a user, then select them from the list to continue.');
+        return;
         alert('âŒ Please search and select a user from the dropdown');
         return;
       }
 
       if (!newUser.name) {
+        alert('IcanEra notice: Please select a valid user profile.');
+        return;
         alert('âŒ Please select a valid user');
         return;
       }
 
       if (!newUser.role) {
+        alert('IcanEra notice: Choose a role before assigning this user.');
+        return;
         alert('âŒ Please select a role');
         return;
       }
 
       if (roleNeedsDepartment && !newUser.department_id) {
+        alert('IcanEra notice: This role requires a department. Please select one.');
+        return;
         alert('âŒ Please select a department for this role.');
         return;
       }
@@ -2991,6 +3002,8 @@ const CMMSModule = ({
       if (!isVerified) {
         const verification = await verifyICANUser(newUser.email);
         if (!verification.exists) {
+          alert('IcanEra access check: This person needs an ICAN account first.\n\nNext steps:\n1. Sign up on ICAN\n2. Complete their ICAN profile\n3. Return here for CMMS access');
+          return;
           alert('âŒ User must have an ICAN account.\n\nPlease ask the user to:\n1. Sign up for ICAN\n2. Complete their ICAN profile\n3. Then they can be added to CMMS');
           return;
         }
@@ -3020,6 +3033,8 @@ const CMMSModule = ({
           .single();
 
         if (saveUserError || !savedUser) {
+          alert('IcanEra alert: We could not save this user right now. ' + (saveUserError?.message || 'Unknown error'));
+          return;
           alert('âŒ Error saving user to database: ' + (saveUserError?.message || 'Unknown error'));
           return;
         }
@@ -3033,6 +3048,8 @@ const CMMSModule = ({
         });
 
         if (assignRoleError) {
+          alert('IcanEra alert: User record was created, but role assignment did not complete. ' + assignRoleError.message);
+          return;
           alert('âš ï¸ User added but role assignment failed: ' + assignRoleError.message);
           return;
         }
@@ -3051,6 +3068,9 @@ const CMMSModule = ({
                 title: 'âœ… You\'ve been added to CMMS!',
                 message: `Welcome to ${cmmsData.companyProfile?.companyName || 'the company'}! Your admin has added you as a ${newUser.role}. You can now access the CMMS dashboard and manage maintenance tasks.`,
                 icon: 'ðŸŽ‰',
+                title: 'Welcome to IcanEra CMMS',
+                message: `You are now part of ${cmmsData.companyProfile?.companyName || 'the company'} as ${normalizeRoleKey(newUser.role)}. Your maintenance workspace is ready.`,
+                icon: 'welcome',
                 action_tab: 'users',
                 action_label: 'View Your Role in Users & Roles',
                 action_link: '/cmms/users',
@@ -3067,18 +3087,81 @@ const CMMSModule = ({
         setNewUser({ name: '', email: '', phone: '', role: 'technician', department_id: '', assignedServices: [] });
         setEmailSearchQuery('');
         setSearchResults([]);
+        alert(
+          `IcanEra success: ${newUser.name || newUser.email} was added to CMMS.\n\n` +
+          `Notification: sent to ${newUser.email}\n` +
+          `Role: ${normalizeRoleKey(newUser.role)}\n` +
+          `Department: ${selectedDepartment?.department_name || 'Not assigned'}`
+        );
+        return;
 
         alert(`âœ… User added to CMMS successfully!\n\nðŸ“¬ Notification sent to ${newUser.email}\nðŸ”‘ Role: ${normalizeRoleKey(newUser.role)}\nðŸ¢ Department: ${selectedDepartment?.department_name || 'Not assigned'}`);
       } catch (error) {
         console.error('Exception adding user:', error);
+        alert('IcanEra alert: ' + error.message);
+        return;
         alert('âŒ Error: ' + error.message);
       }
     };
-    const handleDeleteUser = (userId) => {
-      setCmmsData(prev => ({
-        ...prev,
-        users: prev.users.filter(u => u.id !== userId)
-      }));
+    const handleDeleteUser = async (targetUser) => {
+      if (!targetUser?.id) {
+        alert('❌ Invalid user selected.');
+        return;
+      }
+
+      if (!hasPermission('canDeleteUsers')) {
+        alert('❌ Only Admin users can remove users.');
+        return;
+      }
+
+      if (targetUser.isCreator) {
+        alert('❌ The company creator cannot be removed.');
+        return;
+      }
+
+      if (targetUser.email?.toLowerCase() === user?.email?.toLowerCase()) {
+        alert('❌ You cannot remove your own admin account.');
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `Remove "${targetUser.name}" (${targetUser.email}) from CMMS?\n\nThis will remove role access for this company.`
+      );
+      if (!confirmed) return;
+
+      try {
+        const { error: deleteError } = await supabase
+          .from('cmms_users')
+          .delete()
+          .eq('id', targetUser.id)
+          .eq('cmms_company_id', userCompanyId);
+
+        if (deleteError) {
+          // If hard delete fails due to FK/history records, gracefully deactivate instead.
+          const { error: deactivateError } = await supabase
+            .from('cmms_users')
+            .update({
+              is_active: false,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', targetUser.id)
+            .eq('cmms_company_id', userCompanyId);
+
+          if (deactivateError) {
+            throw deactivateError;
+          }
+
+          await loadCompanyData(userCompanyId);
+          alert(`✅ ${targetUser.name} was deactivated and no longer has CMMS access.`);
+          return;
+        }
+
+        await loadCompanyData(userCompanyId);
+        alert(`✅ ${targetUser.name} was removed from CMMS.`);
+      } catch (error) {
+        console.error('Error removing user:', error);
+        alert(`❌ Failed to remove user:\n${error.message}`);
+      }
     };
 
     const handleAssignAdmin = async (targetUser) => {
@@ -3548,7 +3631,7 @@ const CMMSModule = ({
                           </div>
                         )}
                         <button
-                          onClick={() => handleDeleteUser(user.id)}
+                          onClick={() => handleDeleteUser(user)}
                           className="px-3 py-1.5 bg-red-500 bg-opacity-30 text-red-300 rounded text-xs md:text-sm hover:bg-opacity-50 font-semibold transition-all"
                           title="Remove this user from CMMS"
                         >
@@ -5030,7 +5113,7 @@ const CMMSModule = ({
         setActiveTab('company');
         
         console.log('✅ Profile created successfully, user is now admin with creator permissions');
-        alert('🎉 Company profile created! You are now the Administrator.\n\n✅ Role-Based Tab Access Maintained: Your tab access is still controlled by your assigned role, not your company ownership.');
+        alert('Welcome to IcanEra CMMS. Your operations hub is live. Start by organizing teams, inventory, and maintenance with confidence.');
         
         // Log important: Role-based users can create companies but keep their role restrictions
         if (userRole && userRole !== 'creator') {
