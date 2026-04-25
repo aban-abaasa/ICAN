@@ -6,7 +6,7 @@
 
 import { supabase as supabaseClient } from '../lib/supabase/client';
 
-const OPENAI_API_KEY = import.meta.env?.VITE_OPENAI_API_KEY || process.env?.REACT_APP_OPENAI_API_KEY;
+const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY || '';
 
 const FINANCE_KNOWLEDGE_BRAIN = {
   pillars: [

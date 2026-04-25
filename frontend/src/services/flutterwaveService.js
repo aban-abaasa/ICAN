@@ -20,7 +20,11 @@ class FlutterwaveService {
       console.warn('⚠️ Flutterwave Public Key not configured. Set VITE_FLUTTERWAVE_PUBLIC_KEY or enable mock mode.');
     }
 
-    const mode = this.useMockMode ? '🧪 MOCK' : '🟢 LIVE';
+    const mode = this.useMockMode
+      ? '🧪 MOCK'
+      : this.publicKey
+        ? '🟢 LIVE'
+        : '🟡 LIVE CONFIG MISSING';
     console.log(`✅ Flutterwave Service Initialized (${mode})`);
   }
 

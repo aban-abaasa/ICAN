@@ -756,6 +756,54 @@ const CMMSModule = ({
   const [showCompanyForm, setShowCompanyForm] = useState(false);
   const [showNewUsersList, setShowNewUsersList] = useState(false);
   const [showCompanyDetails, setShowCompanyDetails] = useState(false);
+  const [newUser, setNewUser] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    role: 'technician',
+    department_id: '',
+    assignedServices: []
+  });
+  const [emailSearchQuery, setEmailSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchingUsers, setSearchingUsers] = useState(false);
+  const [verificationStatus, setVerificationStatus] = useState({});
+  const [showDepartmentForm, setShowDepartmentForm] = useState(false);
+  const [isSavingDepartment, setIsSavingDepartment] = useState(false);
+  const [departmentForm, setDepartmentForm] = useState({
+    department_name: '',
+    description: '',
+    location: ''
+  });
+  const searchRequestIdRef = useRef(0);
+  const searchDebounceRef = useRef(null);
+  const departmentOptions = cmmsData.departments || [];
+  const roleNeedsDepartment = ['coordinator', 'supervisor', 'technician', 'storeman'].includes(newUser.role);
+
+  useEffect(() => {
+    if (activeTab !== 'users') return;
+    if (!userCompanyId || departmentOptions.length > 0) return;
+
+    const hydrateDepartments = async () => {
+      const { data: depts, error } = await cmmsService.getCmmsDepartments(userCompanyId);
+      if (!error) {
+        setCmmsData(prev => ({
+          ...prev,
+          departments: depts || []
+        }));
+      }
+    };
+
+    hydrateDepartments();
+  }, [activeTab, userCompanyId, departmentOptions.length]);
+
+  useEffect(() => {
+    return () => {
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current);
+      }
+    };
+  }, []);
 
 
   // ============================================
@@ -1888,7 +1936,7 @@ const CMMSModule = ({
     };
 
     const exportToExcel = async () => {
-      const XLSX = await import('xlsx');
+      const { default: XLSX } = await import('xlsx');
       const wb = XLSX.utils.book_new();
 
       // Inventory sheet
@@ -2479,8 +2527,8 @@ const CMMSModule = ({
     if (!profile && !showProfileForm) {
       return (
         <div className="glass-card p-4 md:p-6 space-y-4">
-          <h3 className="text-lg md:text-xl font-bold text-white">Company Profile</h3>
-          <p className="text-gray-300 text-sm">Create your company profile to continue.</p>
+          <h3 className="text-lg md:text-xl font-bold text-gray-900 dark:text-white">Company Profile</h3>
+          <p className="text-gray-600 dark:text-gray-300 text-sm">Create your company profile to continue.</p>
           <button
             onClick={() => setShowProfileForm(true)}
             className="px-4 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-green-600 transition-all text-sm"
@@ -2495,10 +2543,10 @@ const CMMSModule = ({
       <div className="space-y-4">
         {(showProfileForm || isEditingProfile || !profile) && (
           <div className="glass-card p-4 md:p-6 space-y-4">
-            <h3 className="text-lg md:text-xl font-bold text-white">{(profile && !isNewCompanyMode) ? '🏢 Edit Company Profile' : '🏢 Create Company Profile'}</h3>
+            <h3 className="text-lg md:text-xl font-bold text-gray-900 dark:text-white">{(profile && !isNewCompanyMode) ? '🏢 Edit Company Profile' : '🏢 Create Company Profile'}</h3>
 
             {profileError && (
-              <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-sm">
+              <div className="p-3 bg-red-100 dark:bg-red-500/20 border border-red-300 dark:border-red-500/50 rounded-lg text-red-700 dark:text-red-200 text-sm">
                 {profileError}
               </div>
             )}
@@ -2506,71 +2554,71 @@ const CMMSModule = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
               {/* Company Name */}
               <div className="space-y-1.5">
-                <label className="block text-gray-300 text-sm font-semibold">Company Name *</label>
+                <label className="block text-gray-700 dark:text-gray-300 text-sm font-semibold">Company Name *</label>
                 <input
                   type="text"
                   placeholder="Enter company name"
                   value={formData.companyName}
                   onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                  className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-500 text-sm focus:border-blue-500 focus:border-opacity-50 outline-none"
+                  className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-opacity-10 border border-gray-300 dark:border-white dark:border-opacity-20 rounded text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-500 text-sm focus:border-blue-500 focus:border-opacity-50 outline-none"
                 />
               </div>
 
               {/* Registration Number */}
               <div className="space-y-1.5">
-                <label className="block text-gray-300 text-sm font-semibold">Registration Number</label>
+                <label className="block text-gray-700 dark:text-gray-300 text-sm font-semibold">Registration Number</label>
                 <input
                   type="text"
                   placeholder="e.g., TIN-123456789"
                   value={formData.companyRegistration}
                   onChange={(e) => setFormData({ ...formData, companyRegistration: e.target.value })}
-                  className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-500 text-sm focus:border-blue-500 focus:border-opacity-50 outline-none"
+                  className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-opacity-10 border border-gray-300 dark:border-white dark:border-opacity-20 rounded text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-500 text-sm focus:border-blue-500 focus:border-opacity-50 outline-none"
                 />
               </div>
 
               {/* Location */}
               <div className="space-y-1.5">
-                <label className="block text-gray-300 text-sm font-semibold">Location</label>
+                <label className="block text-gray-700 dark:text-gray-300 text-sm font-semibold">Location</label>
                 <input
                   type="text"
                   placeholder="City, Country"
                   value={formData.location}
                   onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-500 text-sm focus:border-blue-500 focus:border-opacity-50 outline-none"
+                  className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-opacity-10 border border-gray-300 dark:border-white dark:border-opacity-20 rounded text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-500 text-sm focus:border-blue-500 focus:border-opacity-50 outline-none"
                 />
               </div>
 
               {/* Phone */}
               <div className="space-y-1.5">
-                <label className="block text-gray-300 text-sm font-semibold">Phone *</label>
+                <label className="block text-gray-700 dark:text-gray-300 text-sm font-semibold">Phone *</label>
                 <input
                   type="tel"
                   placeholder="+1 (555) 000-0000"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-500 text-sm focus:border-blue-500 focus:border-opacity-50 outline-none"
+                  className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-opacity-10 border border-gray-300 dark:border-white dark:border-opacity-20 rounded text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-500 text-sm focus:border-blue-500 focus:border-opacity-50 outline-none"
                 />
               </div>
 
               {/* Email */}
               <div className="space-y-1.5">
-                <label className="block text-gray-300 text-sm font-semibold">Email *</label>
+                <label className="block text-gray-700 dark:text-gray-300 text-sm font-semibold">Email *</label>
                 <input
                   type="email"
                   placeholder="contact@company.com"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-500 text-sm focus:border-blue-500 focus:border-opacity-50 outline-none"
+                  className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-opacity-10 border border-gray-300 dark:border-white dark:border-opacity-20 rounded text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-500 text-sm focus:border-blue-500 focus:border-opacity-50 outline-none"
                 />
               </div>
 
               {/* Department Input - Moved Here */}
-              <div className="space-y-3 md:col-span-2 bg-blue-500 bg-opacity-10 border border-blue-500 border-opacity-30 rounded-lg p-4">
-                <h4 className="text-sm font-bold text-white mb-2">🏭 Add Departments <span className="text-red-400 text-xs">(Required)</span></h4>
-                <p className="text-gray-400 text-xs mb-3">Create your own departments manually.</p>
+              <div className="space-y-3 md:col-span-2 bg-blue-50 dark:bg-blue-500 dark:bg-opacity-10 border border-blue-300 dark:border-blue-500 dark:border-opacity-30 rounded-lg p-4">
+                <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-2">🏭 Add Departments <span className="text-red-600 dark:text-red-400 text-xs">(Required)</span></h4>
+                <p className="text-gray-600 dark:text-gray-400 text-xs mb-3">Create your own departments manually.</p>
 
                 {departmentError && (
-                  <div className="p-2 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-xs">
+                  <div className="p-2 bg-red-100 dark:bg-red-500/20 border border-red-300 dark:border-red-500/50 rounded-lg text-red-700 dark:text-red-200 text-xs">
                     {departmentError}
                   </div>
                 )}
@@ -2590,7 +2638,7 @@ const CMMSModule = ({
                         setDepartmentForm({ department_name: '', description: '', location: '' });
                       }
                     }}
-                    className="flex-1 px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-500 text-sm focus:border-blue-500 focus:border-opacity-50 outline-none"
+                    className="flex-1 px-3 py-2 bg-white dark:bg-white dark:bg-opacity-10 border border-gray-300 dark:border-white dark:border-opacity-20 rounded text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-500 text-sm focus:border-blue-500 focus:border-opacity-50 outline-none"
                   />
                   <button
                     onClick={() => {
@@ -2602,7 +2650,7 @@ const CMMSModule = ({
                         setDepartmentForm({ department_name: '', description: '', location: '' });
                       }
                     }}
-                    className="px-3 py-2 bg-blue-500 bg-opacity-40 text-blue-100 rounded-lg font-semibold hover:bg-opacity-60 transition-all text-sm whitespace-nowrap"
+                    className="px-3 py-2 bg-blue-100 dark:bg-blue-500 dark:bg-opacity-40 text-blue-700 dark:text-blue-100 rounded-lg font-semibold hover:bg-blue-200 dark:hover:bg-opacity-60 transition-all text-sm whitespace-nowrap"
                   >
                     + Add
                   </button>
@@ -2622,23 +2670,23 @@ const CMMSModule = ({
                       setDepartmentForm({ department_name: '', description: '', location: '' });
                     }
                   }}
-                  className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-500 text-sm focus:border-blue-500 focus:border-opacity-50 outline-none"
+                  className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-opacity-10 border border-gray-300 dark:border-white dark:border-opacity-20 rounded text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-500 text-sm focus:border-blue-500 focus:border-opacity-50 outline-none"
                 />
 
                 {/* Selected Departments Preview */}
                 {selectedDepartments.length > 0 && (
-                  <div className="mt-2 pt-2 border-t border-white border-opacity-20 space-y-1">
-                    <div className="text-gray-300 text-xs font-semibold">Selected ({selectedDepartments.length})</div>
+                  <div className="mt-2 pt-2 border-t border-gray-300 dark:border-white dark:border-opacity-20 space-y-1">
+                    <div className="text-gray-700 dark:text-gray-300 text-xs font-semibold">Selected ({selectedDepartments.length})</div>
                     <div className="space-y-1">
                       {selectedDepartments.map((dept, idx) => (
-                        <div key={idx} className="bg-green-500 bg-opacity-20 border border-green-500 border-opacity-30 rounded px-2 py-1 flex items-center justify-between text-xs">
+                        <div key={idx} className="bg-green-100 dark:bg-green-500 dark:bg-opacity-20 border border-green-300 dark:border-green-500 dark:border-opacity-30 rounded px-2 py-1 flex items-center justify-between text-xs">
                           <div>
-                            <div className="text-white font-semibold">{dept.name}</div>
-                            {dept.description && <div className="text-gray-400 text-xs">{dept.description}</div>}
+                            <div className="text-gray-900 dark:text-white font-semibold">{dept.name}</div>
+                            {dept.description && <div className="text-gray-600 dark:text-gray-400 text-xs">{dept.description}</div>}
                           </div>
                           <button
                             onClick={() => setSelectedDepartments(selectedDepartments.filter((_, i) => i !== idx))}
-                            className="text-red-400 hover:text-red-300 transition-colors p-0.5 ml-2"
+                            className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors p-0.5 ml-2"
                             title="Remove"
                           >
                             <X className="w-3 h-3" />
@@ -2673,7 +2721,7 @@ const CMMSModule = ({
                       setShowNewCompanyOverlay(false);
                     }
                   }}
-                  className="px-4 py-2 bg-gray-500 bg-opacity-30 text-gray-300 rounded-lg font-semibold hover:bg-opacity-50 transition-all text-sm"
+                  className="px-4 py-2 bg-gray-300 dark:bg-gray-500 dark:bg-opacity-30 text-gray-700 dark:text-gray-300 rounded-lg font-semibold hover:bg-gray-400 dark:hover:bg-opacity-50 transition-all text-sm"
                 >
                   Cancel
                 </button>
@@ -2684,23 +2732,23 @@ const CMMSModule = ({
 
         {profile && !showProfileForm && !isEditingProfile && !isNewCompanyMode && (
           <div className="glass-card p-4 md:p-6">
-            <h3 className="text-lg md:text-xl font-bold text-white mb-4">📋 Company Profile</h3>
+            <h3 className="text-lg md:text-xl font-bold text-gray-900 dark:text-white mb-4">📋 Company Profile</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mb-6">
-              <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded">
-                <div className="text-gray-400 text-xs md:text-sm">Company Name</div>
-                <div className="text-white font-bold text-sm md:text-base">{displayProfile.companyName}</div>
+              <div className="bg-gray-50 dark:bg-white dark:bg-opacity-5 p-3 md:p-4 rounded">
+                <div className="text-gray-600 dark:text-gray-400 text-xs md:text-sm">Company Name</div>
+                <div className="text-gray-900 dark:text-white font-bold text-sm md:text-base">{displayProfile.companyName}</div>
               </div>
-              <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded">
-                <div className="text-gray-400 text-xs md:text-sm">Registration</div>
-                <div className="text-white font-bold text-sm md:text-base">{displayProfile.companyRegistration}</div>
+              <div className="bg-gray-50 dark:bg-white dark:bg-opacity-5 p-3 md:p-4 rounded">
+                <div className="text-gray-600 dark:text-gray-400 text-xs md:text-sm">Registration</div>
+                <div className="text-gray-900 dark:text-white font-bold text-sm md:text-base">{displayProfile.companyRegistration}</div>
               </div>
-              <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded">
-                <div className="text-gray-400 text-xs md:text-sm">Location</div>
-                <div className="text-white font-bold text-sm md:text-base">{displayProfile.location}</div>
+              <div className="bg-gray-50 dark:bg-white dark:bg-opacity-5 p-3 md:p-4 rounded">
+                <div className="text-gray-600 dark:text-gray-400 text-xs md:text-sm">Location</div>
+                <div className="text-gray-900 dark:text-white font-bold text-sm md:text-base">{displayProfile.location}</div>
               </div>
-              <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded">
-                <div className="text-gray-400 text-xs md:text-sm">Email</div>
-                <div className="text-white font-bold text-sm md:text-base break-all">{displayProfile.email}</div>
+              <div className="bg-gray-50 dark:bg-white dark:bg-opacity-5 p-3 md:p-4 rounded">
+                <div className="text-gray-600 dark:text-gray-400 text-xs md:text-sm">Email</div>
+                <div className="text-gray-900 dark:text-white font-bold text-sm md:text-base break-all">{displayProfile.email}</div>
               </div>
             </div>
 
@@ -2716,7 +2764,7 @@ const CMMSModule = ({
                   setDepartmentForm({ department_name: '', description: '', location: '' });
                   setSelectedDepartments([]);
                 }}
-                className="flex-1 px-4 py-2 bg-orange-500 bg-opacity-30 text-orange-300 rounded-lg hover:bg-opacity-40 transition-all text-sm font-semibold"
+                className="flex-1 px-4 py-2 bg-orange-100 dark:bg-orange-500 dark:bg-opacity-30 text-orange-700 dark:text-orange-300 rounded-lg hover:bg-orange-200 dark:hover:bg-opacity-40 transition-all text-sm font-semibold"
               >
                 ✏️ Edit Profile
               </button>
@@ -2731,7 +2779,7 @@ const CMMSModule = ({
                   setProfileError('');
                   setDepartmentError('');
                 }}
-                className="flex-1 px-4 py-2 bg-green-500 bg-opacity-30 text-green-300 rounded-lg hover:bg-opacity-40 transition-all text-sm font-semibold"
+                className="flex-1 px-4 py-2 bg-green-100 dark:bg-green-500 dark:bg-opacity-30 text-green-700 dark:text-green-300 rounded-lg hover:bg-green-200 dark:hover:bg-opacity-40 transition-all text-sm font-semibold"
               >
                 ➕ Create Another Company
               </button>
@@ -2739,14 +2787,14 @@ const CMMSModule = ({
 
             {/* View Departments */}
             {departments.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-white border-opacity-20">
-                <h4 className="text-sm font-bold text-gray-300 mb-3">🏭 Departments ({departments.length})</h4>
+              <div className="mt-4 pt-4 border-t border-gray-300 dark:border-white dark:border-opacity-20">
+                <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">🏭 Departments ({departments.length})</h4>
                 <div className="space-y-2">
                   {departments.map(dept => (
-                    <div key={dept.id} className="bg-white bg-opacity-5 border border-white border-opacity-10 rounded px-3 py-2">
-                      <div className="text-white text-sm font-semibold">{dept.department_name}</div>
+                    <div key={dept.id} className="bg-gray-50 dark:bg-white dark:bg-opacity-5 border border-gray-200 dark:border-white dark:border-opacity-10 rounded px-3 py-2">
+                      <div className="text-gray-900 dark:text-white text-sm font-semibold">{dept.department_name}</div>
                       {(dept.location || dept.description) && (
-                        <div className="text-gray-400 text-xs mt-1">{[dept.location, dept.description].filter(Boolean).join(' • ')}</div>
+                        <div className="text-gray-600 dark:text-gray-400 text-xs mt-1">{[dept.location, dept.description].filter(Boolean).join(' • ')}</div>
                       )}
                     </div>
                   ))}
@@ -2762,12 +2810,11 @@ const CMMSModule = ({
   // ============================================
   // USER ROLE MANAGEMENT (ADMIN ONLY)
   // ============================================
-  const UserRoleManager = () => {
+  const renderUserRoleManager = () => {
     const isAdminUser = userRole === 'admin' || isCreator;
 
     // Strict: Only Admin (or creator treated as admin) can manage users and assign roles
-    if (!isAdminUser) {
-      return (
+    const restrictedView = (
         <div className="space-y-4">
           <div className="glass-card p-4 md:p-6 bg-orange-500 bg-opacity-10 border-l-4 border-orange-500">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
@@ -2812,46 +2859,6 @@ const CMMSModule = ({
           )}
         </div>
       );
-    }
-
-    const [newUser, setNewUser] = useState({
-      name: '',
-      email: '',
-      phone: '',
-      role: 'technician',
-      department_id: '',
-      assignedServices: []
-    });
-
-    const [emailSearchQuery, setEmailSearchQuery] = useState('');
-    const [searchResults, setSearchResults] = useState([]);
-    const [searchingUsers, setSearchingUsers] = useState(false);
-    const [verificationStatus, setVerificationStatus] = useState({});
-    const [showDepartmentForm, setShowDepartmentForm] = useState(false);
-    const [isSavingDepartment, setIsSavingDepartment] = useState(false);
-    const [departmentForm, setDepartmentForm] = useState({
-      department_name: '',
-      description: '',
-      location: ''
-    });
-
-    const departmentOptions = cmmsData.departments || [];
-    const roleNeedsDepartment = ['coordinator', 'supervisor', 'technician', 'storeman'].includes(newUser.role);
-
-    useEffect(() => {
-      const hydrateDepartments = async () => {
-        if (!userCompanyId || departmentOptions.length > 0) return;
-        const { data: depts, error } = await cmmsService.getCmmsDepartments(userCompanyId);
-        if (!error) {
-          setCmmsData(prev => ({
-            ...prev,
-            departments: depts || []
-          }));
-        }
-      };
-
-      hydrateDepartments();
-    }, [userCompanyId, departmentOptions.length]);
 
     const handleCreateDepartmentInline = async () => {
       if (!userCompanyId) {
@@ -2891,21 +2898,36 @@ const CMMSModule = ({
     // Search ICAN users - exact function from BusinessProfileForm
     const handleSearchUsers = async (query) => {
       setEmailSearchQuery(query);
-      if (query.length < 2) {
+      const trimmedQuery = query.trim();
+
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current);
+      }
+
+      if (trimmedQuery.length < 3) {
         setSearchResults([]);
+        setSearchingUsers(false);
         return;
       }
 
+      const requestId = ++searchRequestIdRef.current;
       setSearchingUsers(true);
-      try {
-        const results = await searchICANUsers(query);
-        setSearchResults(results);
-      } catch (error) {
-        console.error('Error searching users:', error);
-        setSearchResults([]);
-      } finally {
-        setSearchingUsers(false);
-      }
+
+      searchDebounceRef.current = setTimeout(async () => {
+        try {
+          const results = await searchICANUsers(trimmedQuery);
+          if (requestId !== searchRequestIdRef.current) return;
+          setSearchResults(results);
+        } catch (error) {
+          if (requestId !== searchRequestIdRef.current) return;
+          console.error('Error searching users:', error);
+          setSearchResults([]);
+        } finally {
+          if (requestId === searchRequestIdRef.current) {
+            setSearchingUsers(false);
+          }
+        }
+      }, 350);
     };
 
     // Select user from dropdown - exact function from BusinessProfileForm
@@ -2975,64 +2997,34 @@ const CMMSModule = ({
       }
 
       const selectedDepartment = departmentOptions.find((dept) => dept.id === newUser.department_id);
+      const normalizedEmail = newUser.email.trim().toLowerCase();
 
       try {
-        const { data: existingUser, error: checkError } = await supabase
+        const { data: savedUser, error: saveUserError } = await supabase
           .from('cmms_users')
+          .upsert({
+            cmms_company_id: userCompanyId,
+            email: normalizedEmail,
+            user_name: newUser.name || normalizedEmail.split('@')[0],
+            phone: newUser.phone || null,
+            department_id: roleNeedsDepartment ? newUser.department_id : null,
+            role: newUser.role,
+            is_active: true,
+            is_creator: false,
+            updated_at: new Date().toISOString()
+          }, {
+            onConflict: 'cmms_company_id,email',
+            ignoreDuplicates: false
+          })
           .select('id')
-          .eq('cmms_company_id', userCompanyId)
-          .eq('email', newUser.email)
-          .maybeSingle();
+          .single();
 
-        let userId;
-
-        if (existingUser) {
-          userId = existingUser.id;
-
-          const { error: updateUserError } = await supabase
-            .from('cmms_users')
-            .update({
-              user_name: newUser.name || newUser.email.split('@')[0],
-              phone: newUser.phone || null,
-              department_id: roleNeedsDepartment ? newUser.department_id : null,
-              role: newUser.role,
-              is_active: true,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', userId);
-
-          if (updateUserError) {
-            alert('âŒ Failed to update existing user: ' + updateUserError.message);
-            return;
-          }
-        } else if (checkError && checkError.code !== 'PGRST116') {
-          alert('âŒ Error checking user: ' + checkError.message);
+        if (saveUserError || !savedUser) {
+          alert('âŒ Error saving user to database: ' + (saveUserError?.message || 'Unknown error'));
           return;
-        } else {
-          const { data: insertedUser, error: userError } = await supabase
-            .from('cmms_users')
-            .insert([
-              {
-                cmms_company_id: userCompanyId,
-                email: newUser.email,
-                user_name: newUser.name || newUser.email.split('@')[0],
-                phone: newUser.phone || null,
-                department_id: roleNeedsDepartment ? newUser.department_id : null,
-                role: newUser.role,
-                is_active: true,
-                is_creator: false
-              }
-            ])
-            .select('id')
-            .single();
-
-          if (userError || !insertedUser) {
-            alert('âŒ Error adding user to database: ' + (userError?.message || 'Unknown error'));
-            return;
-          }
-
-          userId = insertedUser.id;
         }
+
+        const userId = savedUser.id;
 
         const { error: assignRoleError } = await supabase.rpc('assign_cmms_user_role_by_key', {
           p_company_id: userCompanyId,
@@ -3082,7 +3074,6 @@ const CMMSModule = ({
         alert('âŒ Error: ' + error.message);
       }
     };
-
     const handleDeleteUser = (userId) => {
       setCmmsData(prev => ({
         ...prev,
@@ -3217,6 +3208,10 @@ const CMMSModule = ({
       }
     };
 
+    if (!isAdminUser) {
+      return restrictedView;
+    }
+
     return (
       <div className="space-y-6">
         {userRole === 'admin' && (
@@ -3281,7 +3276,7 @@ const CMMSModule = ({
                 )}
 
                 {/* No results message */}
-                {emailSearchQuery.length >= 2 && searchResults.length === 0 && !searchingUsers && (
+                {emailSearchQuery.length >= 3 && searchResults.length === 0 && !searchingUsers && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-slate-700 border border-orange-500 rounded shadow-lg z-20 p-3">
                     <p className="text-orange-300 text-sm">⚠️ No ICAN users found matching "{emailSearchQuery}"</p>
                     <p className="text-slate-400 text-xs mt-1">The person must have an ICAN account first.</p>
@@ -5513,7 +5508,7 @@ const CMMSModule = ({
       <div>
         {activeTab === 'company' && <CompanyProfileManager />}
         {activeTab === 'departments' && <DepartmentManager />}
-        {activeTab === 'users' && <UserRoleManager />}
+        {activeTab === 'users' && renderUserRoleManager()}
         {activeTab === 'inventory' && <InventoryManager />}
         {activeTab === 'requisitions' && (
           <RequisitionWorkspace
@@ -5571,6 +5566,7 @@ const CMMSModule = ({
 };
 
 export default CMMSModule;
+
 
 
 

@@ -187,7 +187,13 @@ const SignUp = ({ onSwitchToSignIn, onSuccess }) => {
     setError('');
 
     try {
-      const result = await signUp(formData.email, formData.password, formData.fullName);
+      const result = await signUp(formData.email, formData.password, formData.fullName, {
+        countryCode: formData.countryCode,
+        operatingMode: formData.operatingMode,
+        riskTolerance: formData.riskTolerance,
+        walletAddress: formData.walletAddress,
+        blockchainConsent: formData.blockchainConsent
+      });
       
       if (result?.needsEmailConfirmation) {
         setSuccess(true);

@@ -15,6 +15,28 @@ export const getSupabase = () => {
   return initSupabase();
 };
 
+const USER_SEARCH_CACHE_TTL_MS = 30 * 1000;
+const USER_SEARCH_CACHE_LIMIT = 200;
+const userSearchCache = new Map();
+
+const getCachedUserSearch = (query) => {
+  const hit = userSearchCache.get(query);
+  if (!hit) return null;
+  if (Date.now() - hit.ts > USER_SEARCH_CACHE_TTL_MS) {
+    userSearchCache.delete(query);
+    return null;
+  }
+  return hit.value;
+};
+
+const setCachedUserSearch = (query, value) => {
+  if (userSearchCache.size >= USER_SEARCH_CACHE_LIMIT) {
+    const firstKey = userSearchCache.keys().next().value;
+    userSearchCache.delete(firstKey);
+  }
+  userSearchCache.set(query, { value, ts: Date.now() });
+};
+
 /**
  * User Verification Service - Verify ICAN user accounts
  */
@@ -147,6 +169,32 @@ export const verifyICANUser = async (email) => {
 export const searchICANUsers = async (searchTerm) => {
   try {
     const sb = getSupabase();
+    const normalizedSearchTerm = String(searchTerm || '').trim();
+
+    const mapUsers = (records = []) => {
+      const seenEmails = new Set();
+
+      return records.reduce((acc, profile) => {
+        const email = String(profile.email || '').trim().toLowerCase();
+        if (!email || seenEmails.has(email)) return acc;
+
+        seenEmails.add(email);
+        acc.push({
+          id: profile.user_id || profile.id,
+          email,
+          name: profile.full_name || profile.email?.split('@')[0] || 'Unknown'
+        });
+        return acc;
+      }, []);
+    };
+
+    if (normalizedSearchTerm.length < 2) {
+      return [];
+    }
+
+    const cached = getCachedUserSearch(normalizedSearchTerm.toLowerCase());
+    if (cached) return cached;
+
     if (!sb) {
       console.log('Demo mode: using demo users');
       return [
@@ -155,133 +203,57 @@ export const searchICANUsers = async (searchTerm) => {
       ];
     }
 
-    // Priority 1: Search all_users table (consolidated view)
+    // Priority 1: single RPC path (security definer) for scalable lookup
     try {
-      console.log('Searching all_users for:', searchTerm);
+      console.log('Searching users via search_ican_users RPC for:', normalizedSearchTerm);
       const { data, error } = await sb
-        .from('all_users')
-        .select('id, user_id, email, full_name')
-        .or(`email.ilike.%${searchTerm}%,full_name.ilike.%${searchTerm}%`)
-        .limit(10);
+        .rpc('search_ican_users', { p_search: normalizedSearchTerm, p_limit: 20, p_offset: 0 });
 
-      if (!error && data && data.length > 0) {
-        console.log('Found users in all_users:', data);
-        return data.map(profile => ({
-          id: profile.user_id || profile.id,
-          email: profile.email,
-          name: profile.full_name || profile.email?.split('@')[0] || 'Unknown'
-        }));
+      if (!error && data) {
+        const mapped = mapUsers(data);
+        setCachedUserSearch(normalizedSearchTerm.toLowerCase(), mapped);
+        return mapped;
       }
-    } catch (allUsersError) {
-      console.log('all_users table not found, trying source tables...');
+    } catch (rpcSearchError) {
+      console.log('search_ican_users RPC unavailable, falling back:', rpcSearchError?.message);
     }
 
-    // Fallback 1: Search ican_user_profiles table
+    // Fallback 1: auth.users RPC only
     try {
-      console.log('Searching ican_user_profiles for:', searchTerm);
-      const { data, error } = await sb
-        .from('ican_user_profiles')
-        .select('id, email, full_name')
-        .or(`email.ilike.%${searchTerm}%,full_name.ilike.%${searchTerm}%`)
-        .limit(10);
-
-      if (!error && data && data.length > 0) {
-        console.log('Found users in ican_user_profiles:', data);
-        return data.map(profile => ({
-          id: profile.id,
-          email: profile.email,
-          name: profile.full_name || profile.email?.split('@')[0] || 'Unknown'
-        }));
-      }
-    } catch (err) {
-      console.log('ican_user_profiles search failed');
-    }
-
-    // Fallback 2: Search profiles table
-    try {
-      console.log('Searching profiles table for:', searchTerm);
-      const { data, error } = await sb
-        .from('profiles')
-        .select('id, email, full_name')
-        .or(`email.ilike.%${searchTerm}%,full_name.ilike.%${searchTerm}%`)
-        .limit(10);
-
-      if (!error && data && data.length > 0) {
-        console.log('Found users in profiles:', data);
-        return data.map(profile => ({
-          id: profile.id,
-          email: profile.email,
-          name: profile.full_name || profile.email?.split('@')[0] || 'Unknown'
-        }));
-      }
-    } catch (err) {
-      console.log('profiles search failed');
-    }
-
-    // Fallback 3: Search auth.users directly (for users not yet in profiles table)
-    try {
-      console.log('Searching auth.users for:', searchTerm);
-      // Note: This requires service_role key or proper RLS policies
-      const { data, error } = await sb
-        .from('all_users') // Try all_users first which should have auth.users data
-        .select('user_id, email, full_name')
-        .eq('source_table', 'auth.users')
-        .or(`email.ilike.%${searchTerm}%,full_name.ilike.%${searchTerm}%`)
-        .limit(10);
-
-      if (!error && data && data.length > 0) {
-        console.log('Found auth.users in all_users:', data);
-        return data.map(profile => ({
-          id: profile.user_id,
-          email: profile.email,
-          name: profile.full_name || profile.email?.split('@')[0] || 'Unknown'
-        }));
-      }
-    } catch (err) {
-      console.log('auth.users search failed:', err.message);
-    }
-
-    // Fallback 3b: RPC to list_auth_users (security definer)
-    try {
-      console.log('Searching auth.users via list_auth_users RPC for:', searchTerm);
+      console.log('Searching auth.users via list_auth_users RPC for:', normalizedSearchTerm);
       const { data: rpcUsers, error: rpcError } = await sb
-        .rpc('list_auth_users', { p_search: searchTerm, p_limit: 10 });
+        .rpc('list_auth_users', { p_search: normalizedSearchTerm, p_limit: 20 });
 
-      if (!rpcError && rpcUsers && rpcUsers.length > 0) {
-        console.log('Found auth users via RPC:', rpcUsers);
-        return rpcUsers.map(user => ({
-          id: user.id,
-          email: user.email,
-          name: user.full_name || user.email?.split('@')[0] || 'Unknown'
-        }));
+      if (!rpcError && rpcUsers) {
+        const mapped = mapUsers(rpcUsers);
+        setCachedUserSearch(normalizedSearchTerm.toLowerCase(), mapped);
+        return mapped;
       }
     } catch (err) {
       console.log('list_auth_users RPC search failed:', err.message);
     }
 
-    // Fallback 4: Email-only search in ican_user_profiles
+    // Fallback 2: single table query (all_users)
     try {
-      console.log('Trying email-only search in ican_user_profiles');
-      const { data: emailData, error: emailError } = await sb
-        .from('ican_user_profiles')
+      console.log('Searching all_users fallback for:', normalizedSearchTerm);
+      const { data, error } = await sb
+        .from('all_users')
         .select('id, email, full_name')
-        .ilike('email', `%${searchTerm}%`)
-        .limit(10);
+        .or(`email.ilike.%${normalizedSearchTerm}%,full_name.ilike.%${normalizedSearchTerm}%`)
+        .limit(20);
 
-      if (!emailError && emailData && emailData.length > 0) {
-        console.log('Found by email in ican_user_profiles:', emailData);
-        return emailData.map(profile => ({
-          id: profile.id,
-          email: profile.email,
-          name: profile.full_name || profile.email?.split('@')[0] || 'Unknown'
-        }));
+      if (!error && data) {
+        const mapped = mapUsers(data);
+        setCachedUserSearch(normalizedSearchTerm.toLowerCase(), mapped);
+        return mapped;
       }
     } catch (err) {
-      console.log('Email-only search failed');
+      console.log('all_users fallback search failed:', err.message);
     }
 
     // No results found
-    console.log('No users found matching:', searchTerm);
+    console.log('No users found matching:', normalizedSearchTerm);
+    setCachedUserSearch(normalizedSearchTerm.toLowerCase(), []);
     return [];
   } catch (error) {
     console.error('Critical error in searchICANUsers:', error);
