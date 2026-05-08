@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ChevronRight, Play, Zap, Shield, TrendingUp, Users, ArrowRight, ChevronDown, X, Image as ImageIcon } from 'lucide-react';
 import DashboardPreview from './DashboardPreview';
 import ThemeSwitcher from './ThemeSwitcher';
+import { PWAInstallButton } from './PWAInstallButton';
 import { useTheme } from '../context/ThemeContext';
 
 const LandingPage = ({ onGetStarted }) => {
@@ -717,20 +718,24 @@ const LandingPage = ({ onGetStarted }) => {
               Testimonials
             </button>
           </div>
-          <div className="flex items-center gap-2 md:gap-3">
-            <ThemeSwitcher />
-            <button
-              onClick={handleSignIn}
-              className="px-3 md:px-5 py-2 rounded-full border-2 ican-rainbow-border bg-purple-900/25 hover:bg-purple-800/40 text-white font-bold transition-all duration-300 text-xs md:text-sm 2xl:text-base"
-            >
-              Sign In
-            </button>
-            <button
-              onClick={handleCreateAccount}
-              className="ican-rainbow-fill border-2 ican-rainbow-border px-3 md:px-5 py-2 rounded-full font-extrabold hover:shadow-2xl hover:shadow-purple-500/55 transition-all duration-300 transform hover:scale-[1.04] text-white text-xs md:text-sm 2xl:text-base"
-            >
-              Create Account
-            </button>
+          <div className="flex flex-col items-end gap-2">
+            {/* Top row: Theme switcher, Sign In, Create Account */}
+            <div className="flex items-center gap-2 md:gap-3">
+              <ThemeSwitcher />
+              <PWAInstallButton />
+              <button
+                onClick={handleSignIn}
+                className="px-3 md:px-5 py-2 rounded-full border-2 ican-rainbow-border bg-purple-900/25 hover:bg-purple-800/40 text-white font-bold transition-all duration-300 text-xs md:text-sm 2xl:text-base"
+              >
+                Sign In
+              </button>
+              <button
+                onClick={handleCreateAccount}
+                className="ican-rainbow-fill border-2 ican-rainbow-border px-3 md:px-5 py-2 rounded-full font-extrabold hover:shadow-2xl hover:shadow-purple-500/55 transition-all duration-300 transform hover:scale-[1.04] text-white text-xs md:text-sm 2xl:text-base"
+              >
+                Create Account
+              </button>
+            </div>
           </div>
         </div>
       </nav>

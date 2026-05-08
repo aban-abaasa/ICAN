@@ -5,6 +5,9 @@ import CountryCheckMiddleware from './components/auth/CountryCheckMiddleware';
 import ICANCapitalEngine from './components/ICAN_Capital_Engine';
 import LandingPage from './components/LandingPage';
 import MobileView from './components/MobileView';
+import { OfflineIndicator } from './components/OfflineIndicator';
+import { SplashScreen } from './components/SplashScreen';
+import { offlineManager } from './lib/offlineManager';
 import { Loader2, AlertCircle } from 'lucide-react';
 
 // Error Boundary for mobile crashes
@@ -62,8 +65,25 @@ const App = () => {
     return false;
   });
   const [appError, setAppError] = useState(null);
+  const [showSplash, setShowSplash] = useState(false);
   const isRestoringAppHistoryRef = useRef(false);
   const lastPublicViewRef = useRef(null);
+
+  // Initialize PWA offline manager on mount
+  useEffect(() => {
+    const initOfflineManager = async () => {
+      try {
+        console.log('[App] Initializing offline manager...');
+        // offlineManager initializes automatically in its constructor
+        // but we can add additional setup here if needed
+        console.log('[App] Offline manager initialized');
+      } catch (error) {
+        console.error('[App] Error initializing offline manager:', error);
+      }
+    };
+
+    initOfflineManager();
+  }, []);
 
   useEffect(() => {
     const handleResize = () => {
@@ -202,6 +222,7 @@ const App = () => {
   if (isRecoveryMode || isResetPasswordPath) {
     return (
       <ErrorBoundary>
+        <SplashScreen show={showSplash} onHide={() => setShowSplash(false)} />
         <AuthPage
           initialView="reset-password"
           onRecoveryHandled={handleRecoveryHandled}
@@ -214,12 +235,17 @@ const App = () => {
     if (showLanding) {
       return (
         <ErrorBoundary>
-          <LandingPage onGetStarted={() => setShowLanding(false)} />
+          <SplashScreen show={showSplash} onHide={() => setShowSplash(false)} />
+          <LandingPage onGetStarted={() => {
+            setShowSplash(true);
+            setTimeout(() => setShowLanding(false), 800);
+          }} />
         </ErrorBoundary>
       );
     }
     return (
       <ErrorBoundary>
+        <SplashScreen show={showSplash} onHide={() => setShowSplash(false)} />
         <AuthPage />
       </ErrorBoundary>
     );
@@ -231,6 +257,8 @@ const App = () => {
     console.log('📱 Rendering mobile view (with country check)');
     return (
       <ErrorBoundary>
+        <SplashScreen show={showSplash} onHide={() => setShowSplash(false)} />
+        <OfflineIndicator />
         <CountryCheckMiddleware>
           <MobileView userProfile={user} />
         </CountryCheckMiddleware>
@@ -242,6 +270,8 @@ const App = () => {
   console.log('🖥️ Rendering desktop view (with country check)');
   return (
     <ErrorBoundary>
+      <SplashScreen show={showSplash} onHide={() => setShowSplash(false)} />
+      <OfflineIndicator />
       <CountryCheckMiddleware>
         <ICANCapitalEngine />
       </CountryCheckMiddleware>
