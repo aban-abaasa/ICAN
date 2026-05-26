@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import OfflineLoginHelper from '../OfflineLoginHelper';
 
 const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
   const { signIn, signInWithGoogle } = useAuth();
@@ -167,8 +168,14 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
     } catch (err) {
       console.error('Sign in error:', err);
       const message = String(err?.message || '').toLowerCase();
-      if (message.includes('invalid login credentials')) {
+      
+      // Check if offline
+      if (!navigator.onLine) {
+        setError('📴 You\'re offline. Use a cached session above or connect to the internet to sign in with a password.');
+      } else if (message.includes('invalid login credentials')) {
         setError('Invalid email or password. Also confirm this account exists in the current Supabase project and has completed email verification.');
+      } else if (message.includes('no cached session')) {
+        setError('No offline session found. Please sign in while online first so we can cache your session.');
       } else {
         setError(err.message || 'Sign in failed. Please try again.');
       }
@@ -242,6 +249,22 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
             <p className="text-red-400 text-sm text-center">{error}</p>
           </div>
         )}
+
+        {/* Offline Login Helper - Show cached sessions if offline */}
+        <OfflineLoginHelper
+          onOfflineLogin={async (email) => {
+            try {
+              await signIn(email, ''); // signIn will handle offline cache
+              if (onSuccess) onSuccess();
+            } catch (err) {
+              setError(err.message);
+            }
+          }}
+          onOnlineLogin={(email, password) => {
+            // Trigger normal form submission
+            handleSubmit({ preventDefault: () => {} });
+          }}
+        />
 
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Email */}

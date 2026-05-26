@@ -1,10 +1,8 @@
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseClient } from '../lib/supabase/client';
+import { offlineAuthManager } from '../lib/offlineAuthManager';
 
-// Initialize Supabase client
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://your-supabase-url.supabase.co';
-const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY || 'your-anon-key';
-
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Get Supabase client (already initialized properly)
+const getClient = () => getSupabaseClient();
 
 /**
  * Save transaction to Supabase
@@ -14,7 +12,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
  */
 export const saveTransaction = async (transaction, userId) => {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getClient()
       .from('ican_transactions')
       .insert([
         {
@@ -59,7 +57,7 @@ export const saveTransaction = async (transaction, userId) => {
  */
 export const getTransactions = async (userId) => {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getClient()
       .from('ican_transactions')
       .select('*')
       .eq('user_id', userId)
@@ -87,7 +85,7 @@ export const getTransactions = async (userId) => {
  */
 export const getTransactionsByDateRange = async (userId, startDate, endDate) => {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getClient()
       .from('ican_transactions')
       .select('*')
       .eq('user_id', userId)
@@ -115,7 +113,7 @@ export const getTransactionsByDateRange = async (userId, startDate, endDate) => 
  */
 export const getTransactionsByType = async (userId, type) => {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getClient()
       .from('ican_transactions')
       .select('*')
       .eq('user_id', userId)
@@ -142,7 +140,7 @@ export const getTransactionsByType = async (userId, type) => {
  */
 export const getTransactionsByCategory = async (userId, category) => {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getClient()
       .from('ican_transactions')
       .select('*')
       .eq('user_id', userId)
@@ -168,7 +166,7 @@ export const getTransactionsByCategory = async (userId, category) => {
  */
 export const getLargeTransactions = async (userId, threshold = 1000000) => {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getClient()
       .from('ican_transactions')
       .select('*')
       .eq('user_id', userId)
@@ -196,7 +194,7 @@ export const getLargeTransactions = async (userId, threshold = 1000000) => {
  */
 export const updateTransaction = async (transactionId, updates) => {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getClient()
       .from('ican_transactions')
       .update(updates)
       .eq('id', transactionId);
@@ -221,20 +219,95 @@ export const updateTransaction = async (transactionId, updates) => {
  */
 export const deleteTransaction = async (transactionId) => {
   try {
-    const { data, error } = await supabase
+    console.log(`🗑️ [supabaseTransactions] Deleting transaction ID: ${transactionId}`);
+    
+    // Get current user to verify ownership
+    const client = getClient();
+    const { data: { user } } = await client.auth.getUser();
+    
+    if (!user) {
+      console.error('❌ No authenticated user found');
+      return { success: false, error: new Error('Not authenticated') };
+    }
+    
+    const userId = user.id;
+    console.log(`👤 [supabaseTransactions] Auth user ID: ${userId}`);
+    
+    // Remove from offline queue first (prevent re-syncing deleted transactions)
+    try {
+      const removed = await offlineAuthManager.removeActionsByTransactionId(transactionId);
+      console.log(`✅ [supabaseTransactions] Cleared ${removed} queued actions`);
+    } catch (queueError) {
+      console.warn('[supabaseTransactions] Could not remove from offline queue:', queueError);
+    }
+    
+    // Verify transaction exists and get its user_id
+    const { data: existingData, error: checkError } = await client
+      .from('ican_transactions')
+      .select('id, user_id')
+      .eq('id', transactionId)
+      .single();
+
+    if (checkError || !existingData) {
+      console.error('❌ [supabaseTransactions] Transaction not found:', checkError);
+      return { success: false, error: new Error('Transaction not found') };
+    }
+    
+    console.log(`📋 [supabaseTransactions] Transaction found - ID: ${existingData.id}, Owner: ${existingData.user_id}`);
+    
+    // Verify ownership
+    if (existingData.user_id !== userId) {
+      console.error(`❌ [supabaseTransactions] User mismatch - Transaction owner: ${existingData.user_id}, Current user: ${userId}`);
+      return { success: false, error: new Error('You do not own this transaction') };
+    }
+    
+    // Delete from Supabase using RLS
+    // Don't use .eq('user_id', ...) in delete - let RLS handle it
+    const { error: deleteError } = await client
       .from('ican_transactions')
       .delete()
       .eq('id', transactionId);
 
-    if (error) {
-      console.error('Error deleting transaction:', error);
-      return { success: false, error };
+    if (deleteError) {
+      console.error('❌ [supabaseTransactions] Supabase delete error:', deleteError);
+      return { success: false, error: deleteError };
     }
 
-    console.log('✅ Transaction deleted');
-    return { success: true, data };
+    console.log(`✅ [supabaseTransactions] Delete executed without error`);
+
+    // Verify deletion succeeded by trying to fetch it again
+    const { data: postDeleteCheck, error: postDeleteError } = await client
+      .from('ican_transactions')
+      .select('id')
+      .eq('id', transactionId)
+      .single();
+
+    // After deletion:
+    // - If record still exists: postDeleteCheck will have data (deletion FAILED)
+    // - If record deleted: postDeleteError will be PGRST116 "no rows" (deletion SUCCEEDED)
+    
+    if (postDeleteCheck) {
+      console.error('❌ [supabaseTransactions] Record still exists after delete:', postDeleteCheck);
+      console.error('⚠️ [supabaseTransactions] Possible RLS policy issue or transaction belongs to different user');
+      return { success: false, error: new Error('Record still exists after delete - RLS or permission issue') };
+    }
+
+    // PGRST116 = "no rows found" = expected success state
+    if (postDeleteError?.code === 'PGRST116') {
+      console.log(`✅ [supabaseTransactions] Deletion verified - record no longer exists (PGRST116)`);
+      return { success: true, deleted: true };
+    }
+
+    // Any other error is unexpected
+    if (postDeleteError) {
+      console.error('❌ [supabaseTransactions] Unexpected verification error:', postDeleteError);
+      return { success: false, error: postDeleteError };
+    }
+
+    console.log(`✅ [supabaseTransactions] Transaction deleted successfully`);
+    return { success: true, deleted: true };
   } catch (err) {
-    console.error('Exception deleting transaction:', err);
+    console.error('❌ [supabaseTransactions] Exception deleting transaction:', err);
     return { success: false, error: err };
   }
 };
@@ -246,7 +319,7 @@ export const deleteTransaction = async (transactionId) => {
  */
 export const getTransactionStats = async (userId) => {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getClient()
       .from('ican_transactions')
       .select('transaction_type, amount')
 
@@ -310,5 +383,3 @@ export const syncTransactionsToSupabase = async (localTransactions, userId) => {
     return { success: false, error: err };
   }
 };
-
-export default supabase;

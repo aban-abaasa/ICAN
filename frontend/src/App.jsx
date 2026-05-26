@@ -5,7 +5,7 @@ import CountryCheckMiddleware from './components/auth/CountryCheckMiddleware';
 import ICANCapitalEngine from './components/ICAN_Capital_Engine';
 import LandingPage from './components/LandingPage';
 import MobileView from './components/MobileView';
-import { OfflineIndicator } from './components/OfflineIndicator';
+import ActionQueue from './components/ActionQueue';
 import { SplashScreen } from './components/SplashScreen';
 import { offlineManager } from './lib/offlineManager';
 import { Loader2, AlertCircle } from 'lucide-react';
@@ -258,7 +258,7 @@ const App = () => {
     return (
       <ErrorBoundary>
         <SplashScreen show={showSplash} onHide={() => setShowSplash(false)} />
-        <OfflineIndicator />
+        <ActionQueue />
         <CountryCheckMiddleware>
           <MobileView userProfile={user} />
         </CountryCheckMiddleware>
@@ -271,7 +271,7 @@ const App = () => {
   return (
     <ErrorBoundary>
       <SplashScreen show={showSplash} onHide={() => setShowSplash(false)} />
-      <OfflineIndicator />
+      <ActionQueue />
       <CountryCheckMiddleware>
         <ICANCapitalEngine />
       </CountryCheckMiddleware>

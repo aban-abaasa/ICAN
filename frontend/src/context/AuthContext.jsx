@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { getSupabaseClient } from '../lib/supabase/client';
+import { offlineAuthManager } from '../lib/offlineAuthManager';
+import { syncManager } from '../lib/syncManager';
 
 const AuthContext = createContext({});
 
@@ -10,6 +12,41 @@ export const AuthProvider = ({ children }) => {
   const [profile, setProfile] = useState(null);
   const [isRecoveryMode, setIsRecoveryMode] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
+  const [syncStatus, setSyncStatus] = useState({ status: 'idle', message: '' });
+
+  // Initialize offline managers
+  useEffect(() => {
+    const initializeOfflineManagers = async () => {
+      try {
+        await offlineAuthManager.init();
+        await syncManager.init();
+        console.log('[AuthContext] Offline managers initialized');
+      } catch (error) {
+        console.error('[AuthContext] Failed to initialize offline managers:', error);
+      }
+    };
+
+    initializeOfflineManagers();
+
+    // Listen for online/offline changes
+    const handleOnline = () => setIsOfflineMode(false);
+    const handleOffline = () => setIsOfflineMode(true);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Subscribe to sync status changes
+    const unsubscribeSyncStatus = syncManager.onSyncStateChange((state) => {
+      setSyncStatus(state);
+    });
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      unsubscribeSyncStatus();
+    };
+  }, []);
 
   // Get supabase client safely
   const getSupabase = () => {
@@ -261,28 +298,137 @@ export const AuthProvider = ({ children }) => {
     return { ...data, needsEmailConfirmation: data.user && !data.session };
   };
 
-  // Sign in - exactly like FARM-AGENT
+  // Sign in with offline support (check cache first)
   const signIn = async (email, password) => {
-    const supabase = getSupabase();
-    if (!supabase) throw new Error('Supabase not initialized');
-
     const normalizedEmail = String(email || '').trim().toLowerCase();
     
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: normalizedEmail,
-      password,
-    });
+    // Try online Supabase auth first
+    if (navigator.onLine) {
+      const supabase = getSupabase();
+      if (!supabase) throw new Error('Supabase not initialized');
 
-    if (error) throw error;
-    return data;
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: normalizedEmail,
+          password,
+        });
+
+        if (error) throw error;
+
+        // Cache the session for offline access
+        await offlineAuthManager.cacheSession({
+          email: normalizedEmail,
+          userId: data.user.id,
+          userMetadata: data.user.user_metadata || {},
+          profile: profile,
+          accessToken: data.session?.access_token
+        });
+
+        return data;
+      } catch (error) {
+        // If online login fails, fall back to offline cached session
+        console.warn('[AuthContext] Online auth failed, trying offline cache:', error.message);
+        return await this.offlineSignIn(normalizedEmail);
+      }
+    } else {
+      // Offline - try cached session
+      return await this.offlineSignIn(normalizedEmail);
+    }
   };
 
-  // Sign out
+  // Sign in with offline cache
+  const offlineSignIn = async (email) => {
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    console.log('[AuthContext] 📴 Attempting offline login for:', normalizedEmail);
+
+    const cachedSession = await offlineAuthManager.getOfflineSession(normalizedEmail);
+
+    if (!cachedSession) {
+      throw new Error('No cached session found. Please sign in while online first.');
+    }
+
+    console.log('[AuthContext] ✅ Using offline cached session for:', normalizedEmail);
+
+    // Set user from cache
+    setUser({
+      id: cachedSession.userId,
+      email: cachedSession.email,
+      user_metadata: cachedSession.userMetadata
+    });
+
+    // Load profile
+    if (cachedSession.profile) {
+      setProfile(cachedSession.profile);
+    } else {
+      await loadProfile(cachedSession.userId);
+    }
+
+    return {
+      user: {
+        id: cachedSession.userId,
+        email: cachedSession.email,
+        user_metadata: cachedSession.userMetadata
+      },
+      offlineMode: true,
+      message: 'Logged in offline mode. Changes will sync when online.'
+    };
+  };
+
+  // Queue an action for sync (WhatsApp-like)
+  const queueAction = async (actionType, actionData) => {
+    try {
+      const queuedAction = await offlineAuthManager.queueOfflineAction(actionType, {
+        ...actionData,
+        userEmail: user?.email
+      });
+
+      console.log('[AuthContext] 📤 Action queued:', actionType);
+
+      // If online, trigger immediate sync
+      if (navigator.onLine && !syncManager.isSyncing) {
+        setTimeout(() => syncManager.performSync(), 500);
+      }
+
+      return queuedAction;
+    } catch (error) {
+      console.error('[AuthContext] Failed to queue action:', error);
+      throw error;
+    }
+  };
+
+  // Get cached sessions for "recent logins" feature
+  const getCachedSessions = async () => {
+    try {
+      const sessions = await offlineAuthManager.getAllCachedSessions();
+      return sessions;
+    } catch (error) {
+      console.error('[AuthContext] Failed to get cached sessions:', error);
+      return [];
+    }
+  };
+
+  // Get sync status
+  const getSyncStatus = async () => {
+    return await syncManager.getSyncStatus();
+  };
+
+  // Manual sync trigger
+  const manualSync = async () => {
+    return await syncManager.manualSync();
+  };
+
+  // Sign out (clear offline session too)
   const signOut = async () => {
     const supabase = getSupabase();
     if (!supabase) throw new Error('Supabase not initialized');
     
     const { error } = await supabase.auth.signOut();
+    
+    // Clear offline session
+    if (user?.email) {
+      await offlineAuthManager.removeSession(user.email);
+    }
+
     if (error) throw error;
   };
 
@@ -347,6 +493,15 @@ export const AuthProvider = ({ children }) => {
     profile,
     isRecoveryMode,
     loading,
+    // Offline support
+    isOfflineMode,
+    syncStatus,
+    queueAction,
+    getCachedSessions,
+    getSyncStatus,
+    manualSync,
+    offlineSignIn,
+    // Auth methods
     signUp,
     signIn,
     signOut,

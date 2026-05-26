@@ -1,7 +1,7 @@
 /**
  * 🌍 Country Check Middleware
  * Runs on app initialization and after login
- * Forces country selection if not already set
+ * Forces country selection if not already set (unless offline)
  */
 
 import React, { useEffect, useState } from 'react';
@@ -11,7 +11,7 @@ import icanCoinService from '../../services/icanCoinService';
 import CountrySetup from './CountrySetup';
 
 export default function CountryCheckMiddleware({ children }) {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, isOfflineMode } = useAuth();
   const [countrySet, setCountrySet] = useState(null);
   const [checking, setChecking] = useState(true);
   const [showCountrySetup, setShowCountrySetup] = useState(false);
@@ -26,6 +26,17 @@ export default function CountryCheckMiddleware({ children }) {
         if (!user?.id) {
           console.log('🔐 No user authenticated yet');
           setCountrySet(null);
+          setShowCountrySetup(false);
+          setChecking(false);
+          return;
+        }
+
+        // 📴 OFFLINE MODE: Skip country check when offline
+        // User can set country later when back online
+        if (!navigator.onLine || isOfflineMode) {
+          console.log('📴 User offline - skipping country check. Allowing app access.');
+          console.log('💡 User can set country later when back online.');
+          setCountrySet(true);
           setShowCountrySetup(false);
           setChecking(false);
           return;
@@ -84,7 +95,7 @@ export default function CountryCheckMiddleware({ children }) {
     if (!authLoading && user?.id) {
       checkCountryStatus();
     }
-  }, [user?.id, authLoading]);
+  }, [user?.id, authLoading, isOfflineMode]);
 
   // Still checking authentication and country
   if (authLoading || checking) {

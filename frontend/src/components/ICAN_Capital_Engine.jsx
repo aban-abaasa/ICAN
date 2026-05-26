@@ -7680,7 +7680,13 @@ Data Freshness: ${reportData.metadata.dataFreshness}
     localStorage.setItem('ican_country', operatingCountry);
     localStorage.setItem('ican_goals', JSON.stringify(goals));
 
-    // Also sync to Supabase if available
+    // Skip Supabase sync if offline (data is already saved locally)
+    if (!navigator.onLine) {
+      console.log('📴 Offline mode: Transactions saved to local storage, will sync when online');
+      return;
+    }
+
+    // Sync to Supabase if online and available
     if (transactions.length > 0) {
       try {
         const supabase = getSupabaseClient();
@@ -7688,8 +7694,9 @@ Data Freshness: ${reportData.metadata.dataFreshness}
           console.warn('⚠️ Supabase client not available for sync');
           return;
         }
-        const { user } = useAuth();
-        const userId = user?.uid || 'demo-user';
+        
+        // Use profile from useAuth (called at component level)
+        const userId = profile?.id || 'demo-user';
 
         for (const transaction of transactions) {
           const { error } = await supabase.rpc('sync_firebase_transaction', {

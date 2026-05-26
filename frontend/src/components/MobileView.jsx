@@ -49,7 +49,8 @@ import {
   Target,
   Clock,
   Percent,
-  Sparkles
+  Sparkles,
+  Trash2
 } from 'lucide-react';
 import SmartTransactionEntry from './SmartTransactionEntry';
 import { ProfilePage } from './auth/ProfilePage';
@@ -62,6 +63,7 @@ import { StatusUploader } from './status/StatusUploader';
 import SearchModal from './SearchModal';
 import ThemeSwitcher from './ThemeSwitcher';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import { BusinessLoanCalculator } from './BusinessLoanCalculator';
 import { jsPDF } from 'jspdf';
 import * as XLSX from 'xlsx';
@@ -73,6 +75,8 @@ import {
 } from '../services/advancedReportService';
 import { VelocityEngine } from '../utils/velocityEngine';
 import { supabase } from '../lib/supabase/client';
+import { deleteTransaction } from '../services/supabaseTransactions';
+import DataCleanupModal from './DataCleanupModal';
 import { walletAccountService } from '../services/walletAccountService';
 import { walletService } from '../services/walletService';
 import {
@@ -552,6 +556,7 @@ const FeatureCardWithSlideshow = ({
 
 const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const { actualTheme } = useTheme();
+  const { isOfflineMode, queueAction, user: authContextUser } = useAuth();
   const [authUser, setAuthUser] = useState(null);
   
   // Get the actual Supabase auth user
@@ -892,6 +897,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [reportRecordScope, setReportRecordScope] = useState('business'); // business | personal | all
   const [reportFilteredMetrics, setReportFilteredMetrics] = useState(null);
   const [isLoadingReportMetrics, setIsLoadingReportMetrics] = useState(false);
+  const [showDataCleanup, setShowDataCleanup] = useState(false);
   const isRestoringMobileHistoryRef = useRef(false);
   const hasHydratedMobileHistoryRef = useRef(false);
   const hasSeededMobileRootRef = useRef(false);
@@ -2304,6 +2310,57 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       setDeleteAccountError(error.message || 'Unable to delete account right now.');
     } finally {
       setIsDeletingAccount(false);
+    }
+  };
+
+  // Delete a transaction with confirmation
+  const handleDeleteTransaction = async (transactionId, description) => {
+    if (!confirm(`Are you sure you want to delete "${description}"?`)) {
+      return;
+    }
+
+    try {
+      console.log(`🗑️ Deleting transaction: ${transactionId}`);
+      const result = await deleteTransaction(transactionId);
+
+      if (!result.success) {
+        const errorMsg = result.error?.message || result.error?.toString?.() || 'Unknown error';
+        console.error('Delete failed:', errorMsg);
+        alert(`❌ Failed to delete: ${errorMsg}`);
+        return;
+      }
+
+      if (!result.deleted) {
+        alert('⚠️ Transaction may not have been deleted. Please refresh and try again.');
+        return;
+      }
+
+      // Remove from local state immediately
+      setTransactions(prev => prev.filter(t => t.id !== transactionId));
+      
+      console.log('✅ Transaction deleted from Supabase');
+      alert('✅ Transaction deleted successfully!');
+      
+      // Reload from Supabase to verify deletion persists
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        const userId = user?.id || userProfile?.id;
+        
+        if (userId) {
+          const engine = new VelocityEngine(userId);
+          const loadResult = await engine.loadTransactions();
+          
+          if (loadResult.success) {
+            setTransactions(loadResult.data || []);
+            console.log('✅ Transactions reloaded from Supabase');
+          }
+        }
+      } catch (reloadError) {
+        console.warn('Could not reload transactions:', reloadError);
+      }
+    } catch (error) {
+      console.error('Error deleting transaction:', error);
+      alert(`❌ Error: ${error.message}`);
     }
   };
 
@@ -5277,8 +5334,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             {todayTransactions.length > 0 ? (
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {todayTransactions.slice(0, 8).map((transaction) => (
-                  <div key={transaction.id} className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700/30 hover:border-slate-600/50 transition">
-                    <div className="flex items-center gap-3">
+                  <div key={transaction.id} className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700/30 hover:border-slate-600/50 transition group">
+                    <div className="flex items-center gap-3 flex-1">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                         transaction.transaction_type === 'income' 
                           ? 'bg-green-500/20 text-green-400' 
@@ -5295,12 +5352,21 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         </p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className={`text-sm font-bold ${
-                        transaction.transaction_type === 'income' ? 'text-green-300' : 'text-red-300'
-                      }`}>
-                        {transaction.transaction_type === 'income' ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount || 0))}
-                      </p>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <p className={`text-sm font-bold ${
+                          transaction.transaction_type === 'income' ? 'text-green-300' : 'text-red-300'
+                        }`}>
+                          {transaction.transaction_type === 'income' ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount || 0))}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteTransaction(transaction.id, transaction.description || 'Transaction')}
+                        className="p-2 rounded hover:bg-red-900/30 opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300"
+                        title="Delete transaction"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -5688,6 +5754,19 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             setShowReportingSystem(true);
           }
           // 'transactions' and 'ai-copilot' stay on home screen
+        }}
+      />
+
+      {/* Data Cleanup Modal */}
+      <DataCleanupModal
+        isOpen={showDataCleanup}
+        onClose={() => setShowDataCleanup(false)}
+        onCleanupComplete={() => {
+          setShowDataCleanup(false);
+          // Reload transactions after cleanup
+          if (velocityMetrics) {
+            loadFinancialMetrics();
+          }
         }}
       />
 
@@ -6212,13 +6291,14 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   </div>
                 </div>
 
-                {/* Generate button */}
-                <button
-                  onClick={async () => {
-                    setIsGeneratingReport(true);
-                    setGeneratedReportData(null);
-                    try {
-                      // Use real Supabase-filtered data when available
+                {/* Generate Report + Cleanup Button Row */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={async () => {
+                      setIsGeneratingReport(true);
+                      setGeneratedReportData(null);
+                      try {
+                        // Use real Supabase-filtered data when available
                       const fm       = reportFilteredMetrics;
                       const income   = fm ? fm.income   : (velocityMetrics?.income30Days   || 0);
                       const expenses = fm ? fm.expenses : (velocityMetrics?.expenses30Days || 0);
@@ -6296,13 +6376,26 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     }
                   }}
                   disabled={isGeneratingReport}
-                  className="w-full py-3 rounded-xl font-bold text-white text-sm transition active:scale-95 disabled:opacity-60"
+                  className="flex-1 py-3 rounded-xl font-bold text-white text-sm transition active:scale-95 disabled:opacity-60"
                   style={{background: 'linear-gradient(135deg, #e11d48, #9333ea)'}}
                 >
-                  {isGeneratingReport ? '⏳ Generating & Saving...' : '🚀 Generate Report'}
+                  {isGeneratingReport ? '⏳ Generating...' : '🚀 Generate Report'}
                 </button>
 
-                {generatedReportData && !isGeneratingReport && (
+                {/* Clean Transaction Data Button */}
+                <button
+                  onClick={() => {
+                    setGeneratedReportData(null);
+                    setShowDataCleanup(true);
+                  }}
+                  disabled={isGeneratingReport}
+                  className="flex-1 py-3 rounded-xl font-bold text-white text-sm transition active:scale-95 disabled:opacity-60 bg-red-500/30 hover:bg-red-500/40 border border-red-500/50"
+                >
+                  🗑️ Clean Data
+                </button>
+              </div>
+
+              {generatedReportData && !isGeneratingReport && (
                   <div className="space-y-2">
                     {generatedReportData.error ? (
                       <div className="bg-red-900/30 border border-red-500/40 rounded-xl p-3">
@@ -6570,15 +6663,50 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           };
           setTransactions(prev => [formattedTransaction, ...prev]);
 
-          // Persist transaction to Supabase via VelocityEngine
+          // Persist transaction to Supabase via VelocityEngine OR queue if offline
           const saveAndRefresh = async () => {
             try {
               // Get user ID from Supabase auth (same as web view)
               const { data: { user } } = await supabase.auth.getUser();
               const userId = user?.id || userProfile?.id || 'demo-user';
+              const userEmail = user?.email || authContextUser?.email;
               
               if (userId) {
-                // Save transaction using VelocityEngine
+                // 📴 CHECK IF OFFLINE — Queue instead of saving directly
+                if (!navigator.onLine || isOfflineMode) {
+                  // Queue business/personal transactions for sync when online
+                  if (resolvedCategory === 'business' || resolvedCategory === 'personal') {
+                    await queueAction('transaction', {
+                      amount: transaction.amount || 0,
+                      type: transaction.isIncome ? 'income' : 'expense',
+                      description: transaction.description || 'Transaction',
+                      category: transaction.category || 'other',
+                      date: transaction.timestamp || new Date().toISOString(),
+                      source: 'smart_entry',
+                      currency: 'UGX',
+                      record_category: resolvedCategory,
+                      accounting_type: transaction.businessAccountingType || null,
+                      reporting_bucket: transaction.reportingBucket || null,
+                      product_name: transaction.productName || null,
+                      product_action: transaction.productAction || null,
+                      ledger_side: transaction.ledgerSide || null,
+                      raw_entry_text: transaction.originalText || transaction.rawInput || null,
+                      entry_mode: resolvedCategory === 'business' ? 'professional_business' : 'personal_quick',
+                      userEmail: userEmail,
+                      userId: userId
+                    });
+                    console.log('📴 Transaction queued for offline sync:', transaction.description);
+                    return; // Don't try to save to Supabase
+                  } else if (resolvedCategory === 'wallet') {
+                    // Wallet transactions require live server (involve real money)
+                    console.error('❌ Wallet transactions require internet connection');
+                    setTransactions(prev => prev.filter(t => t.id !== formattedTransaction.id));
+                    alert('🌐 Wallet operations require an internet connection');
+                    return;
+                  }
+                }
+                
+                // Save transaction using VelocityEngine (online path)
                 const engine = new VelocityEngine(userId);
                 const result = await engine.addTransaction({
                   amount: transaction.amount || 0,
