@@ -1615,6 +1615,7 @@ const CMMSModule = ({
       if (companyIdToUse) {
         loadUserTasks();
         loadCompanyUsers();
+        loadUserMessages();
       }
     }, [companyIdToUse]);
 
@@ -1643,6 +1644,17 @@ const CMMSModule = ({
         console.error('Error loading users:', error);
       } finally {
         setIsLoadingUsers(false);
+      }
+    };
+
+    const loadUserMessages = async () => {
+      try {
+        const result = await cmmsMessagingService.getUserMessages(companyIdToUse);
+        if (result.success) {
+          setUserMessages(result.data || []);
+        }
+      } catch (error) {
+        console.error('Error loading messages:', error);
       }
     };
 
@@ -1684,6 +1696,8 @@ const CMMSModule = ({
               is_read: false
             }]
           }));
+          // Refresh messages from server
+          await loadUserMessages();
         } else {
           alert(`Error: ${result.error}`);
         }
@@ -1724,6 +1738,7 @@ const CMMSModule = ({
             priority: 'medium'
           });
           await loadUserTasks();
+          await loadUserMessages();
         } else {
           alert(`Error: ${result.error}`);
         }

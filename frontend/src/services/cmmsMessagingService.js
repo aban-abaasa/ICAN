@@ -194,6 +194,44 @@ export const getUnreadMessageCount = async (companyId) => {
   }
 };
 
+/**
+ * Get all messages for current user (sent or received)
+ */
+export const getUserMessages = async (companyId) => {
+  try {
+    const { data, error } = await supabase
+      .rpc('fn_get_user_messages', {
+        p_company_id: companyId
+      });
+
+    if (error) {
+      console.error('Error fetching user messages:', error);
+      return {
+        success: false,
+        error: error.message,
+        data: []
+      };
+    }
+
+    const messages = Array.isArray(data) ? data : [];
+    return {
+      success: true,
+      data: messages,
+      stats: {
+        totalMessages: messages.length,
+        unreadMessages: messages.filter(m => !m.is_read).length
+      }
+    };
+  } catch (error) {
+    console.error('Service error:', error);
+    return {
+      success: false,
+      error: error.message,
+      data: []
+    };
+  }
+};
+
 // ============================================================
 // 2. JOB ASSIGNMENT FUNCTIONS
 // ============================================================
@@ -462,6 +500,7 @@ export default {
   markMessageAsRead,
   deleteMessage,
   getUnreadMessageCount,
+  getUserMessages,
   assignJobToUser,
   getUserJobAssignments,
   updateJobStatus,

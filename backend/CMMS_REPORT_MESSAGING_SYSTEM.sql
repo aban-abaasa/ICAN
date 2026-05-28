@@ -112,6 +112,17 @@ CREATE INDEX IF NOT EXISTS idx_cmms_messages_recipient ON public.cmms_report_mes
 CREATE INDEX IF NOT EXISTS idx_cmms_messages_unread ON public.cmms_report_messages(recipient_id, is_read);
 CREATE INDEX IF NOT EXISTS idx_cmms_messages_thread ON public.cmms_report_messages(parent_message_id);
 
+-- Make report_id nullable if it's not already
+DO $$
+BEGIN
+  BEGIN
+    ALTER TABLE public.cmms_report_messages ALTER COLUMN report_id DROP NOT NULL;
+    RAISE NOTICE 'Made report_id nullable in cmms_report_messages';
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'report_id already nullable or table does not exist';
+  END;
+END $$;
+
 -- ============================================================
 -- 2. CREATE JOB ASSIGNMENTS TABLE
 -- ============================================================
@@ -281,12 +292,14 @@ BEGIN
     RAISE EXCEPTION 'You are not a member of this CMMS company';
   END IF;
 
-  -- Validate report exists and belongs to company
-  IF NOT EXISTS (
-    SELECT 1 FROM public.cmms_company_reports
-    WHERE id = p_report_id AND cmms_company_id = p_company_id
-  ) THEN
-    RAISE EXCEPTION 'Report not found';
+  -- Validate report exists if report_id is provided
+  IF p_report_id IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM public.cmms_company_reports
+      WHERE id = p_report_id AND cmms_company_id = p_company_id
+    ) THEN
+      RAISE EXCEPTION 'Report not found';
+    END IF;
   END IF;
 
   -- Validate recipient if specified
@@ -399,8 +412,80 @@ $$;
 GRANT EXECUTE ON FUNCTION public.fn_get_report_messages TO authenticated;
 
 -- ============================================================
--- 9. FUNCTION: Assign User to Job
+-- 8.5. FUNCTION: Get User Messages (all messages for a user)
 -- ============================================================
+
+DROP FUNCTION IF EXISTS public.fn_get_user_messages(UUID) CASCADE;
+CREATE OR REPLACE FUNCTION public.fn_get_user_messages(p_company_id UUID)
+RETURNS TABLE (
+  id UUID,
+  report_id UUID,
+  report_title VARCHAR,
+  sender_name VARCHAR,
+  sender_email VARCHAR,
+  recipient_name VARCHAR,
+  recipient_email VARCHAR,
+  message_text TEXT,
+  message_type VARCHAR,
+  is_read BOOLEAN,
+  created_at TIMESTAMPTZ
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_auth_uid UUID;
+  v_auth_email TEXT;
+  v_user_id UUID;
+BEGIN
+  v_auth_uid := auth.uid();
+  IF v_auth_uid IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated';
+  END IF;
+
+  v_auth_email := NULLIF(TRIM(COALESCE(auth.jwt() ->> 'email', '')), '');
+  IF v_auth_email IS NULL THEN
+    SELECT email INTO v_auth_email FROM auth.users WHERE id = v_auth_uid;
+  END IF;
+
+  SELECT cu.id
+  INTO v_user_id
+  FROM public.cmms_users cu
+  WHERE cu.cmms_company_id = p_company_id
+    AND LOWER(cu.email) = LOWER(v_auth_email)
+    AND cu.is_active = TRUE
+  LIMIT 1;
+
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'You are not a member of this CMMS company';
+  END IF;
+
+  RETURN QUERY
+  SELECT
+    m.id,
+    m.report_id,
+    COALESCE(ccr.report_title, '')::VARCHAR,
+    (SELECT u.name FROM public.cmms_users u WHERE u.id = m.sender_id) AS sender_name,
+    (SELECT u.email FROM public.cmms_users u WHERE u.id = m.sender_id) AS sender_email,
+    (SELECT u.name FROM public.cmms_users u WHERE u.id = m.recipient_id) AS recipient_name,
+    (SELECT u.email FROM public.cmms_users u WHERE u.id = m.recipient_id) AS recipient_email,
+    m.message_text,
+    m.message_type,
+    m.is_read,
+    m.created_at
+  FROM public.cmms_report_messages m
+  LEFT JOIN public.cmms_company_reports ccr ON ccr.id = m.report_id
+  WHERE m.company_id = p_company_id
+    AND (
+      m.sender_id = v_user_id
+      OR m.recipient_id = v_user_id
+    )
+  ORDER BY m.created_at DESC;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.fn_get_user_messages TO authenticated;
 
 DROP FUNCTION IF EXISTS public.fn_assign_job(UUID, UUID, UUID, VARCHAR, TEXT, DATE, VARCHAR) CASCADE;
 CREATE OR REPLACE FUNCTION public.fn_assign_job(
