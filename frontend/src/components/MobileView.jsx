@@ -898,6 +898,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [reportFilteredMetrics, setReportFilteredMetrics] = useState(null);
   const [isLoadingReportMetrics, setIsLoadingReportMetrics] = useState(false);
   const [showDataCleanup, setShowDataCleanup] = useState(false);
+  const [pendingActionsCount, setPendingActionsCount] = useState(0);
   const isRestoringMobileHistoryRef = useRef(false);
   const hasHydratedMobileHistoryRef = useRef(false);
   const hasSeededMobileRootRef = useRef(false);
@@ -1707,6 +1708,25 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
     loadStatuses();
   }, [userProfile?.id]);
+
+  // Track pending offline actions
+  useEffect(() => {
+    const loadPendingActions = async () => {
+      try {
+        const { OfflineAuthManager } = await import('../lib/offlineAuthManager');
+        const manager = new OfflineAuthManager();
+        await manager.init();
+        const pending = await manager.getPendingActions();
+        setPendingActionsCount(pending.length);
+      } catch (error) {
+        console.error('Error loading pending actions:', error);
+      }
+    };
+
+    loadPendingActions();
+    const interval = setInterval(loadPendingActions, 3000); // Check every 3 seconds
+    return () => clearInterval(interval);
+  }, []);
 
   // Process AI messages
   const processAIMessage = async (message) => {
@@ -3144,6 +3164,14 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
             {/* Spacer */}
             <div className="flex-1"></div>
+
+            {/* Pending Badge - Mobile Visible */}
+            {pendingActionsCount > 0 && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-500/25 border border-orange-500/50 text-orange-300 text-xs font-semibold whitespace-nowrap">
+                <Zap className="w-3.5 h-3.5" />
+                <span>{pendingActionsCount} Pending</span>
+              </div>
+            )}
 
             {/* Header Menu Actions - RIGHT */}
             {isWebDashboard ? (
@@ -6382,16 +6410,47 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   {isGeneratingReport ? '⏳ Generating...' : '🚀 Generate Report'}
                 </button>
 
-                {/* Clean Transaction Data Button */}
+                {/* Clean Data Button - Delete All */}
                 <button
-                  onClick={() => {
-                    setGeneratedReportData(null);
-                    setShowDataCleanup(true);
+                  onClick={async () => {
+                    if (!window.confirm('⚠️ Delete ALL transactions and reports? This cannot be undone!')) return;
+                    setIsGeneratingReport(true);
+                    try {
+                      const userId = userProfile?.id;
+                      if (!userId) throw new Error('User not authenticated');
+
+                      // Delete all transactions for this user
+                      const { error: txError } = await supabase
+                        .from('ican_transactions')
+                        .delete()
+                        .eq('user_id', userId);
+                      if (txError) throw txError;
+
+                      // Delete all financial reports for this user
+                      const { error: reportError } = await supabase
+                        .from('financial_reports')
+                        .delete()
+                        .eq('user_id', userId);
+                      if (reportError) throw reportError;
+
+                      // Clear all local state
+                      setGeneratedReportData(null);
+                      setTransactions([]);
+                      setVelocityMetrics(null);
+                      setReportFilteredMetrics(null);
+
+                      alert('✅ All data deleted successfully!');
+                    } catch(e) {
+                      console.error('Delete error:', e);
+                      alert('❌ Error deleting data: ' + e.message);
+                    } finally {
+                      setIsGeneratingReport(false);
+                    }
                   }}
                   disabled={isGeneratingReport}
-                  className="flex-1 py-3 rounded-xl font-bold text-white text-sm transition active:scale-95 disabled:opacity-60 bg-red-500/30 hover:bg-red-500/40 border border-red-500/50"
+                  className="flex-1 py-3 rounded-xl font-bold text-white text-sm transition active:scale-95 disabled:opacity-60 bg-red-600/50 hover:bg-red-600/70 border border-red-500"
                 >
-                  🗑️ Clean Data
+                  {isGeneratingReport ? '⏳ Deleting...' : '🗑️ Delete All Data'}
                 </button>
               </div>
 

@@ -29,13 +29,16 @@ import {
   Clipboard,
   ChevronDown,
   Edit2,
-  Save
+  Save,
+  Briefcase
 } from 'lucide-react';
 
 // Import Supabase CMMS service
 import cmmsService from '../lib/supabase/services/cmmsService';
 import { supabase } from '../lib/supabase/client';
 import { searchICANUsers, verifyICANUser } from '../services/pitchingService';
+import cmmsReportService from '../services/cmmsReportAccessService';
+import cmmsMessagingService from '../services/cmmsMessagingService';
 import NotificationsPanel from './NotificationsPanel';
 import RequisitionWorkspace from './CMMS/RequisitionWorkspace.jsx';
 import RequisitionApprovalsTab from './CMMS/RequisitionApprovalsTab.jsx';
@@ -640,7 +643,8 @@ const CMMSModule = ({
   // ============================================
   // PERMISSION CHECK FUNCTION
   // ============================================
-  const canViewCompanyReportsByRole = (role) => ['admin', 'coordinator', 'supervisor', 'finance'].includes(role);
+  // ALL roles can submit and view reports (database RLS filters access)
+  const canViewCompanyReportsByRole = (role) => true;
 
   const hasPermission = (permission) => {
     if (!isAuthorized || !userRole) return false;
@@ -774,13 +778,13 @@ const CMMSModule = ({
     // So a technician can only see [inventory, requisitions] even if they create a company
     const tabsByRole = {
       guest: [],
-      admin: ['company', 'departments', 'users', 'inventory', 'requisitions', 'approvals', 'reports'],
-      coordinator: ['departments', 'users', 'inventory', 'requisitions', 'approvals', 'reports'],
-      supervisor: ['inventory', 'requisitions', 'approvals', 'reports'],
-      technician: ['inventory', 'requisitions', 'reports'],
-      storeman: ['inventory', 'requisitions', 'reports'],
-      finance: ['requisitions', 'approvals', 'reports'],
-      'service-provider': ['requisitions', 'reports']
+      admin: ['company', 'departments', 'users', 'inventory', 'requisitions', 'approvals', 'reports', 'tasks'],
+      coordinator: ['departments', 'users', 'inventory', 'requisitions', 'approvals', 'reports', 'tasks'],
+      supervisor: ['inventory', 'requisitions', 'approvals', 'reports', 'tasks'],
+      technician: ['inventory', 'requisitions', 'reports', 'tasks'],
+      storeman: ['inventory', 'requisitions', 'reports', 'tasks'],
+      finance: ['requisitions', 'approvals', 'reports', 'tasks'],
+      'service-provider': ['requisitions', 'reports', 'tasks']
     };
     
     return tabsByRole[userRole] || [];
@@ -1576,6 +1580,483 @@ const CMMSModule = ({
   };
 
   // ============================================
+  // TASKS MANAGER (USER ASSIGNED JOBS)
+  // ============================================
+  const TasksManager = () => {
+    // State for tasks
+    const [userTasks, setUserTasks] = useState([]);
+    const [isLoadingTasks, setIsLoadingTasks] = useState(false);
+    const [expandedTaskId, setExpandedTaskId] = useState(null);
+    const [taskFilter, setTaskFilter] = useState('all');
+
+    // State for messaging
+    const [companyUsers, setCompanyUsers] = useState([]);
+    const [selectedUserToMessage, setSelectedUserToMessage] = useState(null);
+    const [messageInput, setMessageInput] = useState('');
+    const [isSendingMessage, setIsSendingMessage] = useState(false);
+    const [userMessages, setUserMessages] = useState({});
+    const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+
+    // State for job assignment
+    const [jobAssignmentForm, setJobAssignmentForm] = useState({
+      assigned_to_user_id: '',
+      job_title: '',
+      job_description: '',
+      due_date: '',
+      priority: 'medium'
+    });
+    const [isCreatingJob, setIsCreatingJob] = useState(false);
+
+    // Determine if user can assign jobs
+    const canAssignJobs = ['admin', 'coordinator', 'supervisor'].includes(userRole);
+
+    // Load all data on mount
+    useEffect(() => {
+      if (companyIdToUse) {
+        loadUserTasks();
+        loadCompanyUsers();
+      }
+    }, [companyIdToUse]);
+
+    const loadUserTasks = async () => {
+      setIsLoadingTasks(true);
+      try {
+        const result = await cmmsMessagingService.getUserJobAssignments(companyIdToUse);
+        if (result.success) {
+          setUserTasks(result.data || []);
+        }
+      } catch (error) {
+        console.error('Error loading tasks:', error);
+      } finally {
+        setIsLoadingTasks(false);
+      }
+    };
+
+    const loadCompanyUsers = async () => {
+      setIsLoadingUsers(true);
+      try {
+        const result = await cmmsMessagingService.getCompanyUsers(companyIdToUse);
+        if (result.success) {
+          setCompanyUsers(result.data || []);
+        }
+      } catch (error) {
+        console.error('Error loading users:', error);
+      } finally {
+        setIsLoadingUsers(false);
+      }
+    };
+
+    const handleUpdateTaskStatus = async (taskId, newStatus) => {
+      const result = await cmmsMessagingService.updateJobStatus(taskId, newStatus);
+      if (result.success) {
+        await loadUserTasks();
+      } else {
+        alert(`Error: ${result.error}`);
+      }
+    };
+
+    const handleSendMessage = async () => {
+      if (!messageInput.trim() || !selectedUserToMessage) return;
+
+      setIsSendingMessage(true);
+      try {
+        const result = await cmmsMessagingService.sendReportMessage(
+          companyIdToUse,
+          null, // No specific report for direct messaging
+          messageInput,
+          selectedUserToMessage.id,
+          'comment'
+        );
+
+        if (result.success) {
+          setMessageInput('');
+          // Add message to local state
+          const userId = selectedUserToMessage.id;
+          setUserMessages(prev => ({
+            ...prev,
+            [userId]: [...(prev[userId] || []), {
+              id: result.data.id,
+              sender_id: user?.id,
+              sender_name: user?.name || 'You',
+              recipient_id: userId,
+              message_text: messageInput,
+              created_at: new Date().toISOString(),
+              is_read: false
+            }]
+          }));
+        } else {
+          alert(`Error: ${result.error}`);
+        }
+      } catch (error) {
+        console.error('Error sending message:', error);
+        alert('Failed to send message');
+      } finally {
+        setIsSendingMessage(false);
+      }
+    };
+
+    const handleAssignJob = async () => {
+      if (!jobAssignmentForm.assigned_to_user_id || !jobAssignmentForm.job_title) {
+        alert('Please fill in required fields');
+        return;
+      }
+
+      setIsCreatingJob(true);
+      try {
+        // For direct job assignment without specific report
+        const result = await cmmsMessagingService.assignJobToUser(
+          companyIdToUse,
+          null, // No specific report
+          jobAssignmentForm.assigned_to_user_id,
+          jobAssignmentForm.job_title,
+          jobAssignmentForm.job_description,
+          jobAssignmentForm.due_date || null,
+          jobAssignmentForm.priority
+        );
+
+        if (result.success) {
+          alert('✓ Job assigned successfully!');
+          setJobAssignmentForm({
+            assigned_to_user_id: '',
+            job_title: '',
+            job_description: '',
+            due_date: '',
+            priority: 'medium'
+          });
+          await loadUserTasks();
+        } else {
+          alert(`Error: ${result.error}`);
+        }
+      } catch (error) {
+        console.error('Error assigning job:', error);
+        alert('Failed to assign job');
+      } finally {
+        setIsCreatingJob(false);
+      }
+    };
+
+    const filteredTasks = userTasks.filter(task => {
+      if (taskFilter === 'all') return true;
+      return task.assignment_status === taskFilter;
+    });
+
+    const priorityColors = {
+      critical: 'bg-red-500/20 text-red-300 border-red-500/50',
+      high: 'bg-orange-500/20 text-orange-300 border-orange-500/50',
+      medium: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/50',
+      low: 'bg-blue-500/20 text-blue-300 border-blue-500/50'
+    };
+
+    const statusColors = {
+      pending: 'bg-gray-500/20 text-gray-300 border-gray-500/50',
+      accepted: 'bg-blue-500/20 text-blue-300 border-blue-500/50',
+      in_progress: 'bg-purple-500/20 text-purple-300 border-purple-500/50',
+      completed: 'bg-green-500/20 text-green-300 border-green-500/50',
+      rejected: 'bg-red-500/20 text-red-300 border-red-500/50'
+    };
+
+    return (
+      <div className="space-y-4 md:space-y-6">
+        {/* Section 1: Your Assigned Tasks */}
+        <div className="glass-card p-4 md:p-6">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h3 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
+              <Briefcase className="w-5 h-5 md:w-6 md:h-6 text-emerald-400" />
+              Your Assigned Tasks
+            </h3>
+            <button
+              onClick={loadUserTasks}
+              disabled={isLoadingTasks}
+              className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-xs text-white"
+            >
+              {isLoadingTasks ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
+
+          <p className="text-gray-300 text-xs md:text-sm mb-4">
+            Track and manage all maintenance jobs assigned to you.
+          </p>
+
+          {/* Filter Buttons */}
+          <div className="flex gap-2 flex-wrap">
+            {[
+              { value: 'all', label: '📋 All', count: userTasks.length },
+              { value: 'pending', label: '⏳ Pending', count: userTasks.filter(t => t.assignment_status === 'pending').length },
+              { value: 'in_progress', label: '🔧 In Progress', count: userTasks.filter(t => t.assignment_status === 'in_progress').length },
+              { value: 'completed', label: '✅ Completed', count: userTasks.filter(t => t.assignment_status === 'completed').length }
+            ].map(filter => (
+              <button
+                key={filter.value}
+                onClick={() => setTaskFilter(filter.value)}
+                className={`px-2.5 py-1 rounded text-xs font-semibold transition-all ${
+                  taskFilter === filter.value
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
+                }`}
+              >
+                {filter.label} ({filter.count})
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Tasks List */}
+        <div className="space-y-3">
+          {isLoadingTasks ? (
+            <div className="glass-card p-6 text-center">
+              <Loader className="w-8 h-8 text-emerald-400 animate-spin mx-auto mb-3" />
+              <p className="text-gray-300">Loading your tasks...</p>
+            </div>
+          ) : filteredTasks.length === 0 ? (
+            <div className="glass-card p-6 text-center">
+              <Briefcase className="w-12 h-12 text-gray-500 mx-auto mb-3 opacity-50" />
+              <p className="text-gray-300">
+                {taskFilter === 'all' ? 'No tasks assigned yet' : `No ${taskFilter} tasks`}
+              </p>
+            </div>
+          ) : (
+            filteredTasks.map(task => {
+              const isExpanded = expandedTaskId === task.id;
+              const isOverdue = task.due_date && task.days_until_due < 0;
+
+              return (
+                <div
+                  key={task.id}
+                  className={`glass-card border transition-all ${isOverdue ? 'border-red-500/50 bg-red-500/5' : 'border-slate-700'}`}
+                >
+                  <button
+                    onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}
+                    className="w-full px-4 py-3 flex items-center justify-between gap-3 text-left hover:bg-white/5 transition-colors"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-white font-semibold text-sm truncate">{task.job_title}</h4>
+                      <p className="text-gray-400 text-xs mt-1 truncate">By {task.assigned_by_name}</p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className={`text-xs px-2 py-1 rounded border font-semibold ${priorityColors[task.priority] || priorityColors.medium}`}>
+                        {task.priority}
+                      </span>
+                      <span className={`text-xs px-2 py-1 rounded border font-semibold ${statusColors[task.assignment_status]}`}>
+                        {task.assignment_status}
+                      </span>
+                      <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                    </div>
+                  </button>
+
+                  {isExpanded && (
+                    <div className="px-4 pb-4 border-t border-slate-700 pt-4 space-y-2 text-sm">
+                      {task.job_description && (
+                        <p className="text-gray-300">{task.job_description}</p>
+                      )}
+                      {task.due_date && (
+                        <p className={isOverdue ? 'text-red-300' : 'text-blue-300'}>
+                          📅 Due: {new Date(task.due_date).toLocaleDateString()}
+                        </p>
+                      )}
+                      {task.assignment_status !== 'completed' && task.assignment_status !== 'rejected' && (
+                        <select
+                          value={task.assignment_status}
+                          onChange={(e) => handleUpdateTaskStatus(task.id, e.target.value)}
+                          className="w-full bg-slate-700 text-white text-xs rounded px-2 py-1.5 border border-slate-600 focus:border-emerald-500"
+                        >
+                          <option value="pending">⏳ Pending</option>
+                          <option value="accepted">✓ Accepted</option>
+                          <option value="in_progress">🔧 In Progress</option>
+                          <option value="completed">✅ Completed</option>
+                        </select>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Section 2: Messaging & Job Assignment */}
+        <div className="grid md:grid-cols-2 gap-4 md:gap-6">
+          {/* Left: User Messages */}
+          <div className="glass-card p-4 md:p-6 border border-slate-700">
+            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+              💬 Messages
+            </h3>
+            
+            <div className="space-y-2">
+              {isLoadingUsers ? (
+                <p className="text-gray-400 text-xs text-center py-4">Loading users...</p>
+              ) : companyUsers.filter(u => u.id !== user?.id).length === 0 ? (
+                <p className="text-gray-400 text-xs text-center py-4">No other users to message</p>
+              ) : (
+                <div className="max-h-48 overflow-y-auto space-y-1">
+                  {companyUsers.filter(u => u.id !== user?.id).map(user => (
+                    <button
+                      key={user.id}
+                      onClick={() => setSelectedUserToMessage(user)}
+                      className={`w-full px-3 py-2 rounded-lg text-left text-sm transition-all ${
+                        selectedUserToMessage?.id === user.id
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-slate-700/50 text-gray-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      <div className="font-semibold truncate">{user.name || user.email}</div>
+                      <div className="text-xs opacity-70 truncate">{user.email}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Chat Display */}
+            {selectedUserToMessage && (
+              <div className="mt-4 space-y-3">
+                <div className="p-3 bg-slate-700/50 rounded text-xs text-gray-300 border-l-2 border-blue-400">
+                  💬 Chat with <span className="font-semibold text-white">{selectedUserToMessage.name || selectedUserToMessage.email}</span>
+                </div>
+
+                <div className="bg-slate-900/50 rounded p-2 h-32 overflow-y-auto space-y-2 border border-slate-700">
+                  {userMessages[selectedUserToMessage.id]?.length === 0 ? (
+                    <p className="text-gray-500 text-xs text-center py-4">No messages yet. Start a conversation!</p>
+                  ) : (
+                    (userMessages[selectedUserToMessage.id] || []).map(msg => (
+                      <div key={msg.id} className={`text-xs px-2 py-1 rounded ${msg.sender_id === user?.id ? 'bg-blue-600 text-white ml-auto max-w-xs' : 'bg-slate-700 text-gray-300 max-w-xs'}`}>
+                        {msg.message_text}
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Message Input */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Type message..."
+                    value={messageInput}
+                    onChange={(e) => setMessageInput(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                    disabled={isSendingMessage}
+                    className="flex-1 bg-slate-700 text-white text-xs rounded px-2 py-2 border border-slate-600 focus:border-blue-400 placeholder-gray-500 disabled:opacity-50"
+                  />
+                  <button
+                    onClick={handleSendMessage}
+                    disabled={isSendingMessage || !messageInput.trim()}
+                    className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs rounded font-semibold"
+                  >
+                    {isSendingMessage ? '...' : 'Send'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Right: Job Assignment (Admin/Coordinator/Supervisor only) */}
+          {canAssignJobs && (
+            <div className="glass-card p-4 md:p-6 border border-slate-700">
+              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                🎯 Assign Job
+              </h3>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-300 mb-1">Assign To *</label>
+                  <select
+                    value={jobAssignmentForm.assigned_to_user_id}
+                    onChange={(e) => setJobAssignmentForm({...jobAssignmentForm, assigned_to_user_id: e.target.value})}
+                    disabled={isCreatingJob || isLoadingUsers}
+                    className="w-full bg-slate-700 text-white text-xs rounded px-2 py-2 border border-slate-600 focus:border-green-400 disabled:opacity-50"
+                  >
+                    <option value="">Select user...</option>
+                    {isLoadingUsers ? (
+                      <option disabled>Loading users...</option>
+                    ) : companyUsers.filter(u => u.id !== user?.id).length === 0 ? (
+                      <option disabled>No other users available</option>
+                    ) : (
+                      companyUsers.filter(u => u.id !== user?.id).map(user => (
+                        <option key={user.id} value={user.id}>
+                          {user.name ? `${user.name} (${user.email})` : user.email}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-300 mb-1">Job Title *</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Repair Pump"
+                    value={jobAssignmentForm.job_title}
+                    onChange={(e) => setJobAssignmentForm({...jobAssignmentForm, job_title: e.target.value})}
+                    disabled={isCreatingJob}
+                    className="w-full bg-slate-700 text-white text-xs rounded px-2 py-2 border border-slate-600 focus:border-green-400 placeholder-gray-500 disabled:opacity-50"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-300 mb-1">Description</label>
+                  <textarea
+                    placeholder="Job details..."
+                    value={jobAssignmentForm.job_description}
+                    onChange={(e) => setJobAssignmentForm({...jobAssignmentForm, job_description: e.target.value})}
+                    disabled={isCreatingJob}
+                    className="w-full bg-slate-700 text-white text-xs rounded px-2 py-2 border border-slate-600 focus:border-green-400 placeholder-gray-500 disabled:opacity-50 h-16 resize-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-300 mb-1">Due Date</label>
+                    <input
+                      type="date"
+                      value={jobAssignmentForm.due_date}
+                      onChange={(e) => setJobAssignmentForm({...jobAssignmentForm, due_date: e.target.value})}
+                      disabled={isCreatingJob}
+                      className="w-full bg-slate-700 text-white text-xs rounded px-2 py-2 border border-slate-600 focus:border-green-400 disabled:opacity-50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-300 mb-1">Priority</label>
+                    <select
+                      value={jobAssignmentForm.priority}
+                      onChange={(e) => setJobAssignmentForm({...jobAssignmentForm, priority: e.target.value})}
+                      disabled={isCreatingJob}
+                      className="w-full bg-slate-700 text-white text-xs rounded px-2 py-2 border border-slate-600 focus:border-green-400 disabled:opacity-50"
+                    >
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                      <option value="critical">Critical</option>
+                    </select>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleAssignJob}
+                  disabled={isCreatingJob || !jobAssignmentForm.assigned_to_user_id || !jobAssignmentForm.job_title}
+                  className="w-full py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:opacity-50 text-white text-xs rounded font-bold transition-all"
+                >
+                  {isCreatingJob ? '⏳ Assigning...' : '✓ Assign Job'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Non-admin message */}
+          {!canAssignJobs && (
+            <div className="glass-card p-4 md:p-6 border border-slate-700">
+              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                🔒 Job Assignment
+              </h3>
+              <p className="text-gray-400 text-xs">
+                Only Admin, Coordinators, and Supervisors can assign jobs. Your current role: <span className="font-semibold text-yellow-300">{userRole}</span>
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================
   // REPORTS & ANALYTICS (ROLE-BASED)
   // ============================================
   const ReportsManager = () => {
@@ -1612,7 +2093,7 @@ const CMMSModule = ({
     ];
 
     const refreshCompanyReports = useCallback(async ({ silent = false, force = false } = {}) => {
-      if (!companyIdToUse || !canViewCompanyReports) return;
+      if (!companyIdToUse) return;
       if (reportsSyncInFlightRef.current && !force) return;
 
       reportsSyncInFlightRef.current = true;
@@ -1621,13 +2102,15 @@ const CMMSModule = ({
       }
 
       try {
-        const { data, error } = await cmmsService.getCompanyReports(companyIdToUse);
-        if (error) {
-          console.error('Error refreshing company reports:', error);
+        // Use new role-based access control service
+        const result = await cmmsReportService.getFilteredReports(companyIdToUse);
+        
+        if (!result.success) {
+          console.error('Error refreshing company reports:', result.error);
           return;
         }
 
-        const nextReports = Array.isArray(data) ? data : [];
+        const nextReports = Array.isArray(result.data) ? result.data : [];
         setCmmsData((prev) => {
           const prevReports = Array.isArray(prev.reports) ? prev.reports : [];
           const sameLength = prevReports.length === nextReports.length;
@@ -1651,25 +2134,9 @@ const CMMSModule = ({
           setIsRefreshingReports(false);
         }
       }
-    }, [companyIdToUse, canViewCompanyReports]);
+    }, [companyIdToUse]);
 
     useEffect(() => {
-      if (!canViewCompanyReports) {
-        reportsInitialLoadKeyRef.current = '';
-        setCmmsData((prev) => {
-          const prevReports = Array.isArray(prev.reports) ? prev.reports : [];
-          if (prevReports.length === 0) {
-            return prev;
-          }
-
-          return {
-            ...prev,
-            reports: []
-          };
-        });
-        return;
-      }
-
       if (activeTab === 'reports' && companyIdToUse) {
         const loadKey = `${companyIdToUse}:${userRole || 'member'}`;
         if (reportsInitialLoadKeyRef.current !== loadKey) {
@@ -1677,17 +2144,17 @@ const CMMSModule = ({
           refreshCompanyReports({ silent: true, force: true });
         }
       }
-    }, [activeTab, companyIdToUse, canViewCompanyReports, refreshCompanyReports, userRole]);
+    }, [activeTab, companyIdToUse, refreshCompanyReports, userRole]);
 
     useEffect(() => {
-      if (activeTab !== 'reports' || !companyIdToUse || !canViewCompanyReports) return;
+      if (activeTab !== 'reports' || !companyIdToUse) return;
 
       const intervalId = setInterval(() => {
         refreshCompanyReports({ silent: true });
       }, 15000);
 
       return () => clearInterval(intervalId);
-    }, [activeTab, companyIdToUse, canViewCompanyReports, refreshCompanyReports]);
+    }, [activeTab, companyIdToUse, refreshCompanyReports]);
 
     const handleSubmitCompanyReport = async () => {
       if (!companyIdToUse) {
@@ -1702,34 +2169,33 @@ const CMMSModule = ({
 
       setIsSubmittingCompanyReport(true);
       try {
-        const payload = {
-          title: reportDraft.title.trim(),
-          category: reportDraft.category,
+        // Use new role-based access control service
+        const result = await cmmsReportService.createFilteredReport(companyIdToUse, {
+          reportTitle: reportDraft.title.trim(),
+          reportCategory: reportDraft.category,
           severity: reportDraft.severity,
-          description: reportDraft.description.trim(),
-          department_id: reportDraft.department_id || null,
-          reporterName: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'CMMS Member',
-          reporterEmail: user?.email || null,
-          reporterRole: userRole || 'member'
-        };
+          reportBody: reportDraft.description.trim(),
+          departmentId: reportDraft.department_id || null,
+          visibilityLevel: 'department' // Auto-set based on role
+        });
 
-        const { data, error } = await cmmsService.createCompanyReport(companyIdToUse, payload);
-        if (error) {
-          console.error('Error creating company report:', error);
-          alert(`❌ Failed to submit report: ${error.message || 'Unknown error'}`);
+        if (!result.success) {
+          console.error('Error creating company report:', result.error);
+          alert(`❌ Failed to submit report: ${result.error || 'Unknown error'}`);
           return;
         }
 
-        if (canViewCompanyReports) {
-          setCmmsData((prev) => {
-            const existing = Array.isArray(prev.reports) ? prev.reports : [];
-            const deduped = [data, ...existing.filter((item) => item.id !== data.id)];
-            return {
-              ...prev,
-              reports: deduped
-            };
-          });
-        }
+        // Show success and refresh list
+        alert('✅ Report submitted successfully!');
+        
+        setCmmsData((prev) => {
+          const existing = Array.isArray(prev.reports) ? prev.reports : [];
+          const deduped = [result.data, ...existing.filter((item) => item.id !== result.data.id)];
+          return {
+            ...prev,
+            reports: deduped
+          };
+        });
 
         setReportDraft({
           title: '',
@@ -2065,11 +2531,26 @@ const CMMSModule = ({
                   const titleText = String(report.report_title || 'Untitled report').trim();
                   const collapsedTitleWord = titleText.split(/\s+/)[0] || 'Untitled';
                   const isExpanded = expandedReportId === report.id;
+                  const isOwnReport = report.is_own_report;
+                  const accessLevel = report.access_level;
+                  
                   const severityStyles = {
                     low: 'bg-blue-500/20 text-blue-300',
                     medium: 'bg-yellow-500/20 text-yellow-300',
                     high: 'bg-orange-500/20 text-orange-300',
                     critical: 'bg-red-500/20 text-red-300'
+                  };
+                  
+                  const accessBadgeStyles = {
+                    admin_full_access: 'bg-red-500/20 text-red-300',
+                    department_access: 'bg-blue-500/20 text-blue-300',
+                    personal_access: 'bg-gray-500/20 text-gray-300'
+                  };
+                  
+                  const accessBadgeLabels = {
+                    admin_full_access: '👤 Admin',
+                    department_access: '👥 Department',
+                    personal_access: '🔒 Personal'
                   };
 
                   return (
@@ -2083,6 +2564,11 @@ const CMMSModule = ({
                           <h4 className="text-white font-semibold text-sm md:text-base truncate">{isExpanded ? titleText : collapsedTitleWord}</h4>
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
+                          {accessLevel && (
+                            <span className={`px-2 py-1 rounded text-[10px] md:text-xs font-semibold uppercase ${accessBadgeStyles[accessLevel] || accessBadgeStyles.personal_access}`}>
+                              {accessBadgeLabels[accessLevel] || 'View'}
+                            </span>
+                          )}
                           <span className={`px-2 py-1 rounded text-[10px] md:text-xs font-semibold uppercase ${severityStyles[severity] || severityStyles.medium}`}>
                             {severity}
                           </span>
@@ -2097,6 +2583,7 @@ const CMMSModule = ({
                           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400">
                             <span>Category: <span className="text-cyan-300">{report.report_category || 'general'}</span></span>
                             <span>Status: <span className="text-emerald-300">{report.status || 'open'}</span></span>
+                            <span>Access: <span className={accessBadgeStyles[accessLevel] + ' px-1 rounded'}>{accessBadgeLabels[accessLevel]}</span></span>
                             <span>By: <span className="text-purple-300">{report.reporter_name || report.reporter_email || 'Member'}</span></span>
                             <span>{new Date(report.created_at).toLocaleString()}</span>
                           </div>
@@ -2109,9 +2596,9 @@ const CMMSModule = ({
             )}
           </div>
         ) : (
-          <div className="glass-card p-4 md:p-6 bg-slate-800/30 border border-slate-700">
-            <h3 className="text-base md:text-lg font-bold text-white mb-2">Recent Company Reports</h3>
-            <p className="text-gray-300 text-sm">Your role can submit reports but cannot view submitted reports.</p>
+          <div className="glass-card p-4 md:p-6 bg-blue-500/10 border-l-4 border-blue-500">
+            <h3 className="text-base md:text-lg font-bold text-white mb-2">🔒 Personal Reports Only</h3>
+            <p className="text-blue-300 text-sm">Your role-based access is limited to your own submitted reports. Supervisors and admins can view more reports based on their department or company-wide access.</p>
           </div>
         )}
 
@@ -4752,7 +5239,8 @@ const CMMSModule = ({
       { id: 'users', label: '👥 Users & Roles', icon: Users },
       { id: 'inventory', label: '📦 Inventory', icon: Package },
       { id: 'requisitions', label: '📋 Requisitions', icon: Package },
-      { id: 'reports', label: '📊 Reports', icon: Package }
+      { id: 'reports', label: '📊 Reports', icon: Package },
+      { id: 'tasks', label: '✅ Tasks', icon: Briefcase }
     ];
 
     allTabs.splice(
@@ -4770,7 +5258,8 @@ const CMMSModule = ({
       inventory: { activeBg: 'linear-gradient(135deg, #16a34a, #15803d)', inactiveBg: 'rgba(34, 197, 94, 0.14)', border: 'rgba(134, 239, 172, 0.55)', inactiveText: '#bbf7d0' },
       requisitions: { activeBg: 'linear-gradient(135deg, #f59e0b, #d97706)', inactiveBg: 'rgba(245, 158, 11, 0.14)', border: 'rgba(253, 186, 116, 0.55)', inactiveText: '#fde68a' },
       approvals: { activeBg: 'linear-gradient(135deg, #f97316, #ea580c)', inactiveBg: 'rgba(249, 115, 22, 0.14)', border: 'rgba(253, 186, 116, 0.55)', inactiveText: '#fed7aa' },
-      reports: { activeBg: 'linear-gradient(135deg, #14b8a6, #0f766e)', inactiveBg: 'rgba(20, 184, 166, 0.14)', border: 'rgba(94, 234, 212, 0.55)', inactiveText: '#99f6e4' }
+      reports: { activeBg: 'linear-gradient(135deg, #14b8a6, #0f766e)', inactiveBg: 'rgba(20, 184, 166, 0.14)', border: 'rgba(94, 234, 212, 0.55)', inactiveText: '#99f6e4' },
+      tasks: { activeBg: 'linear-gradient(135deg, #06b6d4, #0891b2)', inactiveBg: 'rgba(6, 182, 212, 0.14)', border: 'rgba(165, 243, 252, 0.55)', inactiveText: '#cffafe' }
     };
 
     // Track window resize for mobile detection
@@ -5534,6 +6023,7 @@ const CMMSModule = ({
           />
         )}
         {activeTab === 'reports' && <ReportsManager />}
+        {activeTab === 'tasks' && <TasksManager />}
       </div>
       {/* New Company Creation Overlay — for non-admin roles, works regardless of active tab */}
       {showNewCompanyOverlay && (
