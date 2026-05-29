@@ -19,10 +19,77 @@ export default function CountrySetup({ onCountrySet, isModal = false, isMandator
   const [searchQuery, setSearchQuery] = useState('');
   const dropdownRef = useRef(null);
   const searchInputRef = useRef(null);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [suggestedCountry, setSuggestedCountry] = useState(null);
   
   // Debugging
   useEffect(() => {
     console.log('CountrySetup mounted. isOpen:', isOpen, 'isMandatory:', isMandatory);
+  }, []);
+
+  // Try to detect user's location and suggest country
+  useEffect(() => {
+    const detectUserLocation = async () => {
+      try {
+        // Try browser geolocation first (if available and allowed)
+        if ('geolocation' in navigator) {
+          navigator.geolocation.getCurrentPosition(
+            async (position) => {
+              const { latitude, longitude } = position.coords;
+              console.log('📍 User location detected:', { latitude, longitude });
+              
+              // For now, we'll try a free geolocation service
+              // In production, consider using a more robust solution
+              try {
+                const response = await fetch(
+                  `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`,
+                  { headers: { 'Accept-Language': 'en' } }
+                );
+                const data = await response.json();
+                const country = data.address?.country;
+                console.log('🌍 Detected country:', country);
+                
+                // Try to find matching country code
+                if (country) {
+                  // This is a simple heuristic - in production use a proper ISO country lookup
+                  const allCountries = Object.entries(CountryService.getCountries()).map(([code, data]) => ({ code, ...data }));
+                  const match = allCountries.find(c => 
+                    c.name.toLowerCase() === country.toLowerCase() ||
+                    c.code.toLowerCase() === country.toLowerCase()
+                  );
+                  if (match) {
+                    setSuggestedCountry(match.code);
+                    console.log('✅ Suggested country:', match.code, match.name);
+                  }
+                }
+              } catch (err) {
+                console.log('ℹ️ Could not reverse geocode location:', err.message);
+              }
+            },
+            (error) => {
+              console.log('ℹ️ Geolocation permission denied or unavailable:', error.message);
+            },
+            { timeout: 5000 }
+          );
+        }
+      } catch (err) {
+        console.log('ℹ️ Location detection skipped:', err.message);
+      }
+    };
+
+    // Only detect if this is the initial setup (not already selected)
+    if (!selectedCountry) {
+      detectUserLocation();
+    }
+  }, []);
+
+  // Handle mobile responsiveness
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
   
   const [countries] = useState(() => {
@@ -120,13 +187,15 @@ export default function CountrySetup({ onCountrySet, isModal = false, isMandator
         <div className="success-checkmark">
           <div className="checkmark">✓</div>
           <p>{country.name}</p>
-          <p style={{fontSize: '14px', color: 'rgba(255,255,255,0.8)', marginTop: '8px'}}>
-            {country.currency} • {country.icanCoinRate} per ICAN
-          </p>
+          <div className="success-subtext">Location confirmed</div>
         </div>
       </div>
     );
   }
+
+  const headerText = isMandatory ? "Almost done! Where are you?" : "Select Your Country";
+  const selectedCountryObj = selectedCountry ? CountryService.getCountry(selectedCountry) : null;
+  const displayFlag = selectedCountryObj?.flag || '🌍';
 
   return (
     <div 
@@ -146,11 +215,18 @@ export default function CountrySetup({ onCountrySet, isModal = false, isMandator
             aria-label="Toggle country selection dropdown"
             aria-expanded={isOpen}
           >
-            <span className="flag-icon">🌍</span>
-            <span className="header-text">Set Your Base Currency</span>
+            <span className="flag-icon">{displayFlag}</span>
+            <span className="header-text">{headerText}</span>
             <span className={`chevron ${isOpen ? 'open' : ''}`}>▼</span>
           </button>
         </div>
+
+        {suggestedCountry && !selectedCountry && (
+          <div className="suggested-country" onClick={() => handleSelectCountry(suggestedCountry)}>
+            <span>💡 We detected your location: <strong>{CountryService.getCountry(suggestedCountry)?.name}</strong></span>
+            <span style={{fontSize: '12px', color: '#667eea', cursor: 'pointer'}}>Tap to confirm</span>
+          </div>
+        )}
 
         {error && (
           <div className="dropdown-error">
@@ -183,13 +259,10 @@ export default function CountrySetup({ onCountrySet, isModal = false, isMandator
                     disabled={loading}
                     className="country-item"
                     title={`Select ${c.name}`}
-                    aria-label={`${c.name} - ${c.currency}`}
+                    aria-label={`${c.name}`}
                   >
                     <span className="country-flag">{c.flag}</span>
-                    <span className="country-info">
-                      <span className="country-name">{c.name}</span>
-                      <span className="country-rate">{c.currency} - 1 ICAN = {c.icanCoinRate}</span>
-                    </span>
+                    <span className="country-name-text">{c.name}</span>
                     {loading && <span className="spinner-mini"></span>}
                   </button>
                 ))
