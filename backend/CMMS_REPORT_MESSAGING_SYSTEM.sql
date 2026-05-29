@@ -259,7 +259,11 @@ CREATE OR REPLACE FUNCTION public.fn_send_report_message(
   p_recipient_id UUID DEFAULT NULL,
   p_message_type VARCHAR DEFAULT 'comment'
 )
-RETURNS public.cmms_report_messages
+RETURNS TABLE (
+  success BOOLEAN,
+  message VARCHAR,
+  data JSON
+)
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
@@ -268,11 +272,13 @@ DECLARE
   v_auth_uid UUID;
   v_auth_email TEXT;
   v_sender_id UUID;
-  v_message public.cmms_report_messages;
+  v_message_id UUID;
+  v_message_json JSON;
 BEGIN
   v_auth_uid := auth.uid();
   IF v_auth_uid IS NULL THEN
-    RAISE EXCEPTION 'Not authenticated';
+    RETURN QUERY SELECT FALSE, 'Not authenticated'::VARCHAR, NULL::JSON;
+    RETURN;
   END IF;
 
   v_auth_email := NULLIF(TRIM(COALESCE(auth.jwt() ->> 'email', '')), '');
@@ -289,7 +295,8 @@ BEGIN
   LIMIT 1;
 
   IF v_sender_id IS NULL THEN
-    RAISE EXCEPTION 'You are not a member of this CMMS company';
+    RETURN QUERY SELECT FALSE, 'You are not a member of this CMMS company'::VARCHAR, NULL::JSON;
+    RETURN;
   END IF;
 
   -- Validate report exists if report_id is provided
@@ -298,7 +305,8 @@ BEGIN
       SELECT 1 FROM public.cmms_company_reports
       WHERE id = p_report_id AND cmms_company_id = p_company_id
     ) THEN
-      RAISE EXCEPTION 'Report not found';
+      RETURN QUERY SELECT FALSE, 'Report not found'::VARCHAR, NULL::JSON;
+      RETURN;
     END IF;
   END IF;
 
@@ -308,8 +316,15 @@ BEGIN
       SELECT 1 FROM public.cmms_users
       WHERE id = p_recipient_id AND cmms_company_id = p_company_id AND is_active = TRUE
     ) THEN
-      RAISE EXCEPTION 'Recipient not found or inactive';
+      RETURN QUERY SELECT FALSE, 'Recipient not found or inactive'::VARCHAR, NULL::JSON;
+      RETURN;
     END IF;
+  END IF;
+
+  -- Validate message text is not empty
+  IF TRIM(COALESCE(p_message_text, '')) = '' THEN
+    RETURN QUERY SELECT FALSE, 'Message text cannot be empty'::VARCHAR, NULL::JSON;
+    RETURN;
   END IF;
 
   INSERT INTO public.cmms_report_messages (
@@ -327,9 +342,15 @@ BEGIN
     TRIM(p_message_text),
     COALESCE(p_message_type, 'comment')
   )
-  RETURNING * INTO v_message;
+  RETURNING id INTO v_message_id;
 
-  RETURN v_message;
+  -- Fetch the created message as JSON
+  SELECT row_to_json(crm.*)
+  INTO v_message_json
+  FROM public.cmms_report_messages crm
+  WHERE crm.id = v_message_id;
+
+  RETURN QUERY SELECT TRUE, 'Message sent successfully'::VARCHAR, v_message_json;
 END;
 $$;
 
@@ -421,8 +442,10 @@ RETURNS TABLE (
   id UUID,
   report_id UUID,
   report_title VARCHAR,
+  sender_id UUID,
   sender_name VARCHAR,
   sender_email VARCHAR,
+  recipient_id UUID,
   recipient_name VARCHAR,
   recipient_email VARCHAR,
   message_text TEXT,
@@ -466,8 +489,10 @@ BEGIN
     m.id,
     m.report_id,
     COALESCE(ccr.report_title, '')::VARCHAR,
+    m.sender_id,
     (SELECT u.name FROM public.cmms_users u WHERE u.id = m.sender_id) AS sender_name,
     (SELECT u.email FROM public.cmms_users u WHERE u.id = m.sender_id) AS sender_email,
+    m.recipient_id,
     (SELECT u.name FROM public.cmms_users u WHERE u.id = m.recipient_id) AS recipient_name,
     (SELECT u.email FROM public.cmms_users u WHERE u.id = m.recipient_id) AS recipient_email,
     m.message_text,

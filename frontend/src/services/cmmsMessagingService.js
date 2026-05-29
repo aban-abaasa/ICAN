@@ -45,10 +45,27 @@ export const sendReportMessage = async (companyId, reportId, messageText, recipi
       };
     }
 
+    // Function returns a TABLE with (success, message, data)
+    // Handle both single object and array responses
+    const result = Array.isArray(data) ? data[0] : data;
+    
+    // Check if the function itself succeeded (it returns success BOOLEAN)
+    if (!result || !result.success) {
+      const errorMsg = result?.message || 'Failed to send message';
+      console.error('Function error:', errorMsg);
+      return {
+        success: false,
+        error: errorMsg,
+        data: null
+      };
+    }
+
+    // Extract the actual message data from the JSON field
+    const message = result.data || result;
     return {
       success: true,
-      data: data,
-      message: 'Message sent successfully'
+      data: message,
+      message: result.message || 'Message sent successfully'
     };
   } catch (error) {
     console.error('Service error:', error);
@@ -101,14 +118,14 @@ export const getReportMessages = async (companyId, reportId) => {
 };
 
 /**
- * Mark message as read
+ * Mark message as read - Uses RPC function
  */
 export const markMessageAsRead = async (messageId) => {
   try {
-    const { error } = await supabase
-      .from('cmms_report_messages')
-      .update({ is_read: true })
-      .eq('id', messageId);
+    const { data, error } = await supabase
+      .rpc('fn_mark_message_as_read', {
+        p_message_id: messageId
+      });
 
     if (error) {
       console.error('Error marking message as read:', error);
@@ -118,9 +135,19 @@ export const markMessageAsRead = async (messageId) => {
       };
     }
 
+    // Parse response from function
+    if (data && data.length > 0) {
+      const result = data[0];
+      return {
+        success: result.success,
+        message: result.message,
+        data: result.data
+      };
+    }
+
     return {
-      success: true,
-      message: 'Message marked as read'
+      success: false,
+      error: 'No response from server'
     };
   } catch (error) {
     console.error('Service error:', error);
@@ -132,14 +159,14 @@ export const markMessageAsRead = async (messageId) => {
 };
 
 /**
- * Delete a message
+ * Delete a message - Uses RPC function
  */
 export const deleteMessage = async (messageId) => {
   try {
-    const { error } = await supabase
-      .from('cmms_report_messages')
-      .delete()
-      .eq('id', messageId);
+    const { data, error } = await supabase
+      .rpc('fn_delete_message', {
+        p_message_id: messageId
+      });
 
     if (error) {
       console.error('Error deleting message:', error);
@@ -149,9 +176,18 @@ export const deleteMessage = async (messageId) => {
       };
     }
 
+    // Parse response from function
+    if (data && data.length > 0) {
+      const result = data[0];
+      return {
+        success: result.success,
+        message: result.message
+      };
+    }
+
     return {
-      success: true,
-      message: 'Message deleted successfully'
+      success: false,
+      error: 'No response from server'
     };
   } catch (error) {
     console.error('Service error:', error);
@@ -333,6 +369,7 @@ export const getUserJobAssignments = async (companyId) => {
 
 /**
  * Update job assignment status
+ * Uses SECURITY DEFINER function to avoid RLS permission issues
  */
 export const updateJobStatus = async (assignmentId, newStatus) => {
   try {
@@ -343,14 +380,12 @@ export const updateJobStatus = async (assignmentId, newStatus) => {
       };
     }
 
+    // Use SECURITY DEFINER function to bypass RLS permission errors
     const { data, error } = await supabase
-      .from('cmms_job_assignments')
-      .update({ 
-        assignment_status: newStatus,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', assignmentId)
-      .select();
+      .rpc('fn_update_job_assignment_status', {
+        p_assignment_id: assignmentId,
+        p_new_status: newStatus
+      });
 
     if (error) {
       console.error('Error updating job status:', error);
@@ -360,10 +395,20 @@ export const updateJobStatus = async (assignmentId, newStatus) => {
       };
     }
 
+    // Parse response from function
+    if (data && data.length > 0) {
+      const result = data[0];
+      return {
+        success: result.success,
+        data: result.data,  // Already a JSON object from database, don't parse
+        message: result.message,
+        error: result.success ? null : result.message
+      };
+    }
+
     return {
-      success: true,
-      data: data?.[0],
-      message: `Job status updated to "${newStatus}"`
+      success: false,
+      error: 'No response from server'
     };
   } catch (error) {
     console.error('Service error:', error);

@@ -327,9 +327,6 @@ const SignUp = ({ onSwitchToSignIn, onSuccess }) => {
                 <p className="text-sm font-semibold" style={{ color: palette.text }}>
                   {CountryService.getCountry(formData.countryCode)?.flag} {CountryService.getCountry(formData.countryCode)?.name}
                 </p>
-                <p className="text-xs" style={{ color: palette.muted }}>
-                  {selectedRegion} • {CountryService.getCurrencyCode(formData.countryCode)}
-                </p>
               </div>
               <span className="text-sm font-bold" style={{ color: palette.link }}>
                 {showCountrySelector ? 'Hide' : 'Choose'}

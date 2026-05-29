@@ -1619,6 +1619,14 @@ const CMMSModule = ({
       }
     }, [companyIdToUse]);
 
+    // Reload messages when user is selected
+    useEffect(() => {
+      if (selectedUserToMessage && companyIdToUse) {
+        console.log('User selected, loading messages');
+        loadUserMessages();
+      }
+    }, [selectedUserToMessage]);
+
     const loadUserTasks = async () => {
       setIsLoadingTasks(true);
       try {
@@ -1649,9 +1657,37 @@ const CMMSModule = ({
 
     const loadUserMessages = async () => {
       try {
+        console.log('Loading messages for company:', companyIdToUse);
+        console.log('Current user ID:', user?.id);
         const result = await cmmsMessagingService.getUserMessages(companyIdToUse);
         if (result.success) {
-          setUserMessages(result.data || []);
+          // Organize messages by user ID
+          const messagesById = {};
+          if (Array.isArray(result.data)) {
+            console.log('Total messages from backend:', result.data.length);
+            result.data.forEach((msg, idx) => {
+              console.log(`Message ${idx}:`, {
+                id: msg.id,
+                sender_id: msg.sender_id,
+                recipient_id: msg.recipient_id,
+                text: msg.message_text?.substring(0, 30) + '...',
+                created_at: msg.created_at
+              });
+              // Determine the "other" user (sender if we're recipient, recipient if we're sender)
+              const otherUserId = msg.sender_id === user?.id ? msg.recipient_id : msg.sender_id;
+              console.log(`  -> otherUserId: ${otherUserId} (sender_id=${msg.sender_id}, recipient_id=${msg.recipient_id})`);
+              if (!messagesById[otherUserId]) {
+                messagesById[otherUserId] = [];
+              }
+              messagesById[otherUserId].push(msg);
+            });
+          }
+          console.log('Organized messages by user:', Object.keys(messagesById).map(uid => ({ userId: uid, count: messagesById[uid].length })));
+          console.log('Selected user ID:', selectedUserToMessage?.id);
+          console.log('Messages for selected user:', messagesById[selectedUserToMessage?.id]?.length || 0);
+          setUserMessages(messagesById);
+        } else {
+          console.error('Failed to load messages:', result.error);
         }
       } catch (error) {
         console.error('Error loading messages:', error);
@@ -1671,39 +1707,56 @@ const CMMSModule = ({
       if (!messageInput.trim() || !selectedUserToMessage) return;
 
       setIsSendingMessage(true);
+      const messageText = messageInput.trim();
       try {
+        console.log('Sending message to:', selectedUserToMessage.id);
+        console.log('Company:', companyIdToUse);
+        console.log('Message:', messageText);
+        
         const result = await cmmsMessagingService.sendReportMessage(
           companyIdToUse,
           null, // No specific report for direct messaging
-          messageInput,
+          messageText,
           selectedUserToMessage.id,
           'comment'
         );
 
         if (result.success) {
+          console.log('Message sent successfully:', result.data);
+          
+          // Clear input immediately
           setMessageInput('');
+          
           // Add message to local state
           const userId = selectedUserToMessage.id;
+          const newMessage = {
+            id: result.data?.id || `temp-${Date.now()}`,
+            sender_id: user?.id,
+            sender_name: user?.name || 'You',
+            sender_email: user?.email,
+            recipient_id: userId,
+            recipient_name: selectedUserToMessage.name,
+            recipient_email: selectedUserToMessage.email,
+            message_text: messageText,
+            created_at: new Date().toISOString(),
+            is_read: false,
+            message_type: 'comment'
+          };
+          
           setUserMessages(prev => ({
             ...prev,
-            [userId]: [...(prev[userId] || []), {
-              id: result.data.id,
-              sender_id: user?.id,
-              sender_name: user?.name || 'You',
-              recipient_id: userId,
-              message_text: messageInput,
-              created_at: new Date().toISOString(),
-              is_read: false
-            }]
+            [userId]: [...(prev[userId] || []), newMessage]
           }));
-          // Refresh messages from server
-          await loadUserMessages();
+          
+          console.log('Message added to UI');
         } else {
+          console.error('Backend error:', result);
+          console.error('Error message:', result.error);
           alert(`Error: ${result.error}`);
         }
       } catch (error) {
         console.error('Error sending message:', error);
-        alert('Failed to send message');
+        alert('Failed to send message: ' + error.message);
       } finally {
         setIsSendingMessage(false);
       }
