@@ -701,7 +701,221 @@ $$;
 GRANT EXECUTE ON FUNCTION public.fn_get_user_job_assignments TO authenticated;
 
 -- ============================================================
--- 11. DEPLOYMENT VERIFICATION
+-- 11. FUNCTION: Get Bidirectional Conversation Between Two Users
+-- ============================================================
+
+DROP FUNCTION IF EXISTS public.fn_get_conversation_with_user(UUID, UUID) CASCADE;
+CREATE OR REPLACE FUNCTION public.fn_get_conversation_with_user(
+  p_company_id UUID,
+  p_other_user_id UUID
+)
+RETURNS TABLE (
+  id UUID,
+  report_id UUID,
+  report_title VARCHAR,
+  sender_id UUID,
+  sender_name VARCHAR,
+  sender_email VARCHAR,
+  recipient_id UUID,
+  recipient_name VARCHAR,
+  recipient_email VARCHAR,
+  message_text TEXT,
+  message_type VARCHAR,
+  is_read BOOLEAN,
+  created_at TIMESTAMPTZ,
+  parent_message_id UUID
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_auth_uid UUID;
+  v_auth_email TEXT;
+  v_user_id UUID;
+BEGIN
+  v_auth_uid := auth.uid();
+  IF v_auth_uid IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated';
+  END IF;
+
+  v_auth_email := NULLIF(TRIM(COALESCE(auth.jwt() ->> 'email', '')), '');
+  IF v_auth_email IS NULL THEN
+    SELECT email INTO v_auth_email FROM auth.users WHERE id = v_auth_uid;
+  END IF;
+
+  SELECT cu.id
+  INTO v_user_id
+  FROM public.cmms_users cu
+  WHERE cu.cmms_company_id = p_company_id
+    AND LOWER(cu.email) = LOWER(v_auth_email)
+    AND cu.is_active = TRUE
+  LIMIT 1;
+
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'You are not a member of this CMMS company';
+  END IF;
+
+  -- Validate other user exists
+  IF NOT EXISTS (
+    SELECT 1 FROM public.cmms_users cu2
+    WHERE cu2.id = p_other_user_id 
+      AND cu2.cmms_company_id = p_company_id 
+      AND cu2.is_active = TRUE
+  ) THEN
+    RAISE EXCEPTION 'Other user not found or inactive';
+  END IF;
+
+  -- Load all messages in this conversation (bidirectional)
+  RETURN QUERY
+  SELECT
+    m.id,
+    m.report_id,
+    COALESCE(ccr.report_title, '')::VARCHAR,
+    m.sender_id,
+    sender_user.name AS sender_name,
+    sender_user.email AS sender_email,
+    m.recipient_id,
+    recipient_user.name AS recipient_name,
+    recipient_user.email AS recipient_email,
+    m.message_text,
+    m.message_type,
+    m.is_read,
+    m.created_at,
+    m.parent_message_id
+  FROM public.cmms_report_messages m
+  LEFT JOIN public.cmms_company_reports ccr ON ccr.id = m.report_id
+  LEFT JOIN public.cmms_users sender_user ON sender_user.id = m.sender_id
+  LEFT JOIN public.cmms_users recipient_user ON recipient_user.id = m.recipient_id
+  WHERE m.company_id = p_company_id
+    AND (
+      -- Messages sent by current user to other user
+      (m.sender_id = v_user_id AND m.recipient_id = p_other_user_id)
+      OR
+      -- Messages sent by other user to current user
+      (m.sender_id = p_other_user_id AND m.recipient_id = v_user_id)
+    )
+  ORDER BY m.created_at ASC;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.fn_get_conversation_with_user TO authenticated;
+
+-- ============================================================
+-- 11.5. FUNCTION: Get Conversation List (summary of all conversations)
+-- ============================================================
+
+DROP FUNCTION IF EXISTS public.fn_get_conversation_list(UUID) CASCADE;
+CREATE OR REPLACE FUNCTION public.fn_get_conversation_list(p_company_id UUID)
+RETURNS TABLE (
+  other_user_id UUID,
+  other_user_name VARCHAR,
+  other_user_email VARCHAR,
+  last_message_text TEXT,
+  last_message_at TIMESTAMPTZ,
+  unread_count INT,
+  total_message_count INT
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_auth_uid UUID;
+  v_auth_email TEXT;
+  v_user_id UUID;
+BEGIN
+  v_auth_uid := auth.uid();
+  IF v_auth_uid IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated';
+  END IF;
+
+  v_auth_email := NULLIF(TRIM(COALESCE(auth.jwt() ->> 'email', '')), '');
+  IF v_auth_email IS NULL THEN
+    SELECT email INTO v_auth_email FROM auth.users WHERE id = v_auth_uid;
+  END IF;
+
+  SELECT cu.id
+  INTO v_user_id
+  FROM public.cmms_users cu
+  WHERE cu.cmms_company_id = p_company_id
+    AND LOWER(cu.email) = LOWER(v_auth_email)
+    AND cu.is_active = TRUE
+  LIMIT 1;
+
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'You are not a member of this CMMS company';
+  END IF;
+
+  -- Get conversation summary for each user
+  RETURN QUERY
+  WITH conversation_pairs AS (
+    -- Get distinct users we've communicated with
+    SELECT DISTINCT
+      CASE
+        WHEN m.sender_id = v_user_id THEN m.recipient_id
+        ELSE m.sender_id
+      END AS other_user_id
+    FROM public.cmms_report_messages m
+    WHERE m.company_id = p_company_id
+      AND (m.sender_id = v_user_id OR m.recipient_id = v_user_id)
+  ),
+  conversation_stats AS (
+    SELECT
+      cp.other_user_id,
+      (SELECT u.name FROM public.cmms_users u WHERE u.id = cp.other_user_id) AS other_user_name,
+      (SELECT u.email FROM public.cmms_users u WHERE u.id = cp.other_user_id) AS other_user_email,
+      (
+        SELECT m.message_text
+        FROM public.cmms_report_messages m
+        WHERE m.company_id = p_company_id
+          AND (
+            (m.sender_id = v_user_id AND m.recipient_id = cp.other_user_id)
+            OR (m.sender_id = cp.other_user_id AND m.recipient_id = v_user_id)
+          )
+        ORDER BY m.created_at DESC
+        LIMIT 1
+      ) AS last_message_text,
+      (
+        SELECT m.created_at
+        FROM public.cmms_report_messages m
+        WHERE m.company_id = p_company_id
+          AND (
+            (m.sender_id = v_user_id AND m.recipient_id = cp.other_user_id)
+            OR (m.sender_id = cp.other_user_id AND m.recipient_id = v_user_id)
+          )
+        ORDER BY m.created_at DESC
+        LIMIT 1
+      ) AS last_message_at,
+      COALESCE((
+        SELECT COUNT(*)::INT
+        FROM public.cmms_report_messages m
+        WHERE m.company_id = p_company_id
+          AND m.recipient_id = v_user_id
+          AND m.sender_id = cp.other_user_id
+          AND m.is_read = FALSE
+      ), 0) AS unread_count,
+      COALESCE((
+        SELECT COUNT(*)::INT
+        FROM public.cmms_report_messages m
+        WHERE m.company_id = p_company_id
+          AND (
+            (m.sender_id = v_user_id AND m.recipient_id = cp.other_user_id)
+            OR (m.sender_id = cp.other_user_id AND m.recipient_id = v_user_id)
+          )
+      ), 0) AS total_message_count
+    FROM conversation_pairs cp
+  )
+  SELECT *
+  FROM conversation_stats
+  ORDER BY last_message_at DESC NULLS LAST;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.fn_get_conversation_list TO authenticated;
+
+-- ============================================================
+-- 12. DEPLOYMENT VERIFICATION
 -- ============================================================
 
 SELECT 'CMMS Report Messaging & Job Assignment System Deployed Successfully' AS status;

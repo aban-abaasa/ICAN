@@ -539,6 +539,89 @@ export const getCompanyUsers = async (companyId) => {
   }
 };
 
+/**
+ * Get bidirectional conversation between current user and another user
+ * Loads all messages sent/received with a specific user, properly linked
+ * @param {string} companyId - Company UUID
+ * @param {string} otherUserId - Other user UUID
+ */
+export const getConversationWithUser = async (companyId, otherUserId) => {
+  try {
+    const { data, error } = await supabase
+      .rpc('fn_get_conversation_with_user', {
+        p_company_id: companyId,
+        p_other_user_id: otherUserId
+      });
+
+    if (error) {
+      console.error('Error fetching conversation:', error);
+      return {
+        success: false,
+        error: error.message,
+        data: []
+      };
+    }
+
+    const messages = Array.isArray(data) ? data : [];
+    return {
+      success: true,
+      data: messages,
+      stats: {
+        totalMessages: messages.length,
+        unreadMessages: messages.filter(m => !m.is_read).length
+      }
+    };
+  } catch (error) {
+    console.error('Service error:', error);
+    return {
+      success: false,
+      error: error.message,
+      data: []
+    };
+  }
+};
+
+/**
+ * Get conversation list (summary of all conversations with other users)
+ * Shows last message, unread count, and total message count for each conversation
+ * @param {string} companyId - Company UUID
+ */
+export const getConversationList = async (companyId) => {
+  try {
+    const { data, error } = await supabase
+      .rpc('fn_get_conversation_list', {
+        p_company_id: companyId
+      });
+
+    if (error) {
+      console.error('Error fetching conversation list:', error);
+      return {
+        success: false,
+        error: error.message,
+        data: []
+      };
+    }
+
+    const conversations = Array.isArray(data) ? data : [];
+    return {
+      success: true,
+      data: conversations,
+      stats: {
+        totalConversations: conversations.length,
+        unreadConversations: conversations.filter(c => c.unread_count > 0).length,
+        totalUnreadMessages: conversations.reduce((sum, c) => sum + (c.unread_count || 0), 0)
+      }
+    };
+  } catch (error) {
+    console.error('Service error:', error);
+    return {
+      success: false,
+      error: error.message,
+      data: []
+    };
+  }
+};
+
 export default {
   sendReportMessage,
   getReportMessages,
@@ -546,6 +629,8 @@ export default {
   deleteMessage,
   getUnreadMessageCount,
   getUserMessages,
+  getConversationWithUser,
+  getConversationList,
   assignJobToUser,
   getUserJobAssignments,
   updateJobStatus,

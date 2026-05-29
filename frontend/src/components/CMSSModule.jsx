@@ -1594,7 +1594,8 @@ const CMMSModule = ({
     const [selectedUserToMessage, setSelectedUserToMessage] = useState(null);
     const [messageInput, setMessageInput] = useState('');
     const [isSendingMessage, setIsSendingMessage] = useState(false);
-    const [userMessages, setUserMessages] = useState({});
+    const [currentConversationMessages, setCurrentConversationMessages] = useState([]); // Messages with selected user
+    const [isLoadingConversation, setIsLoadingConversation] = useState(false);
     const [isLoadingUsers, setIsLoadingUsers] = useState(false);
 
     // State for job assignment
@@ -1615,17 +1616,46 @@ const CMMSModule = ({
       if (companyIdToUse) {
         loadUserTasks();
         loadCompanyUsers();
-        loadUserMessages();
       }
     }, [companyIdToUse]);
 
-    // Reload messages when user is selected
+    const loadUserMessages = useCallback(async () => {
+      if (!selectedUserToMessage?.id) return;
+      
+      try {
+        setIsLoadingConversation(true);
+        console.log('Loading conversation with user:', selectedUserToMessage.id);
+        console.log('Company:', companyIdToUse);
+        
+        const result = await cmmsMessagingService.getConversationWithUser(
+          companyIdToUse,
+          selectedUserToMessage.id
+        );
+        
+        if (result.success) {
+          console.log('Loaded conversation messages:', result.data.length);
+          setCurrentConversationMessages(result.data || []);
+        } else {
+          console.error('Failed to load conversation:', result.error);
+          setCurrentConversationMessages([]);
+        }
+      } catch (error) {
+        console.error('Error loading conversation:', error);
+        setCurrentConversationMessages([]);
+      } finally {
+        setIsLoadingConversation(false);
+      }
+    }, [selectedUserToMessage?.id, companyIdToUse]);
+
+    // Load conversation with selected user
     useEffect(() => {
       if (selectedUserToMessage && companyIdToUse) {
-        console.log('User selected, loading messages');
+        console.log('User selected:', selectedUserToMessage.id);
         loadUserMessages();
+      } else {
+        setCurrentConversationMessages([]);
       }
-    }, [selectedUserToMessage]);
+    }, [selectedUserToMessage, companyIdToUse, loadUserMessages]);
 
     const loadUserTasks = async () => {
       setIsLoadingTasks(true);
@@ -1655,43 +1685,73 @@ const CMMSModule = ({
       }
     };
 
-    const loadUserMessages = async () => {
-      try {
-        console.log('Loading messages for company:', companyIdToUse);
-        console.log('Current user ID:', user?.id);
-        const result = await cmmsMessagingService.getUserMessages(companyIdToUse);
-        if (result.success) {
-          // Organize messages by user ID
-          const messagesById = {};
-          if (Array.isArray(result.data)) {
-            console.log('Total messages from backend:', result.data.length);
-            result.data.forEach((msg, idx) => {
-              console.log(`Message ${idx}:`, {
-                id: msg.id,
-                sender_id: msg.sender_id,
-                recipient_id: msg.recipient_id,
-                text: msg.message_text?.substring(0, 30) + '...',
-                created_at: msg.created_at
-              });
-              // Determine the "other" user (sender if we're recipient, recipient if we're sender)
-              const otherUserId = msg.sender_id === user?.id ? msg.recipient_id : msg.sender_id;
-              console.log(`  -> otherUserId: ${otherUserId} (sender_id=${msg.sender_id}, recipient_id=${msg.recipient_id})`);
-              if (!messagesById[otherUserId]) {
-                messagesById[otherUserId] = [];
-              }
-              messagesById[otherUserId].push(msg);
-            });
-          }
-          console.log('Organized messages by user:', Object.keys(messagesById).map(uid => ({ userId: uid, count: messagesById[uid].length })));
-          console.log('Selected user ID:', selectedUserToMessage?.id);
-          console.log('Messages for selected user:', messagesById[selectedUserToMessage?.id]?.length || 0);
-          setUserMessages(messagesById);
-        } else {
-          console.error('Failed to load messages:', result.error);
+    // Helper function to organize messages into threads
+    const organizeIntoThreads = (messages) => {
+      const threads = [];
+      const messageMap = {};
+      
+      // First pass: create message map
+      messages.forEach(msg => {
+        messageMap[msg.id] = { ...msg, replies: [] };
+      });
+      
+      // Second pass: organize into threads
+      messages.forEach(msg => {
+        if (!msg.parent_message_id) {
+          // Top-level message
+          threads.push(messageMap[msg.id]);
+        } else if (messageMap[msg.parent_message_id]) {
+          // Reply to another message
+          messageMap[msg.parent_message_id].replies.push(messageMap[msg.id]);
         }
-      } catch (error) {
-        console.error('Error loading messages:', error);
-      }
+      });
+      
+      return threads;
+    };
+
+    // Component to render a message and its replies
+    const MessageThread = ({ message, level = 0 }) => {
+      const isOwnMessage = message.sender_id === user?.id;
+      const indentLevel = level > 0 ? 3 : 0; // Only indent replies
+      
+      return (
+        <div key={message.id} className="w-full space-y-1">
+          {/* Main message */}
+          <div className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`} style={{ marginLeft: level > 0 ? '1.5rem' : '0' }}>
+            <div className={`max-w-xs px-3 py-2 rounded-lg ${
+              isOwnMessage 
+                ? 'bg-green-600 text-white rounded-bl-none' 
+                : 'bg-slate-700 text-gray-100 rounded-br-none'
+            }`}>
+              {/* Sender name - only show for non-own messages or replies */}
+              {(!isOwnMessage || level > 0) && (
+                <div className={`text-xs font-semibold mb-1 ${
+                  isOwnMessage ? 'text-green-200' : 'text-blue-300'
+                }`}>
+                  {message.sender_name || message.sender_email || 'User'}
+                </div>
+              )}
+              {/* Message text */}
+              <div className="text-sm break-words">{message.message_text}</div>
+              {/* Timestamp */}
+              <div className={`text-xs mt-1 text-right ${
+                isOwnMessage ? 'text-green-100' : 'text-gray-400'
+              }`}>
+                {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </div>
+            </div>
+          </div>
+          
+          {/* Render replies */}
+          {message.replies && message.replies.length > 0 && (
+            <div className="space-y-1">
+              {message.replies.map(reply => (
+                <MessageThread key={reply.id} message={reply} level={level + 1} />
+              ))}
+            </div>
+          )}
+        </div>
+      );
     };
 
     const handleUpdateTaskStatus = async (taskId, newStatus) => {
@@ -1727,14 +1787,13 @@ const CMMSModule = ({
           // Clear input immediately
           setMessageInput('');
           
-          // Add message to local state
-          const userId = selectedUserToMessage.id;
+          // Add message to local state - bidirectional conversation
           const newMessage = {
             id: result.data?.id || `temp-${Date.now()}`,
             sender_id: user?.id,
             sender_name: user?.name || 'You',
             sender_email: user?.email,
-            recipient_id: userId,
+            recipient_id: selectedUserToMessage.id,
             recipient_name: selectedUserToMessage.name,
             recipient_email: selectedUserToMessage.email,
             message_text: messageText,
@@ -1743,12 +1802,10 @@ const CMMSModule = ({
             message_type: 'comment'
           };
           
-          setUserMessages(prev => ({
-            ...prev,
-            [userId]: [...(prev[userId] || []), newMessage]
-          }));
+          // Add to current conversation
+          setCurrentConversationMessages(prev => [...prev, newMessage]);
           
-          console.log('Message added to UI');
+          console.log('Message added to conversation');
         } else {
           console.error('Backend error:', result);
           console.error('Error message:', result.error);
@@ -1976,40 +2033,57 @@ const CMMSModule = ({
 
             {/* Chat Display */}
             {selectedUserToMessage && (
-              <div className="mt-4 space-y-3">
-                <div className="p-3 bg-slate-700/50 rounded text-xs text-gray-300 border-l-2 border-blue-400">
-                  💬 Chat with <span className="font-semibold text-white">{selectedUserToMessage.name || selectedUserToMessage.email}</span>
+              <div className="mt-4 space-y-3 flex flex-col h-full">
+                {/* Chat Header */}
+                <div className="p-4 bg-gradient-to-r from-slate-700 to-slate-600 rounded-lg text-sm text-gray-100 border-l-4 border-green-500 shadow-md">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-xs font-bold text-white">
+                      {(selectedUserToMessage.name || selectedUserToMessage.email)?.[0]?.toUpperCase() || '?'}
+                    </div>
+                    <div>
+                      <div className="font-bold text-white">{selectedUserToMessage.name || selectedUserToMessage.email}</div>
+                      <div className="text-xs text-gray-400">💬 Chat</div>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="bg-slate-900/50 rounded p-2 h-32 overflow-y-auto space-y-2 border border-slate-700">
-                  {userMessages[selectedUserToMessage.id]?.length === 0 ? (
-                    <p className="text-gray-500 text-xs text-center py-4">No messages yet. Start a conversation!</p>
+                {/* Messages Container - Like WhatsApp */}
+                <div className="flex-1 bg-slate-900/30 rounded-lg p-4 overflow-y-auto space-y-3 border border-slate-700 min-h-96">
+                  {isLoadingConversation ? (
+                    <div className="flex items-center justify-center h-full">
+                      <Loader className="w-6 h-6 animate-spin text-green-400" />
+                    </div>
+                  ) : currentConversationMessages?.length === 0 ? (
+                    <div className="flex items-center justify-center h-full text-gray-500">
+                      <p className="text-center">
+                        <div className="text-3xl mb-2">💭</div>
+                        <div>No messages yet. Start a conversation!</div>
+                      </p>
+                    </div>
                   ) : (
-                    (userMessages[selectedUserToMessage.id] || []).map(msg => (
-                      <div key={msg.id} className={`text-xs px-2 py-1 rounded ${msg.sender_id === user?.id ? 'bg-blue-600 text-white ml-auto max-w-xs' : 'bg-slate-700 text-gray-300 max-w-xs'}`}>
-                        {msg.message_text}
-                      </div>
+                    organizeIntoThreads(currentConversationMessages || []).map(thread => (
+                      <MessageThread key={thread.id} message={thread} />
                     ))
                   )}
                 </div>
 
-                {/* Message Input */}
-                <div className="flex gap-2">
+                {/* Message Input - Like WhatsApp */}
+                <div className="flex gap-2 items-end">
                   <input
                     type="text"
-                    placeholder="Type message..."
+                    placeholder="Type a message..."
                     value={messageInput}
                     onChange={(e) => setMessageInput(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                    onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSendMessage())}
                     disabled={isSendingMessage}
-                    className="flex-1 bg-slate-700 text-white text-xs rounded px-2 py-2 border border-slate-600 focus:border-blue-400 placeholder-gray-500 disabled:opacity-50"
+                    className="flex-1 bg-slate-700 text-white text-sm rounded-full px-4 py-2 border border-slate-600 focus:border-green-400 focus:outline-none placeholder-gray-500 disabled:opacity-50 resize-none"
                   />
                   <button
                     onClick={handleSendMessage}
                     disabled={isSendingMessage || !messageInput.trim()}
-                    className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs rounded font-semibold"
+                    className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:bg-gray-600 text-white text-sm rounded-full font-semibold transition-colors flex items-center gap-2"
                   >
-                    {isSendingMessage ? '...' : 'Send'}
+                    {isSendingMessage ? '⏳' : '➤'}
                   </button>
                 </div>
               </div>
