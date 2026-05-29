@@ -274,7 +274,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // Sign up - exactly like FARM-AGENT
-  const signUp = async (email, password, fullName) => {
+  const signUp = async (email, password, fullName, countryCode = 'US') => {
     const supabase = getSupabase();
     if (!supabase) throw new Error('Supabase not initialized');
     
@@ -284,6 +284,7 @@ export const AuthProvider = ({ children }) => {
       options: {
         data: {
           full_name: fullName,
+          country_code: countryCode,  // NEW: Pass country code to metadata
         }
       }
     });

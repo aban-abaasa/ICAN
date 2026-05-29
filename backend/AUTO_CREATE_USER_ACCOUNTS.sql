@@ -36,7 +36,7 @@ BEGIN
     user_id,
     email,
     account_number,  -- Generate unique account number
-    country_code,  -- Let user select country first
+    country_code,  -- Extract from user metadata if provided during signup
     status,
     created_at,
     updated_at
@@ -45,7 +45,7 @@ BEGIN
     NEW.id,
     NEW.email,
     'ICAN-' || TO_CHAR(NOW(), 'YYYYMMDDHH24MISS') || '-' || SUBSTRING(NEW.id::text, 1, 8),  -- Unique account number
-    NULL,  -- User must select country on first login
+    COALESCE((NEW.raw_user_meta_data->>'country_code')::VARCHAR(2), NULL),  -- NEW: Get country_code from signup metadata
     'active',  -- Account is active
     NOW(),
     NOW()

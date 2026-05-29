@@ -187,7 +187,7 @@ const SignUp = ({ onSwitchToSignIn, onSuccess }) => {
     setError('');
 
     try {
-      const result = await signUp(formData.email, formData.password, formData.fullName);
+      const result = await signUp(formData.email, formData.password, formData.fullName, formData.countryCode);
       
       if (result?.needsEmailConfirmation) {
         setSuccess(true);
