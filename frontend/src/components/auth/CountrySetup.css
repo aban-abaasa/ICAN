@@ -12,7 +12,8 @@
 }
 
 .country-dropdown-wrapper.mandatory {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
   min-height: 100vh;
   display: flex;
   align-items: center;
@@ -20,9 +21,10 @@
   position: fixed;
   inset: 0;
   z-index: 9999;
-  overflow: visible;
-  padding: 20px;
+  overflow: auto;
+  padding: 16px;
   max-width: 100%;
+  animation: fadeIn 0.3s ease-out;
 }
 
 .dropdown-container {
@@ -34,11 +36,32 @@
 
 .country-dropdown-wrapper.mandatory .dropdown-container {
   background: white;
-  border-radius: 15px;
-  padding: 20px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-  max-width: 100%;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.25);
+  max-width: 480px;
   width: 100%;
+  animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ============================
@@ -360,7 +383,8 @@
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
   position: fixed;
   inset: 0;
   z-index: 9999;
@@ -368,8 +392,13 @@
 
 .success-checkmark {
   text-align: center;
-  color: white;
+  background: white;
+  padding: 40px 32px;
+  border-radius: 16px;
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.25);
   animation: scaleIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  max-width: 400px;
+  width: 100%;
 }
 
 .checkmark {
@@ -386,11 +415,12 @@
   margin: 0;
   letter-spacing: 0.3px;
   line-height: 1.3;
+  color: #333;
 }
 
 .success-subtext {
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.8);
+  color: #999;
   margin-top: 12px;
   font-weight: 500;
   letter-spacing: 0.5px;
@@ -473,11 +503,17 @@
 @media (max-width: 768px) {
   .country-dropdown-wrapper {
     max-width: 100%;
-    padding: 0 16px;
+    padding: 0 12px;
   }
 
   .country-dropdown-wrapper.mandatory {
-    padding: 16px;
+    padding: 12px;
+  }
+
+  .country-dropdown-wrapper.mandatory .dropdown-container {
+    max-width: 100%;
+    padding: 20px;
+    border-radius: 14px;
   }
 
   .dropdown-container {
@@ -488,24 +524,31 @@
     padding: 13px 14px;
     font-size: 14px;
     gap: 10px;
+    border-radius: 8px;
   }
 
   .dropdown-toggle .header-text {
     font-size: 14px;
   }
 
+  .dropdown-toggle .flag-icon {
+    font-size: 18px;
+  }
+
   .dropdown-content {
-    max-height: 360px;
+    max-height: 340px;
     min-width: 100%;
+    border-radius: 8px;
   }
 
   .search-box {
-    padding: 10px;
+    padding: 8px;
   }
 
   .search-box input {
     padding: 9px 12px;
     font-size: 13px;
+    border-radius: 6px;
   }
 
   .suggested-country {
@@ -519,16 +562,34 @@
   .suggested-country span:last-child {
     align-self: flex-start;
   }
+
+  .success-checkmark {
+    padding: 32px 24px;
+  }
+
+  .checkmark {
+    font-size: 64px;
+  }
+
+  .success-checkmark p {
+    font-size: 24px;
+  }
 }
 
 @media (max-width: 480px) {
   .country-dropdown-wrapper {
     max-width: 100%;
-    padding: 0 12px;
+    padding: 0 10px;
   }
 
   .country-dropdown-wrapper.mandatory {
-    padding: 12px;
+    padding: 10px;
+  }
+
+  .country-dropdown-wrapper.mandatory .dropdown-container {
+    padding: 18px;
+    border-radius: 12px;
+    max-width: 100%;
   }
 
   .dropdown-container {
@@ -560,7 +621,7 @@
   }
 
   .dropdown-content {
-    max-height: 340px;
+    max-height: 320px;
     top: calc(100% + 2px);
     border-radius: 8px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
@@ -568,12 +629,23 @@
 
   .search-box {
     padding: 8px;
+    margin-bottom: 8px;
   }
 
   .search-box input {
     padding: 8px 11px;
     font-size: 13px;
     border-radius: 6px;
+  }
+
+  .countries-list {
+    max-height: 260px;
+  }
+
+  .country-item {
+    min-height: 48px;
+    padding: 12px 12px;
+    gap: 12px;
   }
 
   .loading-indicator {
@@ -595,38 +667,95 @@
     font-size: 13px;
   }
 
-  /* Success State Mobile */
-  .success-checkmark p {
-    font-size: 22px;
+  .suggested-country {
+    gap: 6px;
+    padding: 10px 12px;
+    font-size: 11px;
+  }
+
+  .success-checkmark {
+    padding: 28px 20px;
+    max-width: 90vw;
   }
 
   .checkmark {
-    font-size: 60px;
-    margin-bottom: 12px;
+    font-size: 56px;
+    margin-bottom: 16px;
+  }
+
+  .success-checkmark p {
+    font-size: 20px;
   }
 
   .success-subtext {
     font-size: 12px;
-  }
-
-  .suggested-country {
-    padding: 10px 12px;
-    font-size: 11px;
     margin-top: 10px;
   }
 }
 
 @media (max-width: 360px) {
+  .country-dropdown-wrapper.mandatory {
+    padding: 8px;
+  }
+
+  .country-dropdown-wrapper.mandatory .dropdown-container {
+    padding: 16px;
+    border-radius: 10px;
+  }
+
   .dropdown-toggle {
     padding: 11px 11px;
     font-size: 12px;
+    border-radius: 7px;
   }
 
   .dropdown-toggle .flag-icon {
     font-size: 16px;
   }
 
+  .dropdown-toggle .chevron {
+    font-size: 10px;
+  }
+
   .countries-list {
-    max-height: 300px;
+    max-height: 280px;
+  }
+
+  .country-item {
+    min-height: 44px;
+    padding: 10px 10px;
+    gap: 10px;
+    font-size: 13px;
+  }
+
+  .country-flag {
+    font-size: 22px;
+  }
+
+  .country-name-text {
+    font-size: 13px;
+  }
+
+  .search-box input {
+    font-size: 12px;
+    padding: 7px 10px;
+  }
+
+  .suggested-country {
+    font-size: 11px;
+    padding: 10px;
+  }
+
+  .success-checkmark {
+    padding: 20px 16px;
+  }
+
+  .checkmark {
+    font-size: 48px;
+    margin-bottom: 12px;
+  }
+
+  .success-checkmark p {
+    font-size: 18px;
   }
 }
