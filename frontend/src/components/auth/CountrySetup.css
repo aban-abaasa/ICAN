@@ -12,8 +12,6 @@
 }
 
 .country-dropdown-wrapper.mandatory {
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(4px);
   min-height: 100vh;
   display: flex;
   align-items: center;
@@ -383,8 +381,6 @@
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(4px);
   position: fixed;
   inset: 0;
   z-index: 9999;
@@ -579,17 +575,25 @@
 @media (max-width: 480px) {
   .country-dropdown-wrapper {
     max-width: 100%;
-    padding: 0 10px;
+    padding: 0;
+    width: 100vw;
   }
 
   .country-dropdown-wrapper.mandatory {
-    padding: 10px;
+    padding: 0;
+    min-height: 100vh;
+    align-items: flex-start;
+    justify-content: flex-start;
   }
 
   .country-dropdown-wrapper.mandatory .dropdown-container {
-    padding: 18px;
-    border-radius: 12px;
+    padding: 20px 16px;
+    border-radius: 0;
+    width: 100%;
+    min-height: 100vh;
     max-width: 100%;
+    box-shadow: none;
+    animation: none;
   }
 
   .dropdown-container {
@@ -675,7 +679,16 @@
 
   .success-checkmark {
     padding: 28px 20px;
-    max-width: 90vw;
+    max-width: 100%;
+    width: 100vw;
+    min-height: 100vh;
+    height: 100vh;
+    border-radius: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-shadow: none;
   }
 
   .checkmark {
@@ -695,12 +708,16 @@
 
 @media (max-width: 360px) {
   .country-dropdown-wrapper.mandatory {
-    padding: 8px;
+    padding: 0;
+    min-height: 100vh;
   }
 
   .country-dropdown-wrapper.mandatory .dropdown-container {
-    padding: 16px;
-    border-radius: 10px;
+    padding: 16px 12px;
+    border-radius: 0;
+    width: 100%;
+    min-height: 100vh;
+    max-width: 100%;
   }
 
   .dropdown-toggle {
@@ -748,6 +765,16 @@
 
   .success-checkmark {
     padding: 20px 16px;
+    width: 100vw;
+    min-height: 100vh;
+    height: 100vh;
+    border-radius: 0;
+    max-width: 100%;
+    box-shadow: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
   }
 
   .checkmark {
