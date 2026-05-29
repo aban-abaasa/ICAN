@@ -11,6 +11,14 @@
 -- ============================================================
 
 -- ============================================================
+-- 0. ENABLE REQUIRED EXTENSIONS
+-- ============================================================
+
+-- pgcrypto is optional - md5() is built-in to PostgreSQL
+-- CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- ============================================================
 -- 1. CREATE AUDIT LOG TABLE (Immutable)
 -- ============================================================
 
@@ -172,26 +180,22 @@ BEGIN
     AND cu.is_active = TRUE
   LIMIT 1;
 
-  IF v_user_id IS NULL THEN
-    RETURN QUERY SELECT FALSE, NULL::UUID, NULL::VARCHAR, 'User not found in company'::TEXT;
+  IF v_user_id IS NULL OR v_user_role IS NULL THEN
+    RETURN QUERY SELECT FALSE, NULL::UUID, NULL::VARCHAR, 'User not found in company or role not assigned'::TEXT;
     RETURN;
   END IF;
 
   -- Get previous hash for chain
-  SELECT action_hash INTO v_previous_hash
-  FROM public.cmms_audit_log
-  WHERE company_id = p_company_id
-  ORDER BY created_at DESC
+  SELECT aal.action_hash INTO v_previous_hash
+  FROM public.cmms_audit_log aal
+  WHERE aal.company_id = p_company_id
+  ORDER BY aal.created_at DESC
   LIMIT 1;
 
-  -- Generate action hash (SHA256-like hash from data)
-  v_action_hash := encode(
-    digest(
-      p_action_type || p_target_table || COALESCE(p_target_record_id::TEXT, '') || 
-      COALESCE(v_previous_hash, '') || NOW()::TEXT || v_user_id::TEXT,
-      'sha256'
-    ),
-    'hex'
+  -- Generate action hash (MD5 hash from data)
+  v_action_hash := md5(
+    p_action_type || COALESCE(p_target_table, '') || COALESCE(p_target_record_id::TEXT, '') || 
+    COALESCE(v_previous_hash, '') || NOW()::TEXT || COALESCE(v_user_id::TEXT, '')
   );
 
   -- Insert audit log
@@ -265,10 +269,7 @@ DECLARE
   v_integrity_record_exists BOOLEAN;
 BEGIN
   -- Generate hash of current data
-  v_current_hash := encode(
-    digest(p_data_snapshot::TEXT, 'sha256'),
-    'hex'
-  );
+  v_current_hash := md5(p_data_snapshot::TEXT);
 
   -- Check if integrity record exists
   SELECT EXISTS(
@@ -324,7 +325,21 @@ GRANT EXECUTE ON FUNCTION public.fn_verify_data_integrity TO authenticated;
 
 ALTER TABLE public.cmms_audit_log ENABLE ROW LEVEL SECURITY;
 
+-- Allow authenticated users to INSERT audit logs (via function)
+DROP POLICY IF EXISTS audit_log_insert ON public.cmms_audit_log;
+CREATE POLICY audit_log_insert ON public.cmms_audit_log
+  FOR INSERT
+  WITH CHECK (
+    company_id IN (
+      SELECT cmms_company_id FROM public.cmms_users
+      WHERE cmms_company_id = cmms_audit_log.company_id
+        AND LOWER(email) = LOWER(NULLIF(TRIM(COALESCE(auth.jwt() ->> 'email', '')), ''))
+        AND is_active = TRUE
+    )
+  );
+
 -- Admin/Coordinator/Supervisor can view all audit logs for their company
+DROP POLICY IF EXISTS audit_log_view_by_role ON public.cmms_audit_log;
 CREATE POLICY audit_log_view_by_role ON public.cmms_audit_log
   FOR SELECT
   USING (
@@ -338,6 +353,7 @@ CREATE POLICY audit_log_view_by_role ON public.cmms_audit_log
   );
 
 -- Users can only view their own actions
+DROP POLICY IF EXISTS audit_log_view_own_actions ON public.cmms_audit_log;
 CREATE POLICY audit_log_view_own_actions ON public.cmms_audit_log
   FOR SELECT
   USING (
@@ -350,11 +366,13 @@ CREATE POLICY audit_log_view_own_actions ON public.cmms_audit_log
   );
 
 -- Prevent audit log deletion
+DROP POLICY IF EXISTS audit_log_prevent_delete ON public.cmms_audit_log;
 CREATE POLICY audit_log_prevent_delete ON public.cmms_audit_log
   FOR DELETE
   USING (FALSE);
 
 -- Prevent audit log updates
+DROP POLICY IF EXISTS audit_log_prevent_update ON public.cmms_audit_log;
 CREATE POLICY audit_log_prevent_update ON public.cmms_audit_log
   FOR UPDATE
   USING (FALSE);
@@ -365,6 +383,7 @@ CREATE POLICY audit_log_prevent_update ON public.cmms_audit_log
 
 ALTER TABLE public.cmms_data_integrity ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS data_integrity_view ON public.cmms_data_integrity;
 CREATE POLICY data_integrity_view ON public.cmms_data_integrity
   FOR SELECT
   USING (
@@ -504,25 +523,24 @@ BEGIN
   WHERE company_id = p_company_id;
 
   -- Count unverified records (where previous_hash doesn't match previous record's action_hash)
+  WITH audit_with_prev AS (
+    SELECT 
+      curr.id,
+      curr.action_hash,
+      curr.previous_hash,
+      LAG(curr.action_hash) OVER (PARTITION BY curr.company_id ORDER BY curr.created_at) as prev_action_hash
+    FROM public.cmms_audit_log curr
+    WHERE curr.company_id = p_company_id
+  )
   SELECT COUNT(*) INTO v_unverified
-  FROM public.cmms_audit_log a
-  WHERE a.company_id = p_company_id
-    AND a.id NOT IN (
-      SELECT a1.id FROM public.cmms_audit_log a1
-      LEFT JOIN public.cmms_audit_log a2 ON a2.id = (
-        SELECT id FROM public.cmms_audit_log 
-        WHERE company_id = a1.company_id AND created_at < a1.created_at
-        ORDER BY created_at DESC LIMIT 1
-      )
-      WHERE a1.company_id = p_company_id
-        AND (a2.id IS NULL OR a1.previous_hash = a2.action_hash)
-    );
+  FROM audit_with_prev
+  WHERE (previous_hash IS NOT NULL AND previous_hash != prev_action_hash);
 
   -- Get last hash
-  SELECT action_hash INTO v_last_hash
-  FROM public.cmms_audit_log
-  WHERE company_id = p_company_id
-  ORDER BY created_at DESC
+  SELECT al.action_hash INTO v_last_hash
+  FROM public.cmms_audit_log al
+  WHERE al.company_id = p_company_id
+  ORDER BY al.created_at DESC
   LIMIT 1;
 
   IF v_unverified > 0 THEN

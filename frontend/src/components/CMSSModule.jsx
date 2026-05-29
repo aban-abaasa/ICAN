@@ -1715,10 +1715,10 @@ const CMMSModule = ({
       const indentLevel = level > 0 ? 3 : 0; // Only indent replies
       
       return (
-        <div key={message.id} className="w-full space-y-1">
+        <div key={message.id} className="w-full space-y-0.5 md:space-y-1">
           {/* Main message */}
-          <div className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`} style={{ marginLeft: level > 0 ? '1.5rem' : '0' }}>
-            <div className={`max-w-xs px-3 py-2 rounded-lg ${
+          <div className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`} style={{ marginLeft: level > 0 ? '1rem md:1.5rem' : '0' }}>
+            <div className={`max-w-xs px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm ${
               isOwnMessage 
                 ? 'bg-green-600 text-white rounded-bl-none' 
                 : 'bg-slate-700 text-gray-100 rounded-br-none'
@@ -1732,9 +1732,9 @@ const CMMSModule = ({
                 </div>
               )}
               {/* Message text */}
-              <div className="text-sm break-words">{message.message_text}</div>
+              <div className="text-xs md:text-sm break-words">{message.message_text}</div>
               {/* Timestamp */}
-              <div className={`text-xs mt-1 text-right ${
+              <div className={`text-xs mt-1 text-right opacity-80 ${
                 isOwnMessage ? 'text-green-100' : 'text-gray-400'
               }`}>
                 {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -1744,7 +1744,7 @@ const CMMSModule = ({
           
           {/* Render replies */}
           {message.replies && message.replies.length > 0 && (
-            <div className="space-y-1">
+            <div className="space-y-0.5 md:space-y-1">
               {message.replies.map(reply => (
                 <MessageThread key={reply.id} message={reply} level={level + 1} />
               ))}
@@ -1999,31 +1999,31 @@ const CMMSModule = ({
         </div>
 
         {/* Section 2: Messaging & Job Assignment */}
-        <div className="grid md:grid-cols-2 gap-4 md:gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6">
           {/* Left: User Messages */}
-          <div className="glass-card p-4 md:p-6 border border-slate-700">
-            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+          <div className="flex flex-col h-auto md:h-screen overflow-hidden">
+            <h3 className="text-base md:text-lg font-bold text-white mb-3 md:mb-4 flex items-center gap-2">
               💬 Messages
             </h3>
             
-            <div className="space-y-2">
+            <div className="space-y-1 flex-shrink-0 max-h-32 md:max-h-48 md:flex-1 md:flex md:flex-col overflow-hidden">
               {isLoadingUsers ? (
                 <p className="text-gray-400 text-xs text-center py-4">Loading users...</p>
               ) : companyUsers.filter(u => u.id !== user?.id).length === 0 ? (
                 <p className="text-gray-400 text-xs text-center py-4">No other users to message</p>
               ) : (
-                <div className="max-h-48 overflow-y-auto space-y-1">
+                <div className="overflow-y-auto space-y-1">
                   {companyUsers.filter(u => u.id !== user?.id).map(user => (
                     <button
                       key={user.id}
                       onClick={() => setSelectedUserToMessage(user)}
-                      className={`w-full px-3 py-2 rounded-lg text-left text-sm transition-all ${
+                      className={`w-full px-3 py-2.5 md:py-2 rounded-lg text-left text-xs md:text-sm transition-all ${
                         selectedUserToMessage?.id === user.id
                           ? 'bg-blue-600 text-white'
                           : 'bg-slate-700/50 text-gray-300 hover:bg-slate-700'
                       }`}
                     >
-                      <div className="font-semibold truncate">{user.name || user.email}</div>
+                      <div className="font-semibold truncate text-xs md:text-sm">{user.name || user.email}</div>
                       <div className="text-xs opacity-70 truncate">{user.email}</div>
                     </button>
                   ))}
@@ -2033,31 +2033,34 @@ const CMMSModule = ({
 
             {/* Chat Display */}
             {selectedUserToMessage && (
-              <div className="mt-4 space-y-3 flex flex-col h-full">
+              <div className="mt-3 md:mt-4 space-y-2 md:space-y-3 flex flex-col flex-1 min-h-0">
                 {/* Chat Header */}
-                <div className="p-4 bg-gradient-to-r from-slate-700 to-slate-600 rounded-lg text-sm text-gray-100 border-l-4 border-green-500 shadow-md">
+                <div className="p-3 md:p-4 bg-gradient-to-r from-slate-700 to-slate-600 rounded-lg text-xs md:text-sm text-gray-100 border-l-4 border-green-500 shadow-md">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-xs font-bold text-white">
+                    <div className="w-6 md:w-8 h-6 md:h-8 rounded-full bg-green-500 flex items-center justify-center text-xs font-bold text-white">
                       {(selectedUserToMessage.name || selectedUserToMessage.email)?.[0]?.toUpperCase() || '?'}
                     </div>
                     <div>
-                      <div className="font-bold text-white">{selectedUserToMessage.name || selectedUserToMessage.email}</div>
+                      <div className="font-bold text-white text-xs md:text-sm">{selectedUserToMessage.name || selectedUserToMessage.email}</div>
                       <div className="text-xs text-gray-400">💬 Chat</div>
                     </div>
                   </div>
                 </div>
 
                 {/* Messages Container - Like WhatsApp */}
-                <div className="flex-1 bg-slate-900/30 rounded-lg p-4 overflow-y-auto space-y-3 border border-slate-700 min-h-96">
+                <div className="flex-1 overflow-y-auto space-y-2 md:space-y-3 px-3 md:px-4 py-2" style={{scrollbarWidth: 'none', msOverflowStyle: 'none'}} onScroll={(e) => {e.currentTarget.style.scrollbarWidth = 'none';}}>
+                  <style>{`
+                    div::-webkit-scrollbar { display: none; }
+                  `}</style>
                   {isLoadingConversation ? (
                     <div className="flex items-center justify-center h-full">
                       <Loader className="w-6 h-6 animate-spin text-green-400" />
                     </div>
                   ) : currentConversationMessages?.length === 0 ? (
                     <div className="flex items-center justify-center h-full text-gray-500">
-                      <p className="text-center">
-                        <div className="text-3xl mb-2">💭</div>
-                        <div>No messages yet. Start a conversation!</div>
+                      <p className="text-center px-2">
+                        <div className="text-2xl md:text-3xl mb-2">💭</div>
+                        <div className="text-xs md:text-sm">No messages yet. Start a conversation!</div>
                       </p>
                     </div>
                   ) : (
@@ -2068,7 +2071,7 @@ const CMMSModule = ({
                 </div>
 
                 {/* Message Input - Like WhatsApp */}
-                <div className="flex gap-2 items-end">
+                <div className="flex gap-2 items-end pt-3 md:pt-2 pb-1">
                   <input
                     type="text"
                     placeholder="Type a message..."
@@ -2076,12 +2079,12 @@ const CMMSModule = ({
                     onChange={(e) => setMessageInput(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSendMessage())}
                     disabled={isSendingMessage}
-                    className="flex-1 bg-slate-700 text-white text-sm rounded-full px-4 py-2 border border-slate-600 focus:border-green-400 focus:outline-none placeholder-gray-500 disabled:opacity-50 resize-none"
+                    className="flex-1 bg-slate-700 text-white text-xs md:text-sm rounded-full px-3 md:px-4 py-2.5 md:py-2 border border-slate-600 focus:border-green-400 focus:outline-none placeholder-gray-500 disabled:opacity-50 resize-none"
                   />
                   <button
                     onClick={handleSendMessage}
                     disabled={isSendingMessage || !messageInput.trim()}
-                    className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:bg-gray-600 text-white text-sm rounded-full font-semibold transition-colors flex items-center gap-2"
+                    className="px-3 md:px-4 py-2.5 md:py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:bg-gray-600 text-white text-xs md:text-sm rounded-full font-semibold transition-colors flex items-center gap-2 flex-shrink-0"
                   >
                     {isSendingMessage ? '⏳' : '➤'}
                   </button>
@@ -2092,12 +2095,12 @@ const CMMSModule = ({
 
           {/* Right: Job Assignment (Admin/Coordinator/Supervisor only) */}
           {canAssignJobs && (
-            <div className="glass-card p-4 md:p-6 border border-slate-700">
-              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+            <div>
+              <h3 className="text-base md:text-lg font-bold text-white mb-3 md:mb-4 flex items-center gap-2">
                 🎯 Assign Job
               </h3>
 
-              <div className="space-y-3">
+              <div className="space-y-3 md:space-y-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-300 mb-1">Assign To *</label>
                   <select
