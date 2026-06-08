@@ -146,7 +146,7 @@ export const BusinessLoanCalculator = ({ isOpen, onClose, preFilledAmount = '', 
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center p-3 overflow-y-auto">
-      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl w-full max-w-4xl shadow-2xl my-4">
+      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl w-full max-w-4xl shadow-2xl my-4 mt-32 md:mt-28">
         {/* ── Header ── */}
         <div className="bg-gradient-to-r from-blue-700 to-indigo-600 rounded-t-2xl px-5 py-4 flex items-center justify-between">
           <div>

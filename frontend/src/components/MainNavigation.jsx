@@ -2,6 +2,7 @@
  * MainNavigation Component
  * Top menu bar with ICAN Capital Engine sections matching design
  * Includes: Dashboard, Security, Readiness, Growth, Trust (SACCO), Settings
+ * Features: Hide on scroll for better UX, Prominent branding
  */
 
 import React, { useState, useRef, useEffect } from 'react'
@@ -31,7 +32,11 @@ export default function MainNavigation({ onTrustClick, onShareClick, onWalletCli
   const [expandedMenu, setExpandedMenu] = useState(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [expandedMobileMenu, setExpandedMobileMenu] = useState(null)
+  const [isNavVisible, setIsNavVisible] = useState(true)
+  const [scrollDirection, setScrollDirection] = useState('up')
+  const [lastScrollY, setLastScrollY] = useState(0)
   const menuRef = useRef(null)
+  const navRef = useRef(null)
 
   const menuItems = [
     {
@@ -138,6 +143,31 @@ export default function MainNavigation({ onTrustClick, onShareClick, onWalletCli
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // Handle scroll direction for show/hide navbar
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY
+      
+      // Threshold: only hide/show after scrolling more than 50px
+      const threshold = 50
+      
+      if (currentScrollY - lastScrollY > threshold && scrollDirection === 'up') {
+        // Scrolling down
+        setScrollDirection('down')
+        setIsNavVisible(false)
+      } else if (lastScrollY - currentScrollY > threshold && scrollDirection === 'down') {
+        // Scrolling up
+        setScrollDirection('up')
+        setIsNavVisible(true)
+      }
+      
+      setLastScrollY(currentScrollY)
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [lastScrollY, scrollDirection])
+
   return (
     <>
       {/* Top Bar - Mode/Region - Hide on mobile */}
@@ -146,34 +176,43 @@ export default function MainNavigation({ onTrustClick, onShareClick, onWalletCli
       </div> */}
 
       {/* Main Navigation */}
-      <nav className="bg-gradient-to-b from-slate-800 to-slate-900 border-b border-slate-700/50 backdrop-blur-md sticky top-0 z-50">
+      <nav 
+        ref={navRef}
+        className={`bg-gradient-to-b from-slate-800 to-slate-900 border-b border-slate-700/50 backdrop-blur-md sticky top-0 z-50 transition-all duration-300 ease-in-out transform ${
+          isNavVisible ? 'translate-y-0 shadow-lg' : '-translate-y-full shadow-none'
+        }`}
+      >
         <div className="max-w-7xl mx-auto px-4 md:px-6 py-3 md:py-6">
           {/* Desktop: Logo and Title + Menu */}
           <div className="hidden md:block">
-            {/* Logo and Title */}
-            <div className="flex items-center gap-4 mb-6 group">
-              {/* Dynamic Logo with Glow Effect */}
-              <div className="relative transition-all duration-300 group-hover:scale-110 rounded-lg overflow-hidden">
-                {/* Subtle glow background */}
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg opacity-0 group-hover:opacity-30 blur-lg transition-all duration-300"></div>
-                
-                {/* Logo container */}
-                <div className="relative bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-lg p-2 hover:bg-gradient-to-r hover:from-blue-500/30 hover:to-purple-500/30 transition-all duration-300 group-hover:shadow-lg group-hover:shadow-blue-500/50 flex items-center justify-center">
-                  <img 
-                    src={IcanEraLogo} 
-                    alt="IcanEra" 
-                    className="w-14 h-14 object-contain transition-transform duration-300 group-hover:scale-105 filter drop-shadow-md"
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                      e.target.parentElement.textContent = '💎';
-                      e.target.parentElement.style.fontSize = '1.75rem';
-                    }}
-                  />
+            {/* Logo and Title with Enhanced Branding */}
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-4 group">
+                {/* Dynamic Logo with Glow Effect */}
+                <div className="relative transition-all duration-300 group-hover:scale-110 rounded-lg overflow-hidden">
+                  {/* Subtle glow background */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg opacity-0 group-hover:opacity-30 blur-lg transition-all duration-300"></div>
+                  
+                  {/* Logo container */}
+                  <div className="relative bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-lg p-2 hover:bg-gradient-to-r hover:from-blue-500/30 hover:to-purple-500/30 transition-all duration-300 group-hover:shadow-lg group-hover:shadow-blue-500/50 flex items-center justify-center">
+                    <img 
+                      src={IcanEraLogo} 
+                      alt="IcanEra" 
+                      className="w-14 h-14 object-contain transition-transform duration-300 group-hover:scale-105 filter drop-shadow-md"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.parentElement.textContent = '💎';
+                        e.target.parentElement.style.fontSize = '1.75rem';
+                      }}
+                    />
+                  </div>
                 </div>
-              </div>
-              
-              <div>
-                <p className="text-white font-bold text-xl group-hover:drop-shadow-[0_0_8px_rgba(59,130,246,0.5)] transition-all duration-300">IcanEra</p>
+                
+                {/* Branding Text */}
+                <div>
+                  <p className="text-white font-bold text-xl group-hover:drop-shadow-[0_0_8px_rgba(59,130,246,0.5)] transition-all duration-300">ICANera</p>
+                  <p className="text-blue-300 text-xs font-medium">Capital Engine</p>
+                </div>
               </div>
             </div>
 
@@ -244,15 +283,24 @@ export default function MainNavigation({ onTrustClick, onShareClick, onWalletCli
 
           {/* Mobile: Hamburger Menu */}
           <div className="md:hidden">
-            {/* Mobile Header */}
+            {/* Mobile Header with Enhanced Branding */}
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-blue-500/30 border border-blue-400/50">
-                  <Shield className="w-5 h-5 text-blue-400" />
+                <div className="p-2 rounded-lg bg-gradient-to-r from-blue-500/30 to-purple-500/30 border border-blue-400/50">
+                  <img 
+                    src={IcanEraLogo} 
+                    alt="IcanEra" 
+                    className="w-6 h-6 object-contain"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.parentElement.textContent = '💎';
+                      e.target.parentElement.style.fontSize = '1.25rem';
+                    }}
+                  />
                 </div>
                 <div>
                   <p className="text-white font-bold text-lg">ICANera</p>
-                  <p className="text-blue-300 text-xs">Global Capital</p>
+                  <p className="text-blue-300 text-xs font-medium">Capital Engine</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">

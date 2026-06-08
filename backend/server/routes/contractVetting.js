@@ -33,6 +33,20 @@ router.post('/', async (req, res) => {
       });
     }
 
+    // Handle large documents by chunking if needed (Gemini context limit: ~32k tokens)
+    const maxTokensPerRequest = 30000;
+    const estimatedTokens = Math.ceil(contractText.length / 4); // Rough estimate
+    
+    let contractToAnalyze = contractText;
+    let isChunked = false;
+    
+    if (estimatedTokens > maxTokensPerRequest) {
+      // Truncate to most important section (usually terms and conditions at start)
+      contractToAnalyze = contractText.substring(0, maxTokensPerRequest * 4);
+      isChunked = true;
+      console.log('[WARNING] Document exceeded token limit - analyzing truncated version');
+    }
+
     // Security audit log
     const auditLog = {
       userId: req.user.id,
@@ -58,7 +72,7 @@ router.post('/', async (req, res) => {
         temperature: 0.1,
         topK: 40,
         topP: 0.95,
-        maxOutputTokens: 2048,
+        maxOutputTokens: 4096,  // Increased from 2048 to handle real-world contracts
       }
     });
 

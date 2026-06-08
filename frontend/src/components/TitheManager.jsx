@@ -5,13 +5,22 @@ import { getSupabaseClient } from '../lib/supabase';
 /**
  * TitheManager Component
  * 
- * Complete tithe lifecycle management with blockchain security:
- * - Add tithes with wallet integration
- * - Remove/clear tithes and restore wallet
- * - View tithe history with filters
- * - Analytics dashboard
- * - Blockchain audit trail verification
- * - Anonymous giving support
+ * HIGH-LEVEL DEFINITION:
+ * The Tithe Management System is a comprehensive charitable giving platform that enables
+ * users to track, manage, and verify their tithes, offerings, and charitable donations
+ * with complete transparency and blockchain-backed immutability. It bridges financial
+ * transactions (business & personal) with spiritual/charitable giving, maintaining an
+ * immutable audit trail for accountability, tax compliance, and personal record-keeping.
+ * 
+ * KEY CAPABILITIES:
+ * ✅ Add tithes with wallet integration (business/personal filtering)
+ * ✅ Pay tithes from filtered transactions (business or personal income)
+ * ✅ Remove/reverse tithes and restore wallet
+ * ✅ View tithe history with date & type filters
+ * ✅ Analytics dashboard (frequency, recipients, totals)
+ * ✅ Blockchain audit trail with SHA256 immutability verification
+ * ✅ Anonymous giving support for privacy
+ * ✅ Transaction categorization (business vs personal income sources)
  */
 
 export default function TitheManager() {
@@ -22,7 +31,7 @@ export default function TitheManager() {
   // ============================================================
   
   // Form state
-  const [formMode, setFormMode] = useState('add'); // 'add' | 'view' | 'analytics' | 'audit'
+  const [formMode, setFormMode] = useState('add'); // 'add' | 'pay' | 'view' | 'analytics' | 'audit'
   const [form, setForm] = useState({
     amount: '',
     givingType: 'tithe',
@@ -39,6 +48,11 @@ export default function TitheManager() {
   const [auditTrail, setAuditTrail] = useState([]);
   const [chainIntegrity, setChainIntegrity] = useState(null);
   const [selectedTithe, setSelectedTithe] = useState(null);
+  
+  // Transaction filtering state (for Pay mode)
+  const [transactionFilter, setTransactionFilter] = useState('all'); // 'all' | 'business' | 'personal'
+  const [filteredTransactions, setFilteredTransactions] = useState([]);
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
 
   // UI state
   const [loading, setLoading] = useState(false);
@@ -139,6 +153,37 @@ export default function TitheManager() {
       setChainIntegrity(data?.[0] || null);
     } catch (err) {
       console.error('Error verifying chain:', err);
+    }
+  };
+
+  const fetchFilteredTransactions = async (type = 'all') => {
+    try {
+      setLoading(true);
+      
+      // Query ican_financial_transactions filtered by transaction_type
+      let query = supabase
+        .from('ican_financial_transactions')
+        .select('id, amount, currency, transaction_type, description, created_at, source_type')
+        .eq('transaction_status', 'completed')
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      // Filter by transaction type (business or personal)
+      if (type === 'business') {
+        query = query.eq('transaction_type', 'business');
+      } else if (type === 'personal') {
+        query = query.eq('transaction_type', 'personal');
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+      setFilteredTransactions(data || []);
+      setError(null);
+    } catch (err) {
+      setError('Failed to load transactions: ' + err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -251,8 +296,265 @@ export default function TitheManager() {
   };
 
   // ============================================================
+  // PAY TITHE FROM TRANSACTION
+  // ============================================================
+
+  const handlePayTitheFromTransaction = async (e) => {
+    e.preventDefault();
+
+    if (!selectedTransaction) {
+      setError('Please select a transaction to pay tithe from');
+      return;
+    }
+
+    if (!form.amount || parseFloat(form.amount) <= 0) {
+      setError('Please enter a valid tithe amount');
+      return;
+    }
+
+    const amount = parseFloat(form.amount);
+    if (amount > selectedTransaction.amount) {
+      setError(`Tithe amount cannot exceed transaction amount (${selectedTransaction.amount} ${selectedTransaction.currency})`);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const { data, error } = await supabase.rpc('fn_add_tithe', {
+        p_giving_type: form.givingType,
+        p_amount: amount,
+        p_currency: selectedTransaction.currency,
+        p_recipient_type: form.recipientType,
+        p_recipient_name_encrypted: null,
+        p_tithe_percentage: (amount / selectedTransaction.amount * 100).toFixed(1),
+        p_income_reference_amount: selectedTransaction.amount,
+        p_giving_date: form.givingDate,
+        p_notes_encrypted: form.notes || `From ${transactionFilter} transaction`,
+        p_is_anonymous: form.isAnonymous
+      });
+
+      if (error) throw error;
+
+      const result = data?.[0];
+      if (!result.success) throw new Error(result.message);
+
+      setSuccess(`✅ Tithe paid! ${result.message}`);
+
+      // Reset form and refresh
+      setForm({
+        amount: '',
+        givingType: 'tithe',
+        recipientType: 'church',
+        givingDate: new Date().toISOString().split('T')[0],
+        notes: '',
+        isAnonymous: false,
+        incomeReference: ''
+      });
+      setSelectedTransaction(null);
+
+      await Promise.all([
+        fetchTithes(),
+        fetchSummary(),
+        fetchWalletBalance(),
+        fetchFilteredTransactions(transactionFilter)
+      ]);
+
+      setTimeout(() => setSuccess(null), 5000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============================================================
   // RENDER FUNCTIONS
   // ============================================================
+
+  const renderPayTithe = () => (
+    <div className="space-y-4">
+      {/* Transaction Filter */}
+      <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-6 border border-purple-500/30 shadow-lg">
+        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+          <span>💳</span>
+          Select Transaction to Pay Tithe From
+        </h3>
+
+        {/* Filter Tabs */}
+        <div className="flex gap-2 mb-4">
+          {[
+            { id: 'all', label: 'All Transactions' },
+            { id: 'business', label: '🏢 Business Income' },
+            { id: 'personal', label: '👤 Personal Income' }
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => {
+                setTransactionFilter(tab.id);
+                fetchFilteredTransactions(tab.id);
+              }}
+              className={`px-4 py-2 rounded-lg font-medium transition ${
+                transactionFilter === tab.id
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Transactions List */}
+        <div className="space-y-2 mb-4 max-h-64 overflow-y-auto">
+          {filteredTransactions.length === 0 ? (
+            <div className="text-gray-400 text-center py-4">No transactions found</div>
+          ) : (
+            filteredTransactions.map((transaction) => (
+              <div
+                key={transaction.id}
+                onClick={() => {
+                  setSelectedTransaction(transaction);
+                  setForm({
+                    ...form,
+                    incomeReference: transaction.amount,
+                    givingDate: new Date(transaction.created_at).toISOString().split('T')[0]
+                  });
+                }}
+                className={`p-3 rounded-lg border transition cursor-pointer ${
+                  selectedTransaction?.id === transaction.id
+                    ? 'border-purple-500 bg-purple-500/10'
+                    : 'border-slate-700 bg-slate-700/50 hover:border-purple-500/50'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="text-white font-semibold">{transaction.amount.toLocaleString()} {transaction.currency}</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {transaction.description || transaction.source_type} • {new Date(transaction.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <span className={`text-xs px-2 py-1 rounded font-semibold ${
+                    transaction.transaction_type === 'business'
+                      ? 'bg-blue-500/20 text-blue-300'
+                      : 'bg-green-500/20 text-green-300'
+                  }`}>
+                    {transaction.transaction_type}
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Tithe Payment Form */}
+      {selectedTransaction && (
+        <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-6 border border-purple-500/30 shadow-lg">
+          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <span>✨</span>
+            Calculate & Pay Tithe
+          </h3>
+
+          <form onSubmit={handlePayTitheFromTransaction} className="space-y-4">
+            {/* Selected Transaction Summary */}
+            <div className="bg-slate-700/50 rounded-lg p-3 border border-slate-600">
+              <p className="text-xs text-gray-400 mb-1">From Selected Transaction:</p>
+              <p className="text-white font-semibold">{selectedTransaction.amount.toLocaleString()} {selectedTransaction.currency}</p>
+              <p className="text-xs text-gray-400 mt-1">Type: <span className="capitalize text-purple-300">{selectedTransaction.transaction_type}</span></p>
+            </div>
+
+            {/* Tithe Amount */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Tithe Amount</label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  value={form.amount}
+                  onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                  placeholder="Enter tithe amount"
+                  min="1"
+                  max={selectedTransaction.amount}
+                  step="1"
+                  className="flex-1 bg-slate-700/50 border border-purple-500/30 rounded-lg px-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, amount: Math.round(selectedTransaction.amount * 0.1) })}
+                  className="px-3 py-2 bg-purple-500/20 text-purple-300 rounded-lg hover:bg-purple-500/30 transition text-sm"
+                  title="10% tithe"
+                >
+                  10%
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, amount: selectedTransaction.amount })}
+                  className="px-3 py-2 bg-purple-500/20 text-purple-300 rounded-lg hover:bg-purple-500/30 transition text-sm"
+                  title="Full amount"
+                >
+                  100%
+                </button>
+              </div>
+            </div>
+
+            {/* Giving Type */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Type of Giving</label>
+              <select
+                value={form.givingType}
+                onChange={(e) => setForm({ ...form, givingType: e.target.value })}
+                className="w-full bg-slate-700/50 border border-purple-500/30 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500"
+              >
+                <option value="tithe">Tithe (10%)</option>
+                <option value="offering">Offering</option>
+                <option value="charity">Charity</option>
+                <option value="mission">Mission Fund</option>
+                <option value="building_fund">Building Fund</option>
+                <option value="alms">Alms/Zakat</option>
+              </select>
+            </div>
+
+            {/* Recipient Type */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Recipient</label>
+              <select
+                value={form.recipientType}
+                onChange={(e) => setForm({ ...form, recipientType: e.target.value })}
+                className="w-full bg-slate-700/50 border border-purple-500/30 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500"
+              >
+                <option value="church">Church</option>
+                <option value="mosque">Mosque</option>
+                <option value="charity">Charity Organization</option>
+                <option value="individual">Individual</option>
+              </select>
+            </div>
+
+            {/* Anonymous Checkbox */}
+            <label className="flex items-center gap-2 text-gray-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.isAnonymous}
+                onChange={(e) => setForm({ ...form, isAnonymous: e.target.checked })}
+                className="w-4 h-4"
+              />
+              <span className="text-sm">Keep this giving anonymous</span>
+            </label>
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={loading || !form.amount}
+              className="w-full bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 disabled:from-gray-600 disabled:to-gray-600 text-white font-semibold py-2 rounded-lg transition"
+            >
+              {loading ? '⏳ Processing...' : '✅ Pay Tithe'}
+            </button>
+          </form>
+        </div>
+      )}
+    </div>
+  );
 
   const renderAddForm = () => (
     <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-6 border border-purple-500/30 shadow-lg">
@@ -581,13 +883,19 @@ export default function TitheManager() {
         <div className="flex gap-2 mb-6 flex-wrap">
           {[
             { id: 'add', label: '➕ Add Tithe', icon: Plus },
+            { id: 'pay', label: '💳 Pay Tithe', icon: Plus },
             { id: 'view', label: '👁️ View Tithes', icon: Eye },
             { id: 'analytics', label: '📊 Analytics', icon: BarChart3 },
             { id: 'audit', label: '🔒 Blockchain Audit', icon: Lock }
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setFormMode(tab.id)}
+              onClick={() => {
+                setFormMode(tab.id);
+                if (tab.id === 'pay') {
+                  fetchFilteredTransactions(transactionFilter);
+                }
+              }}
               className={`px-4 py-2 rounded-lg font-medium transition ${
                 formMode === tab.id
                   ? 'bg-purple-600 text-white'
@@ -604,6 +912,7 @@ export default function TitheManager() {
           {/* Main Content */}
           <div className="lg:col-span-2">
             {formMode === 'add' && renderAddForm()}
+            {formMode === 'pay' && renderPayTithe()}
             {formMode === 'view' && renderTithesList()}
             {formMode === 'analytics' && renderAnalytics()}
             {formMode === 'audit' && renderBlockchainAudit()}

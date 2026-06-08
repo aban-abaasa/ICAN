@@ -50,7 +50,8 @@ import {
   Clock,
   Percent,
   Sparkles,
-  Trash2
+  Trash2,
+  Sliders
 } from 'lucide-react';
 import SmartTransactionEntry from './SmartTransactionEntry';
 import { ProfilePage } from './auth/ProfilePage';
@@ -800,6 +801,9 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [showWalletAccounts, setShowWalletAccounts] = useState(false);
   const [showTithingCalculator, setShowTithingCalculator] = useState(false);
   const [showReportingSystem, setShowReportingSystem] = useState(false);
+  const [showSecurityPanel, setShowSecurityPanel] = useState(false);
+  const [showLoanCalculator, setShowLoanCalculator] = useState(false);
+  const [showSettingsPanel, setShowSettingsPanel] = useState(false);
   const [showAIChat, setShowAIChat] = useState(false);
 
   // AI Chat state
@@ -1468,6 +1472,15 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showReportingSystem]);
+
+  // Auto-initialize Tithe calculator when modal opens
+  useEffect(() => {
+    if (showTithingCalculator) {
+      // Ensure tithe data is fresh when modal opens
+      setSelectedTithingTab('quick');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showTithingCalculator]);
 
   // Initialize AI chat with welcome message
   useEffect(() => {
@@ -2873,8 +2886,12 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     { id: 'pitchin', label: 'Pitchin', icon: Briefcase },
     { id: 'wallet', label: 'Wallet', icon: Wallet },
     { id: 'trust', label: 'Trust', icon: Lock },
-    { id: 'cmms', label: 'CMMS', icon: Settings },
-    { id: 'extension', label: 'Extension', icon: Sparkles }
+    { id: 'cmms', label: 'CMMS', icon: Building },
+    { id: 'reports', label: 'Reports', icon: PieChart },
+    { id: 'tithe', label: 'Tithe', icon: Heart },
+    { id: 'security', label: 'Security', icon: Shield },
+    { id: 'loancalc', label: 'Loan Calculator', icon: DollarSign },
+    { id: 'settings', label: 'Settings', icon: Sliders }
   ];
 
   const activeHeaderTab =
@@ -2882,7 +2899,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     showWalletPanel ? 'wallet' :
     showTrustPanel ? 'trust' :
     showCmmsPanel ? 'cmms' :
-    ['security', 'readiness', 'growth', 'settings'].includes(selectedDetail?.tab) ? 'extension' :
+    showReportingSystem ? 'reports' :
+    showTithingCalculator ? 'tithe' :
+    showSecurityPanel ? 'security' :
+    showBusinessLoanCalculator ? 'loancalc' :
+    showSettingsPanel ? 'settings' :
     'dashboard';
   const overlayPanelBottomInset = 'calc(5.5rem + env(safe-area-inset-bottom))';
 
@@ -3018,10 +3039,43 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       return;
     }
 
-    closeHeaderPanels();
+    if (tabId === 'reports') {
+      closeHeaderPanels();
+      setSelectedDetail(null);
+      closeAuxiliaryOverlays();
+      setShowReportingSystem(true);
+      return;
+    }
 
-    if (tabId === 'extension') {
-      openDetailView('settings', 'Readiness Pillars');
+    if (tabId === 'tithe') {
+      closeHeaderPanels();
+      setSelectedDetail(null);
+      closeAuxiliaryOverlays();
+      setShowTithingCalculator(true);
+      return;
+    }
+
+    if (tabId === 'security') {
+      closeHeaderPanels();
+      setSelectedDetail(null);
+      closeAuxiliaryOverlays();
+      setShowSecurityPanel(true);
+      return;
+    }
+
+    if (tabId === 'loancalc') {
+      closeHeaderPanels();
+      setSelectedDetail(null);
+      closeAuxiliaryOverlays();
+      setShowBusinessLoanCalculator(true);
+      return;
+    }
+
+    if (tabId === 'settings') {
+      closeHeaderPanels();
+      closeAuxiliaryOverlays();
+      setShowSettingsPanel(true);
+      return;
     }
   };
 
@@ -3247,12 +3301,15 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     {/* Security */}
                     <button
                       onClick={() => {
-                        openDetailView('security', 'Security');
+                        closeHeaderPanels();
+                        setSelectedDetail(null);
+                        closeAuxiliaryOverlays();
+                        setShowSecurityPanel(true);
                         setShowMenuDropdown(false);
                       }}
-                      className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-purple-500/20 hover:text-purple-300 rounded transition"
+                      className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-red-500/20 hover:text-red-300 rounded transition flex items-center gap-2"
                     >
-                       Security
+                      <span>🔐</span> Security
                     </button>
 
                     {/* Readiness */}
@@ -3565,11 +3622,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* ====== DETAIL PAGE - SETTINGS ONLY ====== */}
       {selectedDetail && (
         <div
-          className="fixed inset-0 bg-black/60 z-40 flex items-end"
+          className={`fixed inset-0 bg-black/60 z-40 flex ${isWebDashboard ? 'items-center justify-center p-4' : 'items-end'}`}
           onClick={() => setSelectedDetail(null)}
         >
           <div
-            className="bg-gradient-to-br from-slate-900 to-purple-900 w-full rounded-t-2xl pl-6 pr-8 pt-6 pb-[calc(7rem+env(safe-area-inset-bottom))] max-h-[90vh] overflow-y-auto"
+            className={`bg-gradient-to-br from-slate-900 to-purple-900 rounded-t-2xl ${isWebDashboard ? 'rounded-2xl w-full max-w-3xl max-h-[85vh]' : 'w-full rounded-t-2xl pb-[calc(7rem+env(safe-area-inset-bottom))]'} pl-6 pr-8 pt-6 overflow-y-auto`}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header - Settings Only */}
@@ -5897,15 +5954,20 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
       {/* ── Tithe Calculator Modal ─────────────────────────────────── */}
       {showTithingCalculator && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-start justify-center p-3 overflow-y-auto">
-          <div className="bg-gradient-to-br from-yellow-50 to-amber-50 rounded-2xl w-full max-w-2xl shadow-2xl my-4">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-start justify-center p-3 overflow-y-auto" style={{scrollBehavior: 'smooth', paddingTop: '180px'}}>
+          <div className="bg-gradient-to-br from-yellow-50 to-amber-50 rounded-2xl w-full max-w-2xl shadow-2xl border border-amber-200/50" style={{minHeight: '400px'}}>
             {/* Header */}
-            <div className="bg-gradient-to-r from-yellow-600 to-amber-500 rounded-t-2xl px-5 py-4 flex items-center justify-between">
+            <div className="bg-gradient-to-r from-yellow-600 to-amber-500 rounded-t-2xl px-5 py-4 flex items-center justify-between sticky top-0 z-10">
               <div>
                 <h2 className="text-xl font-bold text-white">🙏 Tithe Calculator</h2>
                 <p className="text-yellow-100 text-xs mt-0.5">Steward faithfully — Uganda giving tracker</p>
               </div>
-              <button onClick={() => setShowTithingCalculator(false)} className="text-white/70 hover:text-white p-1"><X className="w-6 h-6" /></button>
+              <button 
+                onClick={() => setShowTithingCalculator(false)} 
+                className="text-white/70 hover:text-white p-1 transition hover:bg-white/10 rounded"
+              >
+                <X className="w-6 h-6" />
+              </button>
             </div>
 
             <div className="p-4 space-y-4">
@@ -6017,17 +6079,217 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         </div>
       )}
 
+      {/* ── Security Modal ────────────────────────────────────────────────── */}
+      {showSecurityPanel && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-start justify-center p-3 overflow-y-auto" style={{scrollBehavior: 'smooth', paddingTop: '180px'}}>
+          <div className="bg-gradient-to-br from-slate-950 to-red-950 rounded-2xl w-full max-w-2xl shadow-2xl border border-red-500/30" style={{minHeight: '400px'}}>
+            {/* Header */}
+            <div className="bg-gradient-to-r from-red-700 to-red-600 rounded-t-2xl px-5 py-4 flex items-center justify-between sticky top-0 z-10">
+              <div>
+                <h2 className="text-xl font-bold text-white">🔐 Security Settings</h2>
+                <p className="text-red-100 text-xs mt-0.5">Protect your account — Uganda verified</p>
+              </div>
+              <button 
+                onClick={() => setShowSecurityPanel(false)} 
+                className="text-white/70 hover:text-white p-1 transition hover:bg-white/10 rounded"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Password Section */}
+              <div className="space-y-3">
+                <h3 className="text-white font-semibold flex items-center gap-2">
+                  <Lock className="w-5 h-5 text-red-400" />
+                  Password
+                </h3>
+                <button className="w-full px-4 py-3 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-200 rounded-lg transition text-sm font-medium">
+                  Change Password
+                </button>
+              </div>
+
+              {/* Two-Factor Authentication */}
+              <div className="space-y-3">
+                <h3 className="text-white font-semibold flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-orange-400" />
+                  Two-Factor Authentication
+                </h3>
+                <div className="px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-300">SMS Verification</span>
+                    <span className="text-xs bg-green-500/20 text-green-300 px-2 py-1 rounded">✓ Enabled</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Session Management */}
+              <div className="space-y-3">
+                <h3 className="text-white font-semibold flex items-center gap-2">
+                  <Zap className="w-5 h-5 text-yellow-400" />
+                  Active Sessions
+                </h3>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  <div className="px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg text-sm">
+                    <div className="text-slate-300 font-medium">Chrome on Windows</div>
+                    <div className="text-xs text-slate-500 mt-1">Last active: Just now</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Login Activity */}
+              <div className="space-y-3">
+                <h3 className="text-white font-semibold flex items-center gap-2">
+                  <Eye className="w-5 h-5 text-blue-400" />
+                  Recent Login Activity
+                </h3>
+                <div className="space-y-2 max-h-40 overflow-y-auto text-xs text-slate-400">
+                  <div>✓ Signed in today at 2:45 PM from Uganda</div>
+                  <div>✓ Signed in yesterday at 10:20 AM from Uganda</div>
+                  <div>✓ Signed in 2 days ago at 3:15 PM from Uganda</div>
+                </div>
+              </div>
+
+              {/* Close Button */}
+              <button 
+                onClick={() => setShowSecurityPanel(false)}
+                className="w-full px-4 py-3 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600 text-white rounded-lg font-semibold transition"
+              >
+                Close Security Settings
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Settings Modal ────────────────────────────────────────────────── */}
+      {showSettingsPanel && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-start justify-center p-3 overflow-y-auto" style={{scrollBehavior: 'smooth', paddingTop: '180px'}}>
+          <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl border border-slate-700/50" style={{minHeight: '400px'}}>
+            {/* Header */}
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-t-2xl px-5 py-4 flex items-center justify-between sticky top-0 z-10">
+              <div>
+                <h2 className="text-xl font-bold text-white">⚙️ Settings</h2>
+                <p className="text-indigo-100 text-xs mt-0.5">Customize your ICAN experience</p>
+              </div>
+              <button 
+                onClick={() => setShowSettingsPanel(false)} 
+                className="text-white/70 hover:text-white p-1 transition hover:bg-white/10 rounded"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Account Settings */}
+              <div className="space-y-3">
+                <h3 className="text-white font-semibold flex items-center gap-2">
+                  <User className="w-5 h-5 text-indigo-400" />
+                  Account
+                </h3>
+                <button className="w-full text-left px-4 py-3 bg-slate-700/30 hover:bg-slate-700/50 border border-slate-600 rounded-lg transition flex items-center justify-between group">
+                  <span className="text-slate-300 text-sm">Email Address</span>
+                  <span className="text-slate-500 text-xs group-hover:text-slate-400">{userProfile?.email || 'user@ican.era'}</span>
+                </button>
+                <button className="w-full text-left px-4 py-3 bg-slate-700/30 hover:bg-slate-700/50 border border-slate-600 rounded-lg transition flex items-center justify-between">
+                  <span className="text-slate-300 text-sm">Phone Number</span>
+                  <span className="text-slate-500 text-xs">{userProfile?.phone || '+256 7XX XXX XXXX'}</span>
+                </button>
+              </div>
+
+              {/* Notification Settings */}
+              <div className="space-y-3">
+                <h3 className="text-white font-semibold flex items-center gap-2">
+                  <Bell className="w-5 h-5 text-yellow-400" />
+                  Notifications
+                </h3>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-3 px-4 py-3 bg-slate-700/20 hover:bg-slate-700/30 border border-slate-600 rounded-lg cursor-pointer transition">
+                    <input type="checkbox" defaultChecked className="w-4 h-4 rounded text-indigo-500" />
+                    <span className="text-slate-300 text-sm flex-1">Email notifications</span>
+                  </label>
+                  <label className="flex items-center gap-3 px-4 py-3 bg-slate-700/20 hover:bg-slate-700/30 border border-slate-600 rounded-lg cursor-pointer transition">
+                    <input type="checkbox" defaultChecked className="w-4 h-4 rounded text-indigo-500" />
+                    <span className="text-slate-300 text-sm flex-1">SMS alerts</span>
+                  </label>
+                  <label className="flex items-center gap-3 px-4 py-3 bg-slate-700/20 hover:bg-slate-700/30 border border-slate-600 rounded-lg cursor-pointer transition">
+                    <input type="checkbox" defaultChecked className="w-4 h-4 rounded text-indigo-500" />
+                    <span className="text-slate-300 text-sm flex-1">Push notifications</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Privacy Settings */}
+              <div className="space-y-3">
+                <h3 className="text-white font-semibold flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-green-400" />
+                  Privacy
+                </h3>
+                <button className="w-full text-left px-4 py-3 bg-slate-700/30 hover:bg-slate-700/50 border border-slate-600 rounded-lg transition text-slate-300 text-sm font-medium">
+                  View Privacy Policy
+                </button>
+                <button className="w-full text-left px-4 py-3 bg-slate-700/30 hover:bg-slate-700/50 border border-slate-600 rounded-lg transition text-slate-300 text-sm font-medium">
+                  Data Export
+                </button>
+              </div>
+
+              {/* Appearance Settings */}
+              <div className="space-y-3">
+                <h3 className="text-white font-semibold flex items-center gap-2">
+                  <Eye className="w-5 h-5 text-blue-400" />
+                  Appearance
+                </h3>
+                <div className="px-4 py-3 bg-slate-700/30 border border-slate-600 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-300 text-sm">Dark Mode</span>
+                    <span className="text-xs bg-indigo-500/20 text-indigo-300 px-2 py-1 rounded">Always On</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Danger Zone */}
+              <div className="space-y-3 border-t border-slate-700 pt-6">
+                <h3 className="text-red-400 font-semibold text-sm">Danger Zone</h3>
+                <button className="w-full px-4 py-3 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-200 rounded-lg transition text-sm font-medium">
+                  Logout
+                </button>
+                <button className="w-full px-4 py-3 bg-red-950/40 hover:bg-red-950/60 border border-red-900 text-red-300 rounded-lg transition text-sm font-medium">
+                  Delete Account
+                </button>
+              </div>
+
+              {/* Close Button */}
+              <button 
+                onClick={() => setShowSettingsPanel(false)}
+                className="w-full px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg font-semibold transition"
+              >
+                Save & Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Reports Modal ──────────────────────────────────────────────── */}
       {showReportingSystem && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-start justify-center p-3 overflow-y-auto">
-          <div className="bg-gradient-to-br from-slate-900 to-indigo-950 rounded-2xl w-full max-w-3xl shadow-2xl my-4 border border-purple-500/30">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-start justify-center p-3 overflow-y-auto" style={{scrollBehavior: 'smooth', paddingTop: '180px'}}>
+          <div className="bg-gradient-to-br from-slate-900 to-indigo-950 rounded-2xl w-full max-w-3xl shadow-2xl border border-purple-500/30" style={{minHeight: '400px'}}>
             {/* Header */}
-            <div className="bg-gradient-to-r from-rose-700 to-pink-600 rounded-t-2xl px-5 py-4 flex items-center justify-between">
+            <div className="bg-gradient-to-r from-rose-700 to-pink-600 rounded-t-2xl px-5 py-4 flex items-center justify-between sticky top-0 z-10">
               <div>
                 <h2 className="text-xl font-bold text-white">📊 Financial Reports</h2>
                 <p className="text-rose-100 text-xs mt-0.5">AI-powered reports — Uganda compliant</p>
               </div>
-              <button onClick={() => { setShowReportingSystem(false); setReportFilteredMetrics(null); setGeneratedReportData(null); }} className="text-white/70 hover:text-white p-1"><X className="w-6 h-6" /></button>
+              <button 
+                onClick={() => { 
+                  setShowReportingSystem(false); 
+                  setReportFilteredMetrics(null); 
+                  setGeneratedReportData(null); 
+                }} 
+                className="text-white/70 hover:text-white p-1 transition hover:bg-white/10 rounded"
+              >
+                <X className="w-6 h-6" />
+              </button>
             </div>
 
             <div className="p-4 space-y-4">

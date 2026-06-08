@@ -271,12 +271,27 @@ export const callOpenAIForAnalysis = async (prompt, context = {}) => {
       max_tokens: 1000
     };
 
+    // Get Supabase session token for authentication
+    let authHeaders = { 'Content-Type': 'application/json' };
+    
+    try {
+      const { getSupabaseClient } = await import('../lib/supabase/client.js');
+      const supabase = getSupabaseClient();
+      
+      if (supabase) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          authHeaders['Authorization'] = `Bearer ${session.access_token}`;
+        }
+      }
+    } catch (err) {
+      console.warn('⚠️ Could not retrieve Supabase session:', err.message);
+    }
+
     // Prefer server-side proxy route to keep secrets out of the browser.
     const response = await fetch('/api/ai-analysis', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: authHeaders,
       body: JSON.stringify(payload)
     });
 

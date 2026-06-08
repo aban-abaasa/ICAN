@@ -127,9 +127,27 @@ const applyBusinessGuardrails = (transaction, result) => {
  */
 export const analyzeTransactionWithAI = async (transaction) => {
   try {
+    // Get Supabase session token for authentication
+    let authHeaders = { 'Content-Type': 'application/json' };
+    
+    try {
+      const { getSupabaseClient } = await import('../lib/supabase/client.js');
+      const supabase = getSupabaseClient();
+      
+      if (supabase) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          authHeaders['Authorization'] = `Bearer ${session.access_token}`;
+        }
+      }
+    } catch (err) {
+      console.warn('⚠️ Could not retrieve Supabase session:', err.message);
+      // Continue without auth token - backend will handle 401
+    }
+
     const response = await fetch(AI_PROXY_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders,
       body: JSON.stringify({
         model: 'gpt-3.5-turbo',
         messages: [
