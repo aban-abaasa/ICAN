@@ -286,6 +286,12 @@ BEGIN
     SELECT email INTO v_auth_email FROM auth.users WHERE id = v_auth_uid;
   END IF;
 
+  -- Validate company exists
+  IF NOT EXISTS (SELECT 1 FROM public.cmms_companies WHERE id = p_company_id) THEN
+    RETURN QUERY SELECT FALSE, 'Company not found'::VARCHAR, NULL::JSON;
+    RETURN;
+  END IF;
+
   SELECT cu.id
   INTO v_sender_id
   FROM public.cmms_users cu

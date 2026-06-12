@@ -1583,6 +1583,9 @@ const CMMSModule = ({
   // TASKS MANAGER (USER ASSIGNED JOBS)
   // ============================================
   const TasksManager = () => {
+    // Tab state for mobile UX
+    const [tasksTab, setTasksTab] = useState('tasks'); // 'tasks', 'messages', 'assign'
+
     // State for tasks
     const [userTasks, setUserTasks] = useState([]);
     const [isLoadingTasks, setIsLoadingTasks] = useState(false);
@@ -1597,6 +1600,7 @@ const CMMSModule = ({
     const [currentConversationMessages, setCurrentConversationMessages] = useState([]); // Messages with selected user
     const [isLoadingConversation, setIsLoadingConversation] = useState(false);
     const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+    const [userSearchQuery, setUserSearchQuery] = useState(''); // Search state for filtering users
 
     // State for job assignment
     const [jobAssignmentForm, setJobAssignmentForm] = useState({
@@ -1672,14 +1676,25 @@ const CMMSModule = ({
     };
 
     const loadCompanyUsers = async () => {
+      if (!companyIdToUse) {
+        console.warn('⚠️ Cannot load users: companyIdToUse is not set');
+        setCompanyUsers([]);
+        return;
+      }
+      
       setIsLoadingUsers(true);
       try {
         const result = await cmmsMessagingService.getCompanyUsers(companyIdToUse);
         if (result.success) {
           setCompanyUsers(result.data || []);
+          console.log(`✅ Loaded ${result.data?.length || 0} users for company ${companyIdToUse}`);
+        } else {
+          console.error('Failed to load users:', result.error);
+          setCompanyUsers([]);
         }
       } catch (error) {
         console.error('Error loading users:', error);
+        setCompanyUsers([]);
       } finally {
         setIsLoadingUsers(false);
       }
@@ -1766,12 +1781,26 @@ const CMMSModule = ({
     const handleSendMessage = async () => {
       if (!messageInput.trim() || !selectedUserToMessage) return;
 
+      // Validate companyIdToUse is set and valid
+      if (!companyIdToUse) {
+        alert('❌ Error: Company context is not set. Please refresh and try again.');
+        return;
+      }
+
       setIsSendingMessage(true);
       const messageText = messageInput.trim();
       try {
         console.log('Sending message to:', selectedUserToMessage.id);
         console.log('Company:', companyIdToUse);
         console.log('Message:', messageText);
+        
+        // Validate that user still belongs to this company
+        const userBelongsToCompany = companyUsers.some(u => u.id === selectedUserToMessage.id);
+        if (!userBelongsToCompany) {
+          alert('❌ Error: Selected user is not part of this company. Please switch to the correct company.');
+          setIsSendingMessage(false);
+          return;
+        }
         
         const result = await cmmsMessagingService.sendReportMessage(
           companyIdToUse,
@@ -1809,11 +1838,24 @@ const CMMSModule = ({
         } else {
           console.error('Backend error:', result);
           console.error('Error message:', result.error);
-          alert(`Error: ${result.error}`);
+          
+          // Provide helpful error messages
+          if (result.error?.includes('foreign key constraint')) {
+            alert('❌ Error: There was a problem with your company context.\n\nPlease:\n1. Refresh the page\n2. Select the correct company from the dropdown\n3. Try sending the message again');
+          } else if (result.error?.includes('not a member')) {
+            alert('❌ Error: You are not a member of this CMMS company.\n\nPlease switch to a company where you are a member.');
+          } else {
+            alert(`❌ Error: ${result.error}`);
+          }
         }
       } catch (error) {
         console.error('Error sending message:', error);
-        alert('Failed to send message: ' + error.message);
+        
+        if (error.message?.includes('foreign key constraint')) {
+          alert('❌ Error: Company context is invalid.\n\nPlease refresh the page and try again.');
+        } else {
+          alert('❌ Failed to send message: ' + error.message);
+        }
       } finally {
         setIsSendingMessage(false);
       }
@@ -1881,180 +1923,278 @@ const CMMSModule = ({
     };
 
     return (
-      <div className="space-y-4 md:space-y-6">
-        {/* Section 1: Your Assigned Tasks */}
-        <div className="glass-card p-4 md:p-6">
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <h3 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
-              <Briefcase className="w-5 h-5 md:w-6 md:h-6 text-emerald-400" />
-              Your Assigned Tasks
-            </h3>
+      <div className="w-full">
+        {/* ========== MOBILE TAB NAVIGATION ========== */}
+        <div className="mb-4 md:mb-6 grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-3">
+          {/* Tab 1: Your Assigned Tasks */}
+          <button
+            onClick={() => setTasksTab('tasks')}
+            className={`w-full px-3 md:px-4 py-2 md:py-3 rounded-lg font-semibold text-xs md:text-sm transition-all border-2 flex items-center justify-center gap-2 ${
+              tasksTab === 'tasks'
+                ? 'bg-emerald-600 text-white border-emerald-500 shadow-lg'
+                : 'bg-slate-700 text-gray-300 border-slate-600 hover:bg-slate-600'
+            }`}
+          >
+            <Briefcase className="w-4 h-4 md:w-5 md:h-5" />
+            <span className="hidden sm:inline">Tasks</span>
+          </button>
+
+          {/* Tab 2: Messages */}
+          <button
+            onClick={() => setTasksTab('messages')}
+            className={`w-full px-3 md:px-4 py-2 md:py-3 rounded-lg font-semibold text-xs md:text-sm transition-all border-2 flex items-center justify-center gap-2 ${
+              tasksTab === 'messages'
+                ? 'bg-blue-600 text-white border-blue-500 shadow-lg'
+                : 'bg-slate-700 text-gray-300 border-slate-600 hover:bg-slate-600'
+            }`}
+          >
+            <span className="text-sm md:text-base">💬</span>
+            <span className="hidden sm:inline">Messages</span>
+          </button>
+
+          {/* Tab 3: Assign Job (only for admins/coordinators/supervisors) */}
+          {canAssignJobs && (
             <button
-              onClick={loadUserTasks}
-              disabled={isLoadingTasks}
-              className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-xs text-white"
+              onClick={() => setTasksTab('assign')}
+              className={`w-full px-3 md:px-4 py-2 md:py-3 rounded-lg font-semibold text-xs md:text-sm transition-all border-2 flex items-center justify-center gap-2 ${
+                tasksTab === 'assign'
+                  ? 'bg-orange-600 text-white border-orange-500 shadow-lg'
+                  : 'bg-slate-700 text-gray-300 border-slate-600 hover:bg-slate-600'
+              }`}
             >
-              {isLoadingTasks ? 'Refreshing...' : 'Refresh'}
+              <span className="text-sm md:text-base">🎯</span>
+              <span className="hidden sm:inline">Assign</span>
             </button>
-          </div>
-
-          <p className="text-gray-300 text-xs md:text-sm mb-4">
-            Track and manage all maintenance jobs assigned to you.
-          </p>
-
-          {/* Filter Buttons */}
-          <div className="flex gap-2 flex-wrap">
-            {[
-              { value: 'all', label: '📋 All', count: userTasks.length },
-              { value: 'pending', label: '⏳ Pending', count: userTasks.filter(t => t.assignment_status === 'pending').length },
-              { value: 'in_progress', label: '🔧 In Progress', count: userTasks.filter(t => t.assignment_status === 'in_progress').length },
-              { value: 'completed', label: '✅ Completed', count: userTasks.filter(t => t.assignment_status === 'completed').length }
-            ].map(filter => (
-              <button
-                key={filter.value}
-                onClick={() => setTaskFilter(filter.value)}
-                className={`px-2.5 py-1 rounded text-xs font-semibold transition-all ${
-                  taskFilter === filter.value
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
-                }`}
-              >
-                {filter.label} ({filter.count})
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Tasks List */}
-        <div className="space-y-3">
-          {isLoadingTasks ? (
-            <div className="glass-card p-6 text-center">
-              <Loader className="w-8 h-8 text-emerald-400 animate-spin mx-auto mb-3" />
-              <p className="text-gray-300">Loading your tasks...</p>
-            </div>
-          ) : filteredTasks.length === 0 ? (
-            <div className="glass-card p-6 text-center">
-              <Briefcase className="w-12 h-12 text-gray-500 mx-auto mb-3 opacity-50" />
-              <p className="text-gray-300">
-                {taskFilter === 'all' ? 'No tasks assigned yet' : `No ${taskFilter} tasks`}
-              </p>
-            </div>
-          ) : (
-            filteredTasks.map(task => {
-              const isExpanded = expandedTaskId === task.id;
-              const isOverdue = task.due_date && task.days_until_due < 0;
-
-              return (
-                <div
-                  key={task.id}
-                  className={`glass-card border transition-all ${isOverdue ? 'border-red-500/50 bg-red-500/5' : 'border-slate-700'}`}
-                >
-                  <button
-                    onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}
-                    className="w-full px-4 py-3 flex items-center justify-between gap-3 text-left hover:bg-white/5 transition-colors"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-white font-semibold text-sm truncate">{task.job_title}</h4>
-                      <p className="text-gray-400 text-xs mt-1 truncate">By {task.assigned_by_name}</p>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className={`text-xs px-2 py-1 rounded border font-semibold ${priorityColors[task.priority] || priorityColors.medium}`}>
-                        {task.priority}
-                      </span>
-                      <span className={`text-xs px-2 py-1 rounded border font-semibold ${statusColors[task.assignment_status]}`}>
-                        {task.assignment_status}
-                      </span>
-                      <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                    </div>
-                  </button>
-
-                  {isExpanded && (
-                    <div className="px-4 pb-4 border-t border-slate-700 pt-4 space-y-2 text-sm">
-                      {task.job_description && (
-                        <p className="text-gray-300">{task.job_description}</p>
-                      )}
-                      {task.due_date && (
-                        <p className={isOverdue ? 'text-red-300' : 'text-blue-300'}>
-                          📅 Due: {new Date(task.due_date).toLocaleDateString()}
-                        </p>
-                      )}
-                      {task.assignment_status !== 'completed' && task.assignment_status !== 'rejected' && (
-                        <select
-                          value={task.assignment_status}
-                          onChange={(e) => handleUpdateTaskStatus(task.id, e.target.value)}
-                          className="w-full bg-slate-700 text-white text-xs rounded px-2 py-1.5 border border-slate-600 focus:border-emerald-500"
-                        >
-                          <option value="pending">⏳ Pending</option>
-                          <option value="accepted">✓ Accepted</option>
-                          <option value="in_progress">🔧 In Progress</option>
-                          <option value="completed">✅ Completed</option>
-                        </select>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })
           )}
         </div>
 
-        {/* Section 2: Messaging & Job Assignment */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6">
-          {/* Left: User Messages */}
+        {/* ========== TAB CONTENT ========== */}
+        {/* TAB 1: YOUR ASSIGNED TASKS */}
+        {tasksTab === 'tasks' && (
+          <div className="space-y-4">
+            <div className="glass-card p-4 md:p-6">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <h3 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
+                  <Briefcase className="w-5 h-5 md:w-6 md:h-6 text-emerald-400" />
+                  Your Assigned Tasks
+                </h3>
+                <button
+                  onClick={loadUserTasks}
+                  disabled={isLoadingTasks}
+                  className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-xs text-white"
+                >
+                  {isLoadingTasks ? 'Refreshing...' : 'Refresh'}
+                </button>
+              </div>
+
+              <p className="text-gray-300 text-xs md:text-sm mb-4">
+                Track and manage all maintenance jobs assigned to you.
+              </p>
+
+              {/* Filter Buttons */}
+              <div className="flex gap-2 flex-wrap">
+                {[
+                  { value: 'all', label: '📋 All', count: userTasks.length },
+                  { value: 'pending', label: '⏳ Pending', count: userTasks.filter(t => t.assignment_status === 'pending').length },
+                  { value: 'in_progress', label: '🔧 In Progress', count: userTasks.filter(t => t.assignment_status === 'in_progress').length },
+                  { value: 'completed', label: '✅ Completed', count: userTasks.filter(t => t.assignment_status === 'completed').length }
+                ].map(filter => (
+                  <button
+                    key={filter.value}
+                    onClick={() => setTaskFilter(filter.value)}
+                    className={`px-2.5 py-1 rounded text-xs font-semibold transition-all ${
+                      taskFilter === filter.value
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
+                    }`}
+                  >
+                    {filter.label} ({filter.count})
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Tasks List */}
+            <div className="space-y-3">
+              {isLoadingTasks ? (
+                <div className="glass-card p-6 text-center">
+                  <Loader className="w-8 h-8 text-emerald-400 animate-spin mx-auto mb-3" />
+                  <p className="text-gray-300">Loading your tasks...</p>
+                </div>
+              ) : filteredTasks.length === 0 ? (
+                <div className="glass-card p-6 text-center">
+                  <Briefcase className="w-12 h-12 text-gray-500 mx-auto mb-3 opacity-50" />
+                  <p className="text-gray-300">
+                    {taskFilter === 'all' ? 'No tasks assigned yet' : `No ${taskFilter} tasks`}
+                  </p>
+                </div>
+              ) : (
+                filteredTasks.map(task => {
+                  const isExpanded = expandedTaskId === task.id;
+                  const isOverdue = task.due_date && task.days_until_due < 0;
+
+                  return (
+                    <div
+                      key={task.id}
+                      className={`glass-card border transition-all ${isOverdue ? 'border-red-500/50 bg-red-500/5' : 'border-slate-700'}`}
+                    >
+                      <button
+                        onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}
+                        className="w-full px-4 py-3 flex items-center justify-between gap-3 text-left hover:bg-white/5 transition-colors"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-white font-semibold text-sm truncate">{task.job_title}</h4>
+                          <p className="text-gray-400 text-xs mt-1 truncate">By {task.assigned_by_name}</p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className={`text-xs px-2 py-1 rounded border font-semibold ${priorityColors[task.priority] || priorityColors.medium}`}>
+                            {task.priority}
+                          </span>
+                          <span className={`text-xs px-2 py-1 rounded border font-semibold ${statusColors[task.assignment_status]}`}>
+                            {task.assignment_status}
+                          </span>
+                          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                        </div>
+                      </button>
+
+                      {isExpanded && (
+                        <div className="px-4 pb-4 border-t border-slate-700 pt-4 space-y-2 text-sm">
+                          {task.job_description && (
+                            <p className="text-gray-300">{task.job_description}</p>
+                          )}
+                          {task.due_date && (
+                            <p className={isOverdue ? 'text-red-300' : 'text-blue-300'}>
+                              📅 Due: {new Date(task.due_date).toLocaleDateString()}
+                            </p>
+                          )}
+                          {task.assignment_status !== 'completed' && task.assignment_status !== 'rejected' && (
+                            <select
+                              value={task.assignment_status}
+                              onChange={(e) => handleUpdateTaskStatus(task.id, e.target.value)}
+                              className="w-full bg-slate-700 text-white text-xs rounded px-2 py-1.5 border border-slate-600 focus:border-emerald-500"
+                            >
+                              <option value="pending">⏳ Pending</option>
+                              <option value="accepted">✓ Accepted</option>
+                              <option value="in_progress">🔧 In Progress</option>
+                              <option value="completed">✅ Completed</option>
+                            </select>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: MESSAGES */}
+        {tasksTab === 'messages' && (
           <div className="flex flex-col h-auto md:h-screen overflow-hidden">
-            <h3 className="text-base md:text-lg font-bold text-white mb-3 md:mb-4 flex items-center gap-2">
+            <h3 className="text-lg md:text-xl font-bold text-white mb-4 flex items-center gap-2">
               💬 Messages
             </h3>
-            
-            <div className="space-y-1 flex-shrink-0 max-h-32 md:max-h-48 md:flex-1 md:flex md:flex-col overflow-hidden">
-              {isLoadingUsers ? (
-                <p className="text-gray-400 text-xs text-center py-4">Loading users...</p>
-              ) : companyUsers.filter(u => u.id !== user?.id).length === 0 ? (
-                <p className="text-gray-400 text-xs text-center py-4">No other users to message</p>
-              ) : (
-                <div className="overflow-y-auto space-y-1">
-                  {companyUsers.filter(u => u.id !== user?.id).map(user => (
-                    <button
-                      key={user.id}
-                      onClick={() => setSelectedUserToMessage(user)}
-                      className={`w-full px-3 py-2.5 md:py-2 rounded-lg text-left text-xs md:text-sm transition-all ${
-                        selectedUserToMessage?.id === user.id
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-slate-700/50 text-gray-300 hover:bg-slate-700'
-                      }`}
-                    >
-                      <div className="font-semibold truncate text-xs md:text-sm">{user.name || user.email}</div>
-                      <div className="text-xs opacity-70 truncate">{user.email}</div>
-                    </button>
-                  ))}
-                </div>
-              )}
+
+            {/* User List Section - Scrollable */}
+            <div className="flex flex-col mb-4 h-auto md:h-48 border border-slate-700 rounded-lg bg-slate-800/50 overflow-hidden">
+              {/* Search Input */}
+              <div className="flex-shrink-0 p-3 md:p-4 border-b border-slate-700">
+                <input
+                  type="text"
+                  placeholder="🔍 Search users..."
+                  value={userSearchQuery}
+                  onChange={(e) => setUserSearchQuery(e.target.value)}
+                  className="w-full bg-slate-700 text-white text-xs md:text-sm rounded px-3 py-2 border border-slate-600 focus:border-blue-400 focus:outline-none placeholder-gray-500"
+                />
+              </div>
+
+              {/* Scrollable Users List */}
+              <div className="flex-1 overflow-y-auto">
+                {isLoadingUsers ? (
+                  <div className="p-4 text-center">
+                    <p className="text-gray-400 text-xs">Loading users...</p>
+                  </div>
+                ) : companyUsers.filter(u => u.id !== user?.id).length === 0 ? (
+                  <div className="p-4 text-center">
+                    <p className="text-gray-400 text-xs">No other users to message</p>
+                  </div>
+                ) : companyUsers
+                    .filter(u => u.id !== user?.id)
+                    .filter(u => {
+                      const searchLower = userSearchQuery.toLowerCase();
+                      return (
+                        (u.name && u.name.toLowerCase().includes(searchLower)) ||
+                        (u.email && u.email.toLowerCase().includes(searchLower))
+                      );
+                    }).length === 0 ? (
+                  <div className="p-4 text-center">
+                    <p className="text-gray-400 text-xs">No users matching "{userSearchQuery}"</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1 p-2">
+                    {companyUsers
+                      .filter(u => u.id !== user?.id)
+                      .filter(u => {
+                        const searchLower = userSearchQuery.toLowerCase();
+                        return (
+                          (u.name && u.name.toLowerCase().includes(searchLower)) ||
+                          (u.email && u.email.toLowerCase().includes(searchLower))
+                        );
+                      })
+                      .map(userItem => (
+                        <button
+                          key={userItem.id}
+                          onClick={() => {
+                            setSelectedUserToMessage(userItem);
+                            setUserSearchQuery(''); // Clear search after selection
+                          }}
+                          className={`w-full px-3 py-2 rounded-lg text-left text-xs md:text-sm transition-all flex flex-col ${
+                            selectedUserToMessage?.id === userItem.id
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-slate-700/30 text-gray-300 hover:bg-slate-700/60'
+                          }`}
+                        >
+                          <div className="font-semibold truncate">{userItem.name || userItem.email}</div>
+                          <div className="text-xs opacity-70 truncate">{userItem.email}</div>
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Info text */}
+              <div className="flex-shrink-0 p-2 md:p-3 border-t border-slate-700 bg-slate-900/50">
+                <p className="text-gray-400 text-xs text-center">
+                  Select a person to start or continue chatting.
+                </p>
+              </div>
             </div>
 
             {/* Chat Display */}
             {selectedUserToMessage && (
-              <div className="mt-3 md:mt-4 space-y-2 md:space-y-3 flex flex-col flex-1 min-h-0">
+              <div className="space-y-3 flex flex-col flex-1 min-h-0">
                 {/* Chat Header */}
-                <div className="p-3 md:p-4 bg-gradient-to-r from-slate-700 to-slate-600 rounded-lg text-xs md:text-sm text-gray-100 border-l-4 border-green-500 shadow-md">
+                <div className="p-3 md:p-4 bg-gradient-to-r from-slate-700 to-slate-600 rounded-lg text-xs md:text-sm text-gray-100 border-l-4 border-blue-500 shadow-md flex-shrink-0">
                   <div className="flex items-center gap-2">
-                    <div className="w-6 md:w-8 h-6 md:h-8 rounded-full bg-green-500 flex items-center justify-center text-xs font-bold text-white">
+                    <div className="w-6 md:w-8 h-6 md:h-8 rounded-full bg-blue-500 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
                       {(selectedUserToMessage.name || selectedUserToMessage.email)?.[0]?.toUpperCase() || '?'}
                     </div>
-                    <div>
-                      <div className="font-bold text-white text-xs md:text-sm">{selectedUserToMessage.name || selectedUserToMessage.email}</div>
+                    <div className="min-w-0">
+                      <div className="font-bold text-white text-xs md:text-sm truncate">{selectedUserToMessage.name || selectedUserToMessage.email}</div>
                       <div className="text-xs text-gray-400">💬 Chat</div>
                     </div>
                   </div>
                 </div>
 
                 {/* Messages Container - Like WhatsApp */}
-                <div className="flex-1 overflow-y-auto space-y-2 md:space-y-3 px-3 md:px-4 py-2" style={{scrollbarWidth: 'none', msOverflowStyle: 'none'}} onScroll={(e) => {e.currentTarget.style.scrollbarWidth = 'none';}}>
+                <div className="flex-1 overflow-y-auto space-y-2 md:space-y-3 px-3 md:px-4 py-2 min-h-0" style={{scrollbarWidth: 'none', msOverflowStyle: 'none'}}>
                   <style>{`
                     div::-webkit-scrollbar { display: none; }
                   `}</style>
                   {isLoadingConversation ? (
                     <div className="flex items-center justify-center h-full">
-                      <Loader className="w-6 h-6 animate-spin text-green-400" />
+                      <Loader className="w-6 h-6 animate-spin text-blue-400" />
                     </div>
                   ) : currentConversationMessages?.length === 0 ? (
                     <div className="flex items-center justify-center h-full text-gray-500">
@@ -2070,8 +2210,8 @@ const CMMSModule = ({
                   )}
                 </div>
 
-                {/* Message Input - Like WhatsApp */}
-                <div className="flex gap-2 items-end pt-3 md:pt-2 pb-1">
+                {/* Message Input - Fixed Layout for Mobile */}
+                <div className="flex-shrink-0 flex gap-2 items-end pt-2 pb-0 px-1 md:px-0 w-full">
                   <input
                     type="text"
                     placeholder="Type a message..."
@@ -2079,24 +2219,35 @@ const CMMSModule = ({
                     onChange={(e) => setMessageInput(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSendMessage())}
                     disabled={isSendingMessage}
-                    className="flex-1 bg-slate-700 text-white text-xs md:text-sm rounded-full px-3 md:px-4 py-2.5 md:py-2 border border-slate-600 focus:border-green-400 focus:outline-none placeholder-gray-500 disabled:opacity-50 resize-none"
+                    className="flex-1 min-w-0 bg-slate-700 text-white text-xs md:text-sm rounded-full px-3 md:px-4 py-2 md:py-2.5 border border-slate-600 focus:border-blue-400 focus:outline-none placeholder-gray-500 disabled:opacity-50 resize-none"
                   />
                   <button
                     onClick={handleSendMessage}
                     disabled={isSendingMessage || !messageInput.trim()}
-                    className="px-3 md:px-4 py-2.5 md:py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:bg-gray-600 text-white text-xs md:text-sm rounded-full font-semibold transition-colors flex items-center gap-2 flex-shrink-0"
+                    title={isSendingMessage ? 'Sending...' : 'Send message'}
+                    className="px-2.5 md:px-4 py-2 md:py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:bg-gray-600 text-white text-sm md:text-base rounded-full font-semibold transition-colors flex items-center justify-center flex-shrink-0 h-9 md:h-10 w-9 md:w-10"
                   >
                     {isSendingMessage ? '⏳' : '➤'}
                   </button>
                 </div>
               </div>
             )}
-          </div>
 
-          {/* Right: Job Assignment (Admin/Coordinator/Supervisor only) */}
-          {canAssignJobs && (
-            <div>
-              <h3 className="text-base md:text-lg font-bold text-white mb-3 md:mb-4 flex items-center gap-2">
+            {!selectedUserToMessage && (
+              <div className="glass-card p-4 md:p-6 border border-slate-700 text-center flex-1 flex items-center justify-center">
+                <p className="text-gray-400 text-xs md:text-sm">
+                  👆 Select a person above to start messaging
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: ASSIGN JOB (Admin/Coordinator/Supervisor only) */}
+        {tasksTab === 'assign' && canAssignJobs && (
+          <div className="space-y-4">
+            <div className="glass-card p-4 md:p-6 border border-slate-700">
+              <h3 className="text-lg md:text-xl font-bold text-white mb-4 flex items-center gap-2">
                 🎯 Assign Job
               </h3>
 
@@ -2107,7 +2258,7 @@ const CMMSModule = ({
                     value={jobAssignmentForm.assigned_to_user_id}
                     onChange={(e) => setJobAssignmentForm({...jobAssignmentForm, assigned_to_user_id: e.target.value})}
                     disabled={isCreatingJob || isLoadingUsers}
-                    className="w-full bg-slate-700 text-white text-xs rounded px-2 py-2 border border-slate-600 focus:border-green-400 disabled:opacity-50"
+                    className="w-full bg-slate-700 text-white text-xs rounded px-2 py-2 border border-slate-600 focus:border-orange-400 disabled:opacity-50"
                   >
                     <option value="">Select user...</option>
                     {isLoadingUsers ? (
@@ -2115,9 +2266,9 @@ const CMMSModule = ({
                     ) : companyUsers.filter(u => u.id !== user?.id).length === 0 ? (
                       <option disabled>No other users available</option>
                     ) : (
-                      companyUsers.filter(u => u.id !== user?.id).map(user => (
-                        <option key={user.id} value={user.id}>
-                          {user.name ? `${user.name} (${user.email})` : user.email}
+                      companyUsers.filter(u => u.id !== user?.id).map(userItem => (
+                        <option key={userItem.id} value={userItem.id}>
+                          {userItem.name ? `${userItem.name} (${userItem.email})` : userItem.email}
                         </option>
                       ))
                     )}
@@ -2132,7 +2283,7 @@ const CMMSModule = ({
                     value={jobAssignmentForm.job_title}
                     onChange={(e) => setJobAssignmentForm({...jobAssignmentForm, job_title: e.target.value})}
                     disabled={isCreatingJob}
-                    className="w-full bg-slate-700 text-white text-xs rounded px-2 py-2 border border-slate-600 focus:border-green-400 placeholder-gray-500 disabled:opacity-50"
+                    className="w-full bg-slate-700 text-white text-xs rounded px-2 py-2 border border-slate-600 focus:border-orange-400 placeholder-gray-500 disabled:opacity-50"
                   />
                 </div>
 
@@ -2143,7 +2294,7 @@ const CMMSModule = ({
                     value={jobAssignmentForm.job_description}
                     onChange={(e) => setJobAssignmentForm({...jobAssignmentForm, job_description: e.target.value})}
                     disabled={isCreatingJob}
-                    className="w-full bg-slate-700 text-white text-xs rounded px-2 py-2 border border-slate-600 focus:border-green-400 placeholder-gray-500 disabled:opacity-50 h-16 resize-none"
+                    className="w-full bg-slate-700 text-white text-xs rounded px-2 py-2 border border-slate-600 focus:border-orange-400 placeholder-gray-500 disabled:opacity-50 h-20 md:h-24 resize-none"
                   />
                 </div>
 
@@ -2155,7 +2306,7 @@ const CMMSModule = ({
                       value={jobAssignmentForm.due_date}
                       onChange={(e) => setJobAssignmentForm({...jobAssignmentForm, due_date: e.target.value})}
                       disabled={isCreatingJob}
-                      className="w-full bg-slate-700 text-white text-xs rounded px-2 py-2 border border-slate-600 focus:border-green-400 disabled:opacity-50"
+                      className="w-full bg-slate-700 text-white text-xs rounded px-2 py-2 border border-slate-600 focus:border-orange-400 disabled:opacity-50"
                     />
                   </div>
                   <div>
@@ -2164,7 +2315,7 @@ const CMMSModule = ({
                       value={jobAssignmentForm.priority}
                       onChange={(e) => setJobAssignmentForm({...jobAssignmentForm, priority: e.target.value})}
                       disabled={isCreatingJob}
-                      className="w-full bg-slate-700 text-white text-xs rounded px-2 py-2 border border-slate-600 focus:border-green-400 disabled:opacity-50"
+                      className="w-full bg-slate-700 text-white text-xs rounded px-2 py-2 border border-slate-600 focus:border-orange-400 disabled:opacity-50"
                     >
                       <option value="low">Low</option>
                       <option value="medium">Medium</option>
@@ -2177,26 +2328,20 @@ const CMMSModule = ({
                 <button
                   onClick={handleAssignJob}
                   disabled={isCreatingJob || !jobAssignmentForm.assigned_to_user_id || !jobAssignmentForm.job_title}
-                  className="w-full py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:opacity-50 text-white text-xs rounded font-bold transition-all"
+                  className="w-full py-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 disabled:opacity-50 text-white text-xs md:text-sm rounded font-bold transition-all"
                 >
                   {isCreatingJob ? '⏳ Assigning...' : '✓ Assign Job'}
                 </button>
               </div>
             </div>
-          )}
 
-          {/* Non-admin message */}
-          {!canAssignJobs && (
-            <div className="glass-card p-4 md:p-6 border border-slate-700">
-              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                🔒 Job Assignment
-              </h3>
-              <p className="text-gray-400 text-xs">
-                Only Admin, Coordinators, and Supervisors can assign jobs. Your current role: <span className="font-semibold text-yellow-300">{userRole}</span>
+            <div className="glass-card p-4 md:p-6 border border-slate-700 bg-blue-500/10">
+              <p className="text-blue-300 text-xs md:text-sm">
+                💡 <strong>Tip:</strong> Jobs assigned here will be added to the recipient's "Your Assigned Tasks" list and will receive a notification.
               </p>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -3688,11 +3833,11 @@ const CMMSModule = ({
                 cmms_user_id: userId,
                 cmms_company_id: userCompanyId,
                 notification_type: 'user_added_to_cmms',
-                title: 'âœ… You\'ve been added to CMMS!',
-                message: `Welcome to ${cmmsData.companyProfile?.companyName || 'the company'}! Your admin has added you as a ${newUser.role}. You can now access the CMMS dashboard and manage maintenance tasks.`,
-                icon: 'ðŸŽ‰',
+                title: 'You\'ve been added to CMMS',
+                message: `Welcome to ${cmmsData.companyProfile?.companyName || 'the company'}! Your admin has assigned you as a ${newUser.role}. You can now access the CMMS dashboard and manage maintenance tasks.`,
+                icon: '👤',
                 action_tab: 'users',
-                action_label: 'View Your Role in Users & Roles',
+                action_label: 'View Your Role',
                 action_link: '/cmms/users',
                 is_read: false,
                 created_at: new Date().toISOString()
@@ -3783,9 +3928,9 @@ const CMMSModule = ({
                 cmms_user_id: targetUser.id,
                 cmms_company_id: userCompanyId,
                 notification_type: 'promoted_to_admin',
-                title: '⭐ You\'ve been promoted to Admin!',
-                message: `${user?.email || 'An admin'} has promoted you to Admin. You now have full access to CMMS including user management and approvals.`,
-                icon: '⭐',
+                title: 'You\'ve been promoted to Admin',
+                message: `${user?.email || 'An admin'} has promoted you to Admin. You now have full access to CMMS including user management and task approvals.`,
+                icon: '👑',
                 action_tab: 'users',
                 action_label: 'View Admin Dashboard',
                 is_read: false,

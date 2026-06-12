@@ -758,6 +758,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
 
 
   const [velocityMetrics, setVelocityMetrics] = useState(null);
+  const [actualTitheOwed, setActualTitheOwed] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [complianceData, setComplianceData] = useState(null);
   const [scheduleData, setScheduleData] = useState(null);
@@ -846,6 +847,14 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [businessTithingRate, setBusinessTithingRate] = useState(10);
   const [personalTithingRate, setPersonalTithingRate] = useState(10);
   const [selectedTithingTab, setSelectedTithingTab] = useState('quick');
+  // 🔧 Pay In Tithe state
+  const [tithePaymentType, setTithePaymentType] = useState('personal');  // 'personal' or 'business'
+  const [tithePaymentAmount, setTithePaymentAmount] = useState('');
+  const [tithePaymentRecipient, setTithePaymentRecipient] = useState('');
+  const [tithePaymentNotes, setTithePaymentNotes] = useState('');
+  const [isSubmittingTithe, setIsSubmittingTithe] = useState(false);
+  const [tithePaymentSuccess, setTithePaymentSuccess] = useState(null);
+  const [tithePaymentError, setTithePaymentError] = useState(null);
 
   // ========== MY PROFILE STATE FROM ProfilePage ==========
   const [isEditing, setIsEditing] = useState(false);
@@ -1384,15 +1393,23 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   };
   // Calculate Tithing Metrics — driven by REAL transactions from the DB
   const calculateTithingMetrics = () => {
+    // 🔧 FIXED June 8: Separate personal and business income for proper tithe calculation
+    // Personal tithe: calculated on salary/personal income ONLY
+    // Business tithe: calculated on business profit (revenue - expenses) ONLY
+    
     // Real 30-day figures from VelocityEngine (loaded from ican_transactions)
-    const realIncome   = velocityMetrics?.income30Days   || 0;
-    const realExpenses = velocityMetrics?.expenses30Days || 0;
-    const realNetProfit = realIncome - realExpenses;          // net profit this month
+    const personalIncome  = velocityMetrics?.personalIncome30Days   || 0;  // Salary/wages only
+    const businessIncome  = velocityMetrics?.businessIncome30Days   || 0;  // Business sales/revenue only
+    const businessExpenses = velocityMetrics?.businessExpenses30Days || 0; // Business expenses only
+    
+    const businessProfit   = Math.max(0, businessIncome - businessExpenses);  // Business profit (net)
+    const personalTithe    = (personalIncome  * personalTithingRate) / 100;   // Tithe on salary
+    const businessTithe    = (businessProfit  * businessTithingRate) / 100;   // Tithe on business profit
 
-    const personalIncome   = realIncome;
-    const businessProfit   = Math.max(0, realNetProfit);     // tithe on net profit (not gross)
-    const personalTithe    = (personalIncome  * personalTithingRate) / 100;
-    const businessTithe    = (businessProfit  * businessTithingRate) / 100;
+    // Totals for display/reporting
+    const realIncome = personalIncome + businessIncome;
+    const realExpenses = businessExpenses;
+    const realNetProfit = businessProfit + personalIncome; // Total net = personal income + business profit
 
     return {
       totalIncome:    realIncome,
@@ -1400,6 +1417,8 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
       netProfit:      realNetProfit,
       businessProfit,
       personalIncome,
+      businessIncome,
+      businessExpenses,
       requiredTithe:  personalTithe,      // kept for legacy references
       personalTithe,
       businessTithe,
@@ -1408,7 +1427,198 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
     };
   };
 
+  // 🔥 NEW: Manual refresh function for velocity metrics
+  // Call this after recording new transactions to ensure tithe calculations are accurate
+  const refreshVelocityMetrics = async () => {
+    try {
+      console.log('🔄 Manual refresh: Recalculating tithe metrics...');
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id || userProfile?.id;
+      
+      if (!userId) {
+        console.warn('⚠️ Cannot refresh: No user ID found');
+        return;
+      }
+      
+      const engine = new VelocityEngine(userId);
+      const loadResult = await engine.loadTransactions();
+      
+      if (loadResult.success) {
+        setTransactions(loadResult.data || []);
+        const updatedMetrics = engine.calculateMetrics();
+        setVelocityMetrics(updatedMetrics);
+        console.log('✅ Velocity metrics manually refreshed with latest transactions');
+      } else {
+        console.error('❌ Failed to refresh velocity metrics:', loadResult.error);
+      }
+    } catch (error) {
+      console.error('❌ Error refreshing velocity metrics:', error);
+    }
+  };
+
   const tithingMetrics = calculateTithingMetrics();
+
+  // 🔧 IMPROVED: Handle tithe payment recording with proper clearing
+  const handlePayTithe = async () => {
+    try {
+      // Validate inputs
+      if (!tithePaymentAmount || parseFloat(tithePaymentAmount) <= 0) {
+        setTithePaymentError('Please enter a valid payment amount');
+        return;
+      }
+
+      // Recipient is optional - use default if not provided
+      const recipient = tithePaymentRecipient.trim() || 'Tithe Fund';
+
+      setIsSubmittingTithe(true);
+      setTithePaymentError(null);
+      setTithePaymentSuccess(null);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setTithePaymentError('User not authenticated');
+        setIsSubmittingTithe(false);
+        return;
+      }
+
+      const amount = parseFloat(tithePaymentAmount);
+      const paymentDate = new Date().toISOString();
+
+      console.log('🔧 TITHE PAYMENT: Starting payment recording', {
+        userId: user.id,
+        amount,
+        paymentType: tithePaymentType,
+        recipient: recipient,
+        timestamp: paymentDate
+      });
+
+      // ✅ CRITICAL: Create tithe transaction record with complete metadata
+      // The database trigger will automatically clear user_tithe_tracking based on payment_type
+      const { data, error } = await supabase
+        .from('ican_transactions')
+        .insert({
+          user_id: user.id,
+          transaction_type: 'tithe',
+          amount: amount,
+          description: `Tithe payment - ${tithePaymentType} (${recipient})`,
+          status: 'completed',
+          created_at: paymentDate,
+          metadata: {
+            category: 'tithe',
+            record_category: 'tithe',
+            reporting_bucket: 'tithe_payment',
+            entry_type: 'manual',
+            entry_mode: 'tithe-pay-in',
+            payment_type: tithePaymentType, // ✅ CRITICAL: Trigger reads this field
+            recipient: recipient,
+            notes: tithePaymentNotes,
+            tithe_amount_personal: tithePaymentType === 'personal' ? amount : 0,
+            tithe_amount_business: tithePaymentType === 'business' ? amount : 0,
+            tithe_amount_combined: tithePaymentType === 'combined' ? amount : 0
+          }
+        });
+
+      if (error) {
+        console.error('❌ Transaction insert failed:', error);
+        setTithePaymentError(`Failed to record payment: ${error.message}`);
+        setIsSubmittingTithe(false);
+        return;
+      }
+
+      console.log('✅ Transaction recorded:', data);
+
+      // 🔧 Deduct from user's wallet balance
+      try {
+        const { data: walletData } = await supabase
+          .from('user_wallets')
+          .select('balance')
+          .eq('user_id', user.id)
+          .eq('wallet_type', 'personal')
+          .single();
+
+        if (walletData) {
+          const newBalance = Math.max(0, (walletData.balance || 0) - amount);
+          const { error: walletError } = await supabase
+            .from('user_wallets')
+            .update({ balance: newBalance, updated_at: paymentDate })
+            .eq('user_id', user.id)
+            .eq('wallet_type', 'personal');
+
+          if (walletError) {
+            console.warn('⚠️ Wallet deduction warning:', walletError);
+          } else {
+            console.log('✅ Wallet updated. New balance:', newBalance);
+          }
+        }
+      } catch (walletErr) {
+        console.warn('⚠️ Wallet operation error:', walletErr);
+      }
+
+      // 🔧 Update user's net_worth
+      try {
+        const { data: profileData } = await supabase
+          .from('user_profiles')
+          .select('net_worth')
+          .eq('user_id', user.id)
+          .single();
+
+        if (profileData) {
+          const newNetWorth = Math.max(0, (profileData.net_worth || 0) - amount);
+          const { error: netWorthError } = await supabase
+            .from('user_profiles')
+            .update({ net_worth: newNetWorth })
+            .eq('user_id', user.id);
+
+          if (netWorthError) {
+            console.warn('⚠️ Net worth update warning:', netWorthError);
+          } else {
+            console.log('✅ Net worth updated. New net_worth:', newNetWorth);
+          }
+        }
+      } catch (profileErr) {
+        console.warn('⚠️ Profile operation error:', profileErr);
+      }
+
+      // ✅ CRITICAL: Fetch actual tithe values from database AFTER short delay
+      // This allows the trigger to complete and database to reflect cleared tithe
+      console.log('⏳ Waiting for database trigger to clear tithe...');
+      
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      await fetchActualTitheOwed(user.id);
+      
+      console.log('✅ Tithe amounts refreshed from database');
+
+      // Success! Show message
+      setTithePaymentSuccess(
+        `✅ Tithe payment of UGX ${amount.toLocaleString(undefined, {maximumFractionDigits: 0})} recorded successfully!\n💳 Deducted from wallet | 📊 Tithe cleared | 🙏 Payment recorded`
+      );
+      
+      // Reset form after 3 seconds
+      setTimeout(() => {
+        setTithePaymentAmount('');
+        setTithePaymentRecipient('');
+        setTithePaymentNotes('');
+        setTithePaymentType('personal');
+        setTithePaymentSuccess(null);
+        setBusinessTithingRate(10);
+        setPersonalTithingRate(10);
+        
+        // Keep modal open so user can see cleared tithe
+        // setShowTithingCalculator(false);
+      }, 3000);
+
+      // 🔥 NEW: Refresh velocity metrics with latest transactions
+      // This ensures tithe amounts are always accurate based on new cash in/profit
+      console.log('💰 After tithe payment: Refreshing velocity metrics for accuracy...');
+      await refreshVelocityMetrics();
+
+    } catch (err) {
+      console.error('❌ Critical error in handlePayTithe:', err);
+      setTithePaymentError(`Error: ${err.message}`);
+    } finally {
+      setIsSubmittingTithe(false);
+    }
+  };
 
   // Report types configuration
   const reportTypes = {
@@ -1666,34 +1876,117 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
   // Load VelocityEngine data on component mount
   useEffect(() => {
+    let channel;
+
     const loadFinancialMetrics = async () => {
       try {
-        // Get user ID from Supabase auth (same as web view)
+        console.log('🚀 Starting loadFinancialMetrics...');
+        // Get user ID from Supabase auth
         const { data: { user } } = await supabase.auth.getUser();
         const userId = user?.id || userProfile?.id || 'demo-user';
+        console.log('👤 User ID:', userId);
         
         if (userId) {
           const engine = new VelocityEngine(userId);
+          console.log('⚙️ VelocityEngine created');
+          
           const loadResult = await engine.loadTransactions();
+          console.log('📦 LoadResult:', loadResult);
           
           if (loadResult.success) {
-            // Update local transactions state
             setTransactions(loadResult.data || []);
-            console.log(` Mobile: Loaded ${loadResult.data?.length || 0} transactions for user ${userId}`);
+            console.log(`📊 Mobile: Loaded ${loadResult.data?.length || 0} transactions`);
           } else {
-            console.warn(' Mobile: VelocityEngine load failed:', loadResult.error);
+            console.warn('⚠️ VelocityEngine load failed:', loadResult.error);
           }
           
           const metrics = engine.calculateMetrics();
-          console.log(' Mobile VelocityEngine Metrics:', metrics);
+          console.log('📈 Tithe Metrics Updated:', metrics);
+          console.log('✅ Personal Income 30Days:', metrics.personalIncome30Days);
+          console.log('✅ Business Income 30Days:', metrics.businessIncome30Days);
+          console.log('✅ Business Expenses 30Days:', metrics.businessExpenses30Days);
           setVelocityMetrics(metrics);
+          
+          // ✅ FALLBACK: Ensure tithe gets calculated
+          console.log('🎯 Tithe calculation should now work with:', metrics);
+
+          // 🔥 NEW: Subscribe to REAL-TIME transaction changes
+          // This ensures tithe calculations update whenever new transactions come in
+          console.log('📡 Setting up real-time subscription for user:', userId);
+          channel = supabase
+            .channel(`transactions:user:${userId}`)
+            .on(
+              'postgres_changes',
+              {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'ican_transactions',
+                filter: `user_id=eq.${userId}`,
+              },
+              async (payload) => {
+                console.log('🔄 New transaction detected! Recalculating tithe metrics...', payload.new);
+                // Reload transactions from database
+                const reloadResult = await engine.loadTransactions();
+                if (reloadResult.success) {
+                  setTransactions(reloadResult.data || []);
+                  // Recalculate metrics with fresh data
+                  const updatedMetrics = engine.calculateMetrics();
+                  setVelocityMetrics(updatedMetrics);
+                  console.log('✅ Tithe metrics recalculated with new transaction');
+                } else {
+                  console.error('❌ Failed to reload transactions on INSERT:', reloadResult.error);
+                }
+              }
+            )
+            .on(
+              'postgres_changes',
+              {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'ican_transactions',
+                filter: `user_id=eq.${userId}`,
+              },
+              async (payload) => {
+                console.log('🔄 Transaction updated! Recalculating tithe metrics...', payload.new);
+                // Reload transactions from database
+                const reloadResult = await engine.loadTransactions();
+                if (reloadResult.success) {
+                  setTransactions(reloadResult.data || []);
+                  // Recalculate metrics with fresh data
+                  const updatedMetrics = engine.calculateMetrics();
+                  setVelocityMetrics(updatedMetrics);
+                  console.log('✅ Tithe metrics recalculated with updated transaction');
+                } else {
+                  console.error('❌ Failed to reload transactions on UPDATE:', reloadResult.error);
+                }
+              }
+            )
+            .subscribe((status) => {
+              console.log('📡 Subscription status:', status);
+              if (status === 'SUBSCRIBED') {
+                console.log('✅ Real-time subscription active');
+              } else if (status === 'CHANNEL_ERROR') {
+                console.error('❌ Real-time channel error - check Supabase realtime permissions');
+              }
+            });
         }
       } catch (error) {
-        console.error('Error loading financial metrics:', error);
+        console.error('❌ Error loading financial metrics:', error);
+        console.error('❌ Stack:', error.stack);
+        // Set empty metrics as fallback so calculations don't break
+        setVelocityMetrics({ personalIncome30Days: 0, businessIncome30Days: 0, businessExpenses30Days: 0 });
       }
     };
 
+    // Call async function immediately
     loadFinancialMetrics();
+    
+    // ✅ FIXED: Return cleanup function directly from useEffect (not from async function)
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
   }, [userProfile?.id]);
 
   // Load all available statuses/updates for Updates section
@@ -2611,6 +2904,56 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     }
   };
 
+  // Fetch Actual Tithe Owed from Database
+  const fetchActualTitheOwed = async (userId) => {
+    try {
+      if (!userId) {
+        console.warn('No userId provided for fetching tithe');
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('user_tithe_tracking')
+        .select('personal_tithe_accumulated, business_tithe_accumulated, combined_tithe_accumulated, last_payment_date')
+        .eq('user_id', userId)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          // No tithe tracking record exists yet
+          console.log('No tithe tracking record found for user');
+          setActualTitheOwed({
+            personal: 0,
+            business: 0,
+            combined: 0,
+            lastPaymentDate: null
+          });
+        } else {
+          console.error('Error fetching tithe data:', error);
+        }
+        return;
+      }
+
+      if (data) {
+        setActualTitheOwed({
+          personal: data.personal_tithe_accumulated || 0,
+          business: data.business_tithe_accumulated || 0,
+          combined: data.combined_tithe_accumulated || 0,
+          lastPaymentDate: data.last_payment_date
+        });
+        console.log('✅ Actual tithe owed fetched:', data);
+      }
+    } catch (error) {
+      console.error('Error in fetchActualTitheOwed:', error);
+      setActualTitheOwed({
+        personal: 0,
+        business: 0,
+        combined: 0,
+        lastPaymentDate: null
+      });
+    }
+  };
+
   // Initialize wallet data on component mount
   useEffect(() => {
     const initializeWalletData = async () => {
@@ -2629,6 +2972,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         
         // Load wallet data
         await loadWalletAccounts(user.id);
+        
+        // Fetch actual tithe owed from database
+        await fetchActualTitheOwed(user.id);
         
       } catch (error) {
         console.error(' Error initializing wallet data:', error);
@@ -5973,10 +6319,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             <div className="p-4 space-y-4">
               {/* Tab switcher */}
               <div className="flex gap-2 bg-amber-100 rounded-xl p-1">
-                {['quick', 'business', 'personal'].map(tab => (
+                {['quick', 'business', 'personal', 'pay-in'].map(tab => (
                   <button key={tab} onClick={() => setSelectedTithingTab(tab)}
                     className={`flex-1 py-2 rounded-lg text-xs font-bold capitalize transition ${selectedTithingTab === tab ? 'bg-white text-amber-700 shadow' : 'text-amber-600 hover:text-amber-800'}`}>
-                    {tab === 'quick' ? '⚡ Quick' : tab === 'business' ? '💼 Business' : '👤 Personal'}
+                    {tab === 'quick' ? '⚡ Quick' : tab === 'business' ? '💼 Business' : tab === 'personal' ? '👤 Personal' : '💳 Pay In'}
                   </button>
                 ))}
               </div>
@@ -5989,40 +6335,64 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     <span>{tithingMetrics.hasRealData ? 'Based on your real transactions (last 30 days)' : 'No transactions loaded yet'}</span>
                   </div>
 
-                  {/* Net profit breakdown */}
-                  <div className="bg-white rounded-xl p-4 shadow-sm space-y-2">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">This Month's Financials</p>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">💰 Income</span>
-                      <span className="font-semibold text-green-600">UGX {(tithingMetrics.totalIncome || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
+                  {/* 🔧 FIXED: Separate personal and business income display */}
+                  <div className="bg-white rounded-xl p-4 shadow-sm space-y-3">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">This Month's Financials (30 days)</p>
+                    
+                    {/* Personal Income */}
+                    <div className="border-b pb-2">
+                      <div className="text-xs text-gray-400 mb-1">💼 Personal Income (Salary)</div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Salary/Wages</span>
+                        <span className="font-semibold text-green-600">UGX {(tithingMetrics.personalIncome || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">📉 Expenses</span>
-                      <span className="font-semibold text-red-500">UGX {(tithingMetrics.realExpenses || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
+                    
+                    {/* Business Income & Expenses */}
+                    <div className="border-b pb-2">
+                      <div className="text-xs text-gray-400 mb-1">🏪 Business Income & Expenses</div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Business Sales</span>
+                        <span className="font-semibold text-green-600">UGX {(tithingMetrics.businessIncome || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Business Expenses</span>
+                        <span className="font-semibold text-red-500">UGX {(tithingMetrics.businessExpenses || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
+                      </div>
+                      <div className="flex justify-between text-sm font-bold border-t pt-1 mt-1">
+                        <span className="text-gray-700">Business Profit</span>
+                        <span className={tithingMetrics.businessProfit >= 0 ? 'text-blue-600' : 'text-red-600'}>
+                          UGX {(tithingMetrics.businessProfit || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex justify-between text-sm border-t pt-2 mt-1">
-                      <span className="text-gray-700 font-bold">📊 Net Profit</span>
-                      <span className={`font-bold text-base ${(tithingMetrics.netProfit || 0) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                        UGX {(tithingMetrics.netProfit || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}
-                      </span>
+                    
+                    {/* Total Summary */}
+                    <div className="bg-gray-50 rounded-lg p-2">
+                      <div className="flex justify-between text-sm font-bold">
+                        <span className="text-gray-700">Total Net Worth Change</span>
+                        <span className={tithingMetrics.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}>
+                          UGX {(tithingMetrics.netProfit || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Combined tithe */}
+                  {/* Combined tithe - SHOW CALCULATED (based on current income), not database historical debt */}
                   <div className="bg-white rounded-xl p-4 shadow-sm text-center">
-                    <p className="text-xs text-gray-500 mb-1">Combined tithe due (on net profit)</p>
+                    <p className="text-xs text-gray-500 mb-1">Combined tithe due (calculated from current income)</p>
                     <div className="text-3xl font-bold text-amber-600">UGX {(tithingMetrics.combinedTithe || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="bg-white rounded-xl p-4 shadow-sm text-center">
                       <div className="text-sm text-gray-500">Personal Tithe</div>
                       <div className="text-xl font-bold text-green-600">UGX {(tithingMetrics.personalTithe || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
-                      <div className="text-xs text-gray-400">{personalTithingRate}% of income</div>
+                      <div className="text-xs text-gray-400">calculated from income</div>
                     </div>
                     <div className="bg-white rounded-xl p-4 shadow-sm text-center">
                       <div className="text-sm text-gray-500">Business Tithe</div>
                       <div className="text-xl font-bold text-blue-600">UGX {(tithingMetrics.businessTithe || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
-                      <div className="text-xs text-gray-400">{businessTithingRate}% of net profit</div>
+                      <div className="text-xs text-gray-400">calculated from profit</div>
                     </div>
                   </div>
                   <div className="bg-amber-100 rounded-xl p-3 text-xs text-amber-800 border border-amber-200">
@@ -6036,7 +6406,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   {/* Live data banner */}
                   <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold ${tithingMetrics.hasRealData ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-gray-50 text-gray-500 border border-gray-200'}`}>
                     <span>{tithingMetrics.hasRealData ? '🟢 Live' : '⚪ No data'}</span>
-                    <span>{tithingMetrics.hasRealData ? 'Net profit from real 30-day transactions' : 'No transactions loaded yet'}</span>
+                    <span>{tithingMetrics.hasRealData ? 'Business profit from real 30-day transactions' : 'No transactions loaded yet'}</span>
                   </div>
                   <div className="bg-white rounded-xl p-4 shadow-sm">
                     <label className="block text-xs font-semibold text-gray-700 mb-1">Business Tithe Rate (%)</label>
@@ -6045,11 +6415,15 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       className="w-full accent-amber-500" />
                     <div className="flex justify-between text-xs text-gray-400 mt-1"><span>5%</span><span className="font-bold text-amber-600">{businessTithingRate}%</span><span>20%</span></div>
                   </div>
+                  {/* 🔧 FIXED: Show only business income for business tithe */}
                   <div className="bg-white rounded-xl p-4 shadow-sm space-y-2">
-                    <div className="flex justify-between text-sm"><span className="text-gray-500">Income (30d)</span><span className="font-semibold text-green-600">UGX {(tithingMetrics.totalIncome || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
-                    <div className="flex justify-between text-sm"><span className="text-gray-500">Expenses (30d)</span><span className="font-semibold text-red-500">UGX {(tithingMetrics.realExpenses || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
-                    <div className="flex justify-between text-sm border-t pt-2"><span className="text-gray-700 font-bold">Net Profit</span><span className={`font-bold ${(tithingMetrics.netProfit || 0) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>UGX {(tithingMetrics.businessProfit || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
-                    <div className="flex justify-between text-sm"><span className="text-gray-500">Tithe Due</span><span className="font-bold text-amber-600 text-lg">UGX {(tithingMetrics.businessTithe || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                    <div className="flex justify-between text-sm"><span className="text-gray-500">Business Sales (30d)</span><span className="font-semibold text-green-600">UGX {(tithingMetrics.businessIncome || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                    <div className="flex justify-between text-sm"><span className="text-gray-500">Business Expenses (30d)</span><span className="font-semibold text-red-500">UGX {(tithingMetrics.businessExpenses || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                    <div className="flex justify-between text-sm border-t pt-2"><span className="text-gray-700 font-bold">Business Profit</span><span className={`font-bold ${(tithingMetrics.businessProfit || 0) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>UGX {(tithingMetrics.businessProfit || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                    <div className="flex justify-between text-sm text-xs text-gray-500 mt-1"><span>Tithe Due {actualTitheOwed && actualTitheOwed.business !== undefined ? '(from database)' : '(calculated)'}</span><span className="font-bold text-amber-600 text-lg">UGX {(actualTitheOwed && actualTitheOwed.business !== undefined ? actualTitheOwed.business : (tithingMetrics.businessTithe || 0)).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                  </div>
+                  <div className="bg-blue-50 rounded-xl p-3 text-xs text-blue-800 border border-blue-200">
+                    💡 <strong>Tithe on Profit:</strong> Business tithe is calculated on net profit (revenue minus expenses), not gross revenue.
                   </div>
                 </div>
               )}
@@ -6059,7 +6433,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   {/* Live data banner */}
                   <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold ${tithingMetrics.hasRealData ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-gray-50 text-gray-500 border border-gray-200'}`}>
                     <span>{tithingMetrics.hasRealData ? '🟢 Live' : '⚪ No data'}</span>
-                    <span>{tithingMetrics.hasRealData ? 'Income from real 30-day transactions' : 'No transactions loaded yet'}</span>
+                    <span>{tithingMetrics.hasRealData ? 'Salary from real 30-day transactions' : 'No transactions loaded yet'}</span>
                   </div>
                   <div className="bg-white rounded-xl p-4 shadow-sm">
                     <label className="block text-xs font-semibold text-gray-700 mb-1">Personal Tithe Rate (%)</label>
@@ -6068,9 +6442,119 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       className="w-full accent-amber-500" />
                     <div className="flex justify-between text-xs text-gray-400 mt-1"><span>5%</span><span className="font-bold text-amber-600">{personalTithingRate}%</span><span>20%</span></div>
                   </div>
+                  {/* 🔧 FIXED: Show only personal/salary income for personal tithe */}
+                  <div className="bg-white rounded-xl p-4 shadow-sm space-y-2">
+                    <div className="flex justify-between text-sm"><span className="text-gray-500">Salary/Wages (30d)</span><span className="font-semibold text-green-600">UGX {(tithingMetrics.personalIncome || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                    <div className="flex justify-between text-sm border-t pt-2"><span className="text-gray-500">Tithe Due {actualTitheOwed && actualTitheOwed.personal !== undefined ? '(from database)' : '(calculated)'}</span><span className="font-bold text-green-600 text-lg">UGX {(actualTitheOwed && actualTitheOwed.personal !== undefined ? actualTitheOwed.personal : (tithingMetrics.personalTithe || 0)).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                  </div>
+                  <div className="bg-green-50 rounded-xl p-3 text-xs text-green-800 border border-green-200">
+                    💡 <strong>Tithe on Income:</strong> Personal tithe is calculated on salary/wages and personal income only.
+                  </div>
+                </div>
+              )}
+
+              {/* 🔧 NEW: Pay In Tithe Tab */}
+              {selectedTithingTab === 'pay-in' && (
+                <div className="space-y-3">
+                  {/* Summary of tithe due - SHOW CALCULATED based on current income */}
+                  <div className="bg-gradient-to-br from-amber-100 to-yellow-100 rounded-xl p-4 shadow-sm border border-amber-300">
+                    <div className="text-xs text-amber-700 mb-2">Total Tithe Due (calculated from current income)</div>
+                    <div className="text-3xl font-bold text-amber-900">UGX {(tithingMetrics.combinedTithe || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
+                    <div className="text-xs text-amber-700 mt-2 space-y-1">
+                      <div>Personal: UGX {(tithingMetrics.personalTithe || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
+                      <div>Business: UGX {(tithingMetrics.businessTithe || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
+                    </div>
+                  </div>
+
+                  {/* 🔧 FIXED: Use calculated tithe for the quick-fill button */}
+                  {/* Payment amount input */}
                   <div className="bg-white rounded-xl p-4 shadow-sm">
-                    <div className="flex justify-between text-sm mb-2"><span className="text-gray-500">Personal Income (30d)</span><span className="font-semibold">UGX {(tithingMetrics.personalIncome || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
-                    <div className="flex justify-between text-sm"><span className="text-gray-500">Tithe Due</span><span className="font-bold text-green-600 text-lg">UGX {(tithingMetrics.personalTithe || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-2">Payment Amount (UGX)</label>
+                    <input 
+                      type="number" 
+                      value={tithePaymentAmount}
+                      onChange={e => setTithePaymentAmount(e.target.value)}
+                      placeholder="Enter amount to pay"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                    <button 
+                      onClick={() => setTithePaymentAmount(((tithingMetrics.combinedTithe) || 0).toString())}
+                      className="text-xs text-amber-600 hover:text-amber-700 mt-2 font-semibold"
+                    >
+                      Use full tithe due
+                    </button>
+                  </div>
+
+                  {/* Payment type */}
+                  <div className="bg-white rounded-xl p-4 shadow-sm">
+                    <label className="block text-xs font-semibold text-gray-700 mb-2">Payment Type</label>
+                    <select 
+                      value={tithePaymentType}
+                      onChange={e => setTithePaymentType(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    >
+                      <option value="personal">Personal Tithe</option>
+                      <option value="business">Business Tithe</option>
+                      <option value="combined">Combined Tithe</option>
+                    </select>
+                  </div>
+
+                  {/* Payment recipient - OPTIONAL */}
+                  <div className="bg-white rounded-xl p-4 shadow-sm">
+                    <label className="block text-xs font-semibold text-gray-700 mb-2">
+                      Recipient/Church/Organization (Optional)
+                    </label>
+                    <input 
+                      type="text" 
+                      value={tithePaymentRecipient}
+                      onChange={e => setTithePaymentRecipient(e.target.value)}
+                      placeholder="e.g., Mt. Zion Church, Local Ministry"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                    {tithePaymentRecipient.trim() === '' && (
+                      <p className="text-xs text-gray-500 mt-1">💡 Defaults to 'Tithe Fund' if not specified</p>
+                    )}
+                  </div>
+
+                  {/* Payment notes */}
+                  <div className="bg-white rounded-xl p-4 shadow-sm">
+                    <label className="block text-xs font-semibold text-gray-700 mb-2">Notes (Optional)</label>
+                    <textarea 
+                      value={tithePaymentNotes}
+                      onChange={e => setTithePaymentNotes(e.target.value)}
+                      placeholder="Add any notes about this tithe payment"
+                      rows="2"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  {/* Success/Error messages */}
+                  {tithePaymentSuccess && (
+                    <div className="bg-green-50 rounded-xl p-3 text-sm text-green-800 border border-green-200">
+                      ✅ {tithePaymentSuccess}
+                    </div>
+                  )}
+                  {tithePaymentError && (
+                    <div className="bg-red-50 rounded-xl p-3 text-sm text-red-800 border border-red-200">
+                      ❌ {tithePaymentError}
+                    </div>
+                  )}
+
+                  {/* Submit button */}
+                  <button 
+                    onClick={() => handlePayTithe()}
+                    disabled={isSubmittingTithe || !tithePaymentAmount}
+                    className={`w-full py-3 rounded-xl font-bold text-white transition ${
+                      isSubmittingTithe || !tithePaymentAmount
+                        ? 'bg-gray-400 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600'
+                    }`}
+                  >
+                    {isSubmittingTithe ? 'Processing...' : '💳 Record Tithe Payment'}
+                  </button>
+
+                  <div className="bg-amber-50 rounded-xl p-3 text-xs text-amber-800 border border-amber-200">
+                    📖 <strong>Malachi 3:10</strong> — "Bring the whole tithe into the storehouse... and see if I will not open the floodgates of heaven and pour out so much blessing."
                   </div>
                 </div>
               )}

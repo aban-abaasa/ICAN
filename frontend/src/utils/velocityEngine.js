@@ -273,6 +273,41 @@ export class VelocityEngine {
     const income7Days = periodMetrics.weekly.income;
     const expenses7Days = periodMetrics.weekly.expenses;
 
+    // 🔧 FIXED June 8: Separate personal and business income for tithe calculation
+    // Personal income: salary, wages, bonuses from employment (category='salary' or metadata.record_category='personal')
+    // Business income: sales, revenue from business (metadata.record_category='business' or metadata.reporting_bucket='sold_income')
+    const last30Days = this.transactions.filter(t => new Date(t.created_at) > thirtyDaysAgo);
+    
+    const personalIncome30Days = last30Days
+      .filter(t => t.transaction_type === 'income' && 
+        (
+          (t.metadata?.category === 'salary') ||
+          (t.metadata?.record_category === 'personal') ||
+          (t.metadata?.entry_mode === 'salary')
+        )
+      )
+      .reduce((sum, t) => sum + (t.amount || 0), 0);
+    
+    const businessIncome30Days = last30Days
+      .filter(t => t.transaction_type === 'income' &&
+        (
+          (t.metadata?.record_category === 'business') ||
+          (t.metadata?.reporting_bucket === 'sold_income') ||
+          (t.metadata?.category === 'business')
+        )
+      )
+      .reduce((sum, t) => sum + (t.amount || 0), 0);
+    
+    const businessExpenses30Days = last30Days
+      .filter(t => t.transaction_type === 'expense' &&
+        (
+          (t.metadata?.record_category === 'business') ||
+          (t.metadata?.reporting_bucket === 'bought_stock') ||
+          (t.metadata?.category === 'business')
+        )
+      )
+      .reduce((sum, t) => sum + (t.amount || 0), 0);
+
     // Category breakdown
     const categoryBreakdown = this.getCategoryBreakdown();
 
@@ -293,6 +328,10 @@ export class VelocityEngine {
       expenses30Days,
       income7Days,
       expenses7Days,
+      // 🔧 FIXED June 8: Separated personal and business metrics
+      personalIncome30Days,
+      businessIncome30Days,
+      businessExpenses30Days,
       // New detailed period metrics
       periodMetrics,
       // Overall ROI and savings rate

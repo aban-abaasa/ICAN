@@ -31,7 +31,7 @@ export default function TitheManager() {
   // ============================================================
   
   // Form state
-  const [formMode, setFormMode] = useState('add'); // 'add' | 'pay' | 'view' | 'analytics' | 'audit'
+  const [formMode, setFormMode] = useState('add'); // 'add' | 'settle' | 'pay' | 'view' | 'analytics' | 'audit'
   const [form, setForm] = useState({
     amount: '',
     givingType: 'tithe',
@@ -44,15 +44,12 @@ export default function TitheManager() {
 
   // Data state
   const [tithes, setTithes] = useState([]);
+  const [unpaidTithes, setUnpaidTithes] = useState([]);
   const [summary, setSummary] = useState(null);
   const [auditTrail, setAuditTrail] = useState([]);
   const [chainIntegrity, setChainIntegrity] = useState(null);
   const [selectedTithe, setSelectedTithe] = useState(null);
-  
-  // Transaction filtering state (for Pay mode)
-  const [transactionFilter, setTransactionFilter] = useState('all'); // 'all' | 'business' | 'personal'
-  const [filteredTransactions, setFilteredTransactions] = useState([]);
-  const [selectedTransaction, setSelectedTransaction] = useState(null);
+  const [selectedForPayment, setSelectedForPayment] = useState([]);
 
   // UI state
   const [loading, setLoading] = useState(false);
@@ -69,6 +66,7 @@ export default function TitheManager() {
     const init = async () => {
       await Promise.all([
         fetchTithes(),
+        fetchUnpaidTithes(),
         fetchSummary(),
         fetchWalletBalance(),
         fetchChainIntegrity()
@@ -131,6 +129,29 @@ export default function TitheManager() {
     }
   };
 
+  const fetchCurrentTitheOwed = async () => {
+    try {
+      const { data, error } = await supabase.rpc('fn_get_current_tithe_owed');
+      
+      if (error) throw error;
+      
+      // Update the summary with actual tithe owed from database
+      if (data && data[0]) {
+        const titheData = data[0];
+        setSummary(prev => ({
+          ...prev,
+          personalTithe: titheData.personal_tithe_owed,
+          businessTithe: titheData.business_tithe_owed,
+          combinedTithe: titheData.combined_tithe_owed,
+          totalTithe: titheData.total_tithe_owed,
+          lastPaymentDate: titheData.last_payment_date
+        }));
+      }
+    } catch (err) {
+      console.error('Error fetching current tithe owed:', err);
+    }
+  };
+
   const fetchAuditTrail = async (titheId = null) => {
     try {
       const { data, error } = await supabase.rpc('fn_get_tithe_audit_trail', {
@@ -184,6 +205,45 @@ export default function TitheManager() {
       setError('Failed to load transactions: ' + err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchUnpaidTithes = async () => {
+    try {
+      // Query tithes that haven't been marked as paid yet
+      const { data, error } = await supabase
+        .from('ican_tithe_records')
+        .select('id, tithe_id, amount, currency, giving_type, recipient_type, giving_date, created_at, is_anonymous')
+        .neq('blockchain_status', 'removed')
+        .eq('payment_status', 'pending')
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (error) {
+        // If column doesn't exist, try without payment_status filter
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('ican_tithe_records')
+          .select('id, tithe_id, amount, currency, giving_type, recipient_type, giving_date, created_at, is_anonymous')
+          .neq('blockchain_status', 'removed')
+          .order('created_at', { ascending: false })
+          .limit(100);
+
+        if (fallbackError) throw fallbackError;
+        setUnpaidTithes(fallbackData || []);
+      } else {
+        setUnpaidTithes(data || []);
+      }
+    } catch (err) {
+      console.error('Error fetching unpaid tithes:', err);
+      // If table query fails, fetch all and filter locally
+      try {
+        const { data } = await supabase
+          .from('ican_tithe_records')
+          .select('*')
+          .neq('blockchain_status', 'removed')
+          .limit(100);
+        setUnpaidTithes(data || []);
+      } catch {}
     }
   };
 
@@ -242,6 +302,7 @@ export default function TitheManager() {
       await Promise.all([
         fetchTithes(),
         fetchSummary(),
+        fetchCurrentTitheOwed(),
         fetchWalletBalance()
       ]);
 
@@ -358,6 +419,7 @@ export default function TitheManager() {
       await Promise.all([
         fetchTithes(),
         fetchSummary(),
+        fetchCurrentTitheOwed(),
         fetchWalletBalance(),
         fetchFilteredTransactions(transactionFilter)
       ]);
@@ -371,8 +433,192 @@ export default function TitheManager() {
   };
 
   // ============================================================
+  // SETTLE/PAY TITHES - Clear & Record in Reports
+  // ============================================================
+
+  const handleSettleTithes = async () => {
+    if (selectedForPayment.length === 0) {
+      setError('Please select at least one tithe to settle');
+      return;
+    }
+
+    const totalAmount = selectedForPayment.reduce((sum, tithe) => sum + tithe.amount, 0);
+
+    if (!window.confirm(`Settle ${selectedForPayment.length} tithe(s) for total ${totalAmount.toLocaleString()} UGX? This will record them in your financial reports.`)) {
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      // Mark each tithe as paid and create report records
+      const settlePromises = selectedForPayment.map(async (tithe) => {
+        // Update tithe status to paid
+        const { error: updateError } = await supabase
+          .from('ican_tithe_records')
+          .update({
+            blockchain_status: 'settled',
+            payment_status: 'paid',
+            settled_date: new Date().toISOString()
+          })
+          .eq('id', tithe.id);
+
+        if (updateError) throw updateError;
+
+        // Create financial report entry
+        const { error: reportError } = await supabase
+          .from('ican_transactions')
+          .insert({
+            user_id: (await supabase.auth.getUser()).data.user?.id,
+            amount: tithe.amount,
+            currency: tithe.currency,
+            transaction_type: 'tithe',
+            description: `${tithe.giving_type.charAt(0).toUpperCase() + tithe.giving_type.slice(1)} to ${tithe.recipient_type}`,
+            status: 'completed',
+            metadata: {
+              payment_type: 'personal',
+              tithe_type: tithe.giving_type,
+              entry_mode: 'tithe-pay-in',
+              recorded_date: new Date().toISOString(),
+              tithe_id: tithe.id,
+              giving_type: tithe.giving_type,
+              recipient_type: tithe.recipient_type,
+              is_anonymous: tithe.is_anonymous,
+              record_category: 'tithe'
+            }
+          });
+
+        if (reportError) throw reportError;
+
+        return { titheId: tithe.id, success: true };
+      });
+
+      await Promise.all(settlePromises);
+
+      setSuccess(`✅ Settled ${selectedForPayment.length} tithe(s) for ${totalAmount.toLocaleString()} UGX - Recorded in reports!`);
+      setSelectedForPayment([]);
+
+      // Refresh all data including current tithe owed from database
+      await Promise.all([
+        fetchTithes(),
+        fetchUnpaidTithes(),
+        fetchSummary(),
+        fetchCurrentTitheOwed(),
+        fetchWalletBalance()
+      ]);
+
+      setTimeout(() => setSuccess(null), 5000);
+    } catch (err) {
+      setError(`Failed to settle tithes: ${err.message}`);
+      console.error('Settlement error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============================================================
   // RENDER FUNCTIONS
   // ============================================================
+
+  const renderSettleTithes = () => (
+    <div className="space-y-4">
+      <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-6 border border-purple-500/30 shadow-lg">
+        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+          <span>💰</span>
+          Settle & Record Tithes
+        </h3>
+        <p className="text-gray-400 text-sm mb-4">
+          Mark tithes as paid and record them in your financial reports for tax and accountability purposes.
+        </p>
+
+        {/* Summary */}
+        {selectedForPayment.length > 0 && (
+          <div className="bg-slate-700/50 rounded-lg p-4 mb-4 border border-slate-600">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-400 text-sm">Selected for Settlement</p>
+                <p className="text-2xl font-bold text-green-400">{selectedForPayment.reduce((sum, t) => sum + t.amount, 0).toLocaleString()} UGX</p>
+                <p className="text-xs text-gray-500 mt-1">{selectedForPayment.length} tithe(s)</p>
+              </div>
+              <button
+                onClick={handleSettleTithes}
+                disabled={loading || selectedForPayment.length === 0}
+                className="px-6 py-2 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 disabled:from-gray-600 disabled:to-gray-600 text-white font-semibold rounded-lg transition"
+              >
+                {loading ? '⏳ Settling...' : '✅ Settle & Record'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Unpaid Tithes List */}
+        <div className="space-y-2">
+          <h4 className="text-sm font-semibold text-gray-300 mb-3">Unpaid Tithes</h4>
+          
+          {unpaidTithes.length === 0 ? (
+            <div className="bg-slate-700/50 rounded-lg p-6 text-center text-gray-400">
+              <p>✅ All tithes settled! No unpaid tithes.</p>
+            </div>
+          ) : (
+            unpaidTithes.map((tithe) => (
+              <div
+                key={tithe.id}
+                onClick={() => {
+                  const isSelected = selectedForPayment.some(t => t.id === tithe.id);
+                  if (isSelected) {
+                    setSelectedForPayment(selectedForPayment.filter(t => t.id !== tithe.id));
+                  } else {
+                    setSelectedForPayment([...selectedForPayment, tithe]);
+                  }
+                }}
+                className={`p-4 rounded-lg border transition cursor-pointer ${
+                  selectedForPayment.some(t => t.id === tithe.id)
+                    ? 'border-green-500 bg-green-500/10'
+                    : 'border-slate-700 bg-slate-700/50 hover:border-purple-500/50'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedForPayment.some(t => t.id === tithe.id)}
+                    onChange={() => {}}
+                    className="w-5 h-5 cursor-pointer"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-white font-semibold">{tithe.amount.toLocaleString()} {tithe.currency}</span>
+                      <span className="bg-purple-500/20 text-purple-300 text-xs px-2 py-1 rounded capitalize">
+                        {tithe.giving_type}
+                      </span>
+                      {tithe.is_anonymous && (
+                        <Lock className="w-3 h-3 text-yellow-400" title="Anonymous" />
+                      )}
+                    </div>
+                    <div className="text-sm text-gray-400 mt-1">
+                      {tithe.recipient_type} • {new Date(tithe.giving_date).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <span className="text-xs bg-yellow-500/20 text-yellow-300 px-2 py-1 rounded">
+                    Pending
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Info Box */}
+        <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+          <p className="text-sm text-blue-300">
+            <strong>📋 What happens when you settle?</strong><br />
+            Selected tithes are marked as paid, recorded in your financial reports (for tax purposes), and cleared from the pending list. This creates an immutable audit trail in your reports.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 
   const renderPayTithe = () => (
     <div className="space-y-4">
@@ -883,6 +1129,7 @@ export default function TitheManager() {
         <div className="flex gap-2 mb-6 flex-wrap">
           {[
             { id: 'add', label: '➕ Add Tithe', icon: Plus },
+            { id: 'settle', label: '💰 Settle Tithes', icon: Plus },
             { id: 'pay', label: '💳 Pay Tithe', icon: Plus },
             { id: 'view', label: '👁️ View Tithes', icon: Eye },
             { id: 'analytics', label: '📊 Analytics', icon: BarChart3 },
@@ -894,6 +1141,8 @@ export default function TitheManager() {
                 setFormMode(tab.id);
                 if (tab.id === 'pay') {
                   fetchFilteredTransactions(transactionFilter);
+                } else if (tab.id === 'settle') {
+                  fetchUnpaidTithes();
                 }
               }}
               className={`px-4 py-2 rounded-lg font-medium transition ${
@@ -912,6 +1161,7 @@ export default function TitheManager() {
           {/* Main Content */}
           <div className="lg:col-span-2">
             {formMode === 'add' && renderAddForm()}
+            {formMode === 'settle' && renderSettleTithes()}
             {formMode === 'pay' && renderPayTithe()}
             {formMode === 'view' && renderTithesList()}
             {formMode === 'analytics' && renderAnalytics()}
