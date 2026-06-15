@@ -1,0 +1,28 @@
+
+- 
++ # ICAN Backend Server Environment Variables
++ 
++ # ===========================================
++ # Supabase Configuration (Shared with FARM-AGENT)
++ # ===========================================
++ SUPABASE_URL=https://hswxazpxcgtqbxeqcxxw.supabase.co
++ SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhzd3hhenB4Y2d0cWJ4ZXFjeHh3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIxNDE1NzAsImV4cCI6MjA2NzcxNzU3MH0.ryOHQGgiEFf25Q9XA2K0akCcrQ7NcZddVfnWMdAH0DU
++ SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhzd3hhenB4Y2d0cWJ4ZXFjeHh3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MjE0MTU3MCwiZXhwIjoyMDY3NzE3NTcwfQ.ljWN-RgMNI5vd9ueq2Ybs4b2a9e_i_tu51uRehrltWw
++ 
++ # ===========================================
++ # Server Configuration
++ # ===========================================
++ PORT=5000
++ NODE_ENV=development
++ 
++ # ===========================================
++ # Security Configuration
++ # ===========================================
++ JWT_SECRET=ican_demo_jwt_secret_key_2024
++ BIOMETRIC_ENCRYPTION_KEY=ican_demo_biometric_key_2024
++ 
++ # ===========================================
++ # Gemini AI API Configuration
++ # ===========================================
++ GEMINI_API_KEY=demo_gemini_key
++ 

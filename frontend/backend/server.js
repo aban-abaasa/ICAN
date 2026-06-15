@@ -18,6 +18,8 @@ const momoRoutes = require('./routes/momoRoutes');
 const p2pTransferRoutes = require('./routes/p2pTransferRoutes');
 const paymentsRoutes = require('./routes/paymentsRoutes');
 const withdrawalRoutes = require('./routes/withdrawalRoutes');
+const accountRoutes = require('./routes/accountRoutes');
+const aiAnalysisRoutes = require('./routes/aiAnalysisRoutes');
 
 // ES6 module imports for pinReset and email routes
 let pinResetRoutes;
@@ -105,6 +107,12 @@ app.use('/api/payments', paymentsRoutes);
 // Withdrawal Routes
 app.use('/api/withdrawals', withdrawalRoutes);
 
+// Account Routes (danger zone account deletion)
+app.use('/api/account', accountRoutes);
+
+// AI Analysis Routes (OpenAI proxy for transaction analysis)
+app.use('/api/ai-analysis', aiAnalysisRoutes);
+
 // ==========================================
 // API Routes (ES6 modules - loaded dynamically)
 // ==========================================
@@ -168,6 +176,7 @@ async function loadRoutesAndStartServer() {
 ║  ✅ Payment Routes: /api/payments/*      ║
 ║  ✅ PIN Reset Routes: /api/admin/*       ║
 ║  ✅ Email Routes: /api/email/*           ║
+║  ✅ AI Analysis Routes: /api/ai-analysis/*║
 ║  ✅ Health Check: /health                ║
 ║  ✅ Supabase: Connected                  ║
 ╚══════════════════════════════════════════╝

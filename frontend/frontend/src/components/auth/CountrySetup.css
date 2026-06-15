@@ -1,0 +1,788 @@
+/**
+ * Country Setup Dropdown Styles (Minimal & Functional)
+ */
+
+.country-dropdown-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+  z-index: 100;
+  overflow: visible;
+}
+
+.country-dropdown-wrapper.mandatory {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  overflow: auto;
+  padding: 16px;
+  max-width: 100%;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.dropdown-container {
+  position: relative;
+  width: 100%;
+  z-index: 10000;
+  overflow: visible;
+}
+
+.country-dropdown-wrapper.mandatory .dropdown-container {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.25);
+  max-width: 480px;
+  width: 100%;
+  animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ============================
+   DROPDOWN HEADER / TOGGLE
+   ============================ */
+
+.dropdown-header {
+  position: relative;
+  z-index: 10;
+}
+
+.dropdown-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #f8f9fa;
+  border: 2px solid #e0e0e0;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  color: #333;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  font-family: inherit;
+}
+
+.dropdown-toggle:hover:not(:disabled) {
+  border-color: #667eea;
+  background: #f0f0f0;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+  transform: translateY(-2px);
+}
+
+.dropdown-toggle.open {
+  border-color: #667eea;
+  background: white;
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.25);
+}
+
+.dropdown-toggle:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: #f0f0f0;
+}
+
+.dropdown-toggle .flag-icon {
+  font-size: 20px;
+  display: inline-block;
+}
+
+.dropdown-toggle .header-text {
+  flex: 1;
+  text-align: left;
+  letter-spacing: 0.3px;
+}
+
+.dropdown-toggle .chevron {
+  display: inline-block;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: #667eea;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dropdown-toggle .chevron.open {
+  transform: rotateZ(180deg);
+}
+
+/* ============================
+   DROPDOWN ERROR
+   ============================ */
+
+.dropdown-error {
+  color: #d32f2f;
+  font-size: 13px;
+  padding: 10px 14px;
+  background: #ffebee;
+  border-radius: 6px;
+  margin-top: 8px;
+  border-left: 3px solid #d32f2f;
+  display: flex;
+  align-items: center;
+  animation: slideDown 0.2s ease-out;
+}
+
+/* ============================
+   DROPDOWN CONTENT
+   ============================ */
+
+.dropdown-content {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  max-height: 420px;
+  overflow: hidden;
+  z-index: 10001;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.15);
+  animation: slideDown 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 100%;
+  min-width: 100%;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ============================
+   SEARCH BOX
+   ============================ */
+
+.search-box {
+  padding: 12px;
+  border-bottom: 1px solid #e0e0e0;
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 10002;
+}
+
+.search-box input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+  font-family: inherit;
+  background: white;
+}
+
+.search-box input:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  background: #fafbfc;
+}
+
+.search-box input::placeholder {
+  color: #b0b0b0;
+}
+
+.search-box input:disabled {
+  background: #f5f5f5;
+  cursor: not-allowed;
+  color: #999;
+}
+
+/* ============================
+   COUNTRIES LIST
+   ============================ */
+
+.countries-list {
+  max-height: 380px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px;
+}
+
+.country-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 14px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 10px;
+  text-align: left;
+  font-size: 15px;
+  color: #333;
+  font-weight: 500;
+  min-height: 50px;
+  box-sizing: border-box;
+}
+
+.country-item:hover:not(:disabled) {
+  background: linear-gradient(135deg, #f5f7ff 0%, #eeebff 100%);
+  transform: translateX(6px);
+  box-shadow: inset 3px 0 0 #667eea;
+}
+
+.country-item:active:not(:disabled) {
+  background: #e8e3ff;
+  transform: translateX(4px);
+}
+
+.country-item:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: transparent;
+}
+
+.country-item:focus-visible {
+  outline: 2px solid #667eea;
+  outline-offset: -2px;
+}
+
+.country-flag {
+  font-size: 28px;
+  min-width: 36px;
+  text-align: center;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.country-name-text {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 500;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+}
+
+.spinner-mini {
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid #e0e0e0;
+  border-top-color: #667eea;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  flex-shrink: 0;
+}
+
+/* Mobile Optimization */
+@media (max-width: 480px) {
+  .countries-list {
+    max-height: 360px;
+    padding: 2px;
+  }
+
+  .country-item {
+    gap: 12px;
+    padding: 12px 12px;
+    min-height: 48px;
+    font-size: 14px;
+  }
+
+  .country-flag {
+    font-size: 26px;
+    min-width: 34px;
+  }
+
+  .country-name-text {
+    font-size: 14px;
+  }
+
+  .country-item:hover:not(:disabled) {
+    transform: translateX(4px);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================
+   NO RESULTS STATE
+   ============================ */
+
+.no-results {
+  text-align: center;
+  padding: 40px 20px;
+  color: #999;
+}
+
+.no-results p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* ============================
+   LOADING INDICATOR
+   ============================ */
+
+.loading-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 20px;
+  border-top: 1px solid #e0e0e0;
+  color: #667eea;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* ============================
+   SUCCESS STATE
+   ============================ */
+
+.country-setup-minimal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+}
+
+.success-checkmark {
+  text-align: center;
+  background: white;
+  padding: 40px 32px;
+  border-radius: 16px;
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.25);
+  animation: scaleIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  max-width: 400px;
+  width: 100%;
+}
+
+.checkmark {
+  font-size: 72px;
+  line-height: 1;
+  margin-bottom: 20px;
+  display: inline-block;
+  animation: scaleIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.success-checkmark p {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: 0.3px;
+  line-height: 1.3;
+  color: #333;
+}
+
+.success-subtext {
+  font-size: 14px;
+  color: #999;
+  margin-top: 12px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ============================
+   SCROLLBAR STYLING
+   ============================ */
+
+.countries-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.countries-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.countries-list::-webkit-scrollbar-thumb {
+  background: #d0d0d0;
+  border-radius: 3px;
+  transition: background 0.3s ease;
+}
+
+.countries-list::-webkit-scrollbar-thumb:hover {
+  background: #999;
+}
+
+/* Suggested Country Chip */
+.suggested-country {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  margin-top: 12px;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.05) 100%);
+  border: 1.5px solid rgba(102, 126, 234, 0.3);
+  border-radius: 8px;
+  font-size: 13px;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.suggested-country:hover {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.1) 100%);
+  border-color: rgba(102, 126, 234, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+}
+
+.suggested-country strong {
+  color: #667eea;
+  font-weight: 600;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 768px) {
+  .country-dropdown-wrapper {
+    max-width: 100%;
+    padding: 0 12px;
+  }
+
+  .country-dropdown-wrapper.mandatory {
+    padding: 12px;
+  }
+
+  .country-dropdown-wrapper.mandatory .dropdown-container {
+    max-width: 100%;
+    padding: 20px;
+    border-radius: 14px;
+  }
+
+  .dropdown-container {
+    width: 100%;
+  }
+
+  .dropdown-toggle {
+    padding: 13px 14px;
+    font-size: 14px;
+    gap: 10px;
+    border-radius: 8px;
+  }
+
+  .dropdown-toggle .header-text {
+    font-size: 14px;
+  }
+
+  .dropdown-toggle .flag-icon {
+    font-size: 18px;
+  }
+
+  .dropdown-content {
+    max-height: 340px;
+    min-width: 100%;
+    border-radius: 8px;
+  }
+
+  .search-box {
+    padding: 8px;
+  }
+
+  .search-box input {
+    padding: 9px 12px;
+    font-size: 13px;
+    border-radius: 6px;
+  }
+
+  .suggested-country {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+  }
+
+  .suggested-country span:last-child {
+    align-self: flex-start;
+  }
+
+  .success-checkmark {
+    padding: 32px 24px;
+  }
+
+  .checkmark {
+    font-size: 64px;
+  }
+
+  .success-checkmark p {
+    font-size: 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .country-dropdown-wrapper {
+    max-width: 100%;
+    padding: 0;
+    width: 100vw;
+  }
+
+  .country-dropdown-wrapper.mandatory {
+    padding: 0;
+    min-height: 100vh;
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+
+  .country-dropdown-wrapper.mandatory .dropdown-container {
+    padding: 20px 16px;
+    border-radius: 0;
+    width: 100%;
+    min-height: 100vh;
+    max-width: 100%;
+    box-shadow: none;
+    animation: none;
+  }
+
+  .dropdown-container {
+    width: 100%;
+  }
+
+  .dropdown-header {
+    width: 100%;
+  }
+
+  .dropdown-toggle {
+    padding: 12px 12px;
+    font-size: 13px;
+    gap: 10px;
+    border-radius: 8px;
+  }
+
+  .dropdown-toggle .flag-icon {
+    font-size: 18px;
+  }
+
+  .dropdown-toggle .header-text {
+    font-size: 13px;
+    letter-spacing: 0.2px;
+  }
+
+  .dropdown-toggle .chevron {
+    font-size: 11px;
+  }
+
+  .dropdown-content {
+    max-height: 320px;
+    top: calc(100% + 2px);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  }
+
+  .search-box {
+    padding: 8px;
+    margin-bottom: 8px;
+  }
+
+  .search-box input {
+    padding: 8px 11px;
+    font-size: 13px;
+    border-radius: 6px;
+  }
+
+  .countries-list {
+    max-height: 260px;
+  }
+
+  .country-item {
+    min-height: 48px;
+    padding: 12px 12px;
+    gap: 12px;
+  }
+
+  .loading-indicator {
+    padding: 16px;
+    font-size: 12px;
+    gap: 8px;
+  }
+
+  .loading-indicator .spinner-mini {
+    width: 16px;
+    height: 16px;
+  }
+
+  .no-results {
+    padding: 32px 16px;
+  }
+
+  .no-results p {
+    font-size: 13px;
+  }
+
+  .suggested-country {
+    gap: 6px;
+    padding: 10px 12px;
+    font-size: 11px;
+  }
+
+  .success-checkmark {
+    padding: 28px 20px;
+    max-width: 100%;
+    width: 100vw;
+    min-height: 100vh;
+    height: 100vh;
+    border-radius: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-shadow: none;
+  }
+
+  .checkmark {
+    font-size: 56px;
+    margin-bottom: 16px;
+  }
+
+  .success-checkmark p {
+    font-size: 20px;
+  }
+
+  .success-subtext {
+    font-size: 12px;
+    margin-top: 10px;
+  }
+}
+
+@media (max-width: 360px) {
+  .country-dropdown-wrapper.mandatory {
+    padding: 0;
+    min-height: 100vh;
+  }
+
+  .country-dropdown-wrapper.mandatory .dropdown-container {
+    padding: 16px 12px;
+    border-radius: 0;
+    width: 100%;
+    min-height: 100vh;
+    max-width: 100%;
+  }
+
+  .dropdown-toggle {
+    padding: 11px 11px;
+    font-size: 12px;
+    border-radius: 7px;
+  }
+
+  .dropdown-toggle .flag-icon {
+    font-size: 16px;
+  }
+
+  .dropdown-toggle .chevron {
+    font-size: 10px;
+  }
+
+  .countries-list {
+    max-height: 280px;
+  }
+
+  .country-item {
+    min-height: 44px;
+    padding: 10px 10px;
+    gap: 10px;
+    font-size: 13px;
+  }
+
+  .country-flag {
+    font-size: 22px;
+  }
+
+  .country-name-text {
+    font-size: 13px;
+  }
+
+  .search-box input {
+    font-size: 12px;
+    padding: 7px 10px;
+  }
+
+  .suggested-country {
+    font-size: 11px;
+    padding: 10px;
+  }
+
+  .success-checkmark {
+    padding: 20px 16px;
+    width: 100vw;
+    min-height: 100vh;
+    height: 100vh;
+    border-radius: 0;
+    max-width: 100%;
+    box-shadow: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .checkmark {
+    font-size: 48px;
+    margin-bottom: 12px;
+  }
+
+  .success-checkmark p {
+    font-size: 18px;
+  }
+}

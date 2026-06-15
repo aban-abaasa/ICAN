@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 {
   "name": "ican-capital-engine",
   "version": "1.0.0",
@@ -62,3 +63,12 @@
   "author": "ICAN Capital",
   "license": "MIT"
 }
+||||||| 765bd52b
+=======
+{
+  "dependencies": {
+    "sharp": "^0.34.5",
+    "uuid": "^13.0.0"
+  }
+}
+>>>>>>> 1ee019e9d756b40242c6632756cb0dbd41a19e8c
