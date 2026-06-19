@@ -46,52 +46,21 @@ import BuyIcan from './ICAN/BuyIcan';
 import SellIcan from './ICAN/SellIcan';
 import ReceiveMoneyModal from './ReceiveMoneyModal';
 
-const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = null, onCanGoBack = null }) => {
+const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = null, onTabChange = null }) => {
   const [showBalance, setShowBalance] = useState(true);
   const [selectedCurrency, setSelectedCurrency] = useState('USD');
   const [userCountry, setUserCountry] = useState('UG');
   const [activeTab, _setActiveTab] = useState('overview');
-  const [activeModal, _setActiveModal] = useState(null); // 'send', 'receive', 'topup'
+  const [activeModal, setActiveModal] = useState(null); // 'send', 'receive', 'topup'
 
-  // ── Internal nav stack for back-button support ──────────────────────────
-  const navStackRef = useRef([]);
-
-  const _captureSnap = () => ({
-    tab: activeTab,
-    modal: activeModal,
-  });
-
-  const _pushSnap = () => {
-    navStackRef.current = [...navStackRef.current, _captureSnap()];
-    onCanGoBack?.(true);
-  };
-
-  // Public setters — call these instead of raw state setters to track history
+  // Track tab changes for back navigation — same pattern as Trust/CMSS
   const setActiveTab = (newTab) => {
-    if (newTab !== activeTab) _pushSnap();
-    _setActiveTab(newTab);
+    _setActiveTab(prev => { if (prev !== newTab) onTabChange?.(prev); return newTab; });
   };
-
-  const setActiveModal = (newModal) => {
-    if (newModal !== null && newModal !== activeModal) _pushSnap();
-    _setActiveModal(newModal);
-  };
-
-  // Register a go-back function so MobileView can trigger internal back
   useEffect(() => {
-    if (!navRef) return;
-    navRef.current = () => {
-      if (navStackRef.current.length === 0) return false; // nothing to go back to
-      const prev = navStackRef.current[navStackRef.current.length - 1];
-      navStackRef.current = navStackRef.current.slice(0, -1);
-      _setActiveTab(prev.tab);
-      _setActiveModal(prev.modal);
-      onCanGoBack?.(navStackRef.current.length > 0);
-      return true; // handled
-    };
+    if (navRef) navRef.current = _setActiveTab;
     return () => { if (navRef) navRef.current = null; };
-  }, [navRef, onCanGoBack]);
-  // ────────────────────────────────────────────────────────────────────────
+  }, [navRef]);
 
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false);
   const [sendForm, setSendForm] = useState({ recipient: '', amount: '', description: '' });
