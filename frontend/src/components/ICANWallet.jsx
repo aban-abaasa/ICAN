@@ -46,13 +46,54 @@ import BuyIcan from './ICAN/BuyIcan';
 import SellIcan from './ICAN/SellIcan';
 import ReceiveMoneyModal from './ReceiveMoneyModal';
 
-const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null }) => {
+const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = null, onCanGoBack = null }) => {
   const [showBalance, setShowBalance] = useState(true);
   const [selectedCurrency, setSelectedCurrency] = useState('USD');
   const [userCountry, setUserCountry] = useState('UG');
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, _setActiveTab] = useState('overview');
+  const [activeModal, _setActiveModal] = useState(null); // 'send', 'receive', 'topup'
+
+  // ── Internal nav stack for back-button support ──────────────────────────
+  const navStackRef = useRef([]);
+
+  const _captureSnap = () => ({
+    tab: activeTab,
+    modal: activeModal,
+  });
+
+  const _pushSnap = () => {
+    navStackRef.current = [...navStackRef.current, _captureSnap()];
+    onCanGoBack?.(true);
+  };
+
+  // Public setters — call these instead of raw state setters to track history
+  const setActiveTab = (newTab) => {
+    if (newTab !== activeTab) _pushSnap();
+    _setActiveTab(newTab);
+  };
+
+  const setActiveModal = (newModal) => {
+    if (newModal !== null && newModal !== activeModal) _pushSnap();
+    _setActiveModal(newModal);
+  };
+
+  // Register a go-back function so MobileView can trigger internal back
+  useEffect(() => {
+    if (!navRef) return;
+    navRef.current = () => {
+      if (navStackRef.current.length === 0) return false; // nothing to go back to
+      const prev = navStackRef.current[navStackRef.current.length - 1];
+      navStackRef.current = navStackRef.current.slice(0, -1);
+      _setActiveTab(prev.tab);
+      _setActiveModal(prev.modal);
+      onCanGoBack?.(navStackRef.current.length > 0);
+      return true; // handled
+    };
+    return () => { if (navRef) navRef.current = null; };
+  }, [navRef, onCanGoBack]);
+  // ────────────────────────────────────────────────────────────────────────
+
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false);
-  const [activeModal, setActiveModal] = useState(null); // 'send', 'receive', 'topup'
   const [sendForm, setSendForm] = useState({ recipient: '', amount: '', description: '' });
   const [receiveForm, setReceiveForm] = useState({ amount: '', description: '' });
   const [topupForm, setTopupForm] = useState({ amount: '', paymentInput: '', method: null, detectedMethod: null });

@@ -46,6 +46,7 @@ import {
   Rocket,
   MapPin,
   ChevronRight,
+  ChevronLeft,
   Star,
   Award,
   MessageCircle,
@@ -3446,6 +3447,7 @@ const ICANCapitalEngine = () => {
   const [biometricAction, setBiometricAction] = useState(null);
   const [isListening, setIsListening] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [tabHistory, setTabHistory] = useState([]); // for back navigation
   const [contractText, setContractText] = useState('');
   const [contractAnalysis, setContractAnalysis] = useState(null);
   const [complianceData, setComplianceData] = useState(null);
@@ -9271,10 +9273,11 @@ Data Freshness: ${reportData.metadata.dataFreshness}
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900">
+
       {/* Main Navigation & Header */}
       {activeTab !== 'dashboard' && (
-        <MainNavigation 
-          onTrustClick={() => openFunctionPanel('trust')} 
+        <MainNavigation
+          onTrustClick={() => openFunctionPanel('trust')}
           onShareClick={() => openFunctionPanel('share')}
           onWalletClick={() => openFunctionPanel('wallet')}
         />
@@ -9313,166 +9316,170 @@ Data Freshness: ${reportData.metadata.dataFreshness}
         </div>
       )}
 
-      {/* Navigation */}
-      {activeTab !== 'dashboard' && (
-      <nav className="glass-card mx-4 mt-4 p-4 overflow-visible" style={{ overflow: 'visible' }}>
-        <div className={`flex items-center gap-4 ${activeTab === 'dashboard' ? 'justify-end' : 'justify-between'}`}>
-          {activeTab !== 'dashboard' && (
-            <div className="flex items-center gap-4">
-              <div className={`relative flex-shrink-0 transition-all duration-500 ${isLoading ? 'animate-spin' : ''}`} style={{
-                animation: isLoading ? 'spin 2s linear infinite' : 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-              }}>
-                {/* Glow effect during loading */}
-                {isLoading && (
-                  <div className="absolute inset-0 animate-pulse">
-                    <div className="w-14 h-14 bg-blue-500 rounded-xl opacity-30 blur-lg"></div>
-                  </div>
-                )}
-                
-                {/* Logo with dynamic glow */}
-                <div className={`relative w-14 h-14 flex items-center justify-center rounded-xl overflow-hidden transition-all duration-500 ${
-                  isLoading 
-                    ? 'bg-gradient-to-r from-blue-500 to-purple-500 shadow-lg shadow-blue-500/50' 
-                    : 'bg-gradient-to-r from-blue-500/30 to-purple-500/30'
-                }`}>
-                  <img 
-                    src={IcanEraLogo} 
-                    alt="IcanEra" 
-                    className={`w-11 h-11 object-contain transition-transform duration-500 filter drop-shadow-lg ${isLoading ? 'scale-110' : 'scale-100'}`}
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                      e.target.parentElement.textContent = '💎';
-                      e.target.parentElement.style.fontSize = '1.5rem';
-                    }}
-                  />
+      {/* Icon Navigator — always visible on all tabs */}
+      <nav className="glass-card mx-4 mt-4 p-3 overflow-visible" style={{ overflow: 'visible' }}>
+        <div className="flex items-center justify-between gap-3">
+
+          {/* Back button — only shown when there is history */}
+          {tabHistory.length > 0 && (
+            <button
+              onClick={() => {
+                if (tabHistory.length === 0) return;
+                const prev = tabHistory[tabHistory.length - 1];
+                setTabHistory(h => h.slice(0, -1));
+                closeFunctionPanels();
+                if (prev === 'trust') openFunctionPanel('trust');
+                else if (prev === 'share') openFunctionPanel('share');
+                else if (prev === 'wallet') openFunctionPanel('wallet');
+                else setActiveTab(prev);
+              }}
+              title="Go back"
+              className="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-xl bg-white/10 hover:bg-blue-500/80 text-gray-300 hover:text-white transition-all group"
+            >
+              <ChevronLeft className="w-5 h-5 group-hover:scale-110 transition-transform" />
+            </button>
+          )}
+
+          {/* Logo + brand */}
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <div className={`relative flex-shrink-0 transition-all duration-500 ${isLoading ? 'animate-spin' : ''}`} style={{
+              animation: isLoading ? 'spin 2s linear infinite' : 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            }}>
+              {isLoading && (
+                <div className="absolute inset-0 animate-pulse">
+                  <div className="w-12 h-12 bg-blue-500 rounded-xl opacity-30 blur-lg"></div>
                 </div>
-              </div>
-              
-              <div>
-                <h1 className="text-xl font-bold gradient-text flex items-center gap-2">
-                  IcanEra
-                  {isLoading && (
-                    <div className="flex gap-1">
-                      <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></span>
-                      <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }}></span>
-                      <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></span>
-                    </div>
-                  )}
-                </h1>
-                {isLoading && <p className="text-xs text-blue-300 animate-pulse">Loading financial data...</p>}
+              )}
+              <div className={`relative w-12 h-12 flex items-center justify-center rounded-xl overflow-hidden transition-all duration-500 ${
+                isLoading
+                  ? 'bg-gradient-to-r from-blue-500 to-purple-500 shadow-lg shadow-blue-500/50'
+                  : 'bg-gradient-to-r from-blue-500/30 to-purple-500/30'
+              }`}>
+                <img
+                  src={IcanEraLogo}
+                  alt="IcanEra"
+                  className={`w-9 h-9 object-contain transition-transform duration-500 filter drop-shadow-lg ${isLoading ? 'scale-110' : 'scale-100'}`}
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.parentElement.textContent = '💎';
+                    e.target.parentElement.style.fontSize = '1.25rem';
+                  }}
+                />
               </div>
             </div>
-          )}
-          
+            <div className="hidden sm:block">
+              <h1 className="text-base font-bold gradient-text flex items-center gap-1">
+                IcanEra
+                {isLoading && (
+                  <span className="flex gap-0.5 ml-1">
+                    <span className="w-1 h-1 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></span>
+                    <span className="w-1 h-1 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }}></span>
+                    <span className="w-1 h-1 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></span>
+                  </span>
+                )}
+              </h1>
+              {isLoading
+                ? <p className="text-[10px] text-blue-300 animate-pulse">Loading…</p>
+                : <p className="text-[10px] text-gray-400 capitalize">{activeTab}</p>
+              }
+            </div>
+          </div>
+
           <style>{`
-            @keyframes spin {
-              from { transform: rotate(0deg); }
-              to { transform: rotate(360deg); }
-            }
+            @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
           `}</style>
 
-          {/* Status Carousel in Top-Right (WhatsApp style) */}
-          <div className="flex gap-2 items-center flex-nowrap min-w-0 ml-auto">
+          {/* ── Icon Tab Navigation ── */}
+          <div className="flex items-center gap-1 overflow-x-auto pb-0.5 flex-1 justify-center">
+            {[
+              { id: 'dashboard', label: 'Home',     icon: BarChart3  },
+              { id: 'security',  label: 'Security', icon: Shield     },
+              { id: 'readiness', label: 'Readiness',icon: Globe      },
+              { id: 'growth',    label: 'Growth',   icon: TrendingUp },
+              { id: 'trust',     label: 'SACCO',    icon: Heart      },
+              { id: 'share',     label: 'Share',    icon: Send       },
+              { id: 'wallet',    label: 'Wallet',   icon: DollarSign },
+              { id: 'settings',  label: 'Settings', icon: Settings   },
+            ].map(tab => {
+              const isActive =
+                activeTab === tab.id ||
+                (tab.id === 'trust'  && showTRUST)  ||
+                (tab.id === 'share'  && showSHARE)  ||
+                (tab.id === 'wallet' && showWallet);
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setTabHistory(h => [...h, activeTab]);
+                    if (tab.id === 'trust') openFunctionPanel('trust');
+                    else if (tab.id === 'share') openFunctionPanel('share');
+                    else if (tab.id === 'wallet') openFunctionPanel('wallet');
+                    else { closeFunctionPanels(); setActiveTab(tab.id); }
+                  }}
+                  title={tab.label}
+                  className={`flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-xl transition-all flex-shrink-0 group ${
+                    isActive
+                      ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/40'
+                      : 'text-gray-400 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <tab.icon className={`w-5 h-5 transition-transform group-hover:scale-110 ${isActive ? 'scale-110' : ''}`} />
+                  <span className="text-[9px] font-semibold whitespace-nowrap">{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Right: status carousel + profile avatar */}
+          <div className="flex items-center gap-2 flex-shrink-0">
             <StatusCarousel onStatusClick={() => setShowStatusPage(true)} />
             <button
               onClick={() => setShowStatusPage(true)}
-              className="hidden md:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs text-gray-200 transition"
-              title="Open Status Viewer"
+              className="hidden lg:inline-flex items-center gap-1 px-2 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs text-gray-200 transition"
+              title="Status Viewer"
             >
               <Eye className="w-3.5 h-3.5" />
-              Viewer
+              <span>Viewer</span>
             </button>
-            <button
-              onClick={() => setShowProfilePage(true)}
-              className="hidden md:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs text-gray-200 transition"
-              title="Open My Profile"
-            >
-              <User className="w-3.5 h-3.5" />
-              Profile
-            </button>
-            <div className="hidden xl:block text-right">
-              <p className="text-sm font-semibold text-white truncate max-w-[180px]">{dashboardDisplayName}</p>
-              <p className="text-xs text-gray-300 capitalize">{activeTab}</p>
-            </div>
-            {/* Profile Picture with Edit & Status Buttons */}
             <div className="relative group flex-shrink-0">
-              {/* Avatar */}
               <div
-                onClick={() => {}}
-                className="relative w-10 h-10 rounded-full overflow-hidden ring-2 ring-white ring-opacity-30 cursor-pointer hover:ring-opacity-50 transition-all flex-shrink-0"
+                onClick={() => setShowProfilePage(true)}
+                className="w-9 h-9 rounded-full overflow-hidden ring-2 ring-white/30 cursor-pointer hover:ring-white/60 transition-all"
+                title={dashboardDisplayName}
               >
                 <img
                   src={profile?.avatar_url}
                   alt={profile?.full_name}
                   className="w-full h-full object-cover"
                   onError={(e) => {
-                    e.target.src = `https://ui-avatars.com/api/?name=${profile?.full_name || 'User'}`;
+                    e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(profile?.full_name || 'User')}`;
                   }}
                 />
               </div>
-
-              {/* Add Status Button - Bottom Right of Avatar */}
               <button
                 onClick={() => setShowStatusUploader(true)}
                 className="absolute -bottom-1 -right-1 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 rounded-full p-1 shadow-lg transition-all"
                 title="Add status"
               >
-                <Plus className="w-2.5 h-2.5 text-white" />
+                <Plus className="w-2 h-2 text-white" />
               </button>
-
-              {/* Edit Profile Button - Top Right of Avatar */}
               <button
                 onClick={() => setShowProfilePage(true)}
                 className="absolute -top-1 -right-1 bg-blue-500 hover:bg-blue-600 rounded-full p-1 shadow-lg transition-all hidden group-hover:flex"
                 title="Edit profile"
               >
-                <Edit2 className="w-2.5 h-2.5 text-white" />
+                <Edit2 className="w-2 h-2 text-white" />
               </button>
             </div>
           </div>
-        </div>
 
-        {/* Tab Navigation */}
-        <div className="flex gap-2 mt-4 overflow-x-auto pb-2">
-          {[
-            { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
-            { id: 'security', label: 'Security', icon: Shield },
-            { id: 'readiness', label: 'Readiness', icon: Globe },
-            { id: 'growth', label: 'Growth', icon: TrendingUp },
-            { id: 'trust', label: 'Trust', icon: Heart },
-            { id: 'share', label: 'Share', icon: Send },
-            { id: 'wallet', label: 'Wallet', icon: DollarSign },
-            { id: 'settings', label: 'Settings', icon: Settings }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => {
-                if (tab.id === 'trust') openFunctionPanel('trust');
-                else if (tab.id === 'share') openFunctionPanel('share');
-                else if (tab.id === 'wallet') openFunctionPanel('wallet');
-                else {
-                  closeFunctionPanels();
-                  setActiveTab(tab.id);
-                }
-              }}
-              className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-lg transition-colors whitespace-nowrap text-sm md:text-base ${
-                activeTab === tab.id 
-                  ? 'bg-blue-500 text-white' 
-                  : 'bg-white bg-opacity-10 text-gray-300 hover:text-white'
-              }`}
-            >
-              <tab.icon className="w-4 h-4 flex-shrink-0" />
-              <span className="hidden md:inline">{tab.label}</span>
-            </button>
-          ))}
         </div>
       </nav>
-      )}
 
       {/* Main Content */}
-      <main className={activeTab === 'dashboard' ? 'p-0' : 'p-4'}>
+      <main className="p-4">
         {activeTab === 'dashboard' && (
-          <section className="w-full min-h-screen overflow-y-auto">
+          <section className="w-full min-h-screen overflow-y-auto -mx-4 -mt-4">
             <MobileView userProfile={dashboardUserProfile} isWebDashboard />
           </section>
         )}

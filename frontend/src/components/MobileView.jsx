@@ -21,6 +21,7 @@ import {
   Heart,
   PieChart,
   ChevronRight,
+  ChevronLeft,
   Dot,
   Shield,
   CheckCircle,
@@ -806,6 +807,21 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [showLoanCalculator, setShowLoanCalculator] = useState(false);
   const [showSettingsPanel, setShowSettingsPanel] = useState(false);
   const [showAIChat, setShowAIChat] = useState(false);
+  const [navHistory, setNavHistory] = useState([]); // tracks panel navigation for back button
+
+  // Refs for panel internal back navigation
+  const walletNavRef  = useRef(null); // go-back function → returns true if handled
+  const pitchinNavRef = useRef(null); // go-back function → returns true if handled
+  const trustNavRef   = useRef(null); // tab setter (CMSS/Trust use history-object approach)
+  const cmssNavRef    = useRef(null); // tab setter
+
+  // Whether wallet/pitchin have internal pages to go back to
+  const [panelCanGoBack, setPanelCanGoBack] = useState(false);
+
+  // Called by panels when their internal tab changes — records sub-page to history (Trust/CMSS)
+  const handlePanelTabChange = (panelId, prevTab) => {
+    setNavHistory(prev => [...prev, { panel: panelId, tab: prevTab }]);
+  };
 
   // AI Chat state
   const [aiMessages, setAiMessages] = useState([]);
@@ -3190,33 +3206,15 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
   };
 
   const handleFeatureExplore = (title, action) => {
-    console.log(`Exploring ${title} - Action: ${action}`);
-
-    if (title === 'Pitchin') {
-      requestDemoModuleOpen('pitchin', () => {
-        openFeaturePanel('pitchin');
-      });
-    } else if (title === 'Wallet') {
-      requestDemoModuleOpen('wallet', () => {
-        openFeaturePanel('wallet');
-      });
-    } else if (title === 'Trust') {
-      requestDemoModuleOpen('trust', () => {
-        openFeaturePanel('trust');
-      });
-    } else if (title === 'CMMS') {
-      openFeaturePanel('cmms');
+    const tabMap = { Pitchin: 'pitchin', Wallet: 'wallet', Trust: 'trust', CMMS: 'cmms', Trade: 'wallet', Tithe: 'tithe', Reports: 'reports' };
+    if (tabMap[title]) {
+      navigateTo(tabMap[title]);
     } else if (title === 'Expense & Income') {
+      setNavHistory(prev => [...prev, activeHeaderTab]);
       setShowExpenseIncomePanel(true);
       setShowTransactionEntry(true);
       setTransactionType('personal');
       setActiveBottomTab('expenses');
-    } else if (title === 'Trade') {
-      openFeaturePanel('wallet');
-    } else if (title === 'Tithe') {
-      setShowTithingCalculator(true);
-    } else if (title === 'Reports') {
-      setShowReportingSystem(true);
     }
   };
 
@@ -3319,11 +3317,19 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
   const toggleFeaturePanel = (panelId) => {
     if (isFeaturePanelOpen(panelId)) {
-      closeHeaderPanels();
-      setActiveBottomTab('home');
+      // Closing: pop history and go back to previous panel
+      if (navHistory.length > 0) {
+        const prev = navHistory[navHistory.length - 1];
+        setNavHistory(h => h.slice(0, -1));
+        restorePanel(prev);
+      } else {
+        closeHeaderPanels();
+        setActiveBottomTab('home');
+      }
       return;
     }
-
+    // Opening: record history then open
+    setNavHistory(prev => [...prev, activeHeaderTab]);
     openFeaturePanel(panelId);
   };
 
@@ -3365,64 +3371,79 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     openFeaturePanel(panelId);
   };
 
-  const handleHeaderTabClick = (tabId) => {
+  // Low-level: opens a panel directly without touching history (used by back nav and navigateTo)
+  const restorePanel = (tabId) => {
+    if (!tabId) return;
+
+    // Clear any stale sub-page history for this panel so back doesn't replay old steps
+    setNavHistory(h => h.filter(e => !(typeof e === 'object' && e.panel === tabId)));
+
+    // Close everything first
+    closeHeaderPanels();
+    setShowReportingSystem(false);
+    setShowTithingCalculator(false);
+    setShowSecurityPanel(false);
+    setShowBusinessLoanCalculator(false);
+    setShowSettingsPanel(false);
+    setSelectedDetail(null);
     setShowMenuDropdown(false);
 
     if (tabId === 'dashboard') {
+      setPanelCanGoBack(false);
+      closeAuxiliaryOverlays();
+      setActiveBottomTab('home');
+      return;
+    }
+
+    // Reset internal-back flag when entering a panel fresh
+    if (tabId === 'pitchin' || tabId === 'wallet') setPanelCanGoBack(false);
+
+    if      (tabId === 'pitchin')  { setShowPitchinPanel(true);          setActiveBottomTab('pitchin'); }
+    else if (tabId === 'wallet')   { setShowWalletPanel(true);            setActiveBottomTab('wallet'); }
+    else if (tabId === 'trust')    { setShowTrustPanel(true);             setActiveBottomTab('trust'); }
+    else if (tabId === 'cmms')     { setShowCmmsPanel(true);              setActiveBottomTab('cmms'); }
+    else if (tabId === 'reports')  { setShowReportingSystem(true); }
+    else if (tabId === 'tithe')    { setShowTithingCalculator(true); }
+    else if (tabId === 'security') { setShowSecurityPanel(true); }
+    else if (tabId === 'loancalc') { setShowBusinessLoanCalculator(true); }
+    else if (tabId === 'settings') { setShowSettingsPanel(true); }
+  };
+
+  // High-level: THE single navigation function — always records history first
+  const navigateTo = (panelId) => {
+    if (!panelId) return;
+
+    // Going to dashboard resets the history stack
+    if (panelId === 'dashboard') {
+      setNavHistory([]);
       closeHeaderPanels();
+      setShowReportingSystem(false);
+      setShowTithingCalculator(false);
+      setShowSecurityPanel(false);
+      setShowBusinessLoanCalculator(false);
+      setShowSettingsPanel(false);
       closeAuxiliaryOverlays();
       setSelectedDetail(null);
       setActiveBottomTab('home');
       return;
     }
 
-    if (tabId === 'pitchin' || tabId === 'wallet' || tabId === 'trust' || tabId === 'cmms') {
-      requestDemoModuleOpen(tabId, () => {
-        setSelectedDetail(null);
-        setShowProfilePanel(false);
-        openHeaderPanel(tabId);
-      });
-      return;
-    }
+    // Push where we are NOW to the history stack, then open target
+    const doOpen = () => {
+      setNavHistory(prev => [...prev, activeHeaderTab]);
+      restorePanel(panelId);
+    };
 
-    if (tabId === 'reports') {
-      closeHeaderPanels();
-      setSelectedDetail(null);
-      closeAuxiliaryOverlays();
-      setShowReportingSystem(true);
-      return;
+    // Pitchin / Wallet / Trust still gate through the demo prompt
+    if (['pitchin', 'wallet', 'trust'].includes(panelId)) {
+      requestDemoModuleOpen(panelId, doOpen);
+    } else {
+      doOpen();
     }
+  };
 
-    if (tabId === 'tithe') {
-      closeHeaderPanels();
-      setSelectedDetail(null);
-      closeAuxiliaryOverlays();
-      setShowTithingCalculator(true);
-      return;
-    }
-
-    if (tabId === 'security') {
-      closeHeaderPanels();
-      setSelectedDetail(null);
-      closeAuxiliaryOverlays();
-      setShowSecurityPanel(true);
-      return;
-    }
-
-    if (tabId === 'loancalc') {
-      closeHeaderPanels();
-      setSelectedDetail(null);
-      closeAuxiliaryOverlays();
-      setShowBusinessLoanCalculator(true);
-      return;
-    }
-
-    if (tabId === 'settings') {
-      closeHeaderPanels();
-      closeAuxiliaryOverlays();
-      setShowSettingsPanel(true);
-      return;
-    }
+  const handleHeaderTabClick = (tabId) => {
+    navigateTo(tabId);
   };
 
   // ====== LOAN / RECORD HELPERS ======
@@ -3646,13 +3667,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
                     {/* Security */}
                     <button
-                      onClick={() => {
-                        closeHeaderPanels();
-                        setSelectedDetail(null);
-                        closeAuxiliaryOverlays();
-                        setShowSecurityPanel(true);
-                        setShowMenuDropdown(false);
-                      }}
+                      onClick={() => navigateTo('security')}
                       className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-red-500/20 hover:text-red-300 rounded transition flex items-center gap-2"
                     >
                       <span>🔐</span> Security
@@ -3682,13 +3697,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
                     {/* Reports */}
                     <button
-                      onClick={() => {
-                        closeHeaderPanels();
-                        setSelectedDetail(null);
-                        closeAuxiliaryOverlays();
-                        setShowReportingSystem(true);
-                        setShowMenuDropdown(false);
-                      }}
+                      onClick={() => navigateTo('reports')}
                       className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-rose-500/20 hover:text-rose-300 rounded transition flex items-center gap-2"
                     >
                       <span>📊</span> Reports
@@ -3696,13 +3705,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
                     {/* Tithe */}
                     <button
-                      onClick={() => {
-                        closeHeaderPanels();
-                        setSelectedDetail(null);
-                        closeAuxiliaryOverlays();
-                        setShowTithingCalculator(true);
-                        setShowMenuDropdown(false);
-                      }}
+                      onClick={() => navigateTo('tithe')}
                       className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-yellow-500/20 hover:text-yellow-300 rounded transition flex items-center gap-2"
                     >
                       <span>🙏</span> Tithe
@@ -3710,13 +3713,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
                     {/* Loan Calculator */}
                     <button
-                      onClick={() => {
-                        closeHeaderPanels();
-                        setSelectedDetail(null);
-                        closeAuxiliaryOverlays();
-                        setShowBusinessLoanCalculator(true);
-                        setShowMenuDropdown(false);
-                      }}
+                      onClick={() => navigateTo('loancalc')}
                       className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-amber-500/20 hover:text-amber-300 rounded transition flex items-center gap-2"
                     >
                       <span>🏦</span> Loan Calculator
@@ -3778,6 +3775,37 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           {isWebDashboard && (
             <div className="mt-2 border-t border-slate-700/60 pt-2">
               <div className="flex flex-nowrap items-center gap-1.5 md:gap-2 overflow-x-auto pb-1 scrollbar-hide">
+
+                {/* ← Back button */}
+                {(navHistory.length > 0 || panelCanGoBack) && (
+                  <button
+                    onClick={() => {
+                      // Wallet & Pitchin: try their own internal back stack first
+                      if (activeHeaderTab === 'wallet' && walletNavRef.current) {
+                        if (walletNavRef.current()) return;
+                      }
+                      if (activeHeaderTab === 'pitchin' && pitchinNavRef.current) {
+                        if (pitchinNavRef.current()) return;
+                      }
+                      // Trust / CMSS sub-page objects OR panel-level entries
+                      if (navHistory.length === 0) return;
+                      const prev = navHistory[navHistory.length - 1];
+                      setNavHistory(h => h.slice(0, -1));
+                      if (prev && typeof prev === 'object' && prev.panel && prev.tab) {
+                        const refMap = { trust: trustNavRef, cmss: cmssNavRef };
+                        refMap[prev.panel]?.current?.(prev.tab);
+                      } else {
+                        restorePanel(prev || 'dashboard');
+                      }
+                    }}
+                    title="Go back"
+                    className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-500/60 bg-slate-700/50 hover:bg-indigo-500/30 hover:border-indigo-400/60 text-slate-300 hover:text-white transition-all duration-200 group"
+                  >
+                    <ChevronLeft className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                    <span className="text-xs font-semibold whitespace-nowrap">Back</span>
+                  </button>
+                )}
+
                 {headerNavTabs.map((tab) => {
                   const isActive = activeHeaderTab === tab.id;
                   const TabIcon = tab.icon;
@@ -5998,14 +6026,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         }>
           {/* Home */}
           <button
-            onClick={() => { 
-              setShowProfilePanel(false); 
-              setShowPitchinPanel(false);
-              setShowWalletPanel(false);
-              setShowTrustPanel(false);
-              setShowCmmsPanel(false);
-              setActiveBottomTab('home'); 
-            }}
+            onClick={() => navigateTo('dashboard')}
             className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 transition ${
               showPitchinPanel ? 'opacity-40' : 'opacity-100'
             }`}
@@ -6016,11 +6037,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
           {/* Pitchin */}
           <button
-            onClick={() => {
-              requestDemoModuleOpen('pitchin', () => {
-                toggleFeaturePanel('pitchin');
-              });
-            }}
+            onClick={() => navigateTo('pitchin')}
             className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 transition ${
               showPitchinPanel ? 'opacity-80' : 'opacity-100'
             }`}
@@ -6031,11 +6048,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
           {/* Wallet */}
           <button
-            onClick={() => {
-              requestDemoModuleOpen('wallet', () => {
-                toggleFeaturePanel('wallet');
-              });
-            }}
+            onClick={() => navigateTo('wallet')}
             className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 transition ${
               showPitchinPanel ? 'opacity-40' : 'opacity-100'
             }`}
@@ -6046,11 +6059,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
           {/* Trust */}
           <button
-            onClick={() => {
-              requestDemoModuleOpen('trust', () => {
-                toggleFeaturePanel('trust');
-              });
-            }}
+            onClick={() => navigateTo('trust')}
             className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 transition ${
               showPitchinPanel ? 'opacity-40' : 'opacity-100'
             }`}
@@ -6061,7 +6070,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
           {/* CMMS */}
           <button
-            onClick={() => { toggleFeaturePanel('cmms'); }}
+            onClick={() => navigateTo('cmms')}
             className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 transition ${
               showPitchinPanel ? 'opacity-40' : 'opacity-100'
             }`}
@@ -6079,7 +6088,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           className={`fixed inset-x-0 z-30 bg-black overflow-hidden ${isWebDashboard ? 'top-[132px] md:top-[146px]' : 'top-0'}`}
           style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
-          <Pitchin />
+          <Pitchin navRef={pitchinNavRef} onCanGoBack={setPanelCanGoBack} />
         </div>
       )}
 
@@ -6094,6 +6103,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               currentUser={authUser || userProfile}
               boardroomOpenRequest={trustBoardroomOpenRequest}
               onBoardroomRequestConsumed={() => setTrustBoardroomOpenRequest(null)}
+              navRef={trustNavRef}
+              onTabChange={(prev) => handlePanelTabChange('trust', prev)}
             />
           </div>
         </div>
@@ -6106,7 +6117,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
           <div className="pt-2 px-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-            <ICANWallet />
+            <ICANWallet navRef={walletNavRef} onCanGoBack={setPanelCanGoBack} />
           </div>
         </div>
       )}
@@ -6118,7 +6129,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
           <div className="pt-2 px-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-            <CMMSModule user={userProfile} />
+            <CMMSModule user={userProfile} navRef={cmssNavRef} onTabChange={(prev) => handlePanelTabChange('cmms', prev)} />
           </div>
         </div>
       )}
@@ -6173,17 +6184,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         }}
         onNavigate={(featureId) => {
           setShowSearchModal(false);
-          if (featureId === 'wallets' || featureId === 'ican-coin') openFeaturePanel('wallet');
-          else if (featureId === 'pitching') openFeaturePanel('pitchin');
-          else if (featureId === 'trust') openFeaturePanel('trust');
-          else if (featureId === 'cmms') openFeaturePanel('cmms');
+          const map = { wallets: 'wallet', 'ican-coin': 'wallet', pitching: 'pitchin', trust: 'trust', cmms: 'cmms', reports: 'reports' };
+          if (map[featureId]) navigateTo(map[featureId]);
           else if (featureId === 'profile') openDetailView('profile', 'My Profile');
-          else if (featureId === 'reports') {
-            closeHeaderPanels();
-            setSelectedDetail(null);
-            closeAuxiliaryOverlays();
-            setShowReportingSystem(true);
-          }
           // 'transactions' and 'ai-copilot' stay on home screen
         }}
       />

@@ -292,11 +292,12 @@ const ReportMessagingPanel = ({
           <textarea
             value={messageText}
             onChange={(e) => setMessageText(e.target.value)}
-            placeholder="Type your message..."
+            placeholder="Type your message... (Press Enter to send, Shift+Enter for new line)"
             className="flex-1 bg-slate-700 text-white text-xs rounded px-2 py-2 border border-slate-600 focus:border-blue-500 outline-none resize-none"
             rows="3"
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && e.ctrlKey) {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
                 handleSendMessage();
               }
             }}

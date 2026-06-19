@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Users,
   Plus,
@@ -56,13 +56,17 @@ import { getSupabaseClient } from '../lib/supabase/client';
 const TrustSystem = ({
   currentUser: propCurrentUser,
   boardroomOpenRequest = null,
-  onBoardroomRequestConsumed = null
+  onBoardroomRequestConsumed = null,
+  navRef = null,
+  onTabChange = null
 }) => {
   // Use prop currentUser if provided (mobile), otherwise use AuthContext (web)
   const { user: contextUser } = useAuth() || {};
   const currentUser = propCurrentUser || contextUser;
 
-  const [activeTab, setActiveTab] = useState('explore'); // 'explore', 'mygroups', 'create', 'dashboard', 'voting', 'applications', 'admin'
+  const [activeTab, _setActiveTab] = useState('explore');
+  const setActiveTab = (newTab) => { _setActiveTab(prev => { onTabChange?.(prev); return newTab; }); };
+  useEffect(() => { if (navRef) navRef.current = _setActiveTab; return () => { if (navRef) navRef.current = null; }; }, [navRef]);
   const [groups, setGroups] = useState([]);
   const [myGroups, setMyGroups] = useState([]);
   const [selectedAdminGroup, setSelectedAdminGroup] = useState(null);

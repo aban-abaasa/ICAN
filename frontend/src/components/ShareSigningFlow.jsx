@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, ChevronRight, ChevronDown, ChevronUp, CheckCircle, Clock, Lock, Fingerprint, QrCode, Download, AlertCircle, Users, TrendingUp, Shield, FileText, DollarSign, Printer } from 'lucide-react';
+import { X, ChevronRight, ChevronDown, ChevronUp, CheckCircle, Clock, Lock, Fingerprint, QrCode, Download, AlertCircle, Users, TrendingUp, Shield, FileText, DollarSign, Printer, ArrowLeft } from 'lucide-react';
 import QRCode from 'qrcode';
 import { getSupabase, createNotification, createInvestmentNotification } from '../services/pitchingService';
 import { walletTransactionService } from '../services/walletTransactionService';
@@ -2279,21 +2279,57 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
     return null;
   };
 
+  // Handler for back button
+  const handleBack = () => {
+    console.log('Back button clicked! Current stage:', stage);
+    if (stage > 0) {
+      setStage(stage - 1);
+      console.log('Going back to stage:', stage - 1);
+    } else {
+      console.log('Already at stage 0, closing modal');
+      onClose();
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
       <div className="bg-slate-900 rounded-2xl w-full h-screen overflow-y-auto">
         
         {/* Header */}
-        <div className="sticky top-0 bg-gradient-to-r from-purple-900 to-pink-900 p-6 flex items-center justify-between border-b border-purple-500/30">
-          <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-            <TrendingUp className="w-6 h-6" />
-            Investment Agreement
-          </h2>
+        <div className="sticky top-0 bg-gradient-to-r from-purple-900 to-pink-900 p-4 sm:p-6 flex items-center justify-between border-b border-purple-500/30 z-10 shadow-xl">
+          <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+            {/* Back Arrow - ALWAYS VISIBLE, shows stage info */}
+            <button
+              onClick={handleBack}
+              className={`p-2 sm:p-3 rounded-lg transition-all flex items-center justify-center shrink-0 ${
+                stage > 0 
+                  ? 'bg-white/20 hover:bg-white/30 text-white shadow-lg' 
+                  : 'bg-white/10 hover:bg-white/20 text-white/70'
+              }`}
+              title={stage > 0 ? `Go back to stage ${stage - 1}` : 'Close'}
+            >
+              <ArrowLeft className={`w-5 h-5 sm:w-6 sm:h-6 transition-transform ${stage > 0 ? 'group-hover:-translate-x-1' : ''}`} />
+            </button>
+            
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-white shrink-0" />
+              <div className="min-w-0">
+                <h2 className="text-lg sm:text-2xl font-bold text-white truncate">
+                  Investment Agreement
+                </h2>
+                <p className="text-xs sm:text-sm text-purple-200">
+                  Step {stage + 1} of 9
+                </p>
+              </div>
+            </div>
+          </div>
+          
           <button
             onClick={onClose}
-            className="p-2 hover:bg-white/20 rounded-lg transition text-slate-300"
+            className="p-2 sm:p-3 hover:bg-white/20 rounded-lg transition text-white bg-white/10 ml-2 shrink-0"
+            title="Close"
           >
-            <X className="w-6 h-6" />
+            <X className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
         </div>
 

@@ -43,11 +43,13 @@ import NotificationsPanel from './NotificationsPanel';
 import RequisitionWorkspace from './CMMS/RequisitionWorkspace.jsx';
 import RequisitionApprovalsTab from './CMMS/RequisitionApprovalsTab.jsx';
 
-const CMMSModule = ({ 
+const CMMSModule = ({
   onDataUpdate,
   netWorth,
   currentJourneyStage,
-  user = null  // Current logged-in user
+  user = null,
+  navRef = null,
+  onTabChange = null
 }) => {
   // ============================================
   // ACCESS CONTROL & AUTHORIZATION
@@ -695,7 +697,9 @@ const CMMSModule = ({
   const reportsInitialLoadKeyRef = useRef('');
   const reportsSyncInFlightRef = useRef(false);
 
-  const [activeTab, setActiveTab] = useState('company');
+  const [activeTab, _setActiveTab] = useState('company');
+  const setActiveTab = (newTab) => { _setActiveTab(prev => { onTabChange?.(prev); return newTab; }); };
+  useEffect(() => { if (navRef) navRef.current = _setActiveTab; return () => { if (navRef) navRef.current = null; }; }, [navRef]);
   const [editingUser, setEditingUser] = useState(null);
   const [newlyAddedUserId, setNewlyAddedUserId] = useState(null);  // Track newly added user for UI highlight
   const [triggerCreateCompany, setTriggerCreateCompany] = useState(0); // Incremented to open create form

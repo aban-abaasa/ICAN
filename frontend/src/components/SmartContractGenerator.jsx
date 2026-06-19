@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { FileText, Fingerprint, Lock, Download, CheckCircle, AlertCircle, Eye, EyeOff, Loader, Edit, Sparkles, Eye as EyeIcon, Lock as LockIcon } from 'lucide-react';
+import { FileText, Fingerprint, Lock, Download, CheckCircle, AlertCircle, Eye, EyeOff, Loader, Edit, Sparkles, Eye as EyeIcon, Lock as LockIcon, ArrowLeft, X } from 'lucide-react';
 import QRCode from 'qrcode';
 
 /**
@@ -764,33 +764,60 @@ THIS IS A LEGALLY BINDING AGREEMENT
     );
   }
 
+  // Handler for back button
+  const handleBackStep = () => {
+    console.log('Back button clicked! Current step:', step);
+    if (step > 0) {
+      setStep(step - 1);
+      console.log('Going back to step:', step - 1);
+    } else {
+      console.log('Already at step 0, closing modal');
+      onClose();
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         
         {/* Header */}
-        <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <FileText className="h-8 w-8" />
-            <div>
-              <h1 className="text-2xl font-bold">
+        <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 sm:p-6 flex items-center justify-between z-10 shadow-lg">
+          <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+            {/* Back Arrow - ALWAYS VISIBLE */}
+            <button
+              onClick={handleBackStep}
+              className={`p-2 sm:p-3 rounded-lg transition-all flex items-center justify-center shrink-0 ${
+                step > 0 
+                  ? 'bg-white/20 hover:bg-white/30 shadow-md' 
+                  : 'bg-white/10 hover:bg-white/20'
+              }`}
+              title={step > 0 ? `Go back to step ${step - 1}` : 'Close'}
+            >
+              <ArrowLeft className={`w-5 h-5 sm:w-6 sm:h-6 transition-transform ${step > 0 ? 'hover:-translate-x-1' : ''}`} />
+            </button>
+            
+            <FileText className="h-6 w-6 sm:h-8 sm:w-8 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xl sm:text-2xl font-bold truncate">
                 {mode === 'setup' ? '📝 Set Agreement Terms' : '🤝 Sign Agreement'}
               </h1>
               {mode === 'setup' ? (
-                <p className="text-blue-100 text-sm">👑 Owner - Configure Terms & Conditions</p>
+                <p className="text-blue-100 text-xs sm:text-sm">👑 Owner - Configure Terms & Conditions</p>
               ) : (
-                <p className="text-blue-100 text-sm">
+                <p className="text-blue-100 text-xs sm:text-sm">
                   {signingRequested ? '✅ Owner approved - Ready to sign' : '🔔 Request owner confirmation to sign'}
                 </p>
               )}
-              {isOwner && mode === 'setup' && <p className="text-blue-100 text-xs mt-1">⭐ Set up T&C, then investors will request to sign</p>}
+              {isOwner && mode === 'setup' && <p className="text-blue-100 text-xs mt-1 hidden sm:block">⭐ Set up T&C, then investors will request to sign</p>}
             </div>
           </div>
+          
           <button 
             onClick={onClose}
-            className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition"
+            className="text-white hover:bg-white hover:bg-opacity-20 p-2 sm:p-3 rounded-lg transition bg-white/10 ml-2 shrink-0"
+            title="Close"
           >
-            ✕
+            <X className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
         </div>
 
