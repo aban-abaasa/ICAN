@@ -65,7 +65,7 @@ const TrustSystem = ({
   const currentUser = propCurrentUser || contextUser;
 
   const [activeTab, _setActiveTab] = useState('explore');
-  const setActiveTab = (newTab) => { _setActiveTab(prev => { onTabChange?.(prev); return newTab; }); };
+  const setActiveTab = (newTab) => { if (newTab !== activeTab) { onTabChange?.(activeTab); } _setActiveTab(newTab); };
   useEffect(() => { if (navRef) navRef.current = _setActiveTab; return () => { if (navRef) navRef.current = null; }; }, [navRef]);
   const [groups, setGroups] = useState([]);
   const [myGroups, setMyGroups] = useState([]);

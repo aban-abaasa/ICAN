@@ -809,16 +809,13 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [showAIChat, setShowAIChat] = useState(false);
   const [navHistory, setNavHistory] = useState([]); // tracks panel navigation for back button
 
-  // Refs for panel internal back navigation
-  const walletNavRef  = useRef(null); // go-back function → returns true if handled
-  const pitchinNavRef = useRef(null); // go-back function → returns true if handled
-  const trustNavRef   = useRef(null); // tab setter (CMSS/Trust use history-object approach)
-  const cmssNavRef    = useRef(null); // tab setter
+  // Refs that let MobileView set the internal tab of each panel for back navigation
+  const walletNavRef  = useRef(null);
+  const trustNavRef   = useRef(null);
+  const pitchinNavRef = useRef(null);
+  const cmssNavRef    = useRef(null);
 
-  // Whether wallet/pitchin have internal pages to go back to
-  const [panelCanGoBack, setPanelCanGoBack] = useState(false);
-
-  // Called by panels when their internal tab changes — records sub-page to history (Trust/CMSS)
+  // Called by panels when their internal tab changes — records sub-page to history
   const handlePanelTabChange = (panelId, prevTab) => {
     setNavHistory(prev => [...prev, { panel: panelId, tab: prevTab }]);
   };
@@ -3389,14 +3386,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     setShowMenuDropdown(false);
 
     if (tabId === 'dashboard') {
-      setPanelCanGoBack(false);
       closeAuxiliaryOverlays();
       setActiveBottomTab('home');
       return;
     }
-
-    // Reset internal-back flag when entering a panel fresh
-    if (tabId === 'pitchin' || tabId === 'wallet') setPanelCanGoBack(false);
 
     if      (tabId === 'pitchin')  { setShowPitchinPanel(true);          setActiveBottomTab('pitchin'); }
     else if (tabId === 'wallet')   { setShowWalletPanel(true);            setActiveBottomTab('wallet'); }
@@ -3776,25 +3769,20 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             <div className="mt-2 border-t border-slate-700/60 pt-2">
               <div className="flex flex-nowrap items-center gap-1.5 md:gap-2 overflow-x-auto pb-1 scrollbar-hide">
 
-                {/* ← Back button */}
-                {(navHistory.length > 0 || panelCanGoBack) && (
+                {/* ← Back button — visible only when there is history to go back to */}
+                {navHistory.length > 0 && (
                   <button
                     onClick={() => {
-                      // Wallet & Pitchin: try their own internal back stack first
-                      if (activeHeaderTab === 'wallet' && walletNavRef.current) {
-                        if (walletNavRef.current()) return;
-                      }
-                      if (activeHeaderTab === 'pitchin' && pitchinNavRef.current) {
-                        if (pitchinNavRef.current()) return;
-                      }
-                      // Trust / CMSS sub-page objects OR panel-level entries
                       if (navHistory.length === 0) return;
                       const prev = navHistory[navHistory.length - 1];
                       setNavHistory(h => h.slice(0, -1));
+
                       if (prev && typeof prev === 'object' && prev.panel && prev.tab) {
-                        const refMap = { trust: trustNavRef, cmss: cmssNavRef };
+                        // Sub-page back: tell the open panel to switch its internal tab
+                        const refMap = { wallet: walletNavRef, trust: trustNavRef, pitchin: pitchinNavRef, cmms: cmssNavRef };
                         refMap[prev.panel]?.current?.(prev.tab);
                       } else {
+                        // Panel-level back: restore previous panel
                         restorePanel(prev || 'dashboard');
                       }
                     }}
@@ -6088,7 +6076,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           className={`fixed inset-x-0 z-30 bg-black overflow-hidden ${isWebDashboard ? 'top-[132px] md:top-[146px]' : 'top-0'}`}
           style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
-          <Pitchin navRef={pitchinNavRef} onCanGoBack={setPanelCanGoBack} />
+          <Pitchin navRef={pitchinNavRef} onTabChange={(prev) => handlePanelTabChange('pitchin', prev)} />
         </div>
       )}
 
@@ -6117,7 +6105,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
           <div className="pt-2 px-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-            <ICANWallet navRef={walletNavRef} onCanGoBack={setPanelCanGoBack} />
+            <ICANWallet navRef={walletNavRef} onTabChange={(prev) => handlePanelTabChange('wallet', prev)} />
           </div>
         </div>
       )}

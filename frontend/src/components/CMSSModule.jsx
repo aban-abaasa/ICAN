@@ -698,7 +698,7 @@ const CMMSModule = ({
   const reportsSyncInFlightRef = useRef(false);
 
   const [activeTab, _setActiveTab] = useState('company');
-  const setActiveTab = (newTab) => { _setActiveTab(prev => { onTabChange?.(prev); return newTab; }); };
+  const setActiveTab = (newTab) => { if (newTab !== activeTab) { onTabChange?.(activeTab); } _setActiveTab(newTab); };
   useEffect(() => { if (navRef) navRef.current = _setActiveTab; return () => { if (navRef) navRef.current = null; }; }, [navRef]);
   const [editingUser, setEditingUser] = useState(null);
   const [newlyAddedUserId, setNewlyAddedUserId] = useState(null);  // Track newly added user for UI highlight

@@ -40,7 +40,7 @@ import {
 } from '../services/pitchInteractionsService';
 import { getUserNotifications } from '../services/investmentNotificationsService';
 
-const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, navRef = null, onCanGoBack = null }) => {
+const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, navRef = null, onTabChange = null }) => {
   const [pitches, setPitches] = useState([]);
   const [filteredPitches, setFilteredPitches] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -56,105 +56,41 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, navRef =
   const [sortBy, setSortBy] = useState('relevance');
   const [showMobileSearch, setShowMobileSearch] = useState(false);
 
-  const [showRecorder, _setShowRecorder] = useState(false);
+  const [showRecorder, setShowRecorder] = useState(false);
   const [currentPitch, setCurrentPitch] = useState(null);
   const [activeTab, _setActiveTab] = useState('feed');
-  const [selectedForContract, _setSelectedForContract] = useState(null);
-  const [selectedForInvestment, _setSelectedForInvestment] = useState(null);
+  const setActiveTab = (newTab) => { _setActiveTab(prev => { onTabChange?.(prev); return newTab; }); };
+  useEffect(() => { if (navRef) navRef.current = _setActiveTab; return () => { if (navRef) navRef.current = null; }; }, [navRef]);
+  const [selectedForContract, setSelectedForContract] = useState(null);
+  const [selectedForInvestment, setSelectedForInvestment] = useState(null); // For ShareSigningFlow
   const [videoErrors, setVideoErrors] = useState({});
   const [businessProfiles, setBusinessProfiles] = useState([]);
   const [currentBusinessProfile, setCurrentBusinessProfile] = useState(null);
-  const [showBusinessForm, _setShowBusinessForm] = useState(false);
-  const [showProfileSelector, _setShowProfileSelector] = useState(false);
-  const [showProfileDetails, _setShowProfileDetails] = useState(false);
+  const [showBusinessForm, setShowBusinessForm] = useState(false);
+  const [showProfileSelector, setShowProfileSelector] = useState(false);
+  const [showProfileDetails, setShowProfileDetails] = useState(false);
   const [showWallet, setShowWallet] = useState(false);
   const [editingProfile, setEditingProfile] = useState(null);
   const [likedPitches, setLikedPitches] = useState(new Set());
   const [investedPitches, setInvestedPitches] = useState(new Set()); // track pitches user showed interest in
   const [viewingPitcher, setViewingPitcher] = useState(null); // { name, business_profile_id, user_id } | null
+  const [showComments, setShowComments] = useState(null); // pitch id for comments modal
   const [comments, setComments] = useState({});
   const [newComment, setNewComment] = useState('');
   const [copiedPitchId, setCopiedPitchId] = useState(null);
   const [expandedPitchInfo, setExpandedPitchInfo] = useState(null); // pitch id for info tooltip
-  const [videoOrientations, setVideoOrientations] = useState({});
-  const [showMobilePitchDetail, _setShowMobilePitchDetail] = useState(false);
-  const [selectedMobilePitch, _setSelectedMobilePitch] = useState(null);
-  const [showSHAREHub, _setShowSHAREHub] = useState(false);
-  const [videoPlayerPitch, _setVideoPlayerPitch] = useState(null);
-  const [showComments, _setShowComments] = useState(null);
+  const [videoOrientations, setVideoOrientations] = useState({}); // track video orientations (portrait/landscape)
+  const [showMobilePitchDetail, setShowMobilePitchDetail] = useState(false); // mobile pitch detail modal
+  const [selectedMobilePitch, setSelectedMobilePitch] = useState(null); // selected pitch for mobile detail
+  const [showSHAREHub, setShowSHAREHub] = useState(false); // show SHAREHub modal on mobile
+  const [videoPlayerPitch, setVideoPlayerPitch] = useState(null); // pitch for fullscreen video player
   const [isDesktopView, setIsDesktopView] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth >= 1024 : false
   );
-  const [mutedVideos, setMutedVideos] = useState(new Set());
-  const [currentVisiblePitch, setCurrentVisiblePitch] = useState(null);
+  const [mutedVideos, setMutedVideos] = useState(new Set()); // track which videos are unmuted (all start muted)
+  const [currentVisiblePitch, setCurrentVisiblePitch] = useState(null); // track currently visible pitch for web bottom nav
   const isRestoringPitchinHistoryRef = useRef(false);
   const hasHydratedPitchinHistoryRef = useRef(false);
-
-  // ── Internal nav stack ───────────────────────────────────────────────────
-  const pitchinNavStackRef = useRef([]);
-
-  const _pitchinSnap = () => ({
-    tab: activeTab,
-    recorder: showRecorder,
-    mobilePitchDetail: showMobilePitchDetail,
-    mobilePitch: selectedMobilePitch,
-    contract: selectedForContract,
-    investment: selectedForInvestment,
-    comments: showComments,
-    videoPlayer: videoPlayerPitch,
-    businessForm: showBusinessForm,
-    profileSelector: showProfileSelector,
-    profileDetails: showProfileDetails,
-    shareHub: showSHAREHub,
-  });
-
-  const _pitchinPush = () => {
-    pitchinNavStackRef.current = [...pitchinNavStackRef.current, _pitchinSnap()];
-    onCanGoBack?.(true);
-  };
-
-  const _pitchinRestore = (snap) => {
-    _setActiveTab(snap.tab);
-    _setShowRecorder(snap.recorder);
-    _setShowMobilePitchDetail(snap.mobilePitchDetail);
-    _setSelectedMobilePitch(snap.mobilePitch);
-    _setSelectedForContract(snap.contract);
-    _setSelectedForInvestment(snap.investment);
-    _setShowComments(snap.comments);
-    _setVideoPlayerPitch(snap.videoPlayer);
-    _setShowBusinessForm(snap.businessForm);
-    _setShowProfileSelector(snap.profileSelector);
-    _setShowProfileDetails(snap.profileDetails);
-    _setShowSHAREHub(snap.shareHub);
-  };
-
-  // Public nav setters — use these everywhere (they track history)
-  const setActiveTab            = (v) => { if (v !== activeTab) _pitchinPush(); _setActiveTab(v); };
-  const setShowRecorder         = (v) => { if (v) _pitchinPush(); _setShowRecorder(v); };
-  const setShowMobilePitchDetail= (v) => { if (v) _pitchinPush(); _setShowMobilePitchDetail(v); };
-  const setSelectedMobilePitch  = (v) => { if (v) _pitchinPush(); _setSelectedMobilePitch(v); };
-  const setSelectedForContract  = (v) => { if (v) _pitchinPush(); _setSelectedForContract(v); };
-  const setSelectedForInvestment= (v) => { if (v) _pitchinPush(); _setSelectedForInvestment(v); };
-  const setShowComments         = (v) => { if (v) _pitchinPush(); _setShowComments(v); };
-  const setVideoPlayerPitch     = (v) => { if (v) _pitchinPush(); _setVideoPlayerPitch(v); };
-  const setShowBusinessForm     = (v) => { if (v) _pitchinPush(); _setShowBusinessForm(v); };
-  const setShowProfileSelector  = (v) => { if (v) _pitchinPush(); _setShowProfileSelector(v); };
-  const setShowProfileDetails   = (v) => { if (v) _pitchinPush(); _setShowProfileDetails(v); };
-  const setShowSHAREHub         = (v) => { if (v) _pitchinPush(); _setShowSHAREHub(v); };
-
-  useEffect(() => {
-    if (!navRef) return;
-    navRef.current = () => {
-      if (pitchinNavStackRef.current.length === 0) return false;
-      const prev = pitchinNavStackRef.current[pitchinNavStackRef.current.length - 1];
-      pitchinNavStackRef.current = pitchinNavStackRef.current.slice(0, -1);
-      _pitchinRestore(prev);
-      onCanGoBack?.(pitchinNavStackRef.current.length > 0);
-      return true;
-    };
-    return () => { if (navRef) navRef.current = null; };
-  }, [navRef, onCanGoBack]);
-  // ─────────────────────────────────────────────────────────────────────────
   const videoRefs = useRef({}); // refs to video elements for controlling sound
   const videoScrollRef = useRef(null);
   const metricsUnsubscribeRef = useRef(null); // ref to store real-time unsubscribe function

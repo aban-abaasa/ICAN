@@ -51,18 +51,12 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   const [selectedCurrency, setSelectedCurrency] = useState('USD');
   const [userCountry, setUserCountry] = useState('UG');
   const [activeTab, _setActiveTab] = useState('overview');
-  const [activeModal, setActiveModal] = useState(null); // 'send', 'receive', 'topup'
-
-  // Track tab changes for back navigation — same pattern as Trust/CMSS
   const setActiveTab = (newTab) => {
-    _setActiveTab(prev => { if (prev !== newTab) onTabChange?.(prev); return newTab; });
+    _setActiveTab(prev => { onTabChange?.(prev); return newTab; });
   };
-  useEffect(() => {
-    if (navRef) navRef.current = _setActiveTab;
-    return () => { if (navRef) navRef.current = null; };
-  }, [navRef]);
-
+  useEffect(() => { if (navRef) navRef.current = _setActiveTab; return () => { if (navRef) navRef.current = null; }; }, [navRef]);
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false);
+  const [activeModal, setActiveModal] = useState(null); // 'send', 'receive', 'topup'
   const [sendForm, setSendForm] = useState({ recipient: '', amount: '', description: '' });
   const [receiveForm, setReceiveForm] = useState({ amount: '', description: '' });
   const [topupForm, setTopupForm] = useState({ amount: '', paymentInput: '', method: null, detectedMethod: null });
