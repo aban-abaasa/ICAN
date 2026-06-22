@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
@@ -27,26 +26,3 @@
     }
   ]
 }
-||||||| 765bd52b
-=======
-{
-  "buildCommand": "npm --prefix frontend/frontend run build",
-  "devCommand": "npm --prefix frontend/frontend run dev",
-  "installCommand": "npm --prefix frontend/frontend install",
-  "outputDirectory": "frontend/frontend/dist",
-  "crons": [
-    {
-      "path": "/api/report-automation?mode=daily",
-      "schedule": "15 1 * * *"
-    },
-    {
-      "path": "/api/report-automation?mode=weekly",
-      "schedule": "40 1 * * 1"
-    },
-    {
-      "path": "/api/report-automation?mode=monthly",
-      "schedule": "55 1 1 * *"
-    }
-  ]
-}
->>>>>>> 1ee019e9d756b40242c6632756cb0dbd41a19e8c
