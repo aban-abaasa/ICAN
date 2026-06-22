@@ -58,6 +58,14 @@ export default function TitheManager() {
   const [showBalance, setShowBalance] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
 
+  // 🙏 Tithe Calculator state
+  const [calcIncomeTx, setCalcIncomeTx]   = useState([]);
+  const [calcTitheMap, setCalcTitheMap]   = useState({}); // txId → [{amount, giving_type, date}]
+  const [calcSelected, setCalcSelected]   = useState(null); // selected transaction
+  const [calcForm, setCalcForm]           = useState({ amount: '', givingType: 'tithe', recipientType: 'church', isAnonymous: false });
+  const [calcLoading, setCalcLoading]     = useState(false);
+  const [calcMsg, setCalcMsg]             = useState(null); // { type: 'ok'|'err', text }
+
   // ============================================================
   // INITIALIZATION
   // ============================================================
@@ -515,6 +523,91 @@ export default function TitheManager() {
       console.error('Settlement error:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ============================================================
+  // 🙏 TITHE CALCULATOR — FETCH & PAY
+  // ============================================================
+
+  const fetchCalcData = async () => {
+    try {
+      setCalcLoading(true);
+
+      // 1. Income transactions from the main daily-recording table
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: txData } = await supabase
+        .from('ican_transactions')
+        .select('id, description, amount, transaction_type, record_category, metadata, created_at')
+        .eq('user_id', user.id)
+        .eq('transaction_type', 'income')
+        .order('created_at', { ascending: false })
+        .limit(200);
+
+      setCalcIncomeTx(txData || []);
+
+      // 2. All tithe records — parse TX:{id} from notes to build the map
+      const { data: titheData } = await supabase.rpc('fn_get_user_tithes', {
+        p_start_date: null, p_end_date: null, p_giving_type: null, p_limit: 500
+      });
+
+      const map = {};
+      (titheData || []).forEach(t => {
+        const notes = t.notes_encrypted || t.notes || '';
+        const m = String(notes).match(/TX:([a-z0-9\-]+)/i);
+        if (m) {
+          const id = m[1];
+          if (!map[id]) map[id] = [];
+          map[id].push({ amount: t.amount, giving_type: t.giving_type, date: t.giving_date });
+        }
+      });
+      setCalcTitheMap(map);
+    } catch (err) {
+      console.error('Calc fetch error', err);
+    } finally {
+      setCalcLoading(false);
+    }
+  };
+
+  const handleCalcPayTithe = async () => {
+    if (!calcSelected) return;
+    const amount = parseFloat(calcForm.amount);
+    if (!amount || amount <= 0) { setCalcMsg({ type: 'err', text: 'Enter a valid amount' }); return; }
+    if (amount > calcSelected.amount) { setCalcMsg({ type: 'err', text: `Cannot exceed income amount (${calcSelected.amount?.toLocaleString()} UGX)` }); return; }
+
+    setCalcLoading(true);
+    setCalcMsg(null);
+    try {
+      const { data, error } = await supabase.rpc('fn_add_tithe', {
+        p_giving_type: calcForm.givingType,
+        p_amount: amount,
+        p_currency: 'UGX',
+        p_recipient_type: calcForm.recipientType,
+        p_recipient_name_encrypted: null,
+        p_tithe_percentage: parseFloat((amount / calcSelected.amount * 100).toFixed(1)),
+        p_income_reference_amount: calcSelected.amount,
+        p_giving_date: new Date(calcSelected.created_at).toISOString().split('T')[0],
+        // Store transaction ID silently in notes — blockchain picks it up
+        p_notes_encrypted: `TX:${calcSelected.id}|${calcSelected.description || ''}|${calcForm.givingType}`,
+        p_is_anonymous: calcForm.isAnonymous
+      });
+      if (error) throw error;
+      const result = data?.[0];
+      if (!result?.success) throw new Error(result?.message || 'Failed');
+
+      // Update local map without refetching
+      setCalcTitheMap(prev => {
+        const existing = prev[calcSelected.id] || [];
+        return { ...prev, [calcSelected.id]: [...existing, { amount, giving_type: calcForm.givingType, date: new Date().toISOString() }] };
+      });
+
+      setCalcMsg({ type: 'ok', text: `✅ ${(amount).toLocaleString()} UGX tithe recorded — blockchain secured` });
+      setCalcForm(f => ({ ...f, amount: '' }));
+      setTimeout(() => { setCalcSelected(null); setCalcMsg(null); }, 2500);
+    } catch (err) {
+      setCalcMsg({ type: 'err', text: err.message || 'Payment failed' });
+    } finally {
+      setCalcLoading(false);
     }
   };
 
@@ -1093,6 +1186,207 @@ export default function TitheManager() {
       )}
     </div>
   );
+
+  const renderCalculator = () => {
+    const totalIncome  = calcIncomeTx.reduce((s, t) => s + (t.amount || 0), 0);
+    const titheOwed    = totalIncome * 0.1;
+    const tithePaid    = Object.values(calcTitheMap).flat().reduce((s, r) => s + (r.amount || 0), 0);
+    const titheRemains = Math.max(0, titheOwed - tithePaid);
+
+    const fmtUGX = (n) => `UGX ${(n || 0).toLocaleString()}`;
+
+    // All tithe payment history
+    const history = Object.entries(calcTitheMap)
+      .flatMap(([txId, recs]) => recs.map(r => ({
+        ...r,
+        txDesc: calcIncomeTx.find(t => t.id === txId)?.description || 'Income'
+      })))
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    return (
+      <div className="space-y-5">
+        {/* ── Hero header ── */}
+        <div className="rounded-2xl p-5 border border-amber-500/20" style={{ background: 'linear-gradient(135deg, #1c1008 0%, #2d1a00 100%)' }}>
+          <h2 className="text-2xl font-extrabold text-amber-300 mb-0.5">🙏 Tithe Calculator</h2>
+          <p className="text-xs text-amber-700/80 font-medium tracking-wide uppercase">Steward faithfully · Uganda Giving Tracker</p>
+
+          {calcLoading && calcIncomeTx.length === 0 && (
+            <p className="text-xs text-amber-500/60 mt-3 animate-pulse">Loading your income records…</p>
+          )}
+        </div>
+
+        {/* ── 4 summary cards ── */}
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { label: 'Total Income',    value: fmtUGX(totalIncome),  sub: `${calcIncomeTx.length} records`,                 color: 'text-green-300',  border: 'border-green-500/20',  bg: 'bg-green-500/5'  },
+            { label: '10% Tithe Due',   value: fmtUGX(titheOwed),    sub: 'based on all income',                            color: 'text-amber-300',  border: 'border-amber-500/20',  bg: 'bg-amber-500/5'  },
+            { label: 'Total Paid',      value: fmtUGX(tithePaid),    sub: `${history.length} payment(s) recorded`,         color: 'text-purple-300', border: 'border-purple-500/20', bg: 'bg-purple-500/5' },
+            { label: 'Still Owed',      value: fmtUGX(titheRemains), sub: titheRemains <= 0 ? '🎉 All clear!' : 'to give', color: titheRemains <= 0 ? 'text-green-400' : 'text-rose-300', border: titheRemains <= 0 ? 'border-green-500/20' : 'border-rose-500/20', bg: titheRemains <= 0 ? 'bg-green-500/5' : 'bg-rose-500/5' },
+          ].map(c => (
+            <div key={c.label} className={`rounded-xl border p-4 ${c.bg} ${c.border}`}>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">{c.label}</p>
+              <p className={`text-base font-bold ${c.color}`}>{c.value}</p>
+              <p className="text-[10px] text-gray-600 mt-0.5">{c.sub}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Income transactions list ── */}
+        <div>
+          <h3 className="text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Income Transactions</h3>
+
+          {calcIncomeTx.length === 0 ? (
+            <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-6 text-center text-gray-500 text-sm">
+              No income transactions found.
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-64 overflow-y-auto pr-0.5">
+              {calcIncomeTx.map(t => {
+                const paid     = calcTitheMap[t.id] || [];
+                const paidAmt  = paid.reduce((s, r) => s + (r.amount || 0), 0);
+                const due      = Math.round(t.amount * 0.1);
+                const isSel    = calcSelected?.id === t.id;
+                const isBiz    = (t.record_category || t.metadata?.record_category) === 'business';
+
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => {
+                      setCalcSelected(isSel ? null : t);
+                      setCalcForm(f => ({ ...f, amount: isSel ? '' : String(due) }));
+                      setCalcMsg(null);
+                    }}
+                    className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
+                      isSel
+                        ? 'border-amber-500/50 bg-amber-500/10'
+                        : 'border-slate-700/40 bg-slate-800/40 hover:border-amber-500/25'
+                    }`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{
+                          background: isBiz ? 'rgba(59,130,246,0.15)' : 'rgba(168,85,247,0.15)',
+                          color: isBiz ? '#93c5fd' : '#d8b4fe'
+                        }}>
+                          {isBiz ? '🏢' : '👤'}
+                        </span>
+                        <p className="text-sm font-semibold text-white truncate">{t.description || 'Income'}</p>
+                      </div>
+                      <p className="text-[10px] text-gray-500 mt-0.5">
+                        {fmtUGX(t.amount)} · 10% = <span className="text-amber-400/80">{fmtUGX(due)}</span>
+                        {paidAmt > 0 && <span className="text-green-400 ml-1.5">· Paid {fmtUGX(paidAmt)}</span>}
+                      </p>
+                    </div>
+                    <span className={`text-[10px] font-bold px-2 py-1 rounded-lg flex-shrink-0 ${
+                      paidAmt >= due ? 'bg-green-500/15 text-green-400' : paidAmt > 0 ? 'bg-amber-500/15 text-amber-300' : 'bg-slate-700/60 text-gray-400'
+                    }`}>
+                      {paidAmt >= due ? '✓ Done' : paidAmt > 0 ? 'Partial' : 'Unpaid'}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* ── Pay form (inline, only when a transaction is selected) ── */}
+        {calcSelected && (
+          <div className="rounded-xl border border-amber-500/25 p-4" style={{ background: 'rgba(120,53,15,0.12)' }}>
+            <p className="text-xs font-semibold text-amber-400 mb-3">
+              Paying tithe from: <span className="text-white font-normal">{calcSelected.description || 'Income'} — {fmtUGX(calcSelected.amount)}</span>
+            </p>
+
+            {/* Amount + quick % buttons */}
+            <div className="flex gap-2 mb-3">
+              <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl border border-amber-500/25 bg-slate-900/60">
+                <span className="text-xs text-gray-500 flex-shrink-0">UGX</span>
+                <input
+                  type="number"
+                  value={calcForm.amount}
+                  onChange={e => setCalcForm(f => ({ ...f, amount: e.target.value }))}
+                  placeholder="Amount"
+                  inputMode="numeric"
+                  className="flex-1 bg-transparent text-sm text-white outline-none"
+                />
+              </div>
+              <button onClick={() => setCalcForm(f => ({ ...f, amount: String(Math.round(calcSelected.amount * 0.1)) }))}
+                className="px-3 py-2 rounded-xl bg-amber-500/15 text-amber-300 text-xs font-bold border border-amber-500/20 hover:bg-amber-500/25 transition">10%</button>
+              <button onClick={() => setCalcForm(f => ({ ...f, amount: String(Math.round(calcSelected.amount * 0.05)) }))}
+                className="px-3 py-2 rounded-xl bg-slate-700/60 text-gray-300 text-xs font-bold border border-slate-600/30 hover:bg-slate-700 transition">5%</button>
+            </div>
+
+            {/* Giving type + Recipient */}
+            <div className="flex gap-2 mb-3">
+              <select value={calcForm.givingType} onChange={e => setCalcForm(f => ({ ...f, givingType: e.target.value }))}
+                className="flex-1 bg-slate-800/80 border border-slate-700/50 rounded-xl px-3 py-2 text-xs text-white outline-none">
+                <option value="tithe">Tithe (10%)</option>
+                <option value="offering">Offering</option>
+                <option value="charity">Charity</option>
+                <option value="mission">Mission Fund</option>
+                <option value="building_fund">Building Fund</option>
+                <option value="alms">Alms / Zakat</option>
+              </select>
+              <select value={calcForm.recipientType} onChange={e => setCalcForm(f => ({ ...f, recipientType: e.target.value }))}
+                className="flex-1 bg-slate-800/80 border border-slate-700/50 rounded-xl px-3 py-2 text-xs text-white outline-none">
+                <option value="church">Church</option>
+                <option value="mosque">Mosque</option>
+                <option value="charity">Charity Org</option>
+                <option value="individual">Individual</option>
+              </select>
+            </div>
+
+            {/* Anonymous toggle */}
+            <label className="flex items-center gap-2 mb-3 cursor-pointer select-none">
+              <div
+                onClick={() => setCalcForm(f => ({ ...f, isAnonymous: !f.isAnonymous }))}
+                className={`w-9 h-5 rounded-full transition-all flex items-center px-0.5 flex-shrink-0 ${calcForm.isAnonymous ? 'bg-amber-500 justify-end' : 'bg-slate-700 justify-start'}`}
+              >
+                <div className="w-4 h-4 rounded-full bg-white shadow" />
+              </div>
+              <span className="text-xs text-gray-400">Give anonymously</span>
+            </label>
+
+            {/* Feedback */}
+            {calcMsg && (
+              <div className={`text-xs text-center py-2 px-3 rounded-lg mb-2 font-medium ${calcMsg.type === 'ok' ? 'bg-green-500/15 text-green-300' : 'bg-red-500/15 text-red-300'}`}>
+                {calcMsg.text}
+              </div>
+            )}
+
+            <button
+              onClick={handleCalcPayTithe}
+              disabled={calcLoading || !calcForm.amount}
+              className="w-full py-3 rounded-xl font-bold text-sm transition-all active:scale-95 disabled:opacity-50 text-white"
+              style={{ background: 'linear-gradient(135deg, #b45309 0%, #78350f 100%)' }}
+            >
+              {calcLoading ? '⏳ Recording on blockchain…' : `🙏 Pay ${calcForm.amount ? `UGX ${parseFloat(calcForm.amount || 0).toLocaleString()}` : 'Tithe'}`}
+            </button>
+          </div>
+        )}
+
+        {/* ── Payment history ── */}
+        {history.length > 0 && (
+          <div>
+            <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Payment History</h3>
+            <div className="space-y-1.5">
+              {history.map((r, i) => (
+                <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-800/40 border border-slate-700/30">
+                  <span className="text-base flex-shrink-0">🙏</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-white truncate">{r.txDesc}</p>
+                    <p className="text-[10px] text-gray-500 capitalize mt-0.5">
+                      {r.giving_type} · {new Date(r.date).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </p>
+                  </div>
+                  <p className="text-sm font-bold text-amber-300 flex-shrink-0">{fmtUGX(r.amount)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // ============================================================
   // MAIN RENDER

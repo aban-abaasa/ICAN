@@ -52,7 +52,11 @@ import {
   Percent,
   Sparkles,
   Trash2,
-  Sliders
+  Sliders,
+  Download,
+  Share2,
+  ShieldCheck,
+  Layers
 } from 'lucide-react';
 import SmartTransactionEntry from './SmartTransactionEntry';
 import { ProfilePage } from './auth/ProfilePage';
@@ -141,50 +145,82 @@ const getWalletTabLabel = (tabName = '') => {
 // Recent Transactions Collapsible Component
 const RecentTransactionsCollapsible = ({ transactions, formatCurrency }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [period, setPeriod] = useState('week'); // 'today' | 'week' | 'month' | 'year'
 
-  // Get summary data
-  const recentCount = Math.min(transactions.length, 10);
-  const totalIncome = transactions
-    .filter(t => t.transaction_type === 'income')
-    .slice(0, 5)
-    .reduce((sum, t) => sum + (t.amount || 0), 0);
-  const totalExpense = transactions
-    .filter(t => t.transaction_type !== 'income')
-    .slice(0, 5)
-    .reduce((sum, t) => sum + (t.amount || 0), 0);
+  const periods = [
+    { id: 'today', label: 'Today' },
+    { id: 'week',  label: 'Week'  },
+    { id: 'month', label: 'Month' },
+    { id: 'year',  label: 'Year'  },
+  ];
 
-  // Business vs Personal split (all loaded transactions)
-  const businessTx = transactions.filter(t =>
-    (t.record_category || t.metadata?.record_category) === 'business'
-  );
-  const personalTx = transactions.filter(t =>
-    (t.record_category || t.metadata?.record_category) !== 'business'
-  );
+  // Filter transactions by the selected period
+  const filterByPeriod = (txs, p) => {
+    const now = new Date();
+    const startOf = (y, m, d) => new Date(y, m, d, 0, 0, 0, 0);
+    let cutoff;
+    if (p === 'today') cutoff = startOf(now.getFullYear(), now.getMonth(), now.getDate());
+    else if (p === 'week') cutoff = new Date(now - 7 * 24 * 60 * 60 * 1000);
+    else if (p === 'month') cutoff = startOf(now.getFullYear(), now.getMonth(), 1);
+    else cutoff = startOf(now.getFullYear(), 0, 1); // year
+    return txs.filter(t => t.created_at && new Date(t.created_at) >= cutoff);
+  };
+
+  const filtered = filterByPeriod(transactions, period);
+
+  const totalIncome  = filtered.filter(t => t.transaction_type === 'income').reduce((s, t) => s + (t.amount || 0), 0);
+  const totalExpense = filtered.filter(t => t.transaction_type !== 'income').reduce((s, t) => s + (t.amount || 0), 0);
+  const net = totalIncome - totalExpense;
+
+  const businessTx   = filtered.filter(t => (t.record_category || t.metadata?.record_category) === 'business');
+  const personalTx   = filtered.filter(t => (t.record_category || t.metadata?.record_category) !== 'business');
   const businessTotal = businessTx.reduce((s, t) => s + Math.abs(t.amount || 0), 0);
   const personalTotal = personalTx.reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+
+  const periodLabel = periods.find(p2 => p2.id === period)?.label || 'Week';
+
+  // Period tab row — shared between collapsed & expanded
+  const PeriodTabs = () => (
+    <div className="flex gap-1 mt-2">
+      {periods.map(p2 => (
+        <button
+          key={p2.id}
+          onClick={e => { e.stopPropagation(); setPeriod(p2.id); }}
+          className={`flex-1 py-1 rounded-md text-[11px] font-semibold transition-all ${
+            period === p2.id
+              ? 'bg-blue-500 text-white'
+              : 'bg-slate-700/60 text-gray-400 hover:text-white hover:bg-slate-600/60'
+          }`}
+        >
+          {p2.label}
+        </button>
+      ))}
+    </div>
+  );
 
   // Collapsed Badge View
   if (!isExpanded) {
     return (
       <div className="px-4 pb-4">
-        <div 
+        <div
           className="glass-card p-3 cursor-pointer hover:bg-white hover:bg-opacity-5 transition-all"
           onClick={() => setIsExpanded(true)}
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Activity className="w-5 h-5 text-blue-400" />
-              <span className="text-white font-medium">Recent Transactions</span>
-              <span className="text-xs text-gray-400">({recentCount})</span>
+              <span className="text-white font-medium">Transactions</span>
+              <span className="text-xs text-gray-400">• {periodLabel} ({filtered.length})</span>
             </div>
             <div className="flex items-center gap-3">
               <div className="text-right text-xs">
                 <div className="text-green-400">+{formatCurrency(totalIncome)}</div>
                 <div className="text-red-400">-{formatCurrency(totalExpense)}</div>
               </div>
-              <span className="text-gray-400 text-xs"></span>
+              <span className="text-gray-400 text-xs">▼</span>
             </div>
           </div>
+          <PeriodTabs />
         </div>
       </div>
     );
@@ -194,35 +230,49 @@ const RecentTransactionsCollapsible = ({ transactions, formatCurrency }) => {
   return (
     <div className="px-4 pb-4">
       <div className="glass-card p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-base font-semibold text-white flex items-center gap-2">
             <Activity className="w-5 h-5 text-blue-400" />
-            Recent Transactions
+            Transactions
           </h3>
-          <button
-            onClick={() => setIsExpanded(false)}
-            className="text-gray-400 hover:text-white text-xs"
-          >
-            
-          </button>
+          <button onClick={() => setIsExpanded(false)} className="text-gray-400 hover:text-white text-xs">▲</button>
         </div>
+
+        {/* Period tabs */}
+        <PeriodTabs />
+
+        {/* Net summary strip */}
+        <div className="mt-3 flex gap-2 text-xs">
+          <div className="flex-1 bg-green-500/10 border border-green-500/20 rounded-lg px-2 py-1.5 text-center">
+            <p className="text-green-400 font-semibold">+{formatCurrency(totalIncome)}</p>
+            <p className="text-gray-500">In</p>
+          </div>
+          <div className="flex-1 bg-red-500/10 border border-red-500/20 rounded-lg px-2 py-1.5 text-center">
+            <p className="text-red-400 font-semibold">-{formatCurrency(totalExpense)}</p>
+            <p className="text-gray-500">Out</p>
+          </div>
+          <div className={`flex-1 border rounded-lg px-2 py-1.5 text-center ${net >= 0 ? 'bg-blue-500/10 border-blue-500/20' : 'bg-orange-500/10 border-orange-500/20'}`}>
+            <p className={`font-semibold ${net >= 0 ? 'text-blue-400' : 'text-orange-400'}`}>{net >= 0 ? '+' : ''}{formatCurrency(net)}</p>
+            <p className="text-gray-500">Net</p>
+          </div>
+        </div>
+
         {/* Business / Personal split bar */}
-        {transactions.length > 0 && (
-          <div className="mb-3 p-3 rounded-xl bg-slate-800/40 border border-slate-700/30 space-y-2">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Record Breakdown</p>
+        {filtered.length > 0 && (
+          <div className="mt-3 p-3 rounded-xl bg-slate-800/40 border border-slate-700/30 space-y-2">
             <div className="flex gap-3">
               <div className="flex-1 bg-blue-500/10 border border-blue-500/30 rounded-lg px-3 py-2 text-center">
                 <p className="text-xs text-blue-300 font-medium">Business</p>
-                <p className="text-sm font-bold text-blue-200">{businessTx.length} records</p>
+                <p className="text-sm font-bold text-blue-200">{businessTx.length}</p>
                 <p className="text-xs text-blue-400/80">{formatCurrency(businessTotal)}</p>
               </div>
               <div className="flex-1 bg-green-500/10 border border-green-500/30 rounded-lg px-3 py-2 text-center">
                 <p className="text-xs text-green-300 font-medium">Personal</p>
-                <p className="text-sm font-bold text-green-200">{personalTx.length} records</p>
+                <p className="text-sm font-bold text-green-200">{personalTx.length}</p>
                 <p className="text-xs text-green-400/80">{formatCurrency(personalTotal)}</p>
               </div>
             </div>
-            {/* Split progress bar */}
             {(businessTotal + personalTotal) > 0 && (
               <div className="w-full h-1.5 rounded-full bg-slate-700/60 overflow-hidden">
                 <div
@@ -234,52 +284,52 @@ const RecentTransactionsCollapsible = ({ transactions, formatCurrency }) => {
           </div>
         )}
 
-        <div className="space-y-2 max-h-60 overflow-y-auto">
-          {transactions.slice(0, 10).map((transaction) => {
-            const recCat = transaction.record_category || transaction.metadata?.record_category || 'personal';
-            const isBusiness = recCat === 'business';
-            return (
-              <div key={transaction.id} className="flex items-center justify-between p-3 bg-slate-800/30 rounded-lg border border-slate-700/30">
-                <div className="flex items-center gap-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                    transaction.transaction_type === 'income'
-                      ? 'bg-green-500/20 text-green-400'
-                      : 'bg-red-500/20 text-red-400'
-                  }`}>
-                    {transaction.transaction_type === 'income' ? '+' : '-'}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-white truncate max-w-32">
-                      {transaction.description || 'Transaction'}
-                    </p>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <p className="text-xs text-gray-400">
-                        {new Date(transaction.created_at).toLocaleDateString()}
+        {/* Transaction list */}
+        <div className="space-y-2 max-h-64 overflow-y-auto mt-3">
+          {filtered.length === 0 ? (
+            <p className="text-center text-sm text-gray-500 py-6">No transactions for this {periodLabel.toLowerCase()}</p>
+          ) : (
+            filtered.slice(0, 20).map((transaction) => {
+              const recCat = transaction.record_category || transaction.metadata?.record_category || 'personal';
+              const isBusiness = recCat === 'business';
+              return (
+                <div key={transaction.id} className="flex items-center justify-between p-3 bg-slate-800/30 rounded-lg border border-slate-700/30">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                      transaction.transaction_type === 'income' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                    }`}>
+                      {transaction.transaction_type === 'income' ? '+' : '-'}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-white truncate max-w-32">
+                        {transaction.description || 'Transaction'}
                       </p>
-                      {/* Business / Personal badge */}
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide ${
-                        isBusiness
-                          ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                          : 'bg-green-500/20 text-green-300 border border-green-500/30'
-                      }`}>
-                        {isBusiness ? 'Biz' : 'Personal'}
-                      </span>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <p className="text-xs text-gray-400">
+                          {new Date(transaction.created_at).toLocaleDateString()}
+                        </p>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide ${
+                          isBusiness
+                            ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                            : 'bg-green-500/20 text-green-300 border border-green-500/30'
+                        }`}>
+                          {isBusiness ? 'Biz' : 'Personal'}
+                        </span>
+                      </div>
                     </div>
                   </div>
+                  <div className="text-right">
+                    <p className={`text-sm font-bold ${transaction.transaction_type === 'income' ? 'text-green-300' : 'text-red-300'}`}>
+                      {transaction.transaction_type === 'income' ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount || 0))}
+                    </p>
+                    <p className="text-xs text-gray-400 capitalize">
+                      {transaction.metadata?.category || 'general'}
+                    </p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className={`text-sm font-bold ${
-                    transaction.transaction_type === 'income' ? 'text-green-300' : 'text-red-300'
-                  }`}>
-                    {transaction.transaction_type === 'income' ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount || 0))}
-                  </p>
-                  <p className="text-xs text-gray-400 capitalize">
-                    {transaction.metadata?.category || 'general'}
-                  </p>
-                </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
       </div>
     </div>
@@ -579,6 +629,20 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [currentBalance, setCurrentBalance] = useState('156,002');
   const [activeBottomTab, setActiveBottomTab] = useState('home');
   const [showTransactionEntry, setShowTransactionEntry] = useState(false);
+  const [txPeriod, setTxPeriod] = useState('today'); // 'today' | 'week' | 'month' | 'year'
+  const [expPeriod, setExpPeriod] = useState('today'); // period filter for the full transactions panel
+  const [expSearch, setExpSearch] = useState(''); // search filter for the full transactions panel
+  const [expGrouped, setExpGrouped] = useState(true); // group list by Business / Personal
+  const [expTypeFilter, setExpTypeFilter] = useState('all'); // 'all' | 'business' | 'personal'
+  const [expCustomMonth, setExpCustomMonth] = useState(new Date().getMonth()); // 0-11
+  const [expCustomYear, setExpCustomYear] = useState(new Date().getFullYear());
+  const [expCustomWeekStart, setExpCustomWeekStart] = useState(null); // ISO date string for start of chosen week
+  const [txChainHashes, setTxChainHashes] = useState({}); // id → sha256 hex for business tx
+  const [txTitheMap, setTxTitheMap] = useState({}); // txId → [{amount, giving_type, date, tithe_id}]
+  const [tithePayTarget, setTithePayTarget] = useState(null); // transaction to pay tithe from
+  const [tithePayForm, setTithePayForm] = useState({ amount: '', givingType: 'tithe', recipientType: 'church', isAnonymous: false });
+  const [tithePayLoading, setTithePayLoading] = useState(false);
+  const [tithePayMsg, setTithePayMsg] = useState(null); // { type: 'ok'|'err', text }
   const [transactionType, setTransactionType] = useState(null); // 'business' or 'personal'
   const [showRecordTypeModal, setShowRecordTypeModal] = useState(false);
   const [transactions, setTransactions] = useState([]);
@@ -949,6 +1013,25 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   });
 
   const archivedTransactionCount = Math.max(0, transactions.length - todayTransactions.length);
+
+  // Period-filtered transactions for the home screen section
+  const txPeriodLabels = { today: "Today's", week: "This Week's", month: "This Month's", year: "This Year's" };
+  const txPeriodFiltered = (() => {
+    const now = new Date();
+    let cutoff;
+    if (txPeriod === 'today') return todayTransactions;
+    if (txPeriod === 'week')  cutoff = new Date(now - 7 * 24 * 60 * 60 * 1000);
+    else if (txPeriod === 'month') cutoff = new Date(now.getFullYear(), now.getMonth(), 1);
+    else cutoff = new Date(now.getFullYear(), 0, 1);
+    return transactions.filter(t => {
+      const v = t?.created_at || t?.date || t?.timestamp || t?.transaction_date;
+      if (!v) return false;
+      const d = new Date(v);
+      return !Number.isNaN(d.getTime()) && d >= cutoff;
+    });
+  })();
+  const txPeriodIncome  = txPeriodFiltered.filter(t => t.transaction_type === 'income').reduce((s, t) => s + (t.amount || 0), 0);
+  const txPeriodExpense = txPeriodFiltered.filter(t => t.transaction_type !== 'income').reduce((s, t) => s + (t.amount || 0), 0);
 
   useEffect(() => {
     const mobileState = {
@@ -2652,6 +2735,257 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     }
   };
 
+  // When the panel opens: compute ICAN chain hashes + load tithe payment status
+  useEffect(() => {
+    if (!showExpenseIncomePanel) return;
+    const bizTx = transactions.filter(t => (t.record_category || t.metadata?.record_category) === 'business');
+
+    // Blockchain hashes
+    (async () => {
+      const hashes = {};
+      for (const t of bizTx) {
+        try {
+          const payload = JSON.stringify({ id: t.id, amount: t.amount, description: t.description, created_at: t.created_at });
+          const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(payload));
+          hashes[t.id] = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+        } catch {}
+      }
+      setTxChainHashes(hashes);
+    })();
+
+    // Tithe payment map: fetch all tithe records, parse notes for stored transaction_id
+    (async () => {
+      try {
+        const { data } = await supabase.rpc('fn_get_user_tithes', { p_start_date: null, p_end_date: null, p_giving_type: null, p_limit: 500 });
+        const map = {};
+        (data || []).forEach(tithe => {
+          // Notes may contain "TX:{id}" that we store when paying from transactions panel
+          const notes = tithe.notes_encrypted || tithe.notes || '';
+          const match = String(notes).match(/TX:([a-z0-9\-]+)/i);
+          if (match) {
+            const txId = match[1];
+            if (!map[txId]) map[txId] = [];
+            map[txId].push({ amount: tithe.amount, giving_type: tithe.giving_type, date: tithe.giving_date, tithe_id: tithe.tithe_id });
+          }
+        });
+        setTxTitheMap(map);
+      } catch {}
+    })();
+  }, [showExpenseIncomePanel, transactions]);
+
+  // Download filtered transactions as CSV
+  // Download transactions as CSV
+  const handleDownloadTransactions = (filtered, period) => {
+    const rows = [['Date', 'Type', 'Category', 'Description', 'Amount (UGX)', 'Chain Hash']];
+    filtered.forEach(t => {
+      const hash = txChainHashes[t.id] || t.data_hash || '';
+      rows.push([
+        new Date(t.created_at).toLocaleString(),
+        t.transaction_type || '',
+        t.record_category || t.metadata?.record_category || '',
+        (t.description || '').replace(/"/g, '""'),
+        Math.abs(t.amount || 0),
+        hash.slice(0, 20) || ''
+      ]);
+    });
+    const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ICAN-Transactions-${period}-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Download transactions as a branded PDF
+  const handleDownloadPDF = (filtered, period) => {
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const pageW = 210;
+    const dateStr = new Date().toLocaleDateString([], { year: 'numeric', month: 'long', day: 'numeric' });
+    const biz  = filtered.filter(t => (t.record_category || t.metadata?.record_category) === 'business');
+    const pers = filtered.filter(t => (t.record_category || t.metadata?.record_category) !== 'business');
+    const income  = filtered.filter(t => t.transaction_type === 'income').reduce((s,t) => s+(t.amount||0), 0);
+    const expense = filtered.filter(t => t.transaction_type !== 'income').reduce((s,t) => s+(t.amount||0), 0);
+
+    // ── Header band ──
+    doc.setFillColor(15, 23, 42);       // slate-950
+    doc.rect(0, 0, pageW, 32, 'F');
+    doc.setFillColor(34, 197, 94);      // green-500 accent strip
+    doc.rect(0, 30, pageW, 2, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18); doc.setFont('helvetica', 'bold');
+    doc.text('ICAN', 14, 13);
+    doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+    doc.setTextColor(134, 239, 172);    // green-300
+    doc.text('Transaction Report', 14, 20);
+    doc.setTextColor(203, 213, 225);    // slate-300
+    doc.text(`Period: ${period}`, 14, 27);
+    doc.text(`Generated: ${dateStr}`, pageW - 14, 27, { align: 'right' });
+
+    // ── Summary strip ──
+    let y = 40;
+    const summaries = [
+      { label: 'Total Records', value: String(filtered.length) },
+      { label: 'Income',        value: `UGX ${income.toLocaleString()}` },
+      { label: 'Expense',       value: `UGX ${expense.toLocaleString()}` },
+      { label: 'Net',           value: `UGX ${(income - expense).toLocaleString()}` },
+      { label: 'Business Tx',  value: String(biz.length) },
+      { label: 'Personal Tx',  value: String(pers.length) },
+    ];
+    const colW = (pageW - 28) / 3;
+    summaries.forEach((s, i) => {
+      const col = i % 3;
+      const row = Math.floor(i / 3);
+      const x   = 14 + col * colW;
+      const cy  = y + row * 14;
+      doc.setFillColor(30, 41, 59);
+      doc.roundedRect(x, cy, colW - 2, 12, 1, 1, 'F');
+      doc.setFontSize(7); doc.setTextColor(148, 163, 184); doc.setFont('helvetica', 'normal');
+      doc.text(s.label.toUpperCase(), x + 3, cy + 4.5);
+      doc.setFontSize(9); doc.setTextColor(241, 245, 249); doc.setFont('helvetica', 'bold');
+      doc.text(s.value, x + 3, cy + 9.5);
+    });
+    y += Math.ceil(summaries.length / 3) * 14 + 6;
+
+    // ── Blockchain note (business) ──
+    if (biz.length > 0) {
+      doc.setFillColor(30, 58, 138, 0.25);
+      doc.setDrawColor(59, 130, 246);
+      doc.roundedRect(14, y, pageW - 28, 7, 1, 1, 'S');
+      doc.setFontSize(7); doc.setTextColor(147, 197, 253); doc.setFont('helvetica', 'normal');
+      doc.text('🔐  Business transactions are secured with ICAN SHA-256 Blockchain hashes', 17, y + 4.5);
+      y += 11;
+    }
+
+    // ── Table header ──
+    const cols = [
+      { label: '#',           w: 8  },
+      { label: 'Date / Time', w: 32 },
+      { label: 'Type',        w: 16 },
+      { label: 'Category',    w: 18 },
+      { label: 'Description', w: 62 },
+      { label: 'Amount (UGX)',w: 30 },
+      { label: 'Chain',       w: 22 },
+    ];
+    doc.setFillColor(15, 23, 42);
+    doc.rect(14, y, pageW - 28, 7, 'F');
+    doc.setTextColor(134, 239, 172); doc.setFontSize(7); doc.setFont('helvetica', 'bold');
+    let cx = 14;
+    cols.forEach(c => { doc.text(c.label, cx + 1, y + 4.8); cx += c.w; });
+    y += 7;
+
+    // ── Table rows ──
+    filtered.forEach((t, idx) => {
+      if (y > 272) { doc.addPage(); y = 14; }
+      const isBiz    = (t.record_category || t.metadata?.record_category) === 'business';
+      const isIncome = t.transaction_type === 'income';
+      const hash     = txChainHashes[t.id] || t.data_hash || '';
+
+      doc.setFillColor(idx % 2 === 0 ? 248 : 241, idx % 2 === 0 ? 250 : 245, idx % 2 === 0 ? 252 : 249);
+      doc.rect(14, y, pageW - 28, 6.5, 'F');
+
+      // Left accent for business
+      if (isBiz) { doc.setFillColor(59, 130, 246); doc.rect(14, y, 1, 6.5, 'F'); }
+
+      doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 41, 59);
+      const cells = [
+        String(idx + 1),
+        new Date(t.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        isBiz ? 'Biz' : 'Pers',
+        (t.metadata?.category || t.metadata?.categoryName || '').slice(0, 12),
+        (t.description || '').slice(0, 45),
+        `${isIncome ? '+' : '-'}${Math.abs(t.amount||0).toLocaleString()}`,
+        hash ? hash.slice(0, 10) + '…' : '',
+      ];
+      cx = 14;
+      cells.forEach((cell, ci) => {
+        if (ci === 5) {
+          doc.setTextColor(isIncome ? 22 : 185, isIncome ? 163 : 28, isIncome ? 74 : 26);
+          doc.setFont('helvetica', 'bold');
+        } else {
+          doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'normal');
+        }
+        doc.text(String(cell), cx + 1.5, y + 4.3);
+        cx += cols[ci].w;
+      });
+      y += 6.5;
+    });
+
+    // ── Footer ──
+    const pages = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pages; i++) {
+      doc.setPage(i);
+      doc.setFillColor(15, 23, 42);
+      doc.rect(0, 286, pageW, 11, 'F');
+      doc.setFontSize(7); doc.setTextColor(100, 116, 139);
+      doc.text('ICAN · Confidential · 🔐 Blockchain Secured', 14, 292);
+      doc.text(`Page ${i} of ${pages}`, pageW - 14, 292, { align: 'right' });
+    }
+
+    doc.save(`ICAN-Transactions-${period}-${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
+  // Share transactions summary via Web Share API (mobile) or clipboard
+  const handleShareTransactions = async (filtered, period) => {
+    const lines = filtered.slice(0, 25).map(t => {
+      const isBiz = (t.record_category || t.metadata?.record_category) === 'business';
+      const sign  = t.transaction_type === 'income' ? '+' : '-';
+      return `${isBiz ? '🏢' : '👤'} ${t.description || 'Transaction'} ${sign}${formatCurrency(Math.abs(t.amount || 0))}`;
+    });
+    const shareText = `📊 ICAN Transactions — ${period} (${filtered.length} records)\n\n${lines.join('\n')}${filtered.length > 25 ? `\n…+${filtered.length - 25} more` : ''}\n\n🔐 Secured by ICAN Blockchain`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: `ICAN Transactions — ${period}`, text: shareText });
+      } else {
+        await navigator.clipboard.writeText(shareText);
+        alert('Copied to clipboard!');
+      }
+    } catch {}
+  };
+
+  // Pay tithe from a specific transaction in the panel
+  const handleQuickPayTithe = async () => {
+    if (!tithePayTarget) return;
+    const amount = parseFloat(tithePayForm.amount);
+    if (!amount || amount <= 0) { setTithePayMsg({ type: 'err', text: 'Enter a valid amount' }); return; }
+    if (amount > tithePayTarget.amount) { setTithePayMsg({ type: 'err', text: `Cannot exceed transaction amount (${formatCurrency(tithePayTarget.amount)})` }); return; }
+
+    setTithePayLoading(true);
+    setTithePayMsg(null);
+    try {
+      const { data, error } = await supabase.rpc('fn_add_tithe', {
+        p_giving_type: tithePayForm.givingType,
+        p_amount: amount,
+        p_currency: 'UGX',
+        p_recipient_type: tithePayForm.recipientType,
+        p_recipient_name_encrypted: null,
+        p_tithe_percentage: parseFloat((amount / tithePayTarget.amount * 100).toFixed(1)),
+        p_income_reference_amount: tithePayTarget.amount,
+        p_giving_date: new Date(tithePayTarget.created_at).toISOString().split('T')[0],
+        p_notes_encrypted: `TX:${tithePayTarget.id} | ${tithePayTarget.description || ''} | ${tithePayForm.givingType}`,
+        p_is_anonymous: tithePayForm.isAnonymous
+      });
+      if (error) throw error;
+      const result = data?.[0];
+      if (!result?.success) throw new Error(result?.message || 'Failed');
+
+      // Update local tithe map immediately
+      setTxTitheMap(prev => {
+        const existing = prev[tithePayTarget.id] || [];
+        return { ...prev, [tithePayTarget.id]: [...existing, { amount, giving_type: tithePayForm.givingType, date: new Date().toISOString() }] };
+      });
+
+      setTithePayMsg({ type: 'ok', text: `✅ Tithe of ${formatCurrency(amount)} recorded!` });
+      setTithePayForm({ amount: '', givingType: 'tithe', recipientType: 'church', isAnonymous: false });
+      setTimeout(() => { setTithePayTarget(null); setTithePayMsg(null); }, 2000);
+    } catch (err) {
+      setTithePayMsg({ type: 'err', text: err.message || 'Payment failed' });
+    } finally {
+      setTithePayLoading(false);
+    }
+  };
+
   // Delete a transaction with confirmation
   const handleDeleteTransaction = async (transactionId, description) => {
     if (!confirm(`Are you sure you want to delete "${description}"?`)) {
@@ -3979,6 +4313,24 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             🏦 Loan detected — tap strip or ✓ to open Loan Calculator
           </p>
         ) : null}
+
+        {/* View Transactions button */}
+        <button
+          onClick={() => setShowExpenseIncomePanel(true)}
+          className="mt-3 w-full flex items-center justify-between px-4 py-2.5 rounded-xl border transition-all active:scale-95 hover:border-green-500/30"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bgSecondary)' }}
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-sm">📋</span>
+            <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>View Transactions</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 font-bold">
+              {transactions.length}
+            </span>
+            <ChevronRight className="w-4 h-4" style={{ color: 'var(--color-textSecondary)' }} />
+          </div>
+        </button>
       </div>
 
       {/* ====== DETAIL PAGE - SETTINGS ONLY ====== */}
@@ -5757,8 +6109,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         </div>
       )}
 
-      {/* ====== RECENT TRANSACTIONS SECTION - COLLAPSIBLE ====== */}
+      {/* ====== TRANSACTIONS SECTION - COLLAPSIBLE ====== */}
       <div className="px-4 py-4">
+        {/* Header row */}
         <button
           onClick={() => toggleSection('recentTransactions')}
           className="w-full p-3 rounded-lg border flex items-center justify-between transition-all"
@@ -5769,74 +6122,186 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         >
           <div className="flex items-center gap-2">
             <Activity className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
-            <span className="font-semibold" style={{ color: 'var(--color-text)' }}>Today&apos;s Transactions</span>
-            {todayTransactions.length > 0 && <span className="text-xs px-2 py-1 rounded" style={{ backgroundColor: 'var(--color-primaryLight)', color: 'var(--color-text)' }}>{todayTransactions.length}</span>}
+            <span className="font-semibold" style={{ color: 'var(--color-text)' }}>{txPeriodLabels[txPeriod]} Transactions</span>
+            {txPeriodFiltered.length > 0 && (
+              <span className="text-xs px-2 py-1 rounded" style={{ backgroundColor: 'var(--color-primaryLight)', color: 'var(--color-text)' }}>
+                {txPeriodFiltered.length}
+              </span>
+            )}
           </div>
           <ChevronDown className={`w-5 h-5 transition-transform ${expandedSections.recentTransactions ? 'rotate-180' : ''}`} style={{ color: 'var(--color-primary)' }} />
         </button>
 
+        {/* Period tabs — always visible */}
+        <div className="flex gap-1.5 mt-2">
+          {[
+            { id: 'today', label: 'Today' },
+            { id: 'week',  label: 'Week'  },
+            { id: 'month', label: 'Month' },
+            { id: 'year',  label: 'Year'  },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setTxPeriod(tab.id)}
+              className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
+                txPeriod === tab.id
+                  ? 'bg-blue-500 text-white border-blue-500'
+                  : 'text-gray-400 hover:text-white border-transparent'
+              }`}
+              style={txPeriod !== tab.id ? { backgroundColor: 'var(--color-bgSecondary)' } : {}}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* In / Out summary strip — always visible */}
+        {txPeriodFiltered.length > 0 && (
+          <div className="flex gap-2 mt-2">
+            <div className="flex-1 rounded-lg px-3 py-1.5 text-center" style={{ backgroundColor: 'var(--color-bgSecondary)' }}>
+              <p className="text-xs text-green-400 font-semibold">+{formatCurrency(txPeriodIncome)}</p>
+              <p className="text-[10px] text-gray-500">In</p>
+            </div>
+            <div className="flex-1 rounded-lg px-3 py-1.5 text-center" style={{ backgroundColor: 'var(--color-bgSecondary)' }}>
+              <p className="text-xs text-red-400 font-semibold">-{formatCurrency(txPeriodExpense)}</p>
+              <p className="text-[10px] text-gray-500">Out</p>
+            </div>
+            <div className="flex-1 rounded-lg px-3 py-1.5 text-center" style={{ backgroundColor: 'var(--color-bgSecondary)' }}>
+              <p className={`text-xs font-semibold ${(txPeriodIncome - txPeriodExpense) >= 0 ? 'text-blue-400' : 'text-orange-400'}`}>
+                {(txPeriodIncome - txPeriodExpense) >= 0 ? '+' : ''}{formatCurrency(txPeriodIncome - txPeriodExpense)}
+              </p>
+              <p className="text-[10px] text-gray-500">Net</p>
+            </div>
+          </div>
+        )}
+
         {/* Expanded Content */}
         {expandedSections.recentTransactions && (
           <div className="mt-3">
-            {todayTransactions.length > 0 ? (
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {todayTransactions.slice(0, 8).map((transaction) => (
-                  <div key={transaction.id} className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700/30 hover:border-slate-600/50 transition group">
-                    <div className="flex items-center gap-3 flex-1">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        transaction.transaction_type === 'income' 
-                          ? 'bg-green-500/20 text-green-400' 
-                          : 'bg-red-500/20 text-red-400'
-                      }`}>
-                        {transaction.transaction_type === 'income' ? <TrendingUp className="w-5 h-5" /> : <DollarSign className="w-5 h-5" />}
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium truncate max-w-32" style={{ color: 'var(--color-text)' }}>
-                          {transaction.description || 'Transaction'}
-                        </p>
-                        <p className="text-xs" style={{ color: 'var(--color-textSecondary)' }}>
-                          {new Date(transaction.created_at).toLocaleDateString()}
-                        </p>
+            {txPeriodFiltered.length > 0 ? (() => {
+              // Business / Personal split for this period
+              const bizTx  = txPeriodFiltered.filter(t => (t.record_category || t.metadata?.record_category) === 'business');
+              const persTx = txPeriodFiltered.filter(t => (t.record_category || t.metadata?.record_category) !== 'business');
+              const bizAmt  = bizTx.reduce((s, t)  => s + Math.abs(t.amount || 0), 0);
+              const persAmt = persTx.reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+
+              // Smart date label based on active period
+              const fmtTxDate = (raw) => {
+                const d = new Date(raw);
+                if (txPeriod === 'today') return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                if (txPeriod === 'week')  return d.toLocaleDateString([], { weekday: 'short' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+              };
+
+              return (
+                <>
+                  {/* Business vs Personal split */}
+                  <div className="flex gap-2 mb-3">
+                    <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl border border-blue-500/20 bg-blue-500/8">
+                      <span className="text-base">🏢</span>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-blue-300">{bizTx.length} Business</p>
+                        <p className="text-[10px] text-blue-400/70 truncate">{formatCurrency(bizAmt)}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
-                        <p className={`text-sm font-bold ${
-                          transaction.transaction_type === 'income' ? 'text-green-300' : 'text-red-300'
-                        }`}>
-                          {transaction.transaction_type === 'income' ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount || 0))}
-                        </p>
+                    <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl border border-purple-500/20 bg-purple-500/8">
+                      <span className="text-base">👤</span>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-purple-300">{persTx.length} Personal</p>
+                        <p className="text-[10px] text-purple-400/70 truncate">{formatCurrency(persAmt)}</p>
                       </div>
-                      <button
-                        onClick={() => handleDeleteTransaction(transaction.id, transaction.description || 'Transaction')}
-                        className="p-2 rounded hover:bg-red-900/30 opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300"
-                        title="Delete transaction"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
                     </div>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-6">
+
+                  {/* Transaction rows */}
+                  <div className="space-y-2 max-h-80 overflow-y-auto pr-0.5">
+                    {txPeriodFiltered.slice(0, 30).map((transaction) => {
+                      const recCat    = transaction.record_category || transaction.metadata?.record_category || 'personal';
+                      const isBiz     = recCat === 'business';
+                      const isIncome  = transaction.transaction_type === 'income';
+                      const emoji     = transaction.metadata?.categoryEmoji || transaction.categoryEmoji || null;
+                      const catName   = transaction.metadata?.categoryName || transaction.metadata?.category || null;
+
+                      return (
+                        <div
+                          key={transaction.id}
+                          className="flex items-center gap-3 p-3 rounded-xl border transition-all group"
+                          style={{ backgroundColor: 'var(--color-bgSecondary)', borderColor: 'var(--color-border)' }}
+                        >
+                          {/* Category emoji / fallback icon */}
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-lg ${
+                            isIncome ? 'bg-green-500/15' : 'bg-red-500/15'
+                          }`}>
+                            {emoji
+                              ? <span>{emoji}</span>
+                              : isIncome
+                                ? <TrendingUp className="w-5 h-5 text-green-400" />
+                                : <TrendingDown className="w-5 h-5 text-red-400" />
+                            }
+                          </div>
+
+                          {/* Description + meta */}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold truncate" style={{ color: 'var(--color-text)' }}>
+                              {transaction.description || 'Transaction'}
+                            </p>
+                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                                isBiz
+                                  ? 'bg-blue-500/20 text-blue-300'
+                                  : 'bg-purple-500/20 text-purple-300'
+                              }`}>
+                                {isBiz ? '🏢 Biz' : '👤 Me'}
+                              </span>
+                              {catName && (
+                                <span className="text-[10px] capitalize truncate max-w-20" style={{ color: 'var(--color-textSecondary)' }}>
+                                  {catName}
+                                </span>
+                              )}
+                              <span className="text-[10px] ml-auto" style={{ color: 'var(--color-textSecondary)' }}>
+                                {fmtTxDate(transaction.created_at)}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Amount + delete */}
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <p className={`text-sm font-bold ${isIncome ? 'text-green-400' : 'text-red-400'}`}>
+                              {isIncome ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount || 0))}
+                            </p>
+                            <button
+                              onClick={() => handleDeleteTransaction(transaction.id, transaction.description || 'Transaction')}
+                              className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {txPeriodFiltered.length > 30 && (
+                      <p className="text-center text-xs py-2" style={{ color: 'var(--color-textSecondary)' }}>
+                        +{txPeriodFiltered.length - 30} more — open Reports for full history
+                      </p>
+                    )}
+                  </div>
+                </>
+              );
+            })() : (
+              <div className="text-center py-8">
                 <Activity className="w-10 h-10 text-gray-600 mx-auto mb-2" />
-                <p className="text-sm" style={{ color: 'var(--color-textSecondary)' }}>No transactions recorded for today yet</p>
-                <button 
+                <p className="text-sm" style={{ color: 'var(--color-textSecondary)' }}>
+                  No transactions for {txPeriodLabels[txPeriod].toLowerCase()} period
+                </p>
+                <button
                   onClick={() => setShowRecordTypeModal(true)}
-                  className="mt-2 px-4 py-2 rounded-lg text-sm font-medium transition"
+                  className="mt-3 px-4 py-2 rounded-lg text-sm font-medium transition"
                   style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-text)' }}
                 >
                   Record One
                 </button>
-              </div>
-            )}
-
-            {archivedTransactionCount > 0 && (
-              <div className="mt-3 p-3 rounded-lg border border-dashed" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bgSecondary)' }}>
-                <p className="text-xs" style={{ color: 'var(--color-textSecondary)' }}>
-                  {archivedTransactionCount} older transaction(s) have been archived and are available in Reports.
-                </p>
               </div>
             )}
           </div>
@@ -6110,7 +6575,686 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         </div>
       )}
 
-      {/* CMMS Panel - Full Web CMMS UI */}
+      {/* ===== TRANSACTIONS PANEL — full-screen slide-up ===== */}
+      {showExpenseIncomePanel && (() => {
+        const now = new Date();
+        const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const MONTH_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+        // ── Date range from period + custom pickers ──
+        let expFrom = null, expTo = null;
+        if (expPeriod === 'today') {
+          expFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        } else if (expPeriod === 'week') {
+          if (expCustomWeekStart) {
+            expFrom = new Date(expCustomWeekStart);
+            expTo   = new Date(expFrom.getTime() + 7 * 24 * 60 * 60 * 1000);
+          } else {
+            expFrom = new Date(now - 7 * 24 * 60 * 60 * 1000);
+          }
+        } else if (expPeriod === 'month') {
+          expFrom = new Date(expCustomYear, expCustomMonth, 1);
+          expTo   = new Date(expCustomYear, expCustomMonth + 1, 0, 23, 59, 59);
+        } else if (expPeriod === 'year') {
+          expFrom = new Date(expCustomYear, 0, 1);
+          expTo   = new Date(expCustomYear, 11, 31, 23, 59, 59);
+        }
+
+        // ── Base filter by date range ──
+        let expBase = expFrom
+          ? transactions.filter(t => {
+              const v = t?.created_at || t?.date || t?.timestamp;
+              if (!v) return false;
+              const d = new Date(v);
+              if (Number.isNaN(d.getTime())) return false;
+              if (d < expFrom) return false;
+              if (expTo && d > expTo) return false;
+              return true;
+            })
+          : [...transactions];
+
+        // ── Type filter (Business / Personal) ──
+        if (expTypeFilter === 'business') {
+          expBase = expBase.filter(t => (t.record_category || t.metadata?.record_category) === 'business');
+        } else if (expTypeFilter === 'personal') {
+          expBase = expBase.filter(t => (t.record_category || t.metadata?.record_category) !== 'business');
+        }
+
+        // ── Search filter ──
+        const expFiltered = expSearch.trim()
+          ? expBase.filter(t =>
+              (t.description || '').toLowerCase().includes(expSearch.trim().toLowerCase()) ||
+              String(t.amount || '').includes(expSearch.trim()) ||
+              (t.metadata?.category || '').toLowerCase().includes(expSearch.trim().toLowerCase())
+            )
+          : expBase;
+
+        const expBiz  = expFiltered.filter(t => (t.record_category || t.metadata?.record_category) === 'business');
+        const expPers = expFiltered.filter(t => (t.record_category || t.metadata?.record_category) !== 'business');
+        const expIn   = expFiltered.filter(t => t.transaction_type === 'income').reduce((s,t) => s + (t.amount||0), 0);
+        const expOut  = expFiltered.filter(t => t.transaction_type !== 'income').reduce((s,t) => s + (t.amount||0), 0);
+
+        const fmtExpDate = (raw) => {
+          const d = new Date(raw);
+          if (expPeriod === 'today') return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          if (expPeriod === 'week')  return d.toLocaleDateString([], { weekday: 'short' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        };
+
+        // Build a human-readable label for the current period selection
+        const periodLabel = (() => {
+          if (expPeriod === 'today') return 'Today';
+          if (expPeriod === 'week')  return expCustomWeekStart ? `Week of ${new Date(expCustomWeekStart).toLocaleDateString([],{month:'short',day:'numeric'})}` : 'This Week';
+          if (expPeriod === 'month') return `${MONTH_FULL[expCustomMonth]} ${expCustomYear}`;
+          if (expPeriod === 'year')  return `${expCustomYear}`;
+          return 'All Time';
+        })();
+        const periodLabels = { today: "Today", week: "This Week", month: "This Month", year: "This Year", all: "All Time" };
+
+        // ── Most-sold analysis ──
+        // Collect all transactions whose description starts with "Sold " (case-insensitive)
+        const soldMap = {};
+        expFiltered.forEach(t => {
+          const desc = (t.description || '').trim();
+          if (!desc.toLowerCase().startsWith('sold ')) return;
+          const raw = desc.slice(5).trim(); // everything after "Sold "
+          // Try to strip a leading number: "10 chairs" → qty=10, name="chairs"
+          const numMatch = raw.match(/^(\d+(?:[.,]\d+)?)\s*(.+)/);
+          const qty  = numMatch ? parseFloat(numMatch[1].replace(',', '.')) : 1;
+          const name = (numMatch ? numMatch[2] : raw).toLowerCase().trim();
+          const display = name.charAt(0).toUpperCase() + name.slice(1); // Title-case
+          if (!soldMap[name]) soldMap[name] = { display, count: 0, totalQty: 0, totalAmount: 0 };
+          soldMap[name].count++;
+          soldMap[name].totalQty += qty;
+          soldMap[name].totalAmount += Math.abs(t.amount || 0);
+        });
+        const topSold = Object.values(soldMap).sort((a, b) => b.count - a.count || b.totalAmount - a.totalAmount);
+
+        return (
+          <div
+            className={`fixed inset-x-0 flex flex-col bg-gradient-to-b from-slate-950 to-black ${isWebDashboard ? 'top-[132px] md:top-[146px] z-30' : 'top-0 z-[60]'}`}
+            style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
+          >
+            {/* ── Sticky header ── */}
+            <div
+              className="flex-shrink-0 flex items-center gap-3 px-4 pb-3 border-b border-slate-800"
+              style={{ paddingTop: isWebDashboard ? '1rem' : 'calc(env(safe-area-inset-top) + 1rem)' }}
+            >
+              <button
+                onClick={() => { setShowExpenseIncomePanel(false); setExpSearch(''); }}
+                className="w-9 h-9 rounded-xl flex items-center justify-center bg-slate-800 hover:bg-slate-700 active:scale-90 transition-all flex-shrink-0"
+                aria-label="Go back"
+              >
+                <ChevronLeft className="w-5 h-5 text-green-400" />
+              </button>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-lg font-bold leading-tight" style={{ color: 'var(--color-text)' }}>Transactions</h2>
+                <p className="text-xs" style={{ color: 'var(--color-textSecondary)' }}>{expFiltered.length} records · {periodLabel}</p>
+              </div>
+              {/* PDF */}
+              <button
+                onClick={() => handleDownloadPDF(expFiltered, periodLabel)}
+                className="w-9 h-9 rounded-xl flex items-center justify-center bg-rose-900/40 hover:bg-rose-800/50 active:scale-90 transition-all flex-shrink-0 border border-rose-700/30"
+                title="Download PDF"
+              >
+                <span className="text-[11px] font-bold text-rose-300">PDF</span>
+              </button>
+              {/* CSV */}
+              <button
+                onClick={() => handleDownloadTransactions(expFiltered, periodLabel)}
+                className="w-9 h-9 rounded-xl flex items-center justify-center bg-green-900/40 hover:bg-green-800/50 active:scale-90 transition-all flex-shrink-0 border border-green-700/30"
+                title="Download CSV"
+              >
+                <span className="text-[11px] font-bold text-green-300">CSV</span>
+              </button>
+              {/* Share */}
+              <button
+                onClick={() => handleShareTransactions(expFiltered, periodLabel)}
+                className="w-9 h-9 rounded-xl flex items-center justify-center bg-blue-900/40 hover:bg-blue-800/50 active:scale-90 transition-all flex-shrink-0 border border-blue-700/30"
+                title="Share"
+              >
+                <Share2 className="w-4 h-4 text-blue-300" />
+              </button>
+            </div>
+
+            {/* ── Period tabs ── */}
+            <div className="flex-shrink-0 flex gap-1.5 px-4 py-2 border-b border-slate-800/60">
+              {[
+                { id: 'today', label: 'Today' },
+                { id: 'week',  label: 'Week' },
+                { id: 'month', label: 'Month' },
+                { id: 'year',  label: 'Year' },
+                { id: 'all',   label: 'All' },
+              ].map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => setExpPeriod(p.id)}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    expPeriod === p.id
+                      ? 'bg-green-500 text-white shadow-sm'
+                      : 'text-gray-400 hover:text-white hover:bg-slate-700/50'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            {/* ── Custom date picker (shows when Week / Month / Year selected) ── */}
+            {expPeriod === 'week' && (
+              <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2 border-b border-slate-800/40 bg-slate-900/40">
+                <Calendar className="w-4 h-4 text-green-400 flex-shrink-0" />
+                <span className="text-xs text-gray-400 flex-shrink-0">Week of:</span>
+                <input
+                  type="date"
+                  value={expCustomWeekStart || new Date(now - 7*24*60*60*1000).toISOString().split('T')[0]}
+                  onChange={e => setExpCustomWeekStart(e.target.value)}
+                  className="flex-1 bg-transparent text-xs text-green-300 outline-none border-b border-green-500/30 pb-0.5"
+                  style={{ colorScheme: 'dark' }}
+                />
+                {expCustomWeekStart && (
+                  <button onClick={() => setExpCustomWeekStart(null)} className="text-gray-500 hover:text-white text-sm leading-none flex-shrink-0">×</button>
+                )}
+              </div>
+            )}
+
+            {expPeriod === 'month' && (
+              <div className="flex-shrink-0 border-b border-slate-800/40 bg-slate-900/40">
+                {/* Year row */}
+                <div className="flex items-center justify-between px-4 pt-2 pb-1">
+                  <button onClick={() => setExpCustomYear(y => y - 1)} className="w-7 h-7 rounded-lg bg-slate-800 text-gray-300 hover:text-white flex items-center justify-center text-sm">‹</button>
+                  <span className="text-sm font-bold text-green-300">{expCustomYear}</span>
+                  <button onClick={() => setExpCustomYear(y => Math.min(y + 1, now.getFullYear()))} className="w-7 h-7 rounded-lg bg-slate-800 text-gray-300 hover:text-white flex items-center justify-center text-sm">›</button>
+                </div>
+                {/* Month grid */}
+                <div className="grid grid-cols-6 gap-1 px-4 pb-2">
+                  {MONTHS.map((m, i) => (
+                    <button
+                      key={m}
+                      onClick={() => setExpCustomMonth(i)}
+                      disabled={expCustomYear === now.getFullYear() && i > now.getMonth()}
+                      className={`py-1 rounded-lg text-[10px] font-semibold transition-all ${
+                        expCustomMonth === i
+                          ? 'bg-green-500 text-white'
+                          : expCustomYear === now.getFullYear() && i > now.getMonth()
+                            ? 'text-gray-700 cursor-not-allowed'
+                            : 'text-gray-400 hover:bg-slate-700 hover:text-white'
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {expPeriod === 'year' && (
+              <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2 border-b border-slate-800/40 bg-slate-900/40 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+                {Array.from({ length: 5 }, (_, i) => now.getFullYear() - i).map(yr => (
+                  <button
+                    key={yr}
+                    onClick={() => setExpCustomYear(yr)}
+                    className={`flex-shrink-0 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      expCustomYear === yr ? 'bg-green-500 text-white' : 'bg-slate-800 text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    {yr}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* ── Type filter (All / Business / Personal) ── */}
+            <div className="flex-shrink-0 flex gap-1.5 px-4 py-2 border-b border-slate-800/40">
+              {[
+                { id: 'all',      label: 'All',      active: 'bg-slate-600 text-white',   inactive: 'bg-slate-800/60 text-gray-400' },
+                { id: 'business', label: '🏢 Business', active: 'bg-blue-500/30 text-blue-200 border border-blue-500/40', inactive: 'bg-slate-800/60 text-gray-400' },
+                { id: 'personal', label: '👤 Personal', active: 'bg-purple-500/30 text-purple-200 border border-purple-500/40', inactive: 'bg-slate-800/60 text-gray-400' },
+              ].map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => setExpTypeFilter(f.id)}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${expTypeFilter === f.id ? f.active : f.inactive}`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            {/* ── Search + Group toggle row ── */}
+            <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-slate-800/40">
+              <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl border bg-slate-900/60" style={{ borderColor: 'var(--color-border)' }}>
+                <Search className="w-4 h-4 flex-shrink-0 text-gray-500" />
+                <input
+                  type="text"
+                  value={expSearch}
+                  onChange={e => setExpSearch(e.target.value)}
+                  placeholder="Search transactions…"
+                  className="flex-1 bg-transparent text-sm outline-none placeholder:text-gray-600"
+                  style={{ color: 'var(--color-text)' }}
+                />
+                {expSearch && (
+                  <button onClick={() => setExpSearch('')} className="text-gray-500 hover:text-white text-lg leading-none">×</button>
+                )}
+              </div>
+              {/* Group toggle */}
+              <button
+                onClick={() => setExpGrouped(g => !g)}
+                className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${
+                  expGrouped ? 'bg-green-500/15 border-green-500/30 text-green-300' : 'bg-slate-800 border-slate-700 text-gray-400'
+                }`}
+                title="Group by Business / Personal"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                Group
+              </button>
+            </div>
+
+            {/* ── Summary strip (In / Out / Net) ── */}
+            {expFiltered.length > 0 && (
+              <div className="flex-shrink-0 flex gap-2 px-4 py-2.5 border-b border-slate-800/40">
+                <div className="flex-1 text-center">
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wide">In</p>
+                  <p className="text-sm font-bold text-green-400">{formatCurrency(expIn)}</p>
+                </div>
+                <div className="w-px bg-slate-700" />
+                <div className="flex-1 text-center">
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wide">Out</p>
+                  <p className="text-sm font-bold text-red-400">{formatCurrency(expOut)}</p>
+                </div>
+                <div className="w-px bg-slate-700" />
+                <div className="flex-1 text-center">
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wide">Net</p>
+                  <p className={`text-sm font-bold ${expIn - expOut >= 0 ? 'text-green-300' : 'text-red-300'}`}>
+                    {expIn - expOut >= 0 ? '+' : ''}{formatCurrency(Math.abs(expIn - expOut))}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* ── Business / Personal split ── */}
+            {expFiltered.length > 0 && (
+              <div className="flex-shrink-0 flex gap-2 px-4 py-2">
+                <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl border border-blue-500/20 bg-blue-500/8">
+                  <span>🏢</span>
+                  <div>
+                    <p className="text-xs font-bold text-blue-300">{expBiz.length} Business</p>
+                    <p className="text-[10px] text-blue-400/70">{formatCurrency(expBiz.reduce((s,t)=>s+Math.abs(t.amount||0),0))}</p>
+                  </div>
+                </div>
+                <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl border border-purple-500/20 bg-purple-500/8">
+                  <span>👤</span>
+                  <div>
+                    <p className="text-xs font-bold text-purple-300">{expPers.length} Personal</p>
+                    <p className="text-[10px] text-purple-400/70">{formatCurrency(expPers.reduce((s,t)=>s+Math.abs(t.amount||0),0))}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── Transaction list ── */}
+            <div className="flex-1 overflow-y-auto px-4 pb-4 pt-2">
+              {expFiltered.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full gap-3 opacity-60">
+                  <span className="text-5xl">📭</span>
+                  <p className="text-sm text-gray-400">
+                    {expSearch ? `No results for "${expSearch}"` : `No transactions for ${periodLabel.toLowerCase()}`}
+                  </p>
+                  {!expSearch && (
+                    <button
+                      onClick={() => { setShowExpenseIncomePanel(false); setShowTransactionEntry(true); }}
+                      className="mt-1 px-4 py-2 rounded-xl text-sm font-semibold bg-green-500 text-white active:scale-95 transition"
+                    >
+                      + Record One
+                    </button>
+                  )}
+                </div>
+              ) : (() => {
+                // Helper to render a single transaction row
+                const renderTxRow = (transaction) => {
+                  const recCat   = transaction.record_category || transaction.metadata?.record_category || 'personal';
+                  const isBiz    = recCat === 'business';
+                  const isIncome = transaction.transaction_type === 'income';
+                  const emoji    = transaction.metadata?.categoryEmoji || transaction.categoryEmoji || null;
+                  const catName  = transaction.metadata?.categoryName || transaction.metadata?.category || null;
+                  const chainHash = txChainHashes[transaction.id];
+
+                  // Sold-item stats
+                  const desc   = (transaction.description || '').trim();
+                  const isSold = desc.toLowerCase().startsWith('sold ');
+                  let soldStats = null;
+                  if (isSold) {
+                    const raw = desc.slice(5).trim();
+                    const nm  = raw.match(/^(\d+(?:[.,]\d+)?)\s*(.+)/);
+                    const key = (nm ? nm[2] : raw).toLowerCase().trim();
+                    soldStats = soldMap[key] || null;
+                  }
+                  const soldRank  = soldStats ? topSold.findIndex(s => s.display.toLowerCase() === soldStats.display.toLowerCase()) : -1;
+                  const rankMedal = soldRank === 0 ? '🥇' : soldRank === 1 ? '🥈' : soldRank === 2 ? '🥉' : null;
+
+                  return (
+                    <div
+                      key={transaction.id}
+                      className="flex items-center gap-3 p-3 rounded-xl border transition-all group"
+                      style={{
+                        backgroundColor: 'var(--color-bgSecondary)',
+                        borderColor: isBiz && chainHash ? 'rgba(59,130,246,0.25)' : 'var(--color-border)'
+                      }}
+                    >
+                      {/* Icon */}
+                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 text-lg ${
+                        isIncome ? 'bg-green-500/15' : 'bg-red-500/15'
+                      }`}>
+                        {emoji ? <span>{emoji}</span> : isIncome
+                          ? <TrendingUp className="w-5 h-5 text-green-400" />
+                          : <TrendingDown className="w-5 h-5 text-red-400" />}
+                      </div>
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-semibold truncate flex-1" style={{ color: 'var(--color-text)' }}>
+                            {transaction.description || 'Transaction'}
+                          </p>
+                          {rankMedal && <span className="text-sm flex-shrink-0">{rankMedal}</span>}
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                          {catName && (
+                            <span className="text-[10px] capitalize" style={{ color: 'var(--color-textSecondary)' }}>
+                              {catName}
+                            </span>
+                          )}
+                          {soldStats && soldStats.count > 1 && (
+                            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300">
+                              {soldStats.count}× sold · {formatCurrency(soldStats.totalAmount)}
+                            </span>
+                          )}
+                          {/* ICAN Blockchain seal — business only */}
+                          {isBiz && chainHash && (
+                            <span
+                              className="flex items-center gap-0.5 text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-300"
+                              title={`ICAN Chain: ${chainHash}`}
+                            >
+                              <ShieldCheck className="w-2.5 h-2.5" />
+                              {chainHash.slice(0, 8)}…
+                            </span>
+                          )}
+                          <span className="text-[10px] ml-auto" style={{ color: 'var(--color-textSecondary)' }}>
+                            {fmtExpDate(transaction.created_at)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Amount + delete */}
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <p className={`text-sm font-bold tabular-nums ${isIncome ? 'text-green-400' : 'text-red-400'}`}>
+                          {isIncome ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount || 0))}
+                        </p>
+                        <button
+                          onClick={() => handleDeleteTransaction(transaction.id, transaction.description || 'Transaction')}
+                          className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                };
+
+                if (expGrouped) {
+                  // ── Grouped view ──
+                  const grouped = [
+                    { key: 'business', label: 'Business', emoji: '🏢', color: 'text-blue-300', border: 'border-blue-500/20', items: expFiltered.filter(t => (t.record_category || t.metadata?.record_category) === 'business') },
+                    { key: 'personal', label: 'Personal', emoji: '👤', color: 'text-purple-300', border: 'border-purple-500/20', items: expFiltered.filter(t => (t.record_category || t.metadata?.record_category) !== 'business') },
+                  ];
+                  return (
+                    <div className="space-y-4">
+                      {grouped.map(group => group.items.length === 0 ? null : (
+                        <div key={group.key}>
+                          {/* Section header */}
+                          <div className={`flex items-center gap-2 mb-2 pb-1.5 border-b ${group.border}`}>
+                            <span className="text-base">{group.emoji}</span>
+                            <span className={`text-xs font-bold uppercase tracking-wider ${group.color}`}>{group.label}</span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ml-auto ${group.color} bg-current/10`} style={{ backgroundColor: group.key === 'business' ? 'rgba(59,130,246,0.12)' : 'rgba(168,85,247,0.12)' }}>
+                              {group.items.length} · {formatCurrency(group.items.reduce((s,t) => s + Math.abs(t.amount||0), 0))}
+                            </span>
+                          </div>
+                          <div className="space-y-2">
+                            {group.items.map(renderTxRow)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                }
+
+                // ── Flat chronological view ──
+                return <div className="space-y-2">{expFiltered.map(renderTxRow)}</div>;
+              })()}
+            </div>
+
+            {/* ── Footer: Record buttons ── */}
+            <div className="flex-shrink-0 px-4 pt-2 pb-3 border-t border-slate-800">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setTransactionType('business'); setShowTransactionEntry(true); }}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm active:scale-95 transition border border-blue-500/30 bg-blue-500/10 text-blue-300"
+                >
+                  <span>💼</span> Business
+                </button>
+                <button
+                  onClick={() => { setTransactionType('personal'); setShowTransactionEntry(true); }}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm active:scale-95 transition border border-purple-500/30 bg-purple-500/10 text-purple-300"
+                >
+                  <span>👤</span> Personal
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* tithe calculator lives exclusively inside TitheManager */}
+
+      {false && (() => {
+        const incomeTx = [];
+        const totalIncome = 0;
+        const titheOwed  = totalIncome * 0.1;
+        // placeholder — remove block below on next cleanup
+        const tithePaidTotal = Object.values(txTitheMap).flat().reduce((s, r) => s + (r.amount || 0), 0);
+        const titheStillOwed = Math.max(0, titheOwed - tithePaidTotal);
+
+        // Build a flat history of all tithe payments, newest first
+        const titheHistory = Object.entries(txTitheMap)
+          .flatMap(([txId, records]) =>
+            records.map(r => ({ ...r, txId, txDesc: (transactions.find(t => t.id === txId)?.description || 'Transaction') }))
+          )
+          .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        const GIVING_TYPES = [
+          { id: 'tithe',         label: 'Tithe (10%)' },
+          { id: 'offering',      label: 'Offering' },
+          { id: 'charity',       label: 'Charity' },
+          { id: 'mission',       label: 'Mission Fund' },
+          { id: 'building_fund', label: 'Building Fund' },
+          { id: 'alms',          label: 'Alms / Zakat' },
+        ];
+        const RECIPIENTS = [
+          { id: 'church',    label: 'Church' },
+          { id: 'mosque',    label: 'Mosque' },
+          { id: 'charity',   label: 'Charity Org' },
+          { id: 'individual',label: 'Individual' },
+        ];
+
+        return (
+          <div
+            className={`fixed inset-x-0 flex flex-col z-[70] ${isWebDashboard ? 'top-[132px] md:top-[146px]' : 'top-0'}`}
+            style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset, background: 'linear-gradient(160deg, #0f172a 0%, #1a0a2e 100%)' }}
+          >
+            {/* ── Header ── */}
+            <div
+              className="flex-shrink-0 flex items-center gap-3 px-4 pb-3 border-b border-amber-900/40"
+              style={{ paddingTop: isWebDashboard ? '1rem' : 'calc(env(safe-area-inset-top) + 1rem)' }}
+            >
+              <button
+                onClick={() => { setShowTitheCalc(false); setTithePayTarget(null); setTithePayMsg(null); }}
+                className="w-9 h-9 rounded-xl flex items-center justify-center bg-amber-900/30 hover:bg-amber-800/40 active:scale-90 transition-all flex-shrink-0"
+              >
+                <ChevronLeft className="w-5 h-5 text-amber-400" />
+              </button>
+              <div className="flex-1">
+                <h2 className="text-base font-bold text-amber-300 leading-tight">🙏 Tithe Calculator</h2>
+                <p className="text-[10px] text-amber-600/80">Steward faithfully · Uganda Giving Tracker</p>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              {/* ── Summary cards ── */}
+              <div className="grid grid-cols-2 gap-2 px-4 py-3">
+                {[
+                  { label: 'Total Income',  value: formatCurrency(totalIncome),    sub: `${incomeTx.length} records`,             color: 'text-green-300',  bg: 'bg-green-500/8  border-green-500/20' },
+                  { label: '10% Tithe Due', value: formatCurrency(titheOwed),      sub: 'based on all income',                    color: 'text-amber-300',  bg: 'bg-amber-500/8  border-amber-500/20' },
+                  { label: 'Tithe Paid',    value: formatCurrency(tithePaidTotal), sub: `${titheHistory.length} payment(s)`,      color: 'text-purple-300', bg: 'bg-purple-500/8 border-purple-500/20' },
+                  { label: 'Still Owed',    value: formatCurrency(titheStillOwed), sub: titheStillOwed <= 0 ? '🎉 All clear!' : 'remaining to give', color: titheStillOwed <= 0 ? 'text-green-400' : 'text-rose-300', bg: titheStillOwed <= 0 ? 'bg-green-500/8 border-green-500/20' : 'bg-rose-500/8 border-rose-500/20' },
+                ].map(c => (
+                  <div key={c.label} className={`rounded-xl border p-3 ${c.bg}`}>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">{c.label}</p>
+                    <p className={`text-sm font-bold ${c.color}`}>{c.value}</p>
+                    <p className="text-[10px] text-gray-600 mt-0.5">{c.sub}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* ── Pay from a transaction ── */}
+              <div className="px-4 pb-2">
+                <p className="text-xs font-bold text-amber-400/80 mb-2 uppercase tracking-wider">Pay tithe from income</p>
+                <div className="space-y-2 max-h-52 overflow-y-auto pr-0.5">
+                  {incomeTx.length === 0 ? (
+                    <p className="text-xs text-gray-500 text-center py-4">No income transactions recorded yet</p>
+                  ) : incomeTx.map(t => {
+                    const paid = txTitheMap[t.id] || [];
+                    const paidAmt = paid.reduce((s, r) => s + (r.amount || 0), 0);
+                    const suggested = Math.round(t.amount * 0.1);
+                    const isSelected = tithePayTarget?.id === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => {
+                          setTithePayTarget(isSelected ? null : t);
+                          setTithePayForm(f => ({ ...f, amount: isSelected ? '' : String(suggested) }));
+                          setTithePayMsg(null);
+                        }}
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
+                          isSelected ? 'border-amber-500/50 bg-amber-500/10' : 'border-slate-700/50 bg-slate-800/40 hover:border-amber-500/30'
+                        }`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold truncate text-white">{t.description || 'Income'}</p>
+                          <p className="text-[10px] text-gray-500 mt-0.5">
+                            {formatCurrency(t.amount)} · 10% = <span className="text-amber-400/80">{formatCurrency(suggested)}</span>
+                            {paidAmt > 0 && <span className="text-green-400 ml-1">· Paid {formatCurrency(paidAmt)}</span>}
+                          </p>
+                        </div>
+                        <span className={`text-xs font-bold px-2 py-1 rounded-lg flex-shrink-0 ${paidAmt > 0 ? 'bg-green-500/15 text-green-400' : 'bg-amber-500/15 text-amber-400'}`}>
+                          {paidAmt > 0 ? '✓ Paid' : '🙏 Pay'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* ── Pay form (shows when a transaction is selected) ── */}
+              {tithePayTarget && (
+                <div className="mx-4 mb-3 p-4 rounded-xl border border-amber-500/25 bg-amber-500/5">
+                  <p className="text-xs font-bold text-amber-300 mb-3">
+                    Paying tithe from: <span className="font-normal text-white">{tithePayTarget.description || 'Income'}</span>
+                  </p>
+
+                  {/* Amount row */}
+                  <div className="flex gap-2 mb-3">
+                    <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl border border-amber-500/30 bg-slate-900/60">
+                      <span className="text-xs text-gray-500">UGX</span>
+                      <input
+                        type="number"
+                        value={tithePayForm.amount}
+                        onChange={e => setTithePayForm(f => ({ ...f, amount: e.target.value }))}
+                        placeholder="Amount"
+                        className="flex-1 bg-transparent text-sm text-white outline-none"
+                        inputMode="numeric"
+                      />
+                    </div>
+                    <button onClick={() => setTithePayForm(f => ({ ...f, amount: String(Math.round(tithePayTarget.amount * 0.1)) }))}
+                      className="px-3 py-2 rounded-xl bg-amber-500/15 text-amber-300 text-xs font-bold border border-amber-500/25 hover:bg-amber-500/25 transition">10%</button>
+                    <button onClick={() => setTithePayForm(f => ({ ...f, amount: String(tithePayTarget.amount) }))}
+                      className="px-3 py-2 rounded-xl bg-slate-700/50 text-gray-300 text-xs font-bold border border-slate-600/30 hover:bg-slate-700 transition">Full</button>
+                  </div>
+
+                  {/* Giving type + Recipient in one row */}
+                  <div className="flex gap-2 mb-3">
+                    <select value={tithePayForm.givingType} onChange={e => setTithePayForm(f => ({ ...f, givingType: e.target.value }))}
+                      className="flex-1 bg-slate-800/80 border border-slate-700/50 rounded-xl px-3 py-2 text-xs text-white outline-none">
+                      {GIVING_TYPES.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
+                    </select>
+                    <select value={tithePayForm.recipientType} onChange={e => setTithePayForm(f => ({ ...f, recipientType: e.target.value }))}
+                      className="flex-1 bg-slate-800/80 border border-slate-700/50 rounded-xl px-3 py-2 text-xs text-white outline-none">
+                      {RECIPIENTS.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Anonymous toggle */}
+                  <label className="flex items-center gap-2 mb-3 cursor-pointer">
+                    <div onClick={() => setTithePayForm(f => ({ ...f, isAnonymous: !f.isAnonymous }))}
+                      className={`w-9 h-5 rounded-full transition-all flex-shrink-0 flex items-center px-0.5 ${tithePayForm.isAnonymous ? 'bg-amber-500 justify-end' : 'bg-slate-700 justify-start'}`}>
+                      <div className="w-4 h-4 rounded-full bg-white shadow" />
+                    </div>
+                    <span className="text-xs text-gray-400">Give anonymously</span>
+                  </label>
+
+                  {/* Feedback */}
+                  {tithePayMsg && (
+                    <div className={`text-xs text-center py-2 px-3 rounded-lg mb-2 font-medium ${tithePayMsg.type === 'ok' ? 'bg-green-500/15 text-green-300' : 'bg-red-500/15 text-red-300'}`}>
+                      {tithePayMsg.text}
+                    </div>
+                  )}
+
+                  {/* Pay button */}
+                  <button
+                    onClick={handleQuickPayTithe}
+                    disabled={tithePayLoading || !tithePayForm.amount}
+                    className="w-full py-3 rounded-xl font-bold text-sm transition active:scale-95 disabled:opacity-50"
+                    style={{ background: 'linear-gradient(135deg, #d97706 0%, #92400e 100%)', color: '#fff' }}
+                  >
+                    {tithePayLoading ? '⏳ Recording…' : `🙏 Pay ${tithePayForm.amount ? formatCurrency(parseFloat(tithePayForm.amount) || 0) : 'Tithe'}`}
+                  </button>
+                </div>
+              )}
+
+              {/* ── Tithe payment history ── */}
+              {titheHistory.length > 0 && (
+                <div className="px-4 pb-4">
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Payment History</p>
+                  <div className="space-y-1.5">
+                    {titheHistory.map((r, i) => (
+                      <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-slate-800/40 border border-slate-700/30">
+                        <span className="text-base flex-shrink-0">🙏</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-white truncate">{r.txDesc}</p>
+                          <p className="text-[10px] text-gray-500 capitalize">{r.giving_type} · {new Date(r.date).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                        </div>
+                        <p className="text-xs font-bold text-amber-300 flex-shrink-0">{formatCurrency(r.amount)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* CMMS Panel - Full Web CMSS UI */}
       {showCmmsPanel && (
         <div
           className={`fixed inset-x-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto ${isWebDashboard ? 'top-[132px] md:top-[146px]' : 'top-0'}`}

@@ -26,6 +26,9 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
   const voiceTranscriptRef = useRef('');
   const voiceSupported = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 
+  // ── Quick Entry Tab state ──
+  const [quickMode, setQuickMode] = useState('free'); // 'free' | 'sold' | 'bought'
+
   const startVoiceRecognition = () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return;
@@ -643,6 +646,7 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
       setVoiceInterim('');
       recognitionRef.current?.stop();
       voiceTranscriptRef.current = '';
+      setQuickMode('free');
     }
     // Update selectedMode if transactionType prop changes
     if (transactionType && transactionType !== selectedMode) {
@@ -650,6 +654,15 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, transactionType, prefillText]);
+
+  // Pre-fill the text input with "Sold " or "Bought " so the user just continues typing
+  const handleQuickTab = (mode) => {
+    setQuickMode(mode);
+    const prefix = mode === 'sold' ? 'Sold ' : mode === 'bought' ? 'Bought ' : '';
+    setTextInput(prefix);
+    setParsedData(prefix.trim() ? parseSmartInputWithMode(prefix, selectedMode) : null);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
 
   // Submit transaction with AI analysis
   const handleSubmit = async () => {
@@ -857,6 +870,20 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
               )}
             </div>
           )}
+
+          {/* Quick Entry Tabs — pre-fill "Sold " or "Bought " into the input */}
+          <div className="flex gap-1.5">
+            {[
+              { id: 'free',   label: '✍️ Free',   on: 'bg-gray-700 text-white',   off: 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50' },
+              { id: 'sold',   label: '💵 Sold',   on: 'bg-green-500 text-white',  off: 'bg-white border border-green-200 text-green-700 hover:bg-green-50' },
+              { id: 'bought', label: '📦 Bought', on: 'bg-amber-500 text-white',  off: 'bg-white border border-amber-200 text-amber-700 hover:bg-amber-50' },
+            ].map(tab => (
+              <button key={tab.id} onClick={() => handleQuickTab(tab.id)}
+                className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${quickMode === tab.id ? tab.on : tab.off}`}>
+                {tab.label}
+              </button>
+            ))}
+          </div>
 
           {/* Input Field */}
           <div className="flex items-center gap-2 w-full">
