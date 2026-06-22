@@ -350,6 +350,19 @@ async function openDB() {
         syncStore.createIndex('type', 'type', { unique: false });
         syncStore.createIndex('synced', 'synced', { unique: false });
       }
+
+      // Store for shared content from Web Share Target API
+      if (!db.objectStoreNames.contains('sharedContent')) {
+        const sharedStore = db.createObjectStore('sharedContent', { keyPath: 'id' });
+        sharedStore.createIndex('consumed', 'consumed', { unique: false });
+        sharedStore.createIndex('timestamp', 'timestamp', { unique: false });
+      }
+
+      // Store for shared files (images, PDFs, etc.)
+      if (!db.objectStoreNames.contains('sharedFiles')) {
+        const filesStore = db.createObjectStore('sharedFiles', { keyPath: 'id' });
+        filesStore.createIndex('sharedId', 'sharedId', { unique: false });
+      }
     };
   });
 }
@@ -486,6 +499,83 @@ async function notifyClients(message) {
   const clients = await self.clients.matchAll();
   clients.forEach((client) => {
     client.postMessage(message);
+  });
+}
+
+// ============================================
+// WEB SHARE TARGET API HANDLER
+// ============================================
+
+async function handleShareTarget(request) {
+  try {
+    console.log('[SW] Handling share target request');
+    
+    // Parse the form data from the share
+    const formData = await request.formData();
+    
+    const title = formData.get('title') || '';
+    const text = formData.get('text') || '';
+    const url = formData.get('url') || '';
+    const files = formData.getAll('media') || [];
+    
+    console.log('[SW] Shared content:', { title, text, url, filesCount: files.length });
+    
+    // Store the shared data in IndexedDB for the app to retrieve
+    const sharedData = {
+      id: 'shared_' + Date.now(),
+      title,
+      text,
+      url,
+      files: files.map(file => ({
+        name: file.name,
+        type: file.type,
+        size: file.size
+      })),
+      timestamp: Date.now(),
+      consumed: false
+    };
+    
+    // Store files as blobs
+    const db = await openDB();
+    await storeSharedContent(db, sharedData, files);
+    
+    // Redirect to the app with a share indicator
+    // The app will detect this and show the status/updates composer with pre-filled content
+    return Response.redirect('/?share=true', 303);
+    
+  } catch (error) {
+    console.error('[SW] Error handling share target:', error);
+    // Redirect to app anyway so user can see the app
+    return Response.redirect('/', 303);
+  }
+}
+
+async function storeSharedContent(db, sharedData, files) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(['sharedContent', 'sharedFiles'], 'readwrite');
+    const contentStore = tx.objectStore('sharedContent');
+    const filesStore = tx.objectStore('sharedFiles');
+    
+    tx.oncomplete = () => {
+      console.log('[SW] Shared content stored');
+      resolve();
+    };
+    tx.onerror = () => reject(tx.error);
+    
+    // Store the metadata
+    contentStore.put(sharedData);
+    
+    // Store each file blob
+    files.forEach((file, index) => {
+      filesStore.put({
+        id: sharedData.id + '_file_' + index,
+        sharedId: sharedData.id,
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        blob: file
+      });
+    });
   });
 }
 

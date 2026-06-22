@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Share Target - IcanEra</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+        .test-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        label {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        input, textarea {
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        .info {
+            background: #f0f4ff;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 4px;
+        }
+        .info h3 {
+            margin-top: 0;
+            color: #667eea;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 6px;
+            display: none;
+        }
+        .status.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            display: block;
+        }
+        .status.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🧪 Test Share Target</h1>
+        <p>This page simulates sharing content to IcanEra. Use it to test the share functionality without needing another app.</p>
+        
+        <form class="test-form" id="shareForm">
+            <div>
+                <label for="title">Title</label>
+                <input type="text" id="title" name="title" placeholder="My awesome photo" value="Test Share Title">
+            </div>
+            
+            <div>
+                <label for="text">Text</label>
+                <textarea id="text" name="text" rows="3" placeholder="Check out this amazing content!">This is a test share from the test page. The status uploader should open with this text pre-filled!</textarea>
+            </div>
+            
+            <div>
+                <label for="url">URL</label>
+                <input type="url" id="url" name="url" placeholder="https://example.com" value="https://icanera.com">
+            </div>
+            
+            <div>
+                <label for="file">File (Image/PDF)</label>
+                <input type="file" id="file" name="media" accept="image/*,application/pdf">
+            </div>
+            
+            <button type="submit">📤 Test Share to IcanEra</button>
+        </form>
+        
+        <div id="status" class="status"></div>
+        
+        <div class="info">
+            <h3>ℹ️ How to Use</h3>
+            <ol>
+                <li>Fill in the form fields (or use the defaults)</li>
+                <li>Optionally select an image file</li>
+                <li>Click "Test Share to IcanEra"</li>
+                <li>The app should open with the Status Uploader pre-filled</li>
+            </ol>
+            <p><strong>Note:</strong> The service worker must be registered for this to work properly.</p>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('shareForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = 'status';
+            statusDiv.textContent = '⏳ Submitting share...';
+            statusDiv.style.display = 'block';
+            
+            const formData = new FormData(e.target);
+            
+            try {
+                const response = await fetch('/share', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                console.log('Share response:', response);
+                
+                if (response.redirected) {
+                    statusDiv.className = 'status success';
+                    statusDiv.textContent = '✅ Share submitted! Redirecting...';
+                    
+                    // Follow the redirect
+                    setTimeout(() => {
+                        window.location.href = response.url;
+                    }, 500);
+                } else if (response.ok) {
+                    statusDiv.className = 'status success';
+                    statusDiv.textContent = '✅ Share submitted successfully!';
+                    
+                    // Manually redirect to the app
+                    setTimeout(() => {
+                        window.location.href = '/?share=true';
+                    }, 1000);
+                } else {
+                    statusDiv.className = 'status error';
+                    statusDiv.textContent = `❌ Error: ${response.status} - ${response.statusText}`;
+                }
+            } catch (error) {
+                console.error('Share error:', error);
+                statusDiv.className = 'status error';
+                statusDiv.textContent = `❌ Error: ${error.message}`;
+            }
+        });
+        
+        // Check service worker status
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.ready.then(registration => {
+                console.log('✅ Service Worker is ready:', registration);
+            }).catch(error => {
+                console.warn('⚠️ Service Worker not ready:', error);
+                const statusDiv = document.getElementById('status');
+                statusDiv.className = 'status error';
+                statusDiv.innerHTML = '⚠️ Service Worker not registered. The share target may not work.<br>Please ensure the app is loaded first.';
+                statusDiv.style.display = 'block';
+            });
+        }
+    </script>
+</body>
+</html>

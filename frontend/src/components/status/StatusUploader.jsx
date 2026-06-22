@@ -9,7 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import { uploadStatusMedia, createStatus } from '../../services/statusService';
 import { compressVideo, shouldCompress } from '../../utils/videoCompressor';
 
-export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpenFilePicker = true }) => {
+export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpenFilePicker = true, sharedContent = null }) => {
   const { user, profile } = useAuth();
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -21,6 +21,7 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
   const [error, setError] = useState(null);
   const fileInputRef = useRef(null);
   const hasAutoOpenedRef = useRef(false);
+  const hasLoadedSharedContentRef = useRef(false);
   const pendingFilePickerRef = useRef(false);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -116,6 +117,52 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
     };
   }, [stream, previewUrl]);
 
+  // Load shared content from external apps (Web Share Target API)
+  useEffect(() => {
+    if (!sharedContent || hasLoadedSharedContentRef.current) return;
+    
+    hasLoadedSharedContentRef.current = true;
+    console.log('[StatusUploader] Loading shared content:', sharedContent);
+    
+    // Build caption from shared content
+    let captionText = '';
+    if (sharedContent.title) captionText += sharedContent.title;
+    if (sharedContent.text) {
+      if (captionText) captionText += '\n\n';
+      captionText += sharedContent.text;
+    }
+    if (sharedContent.url) {
+      if (captionText) captionText += '\n\n';
+      captionText += sharedContent.url;
+    }
+    
+    if (captionText) {
+      setCaption(captionText);
+      // If there's text but no files, switch to text mode
+      if (!sharedContent.files || sharedContent.files.length === 0) {
+        setStatusMode('text');
+      }
+    }
+    
+    // Load the first shared file (image or PDF)
+    if (sharedContent.files && sharedContent.files.length > 0) {
+      const firstFile = sharedContent.files[0];
+      const mediaKind = getMediaKind(firstFile);
+      
+      const previewUrl = URL.createObjectURL(firstFile);
+      setPreviewUrl(previewUrl);
+      setPreviewMediaKind(mediaKind);
+      setFileToUpload(firstFile);
+      setStatusMode('media');
+      
+      console.log('[StatusUploader] Loaded shared file:', {
+        name: firstFile.name,
+        type: firstFile.type,
+        size: firstFile.size
+      });
+    }
+  }, [sharedContent]);
+
   const handleFileSelect = async (e) => {
     const file = e.target.files?.[0];
     pendingFilePickerRef.current = false;
@@ -206,6 +253,8 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
 
   // Optionally open file picker immediately when uploader appears
   useEffect(() => {
+    // Don't auto-open if we have shared content
+    if (sharedContent) return;
     if (!autoOpenFilePicker) return;
     if (hasAutoOpenedRef.current) return;
     if (!fileInputRef.current) return;
@@ -216,7 +265,7 @@ export const StatusUploader = ({ onStatusCreated = null, onClose = null, autoOpe
     setTimeout(() => {
       fileInputRef.current?.click();
     }, 0);
-  }, [autoOpenFilePicker, previewUrl, showCamera, isUploading, uploadSuccess]);
+  }, [autoOpenFilePicker, previewUrl, showCamera, isUploading, uploadSuccess, sharedContent]);
 
   // If picker is canceled, keep uploader open so user can still post words-only status.
   useEffect(() => {

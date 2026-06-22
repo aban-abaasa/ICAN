@@ -56,7 +56,8 @@ import {
   Download,
   Share2,
   ShieldCheck,
-  Layers
+  Layers,
+  Filter
 } from 'lucide-react';
 import SmartTransactionEntry from './SmartTransactionEntry';
 import { ProfilePage } from './auth/ProfilePage';
@@ -98,6 +99,12 @@ import {
 import { getUserTrustGroups } from '../services/trustService';
 import { getUserStatuses, getActiveStatuses } from '../services/statusService';
 import { CountryService } from '../services/countryService';
+import {
+  getPendingSharedContent,
+  getSharedFiles,
+  markSharedContentAsConsumed,
+  convertSharedFilesToFiles
+} from '../services/sharedContentService';
 
 const PROFILE_CONFIG_STORAGE_PREFIX = 'ican_profile_configuration';
 const DEFAULT_PROFILE_LEGAL_DISCLAIMER = 'NOT LEGAL OR FINANCIAL ADVICE: The ICAN Capital Engine is a risk assessment and organizational tool. All analysis, recommendations, and scores are for informational purposes only. Consult qualified professionals before making legal, financial, or business decisions.';
@@ -631,7 +638,12 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [showTransactionEntry, setShowTransactionEntry] = useState(false);
   const [txPeriod, setTxPeriod] = useState('today'); // 'today' | 'week' | 'month' | 'year'
   const [expPeriod, setExpPeriod] = useState('today'); // period filter for the full transactions panel
+  const [expFiltersExpanded, setExpFiltersExpanded] = useState(false); // collapse/expand filters (mobile only)
+  const [expMoreMenuOpen, setExpMoreMenuOpen] = useState(false); // 3-dot menu for export/share
   const [expSearch, setExpSearch] = useState(''); // search filter for the full transactions panel
+  
+  // Detect if we're on mobile or desktop for different UX
+  const [isMobileView, setIsMobileView] = useState(window.innerWidth < 768);
   const [expGrouped, setExpGrouped] = useState(true); // group list by Business / Personal
   const [expTypeFilter, setExpTypeFilter] = useState('all'); // 'all' | 'business' | 'personal'
   const [expCustomMonth, setExpCustomMonth] = useState(new Date().getMonth()); // 0-11
@@ -664,6 +676,15 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
 
     window.addEventListener('error', handleMobileError);
     return () => window.removeEventListener('error', handleMobileError);
+  }, []);
+
+  // Detect screen size for mobile vs desktop UX
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobileView(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   if (mobileError) {
@@ -942,6 +963,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [imageError, setImageError] = useState(false);
   const [showStatusPage, setShowStatusPage] = useState(false);
   const [showStatusUploader, setShowStatusUploader] = useState(false);
+  const [sharedContent, setSharedContent] = useState(null); // Store shared content from external apps
   const [userStatuses, setUserStatuses] = useState([]);
   const [loadingStatuses, setLoadingStatuses] = useState(false);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
@@ -2111,6 +2133,51 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     loadStatuses();
   }, [userProfile?.id]);
 
+  // Check for shared content from external apps (Web Share Target API)
+  useEffect(() => {
+    const checkSharedContent = async () => {
+      try {
+        // Check URL params for share indicator
+        const urlParams = new URLSearchParams(window.location.search);
+        const isShareAction = urlParams.get('share') === 'true';
+        
+        if (isShareAction) {
+          console.log('[Share] Detected share action, checking for shared content...');
+          
+          // Get pending shared content from IndexedDB
+          const pendingContent = await getPendingSharedContent();
+          
+          if (pendingContent && pendingContent.length > 0) {
+            const latestShare = pendingContent[0];
+            console.log('[Share] Found shared content:', latestShare);
+            
+            // Get associated files
+            const files = await getSharedFiles(latestShare.id);
+            const convertedFiles = files.length > 0 ? await convertSharedFilesToFiles(files) : [];
+            
+            // Store the shared content with files
+            setSharedContent({
+              ...latestShare,
+              files: convertedFiles
+            });
+            
+            // Open the status uploader with the shared content
+            setShowStatusUploader(true);
+            
+            // Clean up the URL
+            window.history.replaceState({}, '', window.location.pathname);
+          } else {
+            console.log('[Share] No shared content found');
+          }
+        }
+      } catch (error) {
+        console.error('[Share] Error checking shared content:', error);
+      }
+    };
+
+    checkSharedContent();
+  }, []); // Run once on mount
+
   // Track pending offline actions
   useEffect(() => {
     const loadPendingActions = async () => {
@@ -2808,22 +2875,22 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     const income  = filtered.filter(t => t.transaction_type === 'income').reduce((s,t) => s+(t.amount||0), 0);
     const expense = filtered.filter(t => t.transaction_type !== 'income').reduce((s,t) => s+(t.amount||0), 0);
 
-    // ── Header band ──
-    doc.setFillColor(15, 23, 42);       // slate-950
+    // ── Header band — Light professional colors ──
+    doc.setFillColor(241, 245, 249);    // slate-100 (light background)
     doc.rect(0, 0, pageW, 32, 'F');
     doc.setFillColor(34, 197, 94);      // green-500 accent strip
     doc.rect(0, 30, pageW, 2, 'F');
-    doc.setTextColor(255, 255, 255);
+    doc.setTextColor(15, 23, 42);       // slate-900 (dark text on light bg)
     doc.setFontSize(18); doc.setFont('helvetica', 'bold');
-    doc.text('ICAN', 14, 13);
+    doc.text('IcanEra', 14, 13);
     doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-    doc.setTextColor(134, 239, 172);    // green-300
+    doc.setTextColor(22, 163, 74);      // green-600
     doc.text('Transaction Report', 14, 20);
-    doc.setTextColor(203, 213, 225);    // slate-300
+    doc.setTextColor(71, 85, 105);      // slate-600
     doc.text(`Period: ${period}`, 14, 27);
     doc.text(`Generated: ${dateStr}`, pageW - 14, 27, { align: 'right' });
 
-    // ── Summary strip ──
+    // ── Summary strip — Light colors ──
     let y = 40;
     const summaries = [
       { label: 'Total Records', value: String(filtered.length) },
@@ -2839,26 +2906,26 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       const row = Math.floor(i / 3);
       const x   = 14 + col * colW;
       const cy  = y + row * 14;
-      doc.setFillColor(30, 41, 59);
+      doc.setFillColor(226, 232, 240);  // slate-200 (light gray)
       doc.roundedRect(x, cy, colW - 2, 12, 1, 1, 'F');
-      doc.setFontSize(7); doc.setTextColor(148, 163, 184); doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7); doc.setTextColor(100, 116, 139); doc.setFont('helvetica', 'normal');
       doc.text(s.label.toUpperCase(), x + 3, cy + 4.5);
-      doc.setFontSize(9); doc.setTextColor(241, 245, 249); doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9); doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold');
       doc.text(s.value, x + 3, cy + 9.5);
     });
     y += Math.ceil(summaries.length / 3) * 14 + 6;
 
-    // ── Blockchain note (business) ──
+    // ── Blockchain note (business) — Light blue ──
     if (biz.length > 0) {
-      doc.setFillColor(30, 58, 138, 0.25);
-      doc.setDrawColor(59, 130, 246);
+      doc.setFillColor(219, 234, 254);  // blue-100
+      doc.setDrawColor(59, 130, 246);   // blue-500
       doc.roundedRect(14, y, pageW - 28, 7, 1, 1, 'S');
-      doc.setFontSize(7); doc.setTextColor(147, 197, 253); doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7); doc.setTextColor(30, 64, 175); doc.setFont('helvetica', 'normal');
       doc.text('🔐  Business transactions are secured with ICAN SHA-256 Blockchain hashes', 17, y + 4.5);
       y += 11;
     }
 
-    // ── Table header ──
+    // ── Table header — Light with green accent ──
     const cols = [
       { label: '#',           w: 8  },
       { label: 'Date / Time', w: 32 },
@@ -2868,9 +2935,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       { label: 'Amount (UGX)',w: 30 },
       { label: 'Chain',       w: 22 },
     ];
-    doc.setFillColor(15, 23, 42);
+    doc.setFillColor(220, 252, 231);  // green-100
     doc.rect(14, y, pageW - 28, 7, 'F');
-    doc.setTextColor(134, 239, 172); doc.setFontSize(7); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(22, 101, 52); doc.setFontSize(7); doc.setFont('helvetica', 'bold');
     let cx = 14;
     cols.forEach(c => { doc.text(c.label, cx + 1, y + 4.8); cx += c.w; });
     y += 7;
@@ -2927,21 +2994,118 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
   };
 
   // Share transactions summary via Web Share API (mobile) or clipboard
+  // Smart multi-format sharing: PDF, Excel via Email & WhatsApp
   const handleShareTransactions = async (filtered, period) => {
-    const lines = filtered.slice(0, 25).map(t => {
-      const isBiz = (t.record_category || t.metadata?.record_category) === 'business';
-      const sign  = t.transaction_type === 'income' ? '+' : '-';
-      return `${isBiz ? '🏢' : '👤'} ${t.description || 'Transaction'} ${sign}${formatCurrency(Math.abs(t.amount || 0))}`;
+    // Create a modal to choose format and method
+    const shareFormat = await new Promise((resolve) => {
+      const modal = document.createElement('div');
+      modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:9999;';
+      modal.innerHTML = `
+        <div style="background:#1e293b;border-radius:16px;padding:24px;max-width:320px;width:90%;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);">
+          <h3 style="color:#f1f5f9;font-size:18px;font-weight:700;margin:0 0 16px;">Share Transactions</h3>
+          <p style="color:#94a3b8;font-size:13px;margin:0 0 20px;">${filtered.length} records · ${period}</p>
+          
+          <div style="display:grid;gap:10px;margin-bottom:20px;">
+            <button data-action="pdf-email" style="background:linear-gradient(135deg,#dc2626,#b91c1c);color:white;border:none;border-radius:10px;padding:14px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:10px;justify-content:center;">
+              <span style="font-size:18px;">📧</span> Email PDF Report
+            </button>
+            <button data-action="excel-email" style="background:linear-gradient(135deg,#059669,#047857);color:white;border:none;border-radius:10px;padding:14px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:10px;justify-content:center;">
+              <span style="font-size:18px;">📧</span> Email Excel File
+            </button>
+            <button data-action="pdf-whatsapp" style="background:linear-gradient(135deg,#16a34a,#15803d);color:white;border:none;border-radius:10px;padding:14px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:10px;justify-content:center;">
+              <span style="font-size:18px;">📱</span> WhatsApp PDF
+            </button>
+            <button data-action="excel-whatsapp" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:white;border:none;border-radius:10px;padding:14px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:10px;justify-content:center;">
+              <span style="font-size:18px;">📱</span> WhatsApp Excel
+            </button>
+          </div>
+          
+          <button data-action="cancel" style="background:#334155;color:#cbd5e1;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;width:100%;">
+            Cancel
+          </button>
+        </div>
+      `;
+      
+      modal.addEventListener('click', (e) => {
+        const action = e.target.closest('[data-action]')?.dataset.action;
+        if (action) {
+          document.body.removeChild(modal);
+          resolve(action === 'cancel' ? null : action);
+        }
+      });
+      
+      document.body.appendChild(modal);
     });
-    const shareText = `📊 ICAN Transactions — ${period} (${filtered.length} records)\n\n${lines.join('\n')}${filtered.length > 25 ? `\n…+${filtered.length - 25} more` : ''}\n\n🔐 Secured by ICAN Blockchain`;
+    
+    if (!shareFormat) return;
+    
+    const [format, method] = shareFormat.split('-');
+    
     try {
-      if (navigator.share) {
-        await navigator.share({ title: `ICAN Transactions — ${period}`, text: shareText });
-      } else {
-        await navigator.clipboard.writeText(shareText);
-        alert('Copied to clipboard!');
+      if (format === 'pdf') {
+        // Generate PDF
+        handleDownloadPDF(filtered, period);
+        const pdfBlob = await new Promise(resolve => {
+          const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+          // PDF generation code is in handleDownloadPDF, we'll get the blob
+          setTimeout(() => resolve(doc.output('blob')), 100);
+        });
+        
+        if (method === 'email') {
+          const subject = encodeURIComponent(`IcanEra Transaction Report - ${period}`);
+          const body = encodeURIComponent(`Please find attached the transaction report for ${period}.\n\n${filtered.length} transactions\nGenerated: ${new Date().toLocaleDateString()}\n\n🔐 Secured by IcanEra`);
+          window.location.href = `mailto:?subject=${subject}&body=${body}`;
+          alert('📧 Opening email client. Please attach the downloaded PDF file.');
+        } else if (method === 'whatsapp') {
+          const text = encodeURIComponent(`📊 *IcanEra Transaction Report*\n\nPeriod: ${period}\nRecords: ${filtered.length}\n\n_PDF report downloaded - please attach it manually_\n\n🔐 Secured by IcanEra`);
+          window.open(`https://wa.me/?text=${text}`, '_blank');
+          alert('📱 PDF downloaded. Please attach it in WhatsApp.');
+        }
+      } else if (format === 'excel') {
+        // Generate Excel
+        const ws_data = [
+          ['IcanEra Transaction Report'],
+          [`Period: ${period}`, `Generated: ${new Date().toLocaleDateString()}`],
+          [],
+          ['#', 'Date', 'Time', 'Type', 'Category', 'Description', 'Amount (UGX)', 'Blockchain Hash']
+        ];
+        
+        filtered.forEach((t, idx) => {
+          const isBiz = (t.record_category || t.metadata?.record_category) === 'business';
+          const hash = txChainHashes[t.id] || t.data_hash || '';
+          const date = new Date(t.created_at);
+          ws_data.push([
+            idx + 1,
+            date.toLocaleDateString(),
+            date.toLocaleTimeString(),
+            isBiz ? 'Business' : 'Personal',
+            t.metadata?.category || t.metadata?.categoryName || '',
+            t.description || '',
+            t.transaction_type === 'income' ? t.amount : -t.amount,
+            hash
+          ]);
+        });
+        
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(ws_data);
+        XLSX.utils.book_append_sheet(wb, ws, 'Transactions');
+        XLSX.writeFile(wb, `IcanEra_Transactions_${period.replace(/\s/g, '_')}.xlsx`);
+        
+        if (method === 'email') {
+          const subject = encodeURIComponent(`IcanEra Transaction Report - ${period}`);
+          const body = encodeURIComponent(`Please find attached the transaction report for ${period}.\n\n${filtered.length} transactions\nGenerated: ${new Date().toLocaleDateString()}\n\n🔐 Secured by IcanEra`);
+          window.location.href = `mailto:?subject=${subject}&body=${body}`;
+          alert('📧 Opening email client. Please attach the downloaded Excel file.');
+        } else if (method === 'whatsapp') {
+          const text = encodeURIComponent(`📊 *IcanEra Transaction Report*\n\nPeriod: ${period}\nRecords: ${filtered.length}\n\n_Excel file downloaded - please attach it manually_\n\n🔐 Secured by IcanEra`);
+          window.open(`https://wa.me/?text=${text}`, '_blank');
+          alert('📱 Excel downloaded. Please attach it in WhatsApp.');
+        }
       }
-    } catch {}
+    } catch (error) {
+      console.error('Share error:', error);
+      alert('Failed to share. Please try again.');
+    }
   };
 
   // Pay tithe from a specific transaction in the panel
@@ -6672,53 +6836,144 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
         return (
           <div
-            className={`fixed inset-x-0 flex flex-col bg-gradient-to-b from-slate-950 to-black ${isWebDashboard ? 'top-[132px] md:top-[146px] z-30' : 'top-0 z-[60]'}`}
+            className={`fixed inset-x-0 flex flex-col bg-gradient-to-b from-slate-950 to-black overflow-hidden ${isWebDashboard ? 'top-[132px] md:top-[146px] z-30' : 'top-0 z-[60]'}`}
             style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
           >
-            {/* ── Sticky header ── */}
+            {/* ── Compact header with 3-dot menu ── */}
             <div
-              className="flex-shrink-0 flex items-center gap-3 px-4 pb-3 border-b border-slate-800"
-              style={{ paddingTop: isWebDashboard ? '1rem' : 'calc(env(safe-area-inset-top) + 1rem)' }}
+              className="flex-shrink-0 relative"
+              style={{ paddingTop: isWebDashboard ? '0.75rem' : 'calc(env(safe-area-inset-top) + 0.75rem)' }}
             >
-              <button
-                onClick={() => { setShowExpenseIncomePanel(false); setExpSearch(''); }}
-                className="w-9 h-9 rounded-xl flex items-center justify-center bg-slate-800 hover:bg-slate-700 active:scale-90 transition-all flex-shrink-0"
-                aria-label="Go back"
-              >
-                <ChevronLeft className="w-5 h-5 text-green-400" />
-              </button>
-              <div className="flex-1 min-w-0">
-                <h2 className="text-lg font-bold leading-tight" style={{ color: 'var(--color-text)' }}>Transactions</h2>
-                <p className="text-xs" style={{ color: 'var(--color-textSecondary)' }}>{expFiltered.length} records · {periodLabel}</p>
+              <div className="flex items-center gap-2 px-3 pb-2 border-b border-slate-800">
+                <button
+                  onClick={() => { setShowExpenseIncomePanel(false); setExpSearch(''); }}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-800 hover:bg-slate-700 active:scale-90 transition-all flex-shrink-0"
+                  aria-label="Go back"
+                >
+                  <ChevronLeft className="w-4 h-4 text-green-400" />
+                </button>
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-base font-bold leading-tight" style={{ color: 'var(--color-text)' }}>Transactions</h2>
+                  <p className="text-[10px]" style={{ color: 'var(--color-textSecondary)' }}>
+                    {expFiltered.length} records · {periodLabel} 
+                    {expTypeFilter !== 'all' && ` · ${expTypeFilter === 'business' ? '🏢' : '👤'}`}
+                  </p>
+                </div>
+                
+                {/* Mobile: 3-Dot Menu | Desktop: Individual Buttons */}
+                {isMobileView ? (
+                  <button
+                    onClick={() => setExpMoreMenuOpen(!expMoreMenuOpen)}
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all flex-shrink-0 ${
+                      expMoreMenuOpen 
+                        ? 'bg-blue-500/20 border border-blue-500/40' 
+                        : 'bg-slate-800 border border-slate-700'
+                    }`}
+                    aria-label="More options"
+                  >
+                    <MoreVertical className={`w-4 h-4 transition-colors ${expMoreMenuOpen ? 'text-blue-300' : 'text-gray-400'}`} />
+                  </button>
+                ) : (
+                  <>
+                    {/* Desktop: Show all buttons */}
+                    <button
+                      onClick={() => handleDownloadPDF(expFiltered, periodLabel)}
+                      className="w-8 h-8 rounded-lg flex items-center justify-center bg-rose-900/40 hover:bg-rose-800/50 active:scale-90 transition-all flex-shrink-0 border border-rose-700/30"
+                      title="Download PDF"
+                    >
+                      <span className="text-[10px] font-bold text-rose-300">PDF</span>
+                    </button>
+                    <button
+                      onClick={() => handleDownloadTransactions(expFiltered, periodLabel)}
+                      className="w-8 h-8 rounded-lg flex items-center justify-center bg-green-900/40 hover:bg-green-800/50 active:scale-90 transition-all flex-shrink-0 border border-green-700/30"
+                      title="Download CSV"
+                    >
+                      <span className="text-[10px] font-bold text-green-300">CSV</span>
+                    </button>
+                    <button
+                      onClick={() => handleShareTransactions(expFiltered, periodLabel)}
+                      className="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-900/40 hover:bg-blue-800/50 active:scale-90 transition-all flex-shrink-0 border border-blue-700/30"
+                      title="Share"
+                    >
+                      <Share2 className="w-3.5 h-3.5 text-blue-300" />
+                    </button>
+                  </>
+                )}
               </div>
-              {/* PDF */}
-              <button
-                onClick={() => handleDownloadPDF(expFiltered, periodLabel)}
-                className="w-9 h-9 rounded-xl flex items-center justify-center bg-rose-900/40 hover:bg-rose-800/50 active:scale-90 transition-all flex-shrink-0 border border-rose-700/30"
-                title="Download PDF"
-              >
-                <span className="text-[11px] font-bold text-rose-300">PDF</span>
-              </button>
-              {/* CSV */}
-              <button
-                onClick={() => handleDownloadTransactions(expFiltered, periodLabel)}
-                className="w-9 h-9 rounded-xl flex items-center justify-center bg-green-900/40 hover:bg-green-800/50 active:scale-90 transition-all flex-shrink-0 border border-green-700/30"
-                title="Download CSV"
-              >
-                <span className="text-[11px] font-bold text-green-300">CSV</span>
-              </button>
-              {/* Share */}
-              <button
-                onClick={() => handleShareTransactions(expFiltered, periodLabel)}
-                className="w-9 h-9 rounded-xl flex items-center justify-center bg-blue-900/40 hover:bg-blue-800/50 active:scale-90 transition-all flex-shrink-0 border border-blue-700/30"
-                title="Share"
-              >
-                <Share2 className="w-4 h-4 text-blue-300" />
-              </button>
+
+              {/* ── Dropdown Menu (Mobile Only) ── */}
+              {isMobileView && expMoreMenuOpen && (
+                <>
+                  {/* Backdrop */}
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setExpMoreMenuOpen(false)}
+                  />
+                  {/* Menu */}
+                  <div className="absolute right-3 top-full mt-1 z-50 w-48 rounded-xl border border-slate-700 bg-slate-900 shadow-2xl overflow-hidden">
+                    {/* Filter Toggle */}
+                    <button
+                      onClick={() => { setExpFiltersExpanded(!expFiltersExpanded); setExpMoreMenuOpen(false); }}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800 active:bg-slate-700 transition-colors border-b border-slate-800"
+                    >
+                      <Filter className={`w-4 h-4 ${expFiltersExpanded ? 'text-green-400' : 'text-gray-400'}`} />
+                      <span className="flex-1 text-left text-sm" style={{ color: 'var(--color-text)' }}>
+                        {expFiltersExpanded ? 'Hide Filters' : 'Show Filters'}
+                      </span>
+                      {expFiltersExpanded && <Check className="w-3.5 h-3.5 text-green-400" />}
+                    </button>
+                    
+                    {/* PDF Export */}
+                    <button
+                      onClick={() => { handleDownloadPDF(expFiltered, periodLabel); setExpMoreMenuOpen(false); }}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800 active:bg-slate-700 transition-colors"
+                    >
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-rose-900/40 border border-rose-700/30">
+                        <span className="text-[10px] font-bold text-rose-300">PDF</span>
+                      </div>
+                      <div className="flex-1 text-left">
+                        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Export as PDF</p>
+                        <p className="text-[10px] text-gray-500">Download report</p>
+                      </div>
+                    </button>
+                    
+                    {/* CSV Export */}
+                    <button
+                      onClick={() => { handleDownloadTransactions(expFiltered, periodLabel); setExpMoreMenuOpen(false); }}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800 active:bg-slate-700 transition-colors"
+                    >
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-green-900/40 border border-green-700/30">
+                        <span className="text-[10px] font-bold text-green-300">CSV</span>
+                      </div>
+                      <div className="flex-1 text-left">
+                        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Export as CSV</p>
+                        <p className="text-[10px] text-gray-500">Spreadsheet data</p>
+                      </div>
+                    </button>
+                    
+                    {/* Share */}
+                    <button
+                      onClick={() => { handleShareTransactions(expFiltered, periodLabel); setExpMoreMenuOpen(false); }}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800 active:bg-slate-700 transition-colors border-t border-slate-800"
+                    >
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-900/40 border border-blue-700/30">
+                        <Share2 className="w-4 h-4 text-blue-300" />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Share</p>
+                        <p className="text-[10px] text-gray-500">Send to others</p>
+                      </div>
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
 
-            {/* ── Period tabs ── */}
-            <div className="flex-shrink-0 flex gap-1.5 px-4 py-2 border-b border-slate-800/60">
+            {/* ── Collapsible Filters Section (Mobile) | Always Visible (Desktop) ── */}
+            {(isMobileView ? expFiltersExpanded : true) && (
+              <div className="flex-shrink-0 border-b border-slate-800 bg-slate-900/20">
+            {/* ── Period tabs — compact for small screens ── */}
+            <div className="flex gap-1 px-3 py-1.5 border-b border-slate-800/60">
               {[
                 { id: 'today', label: 'Today' },
                 { id: 'week',  label: 'Week' },
@@ -6729,7 +6984,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 <button
                   key={p.id}
                   onClick={() => setExpPeriod(p.id)}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  className={`flex-1 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${
                     expPeriod === p.id
                       ? 'bg-green-500 text-white shadow-sm'
                       : 'text-gray-400 hover:text-white hover:bg-slate-700/50'
@@ -6740,16 +6995,16 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               ))}
             </div>
 
-            {/* ── Custom date picker (shows when Week / Month / Year selected) ── */}
+            {/* ── Custom date picker — compact ── */}
             {expPeriod === 'week' && (
-              <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2 border-b border-slate-800/40 bg-slate-900/40">
-                <Calendar className="w-4 h-4 text-green-400 flex-shrink-0" />
-                <span className="text-xs text-gray-400 flex-shrink-0">Week of:</span>
+              <div className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 border-b border-slate-800/40 bg-slate-900/40">
+                <Calendar className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
+                <span className="text-[10px] text-gray-400 flex-shrink-0">Week of:</span>
                 <input
                   type="date"
                   value={expCustomWeekStart || new Date(now - 7*24*60*60*1000).toISOString().split('T')[0]}
                   onChange={e => setExpCustomWeekStart(e.target.value)}
-                  className="flex-1 bg-transparent text-xs text-green-300 outline-none border-b border-green-500/30 pb-0.5"
+                  className="flex-1 bg-transparent text-[11px] text-green-300 outline-none border-b border-green-500/30 pb-0.5"
                   style={{ colorScheme: 'dark' }}
                 />
                 {expCustomWeekStart && (
@@ -6760,20 +7015,20 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
             {expPeriod === 'month' && (
               <div className="flex-shrink-0 border-b border-slate-800/40 bg-slate-900/40">
-                {/* Year row */}
-                <div className="flex items-center justify-between px-4 pt-2 pb-1">
-                  <button onClick={() => setExpCustomYear(y => y - 1)} className="w-7 h-7 rounded-lg bg-slate-800 text-gray-300 hover:text-white flex items-center justify-center text-sm">‹</button>
-                  <span className="text-sm font-bold text-green-300">{expCustomYear}</span>
-                  <button onClick={() => setExpCustomYear(y => Math.min(y + 1, now.getFullYear()))} className="w-7 h-7 rounded-lg bg-slate-800 text-gray-300 hover:text-white flex items-center justify-center text-sm">›</button>
+                {/* Year row — compact */}
+                <div className="flex items-center justify-between px-3 pt-1.5 pb-1">
+                  <button onClick={() => setExpCustomYear(y => y - 1)} className="w-6 h-6 rounded-lg bg-slate-800 text-gray-300 hover:text-white flex items-center justify-center text-sm">‹</button>
+                  <span className="text-xs font-bold text-green-300">{expCustomYear}</span>
+                  <button onClick={() => setExpCustomYear(y => Math.min(y + 1, now.getFullYear()))} className="w-6 h-6 rounded-lg bg-slate-800 text-gray-300 hover:text-white flex items-center justify-center text-sm">›</button>
                 </div>
-                {/* Month grid */}
-                <div className="grid grid-cols-6 gap-1 px-4 pb-2">
+                {/* Month grid — tighter spacing */}
+                <div className="grid grid-cols-6 gap-1 px-3 pb-1.5">
                   {MONTHS.map((m, i) => (
                     <button
                       key={m}
                       onClick={() => setExpCustomMonth(i)}
                       disabled={expCustomYear === now.getFullYear() && i > now.getMonth()}
-                      className={`py-1 rounded-lg text-[10px] font-semibold transition-all ${
+                      className={`py-1 rounded-lg text-[9px] font-semibold transition-all ${
                         expCustomMonth === i
                           ? 'bg-green-500 text-white'
                           : expCustomYear === now.getFullYear() && i > now.getMonth()
@@ -6789,12 +7044,12 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             )}
 
             {expPeriod === 'year' && (
-              <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2 border-b border-slate-800/40 bg-slate-900/40 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+              <div className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 border-b border-slate-800/40 bg-slate-900/40 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
                 {Array.from({ length: 5 }, (_, i) => now.getFullYear() - i).map(yr => (
                   <button
                     key={yr}
                     onClick={() => setExpCustomYear(yr)}
-                    className={`flex-shrink-0 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    className={`flex-shrink-0 px-3 py-1 rounded-lg text-[11px] font-bold transition-all ${
                       expCustomYear === yr ? 'bg-green-500 text-white' : 'bg-slate-800 text-gray-400 hover:text-white'
                     }`}
                   >
@@ -6804,8 +7059,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               </div>
             )}
 
-            {/* ── Type filter (All / Business / Personal) ── */}
-            <div className="flex-shrink-0 flex gap-1.5 px-4 py-2 border-b border-slate-800/40">
+            {/* ── Type filter — compact ── */}
+            <div className="flex-shrink-0 flex gap-1 px-3 py-1.5 border-b border-slate-800/40">
               {[
                 { id: 'all',      label: 'All',      active: 'bg-slate-600 text-white',   inactive: 'bg-slate-800/60 text-gray-400' },
                 { id: 'business', label: '🏢 Business', active: 'bg-blue-500/30 text-blue-200 border border-blue-500/40', inactive: 'bg-slate-800/60 text-gray-400' },
@@ -6814,96 +7069,164 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 <button
                   key={f.id}
                   onClick={() => setExpTypeFilter(f.id)}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${expTypeFilter === f.id ? f.active : f.inactive}`}
+                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-semibold transition-all ${expTypeFilter === f.id ? f.active : f.inactive}`}
                 >
                   {f.label}
                 </button>
               ))}
             </div>
 
-            {/* ── Search + Group toggle row ── */}
-            <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-slate-800/40">
-              <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl border bg-slate-900/60" style={{ borderColor: 'var(--color-border)' }}>
-                <Search className="w-4 h-4 flex-shrink-0 text-gray-500" />
+            {/* ── Search + Group toggle — compact ── */}
+            <div className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 border-b border-slate-800/40">
+              <div className="flex-1 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border bg-slate-900/60" style={{ borderColor: 'var(--color-border)' }}>
+                <Search className="w-3.5 h-3.5 flex-shrink-0 text-gray-500" />
                 <input
                   type="text"
                   value={expSearch}
                   onChange={e => setExpSearch(e.target.value)}
                   placeholder="Search transactions…"
-                  className="flex-1 bg-transparent text-sm outline-none placeholder:text-gray-600"
+                  className="flex-1 bg-transparent text-xs outline-none placeholder:text-gray-600"
                   style={{ color: 'var(--color-text)' }}
                 />
                 {expSearch && (
-                  <button onClick={() => setExpSearch('')} className="text-gray-500 hover:text-white text-lg leading-none">×</button>
+                  <button onClick={() => setExpSearch('')} className="text-gray-500 hover:text-white text-base leading-none">×</button>
                 )}
               </div>
               {/* Group toggle */}
               <button
                 onClick={() => setExpGrouped(g => !g)}
-                className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${
+                className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-[10px] font-semibold transition-all ${
                   expGrouped ? 'bg-green-500/15 border-green-500/30 text-green-300' : 'bg-slate-800 border-slate-700 text-gray-400'
                 }`}
                 title="Group by Business / Personal"
               >
-                <Layers className="w-3.5 h-3.5" />
+                <Layers className="w-3 h-3" />
                 Group
               </button>
             </div>
 
-            {/* ── Summary strip (In / Out / Net) ── */}
+            {/* ── Summary strip — compact ── */}
             {expFiltered.length > 0 && (
-              <div className="flex-shrink-0 flex gap-2 px-4 py-2.5 border-b border-slate-800/40">
+              <div className="flex-shrink-0 flex gap-2 px-3 py-2 border-b border-slate-800/40">
                 <div className="flex-1 text-center">
-                  <p className="text-[10px] text-gray-500 uppercase tracking-wide">In</p>
-                  <p className="text-sm font-bold text-green-400">{formatCurrency(expIn)}</p>
+                  <p className="text-[9px] text-gray-500 uppercase tracking-wide">In</p>
+                  <p className="text-xs font-bold text-green-400">{formatCurrency(expIn)}</p>
                 </div>
                 <div className="w-px bg-slate-700" />
                 <div className="flex-1 text-center">
-                  <p className="text-[10px] text-gray-500 uppercase tracking-wide">Out</p>
-                  <p className="text-sm font-bold text-red-400">{formatCurrency(expOut)}</p>
+                  <p className="text-[9px] text-gray-500 uppercase tracking-wide">Out</p>
+                  <p className="text-xs font-bold text-red-400">{formatCurrency(expOut)}</p>
                 </div>
                 <div className="w-px bg-slate-700" />
                 <div className="flex-1 text-center">
-                  <p className="text-[10px] text-gray-500 uppercase tracking-wide">Net</p>
-                  <p className={`text-sm font-bold ${expIn - expOut >= 0 ? 'text-green-300' : 'text-red-300'}`}>
+                  <p className="text-[9px] text-gray-500 uppercase tracking-wide">Net</p>
+                  <p className={`text-xs font-bold ${expIn - expOut >= 0 ? 'text-green-300' : 'text-red-300'}`}>
                     {expIn - expOut >= 0 ? '+' : ''}{formatCurrency(Math.abs(expIn - expOut))}
                   </p>
                 </div>
               </div>
             )}
 
-            {/* ── Business / Personal split ── */}
+            {/* ── Business / Personal split — compact ── */}
             {expFiltered.length > 0 && (
-              <div className="flex-shrink-0 flex gap-2 px-4 py-2">
-                <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl border border-blue-500/20 bg-blue-500/8">
-                  <span>🏢</span>
-                  <div>
-                    <p className="text-xs font-bold text-blue-300">{expBiz.length} Business</p>
-                    <p className="text-[10px] text-blue-400/70">{formatCurrency(expBiz.reduce((s,t)=>s+Math.abs(t.amount||0),0))}</p>
+              <div className="flex-shrink-0 flex gap-1.5 px-3 py-1.5">
+                <div className="flex-1 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-blue-500/20 bg-blue-500/8">
+                  <span className="text-sm">🏢</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-bold text-blue-300">{expBiz.length} Business</p>
+                    <p className="text-[9px] text-blue-400/70">{formatCurrency(expBiz.reduce((s,t)=>s+Math.abs(t.amount||0),0))}</p>
                   </div>
                 </div>
-                <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl border border-purple-500/20 bg-purple-500/8">
-                  <span>👤</span>
-                  <div>
-                    <p className="text-xs font-bold text-purple-300">{expPers.length} Personal</p>
-                    <p className="text-[10px] text-purple-400/70">{formatCurrency(expPers.reduce((s,t)=>s+Math.abs(t.amount||0),0))}</p>
+                <div className="flex-1 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-purple-500/20 bg-purple-500/8">
+                  <span className="text-sm">👤</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-bold text-purple-300">{expPers.length} Personal</p>
+                    <p className="text-[9px] text-purple-400/70">{formatCurrency(expPers.reduce((s,t)=>s+Math.abs(t.amount||0),0))}</p>
                   </div>
                 </div>
               </div>
             )}
+            </div>
+            )}
 
-            {/* ── Transaction list ── */}
-            <div className="flex-1 overflow-y-auto px-4 pb-4 pt-2">
+            {/* ── Quick Summary Bar (Mobile Only - when filters collapsed) ── */}
+            {isMobileView && !expFiltersExpanded && expFiltered.length > 0 && (
+              <div className="flex-shrink-0 border-b border-slate-800/40">
+                {/* Stats Row */}
+                <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-slate-900/40 to-slate-900/20">
+                  <div className="flex-1 grid grid-cols-3 gap-2 text-center">
+                    <div>
+                      <p className="text-[8px] text-gray-500 uppercase tracking-wide">In</p>
+                      <p className="text-[11px] font-bold text-green-400 truncate">{formatCurrency(expIn)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[8px] text-gray-500 uppercase tracking-wide">Out</p>
+                      <p className="text-[11px] font-bold text-red-400 truncate">{formatCurrency(expOut)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[8px] text-gray-500 uppercase tracking-wide">Net</p>
+                      <p className={`text-[11px] font-bold truncate ${expIn - expOut >= 0 ? 'text-green-300' : 'text-red-300'}`}>
+                        {expIn - expOut >= 0 ? '+' : ''}{formatCurrency(Math.abs(expIn - expOut))}
+                      </p>
+                    </div>
+                  </div>
+                  {/* Quick Group Toggle */}
+                  <button
+                    onClick={() => setExpGrouped(g => !g)}
+                    className={`flex items-center gap-0.5 px-2 py-1 rounded-md text-[9px] font-semibold transition-all ${
+                      expGrouped 
+                        ? 'bg-green-500/15 border border-green-500/30 text-green-300' 
+                        : 'bg-slate-800 border border-slate-700 text-gray-400'
+                    }`}
+                    title={expGrouped ? 'Ungroup transactions' : 'Group by Business/Personal'}
+                  >
+                    <Layers className="w-2.5 h-2.5" />
+                  </button>
+                </div>
+                {/* Type indicator chips — Smart contextual display */}
+                {(expBiz.length > 0 || expPers.length > 0) && (
+                  <div className="flex items-center gap-1.5 px-3 pb-2 pt-1">
+                    {expBiz.length > 0 && (
+                      <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20">
+                        <span className="text-[10px]">🏢</span>
+                        <span className="text-[9px] font-bold text-blue-300">{expBiz.length}</span>
+                        <span className="text-[8px] text-blue-400/70">{formatCurrency(expBiz.reduce((s,t)=>s+Math.abs(t.amount||0),0))}</span>
+                      </div>
+                    )}
+                    {expPers.length > 0 && (
+                      <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20">
+                        <span className="text-[10px]">👤</span>
+                        <span className="text-[9px] font-bold text-purple-300">{expPers.length}</span>
+                        <span className="text-[8px] text-purple-400/70">{formatCurrency(expPers.reduce((s,t)=>s+Math.abs(t.amount||0),0))}</span>
+                      </div>
+                    )}
+                    <div className="ml-auto text-[8px] text-gray-600 flex items-center gap-1">
+                      <span>Tap</span>
+                      <Filter className="w-2.5 h-2.5" />
+                      <span>to filter</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Transaction list — optimized for small screens with proper scrolling ── */}
+            <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 pt-1.5" style={{ 
+              WebkitOverflowScrolling: 'touch',
+              scrollbarWidth: 'thin',
+              scrollbarColor: 'rgba(148, 163, 184, 0.3) transparent'
+            }}>
+              <div className="pb-4">
               {expFiltered.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full gap-3 opacity-60">
-                  <span className="text-5xl">📭</span>
-                  <p className="text-sm text-gray-400">
+                <div className="flex flex-col items-center justify-center min-h-[200px] gap-2.5 opacity-60 py-8">
+                  <span className="text-4xl">📭</span>
+                  <p className="text-xs text-gray-400 text-center">
                     {expSearch ? `No results for "${expSearch}"` : `No transactions for ${periodLabel.toLowerCase()}`}
                   </p>
                   {!expSearch && (
                     <button
                       onClick={() => { setShowExpenseIncomePanel(false); setShowTransactionEntry(true); }}
-                      className="mt-1 px-4 py-2 rounded-xl text-sm font-semibold bg-green-500 text-white active:scale-95 transition"
+                      className="mt-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-500 text-white active:scale-95 transition"
                     >
                       + Record One
                     </button>
@@ -6935,67 +7258,67 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   return (
                     <div
                       key={transaction.id}
-                      className="flex items-center gap-3 p-3 rounded-xl border transition-all group"
+                      className="flex items-center gap-2 p-2.5 rounded-lg border transition-all group"
                       style={{
                         backgroundColor: 'var(--color-bgSecondary)',
                         borderColor: isBiz && chainHash ? 'rgba(59,130,246,0.25)' : 'var(--color-border)'
                       }}
                     >
-                      {/* Icon */}
-                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 text-lg ${
+                      {/* Icon — compact */}
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 text-base ${
                         isIncome ? 'bg-green-500/15' : 'bg-red-500/15'
                       }`}>
-                        {emoji ? <span>{emoji}</span> : isIncome
-                          ? <TrendingUp className="w-5 h-5 text-green-400" />
-                          : <TrendingDown className="w-5 h-5 text-red-400" />}
+                        {emoji ? <span className="text-sm">{emoji}</span> : isIncome
+                          ? <TrendingUp className="w-4 h-4 text-green-400" />
+                          : <TrendingDown className="w-4 h-4 text-red-400" />}
                       </div>
 
-                      {/* Info */}
+                      {/* Info — optimized spacing */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-sm font-semibold truncate flex-1" style={{ color: 'var(--color-text)' }}>
+                        <div className="flex items-center gap-1">
+                          <p className="text-xs font-semibold truncate flex-1" style={{ color: 'var(--color-text)' }}>
                             {transaction.description || 'Transaction'}
                           </p>
-                          {rankMedal && <span className="text-sm flex-shrink-0">{rankMedal}</span>}
+                          {rankMedal && <span className="text-xs flex-shrink-0">{rankMedal}</span>}
                         </div>
-                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                        <div className="flex items-center gap-1 mt-0.5 flex-wrap">
                           {catName && (
-                            <span className="text-[10px] capitalize" style={{ color: 'var(--color-textSecondary)' }}>
+                            <span className="text-[9px] capitalize" style={{ color: 'var(--color-textSecondary)' }}>
                               {catName}
                             </span>
                           )}
                           {soldStats && soldStats.count > 1 && (
-                            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300">
+                            <span className="text-[8px] font-semibold px-1 py-0.5 rounded-full bg-amber-500/15 text-amber-300">
                               {soldStats.count}× sold · {formatCurrency(soldStats.totalAmount)}
                             </span>
                           )}
                           {/* ICAN Blockchain seal — business only */}
                           {isBiz && chainHash && (
                             <span
-                              className="flex items-center gap-0.5 text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-300"
+                              className="flex items-center gap-0.5 text-[8px] font-mono font-semibold px-1 py-0.5 rounded-full bg-blue-500/15 text-blue-300"
                               title={`ICAN Chain: ${chainHash}`}
                             >
-                              <ShieldCheck className="w-2.5 h-2.5" />
-                              {chainHash.slice(0, 8)}…
+                              <ShieldCheck className="w-2 h-2" />
+                              {chainHash.slice(0, 6)}…
                             </span>
                           )}
-                          <span className="text-[10px] ml-auto" style={{ color: 'var(--color-textSecondary)' }}>
+                          <span className="text-[9px] ml-auto" style={{ color: 'var(--color-textSecondary)' }}>
                             {fmtExpDate(transaction.created_at)}
                           </span>
                         </div>
                       </div>
 
-                      {/* Amount + delete */}
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <p className={`text-sm font-bold tabular-nums ${isIncome ? 'text-green-400' : 'text-red-400'}`}>
+                      {/* Amount + delete — compact */}
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <p className={`text-xs font-bold tabular-nums ${isIncome ? 'text-green-400' : 'text-red-400'}`}>
                           {isIncome ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount || 0))}
                         </p>
                         <button
                           onClick={() => handleDeleteTransaction(transaction.id, transaction.description || 'Transaction')}
-                          className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                          className="p-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 hover:bg-red-500/10"
                           title="Delete"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-3 h-3" />
                         </button>
                       </div>
                     </div>
@@ -7003,24 +7326,24 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 };
 
                 if (expGrouped) {
-                  // ── Grouped view ──
+                  // ── Grouped view — compact ──
                   const grouped = [
                     { key: 'business', label: 'Business', emoji: '🏢', color: 'text-blue-300', border: 'border-blue-500/20', items: expFiltered.filter(t => (t.record_category || t.metadata?.record_category) === 'business') },
                     { key: 'personal', label: 'Personal', emoji: '👤', color: 'text-purple-300', border: 'border-purple-500/20', items: expFiltered.filter(t => (t.record_category || t.metadata?.record_category) !== 'business') },
                   ];
                   return (
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                       {grouped.map(group => group.items.length === 0 ? null : (
                         <div key={group.key}>
-                          {/* Section header */}
-                          <div className={`flex items-center gap-2 mb-2 pb-1.5 border-b ${group.border}`}>
-                            <span className="text-base">{group.emoji}</span>
-                            <span className={`text-xs font-bold uppercase tracking-wider ${group.color}`}>{group.label}</span>
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ml-auto ${group.color} bg-current/10`} style={{ backgroundColor: group.key === 'business' ? 'rgba(59,130,246,0.12)' : 'rgba(168,85,247,0.12)' }}>
+                          {/* Section header — compact */}
+                          <div className={`flex items-center gap-1.5 mb-1.5 pb-1 border-b ${group.border}`}>
+                            <span className="text-sm">{group.emoji}</span>
+                            <span className={`text-[10px] font-bold uppercase tracking-wider ${group.color}`}>{group.label}</span>
+                            <span className={`text-[9px] px-1 py-0.5 rounded-full font-semibold ml-auto ${group.color} bg-current/10`} style={{ backgroundColor: group.key === 'business' ? 'rgba(59,130,246,0.12)' : 'rgba(168,85,247,0.12)' }}>
                               {group.items.length} · {formatCurrency(group.items.reduce((s,t) => s + Math.abs(t.amount||0), 0))}
                             </span>
                           </div>
-                          <div className="space-y-2">
+                          <div className="space-y-1.5">
                             {group.items.map(renderTxRow)}
                           </div>
                         </div>
@@ -7030,25 +7353,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 }
 
                 // ── Flat chronological view ──
-                return <div className="space-y-2">{expFiltered.map(renderTxRow)}</div>;
+                return <div className="space-y-1.5">{expFiltered.map(renderTxRow)}</div>;
               })()}
-            </div>
-
-            {/* ── Footer: Record buttons ── */}
-            <div className="flex-shrink-0 px-4 pt-2 pb-3 border-t border-slate-800">
-              <div className="flex gap-2">
-                <button
-                  onClick={() => { setTransactionType('business'); setShowTransactionEntry(true); }}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm active:scale-95 transition border border-blue-500/30 bg-blue-500/10 text-blue-300"
-                >
-                  <span>💼</span> Business
-                </button>
-                <button
-                  onClick={() => { setTransactionType('personal'); setShowTransactionEntry(true); }}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm active:scale-95 transition border border-purple-500/30 bg-purple-500/10 text-purple-300"
-                >
-                  <span>👤</span> Personal
-                </button>
               </div>
             </div>
           </div>
@@ -7279,9 +7585,21 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {showStatusUploader && (
         <div className="fixed inset-0 z-[140]">
           <StatusUploader
-            onClose={() => setShowStatusUploader(false)}
+            onClose={() => {
+              setShowStatusUploader(false);
+              // Clear shared content after closing
+              if (sharedContent) {
+                markSharedContentAsConsumed(sharedContent.id).catch(console.error);
+                setSharedContent(null);
+              }
+            }}
             onStatusCreated={() => {
               setShowStatusUploader(false);
+              // Mark shared content as consumed
+              if (sharedContent) {
+                markSharedContentAsConsumed(sharedContent.id).catch(console.error);
+                setSharedContent(null);
+              }
               // Refresh statuses after creating a new one
               (async () => {
                 try {
@@ -7294,6 +7612,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 }
               })();
             }}
+            sharedContent={sharedContent}
           />
         </div>
       )}

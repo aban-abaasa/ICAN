@@ -5,6 +5,16 @@
   "rewrites": [
     { "source": "/(.*)", "destination": "/" }
   ],
+  "routes": [
+    {
+      "src": "/share",
+      "methods": ["POST"],
+      "dest": "/",
+      "headers": {
+        "cache-control": "no-cache"
+      }
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
