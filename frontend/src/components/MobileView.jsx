@@ -1511,37 +1511,83 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   };
   // Calculate Tithing Metrics — driven by REAL transactions from the DB
   const calculateTithingMetrics = () => {
-    // 🔧 FIXED June 8: Separate personal and business income for proper tithe calculation
-    // Personal tithe: calculated on salary/personal income ONLY
-    // Business tithe: calculated on business profit (revenue - expenses) ONLY
-    
-    // Real 30-day figures from VelocityEngine (loaded from ican_transactions)
-    const personalIncome  = velocityMetrics?.personalIncome30Days   || 0;  // Salary/wages only
-    const businessIncome  = velocityMetrics?.businessIncome30Days   || 0;  // Business sales/revenue only
-    const businessExpenses = velocityMetrics?.businessExpenses30Days || 0; // Business expenses only
-    
-    const businessProfit   = Math.max(0, businessIncome - businessExpenses);  // Business profit (net)
-    const personalTithe    = (personalIncome  * personalTithingRate) / 100;   // Tithe on salary
-    const businessTithe    = (businessProfit  * businessTithingRate) / 100;   // Tithe on business profit
+    // ── Calendar-month boundaries (resets on the 1st of each month) ──
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1); // e.g. June 1 00:00:00
 
-    // Totals for display/reporting
-    const realIncome = personalIncome + businessIncome;
-    const realExpenses = businessExpenses;
-    const realNetProfit = businessProfit + personalIncome; // Total net = personal income + business profit
+    const monthlyTx = transactions.filter(t => new Date(t.created_at) >= monthStart);
+
+    // ── Monthly personal income (same category logic as VelocityEngine) ──
+    // Inclusive: any income not explicitly tagged as business counts as personal
+    const personalIncome = monthlyTx
+      .filter(t =>
+        t.transaction_type === 'income' &&
+        t.metadata?.record_category !== 'tithe' &&
+        t.metadata?.record_category !== 'business' &&
+        t.metadata?.reporting_bucket !== 'sold_income' &&
+        t.metadata?.category !== 'business'
+      )
+      .reduce((s, t) => s + (t.amount || 0), 0);
+
+    // ── Monthly business income ──
+    const businessIncome = monthlyTx
+      .filter(t =>
+        t.transaction_type === 'income' &&
+        (
+          t.metadata?.record_category === 'business' ||
+          t.metadata?.reporting_bucket === 'sold_income' ||
+          t.metadata?.category === 'business'
+        )
+      )
+      .reduce((s, t) => s + (t.amount || 0), 0);
+
+    // ── Monthly business expenses (tithe payments excluded) ──
+    const businessExpenses = monthlyTx
+      .filter(t =>
+        t.transaction_type === 'expense' &&
+        t.metadata?.record_category !== 'tithe' &&
+        (
+          t.metadata?.record_category === 'business' ||
+          t.metadata?.reporting_bucket === 'bought_stock' ||
+          t.metadata?.category === 'business'
+        )
+      )
+      .reduce((s, t) => s + (t.amount || 0), 0);
+
+    const businessProfit = Math.max(0, businessIncome - businessExpenses);
+    const personalTithe  = (personalIncome * personalTithingRate) / 100;
+    const businessTithe  = (businessProfit  * businessTithingRate) / 100;
+    const combinedTithe  = personalTithe + businessTithe;
+
+    // ── Tithe PAID this calendar month only ──
+    const totalTithePaid = monthlyTx
+      .filter(t => t.metadata?.record_category === 'tithe')
+      .reduce((s, t) => s + (t.amount || 0), 0);
+
+    // Paid ratio: apply proportionally across personal/business buckets
+    const paidRatio = combinedTithe > 0 ? Math.min(1, totalTithePaid / combinedTithe) : 0;
+    const remainingPersonal = Math.max(0, personalTithe * (1 - paidRatio));
+    const remainingBusiness = Math.max(0, businessTithe * (1 - paidRatio));
+    const remainingCombined = Math.max(0, combinedTithe - totalTithePaid);
 
     return {
-      totalIncome:    realIncome,
-      realExpenses,
-      netProfit:      realNetProfit,
+      totalIncome:      personalIncome + businessIncome,
+      realExpenses:     businessExpenses,
+      netProfit:        businessProfit + personalIncome,
       businessProfit,
       personalIncome,
       businessIncome,
       businessExpenses,
-      requiredTithe:  personalTithe,      // kept for legacy references
+      requiredTithe:    personalTithe,
       personalTithe,
       businessTithe,
-      combinedTithe:  personalTithe + businessTithe,
-      hasRealData:    velocityMetrics !== null,
+      combinedTithe,
+      remainingPersonal,
+      remainingBusiness,
+      remainingCombined,
+      totalTithePaid,
+      hasRealData:      transactions.length > 0,
+      monthLabel:       now.toLocaleString('default', { month: 'long', year: 'numeric' }),
     };
   };
 
@@ -1610,13 +1656,13 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
         timestamp: paymentDate
       });
 
-      // ✅ CRITICAL: Create tithe transaction record with complete metadata
-      // The database trigger will automatically clear user_tithe_tracking based on payment_type
+      // Insert as 'expense' with record_category:'tithe' — avoids the broken trigger
+      // on transaction_type='tithe' that has an ambiguous 'amount_remaining' column bug.
       const { data, error } = await supabase
         .from('ican_transactions')
         .insert({
           user_id: user.id,
-          transaction_type: 'tithe',
+          transaction_type: 'expense',
           amount: amount,
           description: `Tithe payment - ${tithePaymentType} (${recipient})`,
           status: 'completed',
@@ -1627,7 +1673,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
             reporting_bucket: 'tithe_payment',
             entry_type: 'manual',
             entry_mode: 'tithe-pay-in',
-            payment_type: tithePaymentType, // ✅ CRITICAL: Trigger reads this field
+            payment_type: tithePaymentType,
             recipient: recipient,
             notes: tithePaymentNotes,
             tithe_amount_personal: tithePaymentType === 'personal' ? amount : 0,
@@ -1644,6 +1690,36 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
       }
 
       console.log('✅ Transaction recorded:', data);
+
+      // Manually clear user_tithe_tracking — replaces what the broken trigger was supposed to do
+      try {
+        const { data: tracking } = await supabase
+          .from('user_tithe_tracking')
+          .select('personal_tithe_accumulated, business_tithe_accumulated, combined_tithe_accumulated')
+          .eq('user_id', user.id)
+          .single();
+
+        if (tracking) {
+          const updates = { last_payment_date: paymentDate };
+          if (tithePaymentType === 'personal') {
+            updates.personal_tithe_accumulated = Math.max(0, (tracking.personal_tithe_accumulated || 0) - amount);
+          } else if (tithePaymentType === 'business') {
+            updates.business_tithe_accumulated = Math.max(0, (tracking.business_tithe_accumulated || 0) - amount);
+          } else {
+            // Combined: drain personal first, then business
+            const personalOwed = tracking.personal_tithe_accumulated || 0;
+            const personalPaid = Math.min(amount, personalOwed);
+            const businessPaid = Math.min(amount - personalPaid, tracking.business_tithe_accumulated || 0);
+            updates.personal_tithe_accumulated = Math.max(0, personalOwed - personalPaid);
+            updates.business_tithe_accumulated = Math.max(0, (tracking.business_tithe_accumulated || 0) - businessPaid);
+            updates.combined_tithe_accumulated = Math.max(0, (tracking.combined_tithe_accumulated || 0) - amount);
+          }
+          await supabase.from('user_tithe_tracking').update(updates).eq('user_id', user.id);
+          console.log('✅ user_tithe_tracking cleared manually');
+        }
+      } catch (trackingErr) {
+        console.warn('⚠️ Tithe tracking update warning:', trackingErr);
+      }
 
       // 🔧 Deduct from user's wallet balance
       try {
@@ -1697,38 +1773,21 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
         console.warn('⚠️ Profile operation error:', profileErr);
       }
 
-      // ✅ CRITICAL: Fetch actual tithe values from database AFTER short delay
-      // This allows the trigger to complete and database to reflect cleared tithe
-      console.log('⏳ Waiting for database trigger to clear tithe...');
-      
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Reload transactions first so remainingCombined recalculates to 0 before showing success
+      await refreshVelocityMetrics();
       await fetchActualTitheOwed(user.id);
-      
-      console.log('✅ Tithe amounts refreshed from database');
 
-      // Success! Show message
       setTithePaymentSuccess(
-        `✅ Tithe payment of UGX ${amount.toLocaleString(undefined, {maximumFractionDigits: 0})} recorded successfully!\n💳 Deducted from wallet | 📊 Tithe cleared | 🙏 Payment recorded`
+        `✅ UGX ${amount.toLocaleString(undefined, {maximumFractionDigits: 0})} tithe paid & cleared! 💳 Wallet deducted | 🙏 Blockchain-secured`
       );
-      
-      // Reset form after 3 seconds
+
       setTimeout(() => {
         setTithePaymentAmount('');
         setTithePaymentRecipient('');
         setTithePaymentNotes('');
-        setTithePaymentType('personal');
+        setTithePaymentType('combined');
         setTithePaymentSuccess(null);
-        setBusinessTithingRate(10);
-        setPersonalTithingRate(10);
-        
-        // Keep modal open so user can see cleared tithe
-        // setShowTithingCalculator(false);
       }, 3000);
-
-      // 🔥 NEW: Refresh velocity metrics with latest transactions
-      // This ensures tithe amounts are always accurate based on new cash in/profit
-      console.log('💰 After tithe payment: Refreshing velocity metrics for accuracy...');
-      await refreshVelocityMetrics();
 
     } catch (err) {
       console.error('❌ Critical error in handlePayTithe:', err);
@@ -7774,7 +7833,15 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               {/* Tab switcher */}
               <div className="flex gap-2 bg-amber-100 rounded-xl p-1">
                 {['quick', 'business', 'personal', 'pay-in'].map(tab => (
-                  <button key={tab} onClick={() => setSelectedTithingTab(tab)}
+                  <button key={tab} onClick={() => {
+                    setSelectedTithingTab(tab);
+                    if (tab === 'pay-in') {
+                      // Use remaining after already-paid tithe (not gross income-based)
+                      const due = Math.round(tithingMetrics.remainingCombined || 0);
+                      if (due > 0) setTithePaymentAmount(String(due));
+                      setTithePaymentType('combined');
+                    }
+                  }}
                     className={`flex-1 py-2 rounded-lg text-xs font-bold capitalize transition ${selectedTithingTab === tab ? 'bg-white text-amber-700 shadow' : 'text-amber-600 hover:text-amber-800'}`}>
                     {tab === 'quick' ? '⚡ Quick' : tab === 'business' ? '💼 Business' : tab === 'personal' ? '👤 Personal' : '💳 Pay In'}
                   </button>
@@ -7786,12 +7853,12 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   {/* Live data banner */}
                   <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold ${tithingMetrics.hasRealData ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-gray-50 text-gray-500 border border-gray-200'}`}>
                     <span>{tithingMetrics.hasRealData ? '🟢 Live' : '⚪ No data'}</span>
-                    <span>{tithingMetrics.hasRealData ? 'Based on your real transactions (last 30 days)' : 'No transactions loaded yet'}</span>
+                    <span>{tithingMetrics.hasRealData ? `${tithingMetrics.monthLabel} — based on this month's transactions` : 'No transactions loaded yet'}</span>
                   </div>
 
                   {/* 🔧 FIXED: Separate personal and business income display */}
                   <div className="bg-white rounded-xl p-4 shadow-sm space-y-3">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">This Month's Financials (30 days)</p>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{tithingMetrics.monthLabel} Financials</p>
                     
                     {/* Personal Income */}
                     <div className="border-b pb-2">
@@ -7911,13 +7978,34 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               {selectedTithingTab === 'pay-in' && (
                 <div className="space-y-3">
                   {/* Summary of tithe due - SHOW CALCULATED based on current income */}
-                  <div className="bg-gradient-to-br from-amber-100 to-yellow-100 rounded-xl p-4 shadow-sm border border-amber-300">
-                    <div className="text-xs text-amber-700 mb-2">Total Tithe Due (calculated from current income)</div>
-                    <div className="text-3xl font-bold text-amber-900">UGX {(tithingMetrics.combinedTithe || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
-                    <div className="text-xs text-amber-700 mt-2 space-y-1">
-                      <div>Personal: UGX {(tithingMetrics.personalTithe || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
-                      <div>Business: UGX {(tithingMetrics.businessTithe || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
+                  <div className={`rounded-xl p-4 shadow-sm border ${tithingMetrics.remainingCombined === 0 && tithingMetrics.combinedTithe > 0 ? 'bg-green-50 border-green-300' : 'bg-gradient-to-br from-amber-100 to-yellow-100 border-amber-300'}`}>
+                    <div className="text-xs text-amber-700 mb-1 font-semibold uppercase tracking-wide">
+                      {tithingMetrics.monthLabel} — Remaining Tithe
                     </div>
+                    <div className={`text-3xl font-bold ${tithingMetrics.remainingCombined === 0 && tithingMetrics.combinedTithe > 0 ? 'text-green-700' : 'text-amber-900'}`}>
+                      UGX {Math.round(tithingMetrics.remainingCombined || 0).toLocaleString()}
+                    </div>
+                    <div className="text-xs text-amber-700 mt-2 space-y-1">
+                      <div>
+                        Personal: <span className="font-semibold">UGX {Math.round(tithingMetrics.remainingPersonal || 0).toLocaleString()}</span>
+                        <span className="text-gray-400 ml-1">of {Math.round(tithingMetrics.personalTithe || 0).toLocaleString()}</span>
+                      </div>
+                      <div>
+                        Business: <span className="font-semibold">UGX {Math.round(tithingMetrics.remainingBusiness || 0).toLocaleString()}</span>
+                        <span className="text-gray-400 ml-1">of {Math.round(tithingMetrics.businessTithe || 0).toLocaleString()}</span>
+                      </div>
+                      {tithingMetrics.totalTithePaid > 0 && (
+                        <div className="text-green-600 font-semibold pt-1 border-t border-amber-200">
+                          ✓ Paid this month: UGX {Math.round(tithingMetrics.totalTithePaid).toLocaleString()}
+                        </div>
+                      )}
+                    </div>
+                    {tithingMetrics.remainingCombined === 0 && tithingMetrics.combinedTithe > 0 && (
+                      <div className="text-sm text-green-700 font-bold mt-2">🎉 All tithes cleared for {tithingMetrics.monthLabel}!</div>
+                    )}
+                    {tithingMetrics.combinedTithe === 0 && (
+                      <div className="text-xs text-gray-500 mt-2">No income recorded this month yet.</div>
+                    )}
                   </div>
 
                   {/* 🔧 FIXED: Use calculated tithe for the quick-fill button */}
@@ -7932,7 +8020,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                     />
                     <button 
-                      onClick={() => setTithePaymentAmount(((tithingMetrics.combinedTithe) || 0).toString())}
+                      onClick={() => setTithePaymentAmount(String(Math.round(tithingMetrics.remainingCombined || 0)))}
                       className="text-xs text-amber-600 hover:text-amber-700 mt-2 font-semibold"
                     >
                       Use full tithe due
@@ -7947,9 +8035,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       onChange={e => setTithePaymentType(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                     >
+                      <option value="combined">Combined Tithe</option>
                       <option value="personal">Personal Tithe</option>
                       <option value="business">Business Tithe</option>
-                      <option value="combined">Combined Tithe</option>
                     </select>
                   </div>
 

@@ -51,6 +51,12 @@ export default function TitheManager() {
   const [selectedTithe, setSelectedTithe] = useState(null);
   const [selectedForPayment, setSelectedForPayment] = useState([]);
 
+  // 💳 Pay Tithe state
+  const [filteredTransactions, setFilteredTransactions] = useState([]);
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
+  const [transactionFilter, setTransactionFilter] = useState('all');
+  const [alreadyTithedTxIds, setAlreadyTithedTxIds] = useState(new Set());
+
   // UI state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -77,7 +83,8 @@ export default function TitheManager() {
         fetchUnpaidTithes(),
         fetchSummary(),
         fetchWalletBalance(),
-        fetchChainIntegrity()
+        fetchChainIntegrity(),
+        loadAlreadyTithedMap()
       ]);
     };
     init();
@@ -255,6 +262,24 @@ export default function TitheManager() {
     }
   };
 
+  // Builds a Set of transaction IDs that have already been tithed
+  // Uses TX:{uuid} blockchain marker stored in notes to detect duplicates
+  const loadAlreadyTithedMap = async () => {
+    try {
+      const { data } = await supabase.rpc('fn_get_user_tithes', {
+        p_start_date: null, p_end_date: null, p_giving_type: null, p_limit: 500
+      });
+      const ids = new Set();
+      (data || []).forEach(t => {
+        const m = String(t.notes_encrypted || t.notes || '').match(/TX:([a-z0-9-]+)/i);
+        if (m) ids.add(m[1]);
+      });
+      setAlreadyTithedTxIds(ids);
+    } catch (err) {
+      console.error('Error loading tithe map:', err);
+    }
+  };
+
   // ============================================================
   // ADD TITHE
   // ============================================================
@@ -365,7 +390,7 @@ export default function TitheManager() {
   };
 
   // ============================================================
-  // PAY TITHE FROM TRANSACTION
+  // PAY TITHE FROM TRANSACTION — auto-settle + blockchain guard
   // ============================================================
 
   const handlePayTitheFromTransaction = async (e) => {
@@ -376,12 +401,18 @@ export default function TitheManager() {
       return;
     }
 
-    if (!form.amount || parseFloat(form.amount) <= 0) {
-      setError('Please enter a valid tithe amount');
+    // ⛔ Blockchain double-tithe guard
+    if (alreadyTithedTxIds.has(selectedTransaction.id)) {
+      setError(`⛔ Double-tithe blocked. Blockchain record already exists for TX:${selectedTransaction.id.slice(0, 8)}… — this income was already tithed.`);
       return;
     }
 
     const amount = parseFloat(form.amount);
+    if (!amount || amount <= 0) {
+      setError('Please enter a valid tithe amount');
+      return;
+    }
+
     if (amount > selectedTransaction.amount) {
       setError(`Tithe amount cannot exceed transaction amount (${selectedTransaction.amount} ${selectedTransaction.currency})`);
       return;
@@ -392,27 +423,79 @@ export default function TitheManager() {
     setSuccess(null);
 
     try {
+      // Blockchain-traceable note: TX:{source_id}|PAID|{timestamp}|{type}
+      const blockchainNote = `TX:${selectedTransaction.id}|PAID|${new Date().toISOString()}|${form.givingType}`;
+
+      // Step 1 — Record tithe
       const { data, error } = await supabase.rpc('fn_add_tithe', {
         p_giving_type: form.givingType,
         p_amount: amount,
         p_currency: selectedTransaction.currency,
         p_recipient_type: form.recipientType,
         p_recipient_name_encrypted: null,
-        p_tithe_percentage: (amount / selectedTransaction.amount * 100).toFixed(1),
+        p_tithe_percentage: parseFloat((amount / selectedTransaction.amount * 100).toFixed(1)),
         p_income_reference_amount: selectedTransaction.amount,
         p_giving_date: form.givingDate,
-        p_notes_encrypted: form.notes || `From ${transactionFilter} transaction`,
+        p_notes_encrypted: blockchainNote,
         p_is_anonymous: form.isAnonymous
       });
 
       if (error) throw error;
-
       const result = data?.[0];
       if (!result.success) throw new Error(result.message);
 
-      setSuccess(`✅ Tithe paid! ${result.message}`);
+      // Step 2 — Fetch the just-created tithe record by its blockchain note
+      const { data: titheRecord } = await supabase
+        .from('ican_tithe_records')
+        .select('id, amount, currency, giving_type, recipient_type')
+        .ilike('notes_encrypted', `TX:${selectedTransaction.id}%`)
+        .neq('blockchain_status', 'removed')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
 
-      // Reset form and refresh
+      if (titheRecord) {
+        // Step 3 — Immediately settle (mark as paid + cleared)
+        await supabase
+          .from('ican_tithe_records')
+          .update({
+            blockchain_status: 'settled',
+            payment_status: 'paid',
+            settled_date: new Date().toISOString()
+          })
+          .eq('id', titheRecord.id);
+
+        // Step 4 — Write to financial reports for tax/audit trail
+        const { data: { user } } = await supabase.auth.getUser();
+        await supabase
+          .from('ican_transactions')
+          .insert({
+            user_id: user?.id,
+            amount: titheRecord.amount,
+            currency: titheRecord.currency,
+            transaction_type: 'tithe',
+            description: `${titheRecord.giving_type.charAt(0).toUpperCase() + titheRecord.giving_type.slice(1)} to ${titheRecord.recipient_type}`,
+            status: 'completed',
+            metadata: {
+              payment_type: selectedTransaction.transaction_type || 'personal',
+              tithe_type: form.givingType,
+              entry_mode: 'tithe-pay-in',
+              recorded_date: new Date().toISOString(),
+              source_transaction_id: selectedTransaction.id,
+              blockchain_note: blockchainNote,
+              giving_type: form.givingType,
+              recipient_type: form.recipientType,
+              is_anonymous: form.isAnonymous,
+              record_category: 'tithe'
+            }
+          });
+      }
+
+      // Mark in local guard so UI immediately reflects no double-tithe
+      setAlreadyTithedTxIds(prev => new Set([...prev, selectedTransaction.id]));
+
+      setSuccess(`✅ Tithe paid & cleared! Secured on blockchain as TX:${selectedTransaction.id.slice(0, 8)}…`);
+
       setForm({
         amount: '',
         givingType: 'tithe',
@@ -426,10 +509,12 @@ export default function TitheManager() {
 
       await Promise.all([
         fetchTithes(),
+        fetchUnpaidTithes(),
         fetchSummary(),
         fetchCurrentTitheOwed(),
         fetchWalletBalance(),
-        fetchFilteredTransactions(transactionFilter)
+        fetchFilteredTransactions(transactionFilter),
+        loadAlreadyTithedMap()
       ]);
 
       setTimeout(() => setSuccess(null), 5000);
@@ -751,40 +836,60 @@ export default function TitheManager() {
           {filteredTransactions.length === 0 ? (
             <div className="text-gray-400 text-center py-4">No transactions found</div>
           ) : (
-            filteredTransactions.map((transaction) => (
-              <div
-                key={transaction.id}
-                onClick={() => {
-                  setSelectedTransaction(transaction);
-                  setForm({
-                    ...form,
-                    incomeReference: transaction.amount,
-                    givingDate: new Date(transaction.created_at).toISOString().split('T')[0]
-                  });
-                }}
-                className={`p-3 rounded-lg border transition cursor-pointer ${
-                  selectedTransaction?.id === transaction.id
-                    ? 'border-purple-500 bg-purple-500/10'
-                    : 'border-slate-700 bg-slate-700/50 hover:border-purple-500/50'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <p className="text-white font-semibold">{transaction.amount.toLocaleString()} {transaction.currency}</p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {transaction.description || transaction.source_type} • {new Date(transaction.created_at).toLocaleDateString()}
-                    </p>
+            filteredTransactions.map((transaction) => {
+              const wasTithed = alreadyTithedTxIds.has(transaction.id);
+              return (
+                <div
+                  key={transaction.id}
+                  onClick={() => {
+                    if (wasTithed) return;
+                    setSelectedTransaction(transaction);
+                    setForm(f => ({
+                      ...f,
+                      incomeReference: transaction.amount,
+                      // Auto-fill 10% tithe
+                      amount: Math.round(transaction.amount * 0.1),
+                      givingDate: new Date(transaction.created_at).toISOString().split('T')[0]
+                    }));
+                  }}
+                  className={`p-3 rounded-lg border transition ${
+                    wasTithed
+                      ? 'border-green-700/40 bg-green-900/10 cursor-not-allowed opacity-60'
+                      : selectedTransaction?.id === transaction.id
+                        ? 'border-purple-500 bg-purple-500/10 cursor-pointer'
+                        : 'border-slate-700 bg-slate-700/50 hover:border-purple-500/50 cursor-pointer'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex-1">
+                      <p className="text-white font-semibold">{transaction.amount.toLocaleString()} {transaction.currency}</p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {transaction.description || transaction.source_type} • {new Date(transaction.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className={`text-xs px-2 py-1 rounded font-semibold ${
+                        transaction.transaction_type === 'business'
+                          ? 'bg-blue-500/20 text-blue-300'
+                          : 'bg-green-500/20 text-green-300'
+                      }`}>
+                        {transaction.transaction_type}
+                      </span>
+                      {wasTithed && (
+                        <span className="text-xs px-2 py-1 rounded font-bold bg-green-500/20 text-green-300">
+                          ✓ Tithed
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <span className={`text-xs px-2 py-1 rounded font-semibold ${
-                    transaction.transaction_type === 'business'
-                      ? 'bg-blue-500/20 text-blue-300'
-                      : 'bg-green-500/20 text-green-300'
-                  }`}>
-                    {transaction.transaction_type}
-                  </span>
+                  {!wasTithed && (
+                    <p className="text-[10px] text-gray-500 mt-1">
+                      10% = {Math.round(transaction.amount * 0.1).toLocaleString()} {transaction.currency}
+                    </p>
+                  )}
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
@@ -881,13 +986,20 @@ export default function TitheManager() {
               <span className="text-sm">Keep this giving anonymous</span>
             </label>
 
+            {/* Blockchain note preview */}
+            {form.amount && selectedTransaction && (
+              <div className="bg-slate-900/60 border border-slate-600/40 rounded-lg px-3 py-2 text-[10px] text-gray-500 font-mono break-all">
+                🔗 TX:{selectedTransaction.id.slice(0, 12)}…|PAID|{form.givingType} — will be blockchain-sealed on submit
+              </div>
+            )}
+
             {/* Submit Button */}
             <button
               type="submit"
               disabled={loading || !form.amount}
-              className="w-full bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 disabled:from-gray-600 disabled:to-gray-600 text-white font-semibold py-2 rounded-lg transition"
+              className="w-full bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 disabled:from-gray-600 disabled:to-gray-600 text-white font-semibold py-3 rounded-lg transition"
             >
-              {loading ? '⏳ Processing...' : '✅ Pay Tithe'}
+              {loading ? '⏳ Recording & Clearing...' : `✅ Pay & Clear Tithe — ${form.amount ? Number(form.amount).toLocaleString() : '0'} ${selectedTransaction?.currency || 'UGX'}`}
             </button>
           </form>
         </div>
@@ -1435,6 +1547,7 @@ export default function TitheManager() {
                 setFormMode(tab.id);
                 if (tab.id === 'pay') {
                   fetchFilteredTransactions(transactionFilter);
+                  loadAlreadyTithedMap();
                 } else if (tab.id === 'settle') {
                   fetchUnpaidTithes();
                 }
