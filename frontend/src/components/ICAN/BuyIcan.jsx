@@ -10,8 +10,9 @@ import icanCoinBlockchainService from '../../services/icanCoinBlockchainService'
 import { CountryService } from '../../services/countryService';
 import './IcanTrading.css';
 
-export default function BuyIcan() {
+export default function BuyIcan({ userId: propUserId, onSuccess } = {}) {
   const { user } = useAuth();
+  const resolvedUserId = propUserId ?? user?.id;
   const [localAmount, setLocalAmount] = useState('');
   const [icanAmount, setIcanAmount] = useState(0);
   const [marketPrice, setMarketPrice] = useState(5000);
@@ -33,7 +34,7 @@ export default function BuyIcan() {
         setLoading(true);
         
         // Get user's country
-        const userCountry = await icanCoinService.getUserCountry(user.id);
+        const userCountry = await icanCoinService.getUserCountry(resolvedUserId);
         setCountry(userCountry);
         setCurrency(CountryService.getCurrencyCode(userCountry));
         setCurrencySymbol(CountryService.getCurrencySymbol(userCountry));
@@ -54,10 +55,10 @@ export default function BuyIcan() {
       }
     };
 
-    if (user?.id) {
+    if (resolvedUserId) {
       initializeData();
     }
-  }, [user]);
+  }, [resolvedUserId]);
 
   // Calculate ICAN amount when local amount changes
   useEffect(() => {
@@ -94,7 +95,7 @@ export default function BuyIcan() {
       setSuccess('');
 
       const result = await icanCoinService.buyIcanCoins(
-        user.id,
+        resolvedUserId,
         parseFloat(localAmount),
         country,
         paymentMethods
@@ -126,7 +127,7 @@ export default function BuyIcan() {
         if (icanAmt > 0 && pricePerCoin > 0) {
           try {
             const blockchainResult = await icanCoinBlockchainService.recordBlockchainTransaction(
-              user.id,
+              resolvedUserId,
               'purchase',
               icanAmt,
               pricePerCoin,
@@ -146,6 +147,7 @@ export default function BuyIcan() {
         // Reset form
         setLocalAmount('');
         setIcanAmount(0);
+        if (onSuccess) onSuccess(result);
       } else {
         setError(result.error || 'Purchase failed');
       }

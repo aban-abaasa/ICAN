@@ -10,8 +10,9 @@ import icanCoinBlockchainService from '../../services/icanCoinBlockchainService'
 import { CountryService } from '../../services/countryService';
 import './IcanTrading.css';
 
-export default function SellIcan() {
+export default function SellIcan({ userId: propUserId, onSuccess } = {}) {
   const { user } = useAuth();
+  const resolvedUserId = propUserId ?? user?.id;
   const [icanAmount, setIcanAmount] = useState('');
   const [localAmount, setLocalAmount] = useState(0);
   const [marketPrice, setMarketPrice] = useState(5000);
@@ -33,13 +34,13 @@ export default function SellIcan() {
         setLoading(true);
 
         // Get user's country
-        const userCountry = await icanCoinService.getUserCountry(user.id);
+        const userCountry = await icanCoinService.getUserCountry(resolvedUserId);
         setCountry(userCountry);
         setCurrency(CountryService.getCurrencyCode(userCountry));
         setCurrencySymbol(CountryService.getCurrencySymbol(userCountry));
 
         // Get ICAN balance
-        const userBalance = await icanCoinService.getIcanBalance(user.id);
+        const userBalance = await icanCoinService.getIcanBalance(resolvedUserId);
         setBalance(userBalance);
 
         // Get market price
@@ -54,10 +55,10 @@ export default function SellIcan() {
       }
     };
 
-    if (user?.id) {
+    if (resolvedUserId) {
       initializeData();
     }
-  }, [user]);
+  }, [resolvedUserId]);
 
   // Calculate local amount and gain/loss when ICAN amount changes
   useEffect(() => {
@@ -113,7 +114,7 @@ export default function SellIcan() {
       setSuccess('');
 
       const result = await icanCoinService.sellIcanCoins(
-        user.id,
+        resolvedUserId,
         parseFloat(icanAmount),
         country
       );
@@ -132,7 +133,7 @@ export default function SellIcan() {
 
         // Record blockchain transaction
         await icanCoinBlockchainService.recordBlockchainTransaction(
-          user.id,
+          resolvedUserId,
           'sale',
           result.icanAmount,
           result.pricePerCoin,
@@ -146,6 +147,7 @@ export default function SellIcan() {
         // Reset form
         setIcanAmount('');
         setLocalAmount(0);
+        if (onSuccess) onSuccess(result);
       } else {
         setError(result.error || 'Sale failed');
       }

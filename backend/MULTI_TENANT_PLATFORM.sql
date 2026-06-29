@@ -41,9 +41,29 @@ CREATE TABLE IF NOT EXISTS public.supermarkets (
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Idempotent column additions for re-runs where the table already existed
+ALTER TABLE public.supermarkets ADD COLUMN IF NOT EXISTS owner_user_id     UUID;
+ALTER TABLE public.supermarkets ADD COLUMN IF NOT EXISTS name              TEXT;
+ALTER TABLE public.supermarkets ADD COLUMN IF NOT EXISTS slug              TEXT;
+ALTER TABLE public.supermarkets ADD COLUMN IF NOT EXISTS description       TEXT;
+ALTER TABLE public.supermarkets ADD COLUMN IF NOT EXISTS logo_url          TEXT;
+ALTER TABLE public.supermarkets ADD COLUMN IF NOT EXISTS phone             TEXT;
+ALTER TABLE public.supermarkets ADD COLUMN IF NOT EXISTS email             TEXT;
+ALTER TABLE public.supermarkets ADD COLUMN IF NOT EXISTS address           TEXT;
+ALTER TABLE public.supermarkets ADD COLUMN IF NOT EXISTS city              TEXT;
+ALTER TABLE public.supermarkets ADD COLUMN IF NOT EXISTS country           TEXT;
+ALTER TABLE public.supermarkets ADD COLUMN IF NOT EXISTS subscription_plan TEXT;
+ALTER TABLE public.supermarkets ADD COLUMN IF NOT EXISTS status            TEXT;
+ALTER TABLE public.supermarkets ADD COLUMN IF NOT EXISTS ican_wallet_id    UUID;
+ALTER TABLE public.supermarkets ADD COLUMN IF NOT EXISTS onboarding_token  TEXT;
+-- location may exist from a prior migration; ensure it is nullable so INSERT can omit it
+ALTER TABLE public.supermarkets ADD COLUMN IF NOT EXISTS location          TEXT;
+ALTER TABLE public.supermarkets ALTER COLUMN location DROP NOT NULL;
+
 ALTER TABLE public.supermarkets ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "supermarket_owner_all"   ON public.supermarkets;
 DROP POLICY IF EXISTS "supermarket_public_read" ON public.supermarkets;
+DROP POLICY IF EXISTS "supermarket_staff_read"  ON public.supermarkets;
 
 -- Owner can do everything on their supermarket row
 CREATE POLICY "supermarket_owner_all" ON public.supermarkets
@@ -51,21 +71,10 @@ CREATE POLICY "supermarket_owner_all" ON public.supermarkets
   USING (owner_user_id = auth.uid())
   WITH CHECK (owner_user_id = auth.uid());
 
--- Staff can read the supermarket they belong to (needed for dashboard)
-CREATE POLICY "supermarket_staff_read" ON public.supermarkets
-  FOR SELECT TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.supermarket_staff ss
-      WHERE ss.supermarket_id = id
-        AND ss.user_id = auth.uid()
-        AND ss.status = 'active'
-    )
-  );
-
 -- Anyone can read active supermarkets (marketplace discovery)
 CREATE POLICY "supermarket_public_read" ON public.supermarkets
   FOR SELECT TO authenticated USING (status = 'active');
+-- NOTE: "supermarket_staff_read" is created after Section 2 (supermarket_staff table must exist first)
 
 
 -- =============================================================================
@@ -86,6 +95,13 @@ CREATE TABLE IF NOT EXISTS public.supermarket_staff (
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (supermarket_id, invited_email)
 );
+
+ALTER TABLE public.supermarket_staff ADD COLUMN IF NOT EXISTS user_id        UUID;
+ALTER TABLE public.supermarket_staff ADD COLUMN IF NOT EXISTS invited_email   TEXT;
+ALTER TABLE public.supermarket_staff ADD COLUMN IF NOT EXISTS role            TEXT;
+ALTER TABLE public.supermarket_staff ADD COLUMN IF NOT EXISTS status          TEXT;
+ALTER TABLE public.supermarket_staff ADD COLUMN IF NOT EXISTS invited_by      UUID;
+ALTER TABLE public.supermarket_staff ADD COLUMN IF NOT EXISTS joined_at       TIMESTAMPTZ;
 
 ALTER TABLE public.supermarket_staff ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "staff_manager_manage" ON public.supermarket_staff;
@@ -118,6 +134,19 @@ CREATE POLICY "staff_self_read" ON public.supermarket_staff
     SELECT email FROM auth.users WHERE id = auth.uid()
   ));
 
+-- Deferred from Section 1: staff can read the supermarket they belong to
+-- (must be created after supermarket_staff table exists)
+CREATE POLICY "supermarket_staff_read" ON public.supermarkets
+  FOR SELECT TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.supermarket_staff ss
+      WHERE ss.supermarket_id = id
+        AND ss.user_id = auth.uid()
+        AND ss.status = 'active'
+    )
+  );
+
 
 -- =============================================================================
 -- SECTION 3 — SUPPLIER APPLICATIONS
@@ -145,6 +174,22 @@ CREATE TABLE IF NOT EXISTS public.supplier_applications (
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE public.supplier_applications ADD COLUMN IF NOT EXISTS supermarket_id            UUID;
+ALTER TABLE public.supplier_applications ADD COLUMN IF NOT EXISTS supplier_user_id          UUID;
+ALTER TABLE public.supplier_applications ADD COLUMN IF NOT EXISTS business_name             TEXT;
+ALTER TABLE public.supplier_applications ADD COLUMN IF NOT EXISTS contact_name              TEXT;
+ALTER TABLE public.supplier_applications ADD COLUMN IF NOT EXISTS contact_phone             TEXT;
+ALTER TABLE public.supplier_applications ADD COLUMN IF NOT EXISTS contact_email             TEXT;
+ALTER TABLE public.supplier_applications ADD COLUMN IF NOT EXISTS product_categories        TEXT[];
+ALTER TABLE public.supplier_applications ADD COLUMN IF NOT EXISTS supply_description        TEXT;
+ALTER TABLE public.supplier_applications ADD COLUMN IF NOT EXISTS monthly_capacity          TEXT;
+ALTER TABLE public.supplier_applications ADD COLUMN IF NOT EXISTS message                   TEXT;
+ALTER TABLE public.supplier_applications ADD COLUMN IF NOT EXISTS status                    TEXT;
+ALTER TABLE public.supplier_applications ADD COLUMN IF NOT EXISTS reviewed_by               UUID;
+ALTER TABLE public.supplier_applications ADD COLUMN IF NOT EXISTS reviewed_at               TIMESTAMPTZ;
+ALTER TABLE public.supplier_applications ADD COLUMN IF NOT EXISTS rejection_reason          TEXT;
+ALTER TABLE public.supplier_applications ADD COLUMN IF NOT EXISTS ican_onboarding_credited  BOOLEAN;
 
 ALTER TABLE public.supplier_applications ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "supplier_own_apps"     ON public.supplier_applications;
@@ -208,9 +253,26 @@ CREATE TABLE IF NOT EXISTS public.mybodaguy_delivery_requests (
   updated_at           TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+ALTER TABLE public.mybodaguy_delivery_requests ADD COLUMN IF NOT EXISTS supermarket_id      UUID;
+ALTER TABLE public.mybodaguy_delivery_requests ADD COLUMN IF NOT EXISTS transaction_id      UUID;
+ALTER TABLE public.mybodaguy_delivery_requests ADD COLUMN IF NOT EXISTS supermarket_name    TEXT;
+ALTER TABLE public.mybodaguy_delivery_requests ADD COLUMN IF NOT EXISTS pickup_address      TEXT;
+ALTER TABLE public.mybodaguy_delivery_requests ADD COLUMN IF NOT EXISTS customer_name       TEXT;
+ALTER TABLE public.mybodaguy_delivery_requests ADD COLUMN IF NOT EXISTS customer_phone      TEXT;
+ALTER TABLE public.mybodaguy_delivery_requests ADD COLUMN IF NOT EXISTS delivery_address    TEXT;
+ALTER TABLE public.mybodaguy_delivery_requests ADD COLUMN IF NOT EXISTS delivery_notes      TEXT;
+ALTER TABLE public.mybodaguy_delivery_requests ADD COLUMN IF NOT EXISTS items_summary       TEXT;
+ALTER TABLE public.mybodaguy_delivery_requests ADD COLUMN IF NOT EXISTS total_ugx           DECIMAL(18,2);
+ALTER TABLE public.mybodaguy_delivery_requests ADD COLUMN IF NOT EXISTS delivery_fee_ugx    DECIMAL(18,2);
+ALTER TABLE public.mybodaguy_delivery_requests ADD COLUMN IF NOT EXISTS rider_id            UUID;
+ALTER TABLE public.mybodaguy_delivery_requests ADD COLUMN IF NOT EXISTS rider_name          TEXT;
+ALTER TABLE public.mybodaguy_delivery_requests ADD COLUMN IF NOT EXISTS status              TEXT;
+ALTER TABLE public.mybodaguy_delivery_requests ADD COLUMN IF NOT EXISTS ican_paid_to_rider  BOOLEAN;
+
 ALTER TABLE public.mybodaguy_delivery_requests ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "supermarket_manage_deliveries" ON public.mybodaguy_delivery_requests;
 DROP POLICY IF EXISTS "rider_see_pending_deliveries"  ON public.mybodaguy_delivery_requests;
+DROP POLICY IF EXISTS "rider_update_own_delivery"     ON public.mybodaguy_delivery_requests;
 
 -- Supermarket owner/managers can create and manage deliveries
 CREATE POLICY "supermarket_manage_deliveries" ON public.mybodaguy_delivery_requests
@@ -291,20 +353,23 @@ BEGIN
 
   INSERT INTO public.supermarkets (
     owner_user_id, name, slug, description, phone, email,
-    address, city, country, logo_url, status
+    address, city, country, logo_url, status, location
   ) VALUES (
     v_owner_id, p_name, v_slug, p_description, p_phone, p_email,
-    p_address, p_city, p_country, p_logo_url, 'active'
+    p_address, p_city, p_country, p_logo_url, 'active',
+    COALESCE(NULLIF(trim(concat_ws(', ', p_address, p_city, p_country)), ''), p_city, p_country, 'Uganda')
   )
   RETURNING * INTO v_supermarket;
 
-  -- Create ICAN wallet for this supermarket owner (shared wallet)
-  v_wallet := get_or_create_ican_wallet(v_owner_id);
-
-  -- Update supermarket with wallet reference
-  UPDATE public.supermarkets
-  SET ican_wallet_id = (v_wallet->>'wallet_id')::UUID
-  WHERE id = v_supermarket.id;
+  -- Create ICAN wallet (safe: skips gracefully if ICAN migration not yet run)
+  BEGIN
+    v_wallet := get_or_create_ican_wallet(v_owner_id);
+    UPDATE public.supermarkets
+    SET ican_wallet_id = (v_wallet->>'wallet_id')::UUID
+    WHERE id = v_supermarket.id;
+  EXCEPTION WHEN OTHERS THEN
+    v_wallet := jsonb_build_object('note', SQLERRM);
+  END;
 
   -- Credit onboarding bonus: 10 ICAN for joining the platform
   BEGIN
@@ -621,6 +686,17 @@ CREATE TABLE IF NOT EXISTS public.supplier_catalog_items (
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE public.supplier_catalog_items ADD COLUMN IF NOT EXISTS supplier_user_id UUID;
+ALTER TABLE public.supplier_catalog_items ADD COLUMN IF NOT EXISTS name             TEXT;
+ALTER TABLE public.supplier_catalog_items ADD COLUMN IF NOT EXISTS category         TEXT;
+ALTER TABLE public.supplier_catalog_items ADD COLUMN IF NOT EXISTS description      TEXT;
+ALTER TABLE public.supplier_catalog_items ADD COLUMN IF NOT EXISTS unit             TEXT;
+ALTER TABLE public.supplier_catalog_items ADD COLUMN IF NOT EXISTS min_order_qty    DECIMAL;
+ALTER TABLE public.supplier_catalog_items ADD COLUMN IF NOT EXISTS price_per_unit   DECIMAL(18,2);
+ALTER TABLE public.supplier_catalog_items ADD COLUMN IF NOT EXISTS currency         TEXT;
+ALTER TABLE public.supplier_catalog_items ADD COLUMN IF NOT EXISTS image_url        TEXT;
+ALTER TABLE public.supplier_catalog_items ADD COLUMN IF NOT EXISTS is_available     BOOLEAN;
 
 ALTER TABLE public.supplier_catalog_items ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "supplier_own_catalog" ON public.supplier_catalog_items;
