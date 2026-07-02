@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Users, Plus, X, Check, Edit2, Lock, Crown, UserCheck, Wallet, Clock, Trash2, MoreVertical } from 'lucide-react';
+import { Building2, Users, Plus, X, Check, Edit2, Lock, Crown, UserCheck, Wallet, Clock, Trash2, MoreVertical, TrendingUp } from 'lucide-react';
 import ShareholderApprovalsCenter from './ShareholderApprovalsCenter';
 
-const BusinessProfileSelector = ({ profiles, currentProfile, onSelectProfile, onCreateNew, onEdit, onDelete, currentUserId, currentUserEmail, onWalletClick }) => {
+const BusinessProfileSelector = ({ profiles, currentProfile, onSelectProfile, onCreateNew, onEdit, onDelete, currentUserId, currentUserEmail, onWalletClick, onShareValueClick }) => {
   const [showForm, setShowForm] = useState(false);
   const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
   const [showApprovalsModal, setShowApprovalsModal] = useState(false);
@@ -214,6 +214,20 @@ const BusinessProfileSelector = ({ profiles, currentProfile, onSelectProfile, on
                           <Wallet className="w-5 h-5" />
                         </button>
 
+                        {/* Live Share Value Button - Desktop Only */}
+                        {onShareValueClick && canAccess(profile, currentUserEmail) && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onShareValueClick(profile);
+                            }}
+                            className="text-amber-400 hover:text-amber-300 transition p-2"
+                            title="Live share value & blockchain anchoring"
+                          >
+                            <TrendingUp className="w-5 h-5" />
+                          </button>
+                        )}
+
                         {/* Delete Button - Desktop Only */}
                         {isCreator(profile) && (
                           <button
@@ -276,6 +290,21 @@ const BusinessProfileSelector = ({ profiles, currentProfile, onSelectProfile, on
                               <Wallet className="w-4 h-4" />
                               <span className="text-sm font-medium">View Wallet</span>
                             </button>
+
+                            {/* Live Share Value Option */}
+                            {onShareValueClick && canAccess(profile, currentUserEmail) && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onShareValueClick(profile);
+                                  setOpenMenuId(null);
+                                }}
+                                className="w-full flex items-center gap-3 px-4 py-3 text-left text-amber-400 hover:bg-slate-600/50 transition border-b border-slate-600"
+                              >
+                                <TrendingUp className="w-4 h-4" />
+                                <span className="text-sm font-medium">Live Share Value</span>
+                              </button>
+                            )}
 
                             {/* Delete Option - Creator Only */}
                             {isCreator(profile) && (

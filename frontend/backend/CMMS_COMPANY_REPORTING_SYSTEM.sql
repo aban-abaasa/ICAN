@@ -90,7 +90,9 @@ WITH CHECK (
   )
 );
 
-CREATE OR REPLACE FUNCTION public.fn_get_company_reports(p_company_id UUID)
+DROP FUNCTION IF EXISTS public.fn_get_company_reports(UUID) CASCADE;
+
+CREATE FUNCTION public.fn_get_company_reports(p_company_id UUID)
 RETURNS SETOF public.cmms_company_reports
 LANGUAGE plpgsql
 SECURITY DEFINER

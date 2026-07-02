@@ -7,6 +7,7 @@ import BusinessProfileForm from './BusinessProfileForm';
 import BusinessProfileSelector from './BusinessProfileSelector';
 import BusinessProfileCard from './BusinessProfileCard';
 import SHAREHub from './SHAREHub';
+import PitchinLiveShareValue from './PitchinLiveShareValue';
 import { 
   getAllPitches, 
   getUserPitches, 
@@ -69,6 +70,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, navRef =
   const [showBusinessForm, setShowBusinessForm] = useState(false);
   const [showProfileSelector, setShowProfileSelector] = useState(false);
   const [showProfileDetails, setShowProfileDetails] = useState(false);
+  const [showShareValuePanel, setShowShareValuePanel] = useState(false);
   const [showWallet, setShowWallet] = useState(false);
   const [editingProfile, setEditingProfile] = useState(null);
   const [likedPitches, setLikedPitches] = useState(new Set());
@@ -2314,18 +2316,15 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, navRef =
             setEditingProfile(null);
           }}
           onEdit={async (profile) => {
-            // Check if user has permission to edit
             const permission = await checkBusinessProfileEditPermission(
-              profile.id, 
-              currentUser?.id, 
+              profile.id,
+              currentUser?.id,
               currentUser?.email
             );
-            
             if (!permission.canEdit) {
               alert(`⚠️ Cannot edit: ${permission.reason}`);
               return;
             }
-            
             setEditingProfile(profile);
             setShowProfileSelector(false);
             setShowBusinessForm(true);
@@ -2335,7 +2334,40 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, navRef =
             setShowProfileSelector(false);
             setShowWallet(true);
           }}
+          onShareValueClick={(profile) => {
+            setCurrentBusinessProfile(profile);
+            setShowProfileSelector(false);
+            setShowShareValuePanel(true);
+          }}
         />
+      )}
+
+      {/* Live Share Value Panel — only shown to business owners, only in PitchIn */}
+      {showShareValuePanel && currentBusinessProfile && currentUser && (
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-6 lg:p-10">
+          <div className="w-full sm:w-[92vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-6xl 2xl:max-w-[1600px] max-h-[92vh] sm:max-h-[90vh] lg:max-h-[85vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-slate-950 border border-slate-700/60 shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 sm:px-6 sm:py-4 border-b border-slate-700/40 sticky top-0 bg-slate-950 z-10">
+              <div>
+                <h2 className="text-base sm:text-lg font-bold text-white">{currentBusinessProfile.name}</h2>
+                <p className="text-xs sm:text-sm text-slate-400">Live share valuation · blockchain-anchored</p>
+              </div>
+              <button
+                onClick={() => setShowShareValuePanel(false)}
+                className="p-2.5 -m-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            {/* Live share value widget */}
+            <div className="p-4 sm:p-6">
+              <PitchinLiveShareValue
+                businessProfile={currentBusinessProfile}
+                ownerUserId={currentUser.id}
+              />
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Comments Modal */}

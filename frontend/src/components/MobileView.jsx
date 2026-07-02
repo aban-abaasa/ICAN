@@ -97,6 +97,7 @@ import {
   formatTimeAgo
 } from '../services/universalNotificationsService';
 import { getUserTrustGroups } from '../services/trustService';
+import { getAllAccessibleBusinessProfiles } from '../services/pitchingService';
 import { getUserStatuses, getActiveStatuses } from '../services/statusService';
 import { CountryService } from '../services/countryService';
 import {
@@ -1007,6 +1008,10 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [reportCustomStart, setReportCustomStart] = useState('');
   const [reportCustomEnd,   setReportCustomEnd]   = useState('');
   const [reportRecordScope, setReportRecordScope] = useState('business'); // business | personal | all
+  // Which business to scope the report to when reportRecordScope === 'business'.
+  // '' means "all businesses combined" (previous behavior).
+  const [reportBusinessId, setReportBusinessId] = useState('');
+  const [reportBusinessProfiles, setReportBusinessProfiles] = useState([]);
   const [reportFilteredMetrics, setReportFilteredMetrics] = useState(null);
   const [isLoadingReportMetrics, setIsLoadingReportMetrics] = useState(false);
   const [showDataCleanup, setShowDataCleanup] = useState(false);
@@ -1308,7 +1313,8 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
     filter = reportDateFilter,
     customStart = reportCustomStart,
     customEnd = reportCustomEnd,
-    scope = reportRecordScope
+    scope = reportRecordScope,
+    businessId = reportBusinessId
   ) => {
     setIsLoadingReportMetrics(true);
     try {
@@ -1317,7 +1323,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
       const { start, end } = getReportDateRange(filter, customStart, customEnd);
       const { data, error } = await supabase
         .from('ican_transactions')
-        .select('amount, transaction_type, description, created_at, metadata')
+        .select('amount, transaction_type, description, created_at, metadata, business_profile_id')
         .eq('user_id', user.id)
         .gte('created_at', start)
         .lte('created_at', end)
@@ -1326,7 +1332,12 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
       const rows = data || [];
       const scopedRows = rows.filter((t) => {
         const category = t.record_category || t.metadata?.record_category || 'personal';
-        if (scope === 'business') return category === 'business';
+        if (scope === 'business') {
+          if (category !== 'business') return false;
+          // Narrow to one business when the owner has more than one and picked one
+          if (businessId) return t.business_profile_id === businessId;
+          return true;
+        }
         if (scope === 'personal') return category !== 'business';
         return true;
       });
@@ -1605,7 +1616,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
       }
       
       const engine = new VelocityEngine(userId);
-      const loadResult = await engine.loadTransactions();
+      const loadResult = await engine.loadAllTransactions();
       
       if (loadResult.success) {
         setTransactions(loadResult.data || []);
@@ -1860,6 +1871,24 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showReportingSystem]);
 
+  // Load the owner's businesses when Reports opens, so Business-scoped reports
+  // can be narrowed to one business instead of always combining all of them.
+  useEffect(() => {
+    if (!showReportingSystem) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user || cancelled) return;
+        const profiles = await getAllAccessibleBusinessProfiles(user.id, user.email);
+        if (!cancelled) setReportBusinessProfiles(profiles || []);
+      } catch (err) {
+        console.error('Failed to load business profiles for Reports filter:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [showReportingSystem]);
+
   // Auto-initialize Tithe calculator when modal opens
   useEffect(() => {
     if (showTithingCalculator) {
@@ -2058,16 +2087,17 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     const loadFinancialMetrics = async () => {
       try {
         console.log('🚀 Starting loadFinancialMetrics...');
-        // Get user ID from Supabase auth
-        const { data: { user } } = await supabase.auth.getUser();
-        const userId = user?.id || userProfile?.id || 'demo-user';
+        // Real Supabase-authenticated user only — never fall back to a fake
+        // id like 'demo-user', which would "succeed" against Supabase but
+        // silently return zero rows and look like all transactions vanished.
+        const userId = authContextUser?.id || userProfile?.id;
         console.log('👤 User ID:', userId);
-        
+
         if (userId) {
           const engine = new VelocityEngine(userId);
           console.log('⚙️ VelocityEngine created');
           
-          const loadResult = await engine.loadTransactions();
+          const loadResult = await engine.loadAllTransactions();
           console.log('📦 LoadResult:', loadResult);
           
           if (loadResult.success) {
@@ -2103,7 +2133,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               async (payload) => {
                 console.log('🔄 New transaction detected! Recalculating tithe metrics...', payload.new);
                 // Reload transactions from database
-                const reloadResult = await engine.loadTransactions();
+                const reloadResult = await engine.loadAllTransactions();
                 if (reloadResult.success) {
                   setTransactions(reloadResult.data || []);
                   // Recalculate metrics with fresh data
@@ -2126,7 +2156,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               async (payload) => {
                 console.log('🔄 Transaction updated! Recalculating tithe metrics...', payload.new);
                 // Reload transactions from database
-                const reloadResult = await engine.loadTransactions();
+                const reloadResult = await engine.loadAllTransactions();
                 if (reloadResult.success) {
                   setTransactions(reloadResult.data || []);
                   // Recalculate metrics with fresh data
@@ -2164,7 +2194,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         supabase.removeChannel(channel);
       }
     };
-  }, [userProfile?.id]);
+  }, [userProfile?.id, authContextUser?.id]);
 
   // Load all available statuses/updates for Updates section
   useEffect(() => {
@@ -2523,8 +2553,13 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
       try {
         // Use VelocityEngine for consistent calculations
-        const engine = new VelocityEngine(userProfile?.id || 'demo-user');
-        await engine.loadTransactions(); // Ensure data is loaded
+        const metricUserId = authContextUser?.id || userProfile?.id;
+        if (!metricUserId) {
+          setMetricPeriodData(prev => ({ ...prev, [metricKey]: { ...prev[metricKey], loading: false } }));
+          return;
+        }
+        const engine = new VelocityEngine(metricUserId);
+        await engine.loadAllTransactions(); // Ensure data is loaded
 
         // Get period data using velocityEngine
         const dailyData = engine.getPeriodMetric(metricKey, 'daily');
@@ -3244,7 +3279,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         
         if (userId) {
           const engine = new VelocityEngine(userId);
-          const loadResult = await engine.loadTransactions();
+          const loadResult = await engine.loadAllTransactions();
           
           if (loadResult.success) {
             setTransactions(loadResult.data || []);
@@ -8362,6 +8397,29 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   ))}
                 </div>
 
+                {/* Business picker — only meaningful once scoped to Business and
+                    the owner has more than one to choose from */}
+                {reportRecordScope === 'business' && reportBusinessProfiles.length > 1 && (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">🏢 Business</p>
+                    <select
+                      value={reportBusinessId}
+                      onChange={(e) => {
+                        const businessId = e.target.value;
+                        setReportBusinessId(businessId);
+                        setReportFilteredMetrics(null);
+                        fetchReportMetrics(reportDateFilter, reportCustomStart, reportCustomEnd, reportRecordScope, businessId);
+                      }}
+                      className="w-full bg-white/10 text-white text-xs rounded-lg px-2 py-2 border border-white/20 focus:outline-none focus:border-purple-400"
+                    >
+                      <option value="" className="text-gray-900">All businesses (combined)</option>
+                      {reportBusinessProfiles.map(p => (
+                        <option key={p.id} value={p.id} className="text-gray-900">{p.business_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">📅 Period</p>
                 <div className="grid grid-cols-4 gap-2">
                   {[{ id:'today', label:'Today' }, { id:'week', label:'Week' }, { id:'month', label:'Month' }, { id:'year', label:'Year' }].map(f => (
@@ -8995,6 +9053,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             currency: 'UGX',
             status: 'completed',
             record_category: resolvedCategory,
+            business_profile_id: transaction.businessProfileId || null,
             metadata: {
               category: transaction.category || 'other',
               source: 'smart_entry',
@@ -9013,9 +9072,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           // Persist transaction to Supabase via VelocityEngine OR queue if offline
           const saveAndRefresh = async () => {
             try {
-              // Get user ID from Supabase auth (same as web view)
+              // Get user ID from Supabase auth (same as web view) — never fall
+              // back to a fake id; that would silently save under a user that
+              // doesn't exist instead of surfacing the real auth problem.
               const { data: { user } } = await supabase.auth.getUser();
-              const userId = user?.id || userProfile?.id || 'demo-user';
+              const userId = authContextUser?.id || user?.id || userProfile?.id;
               const userEmail = user?.email || authContextUser?.email;
               
               if (userId) {
@@ -9039,6 +9100,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       ledger_side: transaction.ledgerSide || null,
                       raw_entry_text: transaction.originalText || transaction.rawInput || null,
                       entry_mode: resolvedCategory === 'business' ? 'professional_business' : 'personal_quick',
+                      business_profile_id: transaction.businessProfileId || null,
                       userEmail: userEmail,
                       userId: userId
                     });
@@ -9070,7 +9132,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   product_action: transaction.productAction || null,
                   ledger_side: transaction.ledgerSide || null,
                   raw_entry_text: transaction.originalText || transaction.rawInput || null,
-                  entry_mode: resolvedCategory === 'business' ? 'professional_business' : 'personal_quick'
+                  entry_mode: resolvedCategory === 'business' ? 'professional_business' : 'personal_quick',
+                  // Pass selected business profile so this transaction feeds PitchIn share valuation
+                  business_profile_id: transaction.businessProfileId || null
                 });
 
                 if (result.success) {
@@ -9082,7 +9146,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   ]);
                   
                   // Reload metrics from VelocityEngine
-                  const loadResult = await engine.loadTransactions();
+                  const loadResult = await engine.loadAllTransactions();
                   if (loadResult.success) {
                     const metrics = engine.calculateMetrics();
                     console.log(' Updated VelocityEngine Metrics:', metrics);
@@ -9093,6 +9157,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   // Remove failed transaction
                   setTransactions(prev => prev.filter(t => t.id !== formattedTransaction.id));
                 }
+              } else {
+                console.error('❌ No authenticated user — cannot save transaction to Supabase');
+                setTransactions(prev => prev.filter(t => t.id !== formattedTransaction.id));
+                alert('You appear to be signed out. Please sign in again and retry.');
               }
             } catch (error) {
               console.error('Error saving transaction to database:', error);

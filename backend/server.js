@@ -20,6 +20,8 @@ const paymentsRoutes = require('./routes/paymentsRoutes');
 const withdrawalRoutes = require('./routes/withdrawalRoutes');
 const accountRoutes = require('./routes/accountRoutes');
 const aiAnalysisRoutes = require('./routes/aiAnalysisRoutes');
+const cron = require('node-cron');
+const { refreshGlobalInflation } = require('./services/inflationRefreshService');
 
 // ES6 module imports for pinReset and email routes
 let pinResetRoutes;
@@ -186,5 +188,16 @@ async function loadRoutesAndStartServer() {
 
 // Load routes and start server
 loadRoutesAndStartServer();
+
+// ==========================================
+// Live World Bank Inflation Refresh
+// Runs once at startup, then daily at 03:00 — official inflation figures
+// are published annually per country, so daily is just "check for the
+// newest published number", not a live tick.
+// ==========================================
+refreshGlobalInflation().catch(err => console.error('[inflation] Initial refresh failed:', err.message));
+cron.schedule('0 3 * * *', () => {
+  refreshGlobalInflation().catch(err => console.error('[inflation] Scheduled refresh failed:', err.message));
+});
 
 module.exports = app;

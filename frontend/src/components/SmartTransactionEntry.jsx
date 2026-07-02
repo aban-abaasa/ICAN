@@ -7,6 +7,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Check, DollarSign, Briefcase, Loader, Mic, MicOff } from 'lucide-react';
 import { analyzeTransactionWithAI } from '../services/accountingAIService';
+import { getAllAccessibleBusinessProfiles } from '../services/pitchingService';
+import { supabase } from '../lib/supabase/client';
 
 
 export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, onClose = null, onSubmit = null, prefillText = '' }) => {
@@ -18,6 +20,12 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
   const [selectedMode, setSelectedMode] = useState(transactionType || 'personal');
   const [showModeSelector, setShowModeSelector] = useState(!transactionType); // Show selector if no transactionType
   const inputRef = useRef(null);
+
+  // ── Business profile tagging — required so this entry feeds PitchIn's
+  // live share valuation (fn_get_business_ican_financials filters by it) ──
+  const [businessProfiles, setBusinessProfiles] = useState([]);
+  const [loadingProfiles, setLoadingProfiles] = useState(false);
+  const [selectedBusinessProfileId, setSelectedBusinessProfileId] = useState('');
 
   // ── Voice recognition state ──
   const [isListening, setIsListening] = useState(false);
@@ -647,6 +655,7 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
       recognitionRef.current?.stop();
       voiceTranscriptRef.current = '';
       setQuickMode('free');
+      setSelectedBusinessProfileId('');
     }
     // Update selectedMode if transactionType prop changes
     if (transactionType && transactionType !== selectedMode) {
@@ -654,6 +663,33 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, transactionType, prefillText]);
+
+  // Load the user's business profiles when Business mode is active, so this
+  // entry can be tagged with a business_profile_id — without this tag, the
+  // transaction never shows up in PitchIn's live share valuation.
+  useEffect(() => {
+    if (!isOpen || selectedMode !== 'business') return;
+    let cancelled = false;
+
+    (async () => {
+      setLoadingProfiles(true);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user || cancelled) return;
+        const profiles = await getAllAccessibleBusinessProfiles(user.id, user.email);
+        if (cancelled) return;
+        setBusinessProfiles(profiles || []);
+        // Auto-select when there's exactly one business — no decision needed
+        setSelectedBusinessProfileId(prev => prev || (profiles?.length === 1 ? profiles[0].id : ''));
+      } catch (err) {
+        console.error('Failed to load business profiles for transaction tagging:', err);
+      } finally {
+        if (!cancelled) setLoadingProfiles(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [isOpen, selectedMode]);
 
   // Pre-fill the text input with "Sold " or "Bought " so the user just continues typing
   const handleQuickTab = (mode) => {
@@ -664,8 +700,16 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
     setTimeout(() => inputRef.current?.focus(), 50);
   };
 
+  // Owner has multiple businesses and hasn't picked which one this entry
+  // belongs to — or the business-profile lookup is still in flight — block
+  // submit rather than silently saving the entry untagged (business_profile_id
+  // would end up null and it would never reach PitchIn's valuation).
+  const needsBusinessSelection = selectedMode === 'business' &&
+    (loadingProfiles || (businessProfiles.length > 1 && !selectedBusinessProfileId));
+
   // Submit transaction with AI analysis
   const handleSubmit = async () => {
+    if (needsBusinessSelection) return;
     if (parsedData?.isValid) {
       setIsAnalyzing(true);
       
@@ -692,7 +736,10 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
           ledgerSide: parsedData.ledgerSide,
           originalText: parsedData.originalText,
           aiConfidence: 0.95,
-          auditTrail: `Categorized as ${parsedData.categoryName || 'General'} (${parsedData.businessAccountingType || 'expense'})`
+          auditTrail: `Categorized as ${parsedData.categoryName || 'General'} (${parsedData.businessAccountingType || 'expense'})`,
+          // Tags this entry to a specific business so it feeds PitchIn's live
+          // share valuation — omitted entirely for personal-mode entries.
+          businessProfileId: selectedMode === 'business' ? (selectedBusinessProfileId || null) : null
         };
 
         // Use OpenAI for professional accounting analysis in business mode
@@ -720,7 +767,7 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
 
   // Handle Enter key
   const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && parsedData?.isValid) {
+    if (e.key === 'Enter' && parsedData?.isValid && !needsBusinessSelection) {
       handleSubmit();
     }
   };
@@ -871,6 +918,37 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
             </div>
           )}
 
+          {/* Business Profile Tag — required for this entry to count toward
+              PitchIn's live share valuation for that business */}
+          {selectedMode === 'business' && (
+            loadingProfiles ? (
+              <div className="flex items-center gap-2 text-xs text-gray-500 px-1">
+                <Loader className="w-3.5 h-3.5 animate-spin" />
+                Loading your businesses…
+              </div>
+            ) : businessProfiles.length === 0 ? (
+              <div className="px-3 py-2 rounded-lg bg-amber-50 border border-amber-300 text-xs text-amber-800">
+                No business profile found — this entry won't count toward any business's share valuation. Create a business in PitchIn first.
+              </div>
+            ) : businessProfiles.length === 1 ? (
+              <div className="px-3 py-2 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-800 flex items-center gap-1.5">
+                <Briefcase className="w-3.5 h-3.5 shrink-0" />
+                Tagged to <span className="font-semibold">{businessProfiles[0].business_name}</span>
+              </div>
+            ) : (
+              <select
+                value={selectedBusinessProfileId}
+                onChange={e => setSelectedBusinessProfileId(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-lg border-2 border-blue-300 bg-white text-sm font-medium text-gray-800 focus:outline-none focus:border-blue-500"
+              >
+                <option value="">Select which business this belongs to…</option>
+                {businessProfiles.map(p => (
+                  <option key={p.id} value={p.id}>{p.business_name}</option>
+                ))}
+              </select>
+            )
+          )}
+
           {/* Quick Entry Tabs — pre-fill "Sold " or "Bought " into the input */}
           <div className="flex gap-1.5">
             {[
@@ -932,9 +1010,9 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
             {/* Send button — always fully visible */}
             <button
               onClick={handleSubmit}
-              disabled={!parsedData?.isValid || isAnalyzing || isListening}
+              disabled={!parsedData?.isValid || isAnalyzing || isListening || needsBusinessSelection}
               className={`flex-shrink-0 w-12 h-12 rounded-xl font-bold transition flex items-center justify-center ${
-                parsedData?.isValid && !isAnalyzing && !isListening
+                parsedData?.isValid && !isAnalyzing && !isListening && !needsBusinessSelection
                   ? 'bg-gradient-to-br from-blue-500 to-cyan-500 text-white shadow-md active:scale-95'
                   : 'bg-gray-200 text-gray-400 cursor-not-allowed'
               }`}

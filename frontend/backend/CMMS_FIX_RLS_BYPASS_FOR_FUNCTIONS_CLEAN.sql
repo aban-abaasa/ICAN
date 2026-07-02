@@ -150,9 +150,7 @@ BEGIN
   RETURNING id INTO v_company_id;
   
   RETURN QUERY SELECT v_company_id, 'SUCCESS'::VARCHAR, 'Company created successfully'::TEXT;
-EXCEPTION 
-  WHEN unique_violation THEN
-    RETURN QUERY SELECT NULL::UUID, 'ERROR'::VARCHAR, 'Company email already exists'::TEXT;
+EXCEPTION
   WHEN OTHERS THEN
     RETURN QUERY SELECT NULL::UUID, 'ERROR'::VARCHAR, SQLERRM::TEXT;
 END;
@@ -192,9 +190,7 @@ BEGIN
   ELSE
     RETURN QUERY SELECT 'ERROR'::VARCHAR, 'Company not found'::TEXT;
   END IF;
-EXCEPTION 
-  WHEN unique_violation THEN
-    RETURN QUERY SELECT 'ERROR'::VARCHAR, 'Company email already exists'::TEXT;
+EXCEPTION
   WHEN OTHERS THEN
     RETURN QUERY SELECT 'ERROR'::VARCHAR, SQLERRM::TEXT;
 END;
@@ -292,9 +288,7 @@ BEGIN
   
   RETURN QUERY SELECT v_company_id, v_dept_count, 'SUCCESS'::VARCHAR, 
     'Company created with ' || v_dept_count || ' department(s)'::TEXT;
-EXCEPTION 
-  WHEN unique_violation THEN
-    RETURN QUERY SELECT NULL::UUID, 0, 'ERROR'::VARCHAR, 'Company email already exists'::TEXT;
+EXCEPTION
   WHEN OTHERS THEN
     RETURN QUERY SELECT NULL::UUID, 0, 'ERROR'::VARCHAR, SQLERRM::TEXT;
 END;

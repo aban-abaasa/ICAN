@@ -7,6 +7,7 @@ import LandingPage from './components/LandingPage';
 import MobileView from './components/MobileView';
 import ActionQueue from './components/ActionQueue';
 import { SplashScreen } from './components/SplashScreen';
+import ICANDevPanel, { SESSION_KEY as ICAN_DEV_KEY } from './components/ICANDevPanel';
 import { offlineManager } from './lib/offlineManager';
 import { Loader2, AlertCircle } from 'lucide-react';
 
@@ -184,6 +185,11 @@ const App = () => {
 
     setIsResetPasswordPath(false);
   };
+
+  // Developer panel — silent intercept, no auth session required
+  if (sessionStorage.getItem(ICAN_DEV_KEY) === 'true') {
+    return <ICANDevPanel onExit={() => window.location.reload()} />;
+  }
 
   // Show loading screen while checking auth status
   if (loading) {

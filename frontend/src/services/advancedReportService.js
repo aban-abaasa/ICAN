@@ -373,55 +373,98 @@ export const buildFinancialDataFromTransactions = (transactions = [], options = 
     return true;
   });
 
-  const totals = filtered.reduce((acc, tx) => {
+  // Use real reporting_bucket values from SmartTransactionEntry and VelocityEngine.
+  // Falls back to generic income/expense classification only when bucket is absent.
+  const buckets = {
+    sold_income:       0,
+    bought_stock:      0,
+    capital_asset:     0,
+    operating_expense: 0,
+    salary_expense:    0,
+    tax_expense:       0,
+    loan_inflow:       0,
+    loan_repayment:    0,
+    owner_equity:      0,
+    dividend_income:   0,
+    dividend_payout:   0,
+    tithe_payment:     0,
+    other_income:      0,
+    other_expense:     0
+  };
+
+  const deductions = [];
+
+  filtered.forEach((tx) => {
     const amount = Math.abs(toNumber(tx?.amount));
-    const kind = getTransactionKind(tx);
+    const bucket = tx?.metadata?.reporting_bucket || tx?.reporting_bucket;
 
-    if (kind === 'income') acc.income += amount;
-    else if (kind === 'expense') acc.expenses += amount;
-    else if (kind === 'investment') acc.investments += amount;
+    if (bucket && Object.prototype.hasOwnProperty.call(buckets, bucket)) {
+      buckets[bucket] += amount;
+    } else {
+      // Fallback: classify by transaction_type / generic kind
+      const kind = getTransactionKind(tx);
+      if (kind === 'income') buckets.other_income += amount;
+      else if (kind === 'expense') buckets.other_expense += amount;
+      else if (kind === 'investment') buckets.capital_asset += amount;
+    }
 
-    return acc;
-  }, { income: 0, expenses: 0, investments: 0 });
+    if (
+      tx?.transaction_type === 'expense' ||
+      ['bought_stock','operating_expense','salary_expense','tax_expense','loan_repayment','dividend_payout'].includes(bucket)
+    ) {
+      deductions.push({
+        category: bucket || tx?.metadata?.category || tx?.transaction_type || 'business_expenses',
+        amount,
+        description: tx?.description || tx?.note || ''
+      });
+    }
+  });
+
+  const totalRevenue   = buckets.sold_income + buckets.dividend_income + buckets.loan_inflow + buckets.other_income;
+  const totalCogs      = buckets.bought_stock;
+  const totalOpex      = buckets.operating_expense + buckets.salary_expense + buckets.other_expense;
+  const totalTax       = buckets.tax_expense;
+  const totalExpenses  = totalCogs + totalOpex + totalTax;
+  const totalAssets    = buckets.capital_asset + buckets.owner_equity;
+  const netProfit      = totalRevenue - totalExpenses;
 
   return {
-    totalIncome: totals.income,
-    totalExpenses: totals.expenses,
-    businessIncome: totals.income * 0.6,
-    investmentIncome: totals.investments,
-    capitalGains: Math.max(0, totals.income - totals.expenses) * 0.1,
-    taxPaid: totals.income * 0.1,
-    deductions: filtered
-      .filter((tx) => getTransactionKind(tx) === 'expense')
-      .map((tx) => ({
-        category: tx.category || tx.transaction_type || 'business_expenses',
-        amount: Math.abs(toNumber(tx.amount)),
-        description: tx.description || tx.note || ''
-      })),
-    netWorth: totals.income - totals.expenses,
+    // Income statement
+    totalIncome:      totalRevenue,
+    totalExpenses:    totalExpenses,
+    businessIncome:   buckets.sold_income,
+    investmentIncome: buckets.dividend_income,
+    capitalGains:     0,
+    taxPaid:          buckets.tax_expense,
+    revenue:          buckets.sold_income,
+    costOfGoodsSold:  buckets.bought_stock,
+    operatingExpenses: buckets.operating_expense + buckets.salary_expense,
+    otherIncome:      buckets.other_income,
+    otherExpenses:    buckets.other_expense,
+    taxExpense:       buckets.tax_expense,
+    netProfit,
+    // Balance sheet
+    netWorth: totalAssets - (buckets.loan_inflow - buckets.loan_repayment),
     assets: {
-      cash: totals.income - totals.expenses,
-      investments: totals.investments,
-      equipment: 0,
-      property: 0,
-      other: 0
+      cash:        Math.max(0, netProfit),
+      investments: buckets.dividend_income,
+      equipment:   buckets.capital_asset,
+      property:    0,
+      other:       buckets.owner_equity
     },
     liabilities: {
-      loans: 0,
+      loans:       Math.max(0, buckets.loan_inflow - buckets.loan_repayment),
       creditCards: 0,
-      payables: totals.expenses * 0.2,
-      other: 0
+      payables:    0,
+      other:       0
     },
-    revenue: totals.income,
-    costOfGoodsSold: totals.expenses * 0.4,
-    operatingExpenses: totals.expenses * 0.4,
-    otherIncome: 0,
-    otherExpenses: 0,
-    taxExpense: totals.income * 0.1,
+    // Raw buckets for custom report sections
+    buckets,
+    deductions,
     reportPeriod,
     transactionCount: filtered.length,
     periodStart: start ? start.toISOString() : null,
-    periodEnd: end ? end.toISOString() : null
+    periodEnd:   end ? end.toISOString() : null
   };
 };
 

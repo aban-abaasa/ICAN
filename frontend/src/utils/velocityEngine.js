@@ -99,6 +99,8 @@ export class VelocityEngine {
             description: transactionData.description,
             currency: transactionData.currency || 'UGX',
             status: 'completed',
+            // Tag to a PitchIn business when provided — feeds live share valuation
+            business_profile_id: transactionData.business_profile_id || null,
             metadata: {
               category: transactionData.category,
               source: transactionData.source,
@@ -132,7 +134,7 @@ export class VelocityEngine {
     }
   }
 
-  // Load user transactions from Supabase
+  // Load user transactions from Supabase (ican_transactions only)
   async loadTransactions() {
     try {
       if (!this.supabase) {
@@ -157,6 +159,107 @@ export class VelocityEngine {
       return { success: true, data: this.transactions };
     } catch (error) {
       console.error('VelocityEngine: Error loading transactions:', error);
+      return { success: false, error };
+    }
+  }
+
+  /**
+   * Load ALL transactions across every app for this user.
+   * Merges ican_transactions (manual entries) with ican_coin_transactions
+   * (MyBodaGuy earnings, FarmAgent sales, SupermarketEra cashbacks, ICAN wallet moves).
+   * This gives "Record Every Transaction" a complete cross-app financial picture.
+   */
+  async loadAllTransactions() {
+    try {
+      if (!this.supabase) throw new Error('Supabase client not initialized');
+
+      const [manualRes, coinRes] = await Promise.all([
+        this.supabase
+          .from('ican_transactions')
+          .select('*')
+          .eq('user_id', this.userId)
+          .order('created_at', { ascending: false }),
+        this.supabase
+          .from('ican_coin_transactions')
+          .select('*')
+          .or(`sender_user_id.eq.${this.userId},recipient_user_id.eq.${this.userId}`)
+          .eq('status', 'completed')
+          .order('created_at', { ascending: false })
+      ]);
+
+      if (manualRes.error) {
+        console.error('VelocityEngine: Error loading manual transactions:', manualRes.error);
+      }
+      if (coinRes.error) {
+        console.error('VelocityEngine: Error loading coin transactions:', coinRes.error);
+      }
+
+      const manualTxs = manualRes.data || [];
+
+      // Normalise ican_coin_transactions into the same shape as ican_transactions
+      // so calculateMetrics() and buildFinancialDataFromTransactions() work on both
+      const coinTxs = (coinRes.data || []).map(tx => {
+        const isIncoming = tx.recipient_user_id === this.userId;
+        const ugxAmount = parseFloat(tx.ugx_equivalent || 0);
+        const sourceLabels = {
+          'mybodaguy':     'MyBodaGuy delivery',
+          'farm-agent':    'Backbone sale',
+          'digital-city-era': 'SupermarketEra cashback',
+          'ican':          'ICAN wallet'
+        };
+
+        // Map coin transaction types to reporting buckets
+        const bucketMap = {
+          earn:         'sold_income',
+          cashback:     'sold_income',
+          transfer_in:  'sold_income',
+          transfer_out: 'operating_expense',
+          tithe:        'tithe_payment',
+          purchase:     'bought_stock',
+          sale:         'sold_income',
+          refund:       'sold_income'
+        };
+
+        return {
+          id:               `coin_${tx.id}`,
+          user_id:          this.userId,
+          amount:           ugxAmount,
+          transaction_type: isIncoming ? 'income' : 'expense',
+          description:      tx.note || `${sourceLabels[tx.source_app] || tx.source_app} — ${tx.transaction_type}`,
+          currency:         'UGX',
+          status:           'completed',
+          created_at:       tx.created_at,
+          business_profile_id: null,
+          _source:          'coin',
+          metadata: {
+            category:          tx.source_app || 'other',
+            source:            tx.source_app,
+            source_app:        tx.source_app,
+            record_category:   'business',
+            reporting_bucket:  isIncoming ? bucketMap[tx.transaction_type] || 'sold_income' : bucketMap[tx.transaction_type] || 'operating_expense',
+            accounting_type:   isIncoming ? 'revenue' : 'expense',
+            ican_amount:       tx.ican_amount,
+            ugx_equivalent:    ugxAmount,
+            coin_tx_type:      tx.transaction_type,
+            reference_id:      tx.reference_id
+          }
+        };
+      });
+
+      // Merge: manual entries first, then coin transactions; deduplicate by id
+      const seen = new Set(manualTxs.map(t => t.id));
+      const merged = [
+        ...manualTxs,
+        ...coinTxs.filter(t => !seen.has(t.id))
+      ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+      this.transactions = merged;
+      this.notifyListeners();
+
+      console.log(`📊 VelocityEngine: ${manualTxs.length} manual + ${coinTxs.length} coin = ${merged.length} total transactions`);
+      return { success: true, data: merged };
+    } catch (error) {
+      console.error('VelocityEngine: Error loading all transactions:', error);
       return { success: false, error };
     }
   }

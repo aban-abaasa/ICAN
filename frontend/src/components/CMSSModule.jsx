@@ -284,8 +284,12 @@ const CMMSModule = ({
       return;
     }
 
-    const resolvedRole = resolveUserRole(membership.effective_role, membership.role_labels);
     const creatorFlag = Boolean(membership.is_creator);
+    // Creators are always admin for their own company regardless of any role
+    // stored elsewhere — this prevents a role from another company bleeding in.
+    const resolvedRole = creatorFlag
+      ? 'admin'
+      : resolveUserRole(membership.effective_role, membership.role_labels);
     const shouldReload = options.reloadData !== false;
 
     persistActiveCompanyId(user?.email || membership.email, membership.cmms_company_id);

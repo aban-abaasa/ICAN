@@ -262,7 +262,7 @@ BEGIN
       WHEN v_cmms_role IN ('coordinator', 'supervisor') AND ccr.department_id = v_department_id THEN 'department_access'
       WHEN ccr.reporter_cmms_user_id = v_cmms_user_id THEN 'personal_access'
       ELSE 'no_access'
-    END AS access_level
+    END::VARCHAR AS access_level
   FROM public.cmms_company_reports ccr
   WHERE ccr.cmms_company_id = p_company_id
     AND (
@@ -489,7 +489,7 @@ BEGIN
         AND v_report_department_id = v_department_id THEN 'department_access'::VARCHAR
       WHEN v_report_creator_id = v_cmms_user_id THEN 'personal_access'::VARCHAR
       ELSE 'no_access'::VARCHAR
-    END AS access_level;
+    END::VARCHAR AS access_level;
 END;
 $$;
 
