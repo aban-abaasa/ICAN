@@ -5,8 +5,24 @@ import {
   Lock, Database, Hash, CreditCard, ToggleLeft, ToggleRight,
   CheckCircle, Copy, Activity, Layers, Clock, AlertTriangle,
   Network, Wallet, ArrowUp, ArrowDown, Eye, EyeOff, ShieldCheck,
+  MessageCircle, Globe, Trash2, Send, Mail,
 } from 'lucide-react';
 import { getSupabaseClient } from '../lib/supabase/client';
+import {
+  devListAllLandingMessages,
+  devDeleteLandingMessage,
+  devReplyToLandingMessage,
+  devMarkCorrectAnswer,
+  devGrantLandingBonus,
+} from '../services/landingMessagesService';
+import {
+  listConversations,
+  fetchMessages as fetchChatMessages,
+  sendMessage as sendChatMessage,
+  markConversationRead,
+  subscribeToAllConversations,
+  subscribeToMessages as subscribeToChatMessages,
+} from '../services/chatService';
 
 export const SESSION_KEY = 'ican_dev_panel_auth';
 const DEV_TOKEN   = 'dev_ICAN_Pr0_KV25';
@@ -49,6 +65,8 @@ const TABS = [
   { id: 'agents',     label: 'Agents',       Icon: Briefcase,   color: '#f97316' },
   { id: 'blockchain', label: 'Blockchain',   Icon: Lock,        color: '#ec4899' },
   { id: 'plans',      label: 'Plans',        Icon: Star,        color: '#eab308' },
+  { id: 'board',      label: 'Public Board', Icon: MessageCircle, color: '#14b8a6' },
+  { id: 'messages',   label: 'Messages',     Icon: Mail,          color: '#0ea5e9' },
 ];
 
 // CSS variable themes
@@ -199,6 +217,413 @@ const StatCard = ({ Icon, label, value, sub, color='#06b6d4', loading }) => (
     </div>
   </div>
 );
+
+// ─── Public landing-page message board (moderation) ────────────────────────
+const fmtChatTime = (d) => {
+  if (!d) return '';
+  const date = new Date(d);
+  const mins = Math.floor((Date.now() - date.getTime()) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return date.toLocaleDateString();
+};
+
+const MessagesTab = () => {
+  const [conversations, setConversations] = useState([]);
+  const [selectedId,    setSelectedId]    = useState(null);
+  const [messages,      setMessages]      = useState([]);
+  const [reply,         setReply]         = useState('');
+  const [sending,       setSending]       = useState(false);
+  const scrollRef = useRef(null);
+
+  const refresh = useCallback(async () => {
+    setConversations(await listConversations());
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  useEffect(() => {
+    return subscribeToAllConversations((payload) => {
+      const row = payload.new;
+      if (!row || row.kind === 'team') return;
+      setConversations(prev =>
+        [row, ...prev.filter(c => c.id !== row.id)]
+          .sort((a, b) => new Date(b.last_message_at) - new Date(a.last_message_at))
+      );
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!selectedId) { setMessages([]); return; }
+    let cancelled = false;
+    (async () => {
+      const msgs = await fetchChatMessages(selectedId);
+      if (cancelled) return;
+      setMessages(msgs);
+      await markConversationRead(selectedId, 'dev');
+      setConversations(prev => prev.map(c => c.id === selectedId ? { ...c, unread_by_dev: false } : c));
+    })();
+    const unsub = subscribeToChatMessages(selectedId, (msg) => {
+      setMessages(prev => (prev.some(m => m.id === msg.id) ? prev : [...prev, msg]));
+    });
+    return () => { cancelled = true; unsub(); };
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages]);
+
+  const selected = conversations.find(c => c.id === selectedId);
+
+  const handleReply = async () => {
+    const body = reply.trim();
+    if (!body || !selectedId || sending) return;
+    setSending(true);
+    try {
+      const msg = await sendChatMessage(selectedId, { senderRole: 'dev', senderName: 'ICAN Team', body });
+      setMessages(prev => [...prev, msg]);
+      setReply('');
+    } catch (e) {
+      console.warn('[MessagesTab] reply failed:', e);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+      <div className="rounded-2xl border overflow-hidden" style={{ background:'var(--dp-card)', borderColor:'var(--dp-card-bd)' }}>
+        <div className="px-4 py-3 border-b text-xs font-bold uppercase tracking-wider" style={{ color:'var(--dp-muted)', borderColor:'var(--dp-sep)' }}>
+          Conversations ({conversations.length})
+        </div>
+        <div className="max-h-[65vh] overflow-y-auto">
+          {conversations.map(c => (
+            <button key={c.id} onClick={() => setSelectedId(c.id)}
+              className="w-full border-b last:border-0 px-4 py-3 text-left transition"
+              style={{ borderColor:'var(--dp-sep)', background: selectedId === c.id ? 'rgba(20,184,166,0.10)' : 'transparent' }}>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold truncate" style={{ color:'var(--dp-txt)' }}>{c.guest_name || c.role || 'Guest'}</p>
+                {c.unread_by_dev && <span className="h-2 w-2 flex-shrink-0 rounded-full bg-red-500" />}
+              </div>
+              <p className="text-xs truncate" style={{ color:'var(--dp-muted)' }}>{c.guest_email}</p>
+              <div className="mt-1.5 flex items-center gap-2">
+                <span className="rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize"
+                  style={{ borderColor:'var(--dp-inner-bd)', background:'var(--dp-inner)', color:'var(--dp-sub)' }}>{c.portal}</span>
+                <span className="text-[10px]" style={{ color:'var(--dp-muted)' }}>{fmtChatTime(c.last_message_at)}</span>
+              </div>
+              {c.last_message_preview && <p className="mt-1 truncate text-xs" style={{ color:'var(--dp-muted)' }}>{c.last_message_preview}</p>}
+            </button>
+          ))}
+          {conversations.length === 0 && (
+            <p className="px-4 py-10 text-center text-sm" style={{ color:'var(--dp-muted)' }}>No conversations yet.</p>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-col overflow-hidden rounded-2xl border" style={{ background:'var(--dp-card)', borderColor:'var(--dp-card-bd)' }}>
+        {!selected ? (
+          <div className="flex flex-1 items-center justify-center text-sm" style={{ color:'var(--dp-muted)' }}>
+            <div className="text-center">
+              <MessageCircle className="mx-auto mb-2 h-8 w-8 opacity-40" />
+              Select a conversation to reply
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="border-b px-4 py-3" style={{ borderColor:'var(--dp-sep)' }}>
+              <p className="text-sm font-semibold" style={{ color:'var(--dp-txt)' }}>{selected.guest_name || 'Guest'}</p>
+              <p className="text-xs" style={{ color:'var(--dp-muted)' }}>{selected.guest_email} · {selected.portal}</p>
+            </div>
+            <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto px-4 py-3" style={{ maxHeight: '48vh' }}>
+              {messages.map(m => {
+                const fromDev = m.sender_role === 'dev';
+                return (
+                  <div key={m.id} className={`flex ${fromDev ? 'justify-end' : 'justify-start'}`}>
+                    <div className="max-w-[75%] rounded-2xl px-3 py-2 text-sm"
+                      style={fromDev
+                        ? { background:'linear-gradient(135deg,#14b8a6,#0f766e)', color:'#fff' }
+                        : { background:'var(--dp-inner)', color:'var(--dp-txt)' }}>
+                      {!fromDev && (
+                        <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide" style={{ color:'var(--dp-muted)' }}>
+                          {m.sender_name || selected.role}
+                        </p>
+                      )}
+                      <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-2 border-t px-3 py-3" style={{ borderColor:'var(--dp-sep)' }}>
+              <input value={reply} onChange={e => setReply(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleReply(); }}
+                placeholder="Reply as ICAN Team…"
+                className="flex-1 rounded-xl border px-3 py-2 text-sm outline-none transition"
+                style={{ background:'var(--dp-input)', borderColor:'var(--dp-input-bd)', color:'var(--dp-txt)' }} />
+              <button onClick={handleReply} disabled={sending || !reply.trim()}
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-white transition disabled:opacity-40"
+                style={{ background:'linear-gradient(135deg,#14b8a6,#0f766e)' }}>
+                <Send size={14} />
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const PublicBoardTab = () => {
+  const [items,      setItems]      = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [deletingId, setDeletingId] = useState(null);
+  const [expandedId, setExpandedId] = useState(null);
+  const [replyDraft, setReplyDraft] = useState('');
+  const [replying,   setReplying]   = useState(false);
+  const [markingId,  setMarkingId]  = useState(null);
+  const [markError,  setMarkError]  = useState('');
+  const [grantTargetId, setGrantTargetId] = useState(null);
+  const [grantAmount,   setGrantAmount]   = useState('');
+  const [grantingId,    setGrantingId]    = useState(null);
+  const [grantError,    setGrantError]    = useState('');
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      setItems(await devListAllLandingMessages(DEV_TOKEN));
+    } catch (e) {
+      console.warn('[PublicBoardTab] failed to load messages:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const handleDelete = async (id) => {
+    if (deletingId) return;
+    setDeletingId(id);
+    try {
+      await devDeleteLandingMessage(DEV_TOKEN, id);
+      if (expandedId === id) setExpandedId(null);
+      await refresh();
+    } catch (e) {
+      console.warn('[PublicBoardTab] failed to delete message:', e);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleReply = async (id) => {
+    const body = replyDraft.trim();
+    if (!body || replying) return;
+    setReplying(true);
+    try {
+      await devReplyToLandingMessage(DEV_TOKEN, id, body, 'ICAN Team');
+      setReplyDraft('');
+      await refresh();
+    } catch (e) {
+      console.warn('[PublicBoardTab] failed to reply:', e);
+    } finally {
+      setReplying(false);
+    }
+  };
+
+  const handleMarkCorrect = async (id) => {
+    if (markingId) return;
+    setMarkingId(id);
+    setMarkError('');
+    try {
+      await devMarkCorrectAnswer(DEV_TOKEN, id);
+      await refresh();
+    } catch (e) {
+      console.warn('[PublicBoardTab] failed to mark correct answer:', e);
+      setMarkError(e?.message || 'Failed to mark as correct answer.');
+    } finally {
+      setMarkingId(null);
+    }
+  };
+
+  const handleOpenGrant = (id) => {
+    setGrantTargetId(prev => (prev === id ? null : id));
+    setGrantAmount('');
+    setGrantError('');
+  };
+
+  const handleGrant = async (item) => {
+    const amt = parseFloat(grantAmount);
+    if (!amt || amt <= 0 || grantingId) return;
+    setGrantingId(item.id);
+    setGrantError('');
+    try {
+      await devGrantLandingBonus(DEV_TOKEN, item.user_id, amt, 'Manual grant from Public Board');
+      setGrantTargetId(null);
+      setGrantAmount('');
+      await refresh();
+    } catch (e) {
+      console.warn('[PublicBoardTab] failed to grant bonus:', e);
+      setGrantError(e?.message || 'Failed to grant ICAN.');
+    } finally {
+      setGrantingId(null);
+    }
+  };
+
+  const topLevel = items.filter(m => !m.parent_id);
+
+  return (
+    <>
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-black" style={{ color:'var(--dp-txt)' }}>
+          Landing page messages <span style={{ color:'var(--dp-muted)' }}>({topLevel.length})</span>
+        </p>
+        <button onClick={refresh} disabled={loading}
+          className="rounded-lg p-1.5 border transition disabled:opacity-40"
+          style={{ background:'var(--dp-inner)', borderColor:'var(--dp-inner-bd)', color:'var(--dp-sub)' }}>
+          <RefreshCw size={13} className={loading ? 'animate-spin' : ''}/>
+        </button>
+      </div>
+
+      {loading && [1,2,3].map(i => <Skel key={i} h="h-20"/>)}
+
+      {topLevel.map(m => {
+        const replies = items.filter(i => i.parent_id === m.id);
+        const isExpanded = expandedId === m.id;
+        return (
+          <div key={m.id} className="rounded-2xl border p-4 transition-all" style={{ background:'var(--dp-card)', borderColor:'var(--dp-card-bd)' }}>
+            <div className="flex items-start justify-between gap-3">
+              <button onClick={() => { setExpandedId(isExpanded ? null : m.id); setReplyDraft(''); }} className="min-w-0 flex-1 text-left">
+                <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
+                  <p className="font-bold" style={{ color:'var(--dp-txt)' }}>{m.name || 'Website visitor'}</p>
+                  <span className="inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[10px] font-bold"
+                    style={m.is_public
+                      ? { borderColor:'rgba(6,182,212,0.3)', background:'rgba(6,182,212,0.1)', color:'#06b6d4' }
+                      : { borderColor:'rgba(245,158,11,0.3)', background:'rgba(245,158,11,0.1)', color:'#f59e0b' }}>
+                    {m.is_public ? <Globe size={10}/> : <Lock size={10}/>}
+                    {m.is_public ? 'Public' : 'Private'}
+                  </span>
+                  {m.origin_app && <Badge label={m.origin_app} cls="bg-slate-500/10 text-slate-400 border-slate-500/20"/>}
+                  {m.reward_reason === 'popular' && <Badge label="🪙 Popular" cls="bg-amber-500/10 text-amber-400 border-amber-500/20"/>}
+                  <span className="text-[10px]" style={{ color:'var(--dp-muted)' }}>{fmtTime(m.created_at)}</span>
+                  {replies.length > 0 && (
+                    <span className="text-[10px]" style={{ color:'var(--dp-muted)' }}>· {replies.length} {replies.length === 1 ? 'reply' : 'replies'}</span>
+                  )}
+                </div>
+                {m.email && <p className="text-xs truncate" style={{ color:'var(--dp-sub)' }}>{m.email}</p>}
+                <p className="mt-1 whitespace-pre-wrap break-words text-sm" style={{ color:'var(--dp-sub)' }}>{m.message}</p>
+              </button>
+              <button onClick={() => handleDelete(m.id)} disabled={deletingId === m.id}
+                className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-rose-500 transition hover:bg-rose-500/10 disabled:opacity-40"
+                title="Delete message">
+                <Trash2 size={14}/>
+              </button>
+            </div>
+
+            {isExpanded && (
+              <div className="mt-3 space-y-2 border-l-2 pl-3" style={{ borderColor:'var(--dp-sep)' }}>
+                {m.user_id && (
+                  <div>
+                    <button onClick={() => handleOpenGrant(m.id)}
+                      className="inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[10px] font-semibold transition"
+                      style={{ borderColor:'rgba(245,158,11,0.3)', background:'rgba(245,158,11,0.1)', color:'#f59e0b' }}>
+                      <Gift size={11}/> Grant ICAN to {m.name || 'this poster'}
+                    </button>
+                    {grantTargetId === m.id && (
+                      <div className="mt-1.5 flex items-center gap-2">
+                        <input type="number" min="0.01" step="0.01" value={grantAmount}
+                          onChange={e => setGrantAmount(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') handleGrant(m); }}
+                          placeholder="Amount"
+                          className="w-24 rounded-lg border px-2 py-1 text-xs outline-none"
+                          style={{ background:'var(--dp-input)', borderColor:'var(--dp-input-bd)', color:'var(--dp-txt)' }}/>
+                        <button onClick={() => handleGrant(m)} disabled={grantingId === m.id || !grantAmount}
+                          className="rounded-lg px-2.5 py-1 text-[10px] font-bold transition disabled:opacity-40"
+                          style={{ background:'#f59e0b', color:'#1e1300' }}>
+                          {grantingId === m.id ? 'Granting…' : 'Confirm'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {replies.map(r => (
+                  <div key={r.id} className="flex items-start justify-between gap-2 rounded-lg px-3 py-2"
+                    style={{ background: r.sender_role === 'dev' ? 'rgba(139,92,246,0.1)' : 'var(--dp-inner)' }}>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-xs font-semibold" style={{ color:'var(--dp-txt)' }}>
+                          {r.sender_role === 'dev' ? 'ICAN Team' : (r.name || 'Website visitor')}
+                        </p>
+                        {r.reward_reason && <Badge label="🪙 Correct answer" cls="bg-amber-500/10 text-amber-400 border-amber-500/20"/>}
+                        <span className="text-[10px]" style={{ color:'var(--dp-muted)' }}>{fmtTime(r.created_at)}</span>
+                      </div>
+                      <p className="mt-0.5 whitespace-pre-wrap break-words text-sm" style={{ color:'var(--dp-sub)' }}>{r.message}</p>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        {r.sender_role !== 'dev' && r.user_id && !r.rewarded_at && (
+                          <button onClick={() => handleMarkCorrect(r.id)} disabled={markingId === r.id}
+                            className="inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[10px] font-semibold transition disabled:opacity-40"
+                            style={{ borderColor:'rgba(34,197,94,0.3)', background:'rgba(34,197,94,0.1)', color:'#4ade80' }}>
+                            <CheckCircle size={11}/> {markingId === r.id ? 'Marking…' : 'Mark correct answer (+1 ICAN)'}
+                          </button>
+                        )}
+                        {r.sender_role !== 'dev' && r.user_id && (
+                          <button onClick={() => handleOpenGrant(r.id)}
+                            className="inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[10px] font-semibold transition"
+                            style={{ borderColor:'rgba(245,158,11,0.3)', background:'rgba(245,158,11,0.1)', color:'#f59e0b' }}>
+                            <Gift size={11}/> Grant ICAN
+                          </button>
+                        )}
+                      </div>
+                      {grantTargetId === r.id && (
+                        <div className="mt-1.5 flex items-center gap-2">
+                          <input type="number" min="0.01" step="0.01" value={grantAmount}
+                            onChange={e => setGrantAmount(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') handleGrant(r); }}
+                            placeholder="Amount"
+                            className="w-24 rounded-lg border px-2 py-1 text-xs outline-none"
+                            style={{ background:'var(--dp-input)', borderColor:'var(--dp-input-bd)', color:'var(--dp-txt)' }}/>
+                          <button onClick={() => handleGrant(r)} disabled={grantingId === r.id || !grantAmount}
+                            className="rounded-lg px-2.5 py-1 text-[10px] font-bold transition disabled:opacity-40"
+                            style={{ background:'#f59e0b', color:'#1e1300' }}>
+                            {grantingId === r.id ? 'Granting…' : 'Confirm'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <button onClick={() => handleDelete(r.id)} disabled={deletingId === r.id}
+                      className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg text-rose-500 transition hover:bg-rose-500/10 disabled:opacity-40"
+                      title="Delete reply">
+                      <Trash2 size={12}/>
+                    </button>
+                  </div>
+                ))}
+                {replies.length === 0 && <p className="text-xs" style={{ color:'var(--dp-muted)' }}>No replies yet.</p>}
+                {markError && <p className="text-xs text-rose-400">{markError}</p>}
+                {grantError && <p className="text-xs text-rose-400">{grantError}</p>}
+
+                {m.is_public && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <input value={replyDraft} onChange={e => setReplyDraft(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleReply(m.id); }}
+                      placeholder="Reply as ICAN Team…"
+                      className="flex-1 rounded-xl border px-3 py-2 text-sm outline-none transition"
+                      style={{ background:'var(--dp-input)', borderColor:'var(--dp-input-bd)', color:'var(--dp-txt)' }}/>
+                    <button onClick={() => handleReply(m.id)} disabled={replying || !replyDraft.trim()}
+                      className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-white transition disabled:opacity-40"
+                      style={{ background:'linear-gradient(135deg,#06b6d4,#0284c7)' }}>
+                      <Send size={14}/>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {!loading && topLevel.length === 0 && <EmptyState msg="No landing page messages yet." Icon={MessageCircle}/>}
+    </>
+  );
+};
 
 // =============================================================================
 // DASHBOARD
@@ -1366,6 +1791,10 @@ const ICANDevDashboard = ({ onExit }) => {
             })}
           </>)}
         </>)}
+
+        {/* ══ PUBLIC BOARD ══ */}
+        {tab==='board' && <PublicBoardTab/>}
+        {tab==='messages' && <MessagesTab/>}
 
       </main>
     </div>

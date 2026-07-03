@@ -329,11 +329,11 @@ export const AuthProvider = ({ children }) => {
       } catch (error) {
         // If online login fails, fall back to offline cached session
         console.warn('[AuthContext] Online auth failed, trying offline cache:', error.message);
-        return await this.offlineSignIn(normalizedEmail);
+        return await offlineSignIn(normalizedEmail);
       }
     } else {
       // Offline - try cached session
-      return await this.offlineSignIn(normalizedEmail);
+      return await offlineSignIn(normalizedEmail);
     }
   };
 

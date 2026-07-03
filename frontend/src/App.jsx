@@ -8,6 +8,7 @@ import MobileView from './components/MobileView';
 import ActionQueue from './components/ActionQueue';
 import { SplashScreen } from './components/SplashScreen';
 import ICANDevPanel, { SESSION_KEY as ICAN_DEV_KEY } from './components/ICANDevPanel';
+import ChatWidget from './components/ChatWidget';
 import { offlineManager } from './lib/offlineManager';
 import { Loader2, AlertCircle } from 'lucide-react';
 
@@ -246,6 +247,7 @@ const App = () => {
             setShowSplash(true);
             setTimeout(() => setShowLanding(false), 800);
           }} />
+          <ChatWidget />
         </ErrorBoundary>
       );
     }
@@ -253,6 +255,7 @@ const App = () => {
       <ErrorBoundary>
         <SplashScreen show={showSplash} onHide={() => setShowSplash(false)} />
         <AuthPage />
+        <ChatWidget />
       </ErrorBoundary>
     );
   }
@@ -268,6 +271,7 @@ const App = () => {
         <CountryCheckMiddleware>
           <MobileView userProfile={user} />
         </CountryCheckMiddleware>
+        <ChatWidget />
       </ErrorBoundary>
     );
   }
@@ -281,6 +285,7 @@ const App = () => {
       <CountryCheckMiddleware>
         <ICANCapitalEngine />
       </CountryCheckMiddleware>
+      <ChatWidget />
     </ErrorBoundary>
   );
 };

@@ -31,6 +31,19 @@ const initializeSupabase = () => {
   }
 
   try {
+    // Multiple apps in this workspace (ICAN, mybodaguy, digital-city-era,
+    // FARM-AGENT) point at the same Supabase project and sometimes get
+    // bundled onto the same page via cross-app imports. Reuse whichever
+    // client for this project URL was created first instead of spinning up
+    // a second GoTrueClient, which otherwise causes session/token races.
+    const sharedClients = (globalThis.__ICANERACOIN_SUPABASE_CLIENTS__ ||= {});
+    if (sharedClients[supabaseUrl]) {
+      supabaseInstance = sharedClients[supabaseUrl];
+      console.log('✅ Supabase client reused from existing instance for this project');
+      isInitializing = false;
+      return supabaseInstance;
+    }
+
     // Create a single Supabase client instance
     supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
@@ -44,6 +57,7 @@ const initializeSupabase = () => {
         },
       },
     });
+    sharedClients[supabaseUrl] = supabaseInstance;
 
     console.log('✅ Supabase client initialized successfully');
 

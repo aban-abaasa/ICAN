@@ -1,9 +1,57 @@
-import React, { useState, useEffect } from 'react';
-import { ChevronRight, Play, Zap, Shield, TrendingUp, Users, ArrowRight, ChevronDown, X, Image as ImageIcon } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { ChevronRight, Play, Zap, Shield, TrendingUp, Users, ArrowRight, ChevronDown, X, Image as ImageIcon, Globe, Lock, Send, User, Mail, ThumbsUp } from 'lucide-react';
 import DashboardPreview from './DashboardPreview';
 import ThemeSwitcher from './ThemeSwitcher';
 import { PWAInstallButton } from './PWAInstallButton';
+import UpdatesFeed from './landing/UpdatesFeed';
+import CommunityStoriesCarousel from './landing/CommunityStoriesCarousel';
+import PitchinPreview from './landing/PitchinPreview';
+import WalletMockTrader from './landing/WalletMockTrader';
+import TrustGroupsPreview from './landing/TrustGroupsPreview';
 import { useTheme } from '../context/ThemeContext';
+import { getSupabaseClient } from '../lib/supabase/client';
+import {
+  createLandingMessage,
+  fetchPublicThreads,
+  getMyIcanBalance,
+  getOrCreateGuestLikeKey,
+  hasIcanWallet,
+  likeMessage,
+  listMyLandingMessages,
+  replyToLandingMessage,
+  subscribeToPublicLandingMessages,
+} from '../services/landingMessagesService';
+
+// ICAN has no shared guest-identity helper (unlike digital-city-era's chatService) — a
+// one-time name/email capture for anonymous repliers is persisted locally instead.
+const GUEST_IDENTITY_KEY = 'ican_guest_identity';
+
+const getGuestIdentity = () => {
+  try {
+    return JSON.parse(localStorage.getItem(GUEST_IDENTITY_KEY) || 'null');
+  } catch {
+    return null;
+  }
+};
+
+const setGuestIdentity = (identity) => {
+  try {
+    localStorage.setItem(GUEST_IDENTITY_KEY, JSON.stringify(identity));
+  } catch {
+    // localStorage unavailable — guest identity just won't persist across visits
+  }
+};
+
+const fmtBoardTime = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  const mins = Math.floor((Date.now() - date.getTime()) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return date.toLocaleDateString();
+};
 
 const LandingPage = ({ onGetStarted }) => {
   const { actualTheme } = useTheme();
@@ -18,6 +66,64 @@ const LandingPage = ({ onGetStarted }) => {
   const [expandedFooterItem, setExpandedFooterItem] = useState(null);
   const [failedMainSlideImages, setFailedMainSlideImages] = useState({});
   const [isImageViewerOpen, setIsImageViewerOpen] = useState(false);
+
+  // ── Community board state ──────────────────────────────────────────
+  const [contactForm, setContactForm] = useState({ name: '', email: '', message: '', isPublic: true });
+  const [identity, setIdentity] = useState(null);
+  const [hasWallet, setHasWallet] = useState(false);
+  const [threads, setThreads] = useState([]);
+  const [myMessages, setMyMessages] = useState([]);
+  const [submitState, setSubmitState] = useState('idle'); // idle | sending | sent | error
+  const [expandedThreadId, setExpandedThreadId] = useState(null);
+  const [replyDraft, setReplyDraft] = useState('');
+  const [replyState, setReplyState] = useState('idle'); // idle | sending | error
+  const [guestIdentity, setGuestIdentityState] = useState(() => getGuestIdentity());
+  const [guestLikeKey] = useState(() => getOrCreateGuestLikeKey());
+  const [selectedContributor, setSelectedContributor] = useState(null);
+  const [contributorBalance, setContributorBalance] = useState(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+
+  // Real posters shown individually (name + message count); every guest
+  // post (no user_id) folds into one aggregate "Guests" entry instead of
+  // showing as separate unnamed people.
+  const contributors = useMemo(() => {
+    const byUser = new Map();
+    let guestCount = 0;
+    const visit = (m) => {
+      if (m.user_id) {
+        const existing = byUser.get(m.user_id);
+        if (existing) {
+          existing.count += 1;
+          existing.name = m.name || existing.name;
+        } else {
+          byUser.set(m.user_id, { authId: m.user_id, name: m.name || 'Community member', count: 1 });
+        }
+      } else {
+        guestCount += 1;
+      }
+    };
+    threads.forEach((t) => {
+      visit(t);
+      t.replies.forEach(visit);
+    });
+    const list = Array.from(byUser.values()).sort((a, b) => b.count - a.count);
+    if (guestCount > 0) list.push({ authId: null, name: 'Guests', count: guestCount, isGuestGroup: true });
+    return list;
+  }, [threads]);
+
+  const handleSelectContributor = (c) => {
+    if (c.isGuestGroup) return;
+    setSelectedContributor(c);
+    setContributorBalance(null);
+    if (identity?.authId && c.authId === identity.authId) {
+      setBalanceLoading(true);
+      getMyIcanBalance(c.authId)
+        .then((bal) => setContributorBalance(bal))
+        .catch(() => setContributorBalance(null))
+        .finally(() => setBalanceLoading(false));
+    }
+  };
+  const [guestReplyForm, setGuestReplyForm] = useState({ name: '', email: '' });
 
   const scrollToSection = (sectionId) => {
     const section = document.getElementById(sectionId);
@@ -512,7 +618,10 @@ const LandingPage = ({ onGetStarted }) => {
     }
   ];
 
-  const testimonials = [
+  // Shown only until real community posts exist below (never a permanent
+  // substitute — see realTestimonials, which prefers genuine Supabase-backed
+  // messages from the community board the moment there are enough of them).
+  const fallbackTestimonials = [
     {
       name: 'Sarah Okoye',
       role: 'Finance Manager',
@@ -532,6 +641,22 @@ const LandingPage = ({ onGetStarted }) => {
       avatar: '👩‍🌾'
     }
   ];
+
+  // Real testimonials sourced from the live community board (public.landing_messages,
+  // already loaded into `threads`) instead of invented quotes — genuine posts from
+  // real visitors/users, rotated the same way the old hardcoded array was. Falls back
+  // to the seeded examples above only while fewer than 3 real posts exist.
+  const realTestimonials = useMemo(() => {
+    const posts = threads
+      .filter((t) => t.message && t.message.trim().length >= 15)
+      .map((t) => ({
+        name: t.name || 'ICANera community member',
+        role: t.user_id ? 'ICANera member' : 'Community visitor',
+        text: t.message.trim(),
+        avatar: t.user_id ? '💼' : '💬'
+      }));
+    return posts.length >= 3 ? posts.slice(0, 12) : fallbackTestimonials;
+  }, [threads]);
 
   // Auto-rotate slides
   useEffect(() => {
@@ -559,11 +684,12 @@ const LandingPage = ({ onGetStarted }) => {
 
   // Auto-rotate testimonials
   useEffect(() => {
+    setCurrentTestimonial(0);
     const interval = setInterval(() => {
-      setCurrentTestimonial((prev) => (prev + 1) % testimonials.length);
+      setCurrentTestimonial((prev) => (prev + 1) % realTestimonials.length);
     }, 7000);
     return () => clearInterval(interval);
-  }, []);
+  }, [realTestimonials.length]);
 
   // Handle scroll
   useEffect(() => {
@@ -573,6 +699,159 @@ const LandingPage = ({ onGetStarted }) => {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // Resolve current auth user (if any) for the community board's contact form.
+  // Private posting also requires an active ICAN wallet — a bare login isn't enough.
+  useEffect(() => {
+    let cancelled = false;
+    const supabase = getSupabaseClient();
+    if (!supabase) return undefined;
+
+    (async () => {
+      const { data: { user: authUser } = {} } = await supabase.auth.getUser();
+      if (cancelled || !authUser) return;
+
+      let name = authUser.email || '';
+      let email = authUser.email || '';
+      try {
+        const { data: profileRow } = await supabase
+          .from('profiles')
+          .select('full_name, email')
+          .eq('id', authUser.id)
+          .maybeSingle();
+        if (profileRow) {
+          name = profileRow.full_name || name;
+          email = profileRow.email || email;
+        }
+      } catch (err) {
+        console.warn('[LandingPage] failed to load profile for community board:', err);
+      }
+      if (cancelled) return;
+
+      const id = { authId: authUser.id, name: name || 'ICANera user', email };
+      setIdentity(id);
+      setContactForm((prev) => ({
+        ...prev,
+        name: prev.name || id.name || '',
+        email: prev.email || id.email || ''
+      }));
+      hasIcanWallet(id.authId)
+        .then((ok) => { if (!cancelled) setHasWallet(ok); })
+        .catch(() => { if (!cancelled) setHasWallet(false); });
+    })();
+
+    return () => { cancelled = true; };
+  }, []);
+
+  // Public community board — everyone can read these, live-updated.
+  const loadThreads = useCallback(() => {
+    return fetchPublicThreads(50, { authId: identity?.authId, guestKey: guestLikeKey })
+      .then((rows) => setThreads(rows))
+      .catch((err) => console.error('[LandingPage] failed to load public threads:', err));
+  }, [identity?.authId, guestLikeKey]);
+
+  useEffect(() => {
+    loadThreads();
+    return subscribeToPublicLandingMessages(() => { loadThreads(); });
+  }, [loadThreads]);
+
+  const handleLike = async (messageId) => {
+    setThreads((prev) => prev.map((t) => {
+      const bump = (m) => (m.id === messageId && !m.likedByMe
+        ? { ...m, likeCount: (m.likeCount || 0) + 1, likedByMe: true }
+        : m);
+      return { ...bump(t), replies: t.replies.map(bump) };
+    }));
+    try {
+      await likeMessage({ messageId, authId: identity?.authId, guestKey: guestLikeKey });
+    } catch (err) {
+      console.error('[LandingPage] failed to like message:', err);
+      loadThreads();
+    }
+  };
+
+  // A signed-in visitor's own message history, public and private.
+  useEffect(() => {
+    if (!identity?.authId) { setMyMessages([]); return undefined; }
+    let cancelled = false;
+    listMyLandingMessages(identity.authId)
+      .then((rows) => { if (!cancelled) setMyMessages(rows); })
+      .catch((err) => console.error('[LandingPage] failed to load your messages:', err));
+    return () => { cancelled = true; };
+  }, [identity?.authId]);
+
+  const handleContactChange = (event) => {
+    const { name, value } = event.target;
+    setContactForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleContactSubmit = async (event) => {
+    event.preventDefault();
+    if (!contactForm.message.trim() || submitState === 'sending') return;
+
+    setSubmitState('sending');
+    try {
+      const saved = await createLandingMessage({
+        name: contactForm.name,
+        email: contactForm.email,
+        company: '',
+        message: contactForm.message,
+        authId: identity?.authId || null,
+        // Only a wallet-holding poster can go private — force public otherwise.
+        isPublic: hasWallet ? contactForm.isPublic : true
+      });
+
+      setSubmitState('sent');
+      setContactForm((prev) => ({ ...prev, message: '' }));
+      if (saved.is_public) {
+        loadThreads();
+      }
+      if (identity?.authId) {
+        setMyMessages((prev) => [saved, ...prev]);
+      }
+    } catch (err) {
+      console.error('[LandingPage] failed to post message:', err);
+      setSubmitState('error');
+    }
+  };
+
+  const handleToggleThread = (threadId) => {
+    setExpandedThreadId((prev) => (prev === threadId ? null : threadId));
+    setReplyDraft('');
+    setReplyState('idle');
+  };
+
+  const handleSaveGuestReplyIdentity = () => {
+    const name = guestReplyForm.name.trim();
+    const email = guestReplyForm.email.trim();
+    if (!name) return;
+    const guest = { name, email };
+    setGuestIdentity(guest);
+    setGuestIdentityState(guest);
+  };
+
+  const handleSendReply = async (threadId) => {
+    const body = replyDraft.trim();
+    if (!body || replyState === 'sending') return;
+
+    const who = identity
+      ? { name: identity.name, email: identity.email, authId: identity.authId }
+      : guestIdentity?.name
+        ? { name: guestIdentity.name, email: guestIdentity.email, authId: null }
+        : null;
+    if (!who) return;
+
+    setReplyState('sending');
+    try {
+      await replyToLandingMessage({ parentId: threadId, name: who.name, email: who.email, authId: who.authId, message: body });
+      setReplyDraft('');
+      setReplyState('idle');
+      await loadThreads();
+    } catch (err) {
+      console.error('[LandingPage] failed to reply:', err);
+      setReplyState('error');
+    }
+  };
 
   useEffect(() => {
     const handleEscClose = (event) => {
@@ -717,6 +996,18 @@ const LandingPage = ({ onGetStarted }) => {
             >
               Testimonials
             </button>
+            <button
+              onClick={() => scrollToSection('community-board')}
+              className={`px-4 py-2 ican-cove-tab border-2 text-sm md:text-base 2xl:text-lg font-bold transition-all duration-300 ${isDarkTheme ? 'text-teal-100 border-teal-300/55 bg-teal-900/25 hover:bg-teal-800/35 hover:border-teal-200/80' : 'text-teal-900 border-teal-400/55 bg-teal-100 hover:bg-teal-200/90 hover:border-teal-500/75'}`}
+            >
+              Community
+            </button>
+            <button
+              onClick={() => scrollToSection('live-explore')}
+              className={`px-4 py-2 ican-cove-tab border-2 text-sm md:text-base 2xl:text-lg font-bold transition-all duration-300 ${isDarkTheme ? 'text-emerald-100 border-emerald-300/55 bg-emerald-900/25 hover:bg-emerald-800/35 hover:border-emerald-200/80' : 'text-emerald-900 border-emerald-400/55 bg-emerald-100 hover:bg-emerald-200/90 hover:border-emerald-500/75'}`}
+            >
+              Try It Live
+            </button>
           </div>
           <div className="flex flex-col items-end gap-2">
             {/* Top row: Theme switcher, Sign In, Create Account */}
@@ -776,24 +1067,24 @@ const LandingPage = ({ onGetStarted }) => {
                     
                     <div className="text-sm text-gray-300 leading-relaxed space-y-4">
                       <div className="space-y-2">
-                        <p className="font-semibold text-yellow-200">Record every transaction effortlessly</p>
-                        <p className="text-xs">Capture income and expenses by voice or manual entry. Smart categorization handles everything.</p>
+                        <p className="font-semibold text-yellow-200">One ICAN, wired across every business you touch</p>
+                        <p className="text-xs">Same wallet balance across ICANera, digital-city-era retail, mybodaguy delivery, and FARM-AGENT's marketplace — every transaction tagged by the app it came from.</p>
                       </div>
                       <div className="space-y-2">
-                        <p className="font-semibold text-purple-200">Separate personal & business finances</p>
-                        <p className="text-xs">Multi-wallet system keeps everything organized and crystal clear.</p>
+                        <p className="font-semibold text-purple-200">Earn ICAN from real activity, not just deposits</p>
+                        <p className="text-xs">1% cashback on digital-city-era purchases, ICAN per completed mybodaguy delivery, ICAN on every FARM-AGENT sale — plus PitchIn dividends and TRUST group returns.</p>
                       </div>
                       <div className="space-y-2">
-                        <p className="font-semibold text-pink-200">Invest, earn, and grow together</p>
-                        <p className="text-xs">TRUST groups (8-15% returns), business investing via PitchIn, zero-fee global transfers.</p>
+                        <p className="font-semibold text-pink-200">Invest, save, and grow together</p>
+                        <p className="text-xs">1 ICAN starts at a 5,000 UGX floor price. TRUST groups (8-15% returns), business investing via PitchIn, zero-fee global transfers.</p>
                       </div>
                       <div className="space-y-2">
-                        <p className="font-semibold text-green-200">Give back with purpose through tithing</p>
-                        <p className="text-xs">Align faith with finances. Automatic calculations, community impact, spiritual accountability.</p>
+                        <p className="font-semibold text-green-200">Giving is automatic, not an afterthought</p>
+                        <p className="text-xs">10% of every ICAN you earn is set aside as tithe the moment it's credited — tracked and transparent, wherever you earned it.</p>
                       </div>
                       <div className="space-y-2">
                         <p className="font-semibold text-blue-200">Scale your business with confidence</p>
-                        <p className="text-xs">Professional tools for team management, inventory, and automated approvals.</p>
+                        <p className="text-xs">Professional reporting, team management, inventory, and automated approvals through ICAN's CMMS.</p>
                       </div>
                     </div>
                     
@@ -835,24 +1126,24 @@ const LandingPage = ({ onGetStarted }) => {
                 {/* Description */}
                 <div className="text-sm md:text-base 2xl:text-lg text-gray-300 leading-relaxed space-y-4">
                   <div className="space-y-3">
-                    <p className="font-semibold text-yellow-200">Record every transaction effortlessly</p>
-                    <p>Capture income and expenses by voice or manual entry. Watch our smart system instantly categorize and organize everything for you.</p>
+                    <p className="font-semibold text-yellow-200">One ICAN, wired across every business you touch</p>
+                    <p>The same wallet balance follows you across four real, live apps — ICANera itself, digital-city-era's retail/POS system, mybodaguy's delivery riders, and FARM-AGENT's farm marketplace. Every transaction is tagged with the app it came from, so nothing needs manual reconciling.</p>
                   </div>
                   <div className="space-y-3">
-                    <p className="font-semibold text-purple-200">Separate personal & business finances</p>
-                    <p>Multi-wallet system keeps your personal savings, business profits, group savings, and investments completely organized and crystal clear.</p>
+                    <p className="font-semibold text-purple-200">Earn ICAN from real activity, not just deposits</p>
+                    <p>Shop at a digital-city-era store and earn 1% back in ICAN automatically. Complete a delivery on mybodaguy and get credited per trip. Sell produce, land, or services on FARM-AGENT and ICAN lands the moment it sells. Add PitchIn dividends and TRUST group returns, and it's all one balance.</p>
                   </div>
                   <div className="space-y-3">
-                    <p className="font-semibold text-pink-200">Invest, earn, and grow together</p>
-                    <p>Build wealth through democratic TRUST groups (8-15% returns), invest in promising businesses via PitchIn, and move money globally with zero fees.</p>
+                    <p className="font-semibold text-pink-200">Invest, save, and grow together</p>
+                    <p>1 ICAN starts at a 5,000 UGX floor price. Build wealth through democratic TRUST groups (8-15% returns), invest in promising businesses via PitchIn, and move money globally with zero fees.</p>
                   </div>
                   <div className="space-y-3">
-                    <p className="font-semibold text-green-200">Give back with purpose through tithing</p>
-                    <p>Align your faith with your finances. Automatic tithe calculations, community impact tracking, and spiritual accountability—your generosity tracked and honored.</p>
+                    <p className="font-semibold text-green-200">Giving is automatic, not an afterthought</p>
+                    <p>10% of every ICAN you earn — from any app — is set aside as tithe the instant it's credited to your wallet. No spreadsheets, no year-end guesswork: it's tracked and transparent by design.</p>
                   </div>
                   <div className="space-y-3">
                     <p className="font-semibold text-blue-200">Scale your business with confidence</p>
-                    <p>Professional reporting, team management, inventory tracking, and automated approvals. Enterprise-grade tools built for ambitious entrepreneurs.</p>
+                    <p>Professional reporting, team management, inventory tracking, and automated approvals through ICAN's CMMS. Enterprise-grade tools built for entrepreneurs running real operations, not demos.</p>
                   </div>
                 </div>
                 
@@ -1234,20 +1525,20 @@ const LandingPage = ({ onGetStarted }) => {
                   key={`user-${currentTestimonial}`}
                   className="flex items-center gap-3 md:gap-4 min-w-max animate-fadeIn"
                 >
-                  <span className="text-3xl md:text-4xl 2xl:text-5xl flex-shrink-0">{testimonials[currentTestimonial].avatar}</span>
+                  <span className="text-3xl md:text-4xl 2xl:text-5xl flex-shrink-0">{realTestimonials[currentTestimonial % realTestimonials.length].avatar}</span>
                   <div className="text-left">
-                    <p className="font-bold text-sm md:text-base 2xl:text-lg text-white">{testimonials[currentTestimonial].name}</p>
-                    <p className="text-xs md:text-sm 2xl:text-base bg-gradient-to-r from-cyan-300 to-purple-300 bg-clip-text text-transparent font-semibold">{testimonials[currentTestimonial].role}</p>
+                    <p className="font-bold text-sm md:text-base 2xl:text-lg text-white">{realTestimonials[currentTestimonial % realTestimonials.length].name}</p>
+                    <p className="text-xs md:text-sm 2xl:text-base bg-gradient-to-r from-cyan-300 to-purple-300 bg-clip-text text-transparent font-semibold">{realTestimonials[currentTestimonial % realTestimonials.length].role}</p>
                   </div>
                 </div>
 
                 {/* Middle - Quote (Compact) */}
                 <div className="flex-grow text-center md:text-left">
-                  <p 
+                  <p
                     key={`quote-${currentTestimonial}`}
                     className="text-gray-300 italic text-xs md:text-sm 2xl:text-base leading-relaxed line-clamp-2 animate-fadeIn"
                   >
-                    "{testimonials[currentTestimonial].text}"
+                    "{realTestimonials[currentTestimonial % realTestimonials.length].text}"
                   </p>
                 </div>
 
@@ -1263,13 +1554,13 @@ const LandingPage = ({ onGetStarted }) => {
                   {/* Nav Buttons */}
                   <div className="flex gap-1 md:gap-2">
                     <button
-                      onClick={() => setCurrentTestimonial((prev) => (prev - 1 + testimonials.length) % testimonials.length)}
+                      onClick={() => setCurrentTestimonial((prev) => (prev - 1 + realTestimonials.length) % realTestimonials.length)}
                       className="p-1.5 md:p-2 rounded-full bg-purple-600/35 hover:bg-purple-500/50 transition-all duration-300 transform hover:scale-110 group/btn border-2 border-purple-300/45 hover:border-purple-300/75"
                     >
                       <ChevronRight className="w-4 h-4 md:w-5 md:h-5 transform rotate-180" />
                     </button>
                     <button
-                      onClick={() => setCurrentTestimonial((prev) => (prev + 1) % testimonials.length)}
+                      onClick={() => setCurrentTestimonial((prev) => (prev + 1) % realTestimonials.length)}
                       className="p-1.5 md:p-2 rounded-full bg-purple-600/35 hover:bg-purple-500/50 transition-all duration-300 transform hover:scale-110 group/btn border-2 border-purple-300/45 hover:border-purple-300/75"
                     >
                       <ChevronRight className="w-4 h-4 md:w-5 md:h-5" />
@@ -1280,12 +1571,12 @@ const LandingPage = ({ onGetStarted }) => {
 
               {/* Indicators - Hidden on Mobile, Visible on Desktop */}
               <div className="hidden md:flex gap-1 justify-center mt-3 flex-wrap relative z-10">
-                {testimonials.map((_, index) => (
+                {realTestimonials.map((_, index) => (
                   <button
                     key={index}
                     onClick={() => setCurrentTestimonial(index)}
                     className={`rounded-full transition transform hover:scale-125 ${
-                      index === currentTestimonial
+                      index === (currentTestimonial % realTestimonials.length)
                         ? 'bg-gradient-to-r from-cyan-400 to-purple-400 w-3 h-3 shadow-lg shadow-cyan-500/50'
                         : 'bg-purple-500/30 w-2 h-2 hover:bg-cyan-500/50'
                     }`}
@@ -1317,6 +1608,361 @@ const LandingPage = ({ onGetStarted }) => {
           </div>
         </div>
       </section>
+
+      {/* Community Board Section */}
+      <section id="community-board" className="relative py-10 md:py-16 lg:py-20 2xl:py-24 px-4 sm:px-6 lg:px-8 2xl:px-16">
+        <div className="max-w-6xl 2xl:max-w-[1400px] mx-auto">
+          <div className="text-center mb-10 md:mb-14">
+            <p className="text-xs md:text-sm font-black uppercase tracking-[0.35em] text-teal-400">Community Board</p>
+            <h2 className={`mt-3 text-2xl md:text-4xl lg:text-5xl font-black leading-tight ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>
+              Ask ICANera anything
+            </h2>
+            <p className={`mt-3 max-w-2xl mx-auto text-sm md:text-base leading-relaxed ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>
+              Public questions from the ICANera community — anyone can read these. The ICANera team can remove any message.
+            </p>
+          </div>
+
+          {/* Contact / ask form */}
+          <form
+            onSubmit={handleContactSubmit}
+            className={`border ican-cove-card p-5 md:p-8 mb-10 md:mb-14 ${isDarkTheme ? 'bg-slate-900/80 border-slate-600/40' : 'bg-white border-slate-300/70'}`}
+          >
+            <h3 className={`text-lg md:text-xl font-bold mb-4 ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>
+              {identity ? `Welcome back, ${identity.name}.` : 'Talk to the ICANera team.'}
+            </h3>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className={`mb-1.5 block text-xs font-semibold uppercase tracking-wide ${isDarkTheme ? 'text-slate-300' : 'text-slate-600'}`}>Your name</label>
+                <input
+                  name="name"
+                  value={contactForm.name}
+                  onChange={handleContactChange}
+                  placeholder="Jane Doe"
+                  className={`w-full rounded-xl border px-4 py-3 text-sm outline-none transition focus:border-cyan-400/60 ${isDarkTheme ? 'bg-slate-950/50 border-slate-600/40 text-white placeholder:text-slate-500' : 'bg-slate-50 border-slate-300 text-slate-900 placeholder:text-slate-400'}`}
+                />
+              </div>
+              <div>
+                <label className={`mb-1.5 block text-xs font-semibold uppercase tracking-wide ${isDarkTheme ? 'text-slate-300' : 'text-slate-600'}`}>Email address</label>
+                <input
+                  type="email"
+                  name="email"
+                  value={contactForm.email}
+                  onChange={handleContactChange}
+                  placeholder="jane@example.com"
+                  className={`w-full rounded-xl border px-4 py-3 text-sm outline-none transition focus:border-cyan-400/60 ${isDarkTheme ? 'bg-slate-950/50 border-slate-600/40 text-white placeholder:text-slate-500' : 'bg-slate-50 border-slate-300 text-slate-900 placeholder:text-slate-400'}`}
+                />
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <label className={`mb-1.5 block text-xs font-semibold uppercase tracking-wide ${isDarkTheme ? 'text-slate-300' : 'text-slate-600'}`}>Message</label>
+              <textarea
+                name="message"
+                value={contactForm.message}
+                onChange={handleContactChange}
+                rows="4"
+                placeholder="Ask about wallets, TRUST groups, PitchIn, tithe, or anything else."
+                className={`w-full rounded-xl border px-4 py-3 text-sm outline-none transition focus:border-cyan-400/60 ${isDarkTheme ? 'bg-slate-950/50 border-slate-600/40 text-white placeholder:text-slate-500' : 'bg-slate-50 border-slate-300 text-slate-900 placeholder:text-slate-400'}`}
+              />
+            </div>
+
+            {identity && hasWallet ? (
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <label className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition ${
+                  contactForm.isPublic ? 'border-cyan-400/60 bg-cyan-400/10' : (isDarkTheme ? 'border-slate-600/40 bg-slate-950/30' : 'border-slate-300 bg-slate-50')
+                }`}>
+                  <input
+                    type="radio"
+                    name="visibility"
+                    className="mt-1"
+                    checked={contactForm.isPublic}
+                    onChange={() => setContactForm((prev) => ({ ...prev, isPublic: true }))}
+                  />
+                  <span>
+                    <span className={`flex items-center gap-2 text-sm font-medium ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>
+                      <Globe className="w-4 h-4" /> Public
+                    </span>
+                    <span className={`mt-1 block text-xs leading-5 ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>Everyone can see this on the community board.</span>
+                  </span>
+                </label>
+                <label className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition ${
+                  !contactForm.isPublic ? 'border-amber-400/60 bg-amber-400/10' : (isDarkTheme ? 'border-slate-600/40 bg-slate-950/30' : 'border-slate-300 bg-slate-50')
+                }`}>
+                  <input
+                    type="radio"
+                    name="visibility"
+                    className="mt-1"
+                    checked={!contactForm.isPublic}
+                    onChange={() => setContactForm((prev) => ({ ...prev, isPublic: false }))}
+                  />
+                  <span>
+                    <span className={`flex items-center gap-2 text-sm font-medium ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>
+                      <Lock className="w-4 h-4" /> Private
+                    </span>
+                    <span className={`mt-1 block text-xs leading-5 ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>Only you and the ICANera team can see this.</span>
+                  </span>
+                </label>
+              </div>
+            ) : identity ? (
+              <p className={`mt-4 text-xs leading-5 ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>
+                Messages here are public — anyone can see them, but the ICANera team can remove any message.{' '}
+                Connect your ICAN wallet after signing in to unlock private messages.
+              </p>
+            ) : (
+              <p className={`mt-4 text-xs leading-5 ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>
+                Messages here are public — anyone can see them, but the ICANera team can remove any message.
+                Sign in with an ICAN wallet to choose public or private for your own messages.
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={submitState === 'sending' || !contactForm.message.trim()}
+              className="mt-5 inline-flex items-center gap-2 rounded-xl ican-rainbow-fill border-2 ican-rainbow-border px-6 py-3 font-bold text-white transition hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
+            >
+              <Mail className="w-4 h-4" />
+              {submitState === 'sending' ? 'Posting…' : 'Post message'}
+            </button>
+            {submitState === 'sent' && (
+              <p className="mt-3 text-sm text-emerald-400">Thanks — your message has been posted.</p>
+            )}
+            {submitState === 'error' && (
+              <p className="mt-3 text-sm text-rose-400">Something went wrong sending that. Please try again.</p>
+            )}
+
+            {identity && myMessages.length > 0 && (
+              <div className="mt-6 pt-5 border-t border-white/10">
+                <p className={`mb-2 text-xs font-semibold uppercase tracking-wide ${isDarkTheme ? 'text-slate-400' : 'text-slate-500'}`}>Your messages</p>
+                <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
+                  {myMessages.map((m) => (
+                    <div key={m.id} className={`rounded-xl border p-3 ${isDarkTheme ? 'bg-slate-950/30 border-slate-600/30' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                          m.is_public
+                            ? 'border-cyan-400/40 bg-cyan-400/10 text-cyan-300'
+                            : 'border-amber-400/40 bg-amber-400/10 text-amber-300'
+                        }`}>
+                          {m.is_public ? <Globe className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                          {m.is_public ? 'Public' : 'Private'}
+                        </span>
+                        <span className={`text-[10px] ${isDarkTheme ? 'text-slate-500' : 'text-slate-400'}`}>{fmtBoardTime(m.created_at)}</span>
+                      </div>
+                      <p className={`mt-2 text-sm leading-6 ${isDarkTheme ? 'text-slate-200' : 'text-slate-700'}`}>{m.message}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </form>
+
+          {/* Public threads grid */}
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {threads.map((m) => {
+              const isExpanded = expandedThreadId === m.id;
+              const canReply = !!(identity || guestIdentity?.name);
+              return (
+                <article
+                  key={m.id}
+                  className={`border ican-cove-panel p-5 transition ${isDarkTheme ? 'bg-slate-900/60 border-slate-600/35' : 'bg-white border-slate-200'} ${isExpanded ? 'md:col-span-2 xl:col-span-3' : ''}`}
+                >
+                  <div role="button" tabIndex={0} onClick={() => handleToggleThread(m.id)} className="w-full cursor-pointer text-left">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-cyan-400/20 to-violet-500/20 text-cyan-300">
+                        <User className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-sm font-semibold ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>{m.name || 'Website visitor'}</p>
+                        <p className={`text-xs ${isDarkTheme ? 'text-slate-500' : 'text-slate-400'}`}>{fmtBoardTime(m.created_at)}</p>
+                      </div>
+                      {m.reward_reason && (
+                        <span className="flex-shrink-0 rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[10px] font-medium text-amber-400">
+                          🪙 Rewarded
+                        </span>
+                      )}
+                      {m.replies.length > 0 && (
+                        <span className={`flex-shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${isDarkTheme ? 'border-slate-600/40 bg-white/5 text-slate-300' : 'border-slate-300 bg-slate-100 text-slate-600'}`}>
+                          {m.replies.length} {m.replies.length === 1 ? 'reply' : 'replies'}
+                        </span>
+                      )}
+                    </div>
+                    <p className={`mt-3 text-sm leading-6 ${isDarkTheme ? 'text-slate-300' : 'text-slate-600'}`}>{m.message}</p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleLike(m.id)}
+                    disabled={m.likedByMe}
+                    className={`mt-3 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition disabled:cursor-default ${
+                      m.likedByMe
+                        ? 'border-cyan-400/50 bg-cyan-400/10 text-cyan-300'
+                        : (isDarkTheme ? 'border-slate-600/40 bg-white/5 text-slate-300 disabled:opacity-100' : 'border-slate-300 bg-slate-100 text-slate-600 disabled:opacity-100')
+                    }`}
+                  >
+                    <ThumbsUp className="h-3.5 w-3.5" /> {m.likeCount || 0}
+                  </button>
+
+                  {isExpanded && (
+                    <div className="mt-4 space-y-3 border-t border-white/10 pt-4">
+                      {m.replies.map((r) => (
+                        <div
+                          key={r.id}
+                          className={`rounded-xl border p-3 ${
+                            r.sender_role === 'dev'
+                              ? 'border-cyan-400/40 bg-cyan-400/10'
+                              : (isDarkTheme ? 'bg-slate-950/30 border-slate-600/30' : 'bg-slate-50 border-slate-200')
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <p className={`text-xs font-semibold ${
+                              r.sender_role === 'dev' ? 'text-cyan-300' : (isDarkTheme ? 'text-white' : 'text-slate-900')
+                            }`}>
+                              {r.sender_role === 'dev' ? 'ICANera Team' : (r.name || 'Website visitor')}
+                            </p>
+                            <div className="flex items-center gap-2">
+                              {r.reward_reason && (
+                                <span className="rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[10px] font-medium text-amber-400">
+                                  🪙 Correct answer
+                                </span>
+                              )}
+                              <span className={`text-[10px] ${isDarkTheme ? 'text-slate-500' : 'text-slate-400'}`}>{fmtBoardTime(r.created_at)}</span>
+                            </div>
+                          </div>
+                          <p className={`mt-1 text-sm leading-6 ${isDarkTheme ? 'text-slate-300' : 'text-slate-600'}`}>{r.message}</p>
+                          <button
+                            type="button"
+                            onClick={() => handleLike(r.id)}
+                            disabled={r.likedByMe}
+                            className={`mt-2 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition disabled:cursor-default ${
+                              r.likedByMe
+                                ? 'border-cyan-400/50 bg-cyan-400/10 text-cyan-300'
+                                : (isDarkTheme ? 'border-slate-600/40 bg-white/5 text-slate-300 disabled:opacity-100' : 'border-slate-300 bg-slate-100 text-slate-600 disabled:opacity-100')
+                            }`}
+                          >
+                            <ThumbsUp className="h-3 w-3" /> {r.likeCount || 0}
+                          </button>
+                        </div>
+                      ))}
+                      {m.replies.length === 0 && (
+                        <p className={`text-xs ${isDarkTheme ? 'text-slate-500' : 'text-slate-400'}`}>No replies yet.</p>
+                      )}
+
+                      {!canReply && (
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <input
+                            value={guestReplyForm.name}
+                            onChange={(e) => setGuestReplyForm((p) => ({ ...p, name: e.target.value }))}
+                            placeholder="Your name"
+                            className={`rounded-lg border px-3 py-2 text-sm outline-none focus:border-cyan-400/60 ${isDarkTheme ? 'bg-slate-950/50 border-slate-600/40 text-white placeholder:text-slate-500' : 'bg-slate-50 border-slate-300 text-slate-900 placeholder:text-slate-400'}`}
+                          />
+                          <input
+                            value={guestReplyForm.email}
+                            onChange={(e) => setGuestReplyForm((p) => ({ ...p, email: e.target.value }))}
+                            placeholder="Your email"
+                            type="email"
+                            className={`rounded-lg border px-3 py-2 text-sm outline-none focus:border-cyan-400/60 ${isDarkTheme ? 'bg-slate-950/50 border-slate-600/40 text-white placeholder:text-slate-500' : 'bg-slate-50 border-slate-300 text-slate-900 placeholder:text-slate-400'}`}
+                          />
+                          <button
+                            type="button"
+                            onClick={handleSaveGuestReplyIdentity}
+                            disabled={!guestReplyForm.name.trim()}
+                            className={`rounded-lg border px-3 py-2 text-xs font-medium transition disabled:opacity-40 sm:col-span-2 ${isDarkTheme ? 'border-slate-600/40 bg-white/5 text-slate-200 hover:bg-white/10' : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                          >
+                            Continue as this name
+                          </button>
+                        </div>
+                      )}
+
+                      {canReply && (
+                        <div className="flex items-center gap-2">
+                          <input
+                            value={replyDraft}
+                            onChange={(e) => setReplyDraft(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') handleSendReply(m.id); }}
+                            placeholder={`Reply as ${identity?.name || guestIdentity?.name}…`}
+                            className={`flex-1 rounded-lg border px-3 py-2 text-sm outline-none focus:border-cyan-400/60 ${isDarkTheme ? 'bg-slate-950/50 border-slate-600/40 text-white placeholder:text-slate-500' : 'bg-slate-50 border-slate-300 text-slate-900 placeholder:text-slate-400'}`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleSendReply(m.id)}
+                            disabled={replyState === 'sending' || !replyDraft.trim()}
+                            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-400 to-violet-600 text-white transition disabled:opacity-40"
+                          >
+                            <Send className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                      {replyState === 'error' && <p className="text-xs text-rose-400">Reply failed — please try again.</p>}
+                    </div>
+                  )}
+                </article>
+              );
+            })}
+            {threads.length === 0 && (
+              <p className={`text-sm ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>No public messages yet — be the first to ask something.</p>
+            )}
+          </div>
+
+          {contributors.length > 0 && (
+            <div className="mt-8">
+              <p className="text-xs uppercase tracking-[0.3em] text-cyan-400">Community members</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {contributors.map((c) => (
+                  <button
+                    key={c.authId || 'guests'}
+                    type="button"
+                    onClick={() => handleSelectContributor(c)}
+                    disabled={c.isGuestGroup}
+                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition disabled:cursor-default ${
+                      isDarkTheme ? 'border-slate-600/40 bg-white/5 text-slate-300' : 'border-slate-300 bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    <User className="h-3 w-3" /> {c.name}
+                    <span className={isDarkTheme ? 'text-slate-500' : 'text-slate-400'}>
+                      · {c.count} {c.count === 1 ? 'message' : 'messages'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {selectedContributor && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setSelectedContributor(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className={`w-full max-w-xs rounded-2xl border p-6 ${isDarkTheme ? 'bg-slate-900 border-slate-600/40' : 'bg-white border-slate-200'}`}
+          >
+            <div className="flex items-center justify-between">
+              <p className={`text-lg font-semibold ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>{selectedContributor.name}</p>
+              <button onClick={() => setSelectedContributor(null)} className={isDarkTheme ? 'text-slate-400' : 'text-slate-500'}>
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className={`mt-2 text-sm ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>
+              {selectedContributor.count} {selectedContributor.count === 1 ? 'message' : 'messages'} on the community board
+            </p>
+            {identity?.authId === selectedContributor.authId && (
+              <div className="mt-4 rounded-xl border border-cyan-400/30 bg-cyan-400/10 p-3">
+                <p className="text-xs uppercase tracking-wide text-cyan-300">Your ICAN balance</p>
+                <p className="mt-1 text-xl font-bold text-cyan-200">
+                  {balanceLoading ? '…' : `${(contributorBalance ?? 0).toFixed(2)} ICAN`}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <UpdatesFeed />
+      <CommunityStoriesCarousel />
+      <PitchinPreview onGetStarted={onGetStarted} authId={identity?.authId ?? null} />
+      <WalletMockTrader onGetStarted={onGetStarted} authId={identity?.authId ?? null} />
+      <TrustGroupsPreview onGetStarted={onGetStarted} />
 
       {/* Footer */}
       <footer className="relative border-t border-purple-500/10 py-6 md:py-10 lg:py-12 2xl:py-16 px-4 sm:px-6 lg:px-8 2xl:px-16">
