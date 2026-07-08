@@ -160,8 +160,16 @@ export const fetchPublicThreads = async (limit = 50, viewer = {}) => {
 };
 
 export const subscribeToPublicLandingMessages = (onInsert) => {
+  // Unique name per subscription — supabase.channel() returns the SAME
+  // already-subscribed channel instance for a repeated fixed name (e.g. two
+  // components subscribing on the same page), and calling .on() on an
+  // already-subscribed channel throws "cannot add postgres_changes
+  // callbacks ... after subscribe()". A unique name guarantees a fresh
+  // channel every time. Matches the same fix applied on the
+  // digital-city-era and mybodaguy sides.
+  const channelName = `landing_messages_public_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
   const channel = supabase
-    .channel('landing_messages_public')
+    .channel(channelName)
     .on(
       'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'landing_messages', filter: 'is_public=eq.true' },
