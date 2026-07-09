@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import PINRecoveryModal from './PINRecoveryModal';
 import './CashInPinModal.css';
 
 /**
@@ -6,13 +7,15 @@ import './CashInPinModal.css';
  * Requests 4-digit PIN from user before approving cash-in
  * Features: Numeric keypad, attempt counter, visual feedback
  */
-const CashInPinModal = ({ 
-  isOpen, 
-  onSubmit, 
+const CashInPinModal = ({
+  isOpen,
+  onSubmit,
   onCancel,
   amount,
   currency,
   userAccount,
+  userId = null,
+  userEmail = null,
   isLoading = false,
   error = null,
   attemptsRemaining = 3
@@ -21,6 +24,8 @@ const CashInPinModal = ({
   const [showPin, setShowPin] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localError, setLocalError] = useState(error);
+  const [showPINRecovery, setShowPINRecovery] = useState(false);
+  const isAccountLocked = (localError || error || '').toLowerCase().includes('locked');
 
   if (!isOpen) return null;
 
@@ -167,8 +172,27 @@ const CashInPinModal = ({
               {isSubmitting || isLoading ? 'Verifying...' : 'Confirm'}
             </button>
           </div>
+
+          {isAccountLocked && userId && (
+            <button
+              type="button"
+              onClick={() => setShowPINRecovery(true)}
+              className="w-full mt-3 bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 rounded-lg transition-colors"
+            >
+              🔐 Forgot PIN / Account Locked?
+            </button>
+          )}
         </form>
       </div>
+
+      {userId && (
+        <PINRecoveryModal
+          isOpen={showPINRecovery}
+          onClose={() => setShowPINRecovery(false)}
+          userId={userId}
+          userEmail={userEmail}
+        />
+      )}
     </div>
   );
 };

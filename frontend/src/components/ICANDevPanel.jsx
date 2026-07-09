@@ -28,6 +28,35 @@ export const SESSION_KEY = 'ican_dev_panel_auth';
 const DEV_TOKEN   = 'dev_ICAN_Pr0_KV25';
 const ICAN_TO_UGX = 5000;
 
+// Must match agentService.js / walletAccountService.js's hashPIN() exactly —
+// PIN verification (process_cashout_with_pin etc.) compares against this
+// salted hash, NOT plain base64. A mismatch here silently "wrong-PINs"
+// every login attempt and re-locks the account.
+const hashAgentPin = (pin) => {
+  let hash = 0;
+  const string = `pin-${pin}-salt-ican-hash`;
+  for (let i = 0; i < string.length; i++) {
+    const char = string.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return btoa(`hash-${Math.abs(hash)}-${pin.length}`);
+};
+
+// group_accounts uses a different salt/prefix (groupWalletAccountService.js's
+// hashPIN) than personal user_accounts — must match exactly or every login
+// after a dev-panel PIN reset "wrong-PIN"s and re-locks the group wallet.
+const hashGroupPin = (pin) => {
+  let hash = 0;
+  const string = `pin-${pin}-salt-ican-group-hash`;
+  for (let i = 0; i < string.length; i++) {
+    const char = string.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return btoa(`group-hash-${Math.abs(hash)}-${pin.length}`);
+};
+
 // Country ISO-2 → currency code (mirrors ican_country_currency_map)
 const COUNTRY_CURRENCY = {
   UG:'UGX',KE:'KES',TZ:'TZS',RW:'RWF',BI:'RWF',
@@ -63,6 +92,7 @@ const TABS = [
   { id: 'businesses', label: 'Businesses',   Icon: Building2,   color: '#10b981' },
   { id: 'groups',     label: 'Trust Groups', Icon: ShieldCheck, color: '#f59e0b' },
   { id: 'agents',     label: 'Agents',       Icon: Briefcase,   color: '#f97316' },
+  { id: 'recovery',   label: 'Recovery',     Icon: AlertTriangle, color: '#ef4444' },
   { id: 'blockchain', label: 'Blockchain',   Icon: Lock,        color: '#ec4899' },
   { id: 'plans',      label: 'Plans',        Icon: Star,        color: '#eab308' },
   { id: 'board',      label: 'Public Board', Icon: MessageCircle, color: '#14b8a6' },
@@ -626,6 +656,146 @@ const PublicBoardTab = () => {
 };
 
 // =============================================================================
+// RECOVERY — locked accounts / forgotten PINs, resolved here (no self-service)
+// =============================================================================
+const RecoveryTab = () => {
+  const supabase = getSupabaseClient();
+  const [requests,    setRequests]    = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [resolvingId, setResolvingId] = useState(null);
+  const [pinDrafts,   setPinDrafts]   = useState({});
+  const [error,       setError]       = useState(null);
+  const [lastResolved, setLastResolved] = useState(null); // { requestId, pin }
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    const { data, error: err } = await supabase.rpc('ican_dev_get_recovery_requests', { dev_token: DEV_TOKEN });
+    if (err) { console.warn('[Dev] ican_dev_get_recovery_requests:', err.message); setRequests([]); }
+    else setRequests(data || []);
+    setLoading(false);
+  }, [supabase]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const resolve = async (requestId, action) => {
+    const pin = (pinDrafts[requestId] || '').trim();
+    if (action === 'unlock' && pin && !/^\d{4}$/.test(pin)) {
+      setError('New PIN must be exactly 4 digits, or leave it blank to keep the current PIN.');
+      return;
+    }
+    const isGroupRequest = !!requests.find(r => r.request_id === requestId)?.group_id;
+    setResolvingId(requestId);
+    setError(null);
+    try {
+      const { data, error: err } = await supabase.rpc('ican_dev_resolve_recovery_request', {
+        dev_token: DEV_TOKEN,
+        p_request_id: requestId,
+        p_action: action,
+        p_new_pin_hash: pin ? (isGroupRequest ? hashGroupPin(pin) : hashAgentPin(pin)) : null,
+        p_new_pin_plain: pin || null,
+      });
+      if (err) throw err;
+      if (!data?.[0]?.success) throw new Error(data?.[0]?.message || 'Failed to resolve request');
+      setLastResolved(action === 'unlock' && pin ? { requestId, pin } : null);
+      setPinDrafts(prev => { const n = { ...prev }; delete n[requestId]; return n; });
+      await refresh();
+    } catch (e) {
+      setError(e.message || 'Failed to resolve request');
+    } finally {
+      setResolvingId(null);
+    }
+  };
+
+  const pending  = requests.filter(r => r.status === 'pending');
+  const resolved = requests.filter(r => r.status !== 'pending');
+
+  const RequestCard = (r) => (
+    <div key={r.request_id} className="rounded-2xl border p-4" style={{ background:'var(--dp-card)', borderColor:'var(--dp-card-bd)' }}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold" style={{ color:'var(--dp-txt)' }}>
+            {r.account_holder_name || 'Unknown'}{r.group_name ? ` · Group: ${r.group_name}` : ''}
+          </p>
+          <p className="text-xs" style={{ color:'var(--dp-muted)' }}>
+            {r.account_number} · {r.email} · {r.phone_number}
+          </p>
+          <p className="mt-1 text-xs" style={{ color:'var(--dp-muted)' }}>
+            {r.request_type === 'pin_reset' ? 'Forgot PIN' : 'Account locked'} · failed attempts: {r.failed_pin_attempts ?? '—'}
+            {r.pin_locked_until ? ` · locked until ${new Date(r.pin_locked_until).toLocaleString()}` : ''}
+          </p>
+          {r.reason && <p className="mt-1.5 text-xs italic" style={{ color:'var(--dp-sub)' }}>&ldquo;{r.reason}&rdquo;</p>}
+        </div>
+        <span className="flex-shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize"
+          style={{
+            borderColor: r.status==='pending' ? 'rgba(245,158,11,0.3)' : r.status==='completed' ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)',
+            background:  r.status==='pending' ? 'rgba(245,158,11,0.1)' : r.status==='completed' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
+            color:       r.status==='pending' ? '#f59e0b' : r.status==='completed' ? '#22c55e' : '#ef4444',
+          }}>
+          {r.status}
+        </span>
+      </div>
+
+      {r.status === 'pending' && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <input
+            value={pinDrafts[r.request_id] || ''}
+            onChange={e => setPinDrafts(prev => ({ ...prev, [r.request_id]: e.target.value.replace(/\D/g,'').slice(0,4) }))}
+            placeholder="New 4-digit PIN (optional)"
+            maxLength={4}
+            className="w-44 rounded-lg border px-2.5 py-1.5 text-xs outline-none"
+            style={{ background:'var(--dp-input)', borderColor:'var(--dp-input-bd)', color:'var(--dp-txt)' }}
+          />
+          <button onClick={() => resolve(r.request_id, 'unlock')} disabled={resolvingId === r.request_id}
+            className="rounded-lg px-3 py-1.5 text-xs font-bold text-white transition disabled:opacity-40"
+            style={{ background:'linear-gradient(135deg,#22c55e,#15803d)' }}>
+            {resolvingId === r.request_id ? 'Working…' : pinDrafts[r.request_id] ? 'Unlock + set PIN' : 'Unlock'}
+          </button>
+          <button onClick={() => resolve(r.request_id, 'reject')} disabled={resolvingId === r.request_id}
+            className="rounded-lg border px-3 py-1.5 text-xs font-bold transition disabled:opacity-40"
+            style={{ borderColor:'rgba(239,68,68,0.3)', background:'rgba(239,68,68,0.1)', color:'#ef4444' }}>
+            Reject
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <>
+      {error && <p className="mb-3 text-xs text-rose-400">{error}</p>}
+      {lastResolved && (
+        <div className="mb-3 flex items-center justify-between rounded-xl border p-3"
+          style={{ borderColor:'rgba(34,197,94,0.3)', background:'rgba(34,197,94,0.1)' }}>
+          <p className="text-xs font-semibold" style={{ color:'#22c55e' }}>
+            Unlocked — new PIN set: <span className="font-bold tracking-widest">{lastResolved.pin}</span>. Make sure this reaches the account holder.
+          </p>
+          <button onClick={() => setLastResolved(null)} className="text-xs" style={{ color:'#22c55e' }}>Dismiss</button>
+        </div>
+      )}
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-xs font-bold uppercase tracking-wider" style={{ color:'var(--dp-muted)' }}>Pending ({pending.length})</p>
+        <button onClick={refresh} className="flex items-center gap-1 text-xs font-semibold" style={{ color:'var(--dp-muted)' }}>
+          <RefreshCw size={11}/> Refresh
+        </button>
+      </div>
+      <div className="space-y-3">
+        {pending.map(RequestCard)}
+        {!loading && pending.length === 0 && <EmptyState msg="No pending recovery requests." Icon={Lock}/>}
+      </div>
+
+      {resolved.length > 0 && (
+        <>
+          <p className="mb-2 mt-6 text-xs font-bold uppercase tracking-wider" style={{ color:'var(--dp-muted)' }}>Recent ({resolved.length})</p>
+          <div className="space-y-3 opacity-70">
+            {resolved.slice(0, 20).map(RequestCard)}
+          </div>
+        </>
+      )}
+    </>
+  );
+};
+
+// =============================================================================
 // DASHBOARD
 // =============================================================================
 const ICANDevDashboard = ({ onExit }) => {
@@ -723,6 +893,33 @@ const ICANDevDashboard = ({ onExit }) => {
 
   const grantBonus = async (userId, amount) => {
     await rpc('ican_dev_grant_bonus',{target_user_id:userId,bonus_amount:amount}); fetchAll();
+  };
+  const [floatDrafts, setFloatDrafts] = useState({}); // agent_id -> { currency, amount }
+  const [grantingFloatId, setGrantingFloatId] = useState(null);
+  const [floatError, setFloatError] = useState(null);
+  const grantFloat = async (agentId) => {
+    const draft = floatDrafts[agentId] || {};
+    const currency = (draft.currency || 'UGX').toUpperCase();
+    const amount = parseFloat(draft.amount);
+    if (!amount || amount <= 0) { setFloatError('Enter an amount greater than zero.'); return; }
+    setGrantingFloatId(agentId);
+    setFloatError(null);
+    try {
+      const { data, error: err } = await supabase.rpc('ican_dev_grant_float', {
+        dev_token: DEV_TOKEN,
+        p_agent_id: agentId,
+        p_currency: currency,
+        p_amount: amount,
+      });
+      if (err) throw err;
+      if (!data?.[0]?.success) throw new Error(data?.[0]?.message || 'Failed to grant float');
+      setFloatDrafts(prev => { const n = { ...prev }; delete n[agentId]; return n; });
+      await fetchAll();
+    } catch (e) {
+      setFloatError(e.message || 'Failed to grant float');
+    } finally {
+      setGrantingFloatId(null);
+    }
   };
   const upsertSub = async (userId, plan, tt='user') => {
     if (!subsOk) return;
@@ -1613,6 +1810,7 @@ const ICANDevDashboard = ({ onExit }) => {
             <StatCard Icon={Briefcase} label="Agents"      value={fmt(agents.length)} color="#f97316" loading={loading}/>
             <StatCard Icon={Wallet}    label="Total Float" value={fmtI(totalFl)}      color="#f59e0b" loading={loading} sub={fmtUGX(totalFl)}/>
           </div>
+          {floatError && <p className="mb-2 text-xs text-rose-400">{floatError}</p>}
           {loading&&[1,2,3].map(i=><Skel key={i} h="h-24"/>)}
           {filt(agents,['agent_name','agent_code']).map(a=>{
             const w=walletMap[a.user_id]; const sub=subFor(a.user_id);
@@ -1644,6 +1842,31 @@ const ICANDevDashboard = ({ onExit }) => {
                     )}
                   </div>
                 </div>
+                {a.agent_id && (
+                  <div className="mt-3 pt-3 border-t flex flex-wrap items-center gap-2" style={{ borderColor:'var(--dp-sep)' }}>
+                    <select
+                      value={floatDrafts[a.agent_id]?.currency || 'UGX'}
+                      onChange={e => setFloatDrafts(prev => ({ ...prev, [a.agent_id]: { ...prev[a.agent_id], currency: e.target.value } }))}
+                      className="rounded-lg border px-2 py-1.5 text-xs outline-none"
+                      style={{ background:'var(--dp-input)', borderColor:'var(--dp-input-bd)', color:'var(--dp-txt)' }}>
+                      <option value="UGX">UGX</option>
+                      <option value="USD">USD</option>
+                      <option value="KES">KES</option>
+                    </select>
+                    <input
+                      type="number" min="0.01" step="0.01"
+                      value={floatDrafts[a.agent_id]?.amount || ''}
+                      onChange={e => setFloatDrafts(prev => ({ ...prev, [a.agent_id]: { ...prev[a.agent_id], amount: e.target.value } }))}
+                      placeholder="Amount"
+                      className="w-28 rounded-lg border px-2.5 py-1.5 text-xs outline-none"
+                      style={{ background:'var(--dp-input)', borderColor:'var(--dp-input-bd)', color:'var(--dp-txt)' }}/>
+                    <button onClick={()=>grantFloat(a.agent_id)} disabled={grantingFloatId===a.agent_id}
+                      className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[10px] font-bold text-white transition disabled:opacity-40"
+                      style={{ background:'linear-gradient(135deg,#f59e0b,#b45309)' }}>
+                      <Wallet size={9}/>{grantingFloatId===a.agent_id ? 'Working…' : 'Give Float'}
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -1795,6 +2018,7 @@ const ICANDevDashboard = ({ onExit }) => {
         {/* ══ PUBLIC BOARD ══ */}
         {tab==='board' && <PublicBoardTab/>}
         {tab==='messages' && <MessagesTab/>}
+        {tab==='recovery' && <RecoveryTab/>}
 
       </main>
     </div>

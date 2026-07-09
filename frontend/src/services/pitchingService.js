@@ -289,6 +289,31 @@ export const searchICANUsers = async (searchTerm) => {
   }
 };
 
+// Resolve a batch of user_ids to display names in one round trip — used to
+// label "who recorded this" in the unified transaction feed (see
+// UNIFIED_BUSINESS_TRANSACTIONS_FEED.sql: fn_get_contributor_names).
+// Returns a map: { [userId]: { name, email } }.
+export const getContributorNames = async (userIds) => {
+  const ids = [...new Set((userIds || []).filter(Boolean))];
+  if (ids.length === 0) return {};
+  try {
+    const sb = getSupabase();
+    if (!sb) return {};
+    const { data, error } = await sb.rpc('fn_get_contributor_names', { p_user_ids: ids });
+    if (error) {
+      console.warn('Error resolving contributor names:', error.message);
+      return {};
+    }
+    return Object.fromEntries((data || []).map(row => [
+      row.user_id,
+      { name: row.contributor_name, email: row.contributor_email }
+    ]));
+  } catch (error) {
+    console.error('Critical error in getContributorNames:', error);
+    return {};
+  }
+};
+
 /**
  * Fetch any users from Supabase
  */
@@ -1102,18 +1127,145 @@ export const getCoOwnedBusinessProfiles = async (userEmail, userId) => {
   }
 };
 
-// Get all business profiles accessible to user (owned OR co-owned)
+// =====================================================
+// Business Team Members — grants an existing ICAN account
+// access to record transactions for a business, without
+// touching equity/cap-table data (business_co_owners).
+// See backend/BUSINESS_TEAM_MEMBERS_SETUP.sql
+// =====================================================
+
+// List the active team members of a business (for the owner's management UI)
+export const getBusinessTeamMembers = async (businessProfileId) => {
+  try {
+    const sb = getSupabase();
+    if (!sb) return [];
+
+    const { data, error } = await sb
+      .from('business_team_members')
+      .select('id, user_id, member_email, member_name, status, created_at')
+      .eq('business_profile_id', businessProfileId)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching business team members:', error);
+    return [];
+  }
+};
+
+// Grant an existing ICAN account (found via searchICANUsers/verifyICANUser) access
+export const addBusinessTeamMember = async (businessProfileId, member) => {
+  try {
+    const sb = getSupabase();
+    if (!sb) return { success: false, error: 'Supabase not configured' };
+
+    const { data: { user: authUser } } = await sb.auth.getUser();
+    if (!authUser) return { success: false, error: 'User not authenticated' };
+
+    const { data, error } = await sb
+      .from('business_team_members')
+      .insert([{
+        business_profile_id: businessProfileId,
+        user_id: member.id,
+        member_email: member.email,
+        member_name: member.name,
+        added_by: authUser.id
+      }])
+      .select();
+
+    if (error) {
+      if (error.code === '23505') {
+        return { success: false, error: `${member.name} already has access to this business` };
+      }
+      throw error;
+    }
+    return { success: true, data: data[0] };
+  } catch (error) {
+    console.error('Error adding business team member:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+export const removeBusinessTeamMember = async (memberId) => {
+  try {
+    const sb = getSupabase();
+    if (!sb) return { success: false, error: 'Supabase not configured' };
+
+    const { error } = await sb
+      .from('business_team_members')
+      .delete()
+      .eq('id', memberId);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (error) {
+    console.error('Error removing business team member:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Get all business profiles where user has team-member (transaction-only) access
+export const getTeamMemberBusinessProfiles = async (userId) => {
+  try {
+    const sb = getSupabase();
+    if (!sb || !userId) return [];
+
+    const { data: memberships, error: membershipError } = await sb
+      .from('business_team_members')
+      .select('business_profile_id')
+      .eq('user_id', userId)
+      .eq('status', 'active');
+
+    if (membershipError || !memberships || memberships.length === 0) return [];
+
+    const profileIds = [...new Set(memberships.map(m => m.business_profile_id))];
+
+    const { data: profiles, error: profileError } = await sb
+      .from('business_profiles')
+      .select(`
+        id,
+        user_id,
+        business_name,
+        business_type,
+        registration_number,
+        tax_id,
+        description,
+        website,
+        business_address,
+        founded_year,
+        total_capital,
+        status,
+        verification_status,
+        created_at
+      `)
+      .in('id', profileIds)
+      .order('created_at', { ascending: false });
+
+    if (profileError) throw profileError;
+    return profiles || [];
+  } catch (error) {
+    console.error('Error fetching team-member business profiles:', error);
+    return [];
+  }
+};
+
+// Get all business profiles accessible to user (owned OR co-owned OR team member)
 export const getAllAccessibleBusinessProfiles = async (userId, userEmail) => {
   try {
     const sb = getSupabase();
     if (!sb) return [];
-    
+
     // Get profiles user created
     const ownedProfiles = await getUserBusinessProfiles(userId);
-    
+
     // Get profiles user is a co-owner of (by user_id or email)
     const coOwnedProfiles = await getCoOwnedBusinessProfiles(userEmail, userId);
-    
+
+    // Get profiles user was granted transaction-only access to
+    const teamMemberProfiles = await getTeamMemberBusinessProfiles(userId);
+
     // Merge and deduplicate by ID
     const allProfiles = [...ownedProfiles];
     for (const coOwned of coOwnedProfiles) {
@@ -1122,7 +1274,12 @@ export const getAllAccessibleBusinessProfiles = async (userId, userEmail) => {
         allProfiles.push({ ...coOwned, isCoOwned: true });
       }
     }
-    
+    for (const teamProfile of teamMemberProfiles) {
+      if (!allProfiles.find(p => p.id === teamProfile.id)) {
+        allProfiles.push({ ...teamProfile, isTeamMember: true });
+      }
+    }
+
     return allProfiles;
   } catch (error) {
     console.error('Error fetching accessible business profiles:', error);

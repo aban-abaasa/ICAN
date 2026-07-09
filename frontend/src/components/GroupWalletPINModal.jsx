@@ -3,14 +3,15 @@
  * Modal for setting and changing group wallet PIN
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Lock, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react';
 import groupWalletAccountService from '../services/groupWalletAccountService';
 import { getSupabaseClient } from '../lib/supabase/client';
+import PINRecoveryModal from './PINRecoveryModal';
 
-const GroupWalletPINModal = ({ 
-  groupId, 
-  groupName, 
+const GroupWalletPINModal = ({
+  groupId,
+  groupName,
   onClose,
   isPINSet = false,
   onSuccess = null
@@ -24,6 +25,14 @@ const GroupWalletPINModal = ({
     new: false,
     confirm: false
   });
+  const [showPINRecovery, setShowPINRecovery] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const isAccountLocked = error.toLowerCase().includes('locked');
+
+  useEffect(() => {
+    const supabase = getSupabaseClient();
+    supabase.auth.getUser().then(({ data }) => setCurrentUser(data?.user || null)).catch(() => {});
+  }, []);
 
   // Set PIN Mode
   const [setPinForm, setSetPinForm] = useState({

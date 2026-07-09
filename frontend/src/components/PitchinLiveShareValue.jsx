@@ -18,15 +18,17 @@ import {
   TrendingUp, TrendingDown, Link2, Link2Off, RefreshCw,
   Shield, ShieldCheck, ChevronDown, ChevronUp, Loader,
   Building2, Tractor, Bike, ShoppingCart, Coins,
-  FileText, CheckCircle2, Wallet, PieChart, Pencil
+  FileText, CheckCircle2, Wallet, PieChart, Pencil, Users
 } from 'lucide-react';
+import BusinessTeamMembersModal from './BusinessTeamMembersModal';
 import {
   calculateLiveShareValue,
   saveDataLink,
   removeDataLink,
   getBusinessDataLinks,
   getSharePriceHistory,
-  setBusinessTotalShares
+  setBusinessTotalShares,
+  getBusinessTransactionsByContributor
 } from '../services/pitchinValuationService';
 import { CountryService } from '../services/countryService';
 import icanCoinService from '../services/icanCoinService';
@@ -34,6 +36,18 @@ import { supabase } from '../lib/supabase/client';
 import { useMarketSnapshot, useIcanPriceByCountry } from '../hooks/useIcanPrice';
 
 const PCT = (n) => `${Number(n || 0) >= 0 ? '+' : ''}${Number(n || 0).toFixed(2)}%`;
+
+const REPORTING_BUCKET_LABELS = {
+  sold_income: 'Sales income',
+  capital_asset: 'Capital asset',
+  bought_stock: 'Stock bought',
+  operating_expense: 'Operating expense',
+  salary_expense: 'Salary expense',
+  tax_expense: 'Tax expense',
+  loan_inflow: 'Loan inflow',
+  dividend_payout: 'Dividend payout',
+  owner_equity: 'Owner equity'
+};
 
 // Convert UGX share price → icaneracoin units using live market price
 // 1 icaneracoin = marketPrice UGX (floor 5,000)
@@ -90,7 +104,7 @@ const SOURCE_APPS = [
   },
   {
     key: 'farm-agent',
-    label: 'Backbone Farm',
+    label: 'AgriBone Farm',
     description: 'Produce, land & service sales',
     icon: Tractor,
     color: 'green',
@@ -179,6 +193,11 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId }) 
   const [discovering, setDiscovering] = useState(false);
   const [showManualTx, setShowManualTx] = useState(false);
   const [showWalletTx, setShowWalletTx] = useState(false);
+  const [showTeamModal, setShowTeamModal] = useState(false);
+  const [contributors, setContributors] = useState([]);
+  const [contributorsError, setContributorsError] = useState(null);
+  const [loadingContributors, setLoadingContributors] = useState(false);
+  const [expandedContributorId, setExpandedContributorId] = useState(null);
   const [userCountry, setUserCountry] = useState('UG');
   const [showShareEditor, setShowShareEditor] = useState(false);
   const [shareInput, setShareInput] = useState('');
@@ -304,14 +323,33 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId }) 
     if (showLinkPanel) discoverEntities();
   }, [showLinkPanel, discoverEntities]);
 
+  // Load the per-contributor breakdown the first time Manual Transactions is
+  // opened — lets the owner see who (owner, co-owner, or team member) recorded
+  // what, not just the combined totals.
+  useEffect(() => {
+    if (!showManualTx || !businessProfileId) return;
+    let cancelled = false;
+    (async () => {
+      setLoadingContributors(true);
+      try {
+        const { contributors: rows, error } = await getBusinessTransactionsByContributor(businessProfileId);
+        if (cancelled) return;
+        setContributors(rows);
+        setContributorsError(error);
+      } finally {
+        if (!cancelled) setLoadingContributors(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [showManualTx, businessProfileId]);
+
   const loadValuation = useCallback(async () => {
     if (!businessProfileId || !ownerUserId) return;
     setLoading(true);
     setError('');
     try {
       const result = await calculateLiveShareValue(businessProfileId, ownerUserId, {
-        saveSnapshot: true,
-        anchorOnChain: true
+        saveSnapshot: true
       });
       setValuation(result);
     } catch (err) {
@@ -437,6 +475,7 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId }) 
   }, 0);
 
   return (
+    <>
     <div className="rounded-2xl border border-slate-700/60 bg-slate-900/80 backdrop-blur-sm overflow-hidden">
 
       {/* ── Header ── */}
@@ -649,7 +688,7 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId }) 
                 {[
                   { label: 'Manual Sales Income',          value: valuation.breakdown.ican_sold_income,     color: 'text-amber-400' },
                   { label: 'Manual Capital Assets',        value: valuation.breakdown.ican_capital_assets,  color: 'text-amber-400' },
-                  { label: 'Backbone Wallet Revenue',     value: valuation.breakdown.farm_revenue,         color: 'text-green-400' },
+                  { label: 'AgriBone Wallet Revenue',     value: valuation.breakdown.farm_revenue,         color: 'text-green-400' },
                   { label: 'MyBodaGuy Wallet Revenue',     value: valuation.breakdown.boda_revenue,         color: 'text-orange-400' },
                   { label: 'SupermarketEra Revenue',       value: valuation.breakdown.supermarket_revenue,  color: 'text-purple-400' },
                   { label: 'ICAN Wallet Revenue',          value: valuation.breakdown.ican_wallet_revenue,  color: 'text-cyan-400' },
@@ -754,7 +793,7 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId }) 
                           {showManualTx ? <ChevronUp size={12} className="text-slate-500" /> : <ChevronDown size={12} className="text-slate-500" />}
                         </span>
                       </div>
-                      <p className="text-[10px] sm:text-xs text-slate-500">Entries you recorded and tagged to this business via "Record Transaction".</p>
+                      <p className="text-[10px] sm:text-xs text-slate-500">Entries recorded and tagged to this business via "Record Transaction" — by you and your team.</p>
                     </div>
                   </button>
 
@@ -791,6 +830,70 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId }) 
                           Loading transaction data…
                         </div>
                       )}
+
+                      {/* ── By contributor — who recorded what ── */}
+                      <div className="mt-3 pt-2.5 border-t border-slate-800/60">
+                        <p className="text-[10px] sm:text-xs font-semibold text-slate-400 mb-1.5 flex items-center gap-1.5">
+                          <Users size={10} className="text-blue-400" /> By contributor
+                        </p>
+                        {loadingContributors ? (
+                          <div className="flex items-center gap-2 text-[10px] sm:text-xs text-slate-500">
+                            <Loader size={10} className="animate-spin" />
+                            Loading contributors…
+                          </div>
+                        ) : contributorsError ? (
+                          <div className="rounded-lg border border-red-700/40 bg-red-900/20 px-2.5 py-2 text-[10px] sm:text-xs text-red-300">
+                            Couldn't load contributor breakdown: {contributorsError}. Make sure BUSINESS_TRANSACTIONS_BY_CONTRIBUTOR.sql has been deployed to Supabase, and that you're the owner or a shareholder of this business.
+                          </div>
+                        ) : contributors.length === 0 ? (
+                          <p className="text-[10px] sm:text-xs text-slate-600 italic">No entries recorded yet.</p>
+                        ) : (
+                          <div className="rounded-lg bg-slate-900/50 border border-slate-700/30 divide-y divide-slate-800/60 overflow-hidden">
+                            {contributors.map(c => {
+                              const isOpen = expandedContributorId === c.userId;
+                              return (
+                                <div key={c.userId || c.email}>
+                                  <button
+                                    onClick={() => setExpandedContributorId(isOpen ? null : c.userId)}
+                                    className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-left hover:bg-slate-800/40 transition-colors"
+                                  >
+                                    <span className="min-w-0 flex-1">
+                                      <span className="block text-[10px] sm:text-xs text-slate-200 font-medium truncate">{c.name}</span>
+                                      <span className="block text-[9px] sm:text-[10px] text-slate-500">
+                                        {c.count} entr{c.count === 1 ? 'y' : 'ies'}
+                                      </span>
+                                    </span>
+                                    <span className={`text-[10px] sm:text-xs font-semibold tabular-nums shrink-0 ${c.netUgx >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                      {c.netUgx >= 0 ? '+' : ''}{FMT(c.netUgx)}
+                                    </span>
+                                    {isOpen ? <ChevronUp size={11} className="text-slate-500 shrink-0" /> : <ChevronDown size={11} className="text-slate-500 shrink-0" />}
+                                  </button>
+
+                                  {isOpen && (
+                                    <div className="bg-slate-950/40 divide-y divide-slate-800/40">
+                                      {c.entries.map(e => (
+                                        <div key={e.id} className="flex items-center justify-between gap-2 px-3 py-1.5">
+                                          <span className="min-w-0 flex-1">
+                                            <span className="block text-[10px] text-slate-300 truncate">
+                                              {e.description || REPORTING_BUCKET_LABELS[e.reporting_bucket] || 'Entry'}
+                                            </span>
+                                            <span className="block text-[9px] text-slate-600">
+                                              {new Date(e.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                            </span>
+                                          </span>
+                                          <span className="text-[10px] font-semibold tabular-nums text-slate-400 shrink-0">
+                                            {FMT(e.amount)}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -815,7 +918,7 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId }) 
                         </span>
                       </div>
                       <p className="text-[10px] sm:text-xs text-slate-500">
-                        icaneracoin earned into your wallet. The native ICAN wallet always counts — Backbone, MyBodaGuy & SupermarketEra only count once linked below.
+                        icaneracoin earned into your wallet. The native ICAN wallet always counts — AgriBone, MyBodaGuy & SupermarketEra only count once linked below.
                       </p>
                     </div>
                   </button>
@@ -826,7 +929,7 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId }) 
                         (() => {
                           const labels = {
                             'mybodaguy':         'MyBodaGuy',
-                            'farm-agent':        'Backbone',
+                            'farm-agent':        'AgriBone',
                             'digital-city-era':  'SupermarketEra',
                             'ican':              'ICAN wallet'
                           };
@@ -861,6 +964,23 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId }) 
                       )}
                     </div>
                   )}
+                </div>
+
+                {/* ── Team Members — who else can tag transactions to this business ── */}
+                <div className="pt-3 border-t border-emerald-800/20">
+                  <button
+                    onClick={() => setShowTeamModal(true)}
+                    className="w-full flex items-start gap-2 text-left"
+                  >
+                    <Users size={11} className="text-blue-400 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs sm:text-sm text-slate-200 font-medium">Team Members</p>
+                        <span className="text-[10px] sm:text-xs text-blue-400 font-semibold shrink-0">Manage →</span>
+                      </div>
+                      <p className="text-[10px] sm:text-xs text-slate-500">Give other ICAN accounts access to record transactions for this business.</p>
+                    </div>
+                  </button>
                 </div>
 
               </div>
@@ -988,5 +1108,13 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId }) 
 
       </div>
     </div>
+
+    {showTeamModal && (
+      <BusinessTeamMembersModal
+        profile={{ id: businessProfileId, business_name: businessProfile?.business_name || businessProfile?.name }}
+        onClose={() => setShowTeamModal(false)}
+      />
+    )}
+    </>
   );
 }

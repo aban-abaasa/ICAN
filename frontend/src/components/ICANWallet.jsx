@@ -39,6 +39,8 @@ import universalTransactionService from '../services/universalTransactionService
 import { getSupabaseClient } from '../lib/supabase/client';
 import { getUserTrustGroups } from '../services/trustService';
 import { CountryService } from '../services/countryService';
+import { getAllAccessibleBusinessProfiles } from '../services/pitchingService';
+import { calculateLiveShareValue } from '../services/pitchinValuationService';
 import AgentDashboard from './AgentDashboard';
 import UnifiedApprovalModal from './UnifiedApprovalModal';
 import CandlestickChart from './CandlestickChart';
@@ -51,9 +53,23 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   const [selectedCurrency, setSelectedCurrency] = useState('USD');
   const [userCountry, setUserCountry] = useState('UG');
   const [activeTab, _setActiveTab] = useState('overview');
+  // onTabChange (which updates MobileView's nav history) must not run inside
+  // the state updater below — React invokes functional updaters during this
+  // component's render phase, so calling another component's setState from
+  // there triggers "Cannot update a component while rendering a different
+  // component". Stash the previous tab and report it from a useEffect instead,
+  // which runs after commit.
+  const pendingTabChangeRef = useRef(null);
   const setActiveTab = (newTab) => {
-    _setActiveTab(prev => { onTabChange?.(prev); return newTab; });
+    _setActiveTab(prev => { pendingTabChangeRef.current = prev; return newTab; });
   };
+  useEffect(() => {
+    if (pendingTabChangeRef.current !== null) {
+      const prev = pendingTabChangeRef.current;
+      pendingTabChangeRef.current = null;
+      onTabChange?.(prev);
+    }
+  }, [activeTab]);
   useEffect(() => { if (navRef) navRef.current = _setActiveTab; return () => { if (navRef) navRef.current = null; }; }, [navRef]);
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false);
   const [activeModal, setActiveModal] = useState(null); // 'send', 'receive', 'topup'
@@ -178,7 +194,6 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   const [requestConfirmationLoading, setRequestConfirmationLoading] = useState(false);
   
   // 📊 Candlestick Chart States
-  const [showTradeModal, setShowTradeModal] = useState(false);
   const [candleData, setCandleData] = useState([]);
   const [candleLoading, setCandleLoading] = useState(false);
   const [candleSettings, setCandleSettings] = useState({
@@ -193,23 +208,45 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   // 📑 Trade Modal Tabs
   const [activeTradeTab, setActiveTradeTab] = useState('wallet'); // 'wallet', 'chart', 'buy', 'sell', 'history'
   const [showMobileTradeMenu, setShowMobileTradeMenu] = useState(false);
+  const [showMobileNavMenu, setShowMobileNavMenu] = useState(false);
   const [tradeHistory, setTradeHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [icanBalance, setIcanBalance] = useState(0);
   const [balanceLoading, setBalanceLoading] = useState(false);
+  const [walletTransactions, setWalletTransactions] = useState([]);
+  const [walletTransactionsLoading, setWalletTransactionsLoading] = useState(false);
+  const [realBusinessProfiles, setRealBusinessProfiles] = useState([]);
+  const [businessProfilesLoading, setBusinessProfilesLoading] = useState(false);
+  const [businessValuations, setBusinessValuations] = useState({}); // { [businessProfileId]: valuation }
+  // Prefer a caller-supplied businessProfiles prop if one was actually passed;
+  // otherwise fall back to what this component fetches for itself from Pitchin.
+  const effectiveBusinessProfiles = (businessProfiles && businessProfiles.length > 0) ? businessProfiles : realBusinessProfiles;
   const isRestoringWalletHistoryRef = useRef(false);
   const hasHydratedWalletHistoryRef = useRef(false);
 
   const dropdownRef = useRef(null);
+  const walletRootRef = useRef(null);
 
-  const VALID_WALLET_TABS = ['overview', 'transactions', 'deposit', 'withdraw', 'agent', 'cards', 'business', 'trust', 'settings'];
+  const VALID_WALLET_TABS = ['overview', 'trade', 'transactions', 'deposit', 'withdraw', 'agent', 'cards', 'business', 'trust', 'settings'];
   const VALID_TRADE_TABS = ['wallet', 'chart', 'buy', 'sell', 'history'];
+  // Trade is now a regular header tab rather than a floating modal.
+  const showTradeModal = activeTab === 'trade';
+
+  // Tabs render inline now (not an overlay), so switching tabs while scrolled
+  // down would otherwise leave the new tab's top (e.g. Trade's header) out of view.
+  const hasMountedTabRef = useRef(false);
+  useEffect(() => {
+    if (!hasMountedTabRef.current) {
+      hasMountedTabRef.current = true;
+      return;
+    }
+    walletRootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [activeTab]);
 
   useEffect(() => {
     const walletState = {
       activeTab,
       activeModal,
-      showTradeModal,
       activeTradeTab,
       showAddCardModal,
       showReceiveMoneyModal,
@@ -232,7 +269,6 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       current &&
       current.activeTab === walletState.activeTab &&
       (current.activeModal || null) === (walletState.activeModal || null) &&
-      Boolean(current.showTradeModal) === walletState.showTradeModal &&
       current.activeTradeTab === walletState.activeTradeTab &&
       Boolean(current.showAddCardModal) === walletState.showAddCardModal &&
       Boolean(current.showReceiveMoneyModal) === walletState.showReceiveMoneyModal &&
@@ -251,7 +287,6 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   }, [
     activeTab,
     activeModal,
-    showTradeModal,
     activeTradeTab,
     showAddCardModal,
     showReceiveMoneyModal,
@@ -269,7 +304,6 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
       setActiveTab(VALID_WALLET_TABS.includes(historyState.activeTab) ? historyState.activeTab : 'overview');
       setActiveModal(historyState.activeModal || null);
-      setShowTradeModal(Boolean(historyState.showTradeModal));
       setActiveTradeTab(VALID_TRADE_TABS.includes(historyState.activeTradeTab) ? historyState.activeTradeTab : 'wallet');
       setShowAddCardModal(Boolean(historyState.showAddCardModal));
       setShowReceiveMoneyModal(Boolean(historyState.showReceiveMoneyModal));
@@ -365,6 +399,106 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     }
   };
 
+  // Business valuation figures (calculateLiveShareValue) are always in UGX.
+  const formatUgx = (value) => `UGX ${Math.round(Number(value) || 0).toLocaleString()}`;
+
+  // Gateway keywords that mean a transaction went through an automated/digital
+  // channel; anything else (cash, agent entry, admin adjustment, no method
+  // recorded at all) is treated as manually handled.
+  const DIGITAL_PAYMENT_KEYWORDS = ['momo', 'mobile money', 'mtn', 'airtel', 'vodafone', 'card', 'visa', 'mastercard', 'verve', 'flutterwave', 'ussd'];
+  const getTransactionChannel = (tx) => {
+    const method = (tx.metadata?.paymentMethod || tx.metadata?.method || '').toString().toLowerCase();
+    const isDigital = DIGITAL_PAYMENT_KEYWORDS.some((keyword) => method.includes(keyword));
+    return isDigital ? 'digital' : 'manual';
+  };
+
+  // 📜 Load Recent Wallet Transactions (Send/Receive/Top-Up/etc, from Supabase)
+  const loadWalletTransactions = async () => {
+    try {
+      setWalletTransactionsLoading(true);
+      const supabase = getSupabaseClient();
+
+      const { data, error } = await supabase
+        .from('ican_transactions')
+        .select('*')
+        .eq('user_id', currentUserId)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) {
+        console.error('Error loading wallet transactions:', error);
+        return;
+      }
+
+      setWalletTransactions(data || []);
+    } catch (err) {
+      console.error('Failed to load wallet transactions:', err);
+    } finally {
+      setWalletTransactionsLoading(false);
+    }
+  };
+
+  // 🏢 Load real business profiles (same source Pitchin uses) + their wallet accounts
+  const loadBusinessAccountProfiles = async () => {
+    if (!currentUserId) return;
+    try {
+      setBusinessProfilesLoading(true);
+      const profiles = await getAllAccessibleBusinessProfiles(currentUserId, userEmail);
+
+      if (!profiles || profiles.length === 0) {
+        setRealBusinessProfiles([]);
+        return;
+      }
+
+      const supabase = getSupabaseClient();
+      const { data: accounts, error } = await supabase
+        .from('user_accounts')
+        .select('*')
+        .eq('account_type', 'business')
+        .in('business_id', profiles.map((p) => p.id));
+
+      if (error) {
+        console.error('Error loading business wallet accounts:', error);
+      }
+
+      const accountsByBusiness = {};
+      (accounts || []).forEach((account) => {
+        if (!accountsByBusiness[account.business_id]) accountsByBusiness[account.business_id] = [];
+        accountsByBusiness[account.business_id].push(account);
+      });
+
+      setRealBusinessProfiles(
+        profiles.map((profile) => ({
+          ...profile,
+          user_accounts: accountsByBusiness[profile.id] || []
+        }))
+      );
+
+      // Fetch each business's live share valuation (Business Value, Net Profit,
+      // ICAN Holdings, share price) — the same numbers Pitchin shows the owner.
+      // saveSnapshot: false because this is a read-only summary view; opening
+      // the wallet shouldn't write a new valuation snapshot for the business.
+      const valuationResults = await Promise.allSettled(
+        profiles.map((profile) =>
+          calculateLiveShareValue(profile.id, profile.user_id, { saveSnapshot: false })
+            .then((result) => [profile.id, result])
+        )
+      );
+      const valuationsById = {};
+      valuationResults.forEach((entry) => {
+        if (entry.status === 'fulfilled') {
+          const [id, result] = entry.value;
+          valuationsById[id] = result;
+        }
+      });
+      setBusinessValuations(valuationsById);
+    } catch (err) {
+      console.error('Failed to load business profiles:', err);
+    } finally {
+      setBusinessProfilesLoading(false);
+    }
+  };
+
   // 📜 Load Trade History
   const loadTradeHistory = async () => {
     try {
@@ -425,6 +559,20 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       setBalanceLoading(false);
     }
   };
+
+  // Load recent wallet transactions when the Transactions tab is opened
+  useEffect(() => {
+    if (activeTab === 'transactions' && currentUserId) {
+      loadWalletTransactions();
+    }
+  }, [activeTab, currentUserId]);
+
+  // Load real business profiles (from Pitchin) when the Business Accounts tab is opened
+  useEffect(() => {
+    if (activeTab === 'business' && currentUserId) {
+      loadBusinessAccountProfiles();
+    }
+  }, [activeTab, currentUserId]);
 
   // Load trade history when trade modal opens
   useEffect(() => {
@@ -1943,13 +2091,12 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         phoneOtp: ''
       });
       setEditingBusinessProfile(null);
-      
+
       // Refresh business profiles to show new wallet account
-      if (onRefreshProfiles) {
-        setTimeout(() => {
-          onRefreshProfiles();
-        }, 500);
-      }
+      setTimeout(() => {
+        loadBusinessAccountProfiles();
+        onRefreshProfiles?.();
+      }, 500);
 
     } catch (error) {
       console.error('❌ Business wallet creation failed:', error);
@@ -2049,13 +2196,12 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         phoneOtp: ''
       });
       setEditingBusinessProfile(null);
-      
+
       // Refresh business profiles to show updated wallet account
-      if (onRefreshProfiles) {
-        setTimeout(() => {
-          onRefreshProfiles();
-        }, 500);
-      }
+      setTimeout(() => {
+        loadBusinessAccountProfiles();
+        onRefreshProfiles?.();
+      }, 500);
 
     } catch (error) {
       console.error('❌ Business wallet update failed:', error);
@@ -2751,7 +2897,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   };
 
   return (
-    <div className="wallet-creative-skin w-full space-y-6">
+    <div ref={walletRootRef} className="wallet-creative-skin w-full space-y-6">
       <style>{`
         .wallet-creative-skin .solid-card,
         .wallet-creative-skin .glass-card {
@@ -3445,77 +3591,184 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
               <Wallet className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h2 className="text-2xl md:text-3xl font-bold" style={walletUi.title}>ICAN Wallet</h2>
+              <h2 className="text-2xl md:text-3xl font-bold" style={walletUi.title}>IcanEraWallette</h2>
               <p className="text-sm md:text-base" style={walletUi.subtitle}>Manage global currency with confidence</p>
             </div>
           </div>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex gap-2 flex-wrap items-center">
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
-              activeTab === 'overview'
-                ? 'text-white'
-                : 'hover:opacity-90'
-            }`}
-            style={activeTab === 'overview' ? walletUi.tabOverviewActive : walletUi.tabOverviewInactive}
-          >
-            <Wallet className="w-4 h-4" />
-            Overview
-          </button>
-
-          {/* Others Dropdown Menu */}
-          <div className="relative group">
+        <div className="relative">
+          {/* Desktop View - every tab visible in the header, nothing hidden behind a menu */}
+          <div className="hidden md:flex gap-2 flex-wrap items-center">
             <button
+              onClick={() => setActiveTab('overview')}
               className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
-                ['transactions', 'withdraw', 'agent', 'cards', 'business', 'trust', 'settings'].includes(activeTab)
-                  ? 'text-white'
-                  : 'hover:opacity-90'
+                activeTab === 'overview' ? 'text-white' : 'hover:opacity-90'
               }`}
-              style={['transactions', 'withdraw', 'agent', 'cards', 'business', 'trust', 'settings'].includes(activeTab) ? walletUi.tabOthersActive : walletUi.tabOthersInactive}
+              style={activeTab === 'overview' ? walletUi.tabOverviewActive : walletUi.tabOverviewInactive}
             >
-              <Menu className="w-4 h-4" />
-              Others
-              <ChevronDown className="w-4 h-4" />
+              <Wallet className="w-4 h-4" />
+              Overview
             </button>
 
-            {/* Dropdown Menu */}
-            <div className="absolute left-0 mt-1 w-48 rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50" style={walletUi.dropdownMenu}>
+            <button
+              onClick={() => setActiveTab('trade')}
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+                activeTab === 'trade' ? 'text-white' : 'hover:opacity-90'
+              }`}
+              style={activeTab === 'trade' ? walletUi.tabOthersActive : walletUi.tabOthersInactive}
+            >
+              <TrendingUp className="w-4 h-4" />
+              Trade
+            </button>
+
+            <button
+              onClick={() => setActiveTab('transactions')}
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+                activeTab === 'transactions' ? 'text-white' : 'hover:opacity-90'
+              }`}
+              style={activeTab === 'transactions' ? walletUi.tabOthersActive : walletUi.tabOthersInactive}
+            >
+              <History className="w-4 h-4" />
+              Transactions
+            </button>
+
+            <button
+              onClick={() => setActiveTab('withdraw')}
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+                activeTab === 'withdraw' ? 'text-white' : 'hover:opacity-90'
+              }`}
+              style={activeTab === 'withdraw' ? walletUi.tabOthersActive : walletUi.tabOthersInactive}
+            >
+              <Upload className="w-4 h-4" />
+              Withdraw
+            </button>
+
+            {/* AGENT TERMINAL TAB - Only if user is an agent */}
+            {!agentCheckLoading && isAgent ? (
               <button
-                onClick={() => setActiveTab('transactions')}
-                className={`w-full px-4 py-2 text-left flex items-center gap-2 transition-all ${
-                  activeTab === 'transactions'
-                    ? ''
-                    : 'hover:opacity-90'
+                onClick={() => setActiveTab('agent')}
+                className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+                  activeTab === 'agent' ? 'text-white' : 'hover:opacity-90'
                 }`}
+                style={activeTab === 'agent' ? walletUi.tabOthersActive : walletUi.tabOthersInactive}
+              >
+                <Store className="w-4 h-4" />
+                🏪 Agent Terminal
+              </button>
+            ) : !agentCheckLoading && !isAgent ? (
+              <button
+                onClick={() => setActiveTab('agent')}
+                title="Click to create an agent account"
+                className="px-4 py-2 rounded-lg flex items-center gap-2 text-gray-400 hover:opacity-90 transition-all cursor-pointer"
+                style={walletUi.tabOthersInactive}
+              >
+                <Lock className="w-4 h-4" />
+                🔒 Agent (Locked)
+              </button>
+            ) : null}
+
+            <button
+              onClick={() => setActiveTab('cards')}
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+                activeTab === 'cards' ? 'text-white' : 'hover:opacity-90'
+              }`}
+              style={activeTab === 'cards' ? walletUi.tabOthersActive : walletUi.tabOthersInactive}
+            >
+              <CreditCard className="w-4 h-4" />
+              Cards
+            </button>
+
+            <button
+              onClick={() => setActiveTab('business')}
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+                activeTab === 'business' ? 'text-white' : 'hover:opacity-90'
+              }`}
+              style={activeTab === 'business' ? walletUi.tabOthersActive : walletUi.tabOthersInactive}
+            >
+              <Store className="w-4 h-4" />
+              Business Accounts
+            </button>
+
+            <button
+              onClick={() => setActiveTab('trust')}
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+                activeTab === 'trust' ? 'text-white' : 'hover:opacity-90'
+              }`}
+              style={activeTab === 'trust' ? walletUi.tabOthersActive : walletUi.tabOthersInactive}
+            >
+              <Lock className="w-4 h-4" />
+              Trust Account
+            </button>
+
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+                activeTab === 'settings' ? 'text-white' : 'hover:opacity-90'
+              }`}
+              style={activeTab === 'settings' ? walletUi.tabOthersActive : walletUi.tabOthersInactive}
+            >
+              <Settings className="w-4 h-4" />
+              Settings
+            </button>
+          </div>
+
+          {/* Mobile View - collapses to the current tab + a toggle menu */}
+          <div className="flex md:hidden items-center gap-2">
+            <button
+              onClick={() => setShowMobileNavMenu(!showMobileNavMenu)}
+              className="flex-1 px-4 py-2 rounded-lg flex items-center justify-between gap-2 text-white"
+              style={walletUi.tabOverviewActive}
+            >
+              <span className="flex items-center gap-2 truncate">
+                <Menu className="w-4 h-4 flex-shrink-0" />
+                {activeTab === 'overview' && 'Overview'}
+                {activeTab === 'trade' && 'Trade'}
+                {activeTab === 'transactions' && 'Transactions'}
+                {activeTab === 'withdraw' && 'Withdraw'}
+                {activeTab === 'agent' && '🏪 Agent Terminal'}
+                {activeTab === 'cards' && 'Cards'}
+                {activeTab === 'business' && 'Business Accounts'}
+                {activeTab === 'trust' && 'Trust Account'}
+                {activeTab === 'settings' && 'Settings'}
+              </span>
+              <ChevronDown className={`w-4 h-4 flex-shrink-0 transition-transform ${showMobileNavMenu ? 'rotate-180' : ''}`} />
+            </button>
+          </div>
+
+          {showMobileNavMenu && (
+            <div className="md:hidden absolute left-0 right-0 mt-1 rounded-lg z-50 overflow-hidden" style={walletUi.dropdownMenu}>
+              <button
+                onClick={() => { setActiveTab('overview'); setShowMobileNavMenu(false); }}
+                className="w-full px-4 py-3 text-left flex items-center gap-2 transition-all hover:opacity-90"
+                style={activeTab === 'overview' ? walletUi.dropdownActiveItem : walletUi.dropdownItem}
+              >
+                <Wallet className="w-4 h-4" />
+                Overview
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('trade'); setShowMobileNavMenu(false); }}
+                className="w-full px-4 py-3 text-left flex items-center gap-2 transition-all hover:opacity-90"
+                style={activeTab === 'trade' ? walletUi.dropdownActiveItem : walletUi.dropdownItem}
+              >
+                <TrendingUp className="w-4 h-4" />
+                Trade
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('transactions'); setShowMobileNavMenu(false); }}
+                className="w-full px-4 py-3 text-left flex items-center gap-2 transition-all hover:opacity-90"
                 style={activeTab === 'transactions' ? walletUi.dropdownActiveItem : walletUi.dropdownItem}
               >
                 <History className="w-4 h-4" />
                 Transactions
               </button>
 
-              {/* COMMENTED OUT DEPOSIT TAB */}
-              {/* <button
-                onClick={() => setActiveTab('deposit')}
-                className={`w-full px-4 py-2 text-left flex items-center gap-2 transition-all ${
-                  activeTab === 'deposit'
-                    ? 'bg-emerald-500/30 text-emerald-300'
-                    : 'text-gray-300 hover:bg-slate-700'
-                }`}
-              >
-                <Download className="w-4 h-4" />
-                Deposit
-              </button> */}
-
               <button
-                onClick={() => setActiveTab('withdraw')}
-                className={`w-full px-4 py-2 text-left flex items-center gap-2 transition-all ${
-                  activeTab === 'withdraw'
-                    ? ''
-                    : 'hover:opacity-90'
-                }`}
+                onClick={() => { setActiveTab('withdraw'); setShowMobileNavMenu(false); }}
+                className="w-full px-4 py-3 text-left flex items-center gap-2 transition-all hover:opacity-90"
                 style={activeTab === 'withdraw' ? walletUi.dropdownActiveItem : walletUi.dropdownItem}
               >
                 <Upload className="w-4 h-4" />
@@ -3525,12 +3778,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
               {/* AGENT TERMINAL TAB - Only if user is an agent */}
               {!agentCheckLoading && isAgent ? (
                 <button
-                  onClick={() => setActiveTab('agent')}
-                  className={`w-full px-4 py-2 text-left flex items-center gap-2 transition-all ${
-                    activeTab === 'agent'
-                      ? ''
-                      : 'hover:opacity-90'
-                  }`}
+                  onClick={() => { setActiveTab('agent'); setShowMobileNavMenu(false); }}
+                  className="w-full px-4 py-3 text-left flex items-center gap-2 transition-all hover:opacity-90"
                   style={activeTab === 'agent' ? walletUi.dropdownActiveItem : walletUi.dropdownItem}
                 >
                   <Store className="w-4 h-4" />
@@ -3538,9 +3787,9 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 </button>
               ) : !agentCheckLoading && !isAgent ? (
                 <button
-                  onClick={() => setActiveTab('agent')}
+                  onClick={() => { setActiveTab('agent'); setShowMobileNavMenu(false); }}
                   title="Click to create an agent account"
-                  className="w-full px-4 py-2 text-left flex items-center gap-2 text-gray-400 hover:bg-slate-700 transition-all cursor-pointer"
+                  className="w-full px-4 py-3 text-left flex items-center gap-2 text-gray-400 hover:opacity-90 transition-all cursor-pointer"
                 >
                   <Lock className="w-4 h-4" />
                   🔒 Agent (Locked)
@@ -3548,12 +3797,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
               ) : null}
 
               <button
-                onClick={() => setActiveTab('cards')}
-                className={`w-full px-4 py-2 text-left flex items-center gap-2 transition-all ${
-                  activeTab === 'cards'
-                    ? ''
-                    : 'hover:opacity-90'
-                }`}
+                onClick={() => { setActiveTab('cards'); setShowMobileNavMenu(false); }}
+                className="w-full px-4 py-3 text-left flex items-center gap-2 transition-all hover:opacity-90"
                 style={activeTab === 'cards' ? walletUi.dropdownActiveItem : walletUi.dropdownItem}
               >
                 <CreditCard className="w-4 h-4" />
@@ -3561,12 +3806,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
               </button>
 
               <button
-                onClick={() => setActiveTab('business')}
-                className={`w-full px-4 py-2 text-left flex items-center gap-2 transition-all ${
-                  activeTab === 'business'
-                    ? ''
-                    : 'hover:opacity-90'
-                }`}
+                onClick={() => { setActiveTab('business'); setShowMobileNavMenu(false); }}
+                className="w-full px-4 py-3 text-left flex items-center gap-2 transition-all hover:opacity-90"
                 style={activeTab === 'business' ? walletUi.dropdownActiveItem : walletUi.dropdownItem}
               >
                 <Store className="w-4 h-4" />
@@ -3574,12 +3815,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
               </button>
 
               <button
-                onClick={() => setActiveTab('trust')}
-                className={`w-full px-4 py-2 text-left flex items-center gap-2 transition-all ${
-                  activeTab === 'trust'
-                    ? ''
-                    : 'hover:opacity-90'
-                }`}
+                onClick={() => { setActiveTab('trust'); setShowMobileNavMenu(false); }}
+                className="w-full px-4 py-3 text-left flex items-center gap-2 transition-all hover:opacity-90"
                 style={activeTab === 'trust' ? walletUi.dropdownActiveItem : walletUi.dropdownItem}
               >
                 <Lock className="w-4 h-4" />
@@ -3587,19 +3824,15 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
               </button>
 
               <button
-                onClick={() => setActiveTab('settings')}
-                className={`w-full px-4 py-2 text-left flex items-center gap-2 transition-all ${
-                  activeTab === 'settings'
-                    ? ''
-                    : 'hover:opacity-90'
-                }`}
+                onClick={() => { setActiveTab('settings'); setShowMobileNavMenu(false); }}
+                className="w-full px-4 py-3 text-left flex items-center gap-2 transition-all hover:opacity-90"
                 style={activeTab === 'settings' ? walletUi.dropdownActiveItem : walletUi.dropdownItem}
               >
                 <Settings className="w-4 h-4" />
                 Settings
               </button>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -3626,8 +3859,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           </div>
 
           {/* Action Buttons */}
-          <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-4 gap-2 sm:gap-3" style={walletUi.actionButtonsWrap}>
-            <button 
+          <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-3 gap-2 sm:gap-3" style={walletUi.actionButtonsWrap}>
+            <button
               onClick={() => setActiveModal('send')}
               className="rounded-lg py-2 sm:py-3 px-2 sm:px-4 flex flex-col items-center gap-1 sm:gap-2 transition-all hover:translate-y-[-1px]"
               style={walletUi.actionButtons.send}
@@ -3635,7 +3868,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
               <Send className="w-4 sm:w-5 h-4 sm:h-5 text-white/90" />
               <span className="text-xs sm:text-sm font-medium text-white">Send</span>
             </button>
-            <button 
+            <button
               onClick={() => setShowReceiveMoneyModal(true)}
               className="rounded-lg py-2 sm:py-3 px-2 sm:px-4 flex flex-col items-center gap-1 sm:gap-2 transition-all hover:translate-y-[-1px]"
               style={walletUi.actionButtons.receive}
@@ -3643,21 +3876,13 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
               <ArrowDownLeft className="w-4 sm:w-5 h-4 sm:h-5 text-white/90" />
               <span className="text-xs sm:text-sm font-medium text-white">Receive</span>
             </button>
-            <button 
+            <button
               onClick={() => setActiveModal('topup')}
               className="rounded-lg py-2 sm:py-3 px-2 sm:px-4 flex flex-col items-center gap-1 sm:gap-2 transition-all hover:translate-y-[-1px]"
               style={walletUi.actionButtons.topUp}
             >
               <Plus className="w-4 sm:w-5 h-4 sm:h-5 text-white/90" />
               <span className="text-xs sm:text-sm font-medium text-white">Top Up</span>
-            </button>
-            <button 
-              onClick={() => setShowTradeModal(true)}
-              className="rounded-lg py-2 sm:py-3 px-2 sm:px-4 flex flex-col items-center gap-1 sm:gap-2 transition-all hover:translate-y-[-1px]"
-              style={walletUi.actionButtons.trade}
-            >
-              <TrendingUp className="w-4 sm:w-5 h-4 sm:h-5 text-white/90" />
-              <span className="text-xs sm:text-sm font-medium text-white">Trade</span>
             </button>
           </div>
         </div>
@@ -3776,24 +4001,51 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           <History className="w-5 h-5" />
           Recent Transactions
         </h3>
-        <div className="space-y-3">
-          {currentWallet.transactions.map((tx) => (
-            <div key={tx.id} className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10 hover:border-white/20 transition-all">
-              <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-lg ${tx.type === 'send' ? 'bg-blue-500/20' : 'bg-green-500/20'}`}>
-                  {tx.type === 'send' ? <ArrowUpRight className="w-4 h-4 text-blue-400" /> : <ArrowDownLeft className="w-4 h-4 text-green-400" />}
+
+        {walletTransactionsLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-cyan-500"></div>
+          </div>
+        ) : walletTransactions.length === 0 ? (
+          <div className="text-center py-12">
+            <History className="w-10 h-10 text-gray-500 mx-auto mb-3" />
+            <p className="text-gray-300 font-medium">No transactions yet</p>
+            <p className="text-gray-500 text-sm mt-1">Send, receive, or top up to see activity here</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {walletTransactions.map((tx) => {
+              const isIncoming = parseFloat(tx.amount) >= 0;
+              const channel = getTransactionChannel(tx);
+              const isDigital = channel === 'digital';
+              return (
+                <div key={tx.id} className={`flex items-center justify-between p-4 bg-white/5 rounded-lg border-l-4 border border-white/10 hover:border-white/20 transition-all ${isDigital ? 'border-l-cyan-500' : 'border-l-amber-500'}`}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`p-2 rounded-lg flex-shrink-0 ${isIncoming ? 'bg-green-500/20' : 'bg-blue-500/20'}`}>
+                      {isIncoming ? <ArrowDownLeft className="w-4 h-4 text-green-400" /> : <ArrowUpRight className="w-4 h-4 text-blue-400" />}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-white font-medium truncate">{tx.description || tx.transaction_type}</p>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${
+                          isDigital
+                            ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                            : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                        }`}>
+                          {isDigital ? '🌐 Digital' : '✋ Manual'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-400">{new Date(tx.created_at).toLocaleString()}</p>
+                    </div>
+                  </div>
+                  <p className={`font-semibold flex-shrink-0 ${isIncoming ? 'text-green-400' : 'text-blue-400'}`}>
+                    {isIncoming ? '+' : '-'}{Math.abs(parseFloat(tx.amount)).toLocaleString()} {tx.currency}
+                  </p>
                 </div>
-                <div>
-                  <p className="text-white font-medium">{tx.type === 'send' ? 'Sent to' : 'Received from'} {tx.type === 'send' ? tx.to : tx.from}</p>
-                  <p className="text-xs text-gray-400">{tx.date}</p>
-                </div>
-              </div>
-              <p className={`font-semibold ${tx.type === 'send' ? 'text-blue-400' : 'text-green-400'}`}>
-                {tx.type === 'send' ? '-' : '+'}{tx.amount.toLocaleString()} {currentWallet.currency}
-              </p>
-            </div>
-          ))}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
       )}
 
@@ -4063,9 +4315,13 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
             </div>
 
             {/* Business Accounts Grid */}
-            {businessProfiles && businessProfiles.length > 0 ? (
+            {businessProfilesLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-cyan-500"></div>
+              </div>
+            ) : effectiveBusinessProfiles && effectiveBusinessProfiles.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {businessProfiles.map((profile) => (
+                {effectiveBusinessProfiles.map((profile) => (
                   <div key={profile.id} className="glass-card p-4 border border-cyan-500/30 bg-gradient-to-br from-cyan-900/10 to-slate-900/20">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-3 flex-1">
@@ -4138,6 +4394,45 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                         <span className="text-white truncate">{profile.business_address || 'N/A'}</span>
                       </div>
                     </div>
+
+                    {/* Live Share Value (same figures Pitchin shows the owner) */}
+                    {(() => {
+                      const valuation = businessValuations[profile.id];
+                      if (!valuation || valuation.needsShareSetup) return null;
+                      const priceUp = valuation.priceChangePercent >= 0;
+                      return (
+                        <div className="mt-3 pt-3 border-t border-cyan-500/20">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-semibold text-gray-300 flex items-center gap-1">
+                              📈 Share Value
+                              <span className="ml-1 text-[10px] text-slate-500 bg-slate-700/60 rounded-full px-2 py-0.5">
+                                {valuation.blockchainVerified ? 'On-chain' : 'Hashed'}
+                              </span>
+                            </span>
+                            <span className={`text-xs font-bold ${priceUp ? 'text-green-400' : 'text-red-400'}`}>
+                              {priceUp ? '+' : ''}{valuation.priceChangePercent.toFixed(2)}%
+                            </span>
+                          </div>
+                          <p className="text-white font-bold text-sm mb-2">
+                            {formatUgx(valuation.sharePriceUgx)} <span className="text-gray-400 font-normal text-xs">per share</span>
+                          </p>
+                          <div className="grid grid-cols-3 gap-2 text-center">
+                            <div className="bg-slate-700/40 rounded-lg p-2">
+                              <p className="text-[10px] text-gray-400">Business Value</p>
+                              <p className="text-xs font-bold text-white truncate">{formatUgx(valuation.businessValueUgx)}</p>
+                            </div>
+                            <div className="bg-slate-700/40 rounded-lg p-2">
+                              <p className="text-[10px] text-gray-400">Net Profit</p>
+                              <p className="text-xs font-bold text-white truncate">{formatUgx(valuation.netProfitUgx)}</p>
+                            </div>
+                            <div className="bg-slate-700/40 rounded-lg p-2">
+                              <p className="text-[10px] text-gray-400">ICAN Holdings</p>
+                              <p className="text-xs font-bold text-white truncate">{formatUgx(valuation.icanHoldingsValue)}</p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>
@@ -5772,11 +6067,11 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         supportsBiometric={true}
       />
 
-      {/* TRADE MODAL - Tabbed Interface with Chart, Buy, Sell, History */}
-      {showTradeModal && (
-        <div className="fixed inset-0 bg-slate-950/95 flex items-center justify-center z-50 p-0 sm:p-2 md:p-4">
-          <div className={`solid-card border border-slate-600 w-full h-[100dvh] sm:h-[96vh] ${activeTradeTab === 'chart' ? 'sm:max-w-[98vw]' : 'sm:max-w-6xl'} overflow-hidden flex flex-col transition-all duration-300`}>
-            {/* Modal Header - Professional Trading Platform Style with Mobile Optimization */}
+      {/* TRADE TAB - Tabbed Interface with Chart, Buy, Sell, History */}
+      {activeTab === 'trade' && (
+        <div className="pt-4 md:pt-6">
+          <div className={`solid-card border border-slate-600 rounded-xl w-full ${activeTradeTab === 'chart' ? '' : 'max-w-6xl mx-auto'} overflow-hidden flex flex-col transition-all duration-300`}>
+            {/* Trade Header - Professional Trading Platform Style with Mobile Optimization */}
             <div className="flex items-center justify-between p-3 sm:p-4 md:p-6 border-b border-slate-700 bg-gradient-to-r from-slate-800 to-slate-900">
               <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
                 <div className="w-10 sm:w-12 h-10 sm:h-12 rounded-lg sm:rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/30 flex-shrink-0">
@@ -5794,9 +6089,9 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                   <span className="text-xs font-medium text-green-400">LIVE</span>
                 </div>
                 <button
-                  onClick={() => setShowTradeModal(false)}
+                  onClick={() => setActiveTab('overview')}
                   className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-slate-700 hover:bg-red-600 text-slate-300 hover:text-white rounded-lg font-semibold transition-all flex-shrink-0"
-                  title="Close trading center"
+                  title="Back to overview"
                 >
                   ✕
                 </button>
@@ -5956,8 +6251,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
               </div>
             </div>
 
-            {/* Tab Content - Scrollable */}
-            <div className="flex-1 overflow-y-auto p-4 md:p-6">
+            {/* Tab Content */}
+            <div className="p-4 md:p-6 pt-6">
               {/* Wallet Tab */}
               {activeTradeTab === 'wallet' && (
                 <div className="space-y-4">

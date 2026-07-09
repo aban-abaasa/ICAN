@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Building2, Edit2, Users, DollarSign, Globe, MapPin, Calendar, Wallet, AlertCircle, Bell, Clock, Trash2, X } from 'lucide-react';
 import ApprovalNotificationCenter from './ApprovalNotificationCenter';
 import ShareholderApprovalsCenter from './ShareholderApprovalsCenter';
+import BusinessTeamMembersModal from './BusinessTeamMembersModal';
 
 const BusinessProfileCard = ({ profile, onEdit, onSelect, onNotification, currentUserId, currentUserEmail, isMember = false }) => {
   const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
   const [showApprovalsModal, setShowApprovalsModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showTeamModal, setShowTeamModal] = useState(false);
 
   if (!profile) return null;
 
@@ -175,6 +177,24 @@ const BusinessProfileCard = ({ profile, onEdit, onSelect, onNotification, curren
                 </div>
               </div>
             </div>
+          )}
+
+          {/* Team Members Button - Owner only: grant transaction-recording access */}
+          {isOwner && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowTeamModal(true);
+              }}
+              className="bg-slate-700 hover:bg-slate-600 text-white p-2 rounded-lg transition relative group/team"
+              title="Team Members"
+            >
+              <Users className="w-5 h-5" />
+              <div className="hidden group-hover/team:block absolute right-0 top-full mt-2 bg-slate-900 border border-slate-700 rounded-lg p-2 w-48 z-50 text-xs text-white shadow-lg">
+                <p className="font-semibold text-slate-300 mb-1">👥 Team Members</p>
+                <p className="text-slate-400">Give existing ICAN accounts access to record transactions here</p>
+              </div>
+            </button>
           )}
 
           {/* Edit Button - Available to all members */}
@@ -398,6 +418,14 @@ const BusinessProfileCard = ({ profile, onEdit, onSelect, onNotification, curren
           {profile.verification_status === 'verified' ? '✓ Verified' : '⏳ Pending'}
         </span>
       </div>
+
+      {/* Team Members Modal - grant/revoke transaction-recording access */}
+      {showTeamModal && (
+        <BusinessTeamMembersModal
+          profile={profile}
+          onClose={() => setShowTeamModal(false)}
+        />
+      )}
 
       {/* Pending Approvals - Investment & Member */}
       {showApprovalsModal && (

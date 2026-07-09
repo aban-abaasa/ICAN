@@ -6,7 +6,10 @@
 import { getSupabaseClient } from '../lib/supabase/client';
 
 // Simple PIN hashing function (browser-compatible)
-const hashPIN = (pin) => {
+// Exported so other surfaces that need to produce a compatible pin_hash
+// (e.g. the dev panel setting a temporary PIN during account recovery)
+// use the exact same algorithm instead of a hand-rolled duplicate.
+export const hashPIN = (pin) => {
   // For demo: create a simple hash using btoa (base64 encoding)
   // In production, use a proper crypto library
   let hash = 0;

@@ -1,27 +1,18 @@
 /**
- * PitchIn Share Value Blockchain Anchoring Service
+ * PitchIn Share Value Snapshot Hashing Service
  *
  * Every daily share price snapshot is hashed with SHA-256 using Web Crypto API
- * and recorded on Ethereum Sepolia via the existing ICAN smart contract.
- * This makes the price history tamper-proof: investors can verify any historical
- * share price by recomputing the hash and checking it against the on-chain record.
+ * and stored in Supabase alongside the snapshot. This makes tampering
+ * detectable: investors can recompute the hash from the stored data and
+ * confirm it matches what was recorded at snapshot time.
  *
- * Uses the same BLOCKCHAIN_CONFIG and ethers.js pattern as blockchainService.js.
+ * There is no real on-chain anchoring — icaneracoin is an internal
+ * Supabase-ledger currency with no real Ethereum keypair behind it, so there
+ * is no wallet to sign a Sepolia transaction with. Anchoring is intentionally
+ * a no-op rather than something waiting on a wallet key to be configured.
  */
 
 import { supabase } from '../lib/supabase/client';
-
-const BLOCKCHAIN_CONFIG = {
-  rpcUrl: import.meta.env.VITE_BLOCKCHAIN_RPC_URL || 'https://eth-sepolia.g.alchemy.com/v2/demo',
-  chainId: parseInt(import.meta.env.VITE_BLOCKCHAIN_CHAIN_ID || '11155111'),
-  contractAddress: import.meta.env.VITE_STATUS_CONTRACT_ADDRESS || '0x0000000000000000000000000000000000000000',
-  contractAbi: [
-    'function registerStatusHash(bytes32 fileHash, string memory mediaUrl, uint256 timestamp) public returns (bytes32)',
-    'function verifyStatus(bytes32 statusHash) public view returns (bool)',
-    'function getStatusOwner(bytes32 statusHash) public view returns (address)',
-    'event StatusRegistered(bytes32 indexed statusHash, address indexed owner, uint256 timestamp)'
-  ]
-};
 
 // ─── Hashing ─────────────────────────────────────────────────────────────────
 
@@ -51,99 +42,22 @@ export async function hashSnapshotData(snapshotPayload) {
   return '0x' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// ─── Blockchain recording ─────────────────────────────────────────────────────
-
-/**
- * Record the snapshot hash on Ethereum Sepolia.
- * Uses registerStatusHash — the mediaUrl field carries the business profile ID
- * so the on-chain record is traceable back to the specific PitchIn business.
- *
- * Returns { success, txHash, blockNumber } or { success: false, error }.
- * If no wallet private key is configured, returns success:false without throwing
- * so the valuation still works — blockchain anchoring is enhancement, not blocker.
- */
-export async function anchorSnapshotOnChain(dataHash, businessProfileId, timestamp) {
-  const walletKey = import.meta.env.VITE_BLOCKCHAIN_WALLET_KEY;
-  if (!walletKey) {
-    console.warn('[ShareBlockchain] No wallet key — snapshot saved to Supabase only');
-    return { success: false, reason: 'no_wallet_key' };
-  }
-
-  try {
-    const { ethers } = await import('ethers');
-    const provider = new ethers.JsonRpcProvider(BLOCKCHAIN_CONFIG.rpcUrl);
-    const signer = new ethers.Wallet(walletKey, provider);
-    const contract = new ethers.Contract(
-      BLOCKCHAIN_CONFIG.contractAddress,
-      BLOCKCHAIN_CONFIG.contractAbi,
-      signer
-    );
-
-    // bytes32 requires exactly 32 bytes — pad/truncate the hash
-    const bytes32Hash = ethers.zeroPadValue(dataHash, 32);
-    const mediaUrl = `pitchin:${businessProfileId}`;
-    const ts = Math.floor(timestamp / 1000);
-
-    console.log('[ShareBlockchain] Anchoring share price snapshot on-chain...');
-    const tx = await contract.registerStatusHash(bytes32Hash, mediaUrl, ts);
-    const receipt = await tx.wait(1);
-
-    console.log(`[ShareBlockchain] Anchored — block ${receipt.blockNumber}, tx ${tx.hash}`);
-    return {
-      success: true,
-      txHash: tx.hash,
-      blockNumber: receipt.blockNumber
-    };
-  } catch (err) {
-    console.error('[ShareBlockchain] On-chain anchoring failed (non-critical):', err.message);
-    return { success: false, error: err.message };
-  }
-}
-
 // ─── Verify ───────────────────────────────────────────────────────────────────
 
 /**
- * Verify a historical snapshot: recompute the hash from stored data and confirm
- * it matches what is recorded on-chain via verifyStatus().
+ * Verify a historical snapshot by recomputing its hash from the stored data
+ * and confirming it matches what was saved at snapshot time.
  */
-export async function verifySnapshotOnChain(snapshotPayload, storedHash) {
-  try {
-    const recomputedHash = await hashSnapshotData(snapshotPayload);
-    const hashesMatch = recomputedHash === storedHash;
-
-    const walletKey = import.meta.env.VITE_BLOCKCHAIN_WALLET_KEY;
-    if (!walletKey || !snapshotPayload.blockchainTxHash) {
-      return { verified: hashesMatch, source: 'hash_only' };
-    }
-
-    const { ethers } = await import('ethers');
-    const provider = new ethers.JsonRpcProvider(BLOCKCHAIN_CONFIG.rpcUrl);
-    const contract = new ethers.Contract(
-      BLOCKCHAIN_CONFIG.contractAddress,
-      BLOCKCHAIN_CONFIG.contractAbi,
-      provider
-    );
-
-    const bytes32Hash = ethers.zeroPadValue(storedHash, 32);
-    const onChainVerified = await contract.verifyStatus(bytes32Hash);
-
-    return {
-      verified: hashesMatch && onChainVerified,
-      hashMatch: hashesMatch,
-      onChainVerified,
-      source: 'blockchain'
-    };
-  } catch (err) {
-    console.error('[ShareBlockchain] Verification failed:', err.message);
-    return { verified: false, error: err.message };
-  }
+export async function verifySnapshotHash(snapshotPayload, storedHash) {
+  const recomputedHash = await hashSnapshotData(snapshotPayload);
+  return { verified: recomputedHash === storedHash, source: 'hash_only' };
 }
 
 // ─── Supabase snapshot persistence ───────────────────────────────────────────
 
 /**
- * Save a share value snapshot to Supabase with its blockchain proof.
- * Called after the valuation is computed and (optionally) anchored on-chain.
+ * Save a share value snapshot to Supabase with its tamper-evident hash.
+ * Called after the valuation is computed.
  */
 export async function saveSnapshotToDb(params) {
   const {

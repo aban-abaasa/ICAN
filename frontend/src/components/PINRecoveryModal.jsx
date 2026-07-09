@@ -1,39 +1,60 @@
-import React, { useState } from 'react';
-import { X, Lock, Mail, CheckCircle, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Lock, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { getSupabaseClient } from '../lib/supabase/client';
 
 /**
  * 🔐 PIN RECOVERY MODAL
- * 
- * Appears when account is locked due to failed PIN attempts
- * Allows users to request PIN reset via email
+ *
+ * Appears when an account is locked (too many failed PIN attempts) or the
+ * user has forgotten their PIN. Submits a request and waits for a developer
+ * to review and resolve it from the dev panel — there is no self-service
+ * unlock here by design, so a locked account can't just unlock itself.
+ *
+ * Pass groupId/groupName when this is for a shared group wallet PIN rather
+ * than the caller's own personal/business account.
  */
-const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail }) => {
-  const [step, setStep] = useState('request'); // 'request', 'token', 'success'
+const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, groupName = null }) => {
+  const [requestType, setRequestType] = useState('pin_reset'); // 'pin_reset' | 'account_unlock'
+  const [reason, setReason] = useState('');
+  const [step, setStep] = useState('request'); // 'request', 'pending', 'resolved'
   const [requestId, setRequestId] = useState(null);
-  const [unlockToken, setUnlockToken] = useState('');
-  const [newPin, setNewPin] = useState('');
-  const [newPinConfirm, setNewPinConfirm] = useState('');
+  const [statusMessage, setStatusMessage] = useState('');
+  const [resolvedStatus, setResolvedStatus] = useState(null); // 'completed' | 'rejected'
+  const [newPin, setNewPin] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
+  const pollRef = useRef(null);
+
+  useEffect(() => {
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, []);
 
   if (!isOpen) return null;
 
-  const hashPIN = (pin) => {
-    let hash = 0;
-    const string = `pin-${pin}-salt-ican-hash`;
-    
-    for (let i = 0; i < string.length; i++) {
-      const char = string.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash;
-    }
-    
-    return btoa(`hash-${Math.abs(hash)}-${pin.length}`);
+  const pollStatus = (id) => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      try {
+        const supabase = getSupabaseClient();
+        const { data, error: err } = await supabase.rpc('get_unlock_request_status', {
+          p_request_id: id
+        });
+        if (err || !data?.[0]) return;
+        const row = data[0];
+        if (row.status === 'completed' || row.status === 'rejected') {
+          clearInterval(pollRef.current);
+          setResolvedStatus(row.status);
+          setStatusMessage(row.message);
+          setNewPin(row.new_pin || null);
+          setStep('resolved');
+        }
+      } catch {
+        // transient — next tick will retry
+      }
+    }, 5000);
   };
 
-  const handleRequestPINReset = async () => {
+  const handleSubmitRequest = async () => {
     if (!userId) {
       setError('User ID not found');
       return;
@@ -44,95 +65,32 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail }) => {
 
     try {
       const supabase = getSupabaseClient();
+      const fullReason = groupId
+        ? `Group wallet "${groupName || groupId}" — ${reason || 'no additional details'}`
+        : (reason || null);
+
       const { data, error: err } = await supabase.rpc('request_account_unlock', {
         p_user_id: userId,
-        p_request_type: 'pin_reset',
-        p_reason: 'Account locked - user requested PIN reset'
+        p_request_type: requestType,
+        p_reason: fullReason,
+        ...(groupId ? { p_group_id: groupId } : {})
       });
 
-      if (err) {
-        throw err;
-      }
+      if (err) throw err;
 
       if (data && data[0]?.success) {
-        setSuccess(data[0].message);
         setRequestId(data[0].request_id);
-        setUnlockToken(data[0].unlock_token);
-        setStep('token');
+        setStatusMessage(data[0].message);
+        setStep('pending');
+        pollStatus(data[0].request_id);
       } else {
-        setError(data?.[0]?.message || 'Failed to request PIN reset');
+        setError(data?.[0]?.message || 'Failed to submit request');
       }
     } catch (err) {
-      console.error('PIN reset request error:', err);
-      setError(err.message || 'Error requesting PIN reset');
+      console.error('Recovery request error:', err);
+      setError(err.message || 'Error submitting request');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleResetPIN = async () => {
-    setError(null);
-
-    if (newPin.length !== 4) {
-      setError('PIN must be 4 digits');
-      return;
-    }
-
-    if (newPin !== newPinConfirm) {
-      setError('PINs do not match');
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const supabase = getSupabaseClient();
-      const hashedPin = hashPIN(newPin);
-
-      const { data, error: err } = await supabase.rpc('reset_pin_with_token', {
-        p_request_id: requestId,
-        p_unlock_token: unlockToken,
-        p_new_pin_hash: hashedPin
-      });
-
-      if (err) {
-        throw err;
-      }
-
-      if (data && data[0]?.success) {
-        setSuccess(data[0].message);
-        setStep('success');
-        setNewPin('');
-        setNewPinConfirm('');
-        
-        // Close modal after 3 seconds
-        setTimeout(() => {
-          onClose();
-        }, 3000);
-      } else {
-        setError(data?.[0]?.message || 'Failed to reset PIN');
-      }
-    } catch (err) {
-      console.error('PIN reset error:', err);
-      setError(err.message || 'Error resetting PIN');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleNumericInput = (num, field) => {
-    if (field === 'new' && newPin.length < 4) {
-      setNewPin(newPin + num);
-    } else if (field === 'confirm' && newPinConfirm.length < 4) {
-      setNewPinConfirm(newPinConfirm + num);
-    }
-  };
-
-  const handleBackspace = (field) => {
-    if (field === 'new') {
-      setNewPin(newPin.slice(0, -1));
-    } else {
-      setNewPinConfirm(newPinConfirm.slice(0, -1));
     }
   };
 
@@ -143,22 +101,22 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail }) => {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
             <Lock className="text-red-500" size={24} />
-            <h2 className="text-xl font-bold">Account Locked</h2>
+            <h2 className="text-xl font-bold">
+              {groupId ? 'Group Wallet Locked' : 'Account Recovery'}
+            </h2>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X size={20} />
           </button>
         </div>
 
-        {/* Step 1: Request PIN Reset */}
+        {/* Step 1: Submit a request */}
         {step === 'request' && (
           <div className="space-y-4">
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
               <p className="text-sm text-red-800">
-                Your account has been locked due to too many failed PIN attempts. You can reset your PIN via email.
+                This goes straight to a developer for review — there's no instant self-unlock.
+                Submit your request below and check back here for the outcome.
               </p>
             </div>
 
@@ -169,121 +127,98 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail }) => {
               </div>
             )}
 
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">What's going on?</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRequestType('pin_reset')}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                    requestType === 'pin_reset'
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
+                  }`}
+                >
+                  I forgot my PIN
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRequestType('account_unlock')}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                    requestType === 'account_unlock'
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
+                  }`}
+                >
+                  I know my PIN, just locked
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Anything else the developer should know? (optional)
+              </label>
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={3}
+                placeholder="e.g. locked myself out trying to remember an old PIN"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-500"
+              />
+            </div>
+
             <button
-              onClick={handleRequestPINReset}
+              onClick={handleSubmitRequest}
               disabled={loading}
               className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium py-2 rounded-lg transition-colors"
             >
-              {loading ? 'Sending...' : `Send Reset Link to ${userEmail}`}
+              {loading ? 'Submitting...' : 'Submit Request'}
             </button>
 
             <p className="text-xs text-gray-500 text-center">
-              You'll receive an email with a link to reset your PIN
+              Signed in as {userEmail || 'your account'}
             </p>
           </div>
         )}
 
-        {/* Step 2: Enter Unlock Token & New PIN */}
-        {step === 'token' && (
-          <div className="space-y-4">
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <p className="text-sm text-green-800">
-                ✅ Check your email for the unlock token
-              </p>
+        {/* Step 2: Waiting on a developer */}
+        {step === 'pending' && (
+          <div className="space-y-4 text-center py-2">
+            <div className="flex justify-center">
+              <Clock size={40} className="text-amber-500 animate-pulse" />
             </div>
+            <p className="font-semibold text-gray-800">Request submitted</p>
+            <p className="text-sm text-gray-600">{statusMessage}</p>
+            <p className="text-xs text-gray-400">This page will update automatically once it's resolved.</p>
+          </div>
+        )}
 
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex gap-2">
-                <AlertCircle size={18} className="text-red-600 flex-shrink-0" />
-                <p className="text-sm text-red-800">{error}</p>
+        {/* Step 3: Resolved */}
+        {step === 'resolved' && (
+          <div className="space-y-4 text-center py-2">
+            <div className="flex justify-center">
+              {resolvedStatus === 'completed'
+                ? <CheckCircle size={48} className="text-green-500" />
+                : <XCircle size={48} className="text-red-500" />}
+            </div>
+            <p className={`font-semibold ${resolvedStatus === 'completed' ? 'text-green-600' : 'text-red-600'}`}>
+              {resolvedStatus === 'completed' ? 'Request resolved!' : 'Request rejected'}
+            </p>
+            <p className="text-sm text-gray-600">{statusMessage}</p>
+            {resolvedStatus === 'completed' && newPin && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <p className="text-xs text-green-700 mb-1">Your new PIN</p>
+                <p className="text-3xl font-bold tracking-[0.3em] text-green-800">{newPin}</p>
+                <p className="text-xs text-green-700 mt-2">Use this to log in — you can change it afterwards.</p>
               </div>
             )}
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                New PIN (4 digits)
-              </label>
-              <div className="flex gap-2 mb-2">
-                {[0, 1, 2, 3].map((i) => (
-                  <div
-                    key={i}
-                    className="w-12 h-12 border-2 border-gray-300 rounded-lg flex items-center justify-center text-lg font-bold"
-                  >
-                    {newPin[i] ? '•' : ''}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Confirm PIN
-              </label>
-              <div className="flex gap-2 mb-2">
-                {[0, 1, 2, 3].map((i) => (
-                  <div
-                    key={i}
-                    className="w-12 h-12 border-2 border-gray-300 rounded-lg flex items-center justify-center text-lg font-bold"
-                  >
-                    {newPinConfirm[i] ? '•' : ''}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Numeric Keypad */}
-            <div className="grid grid-cols-3 gap-2 my-4">
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
-                <button
-                  key={num}
-                  onClick={() => {
-                    if (newPin.length < 4) handleNumericInput(num, 'new');
-                    else if (newPinConfirm.length < 4) handleNumericInput(num, 'confirm');
-                  }}
-                  className="py-2 bg-gray-100 hover:bg-gray-200 rounded-lg font-semibold"
-                >
-                  {num}
-                </button>
-              ))}
-              <button
-                onClick={() => handleNumericInput(0, 'new')}
-                className="py-2 bg-gray-100 hover:bg-gray-200 rounded-lg font-semibold col-span-2"
-              >
-                0
-              </button>
-              <button
-                onClick={() => {
-                  if (newPin.length > newPinConfirm.length) handleBackspace('new');
-                  else handleBackspace('confirm');
-                }}
-                className="py-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg font-semibold"
-              >
-                ⌫
-              </button>
-            </div>
-
             <button
-              onClick={handleResetPIN}
-              disabled={loading || newPin.length !== 4 || newPinConfirm.length !== 4}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium py-2 rounded-lg transition-colors"
+              onClick={onClose}
+              className="w-full bg-gray-800 hover:bg-gray-900 text-white font-medium py-2 rounded-lg transition-colors"
             >
-              {loading ? 'Resetting...' : 'Reset PIN'}
+              Close
             </button>
-          </div>
-        )}
-
-        {/* Step 3: Success */}
-        {step === 'success' && (
-          <div className="space-y-4">
-            <div className="flex justify-center">
-              <CheckCircle size={48} className="text-green-500" />
-            </div>
-            <p className="text-center font-semibold text-green-600">
-              ✅ PIN Reset Successful!
-            </p>
-            <p className="text-center text-sm text-gray-600">
-              Your account is now unlocked. You can log in with your new PIN.
-            </p>
           </div>
         )}
       </div>

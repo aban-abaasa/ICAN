@@ -23,15 +23,15 @@ const aiAnalysisRoutes = require('./routes/aiAnalysisRoutes');
 const cron = require('node-cron');
 const { refreshGlobalInflation } = require('./services/inflationRefreshService');
 
-// ES6 module imports for pinReset and email routes
-let pinResetRoutes;
+// ES6 module imports for email routes
+// pinResetRoutes.js is intentionally NOT mounted — PIN reset / account unlock
+// is now dev-panel-only (see ICAN/backend/PIN_RECOVERY_AND_ACCOUNT_UNLOCK.sql
+// and the "Recovery" tab in ICANDevPanel.jsx). There is no self-service path.
 let emailRoutes;
 
 // Load ES6 modules
 (async () => {
-  const pinResetModule = await import('./routes/pinResetRoutes.js');
   const emailModule = await import('./routes/emailRoutes.js');
-  pinResetRoutes = pinResetModule.default;
   emailRoutes = emailModule.default;
 })();
 
@@ -122,15 +122,11 @@ app.use('/api/ai-analysis', aiAnalysisRoutes);
 // Async function to load ES6 modules and start server
 async function loadRoutesAndStartServer() {
   try {
-    const pinResetModule = await import('./routes/pinResetRoutes.js');
     const emailModule = await import('./routes/emailRoutes.js');
-    
-    // PIN Reset Routes (account unlock, PIN recovery)
-    app.use('/api', pinResetModule.default);
-    
+
     // Email Routes (send PIN reset, unlock confirmations)
     app.use('/api/email', emailModule.default);
-    
+
     console.log('✅ ES6 module routes loaded successfully');
   } catch (error) {
     console.error('❌ Error loading ES6 module routes:', error);

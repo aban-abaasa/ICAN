@@ -7,13 +7,12 @@ import {
   AlertCircle,
   CheckCircle,
   Clock,
-  BarChart3,
-  Lock
+  BarChart3
 } from 'lucide-react';
 import agentService from '../services/agentService';
 import { CountryService } from '../services/countryService';
 import { getSupabaseClient } from '../lib/supabase/client';
-import PinResetFlow from './PinResetFlow';
+import PINRecoveryModal from './PINRecoveryModal';
 
 /**
  * 🏪 AGENT DASHBOARD
@@ -77,9 +76,10 @@ const AgentDashboard = () => {
   const [showPinInput, setShowPinInput] = useState(false);
   const [showFingerprintSetup, setShowFingerprintSetup] = useState(false);
 
-  // State for unlock/reset modals
-  const [showPinReset, setShowPinReset] = useState(false);
-  const [showAccountUnlock, setShowAccountUnlock] = useState(false);
+  // State for the account recovery modal (PIN reset / unlock) — resolved by a
+  // developer from the dev panel, there is no self-service unlock anymore.
+  const [showRecoveryModal, setShowRecoveryModal] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
 
   // Collapsible Agent Info State
   const [showAgentIdCard, setShowAgentIdCard] = useState(true);
@@ -94,6 +94,10 @@ const AgentDashboard = () => {
     const loadCountryAndCurrency = async () => {
       const supabase = getSupabaseClient();
       const { data: { user } } = await supabase.auth.getUser();
+
+      if (user) {
+        setCurrentUser({ id: user.id, email: user.email });
+      }
 
       // Prefer server-side selected country to avoid stale localStorage values.
       let countryCode = null;
@@ -500,29 +504,16 @@ const AgentDashboard = () => {
               </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="grid md:grid-cols-2 gap-3 mb-3">
-              {/* Reset PIN Button */}
+            {/* Action Button */}
+            <div className="mb-3">
               <button
-                onClick={() => setShowPinReset(true)}
-                className="flex items-center gap-3 p-4 bg-blue-600/30 hover:bg-blue-600/50 border border-blue-500/50 rounded-lg transition-all group"
+                onClick={() => setShowRecoveryModal(true)}
+                className="flex items-center gap-3 p-4 w-full bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/50 rounded-lg transition-all group"
               >
                 <div className="text-2xl">🔐</div>
                 <div className="text-left">
-                  <p className="font-semibold text-blue-300 group-hover:text-blue-200">Reset PIN</p>
-                  <p className="text-xs text-gray-400">Send reset link to email</p>
-                </div>
-              </button>
-
-              {/* Request Unlock Button */}
-              <button
-                onClick={() => setShowAccountUnlock(true)}
-                className="flex items-center gap-3 p-4 bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/50 rounded-lg transition-all group"
-              >
-                <div className="text-2xl">🔓</div>
-                <div className="text-left">
-                  <p className="font-semibold text-purple-300 group-hover:text-purple-200">Request Unlock</p>
-                  <p className="text-xs text-gray-400">Contact support team</p>
+                  <p className="font-semibold text-purple-300 group-hover:text-purple-200">Request Account Recovery</p>
+                  <p className="text-xs text-gray-400">Submit a request — a developer reviews and unlocks it, there's no instant self-unlock</p>
                 </div>
               </button>
             </div>
@@ -735,248 +726,20 @@ const AgentDashboard = () => {
     }
   };
 
-  // ============================================
-  // REQUEST ACCOUNT UNLOCK MODAL
-  // ============================================
-
-  const [unlockRequestPin, setUnlockRequestPin] = useState('');
-  const [unlockRequestLoading, setUnlockRequestLoading] = useState(false);
-  const [unlockRequestMessage, setUnlockRequestMessage] = useState(null);
-
-  const handleQuickUnlock = async () => {
-    if (!unlockRequestPin || unlockRequestPin.length !== 4) {
-      setUnlockRequestMessage({
-        type: 'error',
-        text: '❌ Please enter your 4-digit PIN'
-      });
-      return;
-    }
-
-    setUnlockRequestLoading(true);
-    setUnlockRequestMessage(null);
-
-    try {
-      // Hash PIN same way backend expects it
-      const hashedPin = btoa(unlockRequestPin);
-
-      console.log('🔓 Quick Unlock attempt...');
-
-      // Import the existing Supabase client singleton
-      const { getSupabaseClient } = await import('../lib/supabase/client.js');
-      const supabase = getSupabaseClient();
-
-      // Get the AUTHENTICATED user (from Supabase auth, not agentService)
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        throw new Error('Not authenticated. Please log in again.');
-      }
-
-      const userId = user.id;
-      console.log('Using auth user ID:', userId);
-
-      // Query user account from Supabase
-      const { data: userAccounts, error: queryError } = await supabase
-        .from('user_accounts')
-        .select('*')
-        .eq('user_id', userId);
-
-      console.log('Query result:', { userAccounts, queryError, count: userAccounts?.length });
-
-      if (queryError) {
-        console.error('Query error:', queryError);
-        throw new Error(`Query failed: ${queryError.message}`);
-      }
-
-      if (!userAccounts || userAccounts.length === 0) {
-        throw new Error('User account not found in system');
-      }
-
-      const userAccount = userAccounts[0];
-      console.log('User account found:', { 
-        id: userAccount.id, 
-        hasPin: !!userAccount.pin_hash,
-        status: userAccount.status 
-      });
-
-      // Verify PIN matches
-      if (userAccount.pin_hash !== hashedPin) {
-        console.warn('PIN mismatch');
-        throw new Error('Invalid PIN. Please try again.');
-      }
-
-      console.log('✅ PIN verified, unlocking account...');
-
-      // PIN is correct - unlock account by clearing the lock
-      const { error: updateError } = await supabase
-        .from('user_accounts')
-        .update({
-          pin_attempts: 0,
-          pin_locked_until: null,  // Clear the lock timestamp
-          status: 'active',
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', userId);
-
-      if (updateError) {
-        throw new Error('Failed to unlock account: ' + updateError.message);
-      }
-
-      console.log('✅ Account unlocked successfully');
-
-      setUnlockRequestMessage({
-        type: 'success',
-        text: '✅ Account unlocked successfully! You can now proceed with transactions.'
-      });
-      
-      // Clear the lock notification by removing it or updating it
-      // This removes the "Account locked" message from showing
-      setNotification(null);
-      
-      setTimeout(() => {
-        setShowAccountUnlock(false);
-        setUnlockRequestPin('');
-        setUnlockRequestMessage(null);
-        // Refresh to update account status
-        window.location.reload();
-      }, 1500);
-    } catch (error) {
-      console.error('Unlock error:', error);
-      setUnlockRequestMessage({
-        type: 'error',
-        text: '❌ ' + error.message
-      });
-    } finally {
-      setUnlockRequestLoading(false);
-    }
-  };
-
-  const renderUnlockRequestModal = () => {
-    if (!showAccountUnlock) return null;
-
-    return (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-purple-500/30 rounded-lg p-8 max-w-md w-full">
-          <div className="flex items-center gap-3 mb-6">
-            <Lock className="w-8 h-8 text-purple-400" />
-            <h2 className="text-2xl font-bold text-white">🔓 Unlock Account</h2>
-          </div>
-
-          {unlockRequestMessage && (
-            <div className={`mb-4 p-4 rounded-lg border ${
-              unlockRequestMessage.type === 'success'
-                ? 'bg-green-500/10 border-green-500/30 text-green-300'
-                : 'bg-red-500/10 border-red-500/30 text-red-300'
-            }`}>
-              {unlockRequestMessage.text}
-            </div>
-          )}
-
-          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-6">
-            <p className="text-blue-300 text-sm mb-2">
-              <strong>🔐 Verify Your Identity</strong>
-            </p>
-            <p className="text-blue-200 text-xs">
-              Enter your 4-digit PIN to verify ownership and unlock your account immediately.
-            </p>
-          </div>
-
-          <form onSubmit={(e) => { e.preventDefault(); handleQuickUnlock(); }} className="space-y-4">
-            <div>
-              <label className="block text-gray-300 text-sm font-semibold mb-2">
-                Your 4-Digit PIN
-              </label>
-              <input
-                type="password"
-                placeholder="••••"
-                maxLength="4"
-                value={unlockRequestPin}
-                onChange={(e) => setUnlockRequestPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-500 text-center tracking-widest text-2xl focus:outline-none focus:border-purple-400 transition-all"
-                disabled={unlockRequestLoading}
-              />
-              <p className="text-xs text-gray-400 mt-1">
-                Your transaction PIN (not your login password)
-              </p>
-            </div>
-
-            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
-              <p className="text-yellow-300 text-xs">
-                ⚡ <strong>Fast Unlock:</strong> Your account will unlock instantly once PIN is verified.
-              </p>
-            </div>
-
-            <div className="flex gap-3 pt-4">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowAccountUnlock(false);
-                  setUnlockRequestPin('');
-                  setUnlockRequestMessage(null);
-                }}
-                disabled={unlockRequestLoading}
-                className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition-all disabled:opacity-50"
-              >
-                ❌ Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={unlockRequestLoading || unlockRequestPin.length !== 4}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white font-semibold rounded-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {unlockRequestLoading ? (
-                  <>
-                    <Clock className="w-4 h-4 animate-spin" />
-                    Unlocking...
-                  </>
-                ) : (
-                  <>
-                    🔓 Unlock
-                  </>
-                )}
-              </button>
-            </div>
-
-            {/* Alternative: Request via support */}
-            <button
-              type="button"
-              onClick={() => {
-                setShowAccountUnlock(false);
-                setShowPinReset(true);
-              }}
-              className="w-full text-sm text-purple-400 hover:text-purple-300 mt-4 py-2 border-t border-gray-700 pt-4"
-            >
-              💬 Prefer to request via Support?
-            </button>
-          </form>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
 
         {/* ============================================ */}
-        {/* MODALS - PIN RESET & ACCOUNT UNLOCK */}
+        {/* MODAL - ACCOUNT RECOVERY (dev-panel resolved) */}
         {/* ============================================ */}
 
-        {showPinReset && (
-          <PinResetFlow
-            onSuccess={() => {
-              setShowPinReset(false);
-              setNotification({
-                type: 'success',
-                title: '✅ PIN Reset Complete',
-                message: 'Check your email for the reset link. Your account will be unlocked once you reset your PIN.'
-              });
-            }}
-            onCancel={() => setShowPinReset(false)}
-          />
-        )}
-
-        {renderUnlockRequestModal()}
+        <PINRecoveryModal
+          isOpen={showRecoveryModal}
+          onClose={() => setShowRecoveryModal(false)}
+          userId={currentUser?.id}
+          userEmail={currentUser?.email}
+        />
 
         {/* ============================================ */}
         {/* HEADER */}

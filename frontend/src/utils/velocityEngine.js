@@ -134,7 +134,11 @@ export class VelocityEngine {
     }
   }
 
-  // Load user transactions from Supabase (ican_transactions only)
+  // Load transactions visible to this user: their own (personal + business),
+  // plus any entry tagged to a business they own or co-own — so an owner or
+  // shareholder sees what team members/co-owners recorded too, not just what
+  // they personally typed in. See UNIFIED_BUSINESS_TRANSACTIONS_FEED.sql.
+  // Falls back to the old "own rows only" query if that RPC isn't deployed yet.
   async loadTransactions() {
     try {
       if (!this.supabase) {
@@ -142,18 +146,23 @@ export class VelocityEngine {
       }
 
       console.log(`🔍 VelocityEngine: Loading transactions for user ${this.userId}`);
-      const { data, error } = await this.supabase
-        .from('ican_transactions')
-        .select('*')
-        .eq('user_id', this.userId)
-        .order('created_at', { ascending: false });
+      let { data, error } = await this.supabase.rpc('fn_get_visible_ican_transactions');
+
+      if (error) {
+        console.warn('VelocityEngine: fn_get_visible_ican_transactions unavailable, falling back to own-rows-only:', error.message);
+        ({ data, error } = await this.supabase
+          .from('ican_transactions')
+          .select('*')
+          .eq('user_id', this.userId)
+          .order('created_at', { ascending: false }));
+      }
 
       if (error) {
         console.error('VelocityEngine: Error loading transactions from Supabase:', error);
         return { success: false, error };
       }
 
-      console.log(`📊 VelocityEngine: Found ${data?.length || 0} transactions for user ${this.userId}`);
+      console.log(`📊 VelocityEngine: Found ${data?.length || 0} transactions visible to user ${this.userId}`);
       this.transactions = data || [];
       this.notifyListeners();
       return { success: true, data: this.transactions };
@@ -173,19 +182,22 @@ export class VelocityEngine {
     try {
       if (!this.supabase) throw new Error('Supabase client not initialized');
 
-      const [manualRes, coinRes] = await Promise.all([
-        this.supabase
+      let manualRes = await this.supabase.rpc('fn_get_visible_ican_transactions');
+      if (manualRes.error) {
+        console.warn('VelocityEngine: fn_get_visible_ican_transactions unavailable, falling back to own-rows-only:', manualRes.error.message);
+        manualRes = await this.supabase
           .from('ican_transactions')
           .select('*')
           .eq('user_id', this.userId)
-          .order('created_at', { ascending: false }),
-        this.supabase
-          .from('ican_coin_transactions')
-          .select('*')
-          .or(`sender_user_id.eq.${this.userId},recipient_user_id.eq.${this.userId}`)
-          .eq('status', 'completed')
-          .order('created_at', { ascending: false })
-      ]);
+          .order('created_at', { ascending: false });
+      }
+
+      const coinRes = await this.supabase
+        .from('ican_coin_transactions')
+        .select('*')
+        .or(`sender_user_id.eq.${this.userId},recipient_user_id.eq.${this.userId}`)
+        .eq('status', 'completed')
+        .order('created_at', { ascending: false });
 
       if (manualRes.error) {
         console.error('VelocityEngine: Error loading manual transactions:', manualRes.error);
@@ -203,7 +215,7 @@ export class VelocityEngine {
         const ugxAmount = parseFloat(tx.ugx_equivalent || 0);
         const sourceLabels = {
           'mybodaguy':     'MyBodaGuy delivery',
-          'farm-agent':    'Backbone sale',
+          'farm-agent':    'AgriBone sale',
           'digital-city-era': 'SupermarketEra cashback',
           'ican':          'ICAN wallet'
         };

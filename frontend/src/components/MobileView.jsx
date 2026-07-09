@@ -57,7 +57,8 @@ import {
   Share2,
   ShieldCheck,
   Layers,
-  Filter
+  Filter,
+  Loader2
 } from 'lucide-react';
 import SmartTransactionEntry from './SmartTransactionEntry';
 import { ProfilePage } from './auth/ProfilePage';
@@ -97,7 +98,7 @@ import {
   formatTimeAgo
 } from '../services/universalNotificationsService';
 import { getUserTrustGroups } from '../services/trustService';
-import { getAllAccessibleBusinessProfiles } from '../services/pitchingService';
+import { getAllAccessibleBusinessProfiles, getContributorNames } from '../services/pitchingService';
 import { getUserStatuses, getActiveStatuses } from '../services/statusService';
 import { CountryService } from '../services/countryService';
 import {
@@ -646,6 +647,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   // Detect if we're on mobile or desktop for different UX
   const [isMobileView, setIsMobileView] = useState(window.innerWidth < 768);
   const [expGrouped, setExpGrouped] = useState(true); // group list by Business / Personal
+  const [contributorNames, setContributorNames] = useState({}); // user_id → { name, email }, for grouping business entries by who recorded them
   const [expTypeFilter, setExpTypeFilter] = useState('all'); // 'all' | 'business' | 'personal'
   const [expCustomMonth, setExpCustomMonth] = useState(new Date().getMonth()); // 0-11
   const [expCustomYear, setExpCustomYear] = useState(new Date().getFullYear());
@@ -658,6 +660,11 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [tithePayMsg, setTithePayMsg] = useState(null); // { type: 'ok'|'err', text }
   const [transactionType, setTransactionType] = useState(null); // 'business' or 'personal'
   const [showRecordTypeModal, setShowRecordTypeModal] = useState(false);
+  const [recordTypeChoice, setRecordTypeChoice] = useState(''); // dropdown selection inside the Record Transaction modal
+  const [recordBusinessChoice, setRecordBusinessChoice] = useState('');
+  const [recordBusinessProfiles, setRecordBusinessProfiles] = useState([]);
+  const [loadingRecordBusinesses, setLoadingRecordBusinesses] = useState(false);
+  const [preselectedBusinessProfileId, setPreselectedBusinessProfileId] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [showMenuDropdown, setShowMenuDropdown] = useState(false);
   const [activeMenuTab, setActiveMenuTab] = useState('profile');
@@ -1708,7 +1715,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
           .from('user_tithe_tracking')
           .select('personal_tithe_accumulated, business_tithe_accumulated, combined_tithe_accumulated')
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
 
         if (tracking) {
           const updates = { last_payment_date: paymentDate };
@@ -1888,6 +1895,65 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
     })();
     return () => { cancelled = true; };
   }, [showReportingSystem]);
+
+  // Reset the Record Transaction modal's dropdown selections each time it opens,
+  // and load the user's accessible businesses so the "which business" dropdown
+  // is ready the moment Business is chosen — no separate loading step later.
+  useEffect(() => {
+    if (!showRecordTypeModal) return;
+    setRecordBusinessChoice('');
+    let cancelled = false;
+    (async () => {
+      setLoadingRecordBusinesses(true);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user || cancelled) return;
+        const profiles = await getAllAccessibleBusinessProfiles(user.id, user.email);
+        if (!cancelled) setRecordBusinessProfiles(profiles || []);
+      } catch (err) {
+        console.error('Failed to load business profiles for Record Transaction:', err);
+      } finally {
+        if (!cancelled) setLoadingRecordBusinesses(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [showRecordTypeModal]);
+
+  // Smart auto-advance: if "Business" is selected (directly, or pre-filled by
+  // the Business quick-chip) and the user only has exactly one business, don't
+  // make them pick it from a dropdown of one — just proceed.
+  useEffect(() => {
+    if (!showRecordTypeModal || recordTypeChoice !== 'business') return;
+    if (loadingRecordBusinesses || recordBusinessChoice) return;
+    if (recordBusinessProfiles.length === 1) {
+      proceedToRecordEntry('business', recordBusinessProfiles[0].id);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showRecordTypeModal, recordTypeChoice, loadingRecordBusinesses, recordBusinessProfiles]);
+
+  // Now that the unified feed can include business entries recorded by team
+  // members/co-owners (fn_get_visible_ican_transactions), resolve display
+  // names for whoever isn't "me" so the transaction list can group "by
+  // contributor" instead of showing an anonymous user_id.
+  useEffect(() => {
+    const myId = authContextUser?.id || userProfile?.id;
+    const missingIds = [...new Set(
+      transactions
+        .filter(t => (t.record_category || t.metadata?.record_category) === 'business')
+        .map(t => t.user_id)
+        .filter(uid => uid && uid !== myId && !contributorNames[uid])
+    )];
+    if (missingIds.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const resolved = await getContributorNames(missingIds);
+      if (!cancelled && Object.keys(resolved).length > 0) {
+        setContributorNames(prev => ({ ...prev, ...resolved }));
+      }
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactions, authContextUser?.id, userProfile?.id]);
 
   // Auto-initialize Tithe calculator when modal opens
   useEffect(() => {
@@ -2271,10 +2337,13 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
   useEffect(() => {
     const loadPendingActions = async () => {
       try {
-        const { OfflineAuthManager } = await import('../lib/offlineAuthManager');
-        const manager = new OfflineAuthManager();
-        await manager.init();
-        const pending = await manager.getPendingActions();
+        // Reuse the shared singleton (and its single IndexedDB connection)
+        // instead of opening a brand-new connection every 3 seconds, which
+        // leaked connections and could tip the browser into closing one
+        // mid-transaction elsewhere ("database connection is closing").
+        const { offlineAuthManager } = await import('../lib/offlineAuthManager');
+        await offlineAuthManager.init();
+        const pending = await offlineAuthManager.getPendingActions();
         setPendingActionsCount(pending.length);
       } catch (error) {
         console.error('Error loading pending actions:', error);
@@ -3521,33 +3590,32 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         .from('user_tithe_tracking')
         .select('personal_tithe_accumulated, business_tithe_accumulated, combined_tithe_accumulated, last_payment_date')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
       if (error) {
-        if (error.code === 'PGRST116') {
-          // No tithe tracking record exists yet
-          console.log('No tithe tracking record found for user');
-          setActualTitheOwed({
-            personal: 0,
-            business: 0,
-            combined: 0,
-            lastPaymentDate: null
-          });
-        } else {
-          console.error('Error fetching tithe data:', error);
-        }
+        console.error('Error fetching tithe data:', error);
         return;
       }
 
-      if (data) {
+      if (!data) {
+        // No tithe tracking record exists yet
+        console.log('No tithe tracking record found for user');
         setActualTitheOwed({
-          personal: data.personal_tithe_accumulated || 0,
-          business: data.business_tithe_accumulated || 0,
-          combined: data.combined_tithe_accumulated || 0,
-          lastPaymentDate: data.last_payment_date
+          personal: 0,
+          business: 0,
+          combined: 0,
+          lastPaymentDate: null
         });
-        console.log('✅ Actual tithe owed fetched:', data);
+        return;
       }
+
+      setActualTitheOwed({
+        personal: data.personal_tithe_accumulated || 0,
+        business: data.business_tithe_accumulated || 0,
+        combined: data.combined_tithe_accumulated || 0,
+        lastPaymentDate: data.last_payment_date
+      });
+      console.log('✅ Actual tithe owed fetched:', data);
     } catch (error) {
       console.error('Error in fetchActualTitheOwed:', error);
       setActualTitheOwed({
@@ -4046,6 +4114,16 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     return val > 0 ? String(Math.round(val)) : '';
   };
 
+  // Closes the Record Transaction modal and opens the entry screen — called the
+  // instant a choice is complete (personal, or business + which business) so
+  // the dropdowns feel like one smooth step instead of needing a Continue tap.
+  const proceedToRecordEntry = (type, businessId = null) => {
+    setTransactionType(type);
+    setPreselectedBusinessProfileId(type === 'business' ? (businessId || null) : null);
+    setShowRecordTypeModal(false);
+    setShowTransactionEntry(true);
+  };
+
   // Central submit for both typed and voice input
   const handleRecordSubmit = (text) => {
     if (!text || !text.trim()) return;
@@ -4056,6 +4134,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       setShowBusinessLoanCalculator(true);
     } else {
       setVoicePrefill(text.trim());
+      setRecordTypeChoice('');
       setShowRecordTypeModal(true);
     }
   };
@@ -4437,7 +4516,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         <div className="flex gap-2 mb-3 flex-wrap">
           {/* Business record shortcut */}
           <button
-            onClick={() => { setTransactionType('business'); setShowTransactionEntry(true); }}
+            onClick={() => { setRecordTypeChoice('business'); setShowRecordTypeModal(true); }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border active:scale-95 transition-all text-xs font-semibold"
             style={{
               background: modePalette.businessChip,
@@ -4448,9 +4527,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           >
             <span>💼</span> Business
           </button>
-          {/* Personal record shortcut */}
+          {/* Personal record shortcut — no business to pick, so skip straight to entry */}
           <button
-            onClick={() => { setTransactionType('personal'); setShowTransactionEntry(true); }}
+            onClick={() => { setTransactionType('personal'); setPreselectedBusinessProfileId(null); setShowTransactionEntry(true); }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border active:scale-95 transition-all text-xs font-semibold"
             style={{
               background: modePalette.personalChip,
@@ -6554,7 +6633,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   No transactions for {txPeriodLabels[txPeriod].toLowerCase()} period
                 </p>
                 <button
-                  onClick={() => setShowRecordTypeModal(true)}
+                  onClick={() => { setRecordTypeChoice(''); setShowRecordTypeModal(true); }}
                   className="mt-3 px-4 py-2 rounded-lg text-sm font-medium transition"
                   style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-text)' }}
                 >
@@ -7425,23 +7504,73 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     { key: 'business', label: 'Business', emoji: '🏢', color: 'text-blue-300', border: 'border-blue-500/20', items: expFiltered.filter(t => (t.record_category || t.metadata?.record_category) === 'business') },
                     { key: 'personal', label: 'Personal', emoji: '👤', color: 'text-purple-300', border: 'border-purple-500/20', items: expFiltered.filter(t => (t.record_category || t.metadata?.record_category) !== 'business') },
                   ];
+
+                  // Business entries can come from the owner, co-owners and team
+                  // members (unified feed). Personal entries never can — every
+                  // personal row belongs to the viewer, so there's nothing to
+                  // group there. Only sub-group Business, and only once more
+                  // than one contributor actually shows up — a solo business
+                  // owner shouldn't see a redundant "You" sub-header.
+                  const myId = authContextUser?.id || userProfile?.id;
+                  const contributorLabel = (uid) => uid === myId ? 'You' : (contributorNames[uid]?.name || 'Teammate');
+                  const bizContributorIds = new Set(grouped[0].items.map(t => t.user_id).filter(Boolean));
+
                   return (
                     <div className="space-y-3">
-                      {grouped.map(group => group.items.length === 0 ? null : (
-                        <div key={group.key}>
-                          {/* Section header — compact */}
-                          <div className={`flex items-center gap-1.5 mb-1.5 pb-1 border-b ${group.border}`}>
-                            <span className="text-sm">{group.emoji}</span>
-                            <span className={`text-[10px] font-bold uppercase tracking-wider ${group.color}`}>{group.label}</span>
-                            <span className={`text-[9px] px-1 py-0.5 rounded-full font-semibold ml-auto ${group.color} bg-current/10`} style={{ backgroundColor: group.key === 'business' ? 'rgba(59,130,246,0.12)' : 'rgba(168,85,247,0.12)' }}>
-                              {group.items.length} · {formatCurrency(group.items.reduce((s,t) => s + Math.abs(t.amount||0), 0))}
-                            </span>
+                      {grouped.map(group => {
+                        if (group.items.length === 0) return null;
+                        const showByContributor = group.key === 'business' && bizContributorIds.size > 1;
+
+                        return (
+                          <div key={group.key}>
+                            {/* Section header — compact */}
+                            <div className={`flex items-center gap-1.5 mb-1.5 pb-1 border-b ${group.border}`}>
+                              <span className="text-sm">{group.emoji}</span>
+                              <span className={`text-[10px] font-bold uppercase tracking-wider ${group.color}`}>{group.label}</span>
+                              <span className={`text-[9px] px-1 py-0.5 rounded-full font-semibold ml-auto ${group.color} bg-current/10`} style={{ backgroundColor: group.key === 'business' ? 'rgba(59,130,246,0.12)' : 'rgba(168,85,247,0.12)' }}>
+                                {group.items.length} · {formatCurrency(group.items.reduce((s,t) => s + Math.abs(t.amount||0), 0))}
+                              </span>
+                            </div>
+
+                            {!showByContributor ? (
+                              <div className="space-y-1.5">
+                                {group.items.map(renderTxRow)}
+                              </div>
+                            ) : (
+                              <div className="space-y-2.5">
+                                {(() => {
+                                  const byContributor = new Map();
+                                  for (const t of group.items) {
+                                    const uid = t.user_id || 'unknown';
+                                    if (!byContributor.has(uid)) byContributor.set(uid, []);
+                                    byContributor.get(uid).push(t);
+                                  }
+                                  // "You" first, then teammates by entry count
+                                  return Array.from(byContributor.entries())
+                                    .sort(([uidA, itemsA], [uidB, itemsB]) => {
+                                      if (uidA === myId) return -1;
+                                      if (uidB === myId) return 1;
+                                      return itemsB.length - itemsA.length;
+                                    })
+                                    .map(([uid, items]) => (
+                                      <div key={uid}>
+                                        <div className="flex items-center gap-1.5 mb-1">
+                                          <span className="text-[9px] font-semibold text-slate-400">{contributorLabel(uid)}</span>
+                                          <span className="text-[9px] text-slate-600">
+                                            {items.length} · {formatCurrency(items.reduce((s, t) => s + Math.abs(t.amount || 0), 0))}
+                                          </span>
+                                        </div>
+                                        <div className="space-y-1.5 pl-2 border-l border-slate-800">
+                                          {items.map(renderTxRow)}
+                                        </div>
+                                      </div>
+                                    ));
+                                })()}
+                              </div>
+                            )}
                           </div>
-                          <div className="space-y-1.5">
-                            {group.items.map(renderTxRow)}
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   );
                 }
@@ -7800,43 +7929,81 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             </div>
 
             {/* Body */}
-            <div className="p-6 space-y-4">
-              <p className="text-gray-300 text-center mb-6">Select transaction type to proceed</p>
+            <div className="p-6 space-y-5">
+              {recordTypeChoice !== 'business' ? (
+                <>
+                  <p className="text-gray-400 text-sm text-center">Select transaction type to proceed</p>
 
-              {/* Business Option */}
-              <button
-                onClick={() => {
-                  setTransactionType('business');
-                  setShowRecordTypeModal(false);
-                  setShowTransactionEntry(true);
-                }}
-                className="w-full bg-gradient-to-br from-blue-600/20 to-blue-700/20 border-2 border-blue-500/50 hover:border-blue-400/80 rounded-xl p-4 flex flex-col items-center gap-3 transition-all hover:bg-blue-600/30 group"
-              >
-                <Briefcase className="w-8 h-8 text-blue-400 group-hover:text-blue-300 transition" />
-                <div className="text-center">
-                  <h3 className="text-lg font-bold text-white group-hover:text-blue-100 transition">Business</h3>
-                  <p className="text-xs text-gray-400">Company transactions & operations</p>
-                </div>
-              </button>
+                  {/* Transaction Type Dropdown — picking "Business" swaps this
+                      away for just the business-name dropdown below; picking
+                      "Personal" proceeds immediately, nothing else to choose. */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+                      Transaction Type
+                    </label>
+                    <select
+                      value={recordTypeChoice}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setRecordBusinessChoice('');
+                        setRecordTypeChoice(val);
+                        if (val === 'personal') proceedToRecordEntry('personal');
+                      }}
+                      autoFocus
+                      className="w-full bg-slate-800 border-2 border-slate-600 focus:border-purple-400 rounded-xl px-4 py-3 text-white font-semibold outline-none transition"
+                    >
+                      <option value="" disabled>Select type…</option>
+                      <option value="business">Business</option>
+                      <option value="personal">Personal</option>
+                    </select>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => { setRecordTypeChoice(''); setRecordBusinessChoice(''); }}
+                    className="text-xs text-gray-400 hover:text-white flex items-center gap-1 transition"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" /> Change type
+                  </button>
 
-              {/* Personal Option */}
-              <button
-                onClick={() => {
-                  setTransactionType('personal');
-                  setShowRecordTypeModal(false);
-                  setShowTransactionEntry(true);
-                }}
-                className="w-full bg-gradient-to-br from-green-600/20 to-green-700/20 border-2 border-green-500/50 hover:border-green-400/80 rounded-xl p-4 flex flex-col items-center gap-3 transition-all hover:bg-green-600/30 group"
-              >
-                <User className="w-8 h-8 text-green-400 group-hover:text-green-300 transition" />
-                <div className="text-center">
-                  <h3 className="text-lg font-bold text-white group-hover:text-green-100 transition">Personal</h3>
-                  <p className="text-xs text-gray-400">Personal income & expenses</p>
-                </div>
-              </button>
+                  {/* Business-only dropdown — the one and only decision left */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+                      Which business is this for?
+                    </label>
+                    {loadingRecordBusinesses ? (
+                      <div className="flex items-center gap-2 text-sm text-gray-400 px-1 py-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Loading your businesses…
+                      </div>
+                    ) : recordBusinessProfiles.length === 0 ? (
+                      <div className="px-3 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300">
+                        No business found — create one in PitchIn first.
+                      </div>
+                    ) : (
+                      <select
+                        value={recordBusinessChoice}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setRecordBusinessChoice(val);
+                          if (val) proceedToRecordEntry('business', val);
+                        }}
+                        autoFocus
+                        className="w-full bg-slate-800 border-2 border-blue-500/50 focus:border-blue-400 rounded-xl px-4 py-3 text-white font-semibold outline-none transition"
+                      >
+                        <option value="">Select business…</option>
+                        {recordBusinessProfiles.map(p => (
+                          <option key={p.id} value={p.id}>{p.business_name}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                </>
+              )}
 
               {/* Info Footer */}
-              <div className="mt-6 pt-4 border-t border-purple-500/20">
+              <div className="pt-3 border-t border-purple-500/20">
                 <p className="text-xs text-gray-500 text-center">
                    Tip: Transactions are recorded with AI-powered categorization for precise accounting
                 </p>
@@ -9026,11 +9193,13 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       <SmartTransactionEntry
         isOpen={showTransactionEntry}
         transactionType={transactionType}
+        preselectedBusinessProfileId={preselectedBusinessProfileId}
         prefillText={voicePrefill}
         onClose={() => {
           setShowTransactionEntry(false);
           setShowRecordPanel(false);
           setTransactionType(null);
+          setPreselectedBusinessProfileId(null);
           setVoicePrefill('');
         }}
         onSubmit={(transaction) => {

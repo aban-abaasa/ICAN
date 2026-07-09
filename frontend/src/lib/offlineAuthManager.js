@@ -37,6 +37,23 @@ export class OfflineAuthManager {
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         this.db = request.result;
+
+        // If the connection closes for any reason (another tab deleting/
+        // upgrading the DB, or the browser reclaiming it), forget it so the
+        // next call to init()/any method reopens a fresh one instead of
+        // throwing "InvalidStateError: The database connection is closing"
+        // against a dead handle.
+        this.db.onclose = () => {
+          console.warn('[OfflineAuthManager] Connection closed, will reopen on next use');
+          this.db = null;
+          this.initialized = false;
+        };
+        this.db.onversionchange = () => {
+          this.db.close();
+          this.db = null;
+          this.initialized = false;
+        };
+
         resolve(this.db);
       };
 

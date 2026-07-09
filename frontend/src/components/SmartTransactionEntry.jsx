@@ -11,7 +11,7 @@ import { getAllAccessibleBusinessProfiles } from '../services/pitchingService';
 import { supabase } from '../lib/supabase/client';
 
 
-export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, onClose = null, onSubmit = null, prefillText = '' }) => {
+export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, preselectedBusinessProfileId = null, onClose = null, onSubmit = null, prefillText = '' }) => {
   const [textInput, setTextInput] = useState('');
   const [parsedData, setParsedData] = useState(null);
   const [aiAnalysis, setAiAnalysis] = useState(null);
@@ -679,8 +679,9 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
         const profiles = await getAllAccessibleBusinessProfiles(user.id, user.email);
         if (cancelled) return;
         setBusinessProfiles(profiles || []);
-        // Auto-select when there's exactly one business — no decision needed
-        setSelectedBusinessProfileId(prev => prev || (profiles?.length === 1 ? profiles[0].id : ''));
+        // Respect a business already chosen upstream (the Record Transaction modal);
+        // otherwise auto-select when there's exactly one business — no decision needed
+        setSelectedBusinessProfileId(prev => prev || preselectedBusinessProfileId || (profiles?.length === 1 ? profiles[0].id : ''));
       } catch (err) {
         console.error('Failed to load business profiles for transaction tagging:', err);
       } finally {

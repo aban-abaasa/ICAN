@@ -56,7 +56,12 @@ const UnifiedApprovalModal = ({
   const [localError, setLocalError] = useState(error);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPINRecovery, setShowPINRecovery] = useState(false);
-  const isAccountLocked = error && error.toLowerCase().includes('account locked');
+  // A failed PIN attempt sets localError (line ~191) without ever touching
+  // the error prop, since that only flows down from the parent's own state.
+  // Checking error alone here missed the lock message entirely — the text
+  // rendered (localError || error, below) and the lock check must agree.
+  const displayedError = localError || error;
+  const isAccountLocked = displayedError && displayedError.toLowerCase().includes('account locked');
 
   // Load saved PIN from localStorage on mount
   useEffect(() => {

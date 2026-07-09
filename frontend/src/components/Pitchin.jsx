@@ -60,7 +60,19 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, navRef =
   const [showRecorder, setShowRecorder] = useState(false);
   const [currentPitch, setCurrentPitch] = useState(null);
   const [activeTab, _setActiveTab] = useState('feed');
-  const setActiveTab = (newTab) => { _setActiveTab(prev => { onTabChange?.(prev); return newTab; }); };
+  // onTabChange must not run inside the functional updater below — React
+  // invokes it during this component's render phase, so calling another
+  // component's setState from there triggers "Cannot update a component
+  // while rendering a different component". Defer it to a useEffect instead.
+  const pendingTabChangeRef = useRef(null);
+  const setActiveTab = (newTab) => { _setActiveTab(prev => { pendingTabChangeRef.current = prev; return newTab; }); };
+  useEffect(() => {
+    if (pendingTabChangeRef.current !== null) {
+      const prev = pendingTabChangeRef.current;
+      pendingTabChangeRef.current = null;
+      onTabChange?.(prev);
+    }
+  }, [activeTab]);
   useEffect(() => { if (navRef) navRef.current = _setActiveTab; return () => { if (navRef) navRef.current = null; }; }, [navRef]);
   const [selectedForContract, setSelectedForContract] = useState(null);
   const [selectedForInvestment, setSelectedForInvestment] = useState(null); // For ShareSigningFlow
@@ -2350,7 +2362,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, navRef =
             <div className="flex items-center justify-between p-4 sm:px-6 sm:py-4 border-b border-slate-700/40 sticky top-0 bg-slate-950 z-10">
               <div>
                 <h2 className="text-base sm:text-lg font-bold text-white">{currentBusinessProfile.name}</h2>
-                <p className="text-xs sm:text-sm text-slate-400">Live share valuation · blockchain-anchored</p>
+                <p className="text-xs sm:text-sm text-slate-400">Live share valuation · tamper-evident hash</p>
               </div>
               <button
                 onClick={() => setShowShareValuePanel(false)}
@@ -2363,7 +2375,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, navRef =
             <div className="p-4 sm:p-6">
               <PitchinLiveShareValue
                 businessProfile={currentBusinessProfile}
-                ownerUserId={currentUser.id}
+                ownerUserId={currentBusinessProfile.user_id || currentUser.id}
               />
             </div>
           </div>

@@ -2,7 +2,8 @@
  * PitchIn Live Share Valuation Service
  *
  * Aggregates real transaction data from all 4 apps (same Supabase instance)
- * to produce a live, blockchain-anchored share price for a PitchIn business.
+ * to produce a live share price for a PitchIn business, with each snapshot
+ * SHA-256 hashed for tamper evidence.
  *
  * Formula:
  *   Assets         = ican_transactions(capital_asset) + CMMS inventory + icaneracoin holdings × market_price
@@ -17,7 +18,6 @@
 import { supabase } from '../lib/supabase/client';
 import {
   hashSnapshotData,
-  anchorSnapshotOnChain,
   saveSnapshotToDb,
   getLatestSnapshot,
   getSharePriceHistory
@@ -51,11 +51,15 @@ async function getIcanFinancials(businessProfileId) {
 
 async function getCmmsInventoryValue(cmmsCompanyId) {
   if (!cmmsCompanyId) return { valueUgx: 0, itemCount: 0 };
-  const { data, error } = await supabase
-    .from('cmms_inventory_items')
-    .select('unit_price, quantity_in_stock')
-    .eq('cmms_company_id', cmmsCompanyId)
-    .eq('is_active', true);
+  // A direct table select is blocked by RLS unless the viewer is in that CMMS
+  // company's cmms_users table — a PitchIn business owner viewing their own
+  // valuation usually isn't. fn_get_company_inventory is the same
+  // SECURITY DEFINER RPC CMSSModule.jsx itself uses to read inventory
+  // (see backend/FIX_INVENTORY_FETCH_RLS.sql), so this returns the same
+  // items/value the CMMS dashboard shows instead of silently coming back empty.
+  const { data, error } = await supabase.rpc('fn_get_company_inventory', {
+    p_company_id: cmmsCompanyId
+  });
   if (error) {
     console.warn('[Valuation] CMMS inventory read failed:', error.message);
     return { valueUgx: 0, itemCount: 0 };
@@ -71,16 +75,68 @@ async function getCmmsInventoryValue(cmmsCompanyId) {
 
 async function getManualTransactionsDetail(businessProfileId) {
   if (!businessProfileId) return { count: 0 };
-  const { count, error } = await supabase
-    .from('ican_transactions')
-    .select('id', { count: 'exact', head: true })
-    .eq('business_profile_id', businessProfileId)
-    .eq('status', 'completed');
+  // Plain table query is RLS-scoped to rows this caller personally recorded —
+  // it would silently undercount once a team member/co-owner contributes
+  // entries. The RPC is SECURITY DEFINER (re-checks business ownership itself)
+  // so it counts every entry tagged to the business regardless of who logged it.
+  const { data, error } = await supabase.rpc('fn_get_business_manual_transaction_count', {
+    p_business_profile_id: businessProfileId
+  });
   if (error) {
     console.warn('[Valuation] Manual transaction count read failed:', error.message);
     return { count: 0 };
   }
-  return { count: count || 0 };
+  return { count: data || 0 };
+}
+
+// ─── Per-contributor breakdown of manual ledger entries ──────────────────────
+// Lets the business owner see which team member/co-owner recorded what,
+// not just the aggregate totals. See BUSINESS_TRANSACTIONS_BY_CONTRIBUTOR.sql.
+
+const INCOME_BUCKETS = new Set(['sold_income', 'loan_inflow']);
+const EXPENSE_BUCKETS = new Set(['bought_stock', 'operating_expense', 'salary_expense', 'tax_expense', 'dividend_payout']);
+
+// Returns { contributors, error }. `error` is surfaced (not swallowed) so the
+// UI can tell "genuinely zero entries" apart from "the RPC failed" — e.g. the
+// caller isn't the owner/a shareholder, or BUSINESS_TRANSACTIONS_BY_CONTRIBUTOR.sql
+// hasn't been deployed yet (both would otherwise silently look like "no data").
+export async function getBusinessTransactionsByContributor(businessProfileId) {
+  if (!businessProfileId) return { contributors: [], error: null };
+  const { data, error } = await supabase.rpc('fn_get_business_transactions_by_contributor', {
+    p_business_profile_id: businessProfileId
+  });
+  if (error) {
+    console.warn('[Valuation] Per-contributor transaction read failed:', error.message);
+    return { contributors: [], error: error.message };
+  }
+
+  const byContributor = new Map();
+  for (const row of data || []) {
+    const key = row.contributor_user_id || 'unknown';
+    if (!byContributor.has(key)) {
+      byContributor.set(key, {
+        userId: row.contributor_user_id,
+        name: row.contributor_name || row.contributor_email || 'Unknown',
+        email: row.contributor_email,
+        count: 0,
+        netUgx: 0,
+        lastEntryAt: row.created_at,
+        entries: []
+      });
+    }
+    const bucket = byContributor.get(key);
+    const amount = parseFloat(row.amount) || 0;
+    const sign = INCOME_BUCKETS.has(row.reporting_bucket) ? 1
+      : EXPENSE_BUCKETS.has(row.reporting_bucket) ? -1
+      : 0;
+    bucket.count += 1;
+    bucket.netUgx += sign * amount;
+    bucket.entries.push(row);
+    if (new Date(row.created_at) > new Date(bucket.lastEntryAt)) bucket.lastEntryAt = row.created_at;
+  }
+
+  const contributors = Array.from(byContributor.values()).sort((a, b) => b.count - a.count);
+  return { contributors, error: null };
 }
 
 // ─── Source: Cross-app icaneracoin wallet transactions ───────────────────────
@@ -209,7 +265,6 @@ export async function setBusinessTotalShares(businessProfileId, totalShares, bus
   // baseline is meaningful from the moment it's set (not stale/zero).
   const valuation = await calculateLiveShareValue(businessProfileId, businessOwnerUserId, {
     saveSnapshot: false,
-    anchorOnChain: false,
     _shareOverride: shares
   });
 
@@ -231,11 +286,10 @@ export async function setBusinessTotalShares(businessProfileId, totalShares, bus
  * @param {string} businessOwnerUserId - auth.uid() of the business owner
  * @param {object} options
  * @param {boolean} options.saveSnapshot - Whether to save today's snapshot (default: true)
- * @param {boolean} options.anchorOnChain - Whether to anchor on Ethereum Sepolia (default: true)
  * @returns {Promise<ValuationResult>}
  */
 export async function calculateLiveShareValue(businessProfileId, businessOwnerUserId, options = {}) {
-  const { saveSnapshot = true, anchorOnChain = true, _shareOverride = null } = options;
+  const { saveSnapshot = true, _shareOverride = null } = options;
 
   // 1. Get owner-configured share count (business_profiles.total_shares).
   // _shareOverride lets setBusinessTotalShares() preview the price a new
@@ -384,8 +438,8 @@ export async function calculateLiveShareValue(businessProfileId, businessOwnerUs
     blockchainTxHash: null
   };
 
-  // 5. Save snapshot + anchor on blockchain — skip until shares are configured,
-  // there's nothing meaningful to snapshot yet.
+  // 5. Save snapshot — skip until shares are configured, there's nothing
+  // meaningful to snapshot yet.
   if (saveSnapshot && !needsShareSetup) {
     const snapshotDate = new Date().toISOString().split('T')[0];
     const snapshotPayload = {
@@ -404,19 +458,6 @@ export async function calculateLiveShareValue(businessProfileId, businessOwnerUs
     const dataHash = await hashSnapshotData(snapshotPayload);
     result.dataHash = dataHash;
 
-    let txHash = null;
-    let blockNumber = null;
-
-    if (anchorOnChain) {
-      const chainResult = await anchorSnapshotOnChain(dataHash, businessProfileId, Date.now());
-      if (chainResult.success) {
-        txHash = chainResult.txHash;
-        blockNumber = chainResult.blockNumber;
-        result.blockchainVerified = true;
-        result.blockchainTxHash = txHash;
-      }
-    }
-
     try {
       await saveSnapshotToDb({
         businessProfileId,
@@ -430,9 +471,7 @@ export async function calculateLiveShareValue(businessProfileId, businessOwnerUs
         netProfitUgx: netProfit,
         totalShares,
         breakdown,
-        dataHash,
-        blockchainTxHash: txHash,
-        blockchainBlock: blockNumber
+        dataHash
       });
     } catch (dbErr) {
       console.warn('[Valuation] Snapshot DB save failed (non-critical):', dbErr.message);
