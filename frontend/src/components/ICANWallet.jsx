@@ -203,8 +203,6 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     showVolume: true,
     selectedTimeframe: '7s'
   });
-  const [showColorSettings, setShowColorSettings] = useState(false);
-  
   // 📑 Trade Modal Tabs
   const [activeTradeTab, setActiveTradeTab] = useState('wallet'); // 'wallet', 'chart', 'buy', 'sell', 'history'
   const [showMobileTradeMenu, setShowMobileTradeMenu] = useState(false);
@@ -326,14 +324,73 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     }
   }, [showTradeModal]);
 
-  // Load candlestick data when trade modal opens
+  // Format a raw ican_price_ohlc row into the shape the chart expects
+  const formatCandleRow = (candle) => ({
+    id: candle.id,
+    timestamp: candle.open_time,
+    time: new Date(candle.open_time).toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    }),
+    open: parseFloat(candle.open_price || 0),
+    high: parseFloat(candle.high_price || 0),
+    low: parseFloat(candle.low_price || 0),
+    close: parseFloat(candle.close_price || 0),
+    volume: parseFloat(candle.trading_volume || 0),
+    open_price: candle.open_price,
+    high_price: candle.high_price,
+    low_price: candle.low_price,
+    close_price: candle.close_price,
+    trading_volume: candle.trading_volume,
+    open_time: candle.open_time,
+    close_time: candle.close_time
+  });
+
+  // Load candlestick data when trade modal opens, then stay live via Supabase Realtime
   useEffect(() => {
-    if (showTradeModal) {
-      loadCandlestickData(true); // Initial load with loading state
-      // Refresh candlestick data every 7 seconds (silently, no loading state)
-      const interval = setInterval(() => loadCandlestickData(false), 7000);
-      return () => clearInterval(interval);
-    }
+    if (!showTradeModal) return;
+
+    loadCandlestickData(true); // Initial load with loading state
+
+    // Low-frequency safety net in case Realtime isn't reachable (network blip, etc.)
+    const fallbackPoll = setInterval(() => loadCandlestickData(false), 30000);
+
+    // Live feed: the current candle grows/updates in real time, new candles appear instantly
+    const supabase = getSupabaseClient();
+    const channel = supabase
+      .channel('ican_price_ohlc:live')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'ican_price_ohlc' },
+        (payload) => {
+          const incoming = formatCandleRow(payload.new);
+          setCandleData(prev => {
+            const next = [...prev, incoming].slice(-100);
+            return next;
+          });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'ican_price_ohlc' },
+        (payload) => {
+          const incoming = formatCandleRow(payload.new);
+          setCandleData(prev => {
+            const idx = prev.findIndex(c => c.id === incoming.id);
+            if (idx === -1) return prev;
+            const next = [...prev];
+            next[idx] = incoming;
+            return next;
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      clearInterval(fallbackPoll);
+      supabase.removeChannel(channel);
+    };
   }, [showTradeModal]);
 
   // Load candlestick data from database
@@ -344,43 +401,24 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         setCandleLoading(true);
       }
       const supabase = getSupabaseClient();
-      
+
       // Fetch latest 100 candlesticks
       const { data, error } = await supabase
         .from('ican_price_ohlc')
         .select('*')
         .order('open_time', { ascending: false })
         .limit(100);
-      
+
       if (error) {
         console.error('Error loading candlesticks:', error);
         setCandleData([]);
         return;
       }
-      
+
       if (data && data.length > 0) {
         // Format data for chart and reverse to chronological order
-        const formatted = data.reverse().map(candle => ({
-          timestamp: candle.open_time,
-          time: new Date(candle.open_time).toLocaleTimeString('en-US', { 
-            hour: '2-digit', 
-            minute: '2-digit', 
-            second: '2-digit' 
-          }),
-          open: parseFloat(candle.open_price || 0),
-          high: parseFloat(candle.high_price || 0),
-          low: parseFloat(candle.low_price || 0),
-          close: parseFloat(candle.close_price || 0),
-          volume: parseFloat(candle.trading_volume || 0),
-          open_price: candle.open_price,
-          high_price: candle.high_price,
-          low_price: candle.low_price,
-          close_price: candle.close_price,
-          trading_volume: candle.trading_volume,
-          open_time: candle.open_time,
-          close_time: candle.close_time
-        }));
-        
+        const formatted = data.reverse().map(formatCandleRow);
+
         // Only update if data actually changed (compare last candle close price)
         setCandleData(prev => {
           if (prev.length > 0 && prev[prev.length - 1].close === formatted[formatted.length - 1].close) {
@@ -6269,164 +6307,13 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 </div>
               )}
 
-              {/* 📊 CHART TAB - Professional Trading Interface */}
+              {/* 📊 CHART TAB - Just the chart */}
               {activeTradeTab === 'chart' && (
-                <div className="h-full flex flex-col gap-4">
-                  {/* Chart Header - Trading Desk Style */}
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-800 rounded-xl p-4 border border-slate-700">
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
-                          <span className="text-xl">📈</span>
-                        </div>
-                        <div>
-                          <h3 className="text-lg font-bold text-white">ICAN/USD</h3>
-                          <p className="text-xs text-slate-400">Candlestick Analysis</p>
-                        </div>
-                      </div>
-                      
-                      {/* Price Display */}
-                      {candleData && candleData.length > 0 && (
-                        <div className="hidden md:flex items-center gap-4 ml-6 pl-6 border-l border-slate-700">
-                          <div>
-                            <p className="text-xs text-slate-500 uppercase tracking-wider">Current Price</p>
-                            <p className="text-xl font-bold text-white">${parseFloat(candleData[candleData.length - 1]?.close || 0).toFixed(8)}</p>
-                          </div>
-                          <div className={`px-3 py-1.5 rounded-lg ${
-                            candleData[candleData.length - 1]?.close >= candleData[0]?.open
-                              ? 'bg-emerald-500/20 border border-emerald-500/50'
-                              : 'bg-rose-500/20 border border-rose-500/50'
-                          }`}>
-                            <span className={`text-sm font-semibold ${
-                              candleData[candleData.length - 1]?.close >= candleData[0]?.open
-                                ? 'text-emerald-400'
-                                : 'text-rose-400'
-                            }`}>
-                              {candleData[candleData.length - 1]?.close >= candleData[0]?.open ? '▲' : '▼'} 
-                              {Math.abs(((candleData[candleData.length - 1]?.close - candleData[0]?.open) / candleData[0]?.open) * 100).toFixed(2)}%
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    
-                    {/* Controls */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {/* Timeframe Selection */}
-                      <div className="flex items-center bg-slate-900 rounded-lg border border-slate-700 overflow-hidden">
-                        {['7s', '1m', '5m', '15m'].map((tf) => (
-                          <button
-                            key={tf}
-                            onClick={() => setCandleSettings({...candleSettings, selectedTimeframe: tf})}
-                            className={`px-3 py-2 text-xs font-semibold transition-all ${
-                              candleSettings.selectedTimeframe === tf
-                                ? 'bg-amber-600 text-white'
-                                : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                            }`}
-                          >
-                            {tf}
-                          </button>
-                        ))}
-                      </div>
-                      
-                      {/* Refresh Indicator */}
-                      {candleLoading && (
-                        <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                          <div className="w-2 h-2 bg-amber-500 rounded-full animate-ping"></div>
-                          <span className="text-xs text-amber-400 font-medium">Updating...</span>
-                        </div>
-                      )}
-                      
-                      {/* Color Settings Toggle */}
-                      <button
-                        onClick={() => setShowColorSettings(!showColorSettings)}
-                        className={`px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${
-                          showColorSettings
-                            ? 'bg-amber-600 text-white'
-                            : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                        }`}
-                      >
-                        🎨 <span className="hidden sm:inline">Customize</span>
-                      </button>
-                      
-                      {/* Refresh Button */}
-                      <button
-                        onClick={loadCandlestickData}
-                        disabled={candleLoading}
-                        className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white rounded-lg font-semibold transition-all flex items-center gap-2 disabled:opacity-50"
-                      >
-                        🔄 <span className="hidden sm:inline">Refresh</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Color Settings Panel */}
-                  {showColorSettings && (
-                    <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 animate-fadeIn">
-                      <h4 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-                        🎨 Chart Customization
-                      </h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className="bg-slate-900 rounded-lg p-3 border border-slate-700">
-                          <label className="block text-xs text-slate-400 mb-2 font-medium uppercase tracking-wider">Bullish Candle</label>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="color"
-                              value={candleSettings.upColor}
-                              onChange={(e) => setCandleSettings({...candleSettings, upColor: e.target.value})}
-                              className="w-10 h-10 rounded-lg cursor-pointer border-2 border-slate-600"
-                            />
-                            <input
-                              type="text"
-                              value={candleSettings.upColor}
-                              onChange={(e) => setCandleSettings({...candleSettings, upColor: e.target.value})}
-                              className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm font-mono"
-                            />
-                          </div>
-                        </div>
-                        <div className="bg-slate-900 rounded-lg p-3 border border-slate-700">
-                          <label className="block text-xs text-slate-400 mb-2 font-medium uppercase tracking-wider">Bearish Candle</label>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="color"
-                              value={candleSettings.downColor}
-                              onChange={(e) => setCandleSettings({...candleSettings, downColor: e.target.value})}
-                              className="w-10 h-10 rounded-lg cursor-pointer border-2 border-slate-600"
-                            />
-                            <input
-                              type="text"
-                              value={candleSettings.downColor}
-                              onChange={(e) => setCandleSettings({...candleSettings, downColor: e.target.value})}
-                              className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm font-mono"
-                            />
-                          </div>
-                        </div>
-                        <div className="bg-slate-900 rounded-lg p-3 border border-slate-700">
-                          <label className="block text-xs text-slate-400 mb-2 font-medium uppercase tracking-wider">Wick Color</label>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="color"
-                              value={candleSettings.wickColor}
-                              onChange={(e) => setCandleSettings({...candleSettings, wickColor: e.target.value})}
-                              className="w-10 h-10 rounded-lg cursor-pointer border-2 border-slate-600"
-                            />
-                            <input
-                              type="text"
-                              value={candleSettings.wickColor}
-                              onChange={(e) => setCandleSettings({...candleSettings, wickColor: e.target.value})}
-                              className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm font-mono"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Main Chart Area - Expandable */}
-                  <div className="flex-1 min-h-[400px] bg-slate-900 rounded-xl border border-slate-700 overflow-hidden">
+                <div>
+                  <div className="h-[360px] sm:h-[480px] bg-slate-900 rounded-xl border border-slate-700 overflow-hidden">
                     {candleData && candleData.length > 0 ? (
                       <div className="h-full w-full">
-                        <CandlestickChart 
+                        <CandlestickChart
                           candleData={candleData}
                           loading={candleLoading}
                           settings={candleSettings}
@@ -6446,56 +6333,6 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                         </div>
                       </div>
                     )}
-                  </div>
-
-                  {/* Market Stats Bar */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                    {candleData && candleData.length > 0 && (
-                      <>
-                        <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
-                          <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">24h High</p>
-                          <p className="text-sm font-bold text-emerald-400">${Math.max(...candleData.map(c => parseFloat(c.high))).toFixed(8)}</p>
-                        </div>
-                        <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
-                          <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">24h Low</p>
-                          <p className="text-sm font-bold text-rose-400">${Math.min(...candleData.map(c => parseFloat(c.low))).toFixed(8)}</p>
-                        </div>
-                        <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
-                          <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Open</p>
-                          <p className="text-sm font-bold text-white">${parseFloat(candleData[0]?.open || 0).toFixed(8)}</p>
-                        </div>
-                        <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
-                          <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Close</p>
-                          <p className="text-sm font-bold text-white">${parseFloat(candleData[candleData.length - 1]?.close || 0).toFixed(8)}</p>
-                        </div>
-                        <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
-                          <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Volume</p>
-                          <p className="text-sm font-bold text-amber-400">{candleData.reduce((sum, c) => sum + parseFloat(c.volume || 0), 0).toFixed(2)}</p>
-                        </div>
-                        <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
-                          <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Data Points</p>
-                          <p className="text-sm font-bold text-blue-400">{candleData.length}</p>
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  {/* Trading Insight */}
-                  <div className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-xl p-4">
-                    <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center flex-shrink-0">
-                        <span className="text-xl">💡</span>
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-bold text-amber-400 mb-1">Trading Insight</h4>
-                        <p className="text-sm text-slate-300">
-                          Monitor candlestick patterns and technical indicators to identify optimal entry/exit points. 
-                          <span className="text-emerald-400"> Green candles</span> indicate bullish momentum, 
-                          <span className="text-rose-400"> red candles</span> indicate bearish pressure. 
-                          Use support/resistance levels for strategic decisions.
-                        </p>
-                      </div>
-                    </div>
                   </div>
                 </div>
               )}

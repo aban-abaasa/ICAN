@@ -271,7 +271,7 @@ const App = () => {
         <CountryCheckMiddleware>
           <MobileView userProfile={user} />
         </CountryCheckMiddleware>
-        <ChatWidget />
+        <ChatWidget hasBottomNav />
       </ErrorBoundary>
     );
   }

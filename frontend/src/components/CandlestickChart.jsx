@@ -8,18 +8,27 @@ import {
   ReferenceLine,
   Bar,
   ResponsiveContainer,
-  Cell,
-  Line,
 } from "recharts";
 
 const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, loading = false, settings = {} }) => {
   const [displayData, setDisplayData] = useState([]);
   const [analysis, setAnalysis] = useState(null);
   const [prevDataLength, setPrevDataLength] = useState(0);
-  const [zoomLevel, setZoomLevel] = useState(1);
-  const [xAxisDomain, setXAxisDomain] = useState([0, 'dataMax']);
-  const [showAnalysis, setShowAnalysis] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(1); // higher = more zoomed in (fewer, bigger candles)
+  const [panOffset, setPanOffset] = useState(0); // candles back from the live edge
+  const [containerWidth, setContainerWidth] = useState(0);
   const chartContainerRef = useRef(null);
+  const gestureRef = useRef({
+    dragging: false,
+    startX: 0,
+    startPanOffset: 0,
+    pinching: false,
+    startDistance: 0,
+    startZoom: 1,
+  });
+  const displayDataLengthRef = useRef(0);
+  const visibleCandleCountRef = useRef(50);
+  const panOffsetRef = useRef(0);
 
   const defaultSettings = {
     upColor: "#10b981",
@@ -95,18 +104,55 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
     };
   }, []);
 
-  // Calculate how many candles to show based on zoom level
-  const visibleCandleCount = useMemo(() => {
-    const baseCount = 50; // Default number of candles visible at 1x zoom
-    return Math.max(10, Math.floor(baseCount * zoomLevel));
-  }, [zoomLevel]);
+  // Track the chart's real on-screen width so candle count/sizing adapts to phones vs desktop
+  useEffect(() => {
+    const container = chartContainerRef.current;
+    if (!container || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect?.width;
+      if (width) setContainerWidth(width);
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
 
-  // Slice data based on zoom level - show more candles when zoomed in
+  const isCompact = containerWidth > 0 && containerWidth < 480;
+
+  // How many candles fit at 1x zoom - target a legible pixel width per candle
+  // instead of a fixed desktop count, so phones show fewer, bigger candles.
+  const baseCandleCount = useMemo(() => {
+    if (!containerWidth) return 50;
+    const targetPxPerCandle = isCompact ? 10 : 6;
+    return Math.max(12, Math.min(60, Math.floor(containerWidth / targetPxPerCandle)));
+  }, [containerWidth, isCompact]);
+
+  // Calculate how many candles to show based on zoom level - higher zoom = fewer, bigger candles
+  const visibleCandleCount = useMemo(() => {
+    return Math.max(8, Math.min(150, Math.round(baseCandleCount / zoomLevel)));
+  }, [baseCandleCount, zoomLevel]);
+
+  // Slice data based on zoom + pan - panOffset shifts the window back from the live edge
   const zoomedDisplayData = useMemo(() => {
     if (displayData.length === 0) return [];
-    const startIndex = Math.max(0, displayData.length - visibleCandleCount);
-    return displayData.slice(startIndex);
-  }, [displayData, visibleCandleCount]);
+    const maxPanOffset = Math.max(0, displayData.length - visibleCandleCount);
+    const clampedOffset = Math.min(panOffset, maxPanOffset);
+    const endIndex = displayData.length - clampedOffset;
+    const startIndex = Math.max(0, endIndex - visibleCandleCount);
+    return displayData.slice(startIndex, endIndex);
+  }, [displayData, visibleCandleCount, panOffset]);
+
+  // Keep refs in sync so gesture handlers (bound once) always see fresh values
+  useEffect(() => {
+    displayDataLengthRef.current = displayData.length;
+    visibleCandleCountRef.current = visibleCandleCount;
+    panOffsetRef.current = panOffset;
+  }, [displayData.length, visibleCandleCount, panOffset]);
+
+  // Clamp panOffset back into range whenever data/zoom shrink the valid window
+  useEffect(() => {
+    const maxPanOffset = Math.max(0, displayData.length - visibleCandleCount);
+    setPanOffset(prev => Math.min(prev, maxPanOffset));
+  }, [displayData.length, visibleCandleCount]);
 
   useEffect(() => {
     if (!candleData || candleData.length === 0) {
@@ -142,13 +188,6 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
     setPrevDataLength(candleData.length);
   }, [candleData, prevDataLength, calculateIndicators]);
 
-  const priceChangePercent = useMemo(() => {
-    if (displayData.length >= 2) {
-      return (((displayData[displayData.length - 1].close - displayData[0].open) / displayData[0].open) * 100).toFixed(2);
-    }
-    return 0;
-  }, [displayData]);
-
   // Memoize tooltip content
   const renderTooltip = useCallback(({ active, payload }) => {
     if (active && payload && payload[0]) {
@@ -174,57 +213,119 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
     return null;
   }, []);
 
-  // Zoom control handlers
-  const handleZoomIn = useCallback(() => {
-    setZoomLevel(prev => Math.min(prev + 0.2, 3));
+  const ZOOM_MIN = 1;
+  const ZOOM_MAX = 6;
+
+  const clampPan = useCallback((offset) => {
+    const maxPanOffset = Math.max(0, displayDataLengthRef.current - visibleCandleCountRef.current);
+    return Math.max(0, Math.min(offset, maxPanOffset));
   }, []);
 
-  const handleZoomOut = useCallback(() => {
-    setZoomLevel(prev => Math.max(prev - 0.2, 1));
-  }, []);
-
-  const handleResetZoom = useCallback(() => {
-    setZoomLevel(1);
-  }, []);
-
-  const handlePanLeft = useCallback(() => {
-    setXAxisDomain(prev => {
-      const [start, end] = prev;
-      const range = end - start;
-      return [Math.max(0, start - range * 0.2), Math.max(end - range * 0.2, displayData.length)];
-    });
-  }, [displayData.length]);
-
-  const handlePanRight = useCallback(() => {
-    setXAxisDomain(prev => {
-      const [start, end] = prev;
-      const range = end - start;
-      return [start + range * 0.2, Math.min(end + range * 0.2, displayData.length)];
-    });
-  }, [displayData.length]);
-
-  // Handle mouse wheel zoom
+  // Wheel = zoom (desktop). Scroll up zooms in, scroll down zooms out.
   const handleMouseWheel = useCallback((e) => {
     if (chartContainerRef.current && chartContainerRef.current.contains(e.target)) {
       e.preventDefault();
       if (e.deltaY < 0) {
-        // Scroll up - zoom in
-        setZoomLevel(prev => Math.min(prev + 0.1, 3));
+        setZoomLevel(prev => Math.min(prev + 0.15, ZOOM_MAX));
       } else {
-        // Scroll down - zoom out
-        setZoomLevel(prev => Math.max(prev - 0.1, 1));
+        setZoomLevel(prev => Math.max(prev - 0.15, ZOOM_MIN));
       }
     }
   }, []);
 
-  // Add mouse wheel listener
+  // Mouse drag = pan directly on the chart, no buttons
+  const handleMouseDown = useCallback((e) => {
+    gestureRef.current.dragging = true;
+    gestureRef.current.startX = e.clientX;
+    gestureRef.current.startPanOffset = panOffsetRef.current;
+  }, []);
+
+  const handleMouseMove = useCallback((e) => {
+    if (!gestureRef.current.dragging || !chartContainerRef.current) return;
+    const containerWidth = chartContainerRef.current.getBoundingClientRect().width || 1;
+    const candleWidthPx = containerWidth / Math.max(1, visibleCandleCountRef.current);
+    const deltaX = e.clientX - gestureRef.current.startX;
+    const candleDelta = deltaX / candleWidthPx;
+    setPanOffset(clampPan(gestureRef.current.startPanOffset + candleDelta));
+  }, [clampPan]);
+
+  const handleMouseUp = useCallback(() => {
+    gestureRef.current.dragging = false;
+  }, []);
+
+  // Touch: one finger pans, two fingers pinch-zoom - all directly on-screen
+  const getTouchDistance = (touches) => {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  const handleTouchStart = useCallback((e) => {
+    if (e.touches.length === 2) {
+      gestureRef.current.pinching = true;
+      gestureRef.current.dragging = false;
+      gestureRef.current.startDistance = getTouchDistance(e.touches);
+      gestureRef.current.startZoom = zoomLevel;
+    } else if (e.touches.length === 1) {
+      gestureRef.current.dragging = true;
+      gestureRef.current.pinching = false;
+      gestureRef.current.startX = e.touches[0].clientX;
+      gestureRef.current.startPanOffset = panOffsetRef.current;
+    }
+  }, [zoomLevel]);
+
+  const handleTouchMove = useCallback((e) => {
+    if (!chartContainerRef.current) return;
+    if (gestureRef.current.pinching && e.touches.length === 2) {
+      e.preventDefault();
+      const newDistance = getTouchDistance(e.touches);
+      const ratio = newDistance / (gestureRef.current.startDistance || newDistance);
+      const newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, gestureRef.current.startZoom * ratio));
+      setZoomLevel(newZoom);
+    } else if (gestureRef.current.dragging && e.touches.length === 1) {
+      e.preventDefault();
+      const containerWidth = chartContainerRef.current.getBoundingClientRect().width || 1;
+      const candleWidthPx = containerWidth / Math.max(1, visibleCandleCountRef.current);
+      const deltaX = e.touches[0].clientX - gestureRef.current.startX;
+      const candleDelta = deltaX / candleWidthPx;
+      setPanOffset(clampPan(gestureRef.current.startPanOffset + candleDelta));
+    }
+  }, [clampPan]);
+
+  const handleTouchEnd = useCallback((e) => {
+    if (e.touches.length === 0) {
+      gestureRef.current.dragging = false;
+      gestureRef.current.pinching = false;
+    } else if (e.touches.length === 1) {
+      // Dropped from pinch to a single finger - restart as a pan
+      gestureRef.current.pinching = false;
+      gestureRef.current.dragging = true;
+      gestureRef.current.startX = e.touches[0].clientX;
+      gestureRef.current.startPanOffset = panOffsetRef.current;
+    }
+  }, []);
+
+  // Wire up all gesture listeners directly on the chart container - no icons/buttons involved
   useEffect(() => {
     const container = chartContainerRef.current;
-    if (container) {
-      container.addEventListener('wheel', handleMouseWheel, { passive: false });
-      return () => container.removeEventListener('wheel', handleMouseWheel);
-    }
-  }, [handleMouseWheel]);
+    if (!container) return;
+    container.addEventListener('wheel', handleMouseWheel, { passive: false });
+    container.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    container.addEventListener('touchstart', handleTouchStart, { passive: true });
+    container.addEventListener('touchmove', handleTouchMove, { passive: false });
+    container.addEventListener('touchend', handleTouchEnd, { passive: true });
+    return () => {
+      container.removeEventListener('wheel', handleMouseWheel);
+      container.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      container.removeEventListener('touchstart', handleTouchStart);
+      container.removeEventListener('touchmove', handleTouchMove);
+      container.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [handleMouseWheel, handleMouseDown, handleMouseMove, handleMouseUp, handleTouchStart, handleTouchMove, handleTouchEnd]);
 
   // Creative Candlestick Component - Transforms from Trend Line to Full Candlesticks
   const CandlestickRender = ({ x, y, width, height, payload, displayData, upColor, downColor, wickColor }) => {
@@ -240,116 +341,89 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
     const upColor_candlestick = '#10b981'; // Green for bullish
     const downColor_candlestick = '#ef4444'; // Red for bearish
 
-    // Zoom threshold: at low zoom show ONLY trend line, at high zoom show ONLY candlesticks
-    const showTrendLineOnly = zoomLevel <= 1.3;
-    const showCandlesticksOnly = zoomLevel > 1.3;
+    // Always render real OHLC candlesticks - width scales with zoom/candle density
+    return (
+      <g>
+        {displayData.map((candle, index) => {
+          if (!candle) return null;
 
-    // TREND LINE MODE: Show smooth cyan line at normal zoom
-    if (showTrendLineOnly) {
-      return (
-        <polyline
-          points={displayData.map((candle, index) => {
-            const candleX = x + (index * width) + width / 2;
-            const closeY = y + height * (1 - (candle.close - minPrice) / priceRange);
-            return `${candleX},${closeY}`;
-          }).join(' ')}
-          fill="none"
-          stroke="#06b6d4"
-          strokeWidth={2.5}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          opacity={0.85}
-        />
-      );
-    }
+          const isUp = candle.close >= candle.open;
 
-    // CANDLESTICK MODE: Show full candlesticks when zoomed in
-    if (showCandlesticksOnly) {
-      return (
-        <g>
-          {displayData.map((candle, index) => {
-            if (!candle) return null;
-            
-            const isUp = candle.close >= candle.open;
-            
-            // Dynamic sizing - more prominent as zoom increases
-            const candleBodyWidth = Math.max(3, Math.min(width * 0.85, 20));
-            const candleX = x + (index * width) + width / 2;
-            
-            // Normalize prices to chart coordinates
-            const highY = y + height * (1 - (candle.high - minPrice) / priceRange);
-            const lowY = y + height * (1 - (candle.low - minPrice) / priceRange);
-            const openY = y + height * (1 - (candle.open - minPrice) / priceRange);
-            const closeY = y + height * (1 - (candle.close - minPrice) / priceRange);
-            
-            const bodyTop = Math.min(openY, closeY);
-            const bodyHeight = Math.max(Math.abs(closeY - openY), 2);
-            
-            // Color selection: green for up, red for down
-            const bodyFill = isUp ? upColor_candlestick : downColor_candlestick;
-            
-            // Wick color with transparency
-            const wickColor = isUp ? `rgba(16, 185, 129, 0.8)` : `rgba(239, 68, 68, 0.8)`;
+          // Dynamic sizing - scales with available per-candle width
+          const candleBodyWidth = Math.max(2, Math.min(width * 0.7, 20));
+          const candleX = x + (index * width) + width / 2;
 
-            return (
-              <g key={`candlestick-${index}`}>
-                {/* Wick - extended line from high to low showing price range */}
-                <line
-                  x1={candleX}
-                  y1={highY}
-                  y2={lowY}
-                  x2={candleX}
-                  stroke={wickColor}
-                  strokeWidth={Math.max(1, width * 0.15)}
-                  strokeLinecap="round"
-                  opacity={0.9}
-                />
-                
-                {/* Body - main candlestick rectangle showing open/close */}
+          // Normalize prices to chart coordinates
+          const highY = y + height * (1 - (candle.high - minPrice) / priceRange);
+          const lowY = y + height * (1 - (candle.low - minPrice) / priceRange);
+          const openY = y + height * (1 - (candle.open - minPrice) / priceRange);
+          const closeY = y + height * (1 - (candle.close - minPrice) / priceRange);
+
+          const bodyTop = Math.min(openY, closeY);
+          const bodyHeight = Math.max(Math.abs(closeY - openY), 1.5);
+
+          // Color selection: green for up, red for down
+          const bodyFill = isUp ? upColor_candlestick : downColor_candlestick;
+
+          // Wick color with transparency
+          const wickStroke = isUp ? `rgba(16, 185, 129, 0.8)` : `rgba(239, 68, 68, 0.8)`;
+
+          return (
+            <g key={`candlestick-${index}`}>
+              {/* Wick - extended line from high to low showing price range */}
+              <line
+                x1={candleX}
+                y1={highY}
+                y2={lowY}
+                x2={candleX}
+                stroke={wickStroke}
+                strokeWidth={Math.max(1, width * 0.12)}
+                strokeLinecap="round"
+                opacity={0.9}
+              />
+
+              {/* Body - main candlestick rectangle showing open/close */}
+              <rect
+                x={candleX - candleBodyWidth / 2}
+                y={bodyTop}
+                width={candleBodyWidth}
+                height={bodyHeight}
+                fill={bodyFill}
+                stroke={bodyFill}
+                strokeWidth={Math.max(0.5, width * 0.06)}
+                opacity={0.92}
+              />
+
+              {/* Inner highlight for 3D effect */}
+              {bodyHeight > 3 && candleBodyWidth > 5 && (
                 <rect
-                  x={candleX - candleBodyWidth / 2}
-                  y={bodyTop}
-                  width={candleBodyWidth}
-                  height={bodyHeight}
-                  fill={bodyFill}
-                  stroke={bodyFill}
-                  strokeWidth={Math.max(0.5, width * 0.08)}
-                  opacity={0.92}
+                  x={candleX - candleBodyWidth / 2 + 0.5}
+                  y={bodyTop + 0.5}
+                  width={Math.max(1, candleBodyWidth / 2 - 1)}
+                  height={Math.max(1, bodyHeight - 1)}
+                  fill="white"
+                  opacity={0.25}
+                  pointerEvents="none"
                 />
-                
-                {/* Inner highlight for 3D effect */}
-                {bodyHeight > 3 && candleBodyWidth > 5 && (
-                  <rect
-                    x={candleX - candleBodyWidth / 2 + 0.5}
-                    y={bodyTop + 0.5}
-                    width={Math.max(1, candleBodyWidth / 2 - 1)}
-                    height={Math.max(1, bodyHeight - 1)}
-                    fill="white"
-                    opacity={0.25}
-                    pointerEvents="none"
-                  />
-                )}
-                
-                {/* Outer shadow for depth and dimension */}
-                {bodyHeight > 3 && candleBodyWidth > 5 && (
-                  <rect
-                    x={candleX}
-                    y={bodyTop + 0.5}
-                    width={Math.max(1, candleBodyWidth / 2 - 0.5)}
-                    height={Math.max(1, bodyHeight - 1)}
-                    fill="black"
-                    opacity={0.15}
-                    pointerEvents="none"
-                  />
-                )}
-              </g>
-            );
-          })}
-        </g>
-      );
-    }
+              )}
 
-    return null;
+              {/* Outer shadow for depth and dimension */}
+              {bodyHeight > 3 && candleBodyWidth > 5 && (
+                <rect
+                  x={candleX}
+                  y={bodyTop + 0.5}
+                  width={Math.max(1, candleBodyWidth / 2 - 0.5)}
+                  height={Math.max(1, bodyHeight - 1)}
+                  fill="black"
+                  opacity={0.15}
+                  pointerEvents="none"
+                />
+              )}
+            </g>
+          );
+        })}
+      </g>
+    );
   };
 
   if (loading) {
@@ -377,159 +451,44 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
   }
 
   return (
-    <div className="bg-slate-900 rounded-xl p-4 md:p-6 space-y-4 h-full w-full flex flex-col">
-      {/* Chart Header - Compact Professional Style */}
-      <div className="flex flex-col gap-3 flex-shrink-0">
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-          <div className="flex items-center gap-3">
-            <h2 className="text-lg font-bold text-white">ICAN/USD</h2>
-            <div className={`px-2 py-1 rounded text-xs font-semibold ${
-              priceChangePercent >= 0 
-                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
-                : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-          }`}>
-            {priceChangePercent >= 0 ? '▲' : '▼'} {Math.abs(priceChangePercent)}%
-          </div>
-        </div>
-        <span className="text-xs text-slate-500">7-Second Intervals • {displayData.length} Candles</span>
-      </div>
-      </div>
-
-      {/* Zoom & Pan Controls */}
-      <div className="flex flex-wrap items-center gap-2 bg-slate-800/50 p-2.5 rounded-lg border border-slate-700 flex-shrink-0">
-        <button
-          onClick={handlePanLeft}
-          className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-white border border-slate-700 hover:border-slate-600 text-sm"
-          title="Pan Left"
-        >
-          ◀ Pan
-        </button>
-
-        <button
-          onClick={handleZoomOut}
-          disabled={zoomLevel <= 1}
-          className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-white border border-slate-700 hover:border-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-          title="Zoom Out"
-        >
-          🔍−
-        </button>
-
-        <div className="text-xs text-slate-400 px-2 py-1 bg-slate-700/50 rounded border border-slate-700 min-w-max">
-          {(zoomLevel * 100).toFixed(0)}%
-        </div>
-
-        <button
-          onClick={handleZoomIn}
-          disabled={zoomLevel >= 3}
-          className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-white border border-slate-700 hover:border-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-          title="Zoom In"
-        >
-          🔍+
-        </button>
-
-        <button
-          onClick={handleResetZoom}
-          disabled={zoomLevel === 1}
-          className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-white border border-slate-700 hover:border-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-          title="Reset Zoom"
-        >
-          ⟲ Reset
-        </button>
-
-        <button
-          onClick={handlePanRight}
-          className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-white border border-slate-700 hover:border-slate-600 text-sm"
-          title="Pan Right"
-        >
-          Pan ▶
-        </button>
-      </div>
-
-      {/* Toggle Analysis Button */}
-      <button
-        onClick={() => setShowAnalysis(!showAnalysis)}
-        className="w-full py-2 px-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors text-sm font-semibold text-slate-300 flex-shrink-0"
-      >
-        {showAnalysis ? '▼ Hide Analysis' : '▶ Show Analysis'}
-      </button>
-
-      {/* Technical Analysis Grid - Collapsible */}
-      {analysis && showAnalysis && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 flex-shrink-0">
-          {/* Trend Analysis Card */}
-          <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                <span className="text-sm">📊</span>
-              </div>
-              <h4 className="text-sm font-bold text-white">Trend Analysis</h4>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="text-center">
-                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Trend</p>
-                <p className="text-sm font-bold" style={{ color: analysis.trendColor }}>{analysis.trend}</p>
-              </div>
-              <div className="text-center">
-                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">RSI (14)</p>
-                <p className={`text-sm font-bold ${
-                  parseFloat(analysis.rsi) > 70 ? 'text-rose-400' : 
-                  parseFloat(analysis.rsi) < 30 ? 'text-emerald-400' : 'text-white'
-                }`}>{analysis.rsi}</p>
-              </div>
-              <div className="text-center">
-                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Volatility</p>
-                <p className="text-sm font-bold text-amber-400">{analysis.volatility}%</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Support & Resistance Card */}
-          <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                <span className="text-sm">🎯</span>
-              </div>
-              <h4 className="text-sm font-bold text-white">Key Levels</h4>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="text-center">
-                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Resistance</p>
-                <p className="text-sm font-bold text-rose-400 font-mono">${parseFloat(analysis.resistance).toFixed(6)}</p>
-              </div>
-              <div className="text-center">
-                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Current</p>
-                <p className="text-sm font-bold text-amber-400 font-mono">${parseFloat(analysis.currentPrice).toFixed(6)}</p>
-              </div>
-              <div className="text-center">
-                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Support</p>
-                <p className="text-sm font-bold text-emerald-400 font-mono">${parseFloat(analysis.support).toFixed(6)}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Main Chart Container - Flexible for fullscreen */}
-      <div 
+    <div className={`bg-slate-900 rounded-xl h-full w-full flex flex-col ${isCompact ? 'p-1' : 'p-2'}`}>
+      <div
         ref={chartContainerRef}
-        className="bg-slate-950 rounded-lg p-3 border border-slate-800 cursor-grab active:cursor-grabbing overflow-x-auto flex-1 flex flex-col min-h-0" 
+        className={`bg-slate-950 rounded-lg border border-slate-800 cursor-grab active:cursor-grabbing overflow-hidden flex-1 flex flex-col min-h-0 select-none ${isCompact ? 'p-1' : 'p-3'}`}
+        style={{ touchAction: 'none' }}
       >
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={zoomedDisplayData} margin={{ top: 20, right: 30, left: 50, bottom: 50 }}>
+          <ComposedChart
+            data={zoomedDisplayData}
+            margin={
+              isCompact
+                ? { top: 12, right: 4, left: 2, bottom: 28 }
+                : { top: 20, right: 30, left: 50, bottom: 50 }
+            }
+          >
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.1)" />
             <XAxis
               dataKey="time"
-              tick={{ fill: "#64748b", fontSize: 10 }}
-              angle={-45}
+              tick={{ fill: "#64748b", fontSize: isCompact ? 9 : 10 }}
+              tickFormatter={(value) => {
+                if (!isCompact || typeof value !== 'string') return value;
+                // Trim "10:15:32 PM" down to "15:32" so labels fit narrow screens
+                const parts = value.split(':');
+                if (parts.length < 3) return value;
+                return `${parts[1]}:${parts[2].replace(/\s?[AP]M/i, '')}`;
+              }}
+              angle={isCompact ? -60 : -45}
               textAnchor="end"
-              height={60}
-              interval={Math.max(0, Math.floor(zoomedDisplayData.length / (10 * zoomLevel)))}
+              height={isCompact ? 28 : 60}
+              interval={Math.max(0, Math.floor(zoomedDisplayData.length / (isCompact ? 5 : 10)))}
               axisLine={{ stroke: '#334155' }}
               tickLine={{ stroke: '#334155' }}
             />
-            <YAxis 
-              tick={{ fill: "#64748b", fontSize: 10 }} 
-              width={55} 
+            <YAxis
+              tick={{ fill: "#64748b", fontSize: isCompact ? 9 : 10 }}
+              width={isCompact ? 34 : 55}
+              orientation={isCompact ? 'right' : 'left'}
+              mirror={isCompact}
               domain={["dataMin - 0.000001", "dataMax + 0.000001"]}
               axisLine={{ stroke: '#334155' }}
               tickLine={{ stroke: '#334155' }}
@@ -548,13 +507,13 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
               isAnimationActive={false}
             />
 
-            {chartSettings.showVolume && (
-              <Bar dataKey="volume" fill="rgba(168,85,247,0.15)" isAnimationActive={false} yAxisId="left" />
+            {chartSettings.showVolume && !isCompact && (
+              <Bar dataKey="volume" fill="rgba(168,85,247,0.15)" isAnimationActive={false} />
             )}
 
             {/* Beautiful Candlesticks */}
-            <Bar 
-              dataKey="close" 
+            <Bar
+              dataKey="close"
               fill="transparent"
               isAnimationActive={false}
               shape={<CandlestickRender displayData={zoomedDisplayData} upColor={chartSettings.upColor} downColor={chartSettings.downColor} wickColor={chartSettings.wickColor} />}
@@ -562,23 +521,6 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
           </ComposedChart>
         </ResponsiveContainer>
       </div>
-
-      {/* Footer Stats - Only show when analysis is visible */}
-      {showAnalysis && (
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 pt-2 border-t border-slate-800 flex-shrink-0">
-          <div className="flex items-center gap-4">
-            <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded" style={{backgroundColor: chartSettings.upColor}}></span>
-              Bullish
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded" style={{backgroundColor: chartSettings.downColor}}></span>
-              Bearish
-            </span>
-          </div>
-          <span>Auto-refresh: 7s</span>
-        </div>
-      )}
     </div>
   );
 });

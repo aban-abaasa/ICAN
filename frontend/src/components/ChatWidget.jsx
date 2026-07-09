@@ -27,7 +27,7 @@ import {
 
 const dedupe = (list, item) => (list.some((m) => m.id === item.id) ? list : [...list, item]);
 
-const ChatWidget = () => {
+const ChatWidget = ({ hasBottomNav = false }) => {
   const { actualTheme } = useTheme();
   const dark = actualTheme === 'dark';
 
@@ -236,7 +236,7 @@ const ChatWidget = () => {
   const needsGuestForm = !identity;
 
   return (
-    <div className="fixed bottom-5 right-5 z-[999]">
+    <div className={`fixed right-5 z-[999] ${hasBottomNav ? 'bottom-24' : 'bottom-5'}`}>
       {open && (
         <div
           className={`mb-3 flex h-[28rem] w-[22rem] max-w-[90vw] flex-col overflow-hidden rounded-2xl border shadow-2xl ${
