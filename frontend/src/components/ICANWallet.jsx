@@ -4,6 +4,7 @@ import {
   Send,
   ArrowDownLeft,
   ArrowUpRight,
+  ArrowLeft,
   Plus,
   Globe,
   DollarSign,
@@ -36,6 +37,7 @@ import paymentMethodDetector from '../services/paymentMethodDetector';
 import agentService from '../services/agentService';
 import { walletAccountService } from '../services/walletAccountService';
 import universalTransactionService from '../services/universalTransactionService';
+import { sendICAN as sendIcaneracoin } from '../services/icanWalletService';
 import { getSupabaseClient } from '../lib/supabase/client';
 import { getUserTrustGroups } from '../services/trustService';
 import { CountryService } from '../services/countryService';
@@ -74,12 +76,53 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false);
   const [activeModal, setActiveModal] = useState(null); // 'send', 'receive', 'topup'
   const [sendForm, setSendForm] = useState({ recipient: '', amount: '', description: '' });
+  const [sendMethod, setSendMethod] = useState('ican'); // 'ican' | 'mobile' | 'icaneracoin' — explicit choice, replaces the old recipient-string heuristic
   const [receiveForm, setReceiveForm] = useState({ amount: '', description: '' });
   const [topupForm, setTopupForm] = useState({ amount: '', paymentInput: '', method: null, detectedMethod: null });
   const [withdrawForm, setWithdrawForm] = useState({ method: '', phoneAccount: '', amount: '', bankName: '' });
   const [detectedPaymentMethod, setDetectedPaymentMethod] = useState(null);
   const [transactionInProgress, setTransactionInProgress] = useState(false);
   const [transactionResult, setTransactionResult] = useState(null);
+
+  // Lets the phone's hardware/gesture back button (and the in-modal back
+  // arrow) close the Top Up modal instead of navigating the whole app away
+  // from underneath it. Additive to MobileView's own history payload
+  // (spreads window.history.state rather than replacing it) so it doesn't
+  // interfere with that separate, panel-level back-navigation system.
+  const topupModalHistoryPushedRef = useRef(false);
+
+  const closeTopUpModal = () => {
+    setActiveModal(null);
+    setTopupForm({ amount: '', paymentInput: '', method: null, detectedMethod: null });
+    setDetectedPaymentMethod(null);
+    if (topupModalHistoryPushedRef.current) {
+      topupModalHistoryPushedRef.current = false;
+      window.history.back();
+    }
+  };
+
+  useEffect(() => {
+    if (activeModal !== 'topup') return;
+
+    topupModalHistoryPushedRef.current = true;
+    window.history.pushState(
+      { ...(window.history.state || {}), __icanTopupModal: true },
+      '',
+      window.location.href
+    );
+
+    const handleTopupPopState = (event) => {
+      if (!event.state?.__icanTopupModal) {
+        topupModalHistoryPushedRef.current = false;
+        setActiveModal(null);
+        setTopupForm({ amount: '', paymentInput: '', method: null, detectedMethod: null });
+        setDetectedPaymentMethod(null);
+      }
+    };
+
+    window.addEventListener('popstate', handleTopupPopState);
+    return () => window.removeEventListener('popstate', handleTopupPopState);
+  }, [activeModal]);
   const [showPaymentPicker, setShowPaymentPicker] = useState(false);
   // ✅ ADD APPROVAL MODAL STATE
   const [showApprovalModal, setShowApprovalModal] = useState(false);
@@ -1104,17 +1147,15 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     setTransactionInProgress(true);
     
     try {
-      // Determine if recipient is ICAN account or phone number
-      const isICANAccount = sendForm.recipient.toUpperCase().startsWith('ICAN-') || 
-                            sendForm.recipient.includes('@') ||
-                            sendForm.recipient.length > 16; // Likely email or account number
-      
-      if (isICANAccount) {
-        // Send to ICAN Wallet User
-        await handleSendToICANUser(sendForm.recipient, sendForm.amount, sendForm.description);
-      } else {
-        // Send via MOMO (phone number)
+      if (sendMethod === 'mobile') {
+        // Explicit mobile money send — no more guessing from the string shape
         await handleSendViaMOMO(sendForm.recipient, sendForm.amount, sendForm.description);
+      } else if (sendMethod === 'icaneracoin') {
+        // Send icaneracoin (ICAN coin) — separate balance from local currency
+        await handleSendICANCoin(sendForm.recipient, sendForm.amount, sendForm.description);
+      } else {
+        // Send to ICAN Wallet User (account number, phone, or email lookup)
+        await handleSendToICANUser(sendForm.recipient, sendForm.amount, sendForm.description);
       }
     } catch (error) {
       console.error('❌ Send error:', error);
@@ -1127,8 +1168,9 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     }
     
     setSendForm({ recipient: '', amount: '', description: '' });
+    setSendMethod('ican');
     setTransactionInProgress(false);
-    
+
     // Auto close after 3 seconds
     setTimeout(() => {
       setActiveModal(null);
@@ -1242,6 +1284,98 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         type: 'send',
         success: false,
         message: error.message || 'Transfer failed'
+      });
+    }
+  };
+
+  // 💎 Send icaneracoin (ICAN coin) — a separate balance from local currency,
+  // shared across all four apps via ican_user_wallets. Uses the same
+  // recipient lookup (account number, email, or phone → user_id) as
+  // handleSendToICANUser, then transfers through transfer_ican() directly —
+  // that RPC is itself the atomic, balance-checked, server-side-authorized
+  // boundary (same pattern used for icaneracoin sends in the other three
+  // apps), so this does not route through the currency approval modal.
+  const handleSendICANCoin = async (recipientIdentifier, amount, description) => {
+    try {
+      const supabase = getSupabaseClient();
+
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+      if (authError || !authUser) {
+        throw new Error('User not authenticated');
+      }
+
+      let recipientUser = null;
+      let lookupError = null;
+
+      if (recipientIdentifier.toUpperCase().startsWith('ICAN-')) {
+        const { data, error } = await supabase
+          .from('user_accounts')
+          .select('user_id, account_holder_name, account_number')
+          .ilike('account_number', recipientIdentifier)
+          .single();
+        recipientUser = data;
+        lookupError = error;
+      } else if (recipientIdentifier.includes('@')) {
+        const { data, error } = await supabase
+          .from('user_accounts')
+          .select('user_id, account_holder_name, email')
+          .eq('email', recipientIdentifier.toLowerCase())
+          .single();
+        recipientUser = data;
+        lookupError = error;
+      } else {
+        const { data, error } = await supabase
+          .from('user_accounts')
+          .select('user_id, account_holder_name, phone_number')
+          .eq('phone_number', recipientIdentifier)
+          .single();
+        recipientUser = data;
+        lookupError = error;
+      }
+
+      if (!recipientUser || lookupError) {
+        setTransactionResult({
+          type: 'send',
+          success: false,
+          message: `Recipient not found: ${recipientIdentifier}${lookupError ? ` (${lookupError.message})` : ''}`
+        });
+        return;
+      }
+
+      if (recipientUser.user_id === currentUserId) {
+        setTransactionResult({
+          type: 'send',
+          success: false,
+          message: 'Cannot send icaneracoin to yourself'
+        });
+        return;
+      }
+
+      const parsedAmount = parseFloat(amount);
+      if (!(parsedAmount > 0)) {
+        setTransactionResult({ type: 'send', success: false, message: 'Enter a valid ICAN amount' });
+        return;
+      }
+
+      const result = await sendIcaneracoin({
+        fromUserId: currentUserId,
+        toUserId: recipientUser.user_id,
+        amount: parsedAmount,
+        note: description || `Transfer to ${recipientUser.account_holder_name}`,
+      });
+
+      setTransactionResult({
+        type: 'send',
+        success: true,
+        message: `✅ Sent ${parsedAmount.toFixed(4)} ICAN to ${recipientUser.account_holder_name || recipientIdentifier}. No fee — they receive the full amount.`,
+        transactionId: result.tx_id,
+      });
+    } catch (error) {
+      console.error('❌ Icaneracoin transfer failed:', error);
+      setTransactionResult({
+        type: 'send',
+        success: false,
+        message: error.message || 'Icaneracoin transfer failed'
       });
     }
   };
@@ -1625,10 +1759,15 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     setTopupForm({ amount: '', paymentInput: '', method: null, detectedMethod: null });
     setDetectedPaymentMethod(null);
     setTransactionInProgress(false);
-    
+
     // Auto close after 3 seconds
     setTimeout(() => {
-      setActiveModal(null);
+      if (topupModalHistoryPushedRef.current) {
+        topupModalHistoryPushedRef.current = false;
+        window.history.back();
+      } else {
+        setActiveModal(null);
+      }
       setTransactionResult(null);
     }, 3000);
   };
@@ -5147,34 +5286,66 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  👤 Recipient (ICAN Account, Phone, or Email)
-                </label>
-                <input
-                  type="text"
-                  placeholder="ICAN-20260210105243-ace25eb0 | +256701234567 | user@example.com"
-                  value={sendForm.recipient}
-                  onChange={(e) => setSendForm({ ...sendForm, recipient: e.target.value })}
-                  className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none transition-all"
-                />
-                <p className="text-xs text-gray-400 mt-1">
-                  Send to ICAN account number, phone number, or email address
+                <label className="block text-sm font-medium text-gray-300 mb-2">Send To</label>
+                <div className="flex gap-2">
+                  {[
+                    { key: 'ican', label: '👤 ICAN Account' },
+                    { key: 'mobile', label: '📱 Mobile Money' },
+                    { key: 'icaneracoin', label: '💎 Icaneracoin' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() => setSendMethod(opt.key)}
+                      className={`flex-1 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium border transition-all ${
+                        sendMethod === opt.key
+                          ? 'bg-blue-600 border-blue-600 text-white'
+                          : 'bg-white/10 border-white/20 text-gray-300'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Cards can only receive top-ups, not payouts — send to a card isn't supported by any provider we integrate with.
                 </p>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  💰 Amount ({selectedCurrency})
+                  {sendMethod === 'mobile' ? '📱 Recipient Phone Number' : '👤 Recipient (ICAN Account, Phone, or Email)'}
+                </label>
+                <input
+                  type="text"
+                  placeholder={sendMethod === 'mobile' ? '+256701234567' : 'ICAN-20260210105243-ace25eb0 | +256701234567 | user@example.com'}
+                  value={sendForm.recipient}
+                  onChange={(e) => setSendForm({ ...sendForm, recipient: e.target.value })}
+                  className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none transition-all"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  {sendMethod === 'mobile'
+                    ? 'Sent directly to this mobile money number'
+                    : 'Send to ICAN account number, phone number, or email address'}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  💰 Amount ({sendMethod === 'icaneracoin' ? 'ICAN' : selectedCurrency})
                 </label>
                 <input
                   type="number"
-                  placeholder="500"
+                  step={sendMethod === 'icaneracoin' ? '0.0001' : undefined}
+                  placeholder={sendMethod === 'icaneracoin' ? '0.0000' : '500'}
                   value={sendForm.amount}
                   onChange={(e) => setSendForm({ ...sendForm, amount: e.target.value })}
                   className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none transition-all"
                 />
                 <p className="text-xs text-gray-400 mt-1">
-                  Amount in {selectedCurrency} ({userCountry})
+                  {sendMethod === 'icaneracoin'
+                    ? 'Amount in ICAN coins — no fee, the recipient receives the full amount'
+                    : `Amount in ${selectedCurrency} (${userCountry})`}
                 </p>
               </div>
 
@@ -5195,6 +5366,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                   onClick={() => {
                     setActiveModal(null);
                     setSendForm({ recipient: '', amount: '', description: '' });
+                    setSendMethod('ican');
                   }}
                   className="flex-1 px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-all"
                 >
@@ -5293,92 +5465,104 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         </div>
       )}
 
-      {/* TOP UP MODAL */}
+      {/* TOP UP MODAL — full-screen sheet on mobile (proper "fitability" +
+          a real back arrow), centered dialog from sm: up */}
       {activeModal === 'topup' && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="glass-card p-6 w-full max-w-md">
-            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-              <Plus className="w-5 h-5 text-green-400" />
-              Top Up Wallet
-            </h3>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 sm:flex sm:items-center sm:justify-center sm:p-4">
+          <div className="glass-card !rounded-none sm:!rounded-2xl w-full h-full sm:h-auto sm:max-w-md sm:max-h-[calc(100vh-4rem)] overflow-y-auto flex flex-col">
+            <div className="sticky top-0 z-10 flex items-center gap-3 px-4 py-4 border-b border-white/10 bg-[var(--color-bgSecondary)] sm:!rounded-t-2xl">
+              <button
+                type="button"
+                onClick={closeTopUpModal}
+                aria-label="Back"
+                className="p-2 -ml-2 rounded-lg hover:bg-white/10 active:bg-white/20 transition-all shrink-0"
+              >
+                <ArrowLeft className="w-5 h-5 text-white" />
+              </button>
+              <h3 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
+                <Plus className="w-5 h-5 text-green-400 shrink-0" />
+                Top Up Wallet
+              </h3>
+            </div>
 
-            <form onSubmit={handleTopUp} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Payment Method</label>
-                <select
-                  value={topupForm.method || ''}
-                  onChange={(e) => setTopupForm({ ...topupForm, method: e.target.value })}
-                  className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:border-green-400 focus:outline-none transition-all"
-                >
-                  <option value="">Select method...</option>
-                  <option value="mtn">MTN Mobile Money</option>
-                  <option value="vodafone">Vodafone Money</option>
-                  <option value="airtel">Airtel Money</option>
-                  <option value="visa">Visa Card</option>
-                  <option value="mastercard">MasterCard</option>
-                </select>
-              </div>
+            <div className="p-4 sm:p-6 flex-1">
+              <form onSubmit={handleTopUp} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Payment Method</label>
+                  <select
+                    value={topupForm.method || ''}
+                    onChange={(e) => setTopupForm({ ...topupForm, method: e.target.value })}
+                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white text-base focus:border-green-400 focus:outline-none transition-all"
+                  >
+                    <option value="">Select method...</option>
+                    <option value="mtn">MTN Mobile Money</option>
+                    <option value="vodafone">Vodafone Money</option>
+                    <option value="airtel">Airtel Money</option>
+                    <option value="visa">Visa Card</option>
+                    <option value="mastercard">MasterCard</option>
+                  </select>
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  {topupForm.method === 'card' ? 'Card Number' : 'Phone/Account'}
-                </label>
-                <input
-                  type="text"
-                  placeholder={topupForm.method === 'card' ? '4532015112830366' : '256701234567'}
-                  value={topupForm.paymentInput}
-                  onChange={handlePaymentInputChange}
-                  className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:border-green-400 focus:outline-none transition-all"
-                />
-                {detectedPaymentMethod && (
-                  <p className="mt-2 text-xs text-green-400">
-                    ✨ Detected: {detectedPaymentMethod.name} {detectedPaymentMethod.icon}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    {topupForm.method === 'card' ? 'Card Number' : 'Phone/Account'}
+                  </label>
+                  <input
+                    type="text"
+                    inputMode={topupForm.method === 'card' ? 'numeric' : 'tel'}
+                    placeholder={topupForm.method === 'card' ? '4532015112830366' : '256701234567'}
+                    value={topupForm.paymentInput}
+                    onChange={handlePaymentInputChange}
+                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white text-base placeholder-gray-400 focus:border-green-400 focus:outline-none transition-all"
+                  />
+                  {detectedPaymentMethod && (
+                    <p className="mt-2 text-xs text-green-400">
+                      ✨ Detected: {detectedPaymentMethod.name} {detectedPaymentMethod.icon}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Amount ({selectedCurrency})</label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="50000"
+                    value={topupForm.amount}
+                    onChange={(e) => setTopupForm({ ...topupForm, amount: e.target.value })}
+                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white text-base placeholder-gray-400 focus:border-green-400 focus:outline-none transition-all"
+                  />
+                </div>
+
+                <div className="flex flex-col-reverse sm:flex-row gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={closeTopUpModal}
+                    className="flex-1 px-4 py-3 bg-white/10 text-white rounded-lg hover:bg-white/20 active:bg-white/20 transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={transactionInProgress}
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:shadow-lg hover:shadow-green-500/30 disabled:opacity-50 transition-all font-semibold"
+                  >
+                    {transactionInProgress ? 'Processing...' : '💳 Top Up'}
+                  </button>
+                </div>
+              </form>
+
+              {transactionResult && transactionResult.type === 'topup' && (
+                <div className={`mt-4 p-4 rounded-lg ${transactionResult.success ? 'bg-green-500/20 border border-green-500/50' : 'bg-red-500/20 border border-red-500/50'}`}>
+                  <p className={`text-sm font-medium ${transactionResult.success ? 'text-green-400' : 'text-red-400'}`}>
+                    {transactionResult.message}
                   </p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Amount ({selectedCurrency})</label>
-                <input
-                  type="number"
-                  placeholder="50000"
-                  value={topupForm.amount}
-                  onChange={(e) => setTopupForm({ ...topupForm, amount: e.target.value })}
-                  className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:border-green-400 focus:outline-none transition-all"
-                />
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveModal(null);
-                    setTopupForm({ amount: '', paymentInput: '', method: null, detectedMethod: null });
-                  }}
-                  className="flex-1 px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={transactionInProgress}
-                  className="flex-1 px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:shadow-lg hover:shadow-green-500/30 disabled:opacity-50 transition-all font-semibold"
-                >
-                  {transactionInProgress ? 'Processing...' : '💳 Top Up'}
-                </button>
-              </div>
-            </form>
-
-            {transactionResult && transactionResult.type === 'topup' && (
-              <div className={`mt-4 p-4 rounded-lg ${transactionResult.success ? 'bg-green-500/20 border border-green-500/50' : 'bg-red-500/20 border border-red-500/50'}`}>
-                <p className={`text-sm font-medium ${transactionResult.success ? 'text-green-400' : 'text-red-400'}`}>
-                  {transactionResult.message}
-                </p>
-                {transactionResult.transactionId && (
-                  <p className="text-xs text-gray-400 mt-2">ID: {transactionResult.transactionId}</p>
-                )}
-              </div>
-            )}
+                  {transactionResult.transactionId && (
+                    <p className="text-xs text-gray-400 mt-2 break-all">ID: {transactionResult.transactionId}</p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

@@ -5,6 +5,7 @@
  */
 
 import { getSupabaseClient } from '../lib/supabase/client';
+import { payWithFlutterwave, generateTxRef } from './flutterwaveClient';
 
 class MOmoService {
   constructor() {
@@ -38,7 +39,11 @@ class MOmoService {
   }
 
   /**
-   * 💰 Process Top-Up Transaction via Backend Proxy
+   * 💰 Process Top-Up via Flutterwave (card, mobile money, bank account)
+   * Replaces the previous direct MTN MOMO request-payment call — Flutterwave
+   * Checkout handles MTN and Airtel Uganda mobile money, cards, and bank
+   * accounts through one integration, verified server-side before the
+   * transaction is recorded.
    * @param {Object} params - Transaction parameters
    * @param {string} params.amount - Amount to top up
    * @param {string} params.currency - Currency code (UGX, KES, USD, etc.)
@@ -56,20 +61,19 @@ class MOmoService {
       }
 
       const mode = this.useMockMode ? 'MOCK' : 'LIVE';
-      // Force EUR in sandbox mode
-      const finalCurrency = this.useMockMode ? 'EUR' : currency.toUpperCase();
-      
-      console.log(`🚀 Processing MOMO Top-Up (${mode} Mode):`, { 
-        amount, 
-        currency: finalCurrency, 
+      const finalCurrency = currency.toUpperCase();
+
+      console.log(`🚀 Processing Flutterwave Top-Up (${mode} Mode):`, {
+        amount,
+        currency: finalCurrency,
         phoneNumber
       });
 
-      // Mock mode - skip real API call
+      // Mock mode - skip real payment
       if (this.useMockMode) {
         console.log('🧪 Mock Mode: Simulating successful transaction');
         await new Promise(resolve => setTimeout(resolve, 800));
-        
+
         return {
           success: true,
           transactionId: this.generateReferenceId(),
@@ -82,25 +86,6 @@ class MOmoService {
         };
       }
 
-      // Call MTN MOMO API for real transaction
-      const transactionId = this.generateReferenceId();
-      const momoResponse = await this.callMOMOAPI('request-payment', {
-        amount: amount,
-        currency: finalCurrency,
-        externalId: transactionId,
-        payer: {
-          partyIdType: 'MSISDN',
-          partyId: phoneNumber
-        },
-        payerMessage: 'ICAN Wallet Top-Up',
-        payeeNote: description || 'Wallet top-up'
-      });
-
-      if (!momoResponse.success) {
-        throw new Error(momoResponse.error || 'Failed to process MOMO request');
-      }
-
-      // Record transaction to Supabase
       this.supabase = getSupabaseClient();
       if (!this.supabase) {
         throw new Error('Supabase client not initialized');
@@ -111,44 +96,55 @@ class MOmoService {
         throw new Error('User not authenticated');
       }
 
-      const { error } = await this.supabase
-        .from('wallet_transactions')
-        .insert([
-          {
-            user_id: user.id,
-            type: 'topup',
-            provider: 'mtn_momo',
-            amount: parseFloat(amount),
-            currency: finalCurrency,
-            reference_id: transactionId,
-            transaction_id: momoResponse.transactionId || transactionId,
-            phone_number: phoneNumber,
-            description: description || 'ICAN Wallet Top-Up via MOMO',
-            status: 'completed',
-            metadata: {
-              mode: 'LIVE',
-              provider: 'MTN MOMO',
-              momoResponse: momoResponse
-            }
-          }
-        ]);
+      const txRef = generateTxRef('ICAN-TOPUP');
+      const payment = await payWithFlutterwave({
+        amount: parseFloat(amount),
+        currency: finalCurrency,
+        customerEmail: user.email,
+        customerName: user.user_metadata?.full_name,
+        customerPhone: phoneNumber,
+        title: 'ICAN Wallet Top-Up',
+        description: description || 'ICAN Wallet Top-Up',
+        txRef,
+      });
 
-      if (error) {
-        console.error('Transaction recording error:', error);
+      if (payment.status === 'cancelled') {
+        return {
+          success: false,
+          status: 'CANCELLED',
+          message: 'Payment cancelled'
+        };
       }
+      if (payment.status !== 'successful' || !payment.transaction_id) {
+        throw new Error('Payment was not successful');
+      }
+
+      const { data, error } = await this.supabase.functions.invoke('verify-flutterwave-topup', {
+        body: {
+          transaction_id: payment.transaction_id,
+          tx_ref: txRef,
+          amount: parseFloat(amount),
+          currency: finalCurrency,
+          phone_number: phoneNumber,
+          description: description || 'ICAN Wallet Top-Up via Flutterwave',
+        },
+      });
+
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Payment verification failed');
 
       return {
         success: true,
-        transactionId: momoResponse.transactionId || transactionId,
+        transactionId: data.transactionId || payment.transaction_id,
         amount: amount,
         currency: finalCurrency,
         status: 'COMPLETED',
         timestamp: new Date().toISOString(),
         mode: 'LIVE',
-        message: `✅ Successfully added ${amount} ${finalCurrency} to your ICAN Wallet via MOMO`
+        message: `✅ Successfully added ${amount} ${finalCurrency} to your ICAN Wallet via Flutterwave`
       };
     } catch (error) {
-      console.error('❌ MOMO Top-Up failed:', error);
+      console.error('❌ Flutterwave Top-Up failed:', error);
       return {
         success: false,
         error: error.message,
@@ -156,9 +152,7 @@ class MOmoService {
         mode: this.useMockMode ? 'MOCK' : 'LIVE',
         message: error.message.includes('Network')
           ? '⚠️ Network error. Check your internet connection and try again.'
-          : error.message.includes('401') || error.message.includes('403')
-          ? '⚠️ Authentication failed. Check API credentials.'
-          : 'Failed to process mobile money top-up. Please try again.'
+          : 'Failed to process top-up. Please try again.'
       };
     }
   }

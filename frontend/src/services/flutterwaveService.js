@@ -56,7 +56,12 @@ class FlutterwaveService {
         tx_ref: reference,
         amount: amount,
         currency: currency,
-        payment_options: 'card,ussd,bank_transfer,barter,bank_account,credit,debit',
+        // Uganda-supported channels only — 'card' covers Visa/Mastercard,
+        // 'mobilemoneyuganda' covers both MTN and Airtel Uganda mobile money
+        // (Flutterwave routes by the number's network automatically),
+        // 'account' is bank-account/direct-debit. Tokens like
+        // 'bank_transfer'/'barter' aren't valid Flutterwave option strings.
+        payment_options: 'card,mobilemoneyuganda,account',
         customer: {
           email: customerEmail,
           phone_number: customerPhone,

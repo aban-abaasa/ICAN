@@ -345,11 +345,14 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
       if (!supabase || !groupId || (!meetingStarted && boardroomMode !== 'chat')) return;
 
       try {
-        // Load recent messages
+        // Load recent messages — call join/leave/ring events are logged to
+        // this same table as is_system rows for the call-state probe below,
+        // but they don't belong in a "real" chat feed, so they're excluded here.
         const { data: messages, error } = await supabase
           .from('boarding_room_chat')
           .select('*')
           .eq('group_id', groupId)
+          .eq('is_system', false)
           .order('created_at', { ascending: true })
           .limit(50);
 
@@ -359,8 +362,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
             sender: m.user_email?.split('@')[0] || 'User',
             message: m.message,
             timestamp: new Date(m.created_at),
-            isThis: m.user_id === user?.id,
-            isSystem: m.is_system
+            isThis: m.user_id === user?.id
           })));
         }
 
@@ -374,20 +376,21 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
             filter: `group_id=eq.${groupId}`
           }, (payload) => {
             const newMsg = payload.new;
+            if (newMsg.is_system) return; // call events, not real chat — keep the feed real
+
             const isOwnMessage = newMsg.user_id === user?.id;
-            
+
             // Play message notification sound (only for messages from others)
             if (!isOwnMessage && audioServiceRef.current) {
               audioServiceRef.current.playSound('messageNotification');
             }
-            
+
             setChatMessages(prev => [...prev, {
               id: newMsg.id,
               sender: newMsg.user_email?.split('@')[0] || 'User',
               message: newMsg.message,
               timestamp: new Date(newMsg.created_at),
-              isThis: isOwnMessage,
-              isSystem: newMsg.is_system
+              isThis: isOwnMessage
             }]);
           })
           .subscribe();
@@ -1664,7 +1667,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2 sm:space-y-3">
+        <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 sm:py-6 space-y-3 sm:space-y-4">
           {chatMessages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-2">
               <MessageCircle className="w-10 h-10 text-slate-600" />
@@ -1672,29 +1675,20 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
             </div>
           ) : (
             chatMessages.map((msg) => (
-              <div key={msg.id} className="flex flex-col gap-0.5">
-                {msg.isSystem ? (
-                  <div className="flex items-center gap-1.5 py-1.5 px-2 bg-slate-800/40 rounded-lg border border-slate-700/30">
-                    <div className="w-1 h-1 rounded-full bg-blue-400 flex-shrink-0"></div>
-                    <p className="text-xs text-gray-400 italic">{msg.message}</p>
+              <div key={msg.id} className={`flex gap-2 ${msg.isThis ? 'flex-row-reverse' : ''}`}>
+                <div className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 shadow-md ${msg.isThis ? 'bg-gradient-to-br from-blue-600 to-blue-500' : 'bg-gradient-to-br from-purple-600 to-violet-600'}`}>
+                  {msg.sender.charAt(0).toUpperCase()}
+                </div>
+                <div className={`flex flex-col gap-1 ${msg.isThis ? 'items-end' : 'items-start'} flex-1 min-w-0`}>
+                  <p className="text-xs text-gray-400 px-2">{msg.isThis ? 'You' : msg.sender.split('@')[0]}</p>
+                  <div className={`px-3.5 py-2.5 rounded-2xl max-w-[78%] text-sm break-words shadow-md ${
+                    msg.isThis
+                      ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-br-none'
+                      : 'bg-slate-800/80 text-gray-100 rounded-bl-none border border-slate-700/50'
+                  }`}>
+                    {msg.message}
                   </div>
-                ) : (
-                  <div className={`flex gap-2 ${msg.isThis ? 'flex-row-reverse' : ''}`}>
-                    <div className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${msg.isThis ? 'bg-blue-600' : 'bg-purple-600'}`}>
-                      {msg.sender.charAt(0).toUpperCase()}
-                    </div>
-                    <div className={`flex flex-col gap-0.5 ${msg.isThis ? 'items-end' : 'items-start'} flex-1 min-w-0`}>
-                      <p className="text-xs text-gray-400 px-2">{msg.isThis ? 'You' : msg.sender.split('@')[0]}</p>
-                      <div className={`px-3 py-2 rounded-2xl max-w-[78%] text-sm break-words ${
-                        msg.isThis
-                          ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-br-none'
-                          : 'bg-slate-800/80 text-gray-100 rounded-bl-none border border-slate-700/50'
-                      }`}>
-                        {msg.message}
-                      </div>
-                    </div>
-                  </div>
-                )}
+                </div>
               </div>
             ))
           )}
@@ -1841,6 +1835,8 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
         <div className="flex-1 relative bg-black flex flex-col overflow-hidden">
           {/* Main Video Area - Local or selected remote participant */}
           <div className="flex-1 relative bg-gradient-to-br from-slate-900 to-black flex items-center justify-center overflow-hidden">
+            {/* Ambient corner glow — gives the stage a premium, "live" frame without touching the video itself */}
+            <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_140px_30px_rgba(59,130,246,0.10)]"></div>
             {featuredParticipantId ? (
               featuredRemoteStream ? (
                 <video
@@ -1893,8 +1889,11 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
             )}
 
             {/* Main Stage Badge */}
-            <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-lg flex items-center gap-2 border border-white/20 max-w-[70%]">
-              <div className="w-2 h-2 rounded-full bg-green-500"></div>
+            <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-lg flex items-center gap-2 border border-white/20 shadow-lg shadow-black/40 max-w-[70%]">
+              <div className="relative w-2 h-2 flex-shrink-0">
+                <div className="absolute inset-0 rounded-full bg-green-500"></div>
+                <div className="absolute -inset-1 rounded-full bg-green-500/50 animate-ping"></div>
+              </div>
               <span className="text-xs sm:text-sm text-white font-semibold truncate">
                 {featuredParticipantId ? (featuredRemoteMember?.email?.split('@')[0] || 'Participant') : 'You'}
               </span>
@@ -1954,7 +1953,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
                 <button
                   key={idx}
                   onClick={() => setFeaturedParticipantId((prev) => (prev === member?.userId ? null : member?.userId))}
-                  className={`flex-shrink-0 w-12 h-12 sm:w-28 sm:h-28 bg-gradient-to-br ${memberTileVariant(member?.email || member?.userId || String(idx))} rounded-lg relative flex items-center justify-center overflow-hidden shadow-lg hover:shadow-2xl transition-all border group/member ${featuredParticipantId === member?.userId ? 'ring-2 ring-white border-white/60 scale-[1.02]' : 'border-white/10'} ${activeScreenSharerId === member?.userId ? 'ring-2 ring-emerald-400/80' : ''}`}
+                  className={`flex-shrink-0 w-12 h-12 sm:w-28 sm:h-28 bg-gradient-to-br ${memberTileVariant(member?.email || member?.userId || String(idx))} rounded-lg relative flex items-center justify-center overflow-hidden shadow-lg hover:shadow-2xl transition-all border group/member ${featuredParticipantId === member?.userId ? 'ring-2 ring-blue-400 border-blue-300/60 scale-[1.02] shadow-blue-500/40' : 'border-white/10'} ${activeScreenSharerId === member?.userId ? 'ring-2 ring-emerald-400/80' : ''}`}
                   title={featuredParticipantId === member?.userId ? 'Collapse participant' : 'Expand participant'}
                 >
                   {getRemoteStreamByUserId(member?.userId) ? (
@@ -2021,7 +2020,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
             <div className="flex gap-4 items-center">
               {/* Microphone Button - Glassmorphism */}
               <div onMouseEnter={() => setHoveredControl('mic')} onMouseLeave={() => setHoveredControl(null)} className="relative">
-                <button onClick={() => setIsMicOn(!isMicOn)} className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold transition-all backdrop-blur-xl border border-white/20 ${isMicOn ? 'bg-gradient-to-br from-green-400/40 to-emerald-600/40 hover:from-green-400/50 hover:to-emerald-600/50 text-green-100 shadow-lg shadow-green-500/30' : 'bg-gradient-to-br from-red-400/40 to-red-600/40 hover:from-red-400/50 hover:to-red-600/50 text-red-100 shadow-lg shadow-red-500/30'}`} title={isMicOn ? 'Mute' : 'Unmute'}>
+                <button onClick={() => setIsMicOn(!isMicOn)} className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold transition-all transform hover:scale-105 active:scale-95 backdrop-blur-xl border border-white/20 ${isMicOn ? 'bg-gradient-to-br from-green-400/40 to-emerald-600/40 hover:from-green-400/50 hover:to-emerald-600/50 text-green-100 shadow-lg shadow-green-500/30' : 'bg-gradient-to-br from-red-400/40 to-red-600/40 hover:from-red-400/50 hover:to-red-600/50 text-red-100 shadow-lg shadow-red-500/30'}`} title={isMicOn ? 'Mute' : 'Unmute'}>
                   {isMicOn ? <Mic className="w-6 h-6" /> : <MicOff className="w-6 h-6" />}
                 </button>
                 {hoveredControl === 'mic' && <div className="absolute bottom-full mb-3 bg-black/80 backdrop-blur-xl border border-white/20 text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap">{isMicOn ? 'Mute Microphone' : 'Unmute Microphone'}</div>}
@@ -2029,7 +2028,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
 
               {/* Camera Button - Glassmorphism */}
               <div onMouseEnter={() => setHoveredControl('video')} onMouseLeave={() => setHoveredControl(null)} className="relative">
-                <button onClick={toggleVideo} className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold transition-all backdrop-blur-xl border border-white/20 ${isVideoOn ? 'bg-gradient-to-br from-blue-400/40 to-cyan-600/40 hover:from-blue-400/50 hover:to-cyan-600/50 text-blue-100 shadow-lg shadow-blue-500/30' : 'bg-gradient-to-br from-slate-400/40 to-slate-600/40 hover:from-slate-400/50 hover:to-slate-600/50 text-slate-100 shadow-lg shadow-slate-500/30'}`} title={isVideoOn ? 'Turn off Camera' : 'Turn on Camera'}>
+                <button onClick={toggleVideo} className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold transition-all transform hover:scale-105 active:scale-95 backdrop-blur-xl border border-white/20 ${isVideoOn ? 'bg-gradient-to-br from-blue-400/40 to-cyan-600/40 hover:from-blue-400/50 hover:to-cyan-600/50 text-blue-100 shadow-lg shadow-blue-500/30' : 'bg-gradient-to-br from-slate-400/40 to-slate-600/40 hover:from-slate-400/50 hover:to-slate-600/50 text-slate-100 shadow-lg shadow-slate-500/30'}`} title={isVideoOn ? 'Turn off Camera' : 'Turn on Camera'}>
                   {isVideoOn ? <Video className="w-6 h-6" /> : <VideoOff className="w-6 h-6" />}
                 </button>
                 {hoveredControl === 'video' && <div className="absolute bottom-full mb-3 bg-black/80 backdrop-blur-xl border border-white/20 text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap">{isVideoOn ? 'Turn off Camera' : 'Turn on Camera'}</div>}
@@ -2037,7 +2036,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
 
               {/* Sound Toggle Button - Glassmorphism */}
               <div onMouseEnter={() => setHoveredControl('sound')} onMouseLeave={() => setHoveredControl(null)} className="relative">
-                <button onClick={() => setSoundEnabled(!soundEnabled)} className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold transition-all backdrop-blur-xl border border-white/20 ${soundEnabled ? 'bg-gradient-to-br from-amber-400/40 to-yellow-600/40 hover:from-amber-400/50 hover:to-yellow-600/50 text-amber-100 shadow-lg shadow-amber-500/30' : 'bg-gradient-to-br from-slate-400/40 to-slate-600/40 hover:from-slate-400/50 hover:to-slate-600/50 text-slate-100 shadow-lg shadow-slate-500/30'}`} title={soundEnabled ? 'Mute Notifications' : 'Unmute Notifications'}>
+                <button onClick={() => setSoundEnabled(!soundEnabled)} className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold transition-all transform hover:scale-105 active:scale-95 backdrop-blur-xl border border-white/20 ${soundEnabled ? 'bg-gradient-to-br from-amber-400/40 to-yellow-600/40 hover:from-amber-400/50 hover:to-yellow-600/50 text-amber-100 shadow-lg shadow-amber-500/30' : 'bg-gradient-to-br from-slate-400/40 to-slate-600/40 hover:from-slate-400/50 hover:to-slate-600/50 text-slate-100 shadow-lg shadow-slate-500/30'}`} title={soundEnabled ? 'Mute Notifications' : 'Unmute Notifications'}>
                   {soundEnabled ? <Volume2 className="w-6 h-6" /> : <VolumeX className="w-6 h-6" />}
                 </button>
                 {hoveredControl === 'sound' && <div className="absolute bottom-full mb-3 bg-black/80 backdrop-blur-xl border border-white/20 text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap">{soundEnabled ? 'Mute Notifications' : 'Unmute Notifications'}</div>}
@@ -2045,7 +2044,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
 
               {/* Chat Button - Glassmorphism */}
               <div onMouseEnter={() => setHoveredControl('chat')} onMouseLeave={() => setHoveredControl(null)} className="relative">
-                <button onClick={() => setShowChat(!showChat)} className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold transition-all backdrop-blur-xl border border-white/20 ${showChat ? 'bg-gradient-to-br from-purple-400/40 to-violet-600/40 hover:from-purple-400/50 hover:to-violet-600/50 text-purple-100 shadow-lg shadow-purple-500/30' : 'bg-gradient-to-br from-slate-400/40 to-slate-600/40 hover:from-slate-400/50 hover:to-slate-600/50 text-slate-100 shadow-lg shadow-slate-500/30'}`} title={showChat ? 'Hide Chat' : 'Show Chat'}>
+                <button onClick={() => setShowChat(!showChat)} className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold transition-all transform hover:scale-105 active:scale-95 backdrop-blur-xl border border-white/20 ${showChat ? 'bg-gradient-to-br from-purple-400/40 to-violet-600/40 hover:from-purple-400/50 hover:to-violet-600/50 text-purple-100 shadow-lg shadow-purple-500/30' : 'bg-gradient-to-br from-slate-400/40 to-slate-600/40 hover:from-slate-400/50 hover:to-slate-600/50 text-slate-100 shadow-lg shadow-slate-500/30'}`} title={showChat ? 'Hide Chat' : 'Show Chat'}>
                   {showChat ? <MessageCircle className="w-6 h-6" /> : <MessageCircle className="w-6 h-6" />}
                 </button>
                 {hoveredControl === 'chat' && <div className="absolute bottom-full mb-3 bg-black/80 backdrop-blur-xl border border-white/20 text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap">{showChat ? 'Hide Chat' : 'Show Chat'}</div>}
@@ -2053,7 +2052,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
 
               {/* More Menu (Desktop) - Contains screen sharing */}
               <div onMouseEnter={() => setHoveredControl('more')} onMouseLeave={() => setHoveredControl(null)} className="relative">
-                <button onClick={() => setShowDesktopMenu((prev) => !prev)} className="w-14 h-14 rounded-2xl flex items-center justify-center font-bold transition-all backdrop-blur-xl border border-white/20 bg-gradient-to-br from-slate-500/40 to-slate-700/40 hover:from-slate-500/50 hover:to-slate-700/50 text-slate-100 shadow-lg shadow-slate-500/30" title={showDesktopMenu ? 'Hide menu' : 'More options'}>
+                <button onClick={() => setShowDesktopMenu((prev) => !prev)} className="w-14 h-14 rounded-2xl flex items-center justify-center font-bold transition-all transform hover:scale-105 active:scale-95 backdrop-blur-xl border border-white/20 bg-gradient-to-br from-slate-500/40 to-slate-700/40 hover:from-slate-500/50 hover:to-slate-700/50 text-slate-100 shadow-lg shadow-slate-500/30" title={showDesktopMenu ? 'Hide menu' : 'More options'}>
                   <MoreVertical className="w-6 h-6" />
                 </button>
                 {hoveredControl === 'more' && <div className="absolute bottom-full mb-3 bg-black/80 backdrop-blur-xl border border-white/20 text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap">More options</div>}
@@ -2076,7 +2075,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
               </div>
 
               {/* End Call Button - Glassmorphism */}
-              <button onClick={endMeeting} className="w-14 h-14 rounded-2xl flex items-center justify-center font-bold transition-all bg-gradient-to-br from-red-600/50 to-red-800/50 hover:from-red-600/60 hover:to-red-800/60 text-red-100 shadow-lg shadow-red-500/30 backdrop-blur-xl border border-white/20" title="End Meeting">
+              <button onClick={endMeeting} className="w-14 h-14 rounded-2xl flex items-center justify-center font-bold transition-all transform hover:scale-105 active:scale-95 bg-gradient-to-br from-red-600/50 to-red-800/50 hover:from-red-600/60 hover:to-red-800/60 text-red-100 shadow-lg shadow-red-500/30 backdrop-blur-xl border border-white/20" title="End Meeting">
                 <Phone className="w-6 h-6" />
               </button>
             </div>
@@ -2139,43 +2138,6 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
               </div>
             )}
 
-            {showShareChooser && (
-              <div className="fixed inset-0 z-[120] bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-4" onClick={() => setShowShareChooser(false)}>
-                <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl p-4 sm:p-5" onClick={(e) => e.stopPropagation()}>
-                  <h3 className="text-white text-base sm:text-lg font-semibold">Choose what to share</h3>
-                  <p className="text-slate-300 text-xs sm:text-sm mt-1">Your phone will open a system picker where you can select an app/window or the entire screen.</p>
-
-                  <div className="mt-4 space-y-2">
-                    <button
-                      onClick={() => handleShareOptionSelect('app')}
-                      className="w-full text-left px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white transition"
-                    >
-                      Share App or Window
-                    </button>
-                    <button
-                      onClick={() => handleShareOptionSelect('screen')}
-                      className="w-full text-left px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white transition"
-                    >
-                      Share Entire Phone Screen
-                    </button>
-                    <button
-                      onClick={() => handleShareOptionSelect('camera')}
-                      className="w-full text-left px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 transition"
-                    >
-                      Camera Presentation (fallback)
-                    </button>
-                  </div>
-
-                  <button
-                    onClick={() => setShowShareChooser(false)}
-                    className="mt-3 w-full px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-white transition"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-
             <button
               onClick={() => setShowMobileMenu((prev) => !prev)}
               className="w-11 h-11 rounded-xl flex items-center justify-center transition-all bg-black/25 backdrop-blur-md text-slate-100 border border-white/10"
@@ -2184,6 +2146,46 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
               <MoreVertical className="w-5 h-5" />
             </button>
           </div>
+
+          {/* Share chooser — a top-level fixed modal, not nested under the
+              sm:hidden mobile-controls wrapper above, so desktop's "More" menu
+              (which also calls openShareChooser) can actually show it too. */}
+          {showShareChooser && (
+            <div className="fixed inset-0 z-[120] bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-4" onClick={() => setShowShareChooser(false)}>
+              <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl p-4 sm:p-5" onClick={(e) => e.stopPropagation()}>
+                <h3 className="text-white text-base sm:text-lg font-semibold">Choose what to share</h3>
+                <p className="text-slate-300 text-xs sm:text-sm mt-1">A system picker will open where you can select an app/window or the entire screen.</p>
+
+                <div className="mt-4 space-y-2">
+                  <button
+                    onClick={() => handleShareOptionSelect('app')}
+                    className="w-full text-left px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white transition"
+                  >
+                    Share App or Window
+                  </button>
+                  <button
+                    onClick={() => handleShareOptionSelect('screen')}
+                    className="w-full text-left px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white transition"
+                  >
+                    Share Entire Screen
+                  </button>
+                  <button
+                    onClick={() => handleShareOptionSelect('camera')}
+                    className="w-full text-left px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 transition"
+                  >
+                    Camera Presentation (fallback)
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => setShowShareChooser(false)}
+                  className="mt-3 w-full px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-white transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Participants Sidebar - Right - Shows connected members with status */}
           <div className="absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-black/40 to-transparent flex flex-col py-6 gap-3 px-2 overflow-y-auto transition-opacity duration-300 opacity-0 group-hover:opacity-100">
@@ -2274,7 +2276,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
               </div>
 
               {/* Messages Container - Improved scrolling for mobile */}
-              <div className="flex-1 overflow-y-auto p-2 sm:p-4 space-y-2.5 sm:space-y-3 bg-gradient-to-b from-black/50 to-black/30 scrollbar-hide">
+              <div className="flex-1 overflow-y-auto px-2 sm:px-4 py-4 sm:py-5 space-y-3 sm:space-y-4 bg-gradient-to-b from-black/50 to-black/30 scrollbar-hide">
                 {chatMessages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-gray-500">
                     <MessageCircle className="w-6 h-6 sm:w-12 sm:h-12 text-gray-600 mb-1 sm:mb-2 opacity-50" />
@@ -2282,39 +2284,27 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
                   </div>
                 ) : (
                   chatMessages.map((msg) => (
-                    <div key={msg.id} className="group hover:bg-black/30 rounded-lg transition-colors px-1 py-1.5 sm:px-2 sm:py-2">
-                      {msg.isSystem ? (
-                        <div className="flex items-center gap-2 sm:gap-2.5 py-2 px-2.5 sm:px-3.5 bg-gradient-to-r from-slate-800/50 via-slate-800/40 to-slate-900/30 rounded-lg border border-slate-700/40 backdrop-blur-sm hover:border-slate-600/60 transition-colors">
-                          <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center flex-shrink-0 shadow-md shadow-blue-500/30">
-                            <span className="text-white text-[8px] sm:text-[10px] font-bold">•</span>
-                          </div>
-                          <p className="text-xs sm:text-sm text-gray-300 flex-1 break-words leading-relaxed">{msg.message}</p>
-                          <span className="text-[10px] sm:text-xs text-gray-500 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                            {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
+                    <div key={msg.id} className="group hover:bg-black/30 rounded-lg transition-colors px-1 py-2 sm:px-2 sm:py-2.5">
+                      <div className={`flex gap-2 sm:gap-2.5 ${msg.isThis ? 'flex-row-reverse' : ''}`}>
+                        <div className={`h-6 w-6 sm:h-8 sm:w-8 rounded-lg flex items-center justify-center text-xs sm:text-sm font-bold flex-shrink-0 shadow-lg transition-transform group-hover:scale-110 ${msg.isThis ? 'bg-gradient-to-br from-blue-600 to-blue-500 text-white' : 'bg-gradient-to-br from-purple-600 to-violet-600 text-white'}`}>
+                          {msg.sender.charAt(0).toUpperCase()}
                         </div>
-                      ) : (
-                        <div className={`flex gap-2 sm:gap-2.5 ${msg.isThis ? 'flex-row-reverse' : ''}`}>
-                          <div className={`h-6 w-6 sm:h-8 sm:w-8 rounded-lg flex items-center justify-center text-xs sm:text-sm font-bold flex-shrink-0 shadow-lg transition-transform group-hover:scale-110 ${msg.isThis ? 'bg-gradient-to-br from-blue-600 to-blue-500 text-white' : 'bg-gradient-to-br from-purple-600 to-violet-600 text-white'}`}>
-                            {msg.sender.charAt(0).toUpperCase()}
+                        <div className={`flex flex-col gap-1 ${msg.isThis ? 'items-end' : 'items-start'} flex-1 min-w-0`}>
+                          <div className={`flex items-center gap-2 px-1 ${msg.isThis ? 'flex-row-reverse' : ''}`}>
+                            <p className="text-xs sm:text-sm font-semibold text-gray-200">{msg.isThis ? 'You' : msg.sender.split('@')[0]}</p>
+                            <span className="text-[10px] sm:text-xs text-gray-500 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                              {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
                           </div>
-                          <div className={`flex flex-col gap-1 ${msg.isThis ? 'items-end' : 'items-start'} flex-1 min-w-0`}>
-                            <div className={`flex items-center gap-2 px-1 ${msg.isThis ? 'flex-row-reverse' : ''}`}>
-                              <p className="text-xs sm:text-sm font-semibold text-gray-200">{msg.isThis ? 'You' : msg.sender.split('@')[0]}</p>
-                              <span className="text-[10px] sm:text-xs text-gray-500 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-                                {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                            </div>
-                            <div className={`max-w-xs sm:max-w-md px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl text-xs sm:text-sm break-words backdrop-blur-sm shadow-lg transition-all group-hover:shadow-xl ${
-                              msg.isThis 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-br-lg shadow-blue-500/20 hover:shadow-blue-500/40' 
-                                : 'bg-gradient-to-br from-slate-800 to-slate-750 text-gray-100 rounded-bl-lg border border-slate-700/60 hover:border-slate-600/80 hover:bg-gradient-to-br hover:from-slate-750 hover:to-slate-700'
-                            }`}>
-                              {msg.message}
-                            </div>
+                          <div className={`max-w-xs sm:max-w-md px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-2xl text-xs sm:text-sm break-words backdrop-blur-sm shadow-lg transition-all group-hover:shadow-xl ${
+                            msg.isThis
+                              ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-br-lg shadow-blue-500/20 hover:shadow-blue-500/40'
+                              : 'bg-gradient-to-br from-slate-800 to-slate-750 text-gray-100 rounded-bl-lg border border-slate-700/60 hover:border-slate-600/80 hover:bg-gradient-to-br hover:from-slate-750 hover:to-slate-700'
+                          }`}>
+                            {msg.message}
                           </div>
                         </div>
-                      )}
+                      </div>
                     </div>
                   ))
                 )}

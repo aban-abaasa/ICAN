@@ -106,7 +106,7 @@ const GroupDetailsModal = ({ group, onClose }) => {
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[75] p-4">
         <div className="bg-gradient-to-b from-slate-900 to-slate-800 rounded-xl max-w-4xl w-full border border-slate-700 flex flex-col max-h-[90vh]">
           {/* Header - Fixed */}
           <div className="flex-shrink-0 p-8 border-b border-slate-700">

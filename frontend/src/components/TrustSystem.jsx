@@ -2793,9 +2793,10 @@ const TrustSystem = ({
         </div>
       )}
 
-      {/* LIVE BOARDROOM MODAL */}
+      {/* LIVE BOARDROOM MODAL — z-[80] so the call takes over the whole
+          viewport instead of sitting behind the app's fixed z-[70] header */}
       {boardroomGroupId && (
-        <div className="fixed inset-0 bg-black z-[60]">
+        <div className="fixed inset-0 bg-black z-[80]">
           <LiveBoardroom
             groupId={boardroomGroupId}
             groupName={activeBoardroomGroup?.name}

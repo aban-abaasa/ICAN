@@ -34,4 +34,12 @@ echo "6. Deploying delete-account..."
 npx supabase functions deploy delete-account --no-verify-jwt
 
 echo ""
+echo "7. Deploying verify-flutterwave-payment..."
+npx supabase functions deploy verify-flutterwave-payment
+
+echo ""
+echo "8. Deploying verify-flutterwave-topup..."
+npx supabase functions deploy verify-flutterwave-topup
+
+echo ""
 echo "All functions deployed successfully."
