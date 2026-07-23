@@ -1067,24 +1067,32 @@ const LandingPage = ({ onGetStarted }) => {
                     
                     <div className="text-sm text-gray-300 leading-relaxed space-y-4">
                       <div className="space-y-2">
-                        <p className="font-semibold text-yellow-200">One ICAN, wired across every business you touch</p>
-                        <p className="text-xs">Same wallet balance across ICANera, digital-city-era retail, mybodaguy delivery, and FARM-AGENT's marketplace — every transaction tagged by the app it came from.</p>
+                        <p className="font-semibold text-yellow-200">🚀 One IcanEra Platform - Replace All Business Apps</p>
+                        <p className="text-xs">IcanEra unifies your entire business ecosystem. Every transaction recorded across SupermartKera retail, BodaGoEra delivery, AgriBone agriculture, and enterprise operations - all powered by icaneracoin blockchain security.</p>
                       </div>
                       <div className="space-y-2">
-                        <p className="font-semibold text-purple-200">Earn ICAN from real activity, not just deposits</p>
-                        <p className="text-xs">1% cashback on digital-city-era purchases, ICAN per completed mybodaguy delivery, ICAN on every FARM-AGENT sale — plus PitchIn dividends and TRUST group returns.</p>
+                        <p className="font-semibold text-purple-200">💼 Enterprise CMMS - Role-Based Hierarchy & Supplier Integration</p>
+                        <p className="text-xs">Complete role-based access from admin to staff with structured approval workflows. Manage employees, assets, equipment, and salaries. Integrated supplier portal in SupermartKera for seamless ordering - receive inventory from suppliers worldwide via BodaGoEra's cross-border delivery (ships, airplanes, door-to-door service). Track everything with comprehensive business reports.</p>
                       </div>
                       <div className="space-y-2">
-                        <p className="font-semibold text-pink-200">Invest, save, and grow together</p>
-                        <p className="text-xs">1 ICAN starts at a 5,000 UGX floor price. TRUST groups (8-15% returns), business investing via PitchIn, zero-fee global transfers.</p>
+                        <p className="font-semibold text-amber-200">💳 IcanEraWallette - Universal Payment & Money Management</p>
+                        <p className="text-xs">Send and receive money across borders instantly. Trade in icaneracoin, top up your wallet, and pay for products in-store with cash, wallet coins, or real money. Separate accounts for TRUST groups, business, and personal finances - track every transaction with complete clarity and control. All transactions blockchain-verified to stabilize icaneracoin value and beat inflation.</p>
                       </div>
                       <div className="space-y-2">
-                        <p className="font-semibold text-green-200">Giving is automatic, not an afterthought</p>
-                        <p className="text-xs">10% of every ICAN you earn is set aside as tithe the moment it's credited — tracked and transparent, wherever you earned it.</p>
+                        <p className="font-semibold text-pink-200">🏦 TRUST + Blockchain SACCO</p>
+                        <p className="text-xs">Blockchain-secured TRUST groups with agent withdrawals and deposits directly in ICANera Wallet. Every transaction is immutably recorded for complete transparency and security.</p>
                       </div>
                       <div className="space-y-2">
-                        <p className="font-semibold text-blue-200">Scale your business with confidence</p>
-                        <p className="text-xs">Professional reporting, team management, inventory, and automated approvals through ICAN's CMMS.</p>
+                        <p className="font-semibold text-green-200">💰 PitchIn - Public Stock Market & Real-Time Share Valuation</p>
+                        <p className="text-xs">Multi-worker transaction recording across all IcanEra applications in one unified database. Track real-time business value per share with live data from SupermartKera, AgriBone, and BodaGoEra. Complete audit trails, books of accounts, and AI-powered tax calculations specific to each country.</p>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="font-semibold text-blue-200">🌍 Multi-Country Currency & AI Tax Intelligence</p>
+                        <p className="text-xs">Operate across multiple countries with automatic currency support. AI analyzes your transactions and generates country-specific tax reports, proper auditing, and professional books of accounts.</p>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="font-semibold text-cyan-200">🔐 Blockchain-Secured Messaging & Transaction Stability</p>
+                        <p className="text-xs">Every message in the application is blockchain-verified for security. Immutable communication records add value and trust to every interaction. All transactions blockchain-recorded to stabilize icaneracoin value - natural market fluctuation beats inflation while protecting your purchasing power.</p>
                       </div>
                     </div>
                     
@@ -1126,24 +1134,32 @@ const LandingPage = ({ onGetStarted }) => {
                 {/* Description */}
                 <div className="text-sm md:text-base 2xl:text-lg text-gray-300 leading-relaxed space-y-4">
                   <div className="space-y-3">
-                    <p className="font-semibold text-yellow-200">One ICAN, wired across every business you touch</p>
-                    <p>The same wallet balance follows you across four real, live apps — ICANera itself, digital-city-era's retail/POS system, mybodaguy's delivery riders, and FARM-AGENT's farm marketplace. Every transaction is tagged with the app it came from, so nothing needs manual reconciling.</p>
+                    <p className="font-semibold text-yellow-200">🚀 IcanEra - The Ultimate Business Platform</p>
+                    <p>SupermartKera, AgriBone, BodaGoEra, and all business modules unified in one powerful platform. Every transaction across retail, agriculture, delivery, and enterprise is recorded with blockchain-secured icaneracoin power. One wallet, one ecosystem, infinite possibilities.</p>
                   </div>
                   <div className="space-y-3">
-                    <p className="font-semibold text-purple-200">Earn ICAN from real activity, not just deposits</p>
-                    <p>Shop at a digital-city-era store and earn 1% back in ICAN automatically. Complete a delivery on mybodaguy and get credited per trip. Sell produce, land, or services on FARM-AGENT and ICAN lands the moment it sells. Add PitchIn dividends and TRUST group returns, and it's all one balance.</p>
+                    <p className="font-semibold text-purple-200">💼 Enterprise-Grade CMMS with Complete Supply Chain Integration</p>
+                    <p>Comprehensive Computerized Maintenance Management System with role-based access hierarchy from admin to staff. Each level has structured functions for employee management, asset tracking, equipment monitoring, and salary processing. Finalize all approvals and payments through secure workflows. Seamlessly integrated supplier portal in SupermartKera allows you to order and receive inventory from suppliers worldwide. BodaGoEra handles cross-border delivery via ships, airplanes, and door-to-door service for complete source-to-destination logistics. Generate professional business reports, automate approval workflows, and maintain complete audit trails with superior blockchain integration.</p>
                   </div>
                   <div className="space-y-3">
-                    <p className="font-semibold text-pink-200">Invest, save, and grow together</p>
-                    <p>1 ICAN starts at a 5,000 UGX floor price. Build wealth through democratic TRUST groups (8-15% returns), invest in promising businesses via PitchIn, and move money globally with zero fees.</p>
+                    <p className="font-semibold text-amber-200">💳 IcanEraWallette - Universal Payment System & Money Management</p>
+                    <p>Send and receive money across borders instantly with zero delays. Trade seamlessly in icaneracoin, top up your wallet from multiple sources, and enjoy flexible payment options. Pay for products in SupermartKera stores using cash, wallet coins (icaneracoin), or real money - all tracked automatically. Separate dedicated accounts for TRUST group savings, business operations, and personal finances ensure complete clarity. Track every transaction across all accounts with real-time updates, detailed transaction history, and comprehensive financial control. Every transaction is blockchain-verified to provide stability to icaneracoin value - while the coin fluctuates naturally with market demand, the blockchain foundation consistently beats inflation and protects your wealth. Your money, your way, completely organized and inflation-resistant.</p>
                   </div>
                   <div className="space-y-3">
-                    <p className="font-semibold text-green-200">Giving is automatic, not an afterthought</p>
-                    <p>10% of every ICAN you earn — from any app — is set aside as tithe the instant it's credited to your wallet. No spreadsheets, no year-end guesswork: it's tracked and transparent by design.</p>
+                    <p className="font-semibold text-pink-200">🏦 Blockchain TRUST & SACCO with Agent Network</p>
+                    <p>Blockchain-secured TRUST groups offering 8-15% returns with complete transparency. Agent-enabled withdrawals and deposits directly in ICANera Wallet. Every SACCO transaction is immutably recorded on the blockchain for unshakable trust and accountability.</p>
                   </div>
                   <div className="space-y-3">
-                    <p className="font-semibold text-blue-200">Scale your business with confidence</p>
-                    <p>Professional reporting, team management, inventory tracking, and automated approvals through ICAN's CMMS. Enterprise-grade tools built for entrepreneurs running real operations, not demos.</p>
+                    <p className="font-semibold text-green-200">💰 PitchIn - Public Stock Market with Real-Time Share Valuation</p>
+                    <p>Revolutionary public stock market where every transaction across SupermartKera, AgriBone, and BodaGoEra flows into one unified database. Empower different workers to record transactions with role-based access while investors see current business value per share in real-time. Complete books of accounts, proper auditing, and country-specific AI tax calculations. Perfect for businesses with multiple contributors needing transparent financial tracking and live market valuation.</p>
+                  </div>
+                  <div className="space-y-3">
+                    <p className="font-semibold text-blue-200">🌍 Multi-Country Currency & AI-Powered Tax Intelligence</p>
+                    <p>Operate seamlessly across multiple countries with automatic currency conversion and country-specific compliance. AI analyzes your transactions to generate accurate tax reports tailored to each country's regulations. Professional auditing and books of accounts built in.</p>
+                  </div>
+                  <div className="space-y-3">
+                    <p className="font-semibold text-cyan-200">🔐 Blockchain-Secured Messaging & Transaction Stability</p>
+                    <p>Every message in IcanEra is blockchain-verified and immutably recorded. Enhanced security, complete audit trails, and tamper-proof communication records add unprecedented value to your business operations and legal compliance. All transactions are blockchain-recorded to provide stability to icaneracoin value. While the coin naturally fluctuates with real market demand and trading activity, the blockchain foundation ensures it consistently beats inflation, protecting and growing your purchasing power over time. True digital currency that works for you, not against you.</p>
                   </div>
                 </div>
                 
