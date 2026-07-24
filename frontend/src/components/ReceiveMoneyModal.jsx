@@ -214,7 +214,7 @@ const ReceiveMoneyModal = ({
     let frameCount = 0;
     let isDetecting = true;
 
-    console.log('🎬 Starting barcode detection loop...');
+    console.log('🎬 Starting QR code detection loop...');
 
     const detectFrame = async () => {
       try {
@@ -237,19 +237,34 @@ const ReceiveMoneyModal = ({
             return;
           }
           
-          // Try jsQR detection for QR codes
+          // jsQR detection for QR codes with enhanced options
           try {
-            const code = jsQR(imageData.data, imageData.width, imageData.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height, {
+              inversionAttempts: "dontInvert", // Faster detection
+            });
+            
             if (code && code.data && code.data.trim()) {
-              const detectedBarcode = code.data.trim();
+              const detectedQRCode = code.data.trim();
               
               // Prevent duplicate processing
-              if (lastProcessedBarcodeRef.current !== detectedBarcode) {
-                console.log('✅ QR Code Detected:', detectedBarcode);
-                lastProcessedBarcodeRef.current = detectedBarcode;
+              if (lastProcessedBarcodeRef.current !== detectedQRCode) {
+                console.log('✅ QR Code Detected:', detectedQRCode);
+                console.log('📊 QR Code Location:', code.location);
+                lastProcessedBarcodeRef.current = detectedQRCode;
                 
-                // Process the scanned code
-                handleScannedCode(detectedBarcode);
+                // Visual feedback - draw detection box on canvas
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(code.location.topLeftCorner.x, code.location.topLeftCorner.y);
+                ctx.lineTo(code.location.topRightCorner.x, code.location.topRightCorner.y);
+                ctx.lineTo(code.location.bottomRightCorner.x, code.location.bottomRightCorner.y);
+                ctx.lineTo(code.location.bottomLeftCorner.x, code.location.bottomLeftCorner.y);
+                ctx.lineTo(code.location.topLeftCorner.x, code.location.topLeftCorner.y);
+                ctx.stroke();
+                
+                // Process the scanned QR code
+                handleScannedCode(detectedQRCode);
                 
                 // Stop detection after successful scan
                 isDetecting = false;
@@ -827,8 +842,9 @@ const ReceiveMoneyModal = ({
         {step === 'scanner' && (
           <div className="space-y-4">
             <div className="bg-orange-500/20 border border-orange-500/50 rounded-lg p-4">
-              <p className="text-white text-center font-semibold mb-2">📸 Scanning QR Code</p>
-              <p className="text-sm text-gray-300 text-center">Point your camera at the payment QR code</p>
+              <p className="text-white text-center font-semibold mb-2">📸 Scanning Payment QR Code</p>
+              <p className="text-sm text-gray-300 text-center">Point your camera at the payment QR code or use a scanner</p>
+              <p className="text-xs text-orange-300 text-center mt-2">✨ Supports all QR code formats used in payments</p>
             </div>
 
             {/* Camera View */}
@@ -876,15 +892,20 @@ const ReceiveMoneyModal = ({
             <div className="bg-white/10 rounded-lg p-4">
               <p className="text-sm text-gray-300 text-center mb-2">
                 <span className="inline-block px-3 py-1 bg-orange-500/20 rounded-full text-orange-400 font-semibold mb-2">
-                  Multi-Device Support
+                  QR Code Scanner Ready
                 </span>
               </p>
               <ul className="text-xs text-gray-400 space-y-1">
-                <li>📱 <strong>Camera:</strong> Point at QR code (auto-detect)</li>
-                <li>🔫 <strong>Handheld Scanner:</strong> Scan barcode/QR</li>
+                <li>📱 <strong>Camera QR Scan:</strong> Point at payment QR code (auto-detect)</li>
+                <li>🔫 <strong>Handheld Scanner:</strong> Scan QR code or barcode</li>
                 <li>🖥️ <strong>USB Scanner:</strong> Connected scanners work automatically</li>
                 <li>📲 <strong>Bluetooth Scanner:</strong> Paired devices supported</li>
               </ul>
+              <div className="mt-3 pt-3 border-t border-white/20">
+                <p className="text-xs text-gray-500 text-center">
+                  💡 <strong>Tip:</strong> Hold steady and ensure good lighting for best results
+                </p>
+              </div>
             </div>
 
             {error && (
