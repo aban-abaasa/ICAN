@@ -49,6 +49,7 @@ import CandlestickChart from './CandlestickChart';
 import BuyIcan from './ICAN/BuyIcan';
 import SellIcan from './ICAN/SellIcan';
 import ReceiveMoneyModal from './ReceiveMoneyModal';
+import PayMoneyModal from './PayMoneyModal';
 
 const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = null, onTabChange = null }) => {
   const [showBalance, setShowBalance] = useState(true);
@@ -189,6 +190,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   const [showWalletAccountNumber, setShowWalletAccountNumber] = useState(false);
   const [showAgentAccountNumber, setShowAgentAccountNumber] = useState(true);
   const [showReceiveMoneyModal, setShowReceiveMoneyModal] = useState(false);
+  const [showPayMoneyModal, setShowPayMoneyModal] = useState(false);
   
   // Payment Cards State
   const [paymentCards, setPaymentCards] = useState([]);
@@ -4036,10 +4038,10 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           </div>
 
           {/* Action Buttons */}
-          <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-3 gap-2 sm:gap-3" style={walletUi.actionButtonsWrap}>
+          <div className="grid grid-cols-4 gap-1 sm:gap-2" style={walletUi.actionButtonsWrap}>
             <button
               onClick={() => setActiveModal('send')}
-              className="rounded-lg py-2 sm:py-3 px-2 sm:px-4 flex flex-col items-center gap-1 sm:gap-2 transition-all hover:translate-y-[-1px]"
+              className="rounded-lg py-2 sm:py-3 px-1 sm:px-3 flex flex-col items-center gap-1 sm:gap-2 transition-all hover:translate-y-[-1px]"
               style={walletUi.actionButtons.send}
             >
               <Send className="w-4 sm:w-5 h-4 sm:h-5 text-white/90" />
@@ -4047,15 +4049,26 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
             </button>
             <button
               onClick={() => setShowReceiveMoneyModal(true)}
-              className="rounded-lg py-2 sm:py-3 px-2 sm:px-4 flex flex-col items-center gap-1 sm:gap-2 transition-all hover:translate-y-[-1px]"
+              className="rounded-lg py-2 sm:py-3 px-1 sm:px-3 flex flex-col items-center gap-1 sm:gap-2 transition-all hover:translate-y-[-1px]"
               style={walletUi.actionButtons.receive}
             >
               <ArrowDownLeft className="w-4 sm:w-5 h-4 sm:h-5 text-white/90" />
               <span className="text-xs sm:text-sm font-medium text-white">Receive</span>
             </button>
             <button
+              onClick={() => {
+                console.log('Pay button clicked');
+                setShowPayMoneyModal(true);
+              }}
+              className="rounded-lg py-2 sm:py-3 px-1 sm:px-3 flex flex-col items-center gap-1 sm:gap-2 transition-all hover:translate-y-[-1px]"
+              style={{...walletUi.actionButtons.send, background: 'linear-gradient(135deg, #ea580c, #c2410c)'}}
+            >
+              <ArrowUpRight className="w-4 sm:w-5 h-4 sm:h-5 text-white/90" />
+              <span className="text-xs sm:text-sm font-medium text-white">Pay</span>
+            </button>
+            <button
               onClick={() => setActiveModal('topup')}
-              className="rounded-lg py-2 sm:py-3 px-2 sm:px-4 flex flex-col items-center gap-1 sm:gap-2 transition-all hover:translate-y-[-1px]"
+              className="rounded-lg py-2 sm:py-3 px-1 sm:px-3 flex flex-col items-center gap-1 sm:gap-2 transition-all hover:translate-y-[-1px]"
               style={walletUi.actionButtons.topUp}
             >
               <Plus className="w-4 sm:w-5 h-4 sm:h-5 text-white/90" />
@@ -6629,6 +6642,17 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         onClose={() => setShowReceiveMoneyModal(false)}
         userId={userAccount?.id}
         selectedCurrency={selectedCurrency}
+      />
+
+      {/* PAY MONEY MODAL WITH QR SCANNER */}
+      <PayMoneyModal
+        isOpen={showPayMoneyModal}
+        onClose={() => setShowPayMoneyModal(false)}
+        onPaymentScanned={(code) => {
+          console.log('Payment QR scanned:', code);
+          // Handle payment processing here
+          setShowPayMoneyModal(false);
+        }}
       />
     </div>
   );
