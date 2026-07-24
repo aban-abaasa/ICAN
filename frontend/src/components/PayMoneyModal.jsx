@@ -353,6 +353,27 @@ const PayMoneyModal = ({
             onChange={(e) => setScanBuffer(e.target.value)}
           />
 
+          {/* OR Divider */}
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-white/20"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-gray-800 text-gray-400">OR</span>
+            </div>
+          </div>
+
+          {/* Manual Code Input */}
+          <div>
+            <input
+              type="text"
+              placeholder="Enter payment code"
+              value={scannedData}
+              onChange={(e) => setScannedData(e.target.value)}
+              className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:border-orange-400 focus:outline-none transition-all text-center font-mono"
+            />
+          </div>
+
           {error && (
             <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg">
               <p className="text-sm text-red-400">{error}</p>
@@ -365,12 +386,24 @@ const PayMoneyModal = ({
             </div>
           )}
 
-          <button
-            onClick={handleCloseModal}
-            className="w-full px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-all"
-          >
-            ✕
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={handleCloseModal}
+              className="flex-1 px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-all"
+            >
+              ✕
+            </button>
+            {scannedData.trim() && (
+              <button
+                onClick={() => {
+                  handleScannedCode(scannedData.trim());
+                }}
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg hover:shadow-lg transition-all font-semibold"
+              >
+                Pay
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
