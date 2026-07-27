@@ -38,6 +38,7 @@ import agentService from '../services/agentService';
 import { walletAccountService } from '../services/walletAccountService';
 import universalTransactionService from '../services/universalTransactionService';
 import { sendICAN as sendIcaneracoin } from '../services/icanWalletService';
+import { payIcanRequest, parseIcanPayCode } from '../services/icanPaymentRequestService';
 import { getSupabaseClient } from '../lib/supabase/client';
 import { getUserTrustGroups } from '../services/trustService';
 import { CountryService } from '../services/countryService';
@@ -6648,10 +6649,34 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       <PayMoneyModal
         isOpen={showPayMoneyModal}
         onClose={() => setShowPayMoneyModal(false)}
-        onPaymentScanned={(code) => {
-          console.log('Payment QR scanned:', code);
-          // Handle payment processing here
-          setShowPayMoneyModal(false);
+        onPaymentScanned={async (code) => {
+          const paymentCode = parseIcanPayCode(code);
+          if (!paymentCode || !currentUserId) {
+            alert('Invalid payment QR code or you are not signed in.');
+            return;
+          }
+
+          const pin = window.prompt('Enter your transaction PIN to approve this payment:');
+          if (pin === null) return;
+
+          const pinCheck = await walletAccountService.verifyUserPIN(currentUserId, pin);
+          if (!pinCheck?.success) {
+            alert(pinCheck?.error || 'Incorrect transaction PIN. Payment cancelled.');
+            return;
+          }
+
+          try {
+            setTransactionInProgress(true);
+            const result = await payIcanRequest({ paymentCode, payerUserId: currentUserId });
+            alert('Payment successful: ' + Number(result.request.amount).toLocaleString() + ' ICAN sent.');
+            setShowPayMoneyModal(false);
+            await loadWalletBalances(currentUserId);
+          } catch (error) {
+            console.error('ICAN QR payment failed:', error);
+            alert(error.message || 'Payment failed. No request was completed.');
+          } finally {
+            setTransactionInProgress(false);
+          }
         }}
       />
     </div>

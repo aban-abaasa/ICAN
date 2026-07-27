@@ -90,7 +90,12 @@ export default defineConfig({
 
   // Path aliases for cleaner imports
   resolve: {
+    // Keep every hook and the renderer on the same React module in local Vite.
+    // The repository also contains a nested frontend/backend node_modules tree.
+    dedupe: ['react', 'react-dom'],
     alias: {
+      react: path.resolve(__dirname, './node_modules/react'),
+      'react-dom': path.resolve(__dirname, './node_modules/react-dom'),
       '@': path.resolve(__dirname, './src'),
       '@components': path.resolve(__dirname, './src/components'),
       '@context': path.resolve(__dirname, './src/context'),
