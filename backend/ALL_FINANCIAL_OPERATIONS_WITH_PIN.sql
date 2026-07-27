@@ -282,7 +282,8 @@ DECLARE
   v_commission numeric;
   v_net_amount numeric;
 BEGIN
-  SELECT pin_hash, failed_pin_attempts INTO v_user_pin_hash, v_pin_attempts
+  -- user_accounts uses pin_attempts as the canonical lock counter.
+  SELECT pin_hash, COALESCE(pin_attempts, 0) INTO v_user_pin_hash, v_pin_attempts
   FROM public.user_accounts WHERE user_id = p_user_id;
 
   IF v_user_pin_hash IS NULL THEN
@@ -297,12 +298,12 @@ BEGIN
 
   -- Verify PIN
   IF v_user_pin_hash != p_pin_attempt THEN
-    UPDATE public.user_accounts SET failed_pin_attempts = COALESCE(failed_pin_attempts, 0) + 1 WHERE user_id = p_user_id;
+    UPDATE public.user_accounts SET pin_attempts = COALESCE(pin_attempts, 0) + 1 WHERE user_id = p_user_id;
     RETURN QUERY SELECT false, 'Invalid PIN. Attempts remaining: ' || (3 - v_pin_attempts)::text, 0::numeric, 0::numeric;
     RETURN;
   END IF;
 
-  UPDATE public.user_accounts SET failed_pin_attempts = 0 WHERE user_id = p_user_id;
+  UPDATE public.user_accounts SET pin_attempts = 0, pin_locked_until = NULL WHERE user_id = p_user_id;
 
   -- Calculate commission (2.5% default)
   v_commission := (p_amount * 2.5) / 100;

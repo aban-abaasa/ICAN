@@ -57,6 +57,12 @@ const hashGroupPin = (pin) => {
   return btoa(`group-hash-${Math.abs(hash)}-${pin.length}`);
 };
 
+const generateRecoveryPin = () => {
+  const values = new Uint32Array(1);
+  crypto.getRandomValues(values);
+  return String(values[0] % 10000).padStart(4, '0');
+};
+
 // Country ISO-2 → currency code (mirrors ican_country_currency_map)
 const COUNTRY_CURRENCY = {
   UG:'UGX',KE:'KES',TZ:'TZS',RW:'RWF',BI:'RWF',
@@ -678,7 +684,11 @@ const RecoveryTab = () => {
   useEffect(() => { refresh(); }, [refresh]);
 
   const resolve = async (requestId, action) => {
-    const pin = (pinDrafts[requestId] || '').trim();
+    const request = requests.find(r => r.request_id === requestId);
+    const isPinReset = request?.request_type === 'pin_reset';
+    // A forgotten PIN must always receive a replacement PIN. If the developer
+    // leaves the field blank, generate one so the requester can see it.
+    const pin = (pinDrafts[requestId] || '').trim() || (action === 'unlock' && isPinReset ? generateRecoveryPin() : '');
     if (action === 'unlock' && pin && !/^\d{4}$/.test(pin)) {
       setError('New PIN must be exactly 4 digits, or leave it blank to keep the current PIN.');
       return;
@@ -740,7 +750,7 @@ const RecoveryTab = () => {
           <input
             value={pinDrafts[r.request_id] || ''}
             onChange={e => setPinDrafts(prev => ({ ...prev, [r.request_id]: e.target.value.replace(/\D/g,'').slice(0,4) }))}
-            placeholder="New 4-digit PIN (optional)"
+            placeholder={r.request_type === 'pin_reset' ? 'New PIN (blank = generate)' : 'New 4-digit PIN (optional)'}
             maxLength={4}
             className="w-44 rounded-lg border px-2.5 py-1.5 text-xs outline-none"
             style={{ background:'var(--dp-input)', borderColor:'var(--dp-input-bd)', color:'var(--dp-txt)' }}
@@ -748,7 +758,7 @@ const RecoveryTab = () => {
           <button onClick={() => resolve(r.request_id, 'unlock')} disabled={resolvingId === r.request_id}
             className="rounded-lg px-3 py-1.5 text-xs font-bold text-white transition disabled:opacity-40"
             style={{ background:'linear-gradient(135deg,#22c55e,#15803d)' }}>
-            {resolvingId === r.request_id ? 'Working…' : pinDrafts[r.request_id] ? 'Unlock + set PIN' : 'Unlock'}
+            {resolvingId === r.request_id ? 'Working…' : r.request_type === 'pin_reset' ? 'Unlock + provide PIN' : pinDrafts[r.request_id] ? 'Unlock + set PIN' : 'Unlock'}
           </button>
           <button onClick={() => resolve(r.request_id, 'reject')} disabled={resolvingId === r.request_id}
             className="rounded-lg border px-3 py-1.5 text-xs font-bold transition disabled:opacity-40"

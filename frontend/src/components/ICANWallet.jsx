@@ -1829,9 +1829,6 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       // Generate agent code
       const agentCode = `AGENT-${agentRegistrationForm.locationCity.toUpperCase().slice(0, 3)}-${Date.now().toString().slice(-4)}`;
       
-      // Generate unique agent ID (like wallet account number format)
-      const agentId = `ICAN-AGENT-${Date.now().toString().slice(-8)}${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-
       // Get current user
       const { data: { user } } = await agentService.supabase?.auth.getUser() || {};
       if (!user) {
@@ -1850,8 +1847,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           user_id: user.id,
           agent_name: agentRegistrationForm.agentName,
           agent_code: agentCode,
-          agent_id: agentId,
-          phone_number: agentRegistrationForm.phoneNumber,
+           phone_number: agentRegistrationForm.phoneNumber,
           location_city: agentRegistrationForm.locationCity,
           location_name: agentRegistrationForm.locationName,
           status: 'active',
@@ -1882,7 +1878,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       // Success!
       setRegistrationMessage({
         type: 'success',
-        text: `✅ Agent account created! Your Agent ID: ${agentId}`
+         text: `✅ Agent account created! Your Agent ID: ${agentCode}`
       });
 
       // Reset form
@@ -4981,9 +4977,9 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 </div>
                 <p 
                   className="text-white font-mono font-bold cursor-pointer hover:text-blue-300 transition-all select-all"
-                  onClick={() => { navigator.clipboard.writeText(agentAccount.agent_id); alert('Agent ID copied!'); }}
+                   onClick={() => { navigator.clipboard.writeText(agentAccount.agent_id || agentAccount.agent_code); alert('Agent ID copied!'); }}
                 >
-                  {showAgentAccountNumber ? agentAccount.agent_id : '••••••••••••••••'}
+                   {showAgentAccountNumber ? (agentAccount.agent_id || agentAccount.agent_code) : '••••••••••••••••'}
                 </p>
               </div>
 

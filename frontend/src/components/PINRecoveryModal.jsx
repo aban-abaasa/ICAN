@@ -29,11 +29,49 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
 
+  useEffect(() => {
+    if (!isOpen || !userId) return undefined;
+
+    let cancelled = false;
+    const restoreRequest = async () => {
+      try {
+        const supabase = getSupabaseClient();
+        let query = supabase
+          .from('account_unlock_requests')
+          .select('id, status, resolved_pin_plain, request_type, created_at')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        if (groupId) query = query.eq('group_id', groupId);
+        else query = query.is('group_id', null);
+        const { data, error: err } = await query;
+        const row = data?.[0];
+        if (cancelled || err || !row) return;
+
+        setRequestId(row.id);
+        if (row.status === 'completed' || row.status === 'rejected') {
+          setResolvedStatus(row.status);
+          setNewPin(row.resolved_pin_plain || null);
+          setStatusMessage(row.status === 'completed' ? 'Resolved — try again now.' : 'This request was rejected.');
+          setStep('resolved');
+        } else if (row.status === 'pending') {
+          setStep('pending');
+          pollStatus(row.id);
+        }
+      } catch {
+        // The request form remains available if the status lookup fails.
+      }
+    };
+
+    restoreRequest();
+    return () => { cancelled = true; if (pollRef.current) clearInterval(pollRef.current); };
+  }, [isOpen, userId, groupId]);
+
   if (!isOpen) return null;
 
   const pollStatus = (id) => {
     if (pollRef.current) clearInterval(pollRef.current);
-    pollRef.current = setInterval(async () => {
+    const check = async () => {
       try {
         const supabase = getSupabaseClient();
         const { data, error: err } = await supabase.rpc('get_unlock_request_status', {
@@ -51,7 +89,9 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
       } catch {
         // transient — next tick will retry
       }
-    }, 5000);
+    };
+    check();
+    pollRef.current = setInterval(check, 5000);
   };
 
   const handleSubmitRequest = async () => {
@@ -219,6 +259,20 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
             >
               Close
             </button>
+            {resolvedStatus === 'completed' && (
+              <button
+                onClick={() => {
+                  setStep('request');
+                  setRequestId(null);
+                  setResolvedStatus(null);
+                  setNewPin(null);
+                  setStatusMessage('');
+                }}
+                className="w-full text-sm text-blue-600 hover:text-blue-800"
+              >
+                Start another recovery request
+              </button>
+            )}
           </div>
         )}
       </div>

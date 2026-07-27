@@ -312,25 +312,18 @@ BEGIN
     WHERE group_id = v_group_id;
   ELSE
     -- user_id isn't unique on user_accounts (personal + business rows can
-    -- coexist), so target only one row — same "personal first" tie-break
-    -- ican_dev_get_recovery_requests uses — instead of updating every
-    -- account that user owns.
-    -- process_cashout_with_pin() (and the sibling *_with_pin functions)
-    -- actually check/increment failed_pin_attempts, not pin_attempts /
-    -- pin_locked_until — reset both column sets so every known lock check
-    -- clears, regardless of which one a given RPC happens to read.
+    -- coexist). Reset every account owned by the user because the financial
+    -- RPCs look up accounts by user_id and may resolve a different row than
+    -- the personal-first row shown in the developer panel.
+    -- Reset both counter names for compatibility with older deployed RPCs;
+    -- current user_accounts schemas use pin_attempts.
     UPDATE public.user_accounts
     SET pin_attempts = 0,
         pin_locked_until = NULL,
         failed_pin_attempts = 0,
         pin_hash = COALESCE(p_new_pin_hash, pin_hash),
         updated_at = now()
-    WHERE id = (
-      SELECT id FROM public.user_accounts
-      WHERE user_id = v_user_id
-      ORDER BY (account_type = 'personal') DESC, created_at ASC
-      LIMIT 1
-    );
+    WHERE user_id = v_user_id;
   END IF;
 
   UPDATE public.account_unlock_requests

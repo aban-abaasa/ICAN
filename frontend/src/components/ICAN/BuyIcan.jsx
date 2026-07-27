@@ -126,13 +126,13 @@ export default function BuyIcan({ userId: propUserId, onSuccess } = {}) {
         // Record blockchain transaction (non-blocking)
         if (icanAmt > 0 && pricePerCoin > 0) {
           try {
-            const blockchainResult = await icanCoinBlockchainService.recordBlockchainTransaction(
-              resolvedUserId,
-              'purchase',
-              icanAmt,
+            const blockchainResult = await icanCoinBlockchainService.recordBlockchainTransaction({
+              userId: resolvedUserId,
+              type: 'purchase',
+              icanAmount: icanAmt,
               pricePerCoin,
-              'completed'
-            );
+              totalValueUGX: icanAmt * pricePerCoin,
+            });
             if (blockchainResult.success) {
               console.log('✅ Blockchain transaction recorded');
             } else {

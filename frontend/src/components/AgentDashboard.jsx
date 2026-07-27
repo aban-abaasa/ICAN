@@ -12,7 +12,6 @@ import {
 import agentService from '../services/agentService';
 import { CountryService } from '../services/countryService';
 import { getSupabaseClient } from '../lib/supabase/client';
-import PINRecoveryModal from './PINRecoveryModal';
 
 /**
  * 🏪 AGENT DASHBOARD
@@ -76,11 +75,6 @@ const AgentDashboard = () => {
   const [showPinInput, setShowPinInput] = useState(false);
   const [showFingerprintSetup, setShowFingerprintSetup] = useState(false);
 
-  // State for the account recovery modal (PIN reset / unlock) — resolved by a
-  // developer from the dev panel, there is no self-service unlock anymore.
-  const [showRecoveryModal, setShowRecoveryModal] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
-
   // Collapsible Agent Info State
   const [showAgentIdCard, setShowAgentIdCard] = useState(true);
   const [collapsedAgentIdCard, setCollapsedAgentIdCard] = useState(false);
@@ -94,10 +88,6 @@ const AgentDashboard = () => {
     const loadCountryAndCurrency = async () => {
       const supabase = getSupabaseClient();
       const { data: { user } } = await supabase.auth.getUser();
-
-      if (user) {
-        setCurrentUser({ id: user.id, email: user.email });
-      }
 
       // Prefer server-side selected country to avoid stale localStorage values.
       let countryCode = null;
@@ -477,8 +467,14 @@ const AgentDashboard = () => {
       info: <Clock className="w-5 h-5 text-blue-400" />
     }[notification.type];
 
-    // Check if account is locked
-    const isAccountLocked = notification.message && notification.message.includes('Account locked');
+    // Cash-out PIN verification is performed against the customer's account
+    // (the account number entered in the cash-out form), not the logged-in
+    // agent's account. Never present customer lockouts as agent lockouts.
+    const isCustomerAccountLocked = /account locked/i.test(notification.message || '');
+    const displayTitle = isCustomerAccountLocked ? '❌ Customer Account Locked' : notification.title;
+    const displayMessage = isCustomerAccountLocked
+      ? 'The customer account is locked after too many failed PIN attempts. Ask the customer to complete account recovery before trying this cash-out again.'
+      : notification.message;
 
     return (
       <div className="space-y-4 mb-4">
@@ -486,43 +482,15 @@ const AgentDashboard = () => {
         <div className={`border ${bgColor} rounded-lg p-4 flex gap-3`}>
           {icon}
           <div>
-            <h3 className="font-semibold text-white">{notification.title}</h3>
-            <p className="text-gray-300 text-sm">{notification.message}</p>
+            <h3 className="font-semibold text-white">{displayTitle}</h3>
+            <p className="text-gray-300 text-sm">{displayMessage}</p>
           </div>
         </div>
 
-        {/* Account Unlock Actions - Show when account is locked */}
-        {isAccountLocked && (
-          <div className="bg-gradient-to-br from-red-900/40 to-orange-900/40 border border-orange-500/50 rounded-lg p-6">
-            <div className="flex items-start gap-4 mb-4">
-              <div className="text-4xl">🏪</div>
-              <div className="flex-1">
-                <h3 className="text-white font-bold text-lg mb-1">🔐 Account Locked</h3>
-                <p className="text-gray-300 text-sm">
-                  Your account has been locked due to too many failed PIN attempts. Choose an option below to unlock your account:
-                </p>
-              </div>
-            </div>
-
-            {/* Action Button */}
-            <div className="mb-3">
-              <button
-                onClick={() => setShowRecoveryModal(true)}
-                className="flex items-center gap-3 p-4 w-full bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/50 rounded-lg transition-all group"
-              >
-                <div className="text-2xl">🔐</div>
-                <div className="text-left">
-                  <p className="font-semibold text-purple-300 group-hover:text-purple-200">Request Account Recovery</p>
-                  <p className="text-xs text-gray-400">Submit a request — a developer reviews and unlocks it, there's no instant self-unlock</p>
-                </div>
-              </button>
-            </div>
-
-            {/* Tip */}
-            <p className="text-xs text-gray-400 bg-slate-700/30 p-3 rounded">
-              💡 <strong>Tip:</strong> Have your Agent ID ready for faster verification
-            </p>
-          </div>
+        {isCustomerAccountLocked && (
+          <p className="rounded-lg border border-orange-500/50 bg-orange-900/20 p-3 text-xs text-orange-200">
+            This lock belongs to the customer account entered for the cash-out. The agent account is not locked.
+          </p>
         )}
       </div>
     );
@@ -612,7 +580,7 @@ const AgentDashboard = () => {
             {!isCashIn && (
               <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 border-2 border-blue-400/50 rounded-xl p-4 sm:p-5 mt-4 sm:mt-6">
                 <label className="block text-blue-300 text-base sm:text-lg font-bold mb-3 flex items-center gap-2">
-                  🔐 Enter Your PIN
+                  🔐 Enter Customer PIN
                 </label>
                 <input
                   type="password"
@@ -623,7 +591,7 @@ const AgentDashboard = () => {
                   className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-white/10 border-2 border-blue-400/50 rounded-lg text-white placeholder-gray-500 text-center text-2xl sm:text-3xl tracking-widest font-bold focus:outline-none focus:border-blue-300 focus:bg-white/20 transition-all"
                   inputMode="numeric"
                 />
-                <p className="text-xs sm:text-sm text-gray-400 mt-2 text-center">Your 4-digit transaction PIN</p>
+                <p className="text-xs sm:text-sm text-gray-400 mt-2 text-center">The customer's 4-digit transaction PIN</p>
                 {confirmationPin.length === 4 && (
                   <p className="text-xs sm:text-sm text-green-400 mt-2 text-center font-semibold">✓ PIN ready for approval</p>
                 )}
@@ -729,17 +697,6 @@ const AgentDashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
-
-        {/* ============================================ */}
-        {/* MODAL - ACCOUNT RECOVERY (dev-panel resolved) */}
-        {/* ============================================ */}
-
-        <PINRecoveryModal
-          isOpen={showRecoveryModal}
-          onClose={() => setShowRecoveryModal(false)}
-          userId={currentUser?.id}
-          userEmail={currentUser?.email}
-        />
 
         {/* ============================================ */}
         {/* HEADER */}

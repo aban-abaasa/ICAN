@@ -132,13 +132,13 @@ export default function SellIcan({ userId: propUserId, onSuccess } = {}) {
         );
 
         // Record blockchain transaction
-        await icanCoinBlockchainService.recordBlockchainTransaction(
-          resolvedUserId,
-          'sale',
-          result.icanAmount,
-          result.pricePerCoin,
-          'completed'
-        );
+        await icanCoinBlockchainService.recordBlockchainTransaction({
+          userId: resolvedUserId,
+          type: 'sale',
+          icanAmount: result.icanAmount,
+          pricePerCoin: result.pricePerCoin,
+          totalValueUGX: result.icanAmount * result.pricePerCoin,
+        });
 
         // Update balance
         const newBalance = balance - parseFloat(icanAmount);
