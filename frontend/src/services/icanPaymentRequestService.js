@@ -35,6 +35,17 @@ export async function payIcanRequest({ paymentCode, payerUserId }) {
     note: request.description || ('Payment request ' + paymentCode),
     referenceId: request.id,
   });
+  const payerReceipt = {
+    receiptNumber: 'ICAN-RCP-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7).toUpperCase(),
+    paymentCode,
+    transactionId: transfer.out_tx_id || transfer.transaction_id || null,
+    amount,
+    currency: request.currency || 'ICAN',
+    payerUserId,
+    recipientUserId: request.user_id,
+    issuedAt: new Date().toISOString(),
+    description: request.description || 'ICAN QR payment',
+  };
 
   const completion = {
     status: 'completed',
@@ -58,7 +69,12 @@ export async function payIcanRequest({ paymentCode, payerUserId }) {
 
   if (error) throw error;
   if (!completed) throw new Error('Transfer completed, but the payment request could not be marked completed');
-  return { request: completed, transfer };
+  try {
+    const stored = JSON.parse(localStorage.getItem('ican_payment_receipts') || '[]');
+    localStorage.setItem('ican_payment_receipts', JSON.stringify([payerReceipt, ...stored].slice(0, 100)));
+  } catch (_) {}
+
+  return { request: completed, transfer, payerReceipt };
 }
 
 export default { parseIcanPayCode, getIcanPaymentRequest, payIcanRequest };

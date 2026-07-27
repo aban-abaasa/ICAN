@@ -6668,7 +6668,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           try {
             setTransactionInProgress(true);
             const result = await payIcanRequest({ paymentCode, payerUserId: currentUserId });
-            alert('Payment successful: ' + Number(result.request.amount).toLocaleString() + ' ICAN sent.');
+            alert('Payment successful. Receipt: ' + (result.payerReceipt?.receiptNumber || 'available in transaction history'));
             setShowPayMoneyModal(false);
             await loadWalletBalances(currentUserId);
           } catch (error) {
