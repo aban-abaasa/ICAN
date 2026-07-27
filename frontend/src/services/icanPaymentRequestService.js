@@ -1,4 +1,4 @@
-﻿import { getSupabaseClient } from '../lib/supabase/client';
+import { getSupabaseClient } from '../lib/supabase/client';
 import { sendICAN } from './icanWalletService';
 
 const supabase = getSupabaseClient();
@@ -36,14 +36,25 @@ export async function payIcanRequest({ paymentCode, payerUserId }) {
     referenceId: request.id,
   });
 
-  const { data: completed, error } = await supabase.from('payment_requests')
-    .update({
-      status: 'completed',
-      payer_user_id: payerUserId,
-      ican_tx_id: transfer.out_tx_id || transfer.transaction_id || null,
-      completed_at: new Date().toISOString(),
-    })
+  const completion = {
+    status: 'completed',
+    payer_user_id: payerUserId,
+    ican_tx_id: transfer.out_tx_id || transfer.transaction_id || null,
+    completed_at: new Date().toISOString(),
+  };
+  let { data: completed, error } = await supabase.from('payment_requests')
+    .update(completion)
     .eq('id', request.id).eq('status', 'pending').select('*').maybeSingle();
+
+  if (error?.message?.includes('ican_tx_id')) {
+    ({ data: completed, error } = await supabase.from('payment_requests')
+      .update({
+        status: 'completed',
+        payer_user_id: payerUserId,
+        completed_at: completion.completed_at,
+      })
+      .eq('id', request.id).eq('status', 'pending').select('*').maybeSingle());
+  }
 
   if (error) throw error;
   if (!completed) throw new Error('Transfer completed, but the payment request could not be marked completed');
