@@ -502,21 +502,55 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       setWalletTransactionsLoading(true);
       const supabase = getSupabaseClient();
 
-      const { data, error } = await supabase
-        .from('ican_transactions')
-        .select('*')
-        .eq('user_id', currentUserId)
-        .order('created_at', { ascending: false })
-        .limit(50);
+      const [sharedResult, legacyResult] = await Promise.all([
+        supabase
+          .from('ican_coin_transactions')
+          .select('*')
+          .or('sender_user_id.eq.' + currentUserId + ',recipient_user_id.eq.' + currentUserId)
+          .order('created_at', { ascending: false })
+          .limit(100),
+        supabase
+          .from('ican_transactions')
+          .select('*')
+          .eq('user_id', currentUserId)
+          .order('created_at', { ascending: false })
+          .limit(100),
+      ]);
 
-      if (error) {
-        console.error('Error loading wallet transactions:', error);
+      if (sharedResult.error && legacyResult.error) {
+        console.error('Error loading wallet transactions:', sharedResult.error || legacyResult.error);
+        setWalletTransactions([]);
         return;
       }
 
-      setWalletTransactions(data || []);
+      const shared = (sharedResult.data || []).map((tx) => ({
+        ...tx,
+        id: 'shared-' + tx.id,
+        amount: Number(tx.ican_amount || 0) * (
+          tx.sender_user_id === currentUserId && tx.transaction_type === 'transfer_out' ? -1 : 1
+        ),
+        currency: 'ICAN',
+        transaction_type: tx.transaction_type || tx.type || 'transaction',
+        description: tx.note || tx.description || tx.transaction_type || tx.type || 'ICAN transaction',
+        created_at: tx.created_at || tx.timestamp,
+        metadata: { ...(tx.metadata || {}), source_app: tx.source_app || 'ican' },
+      }));
+
+      const legacy = (legacyResult.data || []).map((tx) => ({
+        ...tx,
+        id: 'legacy-' + tx.id,
+        amount: Number(tx.amount || 0),
+        transaction_type: tx.transaction_type || tx.type || 'transaction',
+        description: tx.description || tx.transaction_type || tx.type || 'Wallet transaction',
+      }));
+
+      const merged = [...shared, ...legacy]
+        .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+        .slice(0, 100);
+      setWalletTransactions(merged);
     } catch (err) {
       console.error('Failed to load wallet transactions:', err);
+      setWalletTransactions([]);
     } finally {
       setWalletTransactionsLoading(false);
     }
