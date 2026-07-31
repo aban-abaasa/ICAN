@@ -1328,15 +1328,73 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setIsLoadingReportMetrics(false); return; }
       const { start, end } = getReportDateRange(filter, customStart, customEnd);
-      const { data, error } = await supabase
-        .from('ican_transactions')
-        .select('amount, transaction_type, description, created_at, metadata, business_profile_id')
-        .eq('user_id', user.id)
-        .gte('created_at', start)
-        .lte('created_at', end)
-        .order('created_at', { ascending: false });
-      if (error) { console.error('Report fetch error:', error); }
-      const rows = data || [];
+      const [manualResult, coinResult] = await Promise.all([
+        supabase
+          .from('ican_transactions')
+          .select('amount, transaction_type, description, created_at, metadata, business_profile_id')
+          .eq('user_id', user.id)
+          .gte('created_at', start)
+          .lte('created_at', end),
+        supabase
+          .from('ican_coin_transactions')
+          // Use * so reports continue working before the context migration is
+          // deployed. The mapper below supports both old and new schemas.
+          .select('*')
+          .or(`sender_user_id.eq.${user.id},recipient_user_id.eq.${user.id}`)
+          .eq('status', 'completed')
+          .gte('created_at', start)
+          .lte('created_at', end)
+      ]);
+      if (manualResult.error) console.error('Report manual transaction error:', manualResult.error);
+      if (coinResult.error) console.error('Report ICAN transaction error:', coinResult.error);
+
+      const coinRows = (coinResult.data || []).map((tx) => {
+        const isIncoming = tx.recipient_user_id === user.id;
+        // The payer's transfer_out and recipient's transfer_in are mirror rows.
+        // Only report the row belonging to this user's side of the payment.
+        if ((tx.transaction_type === 'transfer_out' && isIncoming) ||
+            (tx.transaction_type === 'transfer_in' && !isIncoming)) return null;
+        const amount = parseFloat(
+          tx.local_amount ?? tx.ugx_equivalent ?? tx.ugx_floor_value ?? ((tx.ican_amount || 0) * 5000)
+        ) || 0;
+        const classification = tx.expense_classification ||
+          (tx.source_app === 'digital-city-era' || /store|supermarket|purchase/i.test(tx.note || '')
+            ? 'business_expense' : 'person_transfer');
+        const isPersonTransfer = classification === 'person_transfer';
+        const isBusinessExpense = classification === 'business_expense' && !isIncoming;
+        const isIncome = ['earn', 'cashback', 'sale', 'refund'].includes(tx.transaction_type) ||
+          (tx.transaction_type === 'transfer_in' && !isPersonTransfer);
+        return {
+          amount,
+          transaction_type: isPersonTransfer ? 'transfer' : isIncome ? 'income' : isBusinessExpense || tx.transaction_type === 'tithe' ? 'expense' : 'transfer',
+          description: tx.merchant_name || tx.note || `${tx.source_app || 'ICAN wallet'} — ${tx.transaction_type || 'transfer'}`,
+          currency: tx.local_currency || 'UGX',
+          created_at: tx.created_at,
+          business_profile_id: tx.business_profile_id || null,
+          metadata: {
+            category: tx.source_app === 'digital-city-era' ? 'SupermartKera' : (tx.source_app || 'ican'),
+            source_app: tx.source_app,
+            record_category: classification === 'business_expense' ? 'business' : 'personal',
+            reporting_bucket: tx.transaction_type === 'tithe' ? 'tithe_payment' :
+              isBusinessExpense ? 'operating_expense' : isIncome ? 'sold_income' : null,
+            expense_classification: classification,
+            counterparty_type: tx.counterparty_type || 'unknown',
+            merchant_name: tx.merchant_name || null,
+            ican_amount: tx.ican_amount,
+            ugx_equivalent: amount,
+            reference_id: tx.reference_id,
+            business_profile_id: tx.business_profile_id || null,
+          },
+        };
+      });
+
+      // Zero-value/failed placeholder rows are not financial transactions and
+      // must not inflate report counts or produce misleading -0 totals.
+      const manualRows = (manualResult.data || []).filter((tx) =>
+        tx.status !== 'failed' && Number(tx.amount || 0) !== 0
+      );
+      const rows = [...manualRows, ...coinRows.filter(Boolean)]
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
       const scopedRows = rows.filter((t) => {
         const category = t.record_category || t.metadata?.record_category || 'personal';
         if (scope === 'business') {
@@ -1390,7 +1448,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
       const rowsWithBucket = scopedRows.map((t) => ({ ...t, _bucket: inferReportingBucket(t) }));
 
       const totalIncome = rowsWithBucket.filter(t => t.transaction_type === 'income').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
-      const totalOutflows = rowsWithBucket.filter(t => t.transaction_type !== 'income').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+      const totalOutflows = rowsWithBucket.filter(t => t.transaction_type === 'expense').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
       const soldIncome = rowsWithBucket
         .filter(t => t._bucket === 'sold_income')
         .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);

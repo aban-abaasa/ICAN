@@ -6,11 +6,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowUpRight, X, Loader } from 'lucide-react';
 import jsQR from 'jsqr';
+import { getAllAccessibleBusinessProfiles } from '../services/pitchingService';
+import { getSupabaseClient } from '../lib/supabase/client';
 
 const PayMoneyModal = ({ 
   isOpen, 
   onClose, 
-  onPaymentScanned = null 
+  onPaymentScanned = null,
+  userId = null
 }) => {
   console.log('PayMoneyModal rendered, isOpen:', isOpen);
   
@@ -19,6 +22,10 @@ const PayMoneyModal = ({
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
   const [scanBuffer, setScanBuffer] = useState('');
+  const [paymentPurpose, setPaymentPurpose] = useState('personal');
+  const [businessProfiles, setBusinessProfiles] = useState([]);
+  const [businessProfileId, setBusinessProfileId] = useState('');
+  const [loadingBusinesses, setLoadingBusinesses] = useState(false);
   
   // Refs for scanner
   const videoRef = useRef(null);
@@ -32,6 +39,9 @@ const PayMoneyModal = ({
     setError(null);
     setSuccessMessage(null);
     setScanBuffer('');
+    setPaymentPurpose('personal');
+    setBusinessProfiles([]);
+    setBusinessProfileId('');
     
     // Stop camera if active
     if (streamRef.current) {
@@ -58,6 +68,28 @@ const PayMoneyModal = ({
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || paymentPurpose !== 'business' || !userId) return undefined;
+    let cancelled = false;
+    setLoadingBusinesses(true);
+    (async () => {
+      try {
+        const client = getSupabaseClient();
+        const { data: { user } } = await client.auth.getUser();
+        const profiles = await getAllAccessibleBusinessProfiles(userId, user?.email);
+        if (!cancelled) {
+          setBusinessProfiles(profiles || []);
+          setBusinessProfileId(prev => prev || (profiles?.length === 1 ? profiles[0].id : ''));
+        }
+      } catch (error) {
+        console.error('Unable to load businesses for payment:', error);
+      } finally {
+        if (!cancelled) setLoadingBusinesses(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isOpen, paymentPurpose, userId]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -266,10 +298,14 @@ const PayMoneyModal = ({
     }
     setCameraActive(false);
     
-    // Notify parent
-    if (onPaymentScanned) {
-      onPaymentScanned(code);
-    }
+    // Wait until the payer chooses Personal/Business and, when applicable,
+    // the business profile before submitting the payment.
+  };
+
+  const submitPayment = async () => {
+    if (!onPaymentScanned || !scannedData.trim()) return;
+    if (paymentPurpose === 'business' && businessProfiles.length > 1 && !businessProfileId) return;
+    await onPaymentScanned(scannedData.trim(), paymentPurpose, businessProfileId || null);
   };
 
   const initializeGunScanner = () => {
@@ -374,6 +410,34 @@ const PayMoneyModal = ({
             />
           </div>
 
+          <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+            <p className="text-xs text-gray-400 mb-2">Record this payment as</p>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { value: 'personal', label: '👤 Personal' },
+                { value: 'business', label: '🏢 Business' },
+              ].map((option) => (
+                <button key={option.value} type="button" onClick={() => setPaymentPurpose(option.value)}
+                  className={`px-3 py-2 rounded-lg text-sm font-semibold border transition ${paymentPurpose === option.value ? 'bg-orange-500/20 border-orange-400 text-orange-200' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'}`}>
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-gray-500 mt-2">This choice controls ICANera Reports.</p>
+          </div>
+
+          {paymentPurpose === 'business' && scannedData.trim() && (
+            <div className="rounded-lg border border-blue-400/30 bg-blue-500/10 p-3">
+              <p className="text-xs text-blue-200 mb-2">Choose the business for this report</p>
+              {loadingBusinesses ? <p className="text-xs text-gray-300">Loading your businesses…</p> : businessProfiles.length > 1 ? (
+                <select value={businessProfileId} onChange={e => setBusinessProfileId(e.target.value)} className="w-full rounded-lg bg-slate-800 border border-blue-300/40 px-3 py-2 text-sm text-white">
+                  <option value="">Select a business…</option>
+                  {businessProfiles.map(profile => <option key={profile.id} value={profile.id}>{profile.business_name}</option>)}
+                </select>
+              ) : businessProfiles.length === 1 ? <p className="text-sm text-blue-100">{businessProfiles[0].business_name}</p> : <p className="text-xs text-amber-200">No business profile found; this will still be recorded as a business expense.</p>}
+            </div>
+          )}
+
           {error && (
             <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg">
               <p className="text-sm text-red-400">{error}</p>
@@ -396,7 +460,7 @@ const PayMoneyModal = ({
             {scannedData.trim() && (
               <button
                 onClick={() => {
-                  handleScannedCode(scannedData.trim());
+                  submitPayment();
                 }}
                 className="flex-1 px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg hover:shadow-lg transition-all font-semibold"
               >

@@ -492,7 +492,10 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   const DIGITAL_PAYMENT_KEYWORDS = ['momo', 'mobile money', 'mtn', 'airtel', 'vodafone', 'card', 'visa', 'mastercard', 'verve', 'flutterwave', 'ussd'];
   const getTransactionChannel = (tx) => {
     const method = (tx.metadata?.paymentMethod || tx.metadata?.method || '').toString().toLowerCase();
-    const isDigital = DIGITAL_PAYMENT_KEYWORDS.some((keyword) => method.includes(keyword));
+    const sourceApp = (tx.source_app || tx.metadata?.source_app || '').toString().toLowerCase();
+    const isSharedLedger = String(tx.id || '').startsWith('shared-') || Boolean(tx.ican_amount);
+    const isDigital = isSharedLedger || ['digital-city-era', 'farm-agent', 'mybodaguy', 'ican']
+      .some((app) => sourceApp === app) || DIGITAL_PAYMENT_KEYWORDS.some((keyword) => method.includes(keyword));
     return isDigital ? 'digital' : 'manual';
   };
 
@@ -529,9 +532,11 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         amount: Number(tx.ican_amount || 0) * (
           tx.sender_user_id === currentUserId && tx.transaction_type === 'transfer_out' ? -1 : 1
         ),
-        currency: 'ICAN',
+        local_amount: Number(tx.local_amount ?? tx.ugx_floor_value ?? (Number(tx.ican_amount || 0) * 5000)),
+        local_currency: tx.local_currency || 'UGX',
+        currency: tx.local_currency || 'UGX',
         transaction_type: tx.transaction_type || tx.type || 'transaction',
-        description: tx.note || tx.description || tx.transaction_type || tx.type || 'ICAN transaction',
+        description: tx.merchant_name || tx.note || tx.description || tx.transaction_type || tx.type || 'ICAN transaction',
         created_at: tx.created_at || tx.timestamp,
         metadata: { ...(tx.metadata || {}), source_app: tx.source_app || 'ican' },
       }));
@@ -4256,11 +4261,18 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                           {isDigital ? '🌐 Digital' : '✋ Manual'}
                         </span>
                       </div>
-                      <p className="text-xs text-gray-400">{new Date(tx.created_at).toLocaleString()}</p>
+                        <p className="text-xs text-gray-400">{new Date(tx.created_at).toLocaleString()}</p>
+                        {(tx.merchant_name || tx.expense_classification) && (
+                          <p className="text-[11px] text-gray-500 mt-0.5">
+                            {tx.merchant_name || (tx.counterparty_type === 'business' ? 'Business payment' : 'Person transfer')}
+                            {tx.expense_classification ? ` · ${tx.expense_classification.replace(/_/g, ' ')}` : ''}
+                          </p>
+                        )}
                     </div>
                   </div>
                   <p className={`font-semibold flex-shrink-0 ${isIncoming ? 'text-green-400' : 'text-blue-400'}`}>
-                    {isIncoming ? '+' : '-'}{Math.abs(parseFloat(tx.amount)).toLocaleString()} {tx.currency}
+                     {isIncoming ? '+' : '-'}{Math.abs(Number(tx.local_amount ?? tx.amount)).toLocaleString()} {tx.currency}
+                     <span className="text-xs text-gray-500 ml-1">({Math.abs(Number(tx.amount)).toFixed(4)} ICAN)</span>
                   </p>
                 </div>
               );
@@ -6679,7 +6691,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       <PayMoneyModal
         isOpen={showPayMoneyModal}
         onClose={() => setShowPayMoneyModal(false)}
-        onPaymentScanned={async (code) => {
+        userId={currentUserId}
+        onPaymentScanned={async (code, paymentPurpose = 'personal', businessProfileId = null) => {
           const paymentCode = parseIcanPayCode(code);
           if (!paymentCode || !currentUserId) {
             alert('Invalid payment QR code or you are not signed in.');
@@ -6697,7 +6710,13 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
           try {
             setTransactionInProgress(true);
-            const result = await payIcanRequest({ paymentCode, payerUserId: currentUserId });
+            const result = await payIcanRequest({
+              paymentCode,
+              payerUserId: currentUserId,
+              expenseClassification: paymentPurpose === 'business' ? 'business_expense' : 'personal_expense',
+              counterpartyType: 'business',
+              businessProfileId,
+            });
             alert('Payment successful. Receipt: ' + (result.payerReceipt?.receiptNumber || 'available in transaction history'));
             setShowPayMoneyModal(false);
             await loadWalletBalances(currentUserId);

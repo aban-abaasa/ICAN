@@ -14,6 +14,18 @@ import { supabase } from '../lib/supabase/client';
 export const ICAN_TO_UGX = 5000;
 export const SOURCE_APP = 'ican';
 
+const BUSINESS_PAYMENT_HINTS = /\b(store|shop|market|supermarket|restaurant|cafe|business|supplier|vendor|school|hospital|hotel|fuel station)\b/i;
+
+function inferTransferContext(note, merchantName, counterpartyType, expenseClassification) {
+  const text = String(note || '').trim();
+  const inferredBusiness = !merchantName && BUSINESS_PAYMENT_HINTS.test(text);
+  return {
+    merchantName: merchantName || (inferredBusiness ? text : null),
+    counterpartyType: counterpartyType || (inferredBusiness ? 'business' : 'person'),
+    expenseClassification: expenseClassification || (inferredBusiness ? 'business_expense' : 'person_transfer'),
+  };
+}
+
 // ─── Wallet ─────────────────────────────────────────────────────────────────
 
 export async function getOrCreateWallet(userId) {
@@ -58,13 +70,21 @@ export async function getTransactions(userId, limit = 50) {
   if (error) throw error;
   return (data ?? []).map((tx) => ({
     ...tx,
+    localAmount: Number(tx.local_amount ?? tx.ugx_floor_value ?? tx.ican_amount * ICAN_TO_UGX),
+    localCurrency: tx.local_currency || 'UGX',
     direction: tx.recipient_user_id === userId ? 'in' : 'out',
   }));
 }
 
 // ─── Transfer ───────────────────────────────────────────────────────────────
 
-export async function sendICAN({ fromUserId, toUserId, amount, note = '', referenceId = null }) {
+export async function sendICAN({
+  fromUserId, toUserId, amount, note = '', referenceId = null,
+  localAmount = null, localCurrency = 'UGX', merchantName = null,
+  counterpartyType = null, expenseClassification = null,
+  businessProfileId = null,
+}) {
+  const context = inferTransferContext(note, merchantName, counterpartyType, expenseClassification);
   const { data, error } = await supabase.rpc('transfer_ican', {
     p_from_user: fromUserId,
     p_to_user: toUserId,
@@ -72,6 +92,12 @@ export async function sendICAN({ fromUserId, toUserId, amount, note = '', refere
     p_note: note,
     p_source_app: SOURCE_APP,
     p_reference_id: referenceId,
+    p_local_amount: localAmount,
+    p_local_currency: localCurrency,
+    p_merchant_name: context.merchantName,
+    p_counterparty_type: context.counterpartyType,
+    p_expense_classification: context.expenseClassification,
+    p_business_profile_id: businessProfileId,
   });
   if (error) throw error;
   if (!data.success) throw new Error(data.error);

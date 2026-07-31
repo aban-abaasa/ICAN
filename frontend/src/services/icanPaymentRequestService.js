@@ -21,7 +21,13 @@ export async function getIcanPaymentRequest(paymentCode) {
   return data;
 }
 
-export async function payIcanRequest({ paymentCode, payerUserId }) {
+export async function payIcanRequest({
+  paymentCode,
+  payerUserId,
+  expenseClassification = 'personal_expense',
+  counterpartyType = 'business',
+  businessProfileId = null,
+}) {
   if (!payerUserId) throw new Error('You must be signed in to pay');
   const request = await getIcanPaymentRequest(paymentCode);
   if (request.user_id === payerUserId) throw new Error('You cannot pay your own request');
@@ -34,6 +40,12 @@ export async function payIcanRequest({ paymentCode, payerUserId }) {
     amount,
     note: request.description || ('Payment request ' + paymentCode),
     referenceId: request.id,
+    localAmount: request.local_amount || request.amount_local || null,
+    localCurrency: request.local_currency || 'UGX',
+    merchantName: request.merchant_name || null,
+    counterpartyType,
+    expenseClassification,
+    businessProfileId,
   });
   const payerReceipt = {
     receiptNumber: 'ICAN-RCP-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7).toUpperCase(),

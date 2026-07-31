@@ -175,7 +175,7 @@ export class VelocityEngine {
   /**
    * Load ALL transactions across every app for this user.
    * Merges ican_transactions (manual entries) with ican_coin_transactions
-   * (MyBodaGuy earnings, FarmAgent sales, SupermarketEra cashbacks, ICAN wallet moves).
+   * (MyBodaGuy earnings, FarmAgent sales, SupermartKera cashbacks, ICAN wallet moves).
    * This gives "Record Every Transaction" a complete cross-app financial picture.
    */
   async loadAllTransactions() {
@@ -212,48 +212,61 @@ export class VelocityEngine {
       // so calculateMetrics() and buildFinancialDataFromTransactions() work on both
       const coinTxs = (coinRes.data || []).map(tx => {
         const isIncoming = tx.recipient_user_id === this.userId;
-        const ugxAmount = parseFloat(tx.ugx_equivalent || 0);
+        // transfer_in and transfer_out are mirror rows for one payment. Keep
+        // only the row representing this user's side in the report.
+        if ((tx.transaction_type === 'transfer_out' && isIncoming) ||
+            (tx.transaction_type === 'transfer_in' && !isIncoming)) return null;
+        // The shared wallet schema stores the local-currency value as
+        // local_amount. Older rows may expose ugx_equivalent, so keep both
+        // fallbacks and finally derive UGX from the ICAN amount.
+        const ugxAmount = parseFloat(
+          tx.local_amount ?? tx.ugx_equivalent ?? ((tx.ican_amount || 0) * 5000)
+        ) || 0;
         const sourceLabels = {
           'mybodaguy':     'MyBodaGuy delivery',
           'farm-agent':    'AgriBone sale',
-          'digital-city-era': 'SupermarketEra cashback',
+          'digital-city-era': 'SupermartKera cashback',
           'ican':          'ICAN wallet'
         };
 
-        // Map coin transaction types to reporting buckets
-        const bucketMap = {
-          earn:         'sold_income',
-          cashback:     'sold_income',
-          transfer_in:  'sold_income',
-          transfer_out: 'operating_expense',
-          tithe:        'tithe_payment',
-          purchase:     'bought_stock',
-          sale:         'sold_income',
-          refund:       'sold_income'
-        };
+        const classification = tx.expense_classification ||
+          (tx.source_app === 'digital-city-era' || /store|supermarket|purchase/i.test(tx.note || '')
+            ? 'business_expense' : 'person_transfer');
+        const isPersonTransfer = classification === 'person_transfer';
+        const isIncome = ['earn', 'cashback', 'sale', 'refund'].includes(tx.transaction_type) ||
+          (tx.transaction_type === 'transfer_in' && !isPersonTransfer);
+        const isExpense = tx.transaction_type === 'tithe' || tx.transaction_type === 'purchase' ||
+          (tx.transaction_type === 'transfer_out' && classification === 'business_expense');
+        const reportingBucket = tx.transaction_type === 'tithe' ? 'tithe_payment' :
+          tx.transaction_type === 'purchase' ? 'bought_stock' :
+          isExpense ? 'operating_expense' : isIncome ? 'sold_income' : null;
 
         return {
           id:               `coin_${tx.id}`,
           user_id:          this.userId,
           amount:           ugxAmount,
-          transaction_type: isIncoming ? 'income' : 'expense',
-          description:      tx.note || `${sourceLabels[tx.source_app] || tx.source_app} — ${tx.transaction_type}`,
-          currency:         'UGX',
+          transaction_type: isPersonTransfer ? 'transfer' : isIncome ? 'income' : isExpense ? 'expense' : 'transfer',
+          description:      tx.merchant_name || tx.note || `${sourceLabels[tx.source_app] || tx.source_app} — ${tx.transaction_type}`,
+          currency:         tx.local_currency || 'UGX',
           status:           'completed',
           created_at:       tx.created_at,
-          business_profile_id: null,
+          business_profile_id: tx.business_profile_id || null,
           _source:          'coin',
           metadata: {
-            category:          tx.source_app || 'other',
+            category:          tx.source_app === 'digital-city-era' ? 'SupermartKera' : (tx.source_app || 'other'),
             source:            tx.source_app,
             source_app:        tx.source_app,
-            record_category:   'business',
-            reporting_bucket:  isIncoming ? bucketMap[tx.transaction_type] || 'sold_income' : bucketMap[tx.transaction_type] || 'operating_expense',
-            accounting_type:   isIncoming ? 'revenue' : 'expense',
+            record_category:   classification === 'business_expense' ? 'business' : 'personal',
+            reporting_bucket:  reportingBucket,
+            accounting_type:   isIncome ? 'revenue' : isExpense ? 'expense' : 'transfer',
+            expense_classification: classification,
+            counterparty_type: tx.counterparty_type || 'unknown',
+            merchant_name:     tx.merchant_name || null,
             ican_amount:       tx.ican_amount,
             ugx_equivalent:    ugxAmount,
             coin_tx_type:      tx.transaction_type,
-            reference_id:      tx.reference_id
+            reference_id:      tx.reference_id,
+            business_profile_id: tx.business_profile_id || null
           }
         };
       });
@@ -261,8 +274,8 @@ export class VelocityEngine {
       // Merge: manual entries first, then coin transactions; deduplicate by id
       const seen = new Set(manualTxs.map(t => t.id));
       const merged = [
-        ...manualTxs,
-        ...coinTxs.filter(t => !seen.has(t.id))
+        ...manualTxs.filter(t => t.status !== 'failed' && Number(t.amount || 0) !== 0),
+        ...coinTxs.filter(Boolean).filter(t => !seen.has(t.id))
       ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
       this.transactions = merged;

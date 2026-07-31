@@ -184,7 +184,7 @@ async function getWalletTransactionsDetail(ownerUserId) {
   return { totalUgx, count, bySourceApp };
 }
 
-// ─── Source: SupermarketEra purchase orders ───────────────────────────────────
+// ─── Source: SupermartKera purchase orders ───────────────────────────────────
 
 async function getSupermarketRevenue(ownerUserId) {
   if (!ownerUserId) return { valueUgx: 0, orderCount: 0 };
@@ -195,7 +195,7 @@ async function getSupermarketRevenue(ownerUserId) {
     .select('total_amount')
     .eq('status', 'completed');
   if (error) {
-    console.warn('[Valuation] SupermarketEra orders read failed:', error.message);
+    console.warn('[Valuation] SupermartKera orders read failed:', error.message);
     return { valueUgx: 0, orderCount: 0 };
   }
   // Sum all completed orders visible to this user (RLS scopes to their supplier)
@@ -327,7 +327,7 @@ export async function calculateLiveShareValue(businessProfileId, businessOwnerUs
 
   // Wallet earnings split by the app that actually issued them. Only the
   // native 'ican' wallet is always counted — FarmAgent, MyBodaGuy and
-  // SupermarketEra earnings only count once the owner explicitly links that
+  // SupermartKera earnings only count once the owner explicitly links that
   // source below, so Link/Unlink visibly changes the share price.
   const isSourceLinked  = (sourceApp) => Boolean(links[sourceApp]);
   const farmWalletUgx   = isSourceLinked('farm-agent')       ? (walletDetail.bySourceApp['farm-agent']?.valueUgx || 0) : 0;

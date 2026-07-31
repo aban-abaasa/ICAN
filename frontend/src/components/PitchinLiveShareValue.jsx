@@ -124,7 +124,7 @@ const SOURCE_APPS = [
   },
   {
     key: 'digital-city-era',
-    label: 'SupermarketEra Store',
+    label: 'SupermartKera Store',
     description: 'POS & retail transaction volume',
     icon: ShoppingCart,
     color: 'purple',
@@ -297,7 +297,7 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId }) 
         ? bodaCompanies.map(r => ({ id: r.id, label: r.name || user.email }))
         : [{ id: user.id, label: user.email }];
 
-      // ── SupermarketEra: only admin users in the digital-city-era `users` table
+      // ── SupermartKera: only admin users in the internal store `users` table
       //   can link their store. Match by email (users.id is VARCHAR there).
       const { data: dceUser } = await supabase
         .from('users')
@@ -690,7 +690,7 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId }) 
                   { label: 'Manual Capital Assets',        value: valuation.breakdown.ican_capital_assets,  color: 'text-amber-400' },
                   { label: 'AgriBone Wallet Revenue',     value: valuation.breakdown.farm_revenue,         color: 'text-green-400' },
                   { label: 'MyBodaGuy Wallet Revenue',     value: valuation.breakdown.boda_revenue,         color: 'text-orange-400' },
-                  { label: 'SupermarketEra Revenue',       value: valuation.breakdown.supermarket_revenue,  color: 'text-purple-400' },
+                  { label: 'SupermartKera Revenue',       value: valuation.breakdown.supermarket_revenue,  color: 'text-purple-400' },
                   { label: 'ICAN Wallet Revenue',          value: valuation.breakdown.ican_wallet_revenue,  color: 'text-cyan-400' },
                   { label: 'CMMS Inventory Value',         value: valuation.breakdown.cmms_inventory_value, color: 'text-blue-400' },
                   { label: `icaneracoin (${valuation.breakdown.ican_holdings_ican?.toFixed(4)} @ ${FMT(valuation.breakdown.ican_market_price)})`,
@@ -918,7 +918,7 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId }) 
                         </span>
                       </div>
                       <p className="text-[10px] sm:text-xs text-slate-500">
-                        icaneracoin earned into your wallet. The native ICAN wallet always counts — AgriBone, MyBodaGuy & SupermarketEra only count once linked below.
+                        icaneracoin earned into your wallet. The native ICAN wallet always counts — AgriBone, MyBodaGuy & SupermartKera only count once linked below.
                       </p>
                     </div>
                   </button>
@@ -930,7 +930,7 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId }) 
                           const labels = {
                             'mybodaguy':         'MyBodaGuy',
                             'farm-agent':        'AgriBone',
-                            'digital-city-era':  'SupermarketEra',
+                            'digital-city-era':  'SupermartKera',
                             'ican':              'ICAN wallet'
                           };
                           const rows = Object.entries(valuation.sourceStats.wallet.bySourceApp || {})
@@ -1074,10 +1074,10 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId }) 
                       <div className="space-y-1.5">
                         <p className="text-[10px] sm:text-xs text-slate-500">
                           {app.key === 'cmms' && 'No CMMS company found where you are admin.'}
-                          {app.key === 'digital-city-era' && 'You must be a SupermarketEra admin to link this store.'}
+                          {app.key === 'digital-city-era' && 'You must be a SupermartKera admin to link this store.'}
                           {app.key !== 'cmms' && app.key !== 'digital-city-era' && `No ${app.label} account found — paste the ID manually:`}
                         </p>
-                        {/* CMMS and SupermarketEra require verified admin — no manual ID input */}
+                        {/* CMMS and SupermartKera require verified admin — no manual ID input */}
                         {app.key !== 'cmms' && app.key !== 'digital-city-era' && (
                           <div className="flex gap-2">
                             <input
