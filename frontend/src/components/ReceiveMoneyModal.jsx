@@ -27,6 +27,8 @@ const ReceiveMoneyModal = ({
   
   // Form state
   const [formData, setFormData] = useState(initialFormData);
+  const [paymentMethod, setPaymentMethod] = useState('ican');
+  const [cashReceipt, setCashReceipt] = useState(null);
 
   // QR Code state
   const [qrData, setQrData] = useState(null);
@@ -39,6 +41,8 @@ const ReceiveMoneyModal = ({
     setError(null);
     setSuccessMessage(null);
     setFormData(initialFormData);
+    setPaymentMethod('ican');
+    setCashReceipt(null);
     setQrData(null);
     setPaymentLink('');
     setActiveRequests([]);
@@ -96,6 +100,31 @@ const ReceiveMoneyModal = ({
     try {
       setLoading(true);
       setError(null);
+
+      // Cash is receipt-only. It must never call a wallet transfer or alter
+      // the user's ICAN balance.
+      if (paymentMethod === 'cash') {
+        const receipt = {
+          receiptNumber: `CASH-RCP-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`,
+          amount: Number(formData.amount),
+          currency: selectedCurrency,
+          description: formData.description || 'Cash received',
+          paymentMethod: 'cash',
+          receivedAt: new Date().toISOString(),
+          recipientUserId: userId,
+        };
+        setCashReceipt(receipt);
+        try {
+          const stored = JSON.parse(localStorage.getItem('ican_cash_receipts') || '[]');
+          localStorage.setItem('ican_cash_receipts', JSON.stringify([receipt, ...stored].slice(0, 100)));
+        } catch {
+          // The on-screen receipt remains available if browser storage is unavailable.
+        }
+        setSuccessMessage('Cash receipt created. No ICAN balance was changed.');
+        setStep('receipt');
+        onSuccess?.(receipt);
+        return;
+      }
       
       // Create payment request
       const result = await paymentRequestService.createPaymentRequest(
@@ -117,6 +146,27 @@ const ReceiveMoneyModal = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  const downloadCashReceipt = () => {
+    if (!cashReceipt) return;
+    const text = [
+      'ICANERA DIGITAL RECEIPT',
+      '-----------------------',
+      `Receipt: ${cashReceipt.receiptNumber}`,
+      `Amount: ${cashReceipt.amount.toLocaleString()} ${cashReceipt.currency}`,
+      `Method: Cash`,
+      `Description: ${cashReceipt.description}`,
+      `Date: ${new Date(cashReceipt.receivedAt).toLocaleString()}`,
+      '',
+      'Cash receipt only. No ICAN wallet balance was changed.',
+    ].join('\n');
+    const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${cashReceipt.receiptNumber}.txt`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleCopyLink = () => {
@@ -181,6 +231,23 @@ const ReceiveMoneyModal = ({
             </div>
 
             <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Receive method</label>
+              <div className="grid grid-cols-2 gap-2">
+                {[{ value: 'ican', label: '💠 ICAN Wallet' }, { value: 'cash', label: '💵 Cash' }].map(option => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setPaymentMethod(option.value)}
+                    className={`px-3 py-3 rounded-lg border text-sm font-semibold transition-all ${paymentMethod === option.value ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200' : 'bg-white/5 border-white/10 text-gray-400'}`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              {paymentMethod === 'cash' && <p className="text-xs text-amber-300 mt-2">Cash creates a digital receipt only. Your ICAN balance will not change.</p>}
+            </div>
+
+            <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Amount ({selectedCurrency})
               </label>
@@ -240,6 +307,27 @@ const ReceiveMoneyModal = ({
               </button>
             </div>
           </form>
+        )}
+
+        {step === 'receipt' && cashReceipt && (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-emerald-400/40 bg-emerald-500/10 p-5 text-center">
+              <div className="text-4xl mb-2">✅</div>
+              <h4 className="text-xl font-bold text-emerald-300">Digital cash receipt</h4>
+              <p className="text-sm text-gray-300 mt-1">No ICAN balance was changed.</p>
+            </div>
+            <div className="rounded-lg bg-white/10 p-4 space-y-2 text-sm text-gray-200">
+              <div className="flex justify-between"><span>Receipt</span><strong>{cashReceipt.receiptNumber}</strong></div>
+              <div className="flex justify-between"><span>Amount</span><strong>{cashReceipt.amount.toLocaleString()} {cashReceipt.currency}</strong></div>
+              <div className="flex justify-between"><span>Method</span><strong>Cash</strong></div>
+              <div><span className="text-gray-400">Description</span><p>{cashReceipt.description}</p></div>
+              <div className="text-xs text-gray-400">{new Date(cashReceipt.receivedAt).toLocaleString()}</div>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={downloadCashReceipt} className="flex-1 px-4 py-2 bg-cyan-500/20 text-cyan-200 rounded-lg font-semibold">Download Receipt</button>
+              <button onClick={handleCloseModal} className="flex-1 px-4 py-2 bg-white/10 text-white rounded-lg">Done</button>
+            </div>
+          </div>
         )}
 
         {/* Step 3: QR Code Display */}
