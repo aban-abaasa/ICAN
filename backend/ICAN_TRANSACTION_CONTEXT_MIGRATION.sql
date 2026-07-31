@@ -113,21 +113,21 @@ BEGIN
   WHERE user_id = p_to_user;
 
   INSERT INTO public.ican_coin_transactions
-    (sender_user_id, recipient_user_id, ican_amount, local_amount, local_currency,
+    (sender_user_id, recipient_user_id, ican_amount, type, local_amount, local_currency,
      merchant_name, counterparty_type, expense_classification, classification_source, business_profile_id,
      transaction_type, source_app, reference_id, note, actor_role)
   VALUES
-    (p_from_user, p_to_user, p_amount, v_local_amount, upper(COALESCE(p_local_currency, 'UGX')),
+    (p_from_user, p_to_user, p_amount, 'transfer_out', v_local_amount, upper(COALESCE(p_local_currency, 'UGX')),
      NULLIF(trim(p_merchant_name), ''), v_counterparty_type, v_expense_classification, 'rules', p_business_profile_id,
      'transfer_out', p_source_app, p_reference_id, p_note, v_actor_role)
   RETURNING id INTO v_out_tx_id;
 
   INSERT INTO public.ican_coin_transactions
-    (sender_user_id, recipient_user_id, ican_amount, local_amount, local_currency,
+    (sender_user_id, recipient_user_id, ican_amount, type, local_amount, local_currency,
      merchant_name, counterparty_type, expense_classification, classification_source, business_profile_id,
      transaction_type, source_app, reference_id, note, actor_role)
   VALUES
-    (p_from_user, p_to_user, p_amount, v_local_amount, upper(COALESCE(p_local_currency, 'UGX')),
+    (p_from_user, p_to_user, p_amount, 'transfer_in', v_local_amount, upper(COALESCE(p_local_currency, 'UGX')),
      NULLIF(trim(p_merchant_name), ''), v_counterparty_type, v_expense_classification, 'rules', p_business_profile_id,
      'transfer_in', p_source_app, p_reference_id, p_note, v_actor_role)
   RETURNING id INTO v_in_tx_id;
