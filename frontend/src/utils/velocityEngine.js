@@ -196,7 +196,6 @@ export class VelocityEngine {
         .from('ican_coin_transactions')
         .select('*')
         .or(`sender_user_id.eq.${this.userId},recipient_user_id.eq.${this.userId}`)
-        .eq('status', 'completed')
         .order('created_at', { ascending: false });
 
       if (manualRes.error) {

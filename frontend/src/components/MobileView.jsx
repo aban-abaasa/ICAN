@@ -1341,7 +1341,6 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
           // deployed. The mapper below supports both old and new schemas.
           .select('*')
           .or(`sender_user_id.eq.${user.id},recipient_user_id.eq.${user.id}`)
-          .eq('status', 'completed')
           .gte('created_at', start)
           .lte('created_at', end)
       ]);
