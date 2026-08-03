@@ -5,6 +5,12 @@ import { walletAccountService } from '../services/walletAccountService';
 import { memberApprovalService } from '../services/memberApprovalService';
 import BusinessProfileDocuments from './BusinessProfileDocuments';
 
+const STRUCTURE_LIMITS = {
+  sole_proprietorship: 1,
+  organisation: 5,
+  enterprise: 20
+};
+
 const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfile }) => {
   const [step, setStep] = useState('business'); // business, owners, documents, wallet, approvals, notifications, review
   const [loading, setLoading] = useState(false);
@@ -17,6 +23,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
   const [businessData, setBusinessData] = useState({
     businessName: '',
     businessType: '',
+    businessStructure: 'organisation',
     registrationNumber: '',
     taxId: '',
     website: '',
@@ -60,7 +67,9 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
     verified: false
   });
 
-  const totalShare = coOwners.reduce((sum, owner) => sum + (owner.ownershipShare || owner.ownership_share || 0), 0);
+  const totalShare = coOwners.reduce((sum, owner) => sum + Number(owner.ownershipShare || owner.ownership_share || 0), 0);
+  const shareholderLimit = STRUCTURE_LIMITS[businessData.businessStructure] || STRUCTURE_LIMITS.organisation;
+  const isSoleProprietorship = businessData.businessStructure === 'sole_proprietorship';
 
   // Load profile data if editing
   useEffect(() => {
@@ -68,6 +77,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
       setBusinessData({
         businessName: editingProfile.business_name || '',
         businessType: editingProfile.business_type || '',
+        businessStructure: editingProfile.business_structure || (editingProfile.business_type === 'Sole Proprietorship' ? 'sole_proprietorship' : 'organisation'),
         registrationNumber: editingProfile.registration_number || '',
         taxId: editingProfile.tax_id || '',
         website: editingProfile.website || '',
@@ -269,26 +279,33 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
       return;
     }
 
-    if (coOwners.length === 0) {
+    if (isSoleProprietorship && editingProfile?.business_co_owners?.length) {
+      alert('This profile already has shareholders. Keep its current ownership structure or remove shareholders explicitly before choosing Sole Proprietorship.');
+      return;
+    }
+
+    if (!isSoleProprietorship && coOwners.length === 0) {
       alert('Please add at least one co-owner with ownership share');
       return;
     }
 
     // Check that all owners have names and emails
-    for (const owner of coOwners) {
-      if (!owner.name || !owner.email) {
-        alert('All co-owners must have a name and email');
-        return;
+    if (!isSoleProprietorship) {
+      for (const owner of coOwners) {
+        if (!owner.name || !owner.email) {
+          alert('All co-owners must have a name and email');
+          return;
+        }
       }
     }
 
-    if (totalShare !== 100) {
+    if (!isSoleProprietorship && totalShare !== 100) {
       alert(`Ownership shares must total exactly 100%. Currently: ${totalShare}%`);
       return;
     }
 
-    if (coOwners.length > 5) {
-      alert('Maximum 5 co-owners allowed');
+    if (coOwners.length > shareholderLimit) {
+      alert(`${businessData.businessStructure.replace('_', ' ')} allows up to ${shareholderLimit} shareholder${shareholderLimit === 1 ? '' : 's'}`);
       return;
     }
 
@@ -309,12 +326,14 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
     }
 
     // Verify all co-owners have ICAN accounts
-    for (const owner of coOwners) {
-      if (!owner.verified) {
-        const verification = await verifyICANUser(owner.email);
-        if (!verification.exists) {
-          alert(`Co-owner ${owner.email} must have an ICAN account first`);
-          return;
+    if (!isSoleProprietorship) {
+      for (const owner of coOwners) {
+        if (!owner.verified) {
+          const verification = await verifyICANUser(owner.email);
+          if (!verification.exists) {
+            alert(`Co-owner ${owner.email} must have an ICAN account first`);
+            return;
+          }
         }
       }
     }
@@ -324,6 +343,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
       const profile = {
         business_name: businessData.businessName,
         business_type: businessData.businessType,
+        business_structure: businessData.businessStructure,
         registration_number: businessData.registrationNumber,
         tax_id: businessData.taxId,
         website: businessData.website,
@@ -356,7 +376,9 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
         if (result.success && result.data) {
           // Now save co-owners
           console.log('👥 Saving co-owners...');
-          const coOwnersResult = await saveBusinessCoOwners(result.data.id, coOwners);
+          const coOwnersResult = isSoleProprietorship
+            ? { success: true }
+            : await saveBusinessCoOwners(result.data.id, coOwners);
           
           if (coOwnersResult.success) {
             const updatedProfile = {
@@ -381,7 +403,9 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
         if (result.success && result.data) {
           // Now save co-owners
           console.log('👥 Saving co-owners...');
-          const coOwnersResult = await saveBusinessCoOwners(result.data.id, coOwners);
+          const coOwnersResult = isSoleProprietorship
+            ? { success: true }
+            : await saveBusinessCoOwners(result.data.id, coOwners);
           
           if (coOwnersResult.success) {
             // 💳 Create wallet account for business
@@ -391,8 +415,8 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
               businessName: businessData.businessName,
               userId: userId,
               accountHolderName: businessData.businessName,
-              phoneNumber: coOwners[0]?.phone || '',
-              email: coOwners[0]?.email || '',
+              phoneNumber: coOwners[0]?.phone || (await getSupabase().auth.getUser()).data.user?.phone || '',
+              email: coOwners[0]?.email || (await getSupabase().auth.getUser()).data.user?.email || '',
               pin: walletData.pin,
               preferredCurrency: walletData.preferredCurrency,
               biometrics: { enabled: false }
@@ -444,14 +468,16 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
   // Navigation handlers
   const goToNextStep = () => {
     if (currentStepIndex < totalSteps - 1) {
-      setStep(steps[currentStepIndex + 1]);
+      const nextStep = steps[currentStepIndex + 1];
+      setStep(isSoleProprietorship && nextStep === 'owners' ? steps[currentStepIndex + 2] : nextStep);
       window.scrollTo(0, 0);
     }
   };
 
   const goToPrevStep = () => {
     if (currentStepIndex > 0) {
-      setStep(steps[currentStepIndex - 1]);
+      const previousStep = steps[currentStepIndex - 1];
+      setStep(isSoleProprietorship && previousStep === 'owners' ? 'business' : previousStep);
       window.scrollTo(0, 0);
     }
   };
@@ -520,6 +546,20 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                     <option value="Sole Proprietorship">Sole Proprietorship</option>
                     <option value="Non-profit">Non-profit</option>
                   </select>
+                </div>
+
+                <div>
+                  <label className="text-slate-300 text-sm block mb-2">Operating Structure *</label>
+                  <select
+                    value={businessData.businessStructure}
+                    onChange={(e) => handleBusinessChange('businessStructure', e.target.value)}
+                    className="w-full bg-slate-700 text-white rounded-lg px-4 py-2 border border-slate-600 focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="sole_proprietorship">Sole Proprietorship — 1 shareholder</option>
+                    <option value="organisation">Organisation — up to 5 shareholders</option>
+                    <option value="enterprise">Enterprise — up to 20 shareholders</option>
+                  </select>
+                  <p className="text-slate-400 text-xs mt-1">Choose the ownership and management level for this business.</p>
                 </div>
 
                 <div>
@@ -735,7 +775,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
               </div>
 
               {/* Add New Shareholder */}
-              {coOwners.length < 5 && (
+              {coOwners.length < shareholderLimit && (
                 <div className="bg-slate-700/50 p-4 rounded-lg border border-slate-600">
                   <h4 className="text-white font-semibold mb-4">Add New Shareholder (Must have ICAN Account)</h4>
                   <div className="space-y-4 mb-4">
@@ -947,7 +987,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                   business_name: businessData.businessName
                 }}
                 onDocumentsComplete={() => setStep('wallet')}
-                onCancel={() => setStep('owners')}
+                onCancel={() => setStep(isSoleProprietorship ? 'business' : 'owners')}
               />
             </div>
           )}
@@ -1048,7 +1088,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
 
               <div className="flex gap-4">
                 <button
-                  onClick={() => setStep('owners')}
+                  onClick={() => setStep(isSoleProprietorship ? 'business' : 'owners')}
                   className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-lg font-semibold transition"
                 >
                   Back
@@ -1081,12 +1121,12 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
               <BusinessProfileDocuments
                 businessProfile={editingProfile || { business_name: businessData.businessName }}
                 onDocumentsComplete={() => setStep('wallet')}
-                onCancel={() => setStep('owners')}
+                onCancel={() => setStep(isSoleProprietorship ? 'business' : 'owners')}
               />
 
               <div className="flex gap-4">
                 <button
-                  onClick={() => setStep('owners')}
+                  onClick={() => setStep(isSoleProprietorship ? 'business' : 'owners')}
                   className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-lg font-semibold transition"
                 >
                   Back
@@ -1581,7 +1621,11 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                   <PieChart className="w-5 h-5 text-blue-400" />
                   Equity Distribution ({totalShare}%)
                 </h4>
-                {coOwners.length === 0 ? (
+                {isSoleProprietorship ? (
+                  <div className="bg-blue-900/30 p-4 rounded-lg border border-blue-600/50 text-blue-200 text-center">
+                    Sole Proprietorship mode: no shareholders or equity allocation is required. You remain the business administrator.
+                  </div>
+                ) : coOwners.length === 0 ? (
                   <div className="bg-slate-700/50 p-4 rounded-lg border border-slate-600 text-slate-400 text-center">
                     No shareholders added. You cannot save without at least one shareholder.
                   </div>
@@ -1608,7 +1652,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                 )}
               </div>
 
-              {totalShare !== 100 && (
+              {!isSoleProprietorship && totalShare !== 100 && (
                 <div className="bg-red-900/30 border border-red-500/50 p-4 rounded-lg">
                   <p className="text-red-300">
                     ⚠️ Ownership shares must total 100%. Currently: {totalShare}%
@@ -1616,7 +1660,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                 </div>
               )}
 
-              {coOwners.length === 0 && (
+              {!isSoleProprietorship && coOwners.length === 0 && (
                 <div className="bg-red-900/30 border border-red-500/50 p-4 rounded-lg">
                   <p className="text-red-300">
                     ⚠️ Please add at least one co-owner
@@ -1635,7 +1679,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                 </button>
                 <button
                   onClick={handleCreateProfile}
-                  disabled={totalShare !== 100 || coOwners.length === 0 || loading}
+                  disabled={(!isSoleProprietorship && (totalShare !== 100 || coOwners.length === 0)) || loading}
                   className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-slate-600 disabled:to-slate-600 text-white py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 text-sm md:text-base"
                 >
                   {loading && <Loader className="w-4 h-4 animate-spin" />}

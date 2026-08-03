@@ -1,6 +1,10 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export default defineConfig({
   plugins: [react()],
@@ -91,18 +95,17 @@ export default defineConfig({
   // Path aliases for cleaner imports
   resolve: {
     // Keep every hook and the renderer on the same React module in local Vite.
-    // The repository also contains a nested frontend/backend node_modules tree.
+    // Do not alias React to raw absolute files: Vite's optimized renderer and
+    // raw React module would then become two different hook dispatchers.
     dedupe: ['react', 'react-dom'],
-    alias: {
-      react: path.resolve(__dirname, './node_modules/react'),
-      'react-dom': path.resolve(__dirname, './node_modules/react-dom'),
-      '@': path.resolve(__dirname, './src'),
-      '@components': path.resolve(__dirname, './src/components'),
-      '@context': path.resolve(__dirname, './src/context'),
-      '@utils': path.resolve(__dirname, './src/utils'),
-      '@hooks': path.resolve(__dirname, './src/hooks'),
-      '@assets': path.resolve(__dirname, './src/assets')
-    }
+    alias: [
+      { find: '@', replacement: path.resolve(__dirname, './src') },
+      { find: '@components', replacement: path.resolve(__dirname, './src/components') },
+      { find: '@context', replacement: path.resolve(__dirname, './src/context') },
+      { find: '@utils', replacement: path.resolve(__dirname, './src/utils') },
+      { find: '@hooks', replacement: path.resolve(__dirname, './src/hooks') },
+      { find: '@assets', replacement: path.resolve(__dirname, './src/assets') }
+    ]
   },
 
   // Environment variable prefix

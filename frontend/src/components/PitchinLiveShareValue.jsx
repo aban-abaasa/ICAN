@@ -178,7 +178,7 @@ function Sparkline({ history }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function PitchinLiveShareValue({ businessProfile, ownerUserId }) {
+export default function PitchinLiveShareValue({ businessProfile, ownerUserId, readOnly = false }) {
   const [valuation, setValuation] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -267,7 +267,9 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId }) 
           .filter(r => {
             if (!r.cmms_company_id) return false;
             const role = (r.effective_role || '').toLowerCase();
-            return r.is_creator === true || role.includes('admin');
+            return r.is_creator === true
+              || role.includes('admin')
+              || role.includes('owner');
           })
           .map(r => ({
             id:      r.cmms_company_id,
@@ -297,18 +299,40 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId }) 
         ? bodaCompanies.map(r => ({ id: r.id, label: r.name || user.email }))
         : [{ id: user.id, label: user.email }];
 
-      // ── SupermartKera: only admin users in the internal store `users` table
-      //   can link their store. Match by email (users.id is VARCHAR there).
+      // ── SupermartKera: link the actual supermarket UUID, not the internal
+      //   public user ID. The valuation service uses this UUID to read POS
+      //   transactions from `transactions.supermarket_id`.
+      const { data: ownedStores } = await supabase
+        .from('supermarkets')
+        .select('id, name')
+        .eq('owner_user_id', user.id)
+        .limit(20);
+
+      if (ownedStores?.length) {
+        result['digital-city-era'] = ownedStores.map(store => ({
+          id: store.id,
+          label: store.name || user.email,
+          autoLink: true
+        }));
+      }
+
+      // Legacy fallback: some stores were created before owner_user_id was
+      // consistently populated. Resolve through the internal users row.
       const { data: dceUser } = await supabase
         .from('users')
-        .select('id, email, role')
+        .select('id, email, role, supermarket_id')
         .ilike('email', user.email)
         .maybeSingle();
 
-      if (dceUser && (dceUser.role || '').toLowerCase() === 'admin') {
+      if (!result['digital-city-era'] && dceUser && (dceUser.role || '').toLowerCase() === 'admin') {
+        const { data: assignedStore } = await supabase
+          .from('supermarkets')
+          .select('id, name')
+          .eq('id', dceUser.supermarket_id)
+          .maybeSingle();
         result['digital-city-era'] = [{
-          id:       dceUser.id || user.id,
-          label:    dceUser.email || user.email,
+          id:       assignedStore?.id || dceUser.id || user.id,
+          label:    assignedStore?.name || dceUser.email || user.email,
           autoLink: true
         }];
       }
@@ -349,7 +373,7 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId }) 
     setError('');
     try {
       const result = await calculateLiveShareValue(businessProfileId, ownerUserId, {
-        saveSnapshot: true
+        saveSnapshot: !readOnly
       });
       setValuation(result);
     } catch (err) {
@@ -357,7 +381,7 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId }) 
     } finally {
       setLoading(false);
     }
-  }, [businessProfileId, ownerUserId]);
+  }, [businessProfileId, ownerUserId, readOnly]);
 
   const loadLinks = useCallback(async () => {
     if (!businessProfileId) return;
@@ -483,6 +507,11 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId }) 
         <div className="flex items-center gap-2 flex-wrap">
           <Coins size={16} className="text-amber-400 shrink-0" />
           <span className="text-sm sm:text-base font-bold text-white">Live Share Value</span>
+          {readOnly && (
+            <span className="text-[10px] sm:text-xs text-slate-400 bg-slate-800/60 border border-slate-700/50 rounded-full px-2 py-0.5">
+              Shareholder view
+            </span>
+          )}
           {valuation?.blockchainVerified && (
             <span className="flex items-center gap-1 text-xs text-emerald-400 bg-emerald-900/30 border border-emerald-700/40 rounded-full px-2 py-0.5">
               <ShieldCheck size={10} />
@@ -567,6 +596,17 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId }) 
         ) : valuation ? (
           <>
             {valuation.needsShareSetup ? (
+              readOnly ? (
+                <div className="rounded-xl border border-slate-700/40 bg-slate-800/30 p-3 sm:p-4">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <Shield size={14} className="text-slate-400 shrink-0" />
+                    <span className="text-sm sm:text-base font-bold text-slate-300">Share count not configured</span>
+                  </div>
+                  <p className="text-xs sm:text-sm text-slate-400">
+                    The business owner must configure the total shares before a live price per share can be displayed.
+                  </p>
+                </div>
+              ) : (
               <div className="rounded-xl border border-amber-700/40 bg-amber-900/15 p-3 sm:p-4">
                 <div className="flex items-center gap-2 mb-1.5">
                   <PieChart size={14} className="text-amber-400 shrink-0" />
@@ -597,6 +637,7 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId }) 
                 </div>
                 {shareError && <p className="text-xs text-red-400 mt-1.5">{shareError}</p>}
               </div>
+              )
             ) : (
               <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
                 <div className="min-w-0">
@@ -633,13 +674,20 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId }) 
                       </button>
                     </div>
                   ) : (
-                    <button
+                    <>
+                    {!readOnly && <button
                       onClick={() => { setShowShareEditor(true); setShareInput(String(valuation.totalShares)); }}
                       className="flex items-center gap-1 text-[11px] sm:text-xs text-slate-500 hover:text-slate-300 mt-1 transition-colors"
                     >
                       <Pencil size={9} />
                       {valuation.totalShares.toLocaleString()} total shares
-                    </button>
+                    </button>}
+                  {readOnly && !showShareEditor && (
+                    <p className="text-[11px] sm:text-xs text-slate-500 mt-1">
+                      {valuation.totalShares.toLocaleString()} total shares
+                    </p>
+                  )}
+                    </>
                   )}
                   {shareError && showShareEditor && <p className="text-xs text-red-400 mt-1">{shareError}</p>}
                 </div>
@@ -726,6 +774,7 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId }) 
       </div>
 
       {/* ── Link Data Sources panel ── */}
+      {!readOnly && (
       <div className="border-t lg:border-t-0 border-slate-700/40 mt-2 lg:mt-0 lg:col-span-2">
         <button
           onClick={() => setShowLinkPanel(v => !v)}
@@ -1105,11 +1154,12 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId }) 
           </div>
         )}
       </div>
+      )}
 
       </div>
     </div>
 
-    {showTeamModal && (
+    {!readOnly && showTeamModal && (
       <BusinessTeamMembersModal
         profile={{ id: businessProfileId, business_name: businessProfile?.business_name || businessProfile?.name }}
         onClose={() => setShowTeamModal(false)}

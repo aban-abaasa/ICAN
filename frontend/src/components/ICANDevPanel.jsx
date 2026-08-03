@@ -805,6 +805,17 @@ const RecoveryTab = () => {
   );
 };
 
+/* const TransportMonitor = ({ orders, onRefresh }) => (
+  <div className="space-y-4">
+    <div className="flex items-center justify-between">
+      <div><h2 className="text-lg font-black">CMMS → BodaGo transport</h2><p className="text-xs" style={{ color: 'var(--dp-muted)' }}>Automatic transport requests created from linked CMMS orders.</p></div>
+      <button onClick={onRefresh} className="flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-bold" style={{ borderColor: 'var(--dp-inner-bd)', color: 'var(--dp-sub)' }}><RefreshCw size={12}/> Refresh</button>
+    </div>
+    {orders.length === 0 ? <EmptyState msg="No automatic transport orders found." Icon={Activity}/> : <div className="space-y-2">{orders.map(order => <div key={order.request_id} className="rounded-xl border p-4" style={{ background: 'var(--dp-card)', borderColor: 'var(--dp-card-bd)' }}><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-sm font-bold">{order.contract_name}</p><p className="text-[10px]" style={{ color: 'var(--dp-muted)' }}>Request {order.request_id.slice(0, 8)} · CMMS {order.cmms_requisition_number || 'unlinked'}</p></div><span className="rounded-full border px-2 py-1 text-[10px] font-bold capitalize" style={{ borderColor: 'rgba(249,115,22,.35)', color: '#f97316' }}>{order.request_status}</span></div><div className="mt-3 grid gap-2 text-xs sm:grid-cols-4" style={{ color: 'var(--dp-sub)' }}><span>Rides: {order.ride_count}</span><span>Vehicle: {order.vehicle_type || 'Any'}</span><span>CMMS: {order.cmms_status || '—'}</span><span>{order.created_at ? new Date(order.created_at).toLocaleString() : '—'}</span></div></div>)}</div>}
+  </div>
+);
+*/
+
 // =============================================================================
 // DASHBOARD
 // =============================================================================

@@ -64,8 +64,14 @@ async function getCmmsInventoryValue(cmmsCompanyId) {
     console.warn('[Valuation] CMMS inventory read failed:', error.message);
     return { valueUgx: 0, itemCount: 0 };
   }
-  const valueUgx = (data || []).reduce((sum, item) =>
-    sum + (parseFloat(item.unit_price) || 0) * (parseFloat(item.quantity_in_stock) || 0), 0);
+  const valueUgx = (data || []).reduce((sum, item) => {
+    // Keep this tolerant of older RPC deployments that exposed the same
+    // values under unit_cost/current_stock while the canonical RPC uses
+    // unit_price/quantity_in_stock.
+    const unitPrice = item.unit_price ?? item.unit_cost ?? item.cost_per_unit;
+    const quantity = item.quantity_in_stock ?? item.current_stock ?? item.quantity;
+    return sum + (parseFloat(unitPrice) || 0) * (parseFloat(quantity) || 0);
+  }, 0);
   return { valueUgx, itemCount: (data || []).length };
 }
 
@@ -149,13 +155,27 @@ export async function getBusinessTransactionsByContributor(businessProfileId) {
 
 const INCOMING_WALLET_TYPES = new Set(['transfer_in', 'earn', 'cashback', 'sale', 'refund']);
 
-async function getWalletTransactionsDetail(ownerUserId) {
+async function getWalletTransactionsDetail(ownerUserId, extraRecipientIds = []) {
   const empty = { totalUgx: 0, count: 0, bySourceApp: {} };
   if (!ownerUserId) return empty;
+
+  // business_profiles.user_id is the public.users id in older deployments,
+  // while wallet transactions use auth.users ids. Resolve both forms so POS
+  // wallet receipts are not missed by the valuation query.
+  const recipientIds = new Set([ownerUserId, ...(extraRecipientIds || [])].filter(Boolean));
+  const [{ data: publicUser }, { data: authUser }] = await Promise.all([
+    supabase.from('users').select('id, auth_id').eq('id', ownerUserId).maybeSingle(),
+    supabase.from('users').select('id, auth_id').eq('auth_id', ownerUserId).maybeSingle()
+  ]);
+  [publicUser, authUser].forEach((row) => {
+    if (row?.id) recipientIds.add(row.id);
+    if (row?.auth_id) recipientIds.add(row.auth_id);
+  });
+
   const { data, error } = await supabase
     .from('ican_coin_transactions')
     .select('ican_amount, ugx_floor_value, transaction_type, source_app')
-    .eq('recipient_user_id', ownerUserId)
+    .in('recipient_user_id', [...recipientIds])
     .eq('status', 'completed');
   if (error) {
     console.warn('[Valuation] Wallet transactions read failed:', error.message);
@@ -184,22 +204,57 @@ async function getWalletTransactionsDetail(ownerUserId) {
   return { totalUgx, count, bySourceApp };
 }
 
+// BodaGo earnings land in the rider/committee member wallet, not necessarily
+// in the company creator's wallet. Include members of the linked BodaGo
+// company so a company with real rides is not reported as zero.
+async function getBodaGoMemberIds(companyId) {
+  if (!companyId) return [];
+  const { data, error } = await supabase
+    .from('company_members')
+    .select('user_id')
+    .eq('company_id', companyId);
+  if (error) {
+    console.warn('[Valuation] BodaGo company members read failed:', error.message);
+    return [];
+  }
+  return (data || []).map(row => row.user_id).filter(Boolean);
+}
+
 // ─── Source: SupermartKera purchase orders ───────────────────────────────────
 
-async function getSupermarketRevenue(ownerUserId) {
-  if (!ownerUserId) return { valueUgx: 0, orderCount: 0 };
-  // purchase_orders tracks B2B sales; supplier_id links to the supplier entity.
-  // We use total_amount_ugx which is the UGX-denominated order value.
+async function getSupermarketRevenue(sourceEntityId, ownerUserId) {
+  if (!sourceEntityId && !ownerUserId) return { valueUgx: 0, orderCount: 0 };
+
+  // New links store the supermarket UUID. Older Live Share links stored the
+  // DCE public user ID, so resolve both link formats to the actual store.
+  const storeIds = new Set();
+  const candidateIds = [...new Set([sourceEntityId, ownerUserId].filter(Boolean))];
+  const lookups = await Promise.all(candidateIds.flatMap((id) => [
+    supabase.from('supermarkets').select('id').eq('id', id).maybeSingle(),
+    supabase.from('supermarkets').select('id').eq('owner_user_id', id).maybeSingle(),
+    supabase.from('users').select('id, auth_id, supermarket_id').eq('id', id).maybeSingle(),
+    supabase.from('users').select('id, auth_id, supermarket_id').eq('auth_id', id).maybeSingle()
+  ]));
+  lookups.forEach(({ data }) => {
+    if (data?.id && data?.supermarket_id == null) storeIds.add(data.id);
+    if (data?.supermarket_id) storeIds.add(data.supermarket_id);
+  });
+
+  if (storeIds.size === 0) return { valueUgx: 0, orderCount: 0 };
+
+  // POS sales are stored in transactions. purchase_orders are supplier/B2B
+  // orders and must not be used as the store's retail sales count.
   const { data, error } = await supabase
-    .from('purchase_orders')
-    .select('total_amount')
+    .from('transactions')
+    .select('total_amount, amount, supermarket_id')
+    .in('supermarket_id', [...storeIds])
     .eq('status', 'completed');
   if (error) {
-    console.warn('[Valuation] SupermartKera orders read failed:', error.message);
+    console.warn('[Valuation] SupermartKera POS transactions read failed:', error.message);
     return { valueUgx: 0, orderCount: 0 };
   }
-  // Sum all completed orders visible to this user (RLS scopes to their supplier)
-  const valueUgx = (data || []).reduce((sum, o) => sum + (parseFloat(o.total_amount) || 0), 0);
+  const valueUgx = (data || []).reduce((sum, tx) =>
+    sum + (parseFloat(tx.total_amount ?? tx.amount) || 0), 0);
   return { valueUgx, orderCount: (data || []).length };
 }
 
@@ -300,6 +355,8 @@ export async function calculateLiveShareValue(businessProfileId, businessOwnerUs
   // 2. Get linked app sources
   const links = await getDataLinks(businessProfileId);
 
+  const bodaMemberIds = await getBodaGoMemberIds(links['mybodaguy']?.source_entity_id);
+
   // 3. Gather all financial data in parallel
   const [
     icanFinancials,
@@ -312,8 +369,8 @@ export async function calculateLiveShareValue(businessProfileId, businessOwnerUs
     getIcanFinancials(businessProfileId),
     getManualTransactionsDetail(businessProfileId),
     getCmmsInventoryValue(links['cmms']?.source_entity_id),
-    getWalletTransactionsDetail(businessOwnerUserId),
-    getSupermarketRevenue(businessOwnerUserId),
+    getWalletTransactionsDetail(businessOwnerUserId, bodaMemberIds),
+    getSupermarketRevenue(links['digital-city-era']?.source_entity_id, businessOwnerUserId),
     getIcanHoldingsValue(businessOwnerUserId)
   ]);
 

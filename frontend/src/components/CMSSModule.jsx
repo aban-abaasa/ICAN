@@ -30,7 +30,9 @@ import {
   ChevronDown,
   Edit2,
   Save,
-  Briefcase
+  Briefcase,
+  DollarSign,
+  Car
 } from 'lucide-react';
 
 // Import Supabase CMMS service
@@ -42,6 +44,9 @@ import cmmsMessagingService from '../services/cmmsMessagingService';
 import NotificationsPanel from './NotificationsPanel';
 import RequisitionWorkspace from './CMMS/RequisitionWorkspace.jsx';
 import RequisitionApprovalsTab from './CMMS/RequisitionApprovalsTab.jsx';
+import CMMSPayrollPanel from './CMMSPayrollPanel.jsx';
+import CMMSBookTransportPanel from './CMMSBookTransportPanelV2.jsx';
+import { findPichinShareholderBusinesses } from '../services/businessManagementService';
 
 const CMMSModule = ({
   onDataUpdate,
@@ -552,6 +557,7 @@ const CMMSModule = ({
         console.log(`âœ… Loaded ${users.length} users from Supabase`);
         const formattedUsers = users.map(user => ({
           id: user.id,
+          authUserId: user.ican_user_id || user.auth_user_id || user.user_id || null,
           name: user.full_name || user.user_name || user.email?.split('@')[0] || 'User',
           email: user.email,
           phone: user.phone,
@@ -702,6 +708,7 @@ const CMMSModule = ({
   const reportsSyncInFlightRef = useRef(false);
 
   const [activeTab, _setActiveTab] = useState('company');
+  const [, setSyncingPichin] = useState(false);
   const setActiveTab = (newTab) => { if (newTab !== activeTab) { onTabChange?.(activeTab); } _setActiveTab(newTab); };
   useEffect(() => { if (navRef) navRef.current = _setActiveTab; return () => { if (navRef) navRef.current = null; }; }, [navRef]);
   const [editingUser, setEditingUser] = useState(null);
@@ -786,16 +793,54 @@ const CMMSModule = ({
     // So a technician can only see [inventory, requisitions] even if they create a company
     const tabsByRole = {
       guest: [],
-      admin: ['company', 'departments', 'users', 'inventory', 'requisitions', 'approvals', 'reports', 'tasks'],
-      coordinator: ['departments', 'users', 'inventory', 'requisitions', 'approvals', 'reports', 'tasks'],
+      admin: ['company', 'departments', 'users', 'inventory', 'payroll', 'transport', 'requisitions', 'approvals', 'reports', 'tasks'],
+      coordinator: ['departments', 'users', 'inventory', 'transport', 'requisitions', 'approvals', 'reports', 'tasks'],
       supervisor: ['inventory', 'requisitions', 'approvals', 'reports', 'tasks'],
       technician: ['inventory', 'requisitions', 'reports', 'tasks'],
       storeman: ['inventory', 'requisitions', 'reports', 'tasks'],
-      finance: ['requisitions', 'approvals', 'reports', 'tasks'],
+      finance: ['payroll', 'requisitions', 'approvals', 'reports', 'tasks'],
       'service-provider': ['requisitions', 'reports', 'tasks']
     };
     
     return tabsByRole[userRole] || [];
+  };
+
+  // A CMMS company profile is not the business authority. Employee, payroll,
+  // and delegated-admin controls unlock only after the company is linked to a
+  // completed Pichin business profile.
+  const hasPichinBusinessAccount = Boolean(cmmsData.companyProfile?.pichin_business_profile_id);
+  const selectCmmsTab = async (tabId) => {
+    if (['users', 'payroll', 'transport'].includes(tabId) && !hasPichinBusinessAccount) {
+      setSyncingPichin(true);
+      const { data: shareholderBusinesses } = await findPichinShareholderBusinesses({ email: user?.email, userId: user?.id });
+      const business = (shareholderBusinesses || []).find(item => item.canManage);
+      if (business && cmmsData.companyProfile?.id) {
+        const { data: syncResult, error: linkError } = await supabase.rpc('cmms_sync_pichin_business', {
+          p_cmms_company_id: cmmsData.companyProfile.id,
+          p_business_profile_id: business.id
+        });
+        const linkedProfile = Array.isArray(syncResult) ? syncResult[0] : syncResult;
+
+        if (!linkError && linkedProfile) {
+          setCmmsData(prev => ({ ...prev, companyProfile: linkedProfile }));
+          // The requested CMMS tab remains the destination after sync.
+          setActiveTab(tabId);
+          setSyncingPichin(false);
+          return;
+        }
+        window.alert(linkError?.message || 'Pichin synchronization could not be completed. Complete your business profile first.');
+      } else if ((shareholderBusinesses || []).length) {
+        window.alert('Your Gmail is recognized as a shareholder, but only a Pichin business administrator can synchronize CMMS payroll or transport.');
+      } else {
+        const isTransportCompany = /transport|logistics|fleet|delivery/i.test(cmmsData.companyProfile?.industry || '');
+        window.alert(isTransportCompany
+          ? 'Pichin business account required\n\n1. Open Pichin and create the company profile.\n2. Link BodaGo for contracts and rides.\n3. Return to CMMS for fleet, assets, employees, and payroll.'
+          : 'Pichin business account required\n\n1. Open Pichin.\n2. Create or complete your business profile.\n3. Return to CMMS and choose Payroll or Transport again.');
+      }
+      setSyncingPichin(false);
+      return;
+    }
+    setActiveTab(tabId);
   };
 
   useEffect(() => {
@@ -5536,6 +5581,8 @@ const CMMSModule = ({
       { id: 'departments', label: '🏭 Departments', icon: Building },
       { id: 'users', label: '👥 Users & Roles', icon: Users },
       { id: 'inventory', label: '📦 Inventory', icon: Package },
+      { id: 'payroll', label: '💰 Payroll', icon: DollarSign },
+      { id: 'transport', label: '🚐 Transport', icon: Car },
       { id: 'requisitions', label: '📋 Requisitions', icon: Package },
       { id: 'reports', label: '📊 Reports', icon: Package },
       { id: 'tasks', label: '✅ Tasks', icon: Briefcase }
@@ -5554,6 +5601,8 @@ const CMMSModule = ({
       departments: { activeBg: 'linear-gradient(135deg, #0ea5e9, #0284c7)', inactiveBg: 'rgba(14, 165, 233, 0.14)', border: 'rgba(103, 232, 249, 0.55)', inactiveText: '#bae6fd' },
       users: { activeBg: 'linear-gradient(135deg, #8b5cf6, #7c3aed)', inactiveBg: 'rgba(139, 92, 246, 0.14)', border: 'rgba(196, 181, 253, 0.55)', inactiveText: '#ddd6fe' },
       inventory: { activeBg: 'linear-gradient(135deg, #16a34a, #15803d)', inactiveBg: 'rgba(34, 197, 94, 0.14)', border: 'rgba(134, 239, 172, 0.55)', inactiveText: '#bbf7d0' },
+      payroll: { activeBg: 'linear-gradient(135deg, #059669, #047857)', inactiveBg: 'rgba(16, 185, 129, 0.14)', border: 'rgba(110, 231, 183, 0.55)', inactiveText: '#a7f3d0' },
+      transport: { activeBg: 'linear-gradient(135deg, #ea580c, #c2410c)', inactiveBg: 'rgba(249, 115, 22, 0.14)', border: 'rgba(253, 186, 116, 0.55)', inactiveText: '#fed7aa' },
       requisitions: { activeBg: 'linear-gradient(135deg, #f59e0b, #d97706)', inactiveBg: 'rgba(245, 158, 11, 0.14)', border: 'rgba(253, 186, 116, 0.55)', inactiveText: '#fde68a' },
       approvals: { activeBg: 'linear-gradient(135deg, #f97316, #ea580c)', inactiveBg: 'rgba(249, 115, 22, 0.14)', border: 'rgba(253, 186, 116, 0.55)', inactiveText: '#fed7aa' },
       reports: { activeBg: 'linear-gradient(135deg, #14b8a6, #0f766e)', inactiveBg: 'rgba(20, 184, 166, 0.14)', border: 'rgba(94, 234, 212, 0.55)', inactiveText: '#99f6e4' },
@@ -5623,7 +5672,7 @@ const CMMSModule = ({
                       <button
                         key={tab.id}
                         onClick={() => {
-                          setActiveTab(tab.id);
+                          selectCmmsTab(tab.id);
                           setMenuOpen(false);
                         }}
                         className={`
@@ -5666,7 +5715,7 @@ const CMMSModule = ({
                 return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => selectCmmsTab(tab.id)}
                 className={`px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm font-semibold transition-all whitespace-nowrap rounded-lg border ${activeTab === tab.id ? 'text-white' : 'hover:brightness-110'}`}
                 style={activeTab === tab.id
                   ? { background: palette.activeBg, borderColor: palette.border, boxShadow: '0 8px 18px rgba(0, 0, 0, 0.2)' }
@@ -5964,6 +6013,10 @@ const CMMSModule = ({
                   <option value="Manufacturing">Manufacturing</option>
                   <option value="Healthcare">Healthcare</option>
                   <option value="Transportation">Transportation</option>
+                  <option value="Logistics and Fleet">Logistics and Fleet</option>
+                  <option value="Agriculture">Agriculture</option>
+                  <option value="Retail and Supermarket">Retail and Supermarket</option>
+                  <option value="Restaurant and Hospitality">Restaurant and Hospitality</option>
                   <option value="Building Management">Building Management</option>
                   <option value="Industrial">Industrial</option>
                   <option value="Energy">Energy</option>
@@ -6302,6 +6355,16 @@ const CMMSModule = ({
         {activeTab === 'departments' && <DepartmentManager />}
         {activeTab === 'users' && <UserRoleManager />}
         {activeTab === 'inventory' && <InventoryManager />}
+        {activeTab === 'payroll' && (
+          <CMMSPayrollPanel
+            companyProfile={cmmsData.companyProfile}
+            users={cmmsData.users}
+            userRole={userRole}
+            isCreator={isCreator}
+            currentUser={user}
+          />
+        )}
+        {activeTab === 'transport' && <CMMSBookTransportPanel companyProfile={cmmsData.companyProfile} />}
         {activeTab === 'requisitions' && (
           <RequisitionWorkspace
             userRole={userRole}
@@ -6359,6 +6422,3 @@ const CMMSModule = ({
 };
 
 export default CMMSModule;
-
-
-

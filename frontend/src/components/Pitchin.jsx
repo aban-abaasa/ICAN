@@ -1681,6 +1681,10 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, navRef =
                       profile={currentBusinessProfile} 
                       onEdit={() => setShowProfileSelector(true)}
                       onSelect={() => {}}
+                      onShareValue={(profile) => {
+                        setCurrentBusinessProfile(profile);
+                        setShowShareValuePanel(true);
+                      }}
                       isMember={true}
                       currentUserId={currentUser?.id}
                       currentUserEmail={currentUser?.email}
@@ -2376,6 +2380,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, navRef =
               <PitchinLiveShareValue
                 businessProfile={currentBusinessProfile}
                 ownerUserId={currentBusinessProfile.user_id || currentUser.id}
+                readOnly={currentBusinessProfile.user_id !== currentUser.id}
               />
             </div>
           </div>

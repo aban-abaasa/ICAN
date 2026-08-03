@@ -7847,7 +7847,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
           <div className="pt-2 px-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-            <CMMSModule user={userProfile} navRef={cmssNavRef} onTabChange={(prev) => handlePanelTabChange('cmms', prev)} />
+            <CMMSModule
+              user={userProfile}
+              navRef={cmssNavRef}
+              onTabChange={(prev) => handlePanelTabChange('cmms', prev)}
+            />
           </div>
         </div>
       )}

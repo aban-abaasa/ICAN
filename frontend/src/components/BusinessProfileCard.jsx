@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Edit2, Users, DollarSign, Globe, MapPin, Calendar, Wallet, AlertCircle, Bell, Clock, Trash2, X } from 'lucide-react';
+import { Building2, Edit2, Users, DollarSign, Globe, MapPin, Calendar, Wallet, AlertCircle, Bell, Clock, Trash2, X, Lock, TrendingUp, Briefcase } from 'lucide-react';
 import ApprovalNotificationCenter from './ApprovalNotificationCenter';
 import ShareholderApprovalsCenter from './ShareholderApprovalsCenter';
 import BusinessTeamMembersModal from './BusinessTeamMembersModal';
+import BusinessAdministrationModal from './BusinessAdministrationModal';
 
-const BusinessProfileCard = ({ profile, onEdit, onSelect, onNotification, currentUserId, currentUserEmail, isMember = false }) => {
+const BusinessProfileCard = ({ profile, onEdit, onSelect, onNotification, onShareValue, currentUserId, currentUserEmail, isMember = false }) => {
   const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
   const [showApprovalsModal, setShowApprovalsModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showTeamModal, setShowTeamModal] = useState(false);
+  const [showAdministrationModal, setShowAdministrationModal] = useState(false);
 
   if (!profile) return null;
 
@@ -27,6 +29,10 @@ const BusinessProfileCard = ({ profile, onEdit, onSelect, onNotification, curren
   const isShareholder = profile.business_co_owners?.some(
     co => (co.owner_id === currentUserId || co.owner_email === currentUserEmail || co.email === currentUserEmail)
   ) || isOwner;
+  const isBusinessAdmin = isOwner || profile.business_co_owners?.some(co =>
+    (co.owner_id === currentUserId || co.owner_email === currentUserEmail || co.email === currentUserEmail) &&
+    ['owner', 'co-owner', 'cofounder', 'ceo', 'administrator'].includes(String(co.role || '').toLowerCase())
+  );
   console.log('🔐 Is Shareholder?', isShareholder, 'Business:', profile.business_name, 'Current email:', currentUserEmail);
 
   // Handle access control for opening the profile
@@ -248,6 +254,41 @@ const BusinessProfileCard = ({ profile, onEdit, onSelect, onNotification, curren
               <p className="text-slate-400">View wallet account details</p>
             </div>
           </button>
+
+          {/* Live Share Value - available to the owner and shareholders */}
+          {(isShareholder || isOwner) && onShareValue && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onShareValue(profile);
+              }}
+              className="bg-amber-600 hover:bg-amber-500 text-white p-2 rounded-lg transition relative group/share"
+              title="View live share value"
+            >
+              <TrendingUp className="w-5 h-5" />
+              <div className="hidden group-hover/share:block absolute right-0 top-full mt-2 bg-slate-900 border border-slate-700 rounded-lg p-2 w-48 z-50 text-xs text-white shadow-lg">
+                <p className="font-semibold text-amber-300 mb-1">Live Share Value</p>
+                <p className="text-slate-400">View live valuation and share price</p>
+              </div>
+            </button>
+          )}
+
+          {isBusinessAdmin && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowAdministrationModal(true);
+              }}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white p-2 rounded-lg transition relative group/admin"
+              title="Business administration and salaries"
+            >
+              <Briefcase className="w-5 h-5" />
+              <div className="hidden group-hover/admin:block absolute right-0 top-full mt-2 bg-slate-900 border border-slate-700 rounded-lg p-2 w-52 z-50 text-xs text-white shadow-lg">
+                <p className="font-semibold text-indigo-300 mb-1">Business Administration</p>
+                <p className="text-slate-400">Manage delegated access and employee salaries</p>
+              </div>
+            </button>
+          )}
         </div>
       </div>
 
@@ -424,6 +465,13 @@ const BusinessProfileCard = ({ profile, onEdit, onSelect, onNotification, curren
         <BusinessTeamMembersModal
           profile={profile}
           onClose={() => setShowTeamModal(false)}
+        />
+      )}
+
+      {showAdministrationModal && (
+        <BusinessAdministrationModal
+          profile={profile}
+          onClose={() => setShowAdministrationModal(false)}
         />
       )}
 
