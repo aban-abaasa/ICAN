@@ -36,6 +36,66 @@ export async function getOrCreateWallet(userId) {
   return data;
 }
 
+/** Resolve the dedicated iCanEra business wallet used by a PitchIn profile. */
+export async function getOrCreateBusinessWallet(businessProfileId) {
+  const { data, error } = await supabase.rpc('get_or_create_pitchin_business_wallet', {
+    p_business_profile_id: businessProfileId,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function registerBusinessWallet(businessProfileId) {
+  const { data, error } = await supabase.rpc('register_pitchin_business_wallet', {
+    p_business_profile_id: businessProfileId,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function getBusinessWalletTransactions(businessProfileId, limit = 100) {
+  const { data, error } = await supabase.rpc('get_pitchin_business_wallet_transactions', {
+    p_business_profile_id: businessProfileId,
+    p_limit: limit,
+  });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function transferFromBusinessWallet({ businessProfileId, recipientUserId, amount, note = '', referenceId = null, pin }) {
+  const { data, error } = await supabase.rpc('pitchin_business_wallet_transfer', {
+    p_business_profile_id: businessProfileId,
+    p_recipient_user_id: recipientUserId,
+    p_amount_ican: amount,
+    p_note: note,
+    p_reference_id: referenceId,
+    p_pin: pin,
+  });
+  if (error) throw error;
+  if (!data?.success) throw new Error(data?.error || 'Business-wallet transfer failed');
+  return data;
+}
+
+export async function setBusinessWalletPin(businessProfileId, pin) {
+  const { data, error } = await supabase.rpc('set_pitchin_business_wallet_pin', {
+    p_business_profile_id: businessProfileId,
+    p_pin: pin,
+  });
+  if (error) throw error;
+  if (!data?.success) throw new Error(data?.error || 'Could not set business-wallet PIN');
+  return data;
+}
+
+export async function approveBusinessWalletTransaction(transactionId, decision = 'approved') {
+  const { data, error } = await supabase.rpc('approve_pitchin_business_wallet_transaction', {
+    p_transaction_id: transactionId,
+    p_decision: decision,
+  });
+  if (error) throw error;
+  if (!data?.success) throw new Error(data?.error || 'Business-wallet approval failed');
+  return data;
+}
+
 export async function getWallet(userId) {
   const { data, error } = await supabase
     .from('ican_user_wallets')
@@ -190,6 +250,12 @@ export function formatICAN(amount) {
 
 export default {
   getOrCreateWallet,
+  getOrCreateBusinessWallet,
+  registerBusinessWallet,
+  getBusinessWalletTransactions,
+  transferFromBusinessWallet,
+  approveBusinessWalletTransaction,
+  setBusinessWalletPin,
   getWallet,
   getBalance,
   getTransactions,

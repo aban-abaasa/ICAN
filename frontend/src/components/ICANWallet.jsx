@@ -574,26 +574,37 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       }
 
       const supabase = getSupabaseClient();
-      const { data: accounts, error } = await supabase
-        .from('user_accounts')
+      const profilesWithWallets = await Promise.all(profiles.map(async (profile) => {
+        if (profile.ican_wallet) return profile;
+
+        const { data: wallet, error: walletError } = await supabase.rpc(
+          'register_pitchin_business_wallet',
+          { p_business_profile_id: profile.id }
+        );
+
+        if (walletError) {
+          console.warn('Could not register iCanEra business wallet:', walletError.message);
+          return profile;
+        }
+
+        return { ...profile, ican_wallet: wallet };
+      }));
+
+      const { data: businessWallets, error } = await supabase
+        .from('ican_business_wallets')
         .select('*')
-        .eq('account_type', 'business')
-        .in('business_id', profiles.map((p) => p.id));
+        .in('business_profile_id', profilesWithWallets.map((p) => p.id));
 
-      if (error) {
-        console.error('Error loading business wallet accounts:', error);
-      }
+      if (error) console.error('Error loading iCanEra business wallets:', error);
 
-      const accountsByBusiness = {};
-      (accounts || []).forEach((account) => {
-        if (!accountsByBusiness[account.business_id]) accountsByBusiness[account.business_id] = [];
-        accountsByBusiness[account.business_id].push(account);
-      });
+      const walletsByBusiness = Object.fromEntries(
+        (businessWallets || []).map((wallet) => [wallet.business_profile_id, wallet])
+      );
 
       setRealBusinessProfiles(
-        profiles.map((profile) => ({
+        profilesWithWallets.map((profile) => ({
           ...profile,
-          user_accounts: accountsByBusiness[profile.id] || []
+          ican_wallet: profile.ican_wallet || walletsByBusiness[profile.id] || null
         }))
       );
 
@@ -602,7 +613,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       // saveSnapshot: false because this is a read-only summary view; opening
       // the wallet shouldn't write a new valuation snapshot for the business.
       const valuationResults = await Promise.allSettled(
-        profiles.map((profile) =>
+        profilesWithWallets.map((profile) =>
           calculateLiveShareValue(profile.id, profile.user_id, { saveSnapshot: false })
             .then((result) => [profile.id, result])
         )
@@ -4576,7 +4587,25 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     </div>
 
                     {/* Wallet Account Info */}
-                    {profile.user_accounts && profile.user_accounts.length > 0 ? (
+                    {profile.ican_wallet ? (
+                      <div className="bg-slate-700/50 rounded-lg p-3 border border-cyan-500/20">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-gray-400 text-xs">iCanEra Business Wallet</p>
+                          <span className="px-2 py-0.5 rounded-full bg-green-500/30 text-green-300 text-xs border border-green-500/50">
+                            ACTIVE
+                          </span>
+                        </div>
+                        <p className="text-white font-mono text-sm font-bold break-all">
+                          {profile.ican_wallet.wallet_address || 'Business wallet'}
+                        </p>
+                        <p className="text-gray-500 text-xs mt-1">
+                          Balance:
+                          <span className="text-cyan-400 ml-1">
+                            {Number(profile.ican_wallet.ican_balance || 0).toLocaleString()} ICAN
+                          </span>
+                        </p>
+                      </div>
+                    ) : profile.user_accounts && profile.user_accounts.length > 0 ? (
                       <div className="bg-slate-700/50 rounded-lg p-3 border border-cyan-500/20">
                         {profile.user_accounts.map((account, idx) => (
                           <div key={account.id || idx} className="mb-2 last:mb-0">

@@ -8,6 +8,7 @@ import BusinessProfileSelector from './BusinessProfileSelector';
 import BusinessProfileCard from './BusinessProfileCard';
 import SHAREHub from './SHAREHub';
 import PitchinLiveShareValue from './PitchinLiveShareValue';
+import BusinessWalletModal from './BusinessWalletModal';
 import { 
   getAllPitches, 
   getUserPitches, 
@@ -1677,14 +1678,18 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, navRef =
                 
                 {currentBusinessProfile ? (
                   <div className="grid grid-cols-1 gap-4">
-                    <BusinessProfileCard 
-                      profile={currentBusinessProfile} 
+                     <BusinessProfileCard
+                       profile={currentBusinessProfile}
                       onEdit={() => setShowProfileSelector(true)}
                       onSelect={() => {}}
-                      onShareValue={(profile) => {
+                       onShareValue={(profile) => {
                         setCurrentBusinessProfile(profile);
-                        setShowShareValuePanel(true);
-                      }}
+                         setShowShareValuePanel(true);
+                       }}
+                       onWalletClick={(profile) => {
+                         setCurrentBusinessProfile(profile);
+                         setShowWallet(true);
+                       }}
                       isMember={true}
                       currentUserId={currentUser?.id}
                       currentUserEmail={currentUser?.email}
@@ -2174,10 +2179,12 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, navRef =
             setShowBusinessForm(true);
           }}
           onDelete={handleDeleteBusinessProfile}
-          onWalletClick={(profile) => {
-            setShowProfileSelector(false);
-            setShowWallet(true);
-          }}
+           onWalletClick={(profile) => {
+             setShowProfileSelector(false);
+             const selectedProfile = businessProfiles.find(item => item.id === profile?.profileId) || profile;
+             setCurrentBusinessProfile(selectedProfile);
+             setShowWallet(true);
+           }}
         />
       )}
 
@@ -2346,15 +2353,25 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, navRef =
             setShowBusinessForm(true);
           }}
           onDelete={handleDeleteBusinessProfile}
-          onWalletClick={(profile) => {
-            setShowProfileSelector(false);
-            setShowWallet(true);
-          }}
+           onWalletClick={(profile) => {
+             setShowProfileSelector(false);
+             const selectedProfile = businessProfiles.find(item => item.id === profile?.profileId) || profile;
+             setCurrentBusinessProfile(selectedProfile);
+             setShowWallet(true);
+           }}
           onShareValueClick={(profile) => {
             setCurrentBusinessProfile(profile);
             setShowProfileSelector(false);
             setShowShareValuePanel(true);
           }}
+        />
+      )}
+
+      {/* Live Share Value Panel — only shown to business owners, only in PitchIn */}
+      {showWallet && currentBusinessProfile && (
+        <BusinessWalletModal
+          profile={currentBusinessProfile}
+          onClose={() => setShowWallet(false)}
         />
       )}
 

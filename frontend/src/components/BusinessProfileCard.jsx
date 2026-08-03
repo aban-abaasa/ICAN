@@ -5,7 +5,7 @@ import ShareholderApprovalsCenter from './ShareholderApprovalsCenter';
 import BusinessTeamMembersModal from './BusinessTeamMembersModal';
 import BusinessAdministrationModal from './BusinessAdministrationModal';
 
-const BusinessProfileCard = ({ profile, onEdit, onSelect, onNotification, onShareValue, currentUserId, currentUserEmail, isMember = false }) => {
+const BusinessProfileCard = ({ profile, onEdit, onSelect, onNotification, onShareValue, onWalletClick, currentUserId, currentUserEmail, isMember = false }) => {
   const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
   const [showApprovalsModal, setShowApprovalsModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -33,6 +33,7 @@ const BusinessProfileCard = ({ profile, onEdit, onSelect, onNotification, onShar
     (co.owner_id === currentUserId || co.owner_email === currentUserEmail || co.email === currentUserEmail) &&
     ['owner', 'co-owner', 'cofounder', 'ceo', 'administrator'].includes(String(co.role || '').toLowerCase())
   );
+  const businessWallet = profile.ican_wallet || profile.wallet_account;
   console.log('🔐 Is Shareholder?', isShareholder, 'Business:', profile.business_name, 'Current email:', currentUserEmail);
 
   // Handle access control for opening the profile
@@ -243,6 +244,7 @@ const BusinessProfileCard = ({ profile, onEdit, onSelect, onNotification, onShar
           <button
             onClick={(e) => {
               e.stopPropagation();
+              onWalletClick?.(profile);
             }}
             className="bg-green-600 hover:bg-green-700 text-white p-2 rounded-lg transition relative group/wallet"
             title="Business Wallet"
@@ -369,61 +371,66 @@ const BusinessProfileCard = ({ profile, onEdit, onSelect, onNotification, onShar
 
       {/* 💳 Wallet Account Section */}
       <div className="pt-4 border-t border-slate-700">
-        {profile.wallet_account ? (
+        {businessWallet ? (
           <div className="space-y-3">
             <div className="flex items-center gap-2 mb-2">
               <Wallet className="w-4 h-4 text-green-400" />
-              <p className="text-slate-400 text-xs font-semibold">BUSINESS WALLET</p>
+              <p className="text-slate-400 text-xs font-semibold">ICANERA BUSINESS WALLET</p>
               <span className="ml-auto text-xs bg-green-900/50 text-green-300 px-2 py-1 rounded">✓ Active</span>
             </div>
             
             <div className="bg-slate-700/30 p-3 rounded-lg space-y-2">
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-slate-500 text-xs">Account Number</p>
-                  <p className="text-white font-mono font-semibold text-sm">{profile.wallet_account.account_number}</p>
+                  <p className="text-slate-500 text-xs">Wallet Address</p>
+                  <p className="text-white font-mono font-semibold text-sm break-all">{businessWallet.wallet_address || businessWallet.account_number}</p>
                 </div>
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
-                    navigator.clipboard.writeText(profile.wallet_account.account_number);
+                    navigator.clipboard.writeText(businessWallet.wallet_address || businessWallet.account_number);
                   }}
                   className="text-slate-400 hover:text-blue-400 text-xs"
-                  title="Copy account number"
+                  title="Copy wallet address"
                 >
                   📋
                 </button>
               </div>
 
-              {profile.wallet_account.preferred_currency && (
+              {businessWallet.ican_balance !== undefined ? (
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400 text-xs">ICAN Balance</span>
+                  <span className="text-green-400 font-semibold">{Number(businessWallet.ican_balance || 0).toLocaleString()} ICAN</span>
+                </div>
+              ) : businessWallet.preferred_currency && (
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-400 text-xs">Currency</span>
-                  <span className="text-white font-semibold">{profile.wallet_account.preferred_currency}</span>
+                  <span className="text-white font-semibold">{businessWallet.preferred_currency}</span>
                 </div>
               )}
 
-              {(profile.wallet_account.usd_balance !== undefined || 
-                profile.wallet_account.ugx_balance !== undefined ||
-                profile.wallet_account.kes_balance !== undefined) && (
+              {businessWallet.ican_balance === undefined && (businessWallet.usd_balance !== undefined ||
+                businessWallet.ugx_balance !== undefined ||
+                businessWallet.kes_balance !== undefined) && (
                 <div className="pt-2 border-t border-slate-600">
                   <p className="text-slate-400 text-xs mb-2 font-semibold">Balances</p>
                   <div className="space-y-1 text-xs">
-                    {profile.wallet_account.usd_balance !== undefined && (
+                    {businessWallet.usd_balance !== undefined && (
                       <div className="flex justify-between">
                         <span className="text-slate-400">USD</span>
-                        <span className="text-green-400 font-semibold">${(profile.wallet_account.usd_balance || 0).toFixed(2)}</span>
+                        <span className="text-green-400 font-semibold">${(businessWallet.usd_balance || 0).toFixed(2)}</span>
                       </div>
                     )}
-                    {profile.wallet_account.ugx_balance !== undefined && (
+                    {businessWallet.ugx_balance !== undefined && (
                       <div className="flex justify-between">
                         <span className="text-slate-400">UGX</span>
-                        <span className="text-green-400 font-semibold">{(profile.wallet_account.ugx_balance || 0).toLocaleString()}</span>
+                        <span className="text-green-400 font-semibold">{(businessWallet.ugx_balance || 0).toLocaleString()}</span>
                       </div>
                     )}
-                    {profile.wallet_account.kes_balance !== undefined && (
+                    {businessWallet.kes_balance !== undefined && (
                       <div className="flex justify-between">
                         <span className="text-slate-400">KES</span>
-                        <span className="text-green-400 font-semibold">{(profile.wallet_account.kes_balance || 0).toLocaleString()}</span>
+                        <span className="text-green-400 font-semibold">{(businessWallet.kes_balance || 0).toLocaleString()}</span>
                       </div>
                     )}
                   </div>

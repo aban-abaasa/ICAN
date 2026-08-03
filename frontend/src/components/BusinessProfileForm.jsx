@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Building2, Users, Plus, X, Trash2, DollarSign, PieChart, Loader, Search, CheckCircle2, AlertCircle, Wallet, FileText, Bell, Clock, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { createBusinessProfile, updateBusinessProfile, getSupabase, verifyICANUser, searchICANUsers, saveBusinessCoOwners } from '../services/pitchingService';
-import { walletAccountService } from '../services/walletAccountService';
+import { registerBusinessWallet, setBusinessWalletPin } from '../services/icanWalletService';
 import { memberApprovalService } from '../services/memberApprovalService';
 import BusinessProfileDocuments from './BusinessProfileDocuments';
 
@@ -408,33 +408,33 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
             : await saveBusinessCoOwners(result.data.id, coOwners);
           
           if (coOwnersResult.success) {
-            // 💳 Create wallet account for business
-            console.log('💳 Creating business wallet account...');
-            const walletAccountResult = await walletAccountService.createBusinessWalletAccount({
-              businessId: result.data.id,
-              businessName: businessData.businessName,
-              userId: userId,
-              accountHolderName: businessData.businessName,
-              phoneNumber: coOwners[0]?.phone || (await getSupabase().auth.getUser()).data.user?.phone || '',
-              email: coOwners[0]?.email || (await getSupabase().auth.getUser()).data.user?.email || '',
-              pin: walletData.pin,
-              preferredCurrency: walletData.preferredCurrency,
-              biometrics: { enabled: false }
-            });
+            // Register the dedicated iCanEra business wallet. Do not create a
+            // legacy user_accounts row: that table is one-account-per-user
+            // and conflicts when an owner creates multiple businesses.
+            console.log('💳 Registering dedicated iCanEra business wallet...');
+            const businessWallet = await registerBusinessWallet(result.data.id);
+            let pinConfigured = false;
+            try {
+              await setBusinessWalletPin(result.data.id, walletData.pin);
+              pinConfigured = true;
+            } catch (pinError) {
+              console.warn('⚠️ Business wallet registered but PIN setup failed:', pinError?.message || pinError);
+            }
 
-            if (walletAccountResult.success) {
-              console.log('✅ Business wallet account created:', walletAccountResult.data.accountNumber);
+            if (businessWallet) {
+              console.log('✅ Dedicated iCanEra business wallet registered:', businessWallet.wallet_address);
               const createdProfile = {
                 id: result.data.id,
                 ...profile,
                 business_co_owners: coOwners,
-                wallet_account: walletAccountResult.data
+                ican_wallet: businessWallet
               };
-              alert('✅ Profile and business wallet account created successfully!');
+              alert(pinConfigured
+                ? '✅ Profile, iCanEra business wallet, and PIN created successfully!'
+                : '✅ Profile and iCanEra business wallet created. Set the wallet PIN from the wallet icon.');
               onProfileCreated(createdProfile);
             } else {
-              // Profile created but wallet creation failed
-              console.warn('⚠️ Profile created but wallet account failed:', walletAccountResult.error);
+              console.warn('⚠️ Profile created but iCanEra business wallet registration returned no wallet');
               const createdProfile = {
                 id: result.data.id,
                 ...profile,

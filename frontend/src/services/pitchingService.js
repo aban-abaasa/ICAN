@@ -909,7 +909,25 @@ export const getUserBusinessProfiles = async (userId) => {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data || [];
+
+    // Resolve the shared iCanEra wallet for each owned PitchIn profile. A
+    // wallet failure must not hide otherwise valid business profiles while a
+    // deployment is being rolled out.
+    const profilesWithWallets = await Promise.all((data || []).map(async (profile) => {
+      try {
+        const { data: wallet, error: walletError } = await sb.rpc(
+          'get_or_create_pitchin_business_wallet',
+          { p_business_profile_id: profile.id }
+        );
+        if (walletError) throw walletError;
+        return { ...profile, ican_wallet: wallet };
+      } catch (walletError) {
+        console.warn('PitchIn business wallet is not available yet:', walletError?.message || walletError);
+        return profile;
+      }
+    }));
+
+    return profilesWithWallets;
   } catch (error) {
     console.error('Error fetching business profiles:', error);
     return [];
@@ -933,7 +951,17 @@ export const createBusinessProfile = async (userId, profileData) => {
       .select();
 
     if (error) throw error;
-    return { success: true, data: data[0] };
+
+    const profile = data[0];
+    const { data: wallet, error: walletError } = await sb.rpc(
+      'get_or_create_pitchin_business_wallet',
+      { p_business_profile_id: profile.id }
+    );
+    if (walletError) {
+      console.warn('Business profile created, but iCanEra wallet setup needs migration:', walletError.message);
+    }
+
+    return { success: true, data: { ...profile, ican_wallet: wallet || null } };
   } catch (error) {
     console.error('Error creating business profile:', error);
     return { success: false, error: error.message };
@@ -1280,7 +1308,22 @@ export const getAllAccessibleBusinessProfiles = async (userId, userEmail) => {
       }
     }
 
-    return allProfiles;
+    const profilesWithWallets = await Promise.all(allProfiles.map(async (profile) => {
+      if (profile.ican_wallet) return profile;
+      try {
+        const { data: wallet, error: walletError } = await sb.rpc(
+          'get_or_create_pitchin_business_wallet',
+          { p_business_profile_id: profile.id }
+        );
+        if (walletError) throw walletError;
+        return { ...profile, ican_wallet: wallet };
+      } catch (walletError) {
+        console.warn('Could not load iCanEra business wallet for profile:', walletError?.message || walletError);
+        return profile;
+      }
+    }));
+
+    return profilesWithWallets;
   } catch (error) {
     console.error('Error fetching accessible business profiles:', error);
     return [];
