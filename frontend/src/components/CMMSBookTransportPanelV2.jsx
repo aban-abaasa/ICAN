@@ -9,6 +9,8 @@ const money = (value, currency = 'UGX') => `${currency} ${Number(value || 0).toL
 export default function CMMSBookTransportPanel({ companyProfile }) {
   const businessProfileId = companyProfile?.pichin_business_profile_id;
   const [contracts, setContracts] = useState([]);
+  const [workers, setWorkers] = useState([]);
+  const [usage, setUsage] = useState([]);
   const [requests, setRequests] = useState([]);
   const [contractForm, setContractForm] = useState(blankContract);
   const [requestForm, setRequestForm] = useState(blankRequest);
@@ -18,19 +20,29 @@ export default function CMMSBookTransportPanel({ companyProfile }) {
   const [cancelling, setCancelling] = useState(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [workerEmail, setWorkerEmail] = useState('');
+  const [workerStartsAt, setWorkerStartsAt] = useState(new Date().toISOString().slice(0, 16));
+  const [workerEndsAt, setWorkerEndsAt] = useState('');
+  const [workerDailyStart, setWorkerDailyStart] = useState('06:00');
+  const [workerDailyEnd, setWorkerDailyEnd] = useState('18:00');
+  const [workerBillingMode, setWorkerBillingMode] = useState('per_ride');
 
   const load = async () => {
     if (!businessProfileId) { setLoading(false); return; }
     setLoading(true); setError('');
-    const [contractsResult, requestsResult] = await Promise.all([
+    const [contractsResult, requestsResult, workersResult, usageResult] = await Promise.all([
       supabase.from('mbg_corporate_transport_contracts').select('id,contract_name,billing_cycle,monthly_limit,credit_limit,currency,status,starts_on,ends_on,created_at').eq('business_profile_id', businessProfileId).order('created_at', { ascending: false }),
-      supabase.from('mbg_corporate_ride_requests').select('id,contract_id,ride_count,requested_vehicle_type,recurrence,pickup_location,dropoff_location,scheduled_for,status,estimated_total,created_at').eq('business_profile_id', businessProfileId).order('created_at', { ascending: false }).limit(20)
+      supabase.from('mbg_corporate_ride_requests').select('id,contract_id,ride_count,requested_vehicle_type,recurrence,pickup_location,dropoff_location,scheduled_for,status,estimated_total,created_at').eq('business_profile_id', businessProfileId).order('created_at', { ascending: false }).limit(20),
+      supabase.from('cmms_users').select('user_name,email,is_active').eq('cmms_company_id', companyProfile?.id).eq('is_active', true).order('user_name', { ascending: true }),
+      supabase.rpc('mbg_company_transport_usage', { p_business_profile_id: businessProfileId, p_period_start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), p_period_end: new Date().toISOString() })
     ]);
     const readError = contractsResult.error || requestsResult.error;
     if (readError) setError(readError.code === '42P01' || /does not exist/i.test(readError.message || '')
       ? 'Install BodaGo transport first by running mybodaguy/backend/database/SHARED_CORPORATE_TRANSPORT_AND_MONTHLY_RIDERS.sql in Supabase.'
       : readError.message);
     const nextContracts = contractsResult.data || [];
+    setWorkers(workersResult.data || []);
+    if (!usageResult.error) setUsage(usageResult.data || []);
     setContracts(nextContracts); setRequests(requestsResult.data || []);
     setRequestForm(previous => ({ ...previous, contract_id: nextContracts.some(c => c.id === previous.contract_id) ? previous.contract_id : nextContracts.find(c => c.status === 'active')?.id || '' }));
     setLoading(false);
@@ -74,14 +86,34 @@ export default function CMMSBookTransportPanel({ companyProfile }) {
     setCancelling(null);
   };
 
+  const allocateWorker = async event => {
+    event.preventDefault(); setSaving(true); setError(''); setMessage('');
+    if (!businessProfileId || !workerEmail.trim()) { setError('Enter the employee Gmail address used in BodaGo.'); setSaving(false); return; }
+    const { error: allocationError } = await supabase.rpc('mbg_allocate_company_transport_worker', {
+      p_business_profile_id: businessProfileId,
+      p_employee_email: workerEmail.trim(),
+      p_starts_at: new Date(workerStartsAt).toISOString(),
+      p_ends_at: workerEndsAt ? new Date(workerEndsAt).toISOString() : null,
+      p_billing_mode: workerBillingMode,
+      p_daily_start_time: workerDailyStart,
+      p_daily_end_time: workerDailyEnd,
+    });
+    if (allocationError) setError(allocationError.message);
+    else { setWorkerEmail(''); setWorkerEndsAt(''); setWorkerDailyStart('06:00'); setWorkerDailyEnd('18:00'); setMessage('Employee transport benefit activated. The employee can now book from BodaGo/Supermarkera with Company payment.'); }
+    setSaving(false);
+  };
+
   const activeContracts = contracts.filter(c => c.status === 'active');
   const contractName = id => contracts.find(c => c.id === id)?.contract_name || 'Contract';
   const input = 'mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white';
 
   return <div className="max-w-3xl space-y-5 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4 md:p-6">
+    <section className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4"><div><h3 className="font-semibold text-white">Employee transport usage</h3><p className="text-xs text-slate-500">Last 30 days: order count, completion count, total fare, and exact order times.</p></div>{usage.length === 0 ? <p className="text-sm text-slate-500">No assigned employees or transport usage recorded yet.</p> : <div className="space-y-2">{usage.map(row => <div key={row.allocation_id} className="rounded-lg border border-slate-800 bg-slate-950/60 p-3"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="font-medium text-white">{row.employee_email}</p><p className="text-xs text-slate-500">{row.daily_start_time?.slice(0, 5)}–{row.daily_end_time?.slice(0, 5)} · {row.billing_mode}</p></div><span className="rounded-full bg-blue-500/10 px-2 py-1 text-xs text-blue-300">{row.ride_count} orders</span></div><p className="mt-2 text-xs text-slate-400">{row.completed_ride_count} completed · UGX {Number(row.total_fare || 0).toLocaleString()} · {row.last_order_at ? 'Last order ' + new Date(row.last_order_at).toLocaleString() : 'No orders yet'}</p>{row.order_times?.length > 0 && <details className="mt-2"><summary className="cursor-pointer text-xs text-orange-300">View order times</summary><div className="mt-2 space-y-1 text-xs text-slate-500">{row.order_times.map(order => <p key={order.ride_id}>{new Date(order.ordered_at).toLocaleString()} · {order.pickup} → {order.dropoff} · {order.status}</p>)}</div></details>}</div>)}</div>}</section>
     <div className="flex items-start justify-between gap-3"><div className="flex items-center gap-3"><Car className="h-6 w-6 text-orange-400" /><div><h2 className="text-xl font-bold text-white">Book Transport</h2><p className="text-sm text-slate-400">CMMS manages company assets and employees; BodaGo manages contracts, riders, and rides.</p></div></div><button type="button" onClick={load} className="rounded-lg border border-slate-700 p-2 text-slate-400 hover:text-white"><RefreshCw size={16} className={loading ? 'animate-spin' : ''} /></button></div>
     {!businessProfileId && <p className="rounded-lg border border-amber-800/50 bg-amber-900/20 p-3 text-sm text-amber-300">Link the Pichin business profile before using company transport.</p>}
     {error && <p className="rounded-lg border border-red-800/50 bg-red-900/20 p-3 text-sm text-red-300">{error}</p>}{message && <p className="rounded-lg border border-emerald-800/50 bg-emerald-900/20 p-3 text-sm text-emerald-300">{message}</p>}
+
+    <section className="space-y-3 rounded-xl border border-blue-800/50 bg-blue-950/20 p-4"><div><h3 className="font-semibold text-white">Assign company-paid transport</h3><p className="text-xs text-slate-400">Choose an existing employee. Their Gmail must be the same account used to sign in to BodaGo or Supermarkera. The employee places the ride order; the company wallet pays it only during the daily window.</p></div><form onSubmit={allocateWorker} className="grid gap-3 md:grid-cols-2"><label className="text-sm text-slate-300 md:col-span-2">Employee Gmail<select required value={workerEmail} onChange={e => setWorkerEmail(e.target.value)} className={input}><option value="">Select existing employee</option>{workers.map(worker => <option key={worker.email} value={worker.email}>{worker.user_name || worker.email} — {worker.email}</option>)}</select></label><label className="text-sm text-slate-300">Benefit starts<input required type="datetime-local" value={workerStartsAt} onChange={e => setWorkerStartsAt(e.target.value)} className={input} /></label><label className="text-sm text-slate-300">Benefit ends<input type="datetime-local" value={workerEndsAt} onChange={e => setWorkerEndsAt(e.target.value)} className={input} /></label><label className="text-sm text-slate-300">Daily start<input required type="time" value={workerDailyStart} onChange={e => setWorkerDailyStart(e.target.value)} className={input} /></label><label className="text-sm text-slate-300">Daily end<input required type="time" value={workerDailyEnd} onChange={e => setWorkerDailyEnd(e.target.value)} className={input} /></label><label className="text-sm text-slate-300">Company billing<select value={workerBillingMode} onChange={e => setWorkerBillingMode(e.target.value)} className={input}><option value="per_ride">Pay each ride immediately</option><option value="monthly">Settle rides monthly</option></select></label><button disabled={saving} className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white disabled:opacity-50">{saving ? <Loader size={15} className="animate-spin" /> : <Check size={15} />} Assign worker</button></form></section>
 
     <section className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4"><div className="flex items-center justify-between gap-2"><div><h3 className="font-semibold text-white">Transport contracts</h3><p className="text-xs text-slate-500">Create the commercial agreement BodaGo uses to dispatch rides.</p></div><button type="button" onClick={() => setShowContractForm(value => !value)} className="flex items-center gap-1 rounded-lg bg-orange-600 px-3 py-2 text-xs font-semibold text-white"><Plus size={14} /> New contract</button></div>
       {showContractForm && <form onSubmit={createContract} className="grid gap-3 border-t border-slate-800 pt-3 md:grid-cols-2"><label className="text-sm text-slate-300 md:col-span-2">Contract name<input required value={contractForm.contract_name} onChange={e => setContractForm({ ...contractForm, contract_name: e.target.value })} placeholder="Company monthly transport" className={input} /></label><label className="text-sm text-slate-300">Billing cycle<select value={contractForm.billing_cycle} onChange={e => setContractForm({ ...contractForm, billing_cycle: e.target.value })} className={input}><option value="monthly">Monthly</option><option value="prepaid">Prepaid</option></select></label><label className="text-sm text-slate-300">Currency<input maxLength={3} value={contractForm.currency} onChange={e => setContractForm({ ...contractForm, currency: e.target.value })} className={input} /></label><label className="text-sm text-slate-300">Monthly limit<input type="number" min="0" value={contractForm.monthly_limit} onChange={e => setContractForm({ ...contractForm, monthly_limit: e.target.value })} placeholder="Optional" className={input} /></label><label className="text-sm text-slate-300">Credit limit<input type="number" min="0" value={contractForm.credit_limit} onChange={e => setContractForm({ ...contractForm, credit_limit: e.target.value })} placeholder="Optional" className={input} /></label><label className="text-sm text-slate-300">Starts on<input type="date" required value={contractForm.starts_on} onChange={e => setContractForm({ ...contractForm, starts_on: e.target.value })} className={input} /></label><label className="text-sm text-slate-300">Ends on<input type="date" value={contractForm.ends_on} onChange={e => setContractForm({ ...contractForm, ends_on: e.target.value })} className={input} /></label><button disabled={saving} className="flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white disabled:opacity-50 md:col-span-2">{saving ? <Loader size={15} className="animate-spin" /> : <Check size={15} />} Activate contract</button></form>}
