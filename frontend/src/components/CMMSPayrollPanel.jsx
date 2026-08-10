@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Check, DollarSign, Loader, ShieldCheck } from 'lucide-react';
 import { getBusinessAccessMembers, getBusinessCompensation, resolveEmployeeAuthIds, saveBusinessCompensation } from '../services/businessManagementService';
 
-export default function CMMSPayrollPanel({ companyProfile, users = [], userRole, isCreator, currentUser }) {
+export default function CMMSPayrollPanel({ companyProfile, users = [], userRole, isCreator, currentUser, dataScope = 'department' }) {
   const businessProfileId = companyProfile?.pichin_business_profile_id;
   const simpleMode = (companyProfile?.business_mode || 'sole_proprietor') === 'sole_proprietor';
   const [assignedMembers, setAssignedMembers] = useState([]);
@@ -34,7 +34,22 @@ export default function CMMSPayrollPanel({ companyProfile, users = [], userRole,
     });
     return [...byId.values()];
   }, [assignedMembers, employeeSource, currentUser, userRole, isCreator]);
+  const currentUserId = currentUser?.id || currentUser?.user?.id || currentUser?.user_id;
+  const currentDepartmentId = users.find(candidate => candidate.email?.toLowerCase() === currentUser?.email?.toLowerCase())?.department_id;
+  const visibleEmployees = useMemo(() => {
+    if (dataScope === 'company' || dataScope === 'cross_department') return employees;
+    if (dataScope === 'own') return employees.filter(employee => employee.authUserId === currentUserId);
+    return employees.filter(employee => !currentDepartmentId || employee.department_id === currentDepartmentId || employee.departmentId === currentDepartmentId);
+  }, [dataScope, employees, currentDepartmentId, currentUserId]);
   const [records, setRecords] = useState([]);
+  const visibleRecords = useMemo(() => {
+    if (dataScope === 'company' || dataScope === 'cross_department') return records;
+    if (dataScope === 'own') return records.filter(record => record.employee_user_id === currentUserId);
+    return records.filter(record => {
+      const employee = employees.find(candidate => candidate.authUserId === record.employee_user_id);
+      return !currentDepartmentId || employee?.department_id === currentDepartmentId || employee?.departmentId === currentDepartmentId;
+    });
+  }, [dataScope, records, employees, currentDepartmentId, currentUserId]);
   const [employeeId, setEmployeeId] = useState('');
   const [form, setForm] = useState({ pay_type: 'monthly', base_salary: '', currency: 'UGX', overtime_rate: '', payroll_status: 'on_pay' });
   const [loading, setLoading] = useState(Boolean(businessProfileId));
@@ -82,7 +97,7 @@ export default function CMMSPayrollPanel({ companyProfile, users = [], userRole,
   const selectEmployee = event => {
     const id = event.target.value;
     setEmployeeId(id);
-    const current = records.find(record => record.employee_user_id === id);
+    const current = visibleRecords.find(record => record.employee_user_id === id);
     if (current) {
       setForm({
         pay_type: current.pay_type || 'monthly',
@@ -110,7 +125,7 @@ export default function CMMSPayrollPanel({ companyProfile, users = [], userRole,
         {error && <p className="rounded-lg border border-red-800/50 bg-red-900/20 p-2 text-sm text-red-300">{error}</p>}
         {message && <p className="rounded-lg border border-emerald-800/50 bg-emerald-900/20 p-2 text-sm text-emerald-300">{message}</p>}
         <form onSubmit={save} className="grid gap-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4 md:grid-cols-2">
-          <label className="text-sm text-slate-300 md:col-span-2">Employee<select required value={employeeId} onChange={selectEmployee} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white"><option value="">Select employee</option>{employees.map(employee => <option key={employee.authUserId} value={employee.authUserId}>{employee.name} — {employee.role || employee.jobTitle || employee.department || 'Employee'}{employee.email ? ` — ${employee.email}` : ''}</option>)}</select>{employees.length === 0 && <span className="mt-1 block text-xs text-amber-300">Add an active employee in CMMS Users before assigning payroll.</span>}</label>
+          <label className="text-sm text-slate-300 md:col-span-2">Employee<select required value={employeeId} onChange={selectEmployee} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white"><option value="">Select employee</option>{visibleEmployees.map(employee => <option key={employee.authUserId} value={employee.authUserId}>{employee.name} — {employee.role || employee.jobTitle || employee.department || 'Employee'}{employee.email ? ` — ${employee.email}` : ''}</option>)}</select>{visibleEmployees.length === 0 && <span className="mt-1 block text-xs text-amber-300">No employees are available in this payroll scope.</span>}</label>
           <label className="text-sm text-slate-300">Pay type<select value={form.pay_type} onChange={event => setForm(previous => ({ ...previous, pay_type: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white"><option value="monthly">Monthly salary</option><option value="hourly">Hourly</option>{!simpleMode && <><option value="per_ride">Per ride</option><option value="hybrid">Hybrid</option></>}</select></label>
           <label className="text-sm text-slate-300">Payroll status<select value={form.payroll_status} onChange={event => setForm(previous => ({ ...previous, payroll_status: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white"><option value="on_pay">On pay</option><option value="on_hold">On hold</option><option value="ended">Ended</option></select></label>
           <label className="text-sm text-slate-300">Currency<input value={form.currency} onChange={event => setForm(previous => ({ ...previous, currency: event.target.value.toUpperCase() }))} maxLength={6} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label>
@@ -118,7 +133,7 @@ export default function CMMSPayrollPanel({ companyProfile, users = [], userRole,
           <label className="text-sm text-slate-300">Overtime/rate<input type="number" min="0" step="0.01" value={form.overtime_rate} onChange={event => setForm(previous => ({ ...previous, overtime_rate: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label>
           <button disabled={saving || employees.length === 0} className="flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 md:col-span-2">{saving ? <Loader size={16} className="animate-spin" /> : <Check size={16} />} Save salary</button>
         </form>
-        <div><h3 className="mb-2 text-xs font-semibold text-slate-500">CURRENT COMPENSATION</h3>{records.length === 0 ? <p className="text-sm text-slate-500">No compensation records yet.</p> : <div className="space-y-2">{records.map(record => { const employee = employees.find(candidate => candidate.authUserId === record.employee_user_id); return <div key={record.id} className="flex flex-wrap justify-between gap-2 rounded-lg bg-slate-950/60 px-3 py-2 text-sm"><span className="text-slate-300">{employee?.name || record.employee_user_id}<span className="ml-2 text-xs text-slate-500">{employee?.role || employee?.jobTitle || employee?.department || 'Employee'}</span></span><span className={record.payroll_status === 'on_pay' ? 'text-emerald-300' : 'text-amber-300'}>{record.currency} {Number(record.base_salary).toLocaleString()} / {record.pay_type} · {record.payroll_status === 'on_pay' ? 'On pay' : record.payroll_status === 'on_hold' ? 'On hold' : 'Ended'}</span></div>; })}</div>}</div>
+        <div><h3 className="mb-2 text-xs font-semibold text-slate-500">CURRENT COMPENSATION</h3>{visibleRecords.length === 0 ? <p className="text-sm text-slate-500">No compensation records in this scope.</p> : <div className="space-y-2">{visibleRecords.map(record => { const employee = employees.find(candidate => candidate.authUserId === record.employee_user_id); return <div key={record.id} className="flex flex-wrap justify-between gap-2 rounded-lg bg-slate-950/60 px-3 py-2 text-sm"><span className="text-slate-300">{employee?.name || record.employee_user_id}<span className="ml-2 text-xs text-slate-500">{employee?.role || employee?.jobTitle || employee?.department || 'Employee'}</span></span><span className={record.payroll_status === 'on_pay' ? 'text-emerald-300' : 'text-amber-300'}>{record.currency} {Number(record.base_salary).toLocaleString()} / {record.pay_type} · {record.payroll_status === 'on_pay' ? 'On pay' : record.payroll_status === 'on_hold' ? 'On hold' : 'Ended'}</span></div>; })}</div>}</div>
       </>}
     </div>
   );

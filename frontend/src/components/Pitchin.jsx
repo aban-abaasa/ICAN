@@ -5,6 +5,7 @@ import SmartContractGenerator from './SmartContractGenerator';
 import ShareSigningFlow from './ShareSigningFlow';
 import BusinessProfileForm from './BusinessProfileForm';
 import BusinessProfileSelector from './BusinessProfileSelector';
+import BusinessCategorySelector from './BusinessCategorySelector';
 import BusinessProfileCard from './BusinessProfileCard';
 import SHAREHub from './SHAREHub';
 import PitchinLiveShareValue from './PitchinLiveShareValue';
@@ -42,7 +43,7 @@ import {
 } from '../services/pitchInteractionsService';
 import { getUserNotifications } from '../services/investmentNotificationsService';
 
-const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, navRef = null, onTabChange = null }) => {
+const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusinessProfile = false, onBusinessProfileRequestConsumed = null, navRef = null, onTabChange = null }) => {
   const [pitches, setPitches] = useState([]);
   const [filteredPitches, setFilteredPitches] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -81,6 +82,8 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, navRef =
   const [businessProfiles, setBusinessProfiles] = useState([]);
   const [currentBusinessProfile, setCurrentBusinessProfile] = useState(null);
   const [showBusinessForm, setShowBusinessForm] = useState(false);
+  const [showBusinessCategorySelector, setShowBusinessCategorySelector] = useState(false);
+  const [selectedBusinessCategory, setSelectedBusinessCategory] = useState(null);
   const [showProfileSelector, setShowProfileSelector] = useState(false);
   const [showProfileDetails, setShowProfileDetails] = useState(false);
   const [showShareValuePanel, setShowShareValuePanel] = useState(false);
@@ -109,6 +112,28 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, navRef =
   const videoRefs = useRef({}); // refs to video elements for controlling sound
   const videoScrollRef = useRef(null);
   const metricsUnsubscribeRef = useRef(null); // ref to store real-time unsubscribe function
+
+  useEffect(() => {
+    if (openBusinessProfile) {
+      setEditingProfile(null);
+      setSelectedBusinessCategory(null);
+      setShowBusinessCategorySelector(true);
+      onBusinessProfileRequestConsumed?.();
+    }
+  }, [openBusinessProfile, onBusinessProfileRequestConsumed]);
+
+  const openNewBusinessProfile = () => {
+    setShowProfileSelector(false);
+    setEditingProfile(null);
+    setSelectedBusinessCategory(null);
+    setShowBusinessCategorySelector(true);
+  };
+
+  const handleBusinessCategorySelected = (category) => {
+    setSelectedBusinessCategory(category);
+    setShowBusinessCategorySelector(false);
+    setShowBusinessForm(true);
+  };
 
   const VALID_PITCHIN_TABS = ['feed', 'myPitches', 'interested', 'search'];
 
@@ -1013,7 +1038,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, navRef =
       if (businessProfiles.length > 0) {
         setShowProfileSelector(true);
       } else {
-        setShowBusinessForm(true);
+        openNewBusinessProfile();
       }
       return;
     }
@@ -1661,7 +1686,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, navRef =
                   </h2>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => setShowBusinessForm(true)}
+                      onClick={openNewBusinessProfile}
                       className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition"
                     >
                       <Plus className="w-4 h-4" />
@@ -2146,6 +2171,14 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, navRef =
           }}
           userId={currentUser?.id}
           editingProfile={editingProfile}
+          initialBusinessCategory={selectedBusinessCategory}
+        />
+      )}
+
+      {showBusinessCategorySelector && (
+        <BusinessCategorySelector
+          onSelect={handleBusinessCategorySelected}
+          onCancel={() => setShowBusinessCategorySelector(false)}
         />
       )}
 
@@ -2157,11 +2190,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, navRef =
           currentUserId={currentUser?.id}
           currentUserEmail={currentUser?.email}
           onSelectProfile={handleSelectBusinessProfile}
-          onCreateNew={() => {
-            setShowProfileSelector(false);
-            setShowBusinessForm(true);
-            setEditingProfile(null);
-          }}
+          onCreateNew={openNewBusinessProfile}
           onEdit={async (profile) => {
             const permission = await checkBusinessProfileEditPermission(
               profile.id, 
@@ -2322,6 +2351,14 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, navRef =
           }}
           userId={currentUser?.id}
           editingProfile={editingProfile}
+          initialBusinessCategory={selectedBusinessCategory}
+        />
+      )}
+
+      {showBusinessCategorySelector && (
+        <BusinessCategorySelector
+          onSelect={handleBusinessCategorySelected}
+          onCancel={() => setShowBusinessCategorySelector(false)}
         />
       )}
 
@@ -2333,11 +2370,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, navRef =
           currentUserId={currentUser?.id}
           currentUserEmail={currentUser?.email}
           onSelectProfile={handleSelectBusinessProfile}
-          onCreateNew={() => {
-            setShowProfileSelector(false);
-            setShowBusinessForm(true);
-            setEditingProfile(null);
-          }}
+          onCreateNew={openNewBusinessProfile}
           onEdit={async (profile) => {
             const permission = await checkBusinessProfileEditPermission(
               profile.id,

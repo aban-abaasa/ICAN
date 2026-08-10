@@ -62,15 +62,28 @@ export async function getBusinessWalletTransactions(businessProfileId, limit = 1
   return data ?? [];
 }
 
-export async function transferFromBusinessWallet({ businessProfileId, recipientUserId, amount, note = '', referenceId = null, pin }) {
-  const { data, error } = await supabase.rpc('pitchin_business_wallet_transfer', {
-    p_business_profile_id: businessProfileId,
-    p_recipient_user_id: recipientUserId,
-    p_amount_ican: amount,
-    p_note: note,
-    p_reference_id: referenceId,
-    p_pin: pin,
-  });
+export async function transferFromBusinessWallet({ businessProfileId, recipientUserId, recipientBusinessProfileId = null, amount, note = '', referenceId = null, pin }) {
+  const rpcName = recipientBusinessProfileId
+    ? 'pitchin_business_wallet_transfer_to_business'
+    : 'pitchin_business_wallet_transfer';
+  const rpcArgs = recipientBusinessProfileId
+    ? {
+        p_business_profile_id: businessProfileId,
+        p_recipient_business_profile_id: recipientBusinessProfileId,
+        p_amount_ican: amount,
+        p_note: note,
+        p_reference_id: referenceId,
+        p_pin: pin,
+      }
+    : {
+        p_business_profile_id: businessProfileId,
+        p_recipient_user_id: recipientUserId,
+        p_amount_ican: amount,
+        p_note: note,
+        p_reference_id: referenceId,
+        p_pin: pin,
+      };
+  const { data, error } = await supabase.rpc(rpcName, rpcArgs);
   if (error) throw error;
   if (!data?.success) throw new Error(data?.error || 'Business-wallet transfer failed');
   return data;
@@ -86,14 +99,31 @@ export async function setBusinessWalletPin(businessProfileId, pin) {
   return data;
 }
 
-export async function approveBusinessWalletTransaction(transactionId, decision = 'approved') {
+export async function approveBusinessWalletTransaction(transactionId, decision = 'approved', pin = null) {
   const { data, error } = await supabase.rpc('approve_pitchin_business_wallet_transaction', {
     p_transaction_id: transactionId,
     p_decision: decision,
+    p_pin: pin,
   });
   if (error) throw error;
   if (!data?.success) throw new Error(data?.error || 'Business-wallet approval failed');
   return data;
+}
+
+export async function getBusinessWalletNotifications(unreadOnly = true) {
+  const { data, error } = await supabase.rpc('get_ican_business_wallet_notifications', {
+    p_unread_only: unreadOnly,
+  });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function markBusinessWalletNotificationRead(notificationId) {
+  const { data, error } = await supabase.rpc('mark_ican_business_wallet_notification_read', {
+    p_notification_id: notificationId,
+  });
+  if (error) throw error;
+  return Boolean(data);
 }
 
 export async function getWallet(userId) {
@@ -161,6 +191,42 @@ export async function sendICAN({
   });
   if (error) throw error;
   if (!data.success) throw new Error(data.error);
+  return data;
+}
+
+export async function sendICANToBusiness({
+  fromUserId, businessProfileId, amount, note = '', referenceId = null,
+  sourceApp = SOURCE_APP, pinAttempt = null,
+}) {
+  const { data, error } = await supabase.rpc('transfer_ican_to_business', {
+    p_from_user: fromUserId,
+    p_business_profile_id: businessProfileId,
+    p_amount: amount,
+    p_note: note,
+    p_source_app: sourceApp,
+    p_reference_id: referenceId,
+    p_pin_attempt: pinAttempt,
+  });
+  if (error) throw error;
+  if (!data?.success) throw new Error(data?.error || 'Business-wallet transfer failed');
+  return data;
+}
+
+export async function sendAgentFiatToBusiness({
+  agentId, businessProfileId, amountLocal, currency = 'UGX', pinAttempt,
+  walletAddress, note = '',
+}) {
+  const { data, error } = await supabase.rpc('transfer_agent_fiat_to_business', {
+    p_agent_id: agentId,
+    p_business_profile_id: businessProfileId,
+    p_amount_local: amountLocal,
+    p_currency: currency,
+    p_pin_attempt: pinAttempt,
+    p_wallet_address: walletAddress,
+    p_note: note,
+  });
+  if (error) throw error;
+  if (!data?.success) throw new Error(data?.error || 'Business-wallet transfer failed');
   return data;
 }
 
@@ -253,6 +319,8 @@ export default {
   getOrCreateBusinessWallet,
   registerBusinessWallet,
   getBusinessWalletTransactions,
+  getBusinessWalletNotifications,
+  markBusinessWalletNotificationRead,
   transferFromBusinessWallet,
   approveBusinessWalletTransaction,
   setBusinessWalletPin,

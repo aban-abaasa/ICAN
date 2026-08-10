@@ -11,7 +11,7 @@ RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, auth
-AS $$
+AS $cmms$
 DECLARE
   v_company public.cmms_company_profiles;
   v_business_id UUID;
@@ -142,7 +142,9 @@ BEGIN
         permissions = business_account_members.permissions || EXCLUDED.permissions,
         updated_at = now();
 
-  -- Give every active CMMS manager authority in the shared Pichin account.
+  -- Give every active CMMS manager access to CMMS operations only. For a sole
+  -- proprietorship, store workers must not receive PitchIn business-profile
+  -- administration or wallet-approval authority.
   FOR v_manager IN
     SELECT cu.user_name, cu.email
     FROM public.cmms_users cu
@@ -161,7 +163,7 @@ BEGIN
         permissions, invited_by, joined_at
       ) VALUES (
         v_business_id, v_manager_auth_id, 'active', 'Manager',
-        jsonb_build_object('manage_business', true, 'manage_payroll', true, 'manage_transport', true),
+         jsonb_build_object('manage_business', false, 'manage_payroll', true, 'manage_transport', true),
         auth.uid(), now()
       )
       ON CONFLICT (business_profile_id, auth_user_id) DO UPDATE
@@ -171,6 +173,21 @@ BEGIN
     END IF;
   END LOOP;
 
+  -- Revoke any previously granted PitchIn business-management permission from
+  -- non-admin workers. Their CMMS roles and CMMS access remain unchanged.
+  UPDATE public.business_account_members bam
+     SET permissions = COALESCE(bam.permissions, '{}'::JSONB)
+                         || jsonb_build_object('manage_business', false),
+         updated_at = now()
+   WHERE bam.business_profile_id = v_business_id
+     AND bam.auth_user_id <> auth.uid()
+     AND EXISTS (
+       SELECT 1 FROM public.business_profiles bp
+        WHERE bp.id = bam.business_profile_id
+          AND lower(COALESCE(bp.business_type, '')) NOT IN
+              ('limited', 'limited company', 'llc', 'private limited company')
+     );
+
   RETURN jsonb_build_object(
     'success', true,
     'mode', 'small_team',
@@ -178,7 +195,7 @@ BEGIN
     'business_profile_id', v_business_id
   );
 END;
-$$;
+$cmms$;
 
 REVOKE ALL ON FUNCTION public.cmms_ensure_small_business_authority(UUID) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.cmms_ensure_small_business_authority(UUID) TO authenticated;

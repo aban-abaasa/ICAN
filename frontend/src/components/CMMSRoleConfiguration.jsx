@@ -3,16 +3,16 @@ import { Check, Edit2, Plus, Save, Trash2, X } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 
 export const CMMS_TOOL_OPTIONS = [
-  { id: 'company', label: 'Company configuration', permission: 'canViewCompany' },
-  { id: 'departments', label: 'Departments', permission: 'canManageDepartments' },
-  { id: 'users', label: 'Users and role assignments', permission: 'canManageUsers' },
-  { id: 'inventory', label: 'Inventory', permission: 'canViewInventory' },
-  { id: 'payroll', label: 'Payroll', permission: 'canViewFinancials' },
-  { id: 'transport', label: 'Transport', permission: 'canManageTransport' },
-  { id: 'requisitions', label: 'Requisitions', permission: 'canViewRequisitions' },
-  { id: 'approvals', label: 'Approvals', permission: 'canApproveRequisitions' },
-  { id: 'reports', label: 'Reports', permission: 'canViewReports' },
-  { id: 'tasks', label: 'Tasks and work orders', permission: 'canCreateWorkOrders' }
+  { id: 'company', label: 'Company configuration', permission: 'canViewCompany', actions: ['view', 'edit'] },
+  { id: 'departments', label: 'Departments', permission: 'canManageDepartments', actions: ['view', 'create', 'edit', 'delete'] },
+  { id: 'users', label: 'Users and role assignments', permission: 'canManageUsers', actions: ['view', 'create', 'edit', 'assign'] },
+  { id: 'inventory', label: 'Inventory', permission: 'canViewInventory', actions: ['view', 'create', 'edit', 'approve'] },
+  { id: 'payroll', label: 'Payroll', permission: 'canViewFinancials', actions: ['view', 'create', 'edit', 'approve'], scopes: true },
+  { id: 'transport', label: 'Transport', permission: 'canManageTransport', actions: ['view', 'create', 'edit', 'approve', 'assign'] },
+  { id: 'requisitions', label: 'Requisitions and supplier orders', permission: 'canViewRequisitions', actions: ['view', 'create', 'edit', 'purchase', 'approve', 'assign'], scopes: true },
+  { id: 'approvals', label: 'Approvals', permission: 'canApproveRequisitions', actions: ['view', 'approve', 'reject'], scopes: true },
+  { id: 'reports', label: 'Reports', permission: 'canViewReports', actions: ['view', 'create', 'export'], scopes: true },
+  { id: 'tasks', label: 'Tasks and work orders', permission: 'canCreateWorkOrders', actions: ['view', 'create', 'edit', 'assign', 'approve', 'complete'] }
 ];
 
 const emptyRole = { display_name: '', description: '', permission_level: 1, tool_access: {} };
@@ -51,8 +51,50 @@ const CMMSRoleConfiguration = ({ companyId, isAdmin, onRolesChanged }) => {
   const toggleTool = (tool) => {
     setDraft((current) => ({
       ...current,
-      tool_access: { ...(current.tool_access || {}), [tool.id]: !selectedTools[tool.id] }
+      tool_access: {
+        ...(current.tool_access || {}),
+        [tool.id]: selectedTools[tool.id]
+          ? false
+          : { view: true }
+      }
     }));
+  };
+
+  const toggleAction = (tool, action) => {
+    setDraft((current) => {
+      const currentAccess = current.tool_access?.[tool.id];
+      const actions = currentAccess && typeof currentAccess === 'object' ? currentAccess : {};
+      return {
+        ...current,
+        tool_access: {
+          ...(current.tool_access || {}),
+          [tool.id]: { ...actions, [action]: !actions[action], view: true }
+        }
+      };
+    });
+  };
+
+  const hasAction = (tool, action) => {
+    const access = selectedTools[tool.id];
+    return Boolean(access && typeof access === 'object' && access[action]);
+  };
+
+  const getScope = (tool) => {
+    const access = selectedTools[tool.id];
+    return access && typeof access === 'object' ? access.scope || 'department' : 'department';
+  };
+
+  const setScope = (tool, scope) => {
+    setDraft((current) => {
+      const access = current.tool_access?.[tool.id];
+      return {
+        ...current,
+        tool_access: {
+          ...(current.tool_access || {}),
+          [tool.id]: { ...(access && typeof access === 'object' ? access : { view: true }), scope }
+        }
+      };
+    });
   };
 
   const saveRole = async (event) => {
@@ -100,9 +142,33 @@ const CMMSRoleConfiguration = ({ companyId, isAdmin, onRolesChanged }) => {
             <input type="number" min="1" max="10" value={draft.permission_level || 1} onChange={(e) => setDraft({ ...draft, permission_level: e.target.value })} placeholder="Permission level" className="w-full px-3 py-2 rounded bg-white/10 text-white border border-white/20" />
           </div>
           <textarea value={draft.description || ''} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="Describe what this role is responsible for" rows={2} className="w-full px-3 py-2 rounded bg-white/10 text-white border border-white/20" />
-          <div><p className="text-white font-semibold mb-2">Tools this role may access</p><div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-            {CMMS_TOOL_OPTIONS.map((tool) => <button type="button" key={tool.id} onClick={() => toggleTool(tool)} className={`text-left px-3 py-2 rounded border ${selectedTools[tool.id] ? 'bg-green-500/20 border-green-400 text-green-200' : 'bg-white/5 border-white/10 text-gray-400'}`}><Check className={`inline w-4 h-4 mr-2 ${selectedTools[tool.id] ? 'opacity-100' : 'opacity-20'}`} />{tool.label}</button>)}
-          </div></div>
+          <div>
+            <p className="text-white font-semibold mb-2">Tools this role may access</p>
+            <div className="grid md:grid-cols-2 gap-3">
+              {CMMS_TOOL_OPTIONS.map((tool) => {
+                const enabled = Boolean(selectedTools[tool.id]);
+                return <div key={tool.id} className={`rounded border p-3 ${enabled ? 'bg-green-500/10 border-green-400/50' : 'bg-white/5 border-white/10'}`}>
+                  <button type="button" onClick={() => toggleTool(tool)} className={`text-left font-semibold ${enabled ? 'text-green-200' : 'text-gray-400'}`}>
+                    <Check className={`inline w-4 h-4 mr-2 ${enabled ? 'opacity-100' : 'opacity-20'}`} />{tool.label}
+                  </button>
+                  {enabled && <div className="flex flex-wrap gap-2 mt-3 pl-6">
+                    {tool.actions.map((action) => <label key={action} className="inline-flex items-center gap-1 text-xs text-gray-300 capitalize">
+                      <input type="checkbox" checked={hasAction(tool, action)} onChange={() => toggleAction(tool, action)} />
+                      {action}
+                    </label>)}
+                    {tool.scopes && <label className="flex items-center gap-2 basis-full text-xs text-gray-300 mt-1">Data scope
+                      <select value={getScope(tool)} onChange={(event) => setScope(tool, event.target.value)} className="rounded bg-slate-900 border border-white/20 px-2 py-1 text-white">
+                        <option value="own">Own records only</option>
+                        <option value="department">Department only</option>
+                        <option value="cross_department">Cross-department</option>
+                        <option value="company">Company-wide</option>
+                      </select>
+                    </label>}
+                  </div>}
+                </div>;
+              })}
+            </div>
+          </div>
           {error && <p className="text-red-300 text-sm">{error}</p>}
           <button disabled={saving} className="px-4 py-2 rounded bg-purple-600 hover:bg-purple-500 text-white font-semibold flex items-center gap-2"><Save className="w-4 h-4" />{saving ? 'Saving…' : editingId ? 'Update role' : 'Create role'}</button>
         </form>

@@ -672,6 +672,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [treasurySubTab, setTreasurySubTab] = useState('account');
   const [showProfilePanel, setShowProfilePanel] = useState(false);
   const [showPitchinPanel, setShowPitchinPanel] = useState(false);
+  const [openPitchinBusinessProfile, setOpenPitchinBusinessProfile] = useState(false);
   const [showWalletPanel, setShowWalletPanel] = useState(false);
   const [mobileError, setMobileError] = useState(null);
 
@@ -4725,6 +4726,26 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             <ChevronRight className="w-4 h-4" style={{ color: 'var(--color-textSecondary)' }} />
           </div>
         </button>
+
+        {/* Pichin business-profile entry point. Operational setup stays in CMMS. */}
+        <button
+          onClick={() => {
+            setOpenPitchinBusinessProfile(true);
+            openFeaturePanel('pitchin');
+          }}
+          className="mt-3 w-full flex items-center justify-between px-4 py-3 rounded-xl border border-indigo-400/30 bg-indigo-500/10 hover:bg-indigo-500/20 transition-all active:scale-95"
+        >
+          <div className="flex items-center gap-3 text-left">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-500/20">
+              <Briefcase className="h-5 w-5 text-indigo-300" />
+            </div>
+            <div>
+              <span className="block text-sm font-semibold text-white">Manage your business</span>
+              <span className="block text-xs text-indigo-200/70">Choose your company type in your Pichin business profile</span>
+            </div>
+          </div>
+          <ChevronRight className="h-5 w-5 text-indigo-300" />
+        </button>
       </div>
 
       {/* ====== DETAIL PAGE - SETTINGS ONLY ====== */}
@@ -6935,7 +6956,12 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           className={`fixed inset-x-0 z-30 bg-black overflow-hidden ${isWebDashboard ? 'top-[132px] md:top-[146px]' : 'top-0'}`}
           style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
-          <Pitchin navRef={pitchinNavRef} onTabChange={(prev) => handlePanelTabChange('pitchin', prev)} />
+          <Pitchin
+            openBusinessProfile={openPitchinBusinessProfile}
+            onBusinessProfileRequestConsumed={() => setOpenPitchinBusinessProfile(false)}
+            navRef={pitchinNavRef}
+            onTabChange={(prev) => handlePanelTabChange('pitchin', prev)}
+          />
         </div>
       )}
 
@@ -7855,6 +7881,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           </div>
         </div>
       )}
+
 
       {/* Status Feed Page */}
       {showStatusPage && (

@@ -9,9 +9,11 @@ import {
   Clock,
   BarChart3
 } from 'lucide-react';
-import agentService from '../services/agentService';
+import agentService, { hashPIN } from '../services/agentService';
 import { CountryService } from '../services/countryService';
 import { getSupabaseClient } from '../lib/supabase/client';
+import { sendAgentFiatToBusiness } from '../services/icanWalletService';
+import { useIcanPrice } from '../hooks/useIcanPrice';
 
 /**
  * 🏪 AGENT DASHBOARD
@@ -28,6 +30,7 @@ const AgentDashboard = () => {
   const [notification, setNotification] = useState(null);
   const [localCurrency, setLocalCurrency] = useState('UGX'); // Default to UGX
   const [localCurrencySymbol, setLocalCurrencySymbol] = useState('Sh');
+  const { price: currentIcanPrice, loading: icanPriceLoading } = useIcanPrice(localCurrency);
 
   // Cash-In Form
   const [cashInForm, setCashInForm] = useState({
@@ -181,6 +184,17 @@ const AgentDashboard = () => {
     setRecentTransactions(transactions);
   };
 
+  const isBusinessWalletAddress = (value) =>
+    String(value || '').trim().toUpperCase().startsWith('BIZ-');
+
+  const notifyBusinessWalletRequiresIcanSend = (walletAddress) => {
+    setNotification({
+      type: 'error',
+      title: 'PitchIn Business Wallet',
+      message: `${walletAddress} is an icaneracoin business wallet. Use the Send tab with icaneracoin to transfer to it; agent cash-in/cash-out supports customer fiat wallets.`
+    });
+  };
+
   // ============================================
   // CASH-IN HANDLER
   // ============================================
@@ -191,12 +205,17 @@ const AgentDashboard = () => {
     // Show confirmation modal instead of directly processing
     if (!showConfirmation) {
       try {
+        if (isBusinessWalletAddress(cashInForm.userAccountId)) {
+          notifyBusinessWalletRequiresIcanSend(cashInForm.userAccountId);
+          return;
+        }
+
         // Look up customer name before showing confirmation
         const { data: userAccount, error: userError } = await agentService.supabase
           .from('user_accounts')
           .select('user_id, account_holder_name')
           .eq('account_number', cashInForm.userAccountId)
-          .single();
+          .maybeSingle();
 
         if (userError || !userAccount) {
           setNotification({
@@ -284,12 +303,56 @@ const AgentDashboard = () => {
     // Show confirmation modal instead of directly processing
     if (!showConfirmation) {
       try {
+        if (isBusinessWalletAddress(cashOutForm.userAccountId)) {
+          const { data, error } = await agentService.supabase.rpc('resolve_ican_business_wallet', {
+            p_wallet_address: cashOutForm.userAccountId.trim(),
+          });
+          const businessWallet = Array.isArray(data) ? data[0] : data;
+
+          if (error || !businessWallet) {
+            setNotification({
+              type: 'error',
+              title: '❌ Business Wallet Not Found',
+              message: `Business wallet ${cashOutForm.userAccountId} not found or inactive`
+            });
+            return;
+          }
+
+          const localAmount = parseFloat(cashOutForm.amount);
+          const coinPrice = Number(currentIcanPrice?.price_local);
+          const icanAmount = localAmount / coinPrice;
+          if (icanPriceLoading || !(coinPrice > 0)) {
+            setNotification({ type: 'error', title: '❌ ICAN Price Unavailable', message: 'The current ICAN price is still loading. Please try again.' });
+            return;
+          }
+          if (!(localAmount > 0) || !(icanAmount > 0)) {
+            setNotification({ type: 'error', title: '❌ Invalid Amount', message: 'Enter an amount greater than zero' });
+            return;
+          }
+
+          setConfirmationData({
+            type: 'cashOut',
+            isBusinessIcan: true,
+            userAccountId: cashOutForm.userAccountId.trim(),
+            businessProfileId: businessWallet.business_profile_id,
+            customerName: businessWallet.business_name || 'PitchIn Business',
+            amount: localAmount,
+            icanAmount,
+            coinPrice,
+            currency: cashOutForm.currency,
+            description: `ICAN business-wallet transfer from ${cashOutForm.userAccountId.trim()}`
+          });
+          setConfirmationAction('cashOut');
+          setShowConfirmation(true);
+          return;
+        }
+
         // Look up customer name before showing confirmation
         const { data: userAccount, error: userError } = await agentService.supabase
           .from('user_accounts')
           .select('user_id, account_holder_name')
           .eq('account_number', cashOutForm.userAccountId)
-          .single();
+          .maybeSingle();
 
         if (userError || !userAccount) {
           setNotification({
@@ -326,14 +389,39 @@ const AgentDashboard = () => {
     setNotification(null);
 
     try {
-      // Validate PIN was entered
-      if (!confirmationPin || confirmationPin.length !== 4) {
+      // Both regular cash-out and ICAN business transfers require the agent PIN.
+      if (!confirmationPin || !/^\d{4}$/.test(confirmationPin)) {
         setNotification({
           type: 'error',
           title: '❌ PIN Required',
           message: 'Please enter your 4-digit PIN'
         });
         setLoading(false);
+        return;
+      }
+
+      if (confirmationData.isBusinessIcan) {
+        const result = await sendAgentFiatToBusiness({
+          agentId: agentService.agentId,
+          businessProfileId: confirmationData.businessProfileId,
+          amountLocal: confirmationData.amount,
+          currency: confirmationData.currency,
+          pinAttempt: hashPIN(confirmationPin),
+          walletAddress: confirmationData.userAccountId,
+          note: confirmationData.description,
+        });
+
+        setLoading(false);
+        setShowConfirmation(false);
+        setConfirmationPin('');
+        if (result?.success) {
+          setNotification({
+            type: 'success',
+            title: '✅ icaneracoin Business Transfer Successful',
+            message: `${confirmationData.icanAmount.toFixed(4)} icaneracoin sent to ${confirmationData.customerName}. The business received ${Number(result.business_received || 0).toFixed(4)} icaneracoin after tithe.`
+          });
+          setCashOutForm({ userAccountId: '', amount: '', currency: localCurrency, phoneNumber: '' });
+        }
         return;
       }
 
@@ -529,7 +617,11 @@ const AgentDashboard = () => {
             <div className="bg-white/10 border border-white/20 rounded-lg p-3 sm:p-4">
               <p className="text-gray-400 text-xs sm:text-sm mb-1">Transaction Type</p>
               <p className="text-white font-semibold text-base sm:text-lg">
-                {isCashIn ? 'Cash-In (Transfer to User)' : 'Cash-Out (User Withdrawal)'}
+                {isCashIn
+                  ? 'Cash-In (Transfer to User)'
+                  : confirmationData.isBusinessIcan
+                    ? 'icaneracoin Transfer (PitchIn Business Wallet)'
+                    : 'Cash-Out (User Withdrawal)'}
               </p>
             </div>
 
@@ -549,6 +641,14 @@ const AgentDashboard = () => {
               <p className="text-white font-bold text-2xl sm:text-3xl">
                 {confirmationData.currency} {parseFloat(confirmationData.amount).toLocaleString()}
               </p>
+              {confirmationData.isBusinessIcan && (
+                <p className="text-cyan-300 font-semibold mt-2">
+                  = {confirmationData.icanAmount.toFixed(4)} ICAN
+                  <span className="block text-gray-400 text-xs font-normal mt-1">
+                    Live rate: 1 ICAN = {Number(confirmationData.coinPrice).toLocaleString()} {confirmationData.currency}
+                  </span>
+                </p>
+              )}
             </div>
 
             {/* User Account ID */}
@@ -568,7 +668,7 @@ const AgentDashboard = () => {
             )}
 
             {/* Commission Note for Cash-Out */}
-            {!isCashIn && (
+            {!isCashIn && !confirmationData.isBusinessIcan && (
               <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 sm:p-4">
                 <p className="text-yellow-300 text-xs sm:text-sm">
                   <strong>💡 Note:</strong> You will earn 2.5% commission on this transaction
@@ -576,12 +676,17 @@ const AgentDashboard = () => {
               </div>
             )}
 
-            {/* PIN INPUT SECTION - Only for Cash-Out */}
+            {/* PIN INPUT SECTION - Required for all cash-out transfers */}
             {!isCashIn && (
               <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 border-2 border-blue-400/50 rounded-xl p-4 sm:p-5 mt-4 sm:mt-6">
                 <label className="block text-blue-300 text-base sm:text-lg font-bold mb-3 flex items-center gap-2">
                   🔐 Enter Customer PIN
                 </label>
+                <p className="text-xs sm:text-sm text-gray-400 mb-3 text-center">
+                  {confirmationData.isBusinessIcan
+                    ? 'Your 4-digit agent wallet PIN is required'
+                    : "The customer's 4-digit transaction PIN"}
+                </p>
                 <input
                   type="password"
                   placeholder="• • • •"
@@ -591,7 +696,11 @@ const AgentDashboard = () => {
                   className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-white/10 border-2 border-blue-400/50 rounded-lg text-white placeholder-gray-500 text-center text-2xl sm:text-3xl tracking-widest font-bold focus:outline-none focus:border-blue-300 focus:bg-white/20 transition-all"
                   inputMode="numeric"
                 />
-                <p className="text-xs sm:text-sm text-gray-400 mt-2 text-center">The customer's 4-digit transaction PIN</p>
+                <p className="text-xs sm:text-sm text-gray-400 mt-2 text-center">
+                  {confirmationData.isBusinessIcan
+                    ? 'Your 4-digit agent wallet PIN is required'
+                    : "The customer's 4-digit transaction PIN"}
+                </p>
                 {confirmationPin.length === 4 && (
                   <p className="text-xs sm:text-sm text-green-400 mt-2 text-center font-semibold">✓ PIN ready for approval</p>
                 )}
@@ -1094,7 +1203,7 @@ const AgentDashboard = () => {
                   <label className="block text-gray-300 font-semibold mb-2">User Account ID</label>
                   <input
                     type="text"
-                    placeholder="e.g., user-12345 or ACC-001"
+                    placeholder="e.g., ICAN-... or BIZ-..."
                     value={cashInForm.userAccountId}
                     onChange={(e) => setCashInForm({...cashInForm, userAccountId: e.target.value})}
                     className="w-full bg-slate-700/50 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
@@ -1159,7 +1268,7 @@ const AgentDashboard = () => {
                   <label className="block text-gray-300 font-semibold mb-2">Customer Account Number</label>
                   <input
                     type="text"
-                    placeholder="e.g., ICAN-3610252715435498"
+                    placeholder="e.g., ICAN-... or BIZ-..."
                     value={cashOutForm.userAccountId}
                     onChange={(e) => setCashOutForm({...cashOutForm, userAccountId: e.target.value})}
                     className="w-full bg-slate-700/50 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"

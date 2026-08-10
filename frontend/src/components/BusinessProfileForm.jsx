@@ -3,6 +3,7 @@ import { Building2, Users, Plus, X, Trash2, DollarSign, PieChart, Loader, Search
 import { createBusinessProfile, updateBusinessProfile, getSupabase, verifyICANUser, searchICANUsers, saveBusinessCoOwners } from '../services/pitchingService';
 import { registerBusinessWallet, setBusinessWalletPin } from '../services/icanWalletService';
 import { memberApprovalService } from '../services/memberApprovalService';
+import { createBusinessProfileFromCategory, publishBusinessAsSupplier } from '../services/businessManagementService';
 import BusinessProfileDocuments from './BusinessProfileDocuments';
 
 const STRUCTURE_LIMITS = {
@@ -11,7 +12,7 @@ const STRUCTURE_LIMITS = {
   enterprise: 20
 };
 
-const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfile }) => {
+const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfile, initialBusinessCategory = null }) => {
   const [step, setStep] = useState('business'); // business, owners, documents, wallet, approvals, notifications, review
   const [loading, setLoading] = useState(false);
   const [searchingUsers, setSearchingUsers] = useState(false);
@@ -102,6 +103,12 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
       }
     }
   }, [editingProfile]);
+
+  useEffect(() => {
+    if (!editingProfile && initialBusinessCategory?.display_name) {
+      setBusinessData((current) => ({ ...current, businessType: initialBusinessCategory.display_name }));
+    }
+  }, [editingProfile, initialBusinessCategory]);
 
   // Load pending approvals when viewing approvals step
   useEffect(() => {
@@ -363,6 +370,13 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
         notify_via_in_app: notificationSettings.notifyViaInApp,
         shareholder_notification_level: notificationSettings.shareholderNotificationLevel
       };
+      if (initialBusinessCategory?.category_key) {
+        profile.metadata = {
+          source: 'pichin',
+          category_key: initialBusinessCategory.category_key,
+          category_name: initialBusinessCategory.display_name
+        };
+      }
 
       let result;
       
@@ -398,7 +412,32 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
       } else {
         // Create new profile
         console.log('✨ Creating new profile');
-        result = await createBusinessProfile(userId, { user_id: userId, ...profile });
+        if (initialBusinessCategory?.category_key) {
+          const categoryResult = await createBusinessProfileFromCategory({
+            businessName: businessData.businessName,
+            categoryKey: initialBusinessCategory.category_key,
+            businessType: initialBusinessCategory.display_name,
+            sourceApp: 'pichin'
+          });
+          if (categoryResult.success && categoryResult.data) {
+            const configuredProfile = await updateBusinessProfile(categoryResult.data, profile);
+            result = configuredProfile.success
+              ? configuredProfile
+              : { success: false, error: configuredProfile.error };
+          } else {
+            console.warn('Unified category setup unavailable; using legacy profile creation:', categoryResult.error);
+            result = await createBusinessProfile(userId, { user_id: userId, ...profile });
+          }
+        } else {
+          result = await createBusinessProfile(userId, { user_id: userId, ...profile });
+        }
+
+        if (result.success && result.data?.id && initialBusinessCategory?.category_key === 'wholesale') {
+          const supplierResult = await publishBusinessAsSupplier(result.data.id, 'wholesale');
+          if (!supplierResult.success) {
+            console.warn('Wholesale profile created but supplier publishing failed:', supplierResult.error);
+          }
+        }
         
         if (result.success && result.data) {
           // Now save co-owners

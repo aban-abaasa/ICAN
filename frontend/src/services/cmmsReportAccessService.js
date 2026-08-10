@@ -14,8 +14,16 @@ import { supabase } from '../lib/supabase/client';
 // 1. GET FILTERED REPORTS (Based on user role)
 // ============================================================
 
-export const getFilteredReports = async (companyId) => {
+export const getFilteredReports = async (companyId, dataScope = 'department') => {
   try {
+    // Company/cross-department scopes use the company report RPC, while the
+    // role-aware RPC remains the safe default for department/own views.
+    if (dataScope === 'company' || dataScope === 'cross_department') {
+      const { data: companyData, error: companyError } = await supabase.rpc('fn_get_company_reports', {
+        p_company_id: companyId
+      });
+      if (!companyError) return { success: true, data: companyData || [] };
+    }
     const { data, error } = await supabase
       .rpc('fn_get_filtered_reports', {
         p_company_id: companyId
@@ -32,7 +40,9 @@ export const getFilteredReports = async (companyId) => {
 
     return {
       success: true,
-      data: data || [],
+      data: dataScope === 'own'
+        ? (data || []).filter((report) => report.is_own_report)
+        : data || [],
       stats: {
         totalReports: data?.length || 0,
         ownReports: data?.filter(r => r.is_own_report)?.length || 0,

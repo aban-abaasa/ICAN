@@ -37,7 +37,7 @@ import paymentMethodDetector from '../services/paymentMethodDetector';
 import agentService from '../services/agentService';
 import { walletAccountService } from '../services/walletAccountService';
 import universalTransactionService from '../services/universalTransactionService';
-import { sendICAN as sendIcaneracoin } from '../services/icanWalletService';
+import { sendICAN as sendIcaneracoin, sendICANToBusiness } from '../services/icanWalletService';
 import { payIcanRequest, parseIcanPayCode } from '../services/icanPaymentRequestService';
 import { getSupabaseClient } from '../lib/supabase/client';
 import { getUserTrustGroups } from '../services/trustService';
@@ -1242,6 +1242,43 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         throw new Error('User not authenticated');
       }
 
+      // BIZ-* addresses belong to dedicated PitchIn business wallets, not to
+      // user_accounts. Route them through the atomic ICAN business transfer.
+      if (recipientIdentifier.trim().toUpperCase().startsWith('BIZ-')) {
+        const { data, error } = await supabase.rpc('resolve_ican_business_wallet', {
+          p_wallet_address: recipientIdentifier.trim(),
+        });
+        const businessWallet = Array.isArray(data) ? data[0] : data;
+        if (error || !businessWallet) {
+          setTransactionResult({
+            type: 'send',
+            success: false,
+            message: `Business account not found: ${recipientIdentifier}${error ? ` (${error.message})` : ''}`
+          });
+          return;
+        }
+
+        const parsedAmount = parseFloat(amount);
+        if (!(parsedAmount > 0)) {
+          setTransactionResult({ type: 'send', success: false, message: 'Enter a valid ICAN amount' });
+          return;
+        }
+
+        const result = await sendICANToBusiness({
+          fromUserId: currentUserId,
+          businessProfileId: businessWallet.business_profile_id,
+          amount: parsedAmount,
+          note: description || `Transfer to ${businessWallet.business_name || recipientIdentifier}`,
+        });
+        setTransactionResult({
+          type: 'send',
+          success: true,
+          message: `✅ Sent ${parsedAmount.toFixed(4)} ICAN to ${businessWallet.business_name || recipientIdentifier}.`,
+          transactionId: result.out_tx_id,
+        });
+        return;
+      }
+
       // Find recipient by account number, email, or phone
       let recipientUser = null;
       let lookupError = null;
@@ -1252,7 +1289,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           .from('user_accounts')
           .select('user_id, account_holder_name, account_number')
           .ilike('account_number', recipientIdentifier)
-          .single();
+          .maybeSingle();
         recipientUser = data;
         lookupError = error;
         console.log('Search by account number:', { recipientIdentifier, data, error });
@@ -1262,7 +1299,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           .from('user_accounts')
           .select('user_id, account_holder_name, email')
           .eq('email', recipientIdentifier.toLowerCase())
-          .single();
+          .maybeSingle();
         recipientUser = data;
         lookupError = error;
         console.log('Search by email:', { email: recipientIdentifier.toLowerCase(), data, error });
@@ -1272,7 +1309,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           .from('user_accounts')
           .select('user_id, account_holder_name, phone_number')
           .eq('phone_number', recipientIdentifier)
-          .single();
+          .maybeSingle();
         recipientUser = data;
         lookupError = error;
         console.log('Search by phone:', { phone: recipientIdentifier, data, error });
@@ -1360,12 +1397,49 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       let recipientUser = null;
       let lookupError = null;
 
+      // BIZ-* is the public address of a dedicated business wallet, not a
+      // user_accounts.account_number. Resolve it before personal-account lookup.
+      if (recipientIdentifier.trim().toUpperCase().startsWith('BIZ-')) {
+        const { data, error } = await supabase.rpc('resolve_ican_business_wallet', {
+          p_wallet_address: recipientIdentifier.trim(),
+        });
+        const businessWallet = Array.isArray(data) ? data[0] : data;
+        if (error || !businessWallet) {
+          setTransactionResult({
+            type: 'send',
+            success: false,
+            message: `Business account not found: ${recipientIdentifier}${error ? ` (${error.message})` : ''}`
+          });
+          return;
+        }
+
+        const parsedAmount = parseFloat(amount);
+        if (!(parsedAmount > 0)) {
+          setTransactionResult({ type: 'send', success: false, message: 'Enter a valid ICAN amount' });
+          return;
+        }
+
+        const result = await sendICANToBusiness({
+          fromUserId: currentUserId,
+          businessProfileId: businessWallet.business_profile_id,
+          amount: parsedAmount,
+          note: description || `Transfer to ${businessWallet.business_name || recipientIdentifier}`,
+        });
+        setTransactionResult({
+          type: 'send',
+          success: true,
+          message: `✅ Sent ${parsedAmount.toFixed(4)} ICAN to ${businessWallet.business_name || recipientIdentifier}.`,
+          transactionId: result.out_tx_id,
+        });
+        return;
+      }
+
       if (recipientIdentifier.toUpperCase().startsWith('ICAN-')) {
         const { data, error } = await supabase
           .from('user_accounts')
           .select('user_id, account_holder_name, account_number')
           .ilike('account_number', recipientIdentifier)
-          .single();
+          .maybeSingle();
         recipientUser = data;
         lookupError = error;
       } else if (recipientIdentifier.includes('@')) {
@@ -1373,7 +1447,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           .from('user_accounts')
           .select('user_id, account_holder_name, email')
           .eq('email', recipientIdentifier.toLowerCase())
-          .single();
+          .maybeSingle();
         recipientUser = data;
         lookupError = error;
       } else {
@@ -1381,7 +1455,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           .from('user_accounts')
           .select('user_id, account_holder_name, phone_number')
           .eq('phone_number', recipientIdentifier)
-          .single();
+          .maybeSingle();
         recipientUser = data;
         lookupError = error;
       }

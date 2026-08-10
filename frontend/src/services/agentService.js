@@ -6,7 +6,7 @@
 import { getSupabaseClient } from '../lib/supabase/client';
 
 // Hash PIN using the same method as walletAccountService & universalTransactionService
-const hashPIN = (pin) => {
+export const hashPIN = (pin) => {
   let hash = 0;
   const string = `pin-${pin}-salt-ican-hash`;
   
