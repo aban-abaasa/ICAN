@@ -60,6 +60,22 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Background wallet alerts for an installed PWA. The server sends only a
+// minimal title/body/reference; wallet balances are never included in push.
+self.addEventListener('push', (event) => {
+  const payload = event.data ? event.data.json() : {};
+  event.waitUntil(self.registration.showNotification(payload.title || 'ICANera Wallet', {
+    body: payload.body || 'You have a new wallet notification.',
+    icon: '/icons/icon-192x192.png', badge: '/icons/icon-192x192.png',
+    tag: payload.tag || 'ican-wallet', data: { url: payload.url || '/wallet' },
+  }));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(clients.openWindow(event.notification.data?.url || '/wallet'));
+});
+
 // ============================================
 // FETCH EVENT - INTELLIGENT OFFLINE ROUTING
 // ============================================

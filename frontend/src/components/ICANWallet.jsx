@@ -27,6 +27,7 @@ import {
   MapPin,
   Menu
 } from 'lucide-react';
+import ICANWalletInbox from './ICANWalletInbox';
 import momoService from '../services/momoService';
 import airtelMoneyService from '../services/airtelMoneyService';
 import flutterwaveService from '../services/flutterwaveService';
@@ -3198,6 +3199,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
   return (
     <div ref={walletRootRef} className="wallet-creative-skin w-full space-y-6">
+      <div className="flex justify-end"><ICANWalletInbox /></div>
       <style>{`
         .wallet-creative-skin .solid-card,
         .wallet-creative-skin .glass-card {
