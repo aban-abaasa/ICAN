@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Edit2, Users, DollarSign, Globe, MapPin, Calendar, Wallet, AlertCircle, Bell, Clock, Trash2, X, Lock, TrendingUp, Briefcase } from 'lucide-react';
+import { Building2, Edit2, Users, Globe, MapPin, Calendar, Wallet, AlertCircle, Bell, Clock, Trash2, X, Lock, TrendingUp, Briefcase } from 'lucide-react';
 import ApprovalNotificationCenter from './ApprovalNotificationCenter';
 import ShareholderApprovalsCenter from './ShareholderApprovalsCenter';
 import BusinessTeamMembersModal from './BusinessTeamMembersModal';
@@ -299,7 +299,7 @@ const BusinessProfileCard = ({ profile, onEdit, onSelect, onNotification, onShar
       )}
 
       <div className="space-y-2 mb-4">
-        {/* Top Row: Founded & Total Capital */}
+        {/* Top Row: Founded */}
         <div className="grid grid-cols-2 gap-3">
           {profile.founded_year && (
             <div className="flex items-center gap-2 text-slate-400 text-sm">
@@ -308,12 +308,6 @@ const BusinessProfileCard = ({ profile, onEdit, onSelect, onNotification, onShar
             </div>
           )}
           
-          {profile.total_capital && (
-            <div className="flex items-center gap-2 text-slate-400 text-sm">
-              <DollarSign className="w-4 h-4 text-green-400 flex-shrink-0" />
-              <span className="min-w-0 font-semibold text-green-300">${(profile.total_capital || 0).toLocaleString()}</span>
-            </div>
-          )}
         </div>
 
         {/* Bottom Row: Shareholders & Address */}

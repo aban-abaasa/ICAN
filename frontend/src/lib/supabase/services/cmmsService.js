@@ -211,6 +211,24 @@ export const getCompanyProfile = async (companyId) => {
 };
 
 /**
+ * Connect the selected Manage Business profile to its CMMS tenant.
+ * The RPC copies business_type and rebuilds the type-specific architecture.
+ */
+export const ensurePichinBusinessAccess = async (businessProfileId) => {
+  try {
+    if (!businessProfileId) throw new Error('Business profile is required');
+    const { data, error } = await supabase.rpc('cmms_ensure_pichin_business_access', {
+      p_business_profile_id: businessProfileId
+    });
+    if (error) throw error;
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error connecting Manage Business profile to CMMS:', error);
+    return { data: null, error };
+  }
+};
+
+/**
  * Update company profile
  * @param {string} companyId - Company UUID
  * @param {Object} updates - Fields to update
@@ -1836,6 +1854,7 @@ export default {
   createCompanyProfile,
   createCompanyWithDepartments,
   getCompanyProfile,
+  ensurePichinBusinessAccess,
   updateCompanyProfile,
   createAdminUser,
   getCompanyUsers,

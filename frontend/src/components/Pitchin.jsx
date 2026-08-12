@@ -42,6 +42,7 @@ import {
   getPitchMetrics
 } from '../services/pitchInteractionsService';
 import { getUserNotifications } from '../services/investmentNotificationsService';
+import { calculateLiveShareValue } from '../services/pitchinValuationService';
 
 const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusinessProfile = false, onBusinessProfileRequestConsumed = null, navRef = null, onTabChange = null }) => {
   const [pitches, setPitches] = useState([]);
@@ -1075,6 +1076,32 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
       console.error('Error recording investment interest:', error);
     }
     
+    // Use the current business valuation for the investment flow. The listed
+    // pitch price remains the fallback when live valuation data is unavailable.
+    let investmentPitch = pitch;
+    const businessProfileId = pitch.business_profile_id || pitch.business_profiles?.id;
+    const businessOwnerUserId = pitch.business_profiles?.user_id || pitch.user_id;
+    if (businessProfileId && businessOwnerUserId) {
+      try {
+        const liveValue = await calculateLiveShareValue(
+          businessProfileId,
+          businessOwnerUserId,
+          { saveSnapshot: false }
+        );
+        if (Number.isFinite(Number(liveValue?.sharePriceUgx)) && liveValue.sharePriceUgx > 0) {
+          investmentPitch = {
+            ...pitch,
+            share_price: liveValue.sharePriceUgx,
+            live_share_price_ugx: liveValue.sharePriceUgx,
+            live_business_value_ugx: liveValue.businessValueUgx,
+            live_total_shares: liveValue.totalShares
+          };
+        }
+      } catch (valuationError) {
+        console.warn('[Pitchin] Live share valuation unavailable; using listed pitch price:', valuationError.message);
+      }
+    }
+
     // Use ShareSigningFlow for investment (businessProfile can be null for investors)
     console.log('🔍 INVEST BUTTON CLICKED - Pitch data being passed to ShareSigningFlow:');
     console.log('   User has business profile:', currentBusinessProfile ? 'YES' : 'NO');
@@ -1082,7 +1109,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
     console.log('   pitch.business_profile_id:', pitch.business_profile_id);
     console.log('   pitch.business_profiles (nested):', pitch.business_profiles);
     console.log('   Full pitch object:', pitch);
-    setSelectedForInvestment(pitch);
+    setSelectedForInvestment(investmentPitch);
   };
 
   const handleBusinessProfileCreated = async (profile) => {

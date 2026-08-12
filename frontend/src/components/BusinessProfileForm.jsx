@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Users, Plus, X, Trash2, DollarSign, PieChart, Loader, Search, CheckCircle2, AlertCircle, Wallet, FileText, Bell, Clock, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Building2, Users, Plus, X, Trash2, PieChart, Loader, Search, CheckCircle2, AlertCircle, Wallet, FileText, Bell, Clock, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { createBusinessProfile, updateBusinessProfile, getSupabase, verifyICANUser, searchICANUsers, saveBusinessCoOwners } from '../services/pitchingService';
 import { registerBusinessWallet, setBusinessWalletPin } from '../services/icanWalletService';
 import { memberApprovalService } from '../services/memberApprovalService';
@@ -30,8 +30,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
     website: '',
     description: '',
     businessAddress: '',
-    foundedYear: new Date().getFullYear(),
-    totalCapital: ''
+    foundedYear: new Date().getFullYear()
   });
 
   const [coOwners, setCoOwners] = useState([]);
@@ -84,8 +83,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
         website: editingProfile.website || '',
         description: editingProfile.description || '',
         businessAddress: editingProfile.business_address || '',
-        foundedYear: editingProfile.founded_year || new Date().getFullYear(),
-        totalCapital: editingProfile.total_capital || ''
+        foundedYear: editingProfile.founded_year || new Date().getFullYear()
       });
       
       // Load co-owners - map database fields to form fields
@@ -106,7 +104,23 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
 
   useEffect(() => {
     if (!editingProfile && initialBusinessCategory?.display_name) {
-      setBusinessData((current) => ({ ...current, businessType: initialBusinessCategory.display_name }));
+      const category = initialBusinessCategory;
+      const categoryDefaults = {
+        retail: 'Retail business with inventory, sales, maintenance, and reporting workflows.',
+        wholesale: 'Wholesale business with bulk purchasing, warehouse operations, supplier sales, and delivery workflows.',
+        factory: 'Factory and manufacturing business with production, quality control, work orders, inventory, and supplier workflows.',
+        supplier: 'Supplier business providing goods, materials, or services to other businesses.',
+        pharmacy: 'Pharmacy business with dispensary, inventory, procurement, and regulated product workflows.',
+        school: 'School business with administration, teaching, facilities, procurement, inventory, and school-fees workflows.',
+        hospital: 'Hospital or clinic with clinical operations, facilities, pharmacy, procurement, inventory, and compliance workflows.',
+        construction: 'Construction business with projects, sites, equipment, milestones, procurement, and inventory workflows.'
+      };
+      setBusinessData((current) => ({
+        ...current,
+        businessType: current.businessType || 'Sole Proprietorship',
+        businessStructure: category.operating_mode === 'enterprise' ? 'enterprise' : current.businessStructure,
+        description: current.description || categoryDefaults[category.category_key] || category.description || '',
+      }));
     }
   }, [editingProfile, initialBusinessCategory]);
 
@@ -357,7 +371,6 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
         description: businessData.description,
         business_address: businessData.businessAddress,
         founded_year: businessData.foundedYear,
-        total_capital: businessData.totalCapital ? parseInt(businessData.totalCapital) : 0,
         status: 'active',
         verification_status: 'pending',
         // Notification Settings
@@ -374,7 +387,12 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
         profile.metadata = {
           source: 'pichin',
           category_key: initialBusinessCategory.category_key,
-          category_name: initialBusinessCategory.display_name
+          category_name: initialBusinessCategory.display_name,
+          operating_mode: initialBusinessCategory.operating_mode || null,
+          default_modules: initialBusinessCategory.default_modules || {},
+          default_departments: initialBusinessCategory.default_departments || [],
+          default_roles: initialBusinessCategory.default_roles || [],
+          required_documents: initialBusinessCategory.required_documents || []
         };
       }
 
@@ -571,6 +589,8 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                   />
                 </div>
 
+                {initialBusinessCategory?.display_name && <div className="col-span-2 rounded-lg border border-indigo-400/30 bg-indigo-500/10 p-3 text-sm text-indigo-100"><span className="font-semibold">Selected business category:</span> {initialBusinessCategory.display_name}<span className="mt-1 block text-xs text-indigo-200/70">CMMS will enable the modules and workflows configured specifically for this business category.</span></div>}
+
                 <div>
                   <label className="text-slate-300 text-sm block mb-2">Business Type *</label>
                   <select
@@ -630,17 +650,6 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                     value={businessData.taxId}
                     onChange={(e) => handleBusinessChange('taxId', e.target.value)}
                     placeholder="e.g., EIN: 12-3456789"
-                    className="w-full bg-slate-700 text-white rounded-lg px-4 py-2 border border-slate-600 focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-slate-300 text-sm block mb-2">Total Capital</label>
-                  <input
-                    type="number"
-                    value={businessData.totalCapital}
-                    onChange={(e) => handleBusinessChange('totalCapital', e.target.value)}
-                    placeholder="e.g., 100000"
                     className="w-full bg-slate-700 text-white rounded-lg px-4 py-2 border border-slate-600 focus:border-blue-500 focus:outline-none"
                   />
                 </div>

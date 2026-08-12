@@ -50,8 +50,8 @@ const BusinessCategorySelector = ({ onSelect, onCancel }) => {
         </div>
         {loading && <p className="mb-3 text-xs text-slate-500">Loading available business types…</p>}
         <div className="grid gap-3 sm:grid-cols-2">
-          {categories.map(({ category_key, display_name, description, Icon }) => (
-            <button key={category_key} onClick={() => onSelect({ category_key, display_name })} className="group flex items-center gap-4 rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-left transition hover:border-indigo-400/60 hover:bg-indigo-500/10">
+          {categories.map(({ category_key, display_name, description, default_modules, default_departments, default_roles, required_documents, operating_mode, Icon }) => (
+            <button key={category_key} onClick={() => onSelect({ category_key, display_name, description, default_modules, default_departments, default_roles, required_documents, operating_mode })} className="group flex items-center gap-4 rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-left transition hover:border-indigo-400/60 hover:bg-indigo-500/10">
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-300"><Icon size={22} /></span>
               <span className="min-w-0 flex-1"><span className="block font-semibold text-white">{display_name}</span><span className="mt-1 block text-xs leading-5 text-slate-400">{description}</span></span>
               <ArrowRight size={18} className="shrink-0 text-slate-600 transition group-hover:translate-x-1 group-hover:text-indigo-300" />

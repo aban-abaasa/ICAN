@@ -47,9 +47,12 @@ import RequisitionApprovalsTab from './CMMS/RequisitionApprovalsTab.jsx';
 import CMMSPayrollPanel from './CMMSPayrollPanel.jsx';
 import CMMSBookTransportPanel from './CMMSBookTransportPanelV2.jsx';
 import CMSSupplierPurchasePanel from './CMSSupplierPurchasePanel.jsx';
-import { createBusinessProfileFromCategory, findPichinShareholderBusinesses, searchGlobalSuppliers } from '../services/businessManagementService';
+import SupplierOrderPaymentApprovals from './CMMS/SupplierOrderPaymentApprovals.jsx';
+import { createBusinessProfileFromCategory, findPichinShareholderBusinesses, searchGlobalSuppliers, getBusinessModules } from '../services/businessManagementService';
 import BusinessCategorySelector from './BusinessCategorySelector';
 import CMMSRoleConfiguration, { CMMS_TOOL_OPTIONS } from './CMMSRoleConfiguration.jsx';
+import CMMSFeesPanel from './CMMSFeesPanel.jsx';
+import CMMSOperationsPanel from './CMMSOperationsPanel.jsx';
 
 const CMMSModule = ({
   onDataUpdate,
@@ -69,6 +72,8 @@ const CMMSModule = ({
   const [accessDeniedReason, setAccessDeniedReason] = useState('');
   const [cmmsRoleDefinitions, setCmmsRoleDefinitions] = useState([]);
   const [availableUserRoles, setAvailableUserRoles] = useState([]);
+  const [businessModules, setBusinessModules] = useState([]);
+  const [businessModulesLoaded, setBusinessModulesLoaded] = useState(false);
 
   // Role-based permission matrix
   const rolePermissions = {
@@ -633,7 +638,14 @@ const CMMSModule = ({
         .select('*')
         .or(`cmms_company_id.eq.${companyIdToUse},cmms_company_id.is.null`)
         .eq('is_active', true);
-      setCmmsRoleDefinitions(roleRows || []);
+      // Prefer company-local roles over identically named legacy global roles.
+      // This keeps the Admin role picker separate for each owned business.
+      const scopedRoleRows = (roleRows || [])
+        .sort((left, right) => Number(Boolean(right.cmms_company_id)) - Number(Boolean(left.cmms_company_id)))
+        .filter((role, index, roles) => roles.findIndex((candidate) => (
+          normalizeRoleKey(candidate.role_name) === normalizeRoleKey(role.role_name)
+        )) === index);
+      setCmmsRoleDefinitions(scopedRoleRows);
 
       // A member may only switch between roles that an administrator assigned
       // to that member in this company. The selected role is a UI context; it
@@ -669,7 +681,7 @@ const CMMSModule = ({
       const currentMembership = companyMemberships.find((membership) => membership.cmms_company_id === companyIdToUse);
       const fallbackRoleKey = resolveUserRole(currentMembership?.effective_role, currentMembership?.role_labels);
       if (!assignedRoles.length && fallbackRoleKey) {
-        const fallbackRole = (roleRows || []).find((role) => normalizeRoleKey(role.role_name) === fallbackRoleKey);
+        const fallbackRole = scopedRoleRows.find((role) => normalizeRoleKey(role.role_name) === fallbackRoleKey);
         if (fallbackRole) assignedRoles = [fallbackRole];
       }
       setAvailableUserRoles(assignedRoles);
@@ -851,6 +863,20 @@ const CMMSModule = ({
     normalizeRoleKey(role.role_name) === normalizeRoleKey(userRole)
     || normalizeRoleKey(role.display_name) === normalizeRoleKey(userRole)
   ));
+  // Some companies use a custom internal role key (for example
+  // "custom-student-…") while displaying it as "Student". Treat both forms
+  // as the student experience; relying on the internal key alone exposed the
+  // administrator fee screen to those student accounts.
+  const isStudentCmmsRole = (roleKey) => {
+    const definition = cmmsRoleDefinitions.find((role) => (
+      normalizeRoleKey(role.role_name) === normalizeRoleKey(roleKey)
+      || normalizeRoleKey(role.display_name) === normalizeRoleKey(roleKey)
+    ));
+    return normalizeRoleKey(roleKey) === 'student'
+      || normalizeRoleKey(definition?.display_name) === 'student';
+  };
+  const isActiveStudent = isStudentCmmsRole(userRole)
+    || normalizeRoleKey(activeRoleDefinition?.display_name) === 'student';
 
   const handleRoleSelection = (event) => {
     const nextRole = event.target.value;
@@ -903,6 +929,24 @@ const CMMSModule = ({
     requisitions: [],
     reports: []  // NEW: For role-based reports
   });
+  useEffect(() => {
+    const profileId = cmmsData.companyProfile?.pichin_business_profile_id;
+    setBusinessModulesLoaded(false);
+    if (!profileId) {
+      setBusinessModules([]);
+      setBusinessModulesLoaded(true);
+      return;
+    }
+    let cancelled = false;
+    getBusinessModules(profileId).then(({ data }) => {
+      if (!cancelled) setBusinessModules((data || []).filter((module) => module.enabled));
+    }).catch(() => {
+      if (!cancelled) setBusinessModules([]);
+    }).finally(() => {
+      if (!cancelled) setBusinessModulesLoaded(true);
+    });
+    return () => { cancelled = true; };
+  }, [cmmsData.companyProfile?.pichin_business_profile_id]);
   const reportsInitialLoadKeyRef = useRef('');
   const reportsSyncInFlightRef = useRef(false);
 
@@ -1004,9 +1048,25 @@ const CMMSModule = ({
     };
     
     return tabsByRole[userRole] || []; */
-    if (isCreator || userRole === 'admin') return [...CMMS_TOOL_OPTIONS.map((tool) => tool.id), 'role-config'];
+    const enabledKeys = new Set(businessModules.map((module) => module.module_key));
+    const baseTools = new Set(['company', 'departments', 'users', 'inventory', 'reports']);
+    const moduleForTool = {
+      inventory: ['inventory', 'assets', 'cmms_assets'], payroll: ['payroll', 'finance'], fees: ['fees', 'school_fees'],
+      production: ['production', 'bom', 'wip_locks'], quality: ['quality'], clinical: ['clinical'],
+      pharmacy: ['pharmacy'], transport: ['bodagoera_transport', 'transport', 'fleet'],
+      requisitions: ['requisitions', 'supplier_marketplace'], tasks: ['tasks', 'work_orders', 'maintenance'],
+      approvals: ['approvals'], reports: ['reports', 'report_cards']
+    };
+    const categoryAllows = (toolId) => {
+      if (!cmmsData.companyProfile?.pichin_business_profile_id) return true;
+      if (!businessModulesLoaded || businessModules.length === 0) return baseTools.has(toolId);
+      const required = moduleForTool[toolId];
+      return !required || required.some((key) => enabledKeys.has(key));
+    };
+    const availableTools = CMMS_TOOL_OPTIONS.filter((tool) => categoryAllows(tool.id));
+    if (isCreator || userRole === 'admin') return [...availableTools.map((tool) => tool.id), 'role-config'];
     const role = cmmsRoleDefinitions.find((item) => normalizeRoleKey(item.role_name) === normalizeRoleKey(userRole) || normalizeRoleKey(item.display_name) === normalizeRoleKey(userRole));
-    return role?.tool_access ? CMMS_TOOL_OPTIONS.filter((tool) => role.tool_access[tool.id]).map((tool) => tool.id) : [];
+    return role?.tool_access ? availableTools.filter((tool) => role.tool_access[tool.id]).map((tool) => tool.id) : [];
   };
 
   // A CMMS company profile is not the business authority. Employee, payroll,
@@ -1014,6 +1074,10 @@ const CMMSModule = ({
   // completed Pichin business profile.
   const hasPichinBusinessAccount = Boolean(cmmsData.companyProfile?.pichin_business_profile_id);
   const selectCmmsTab = async (tabId) => {
+    if (!getTabs().includes(tabId)) {
+      alert('This module is not enabled for the selected business profile.');
+      return;
+    }
     if (['users', 'payroll', 'transport'].includes(tabId) && !hasPichinBusinessAccount) {
       setSyncingPichin(true);
       let requiresFullSetup = false;
@@ -1089,7 +1153,7 @@ const CMMSModule = ({
     if (!allowedTabs.includes(activeTab)) {
       setActiveTab(allowedTabs[0]);
     }
-  }, [activeTab, hasBusinessProfile, isAuthorized, userRole, isCreator]);
+  }, [activeTab, hasBusinessProfile, isAuthorized, userRole, isCreator, businessModulesLoaded, businessModules]);
 
   // Requisition status workflow
   const requisitionStatuses = [
@@ -1277,7 +1341,9 @@ const CMMSModule = ({
       }));
     };
 
-    const canCreateRequisition = hasToolAction('requisitions', 'create') || ['technician', 'supervisor', 'coordinator'].includes(userRole);
+    const canCreateRequisition = isCreator || normalizeRoleKey(userRole) === 'admin'
+      || hasToolAction('requisitions', 'create')
+      || ['technician', 'supervisor', 'coordinator'].includes(userRole);
     const canApproveSupervisor = hasToolAction('approvals', 'approve') || ['supervisor', 'coordinator'].includes(userRole);
     const canApproveCoordinator = hasToolAction('approvals', 'approve') || ['coordinator', 'finance'].includes(userRole);
     const canApproveFinance = hasToolAction('approvals', 'approve') || userRole === 'finance';
@@ -3898,6 +3964,7 @@ const CMMSModule = ({
       name: '',
       email: '',
       phone: '',
+      auth_user_id: '',
       role: '',
       department_id: '',
       assignedServices: []
@@ -3998,6 +4065,7 @@ const CMMSModule = ({
     const handleSelectUser = async (user) => {
       const updatedUser = {
         ...newUser,
+        auth_user_id: user.id || '',
         name: user.name || '',
         email: user.email || '',
         phone: user.phone || newUser.phone
@@ -4073,6 +4141,7 @@ const CMMSModule = ({
             .update({
               user_name: newUser.name || newUser.email.split('@')[0],
               phone: newUser.phone || null,
+              ican_user_id: newUser.auth_user_id || null,
               department_id: roleNeedsDepartment ? newUser.department_id : (newUser.department_id || null),
               role: newUser.role,
               is_active: true,
@@ -4096,6 +4165,7 @@ const CMMSModule = ({
                 email: newUser.email,
                 user_name: newUser.name || newUser.email.split('@')[0],
                 phone: newUser.phone || null,
+                ican_user_id: newUser.auth_user_id || null,
                 department_id: roleNeedsDepartment ? newUser.department_id : (newUser.department_id || null),
                 role: newUser.role,
                 is_active: true,
@@ -4122,6 +4192,17 @@ const CMMSModule = ({
         if (assignRoleError) {
           alert('âš ï¸ User added but role assignment failed: ' + assignRoleError.message);
           return;
+        }
+
+        if (isStudentCmmsRole(newUser.role)) {
+          const { error: studentSyncError } = await supabase.rpc('sync_cmms_student_business_membership', {
+            p_company_id: userCompanyId,
+            p_cmms_user_id: userId,
+          });
+          if (studentSyncError) {
+            alert('User was given the CMMS Student role, but the School Fees student link failed: ' + studentSyncError.message);
+            return;
+          }
         }
 
         setNewlyAddedUserId(userId);
@@ -4151,7 +4232,7 @@ const CMMSModule = ({
 
         await loadCompanyData(userCompanyId);
 
-        setNewUser({ name: '', email: '', phone: '', role: '', department_id: '', assignedServices: [] });
+        setNewUser({ name: '', email: '', phone: '', auth_user_id: '', role: '', department_id: '', assignedServices: [] });
         setEmailSearchQuery('');
         setSearchResults([]);
 
@@ -4394,7 +4475,7 @@ const CMMSModule = ({
                 <span className="text-blue-300 text-sm">📧 Selected: <strong>{newUser.email}</strong></span>
                 <button
                   onClick={() => {
-                    setNewUser({ name: '', email: '', phone: '', role: '', department_id: '', assignedServices: [] });
+                    setNewUser({ name: '', email: '', phone: '', auth_user_id: '', role: '', department_id: '', assignedServices: [] });
                     setEmailSearchQuery('');
                   }}
                   className="ml-auto text-red-400 hover:text-red-300 text-xs"
@@ -5843,6 +5924,11 @@ const CMMSModule = ({
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
     const allTabs = [
+      { id: 'fees', label: 'School Fees', icon: DollarSign },
+      { id: 'production', label: 'Production / WIP', icon: Wrench },
+      { id: 'quality', label: 'Quality Control', icon: CheckCircle },
+      { id: 'clinical', label: 'Clinical Operations', icon: Briefcase },
+      { id: 'pharmacy', label: 'Pharmacy & Supplies', icon: Package },
       { id: 'role-config', label: '🔐 Role Configuration', icon: Users },
       { id: 'company', label: '🏢 Company', icon: Building },
       { id: 'departments', label: '🏭 Departments', icon: Building },
@@ -6516,7 +6602,7 @@ const CMMSModule = ({
           {companyMemberships.length > 1 && (
             <div className="flex items-end gap-2">
               <div className="min-w-[220px]">
-                <label className="block text-[10px] uppercase tracking-wide text-gray-400 mb-1">Active Company</label>
+                <label className="block text-[10px] uppercase tracking-wide text-gray-400 mb-1">Business profile / CMMS administrator</label>
                 <select
                   value={userCompanyId || ''}
                   onChange={handleSwitchCompany}
@@ -6524,8 +6610,13 @@ const CMMSModule = ({
                   className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white text-sm focus:border-blue-400 transition-all disabled:opacity-60"
                 >
                   {companyMemberships.map((membership) => {
-                    const membershipRole = resolveUserRole(membership.effective_role, membership.role_labels);
                     const companyLabel = membership.company_name || `Company ${membership.cmms_company_id.slice(0, 8)}`;
+                    const businessType = membership.pichin_business_type
+                      ? ` (${membership.pichin_business_type})`
+                      : '';
+                    const membershipRole = membership.is_pichin_business_admin || membership.is_creator
+                      ? 'Business Administrator'
+                      : resolveUserRole(membership.effective_role, membership.role_labels);
 
                     return (
                       <option key={membership.cmms_company_id} value={membership.cmms_company_id}>
@@ -6677,11 +6768,13 @@ const CMMSModule = ({
       {/* Tab Content */}
       <div>
         {activeTab === 'company' && <CompanyProfileManager />}
-        {activeTab === 'departments' && <DepartmentManager />}
-        {activeTab === 'users' && <UserRoleManager />}
-        {activeTab === 'role-config' && <CMMSRoleConfiguration companyId={companyIdToUse} isAdmin={userRole === 'admin' || isCreator} onRolesChanged={setCmmsRoleDefinitions} />}
-        {activeTab === 'inventory' && <InventoryManager />}
-        {activeTab === 'payroll' && (
+        {activeTab === 'departments' && getTabs().includes('departments') && <DepartmentManager />}
+        {activeTab === 'users' && getTabs().includes('users') && <UserRoleManager />}
+        {activeTab === 'role-config' && getTabs().includes('role-config') && <CMMSRoleConfiguration companyId={companyIdToUse} isAdmin={userRole === 'admin' || isCreator} onRolesChanged={setCmmsRoleDefinitions} />}
+        {activeTab === 'inventory' && getTabs().includes('inventory') && <InventoryManager />}
+        {activeTab === 'fees' && getTabs().includes('fees') && <CMMSFeesPanel companyId={companyIdToUse} businessProfileId={cmmsData.companyProfile?.pichin_business_profile_id} cmmsUsers={cmmsData.users} studentView={isActiveStudent} />}
+        {['production', 'quality', 'clinical', 'pharmacy'].includes(activeTab) && getTabs().includes(activeTab) && <CMMSOperationsPanel companyId={companyIdToUse} businessProfileId={cmmsData.companyProfile?.pichin_business_profile_id} mode={activeTab} />}
+        {activeTab === 'payroll' && getTabs().includes('payroll') && (
           <CMMSPayrollPanel
             companyProfile={cmmsData.companyProfile}
             users={cmmsData.users}
@@ -6691,8 +6784,8 @@ const CMMSModule = ({
             dataScope={getToolScope('payroll')}
           />
         )}
-        {activeTab === 'transport' && <CMMSBookTransportPanel companyProfile={cmmsData.companyProfile} />}
-        {activeTab === 'requisitions' && (
+        {activeTab === 'transport' && getTabs().includes('transport') && <CMMSBookTransportPanel companyProfile={cmmsData.companyProfile} />}
+        {activeTab === 'requisitions' && getTabs().includes('requisitions') && (
           <>
             <CMSSupplierPurchasePanel
               companyId={companyIdToUse}
@@ -6708,16 +6801,22 @@ const CMMSModule = ({
             />
           </>
         )}
-        {activeTab === 'approvals' && (
-          <RequisitionApprovalsTab
-            userRole={userRole}
-            companyId={companyIdToUse}
-            cmmsData={cmmsData}
-            setCmmsData={setCmmsData}
-          />
+        {activeTab === 'approvals' && getTabs().includes('approvals') && (
+          <>
+            <SupplierOrderPaymentApprovals
+              companyId={companyIdToUse}
+              canApprove={userRole === 'admin' || userRole === 'business_admin' || isCreator}
+            />
+            <RequisitionApprovalsTab
+              userRole={userRole}
+              companyId={companyIdToUse}
+              cmmsData={cmmsData}
+              setCmmsData={setCmmsData}
+            />
+          </>
         )}
-        {activeTab === 'reports' && <ReportsManager />}
-        {activeTab === 'tasks' && <TasksManager />}
+        {activeTab === 'reports' && getTabs().includes('reports') && <ReportsManager />}
+        {activeTab === 'tasks' && getTabs().includes('tasks') && <TasksManager />}
       </div>
       {/* New Company Creation Overlay — for non-admin roles, works regardless of active tab */}
       {showNewCompanyOverlay && (

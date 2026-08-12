@@ -189,9 +189,13 @@ export const findPichinShareholderBusinesses = async ({ email, userId } = {}) =>
   const seen = new Set();
   let firstError = null;
   if (userId) {
-    const { data, error } = await sb.from('business_profiles').select('id, business_name, business_type, metadata, status').eq('user_id', userId).eq('status', 'active');
+    const { data, error } = await sb.from('business_profiles').select('id, business_name, business_type, metadata, status').eq('user_id', userId);
     if (error) firstError = error;
-    (data || []).forEach(profile => { if (!seen.has(profile.id)) { seen.add(profile.id); rows.push({ ...profile, canManage: true, matchedBy: 'owner' }); } });
+    (data || []).forEach(profile => {
+      if (['inactive', 'suspended', 'rejected', 'deleted'].includes(String(profile.status || 'active').toLowerCase()) || seen.has(profile.id)) return;
+      seen.add(profile.id);
+      rows.push({ ...profile, canManage: true, matchedBy: 'owner' });
+    });
 
     // The unified business migration records the owner as a business role too.
     // Include those profiles so the Business tab remains connected to the
@@ -203,7 +207,7 @@ export const findPichinShareholderBusinesses = async ({ email, userId } = {}) =>
     if (roleError && !firstError) firstError = roleError;
     (roleRows || []).forEach(row => {
       const profile = row.business_profiles;
-      if (!profile?.id || profile.status !== 'active' || seen.has(profile.id)) return;
+      if (!profile?.id || ['inactive', 'suspended', 'rejected', 'deleted'].includes(String(profile.status || 'active').toLowerCase()) || seen.has(profile.id)) return;
       seen.add(profile.id);
       rows.push({ ...profile, canManage: true, matchedBy: 'business-role' });
     });

@@ -241,21 +241,21 @@ CREATE INDEX IF NOT EXISTS idx_cmms_events_business ON public.cmms_operational_e
 INSERT INTO public.business_category_templates
   (category_key, display_name, operating_mode, default_modules, default_departments, default_roles, required_documents)
 VALUES
-('retail', 'Retail', 'retail_adapter', '{"inventory":true,"supplier_marketplace":true,"cmms_assets":true,"maintenance":true,"reports":true}', '["Store Operations","Inventory","Finance"]', '["business_admin","store_manager","inventory_receiver","cashier"]', '[]'),
-('wholesale', 'Wholesale', 'retail_adapter', '{"inventory":true,"supplier_marketplace":true,"cmms_assets":true,"warehouse":true,"maintenance":true,"reports":true,"bodagoera_transport":true}', '["Warehouse","Procurement","Sales","Finance"]', '["business_admin","warehouse_manager","inventory_receiver","buyer"]', '[]'),
-('factory', 'Factory / Manufacturing', 'operational', '{"assets":true,"inventory":true,"maintenance":true,"work_orders":true,"bom":true,"wip_locks":true,"supplier_marketplace":true,"reports":true,"bodagoera_transport":true}', '["Production","Maintenance","Warehouse","Quality","Finance"]', '["business_admin","production_manager","technician","storeman","quality_manager"]', '["registration","operating_license"]'),
-('supplier', 'Supplier / Raw Materials', 'operational', '{"supplier_marketplace":true,"catalog":true,"orders":true,"delivery":true,"bodagoera_transport":true,"reports":true}', '["Sales","Fulfilment","Finance"]', '["business_admin","sales_manager","fulfilment_manager"]', '[]'),
-('restaurant', 'Restaurant / Hospitality', 'retail_adapter', '{"inventory":true,"supplier_marketplace":true,"maintenance":true,"reports":true}', '["Operations","Kitchen","Procurement","Finance"]', '["business_admin","operations_manager","inventory_receiver"]', '[]'),
-('pharmacy', 'Pharmacy', 'retail_adapter', '{"inventory":true,"supplier_marketplace":true,"lot_tracking":true,"maintenance":true,"reports":true}', '["Dispensary","Inventory","Procurement","Finance"]', '["business_admin","pharmacist","inventory_receiver"]', '["professional_license"]'),
-('school', 'School', 'enterprise', '{"assets":true,"maintenance":true,"occupancy":true,"sanitation":true,"inventory":true,"reports":true}', '["Administration","Teaching","Facilities","Procurement","Finance"]', '["business_admin","department_head","facility_manager","inventory_receiver"]', '["registration"]'),
-('hospital', 'Hospital / Clinic', 'enterprise', '{"assets":true,"maintenance":true,"occupancy":true,"sanitation":true,"inventory":true,"milestone_gates":true,"reports":true}', '["Clinical","Facilities","Pharmacy","Procurement","Finance"]', '["business_admin","clinical_manager","facility_manager","inventory_receiver"]', '["registration","health_license"]'),
-('construction', 'Construction', 'enterprise', '{"assets":true,"projects":true,"maintenance":true,"inventory":true,"milestones":true,"supplier_marketplace":true,"reports":true}', '["Projects","Sites","Equipment","Procurement","Finance"]', '["business_admin","project_manager","site_manager","storeman"]', '["registration","project_license"]'),
-('project_management', 'Project Management', 'enterprise', '{"projects":true,"milestones":true,"approvals":true,"reports":true}', '["Projects","Delivery","Finance"]', '["business_admin","project_manager","reviewer"]', '[]'),
-('government', 'Government / Infrastructure', 'enterprise', '{"assets":true,"projects":true,"fleet":true,"inspections":true,"escrow_gates":true,"milestones":true,"reports":true}', '["Administration","Projects","Fleet","Procurement","Audit"]', '["business_admin","project_manager","inspector","finance_approver","auditor"]', '["registration","mandate"]'),
-('law_firm', 'Law Firm', 'enterprise', '{"matters":true,"documents":true,"approvals":true,"reports":true}', '["Matters","Research","Client Services","Finance"]', '["business_admin","matter_manager","reviewer"]', '["registration","professional_license"]'),
-('audit_firm', 'Audit / Accounting Firm', 'enterprise', '{"engagements":true,"documents":true,"approvals":true,"reports":true}', '["Engagements","Review","Client Services","Finance"]', '["business_admin","engagement_manager","reviewer","auditor"]', '["registration","professional_license"]'),
-('professional_services', 'Professional Services', 'enterprise', '{"projects":true,"tasks":true,"reports":true}', '["Delivery","Client Services","Finance"]', '["business_admin","project_manager","reviewer"]', '[]'),
-('other', 'Other Organisation', 'operational', '{"assets":true,"tasks":true,"inventory":true,"reports":true}', '["Operations","Finance"]', '["business_admin","department_manager","member"]', '[]')
+('retail', 'Retail', 'retail_adapter', '{"inventory":true,"supplier_marketplace":true,"cmms_assets":true,"maintenance":true,"reports":true,"requisitions":true,"payroll":true,"transport":true}', '["Store Operations","Inventory","Finance"]', '["business_admin","store_manager","inventory_receiver","cashier"]', '[]'),
+('wholesale', 'Wholesale', 'retail_adapter', '{"inventory":true,"supplier_marketplace":true,"cmms_assets":true,"warehouse":true,"maintenance":true,"reports":true,"bodagoera_transport":true,"requisitions":true,"payroll":true,"transport":true}', '["Warehouse","Procurement","Sales","Finance"]', '["business_admin","warehouse_manager","inventory_receiver","buyer"]', '[]'),
+('factory', 'Factory / Manufacturing', 'operational', '{"assets":true,"inventory":true,"maintenance":true,"work_orders":true,"bom":true,"wip_locks":true,"supplier_marketplace":true,"reports":true,"bodagoera_transport":true,"requisitions":true,"payroll":true,"transport":true}', '["Production","Maintenance","Warehouse","Quality","Finance"]', '["business_admin","production_manager","technician","storeman","quality_manager"]', '["registration","operating_license"]'),
+('supplier', 'Supplier / Raw Materials', 'operational', '{"supplier_marketplace":true,"catalog":true,"orders":true,"delivery":true,"bodagoera_transport":true,"reports":true,"requisitions":true,"payroll":true,"transport":true}', '["Sales","Fulfilment","Finance"]', '["business_admin","sales_manager","fulfilment_manager"]', '[]'),
+('restaurant', 'Restaurant / Hospitality', 'retail_adapter', '{"inventory":true,"supplier_marketplace":true,"maintenance":true,"reports":true,"requisitions":true,"payroll":true,"transport":true}', '["Operations","Kitchen","Procurement","Finance"]', '["business_admin","operations_manager","inventory_receiver"]', '[]'),
+('pharmacy', 'Pharmacy', 'retail_adapter', '{"inventory":true,"supplier_marketplace":true,"lot_tracking":true,"maintenance":true,"reports":true,"requisitions":true,"payroll":true,"transport":true}', '["Dispensary","Inventory","Procurement","Finance"]', '["business_admin","pharmacist","inventory_receiver"]', '["professional_license"]'),
+('school', 'School', 'enterprise', '{"assets":true,"maintenance":true,"occupancy":true,"sanitation":true,"inventory":true,"fees":true,"school_fees":true,"payroll":true,"finance":true,"requisitions":true,"supplier_marketplace":true,"transport":true,"bodagoera_transport":true,"reports":true,"student_information":true,"attendance":true,"grading":true,"report_cards":true,"transcripts":true,"competency_based_assessment":true}', '["Administration","Teaching","Students","Admissions","Examinations","Facilities","Transport","Procurement","Finance","Human Resources"]', '["business_admin","head_teacher","department_head","registrar","teacher","student","exam_officer","bursar","payroll_officer","transport_coordinator","facility_manager","procurement_officer","inventory_receiver"]', '["registration"]'),
+('hospital', 'Hospital / Clinic', 'enterprise', '{"assets":true,"maintenance":true,"occupancy":true,"sanitation":true,"inventory":true,"clinical":true,"pharmacy":true,"milestone_gates":true,"reports":true,"requisitions":true,"payroll":true,"transport":true}', '["Clinical","Facilities","Pharmacy","Procurement","Finance"]', '["business_admin","clinical_manager","facility_manager","inventory_receiver"]', '["registration","health_license"]'),
+('construction', 'Construction', 'enterprise', '{"assets":true,"projects":true,"maintenance":true,"inventory":true,"milestones":true,"supplier_marketplace":true,"reports":true,"requisitions":true,"payroll":true,"transport":true}', '["Projects","Sites","Equipment","Procurement","Finance"]', '["business_admin","project_manager","site_manager","storeman"]', '["registration","project_license"]'),
+('project_management', 'Project Management', 'enterprise', '{"projects":true,"milestones":true,"approvals":true,"reports":true,"requisitions":true,"payroll":true,"transport":true}', '["Projects","Delivery","Finance"]', '["business_admin","project_manager","reviewer"]', '[]'),
+('government', 'Government / Infrastructure', 'enterprise', '{"assets":true,"projects":true,"fleet":true,"inspections":true,"escrow_gates":true,"milestones":true,"reports":true,"requisitions":true,"payroll":true,"transport":true}', '["Administration","Projects","Fleet","Procurement","Audit"]', '["business_admin","project_manager","inspector","finance_approver","auditor"]', '["registration","mandate"]'),
+('law_firm', 'Law Firm', 'enterprise', '{"matters":true,"documents":true,"approvals":true,"reports":true,"requisitions":true,"payroll":true,"transport":true}', '["Matters","Research","Client Services","Finance"]', '["business_admin","matter_manager","reviewer"]', '["registration","professional_license"]'),
+('audit_firm', 'Audit / Accounting Firm', 'enterprise', '{"engagements":true,"documents":true,"approvals":true,"reports":true,"requisitions":true,"payroll":true,"transport":true}', '["Engagements","Review","Client Services","Finance"]', '["business_admin","engagement_manager","reviewer","auditor"]', '["registration","professional_license"]'),
+('professional_services', 'Professional Services', 'enterprise', '{"projects":true,"tasks":true,"reports":true,"requisitions":true,"payroll":true,"transport":true}', '["Delivery","Client Services","Finance"]', '["business_admin","project_manager","reviewer"]', '[]'),
+('other', 'Other Organisation', 'operational', '{"assets":true,"tasks":true,"inventory":true,"reports":true,"requisitions":true,"payroll":true,"transport":true}', '["Operations","Finance"]', '["business_admin","department_manager","member"]', '[]')
 ON CONFLICT (category_key) DO UPDATE SET
   display_name = EXCLUDED.display_name,
   operating_mode = EXCLUDED.operating_mode,
@@ -264,6 +264,64 @@ ON CONFLICT (category_key) DO UPDATE SET
   default_roles = EXCLUDED.default_roles,
   required_documents = EXCLUDED.required_documents,
   updated_at = now();
+
+-- Apply newly introduced school capabilities to existing school profiles.
+-- This keeps the migration additive while making payroll, transport,
+-- requisitions, fees, and standards-based academic records available without
+-- requiring schools to recreate their business profile.
+INSERT INTO public.business_profile_modules (business_profile_id, module_key, enabled)
+SELECT bp.id, modules.key, modules.value::BOOLEAN
+  FROM public.business_profiles bp
+  CROSS JOIN LATERAL jsonb_each_text(
+    (SELECT bct.default_modules
+       FROM public.business_category_templates bct
+      WHERE bct.category_key = 'school')
+  ) AS modules
+ WHERE COALESCE(bp.status, 'active') = 'active'
+   AND (lower(COALESCE(bp.metadata ->> 'category_key', '')) = 'school'
+        OR lower(COALESCE(bp.business_type, '')) LIKE '%school%')
+ON CONFLICT (business_profile_id, module_key) DO UPDATE SET
+  enabled = EXCLUDED.enabled,
+  updated_at = now();
+
+-- Students are business members for access control, not payroll employees.
+-- Add the dedicated role to existing school profiles so administrators can
+-- assign students through the same Users & Roles workflow.
+INSERT INTO public.business_roles
+  (business_profile_id, role_key, display_name, visibility_scope, is_system_role)
+SELECT bp.id, 'student', 'Student', 'own', TRUE
+  FROM public.business_profiles bp
+ WHERE COALESCE(bp.status, 'active') = 'active'
+   AND (lower(COALESCE(bp.metadata ->> 'category_key', '')) = 'school'
+        OR lower(COALESCE(bp.business_type, '')) LIKE '%school%')
+ON CONFLICT (business_profile_id, role_key) DO NOTHING;
+
+-- Seed fee visibility and payment permissions for existing school roles.
+-- Existing administrator choices are preserved with DO NOTHING.
+-- Fee payment permissions are wallet-only: payment handlers must call
+-- public.ican_business_wallet_charge with operation_type = 'school_fee_payment'
+-- and must not create cash/card settlement records directly.
+INSERT INTO public.business_role_permissions (business_role_id, permission_key, allowed)
+SELECT br.id, fee_permissions.permission_key, TRUE
+  FROM public.business_roles br
+  JOIN public.business_profiles bp ON bp.id = br.business_profile_id
+  CROSS JOIN LATERAL (
+    VALUES
+      ('view_own_student_fees', ARRAY['teacher', 'head_teacher', 'department_head']::TEXT[]),
+      ('view_own_student_fees', ARRAY['student']::TEXT[]),
+      ('view_department_fees', ARRAY['head_teacher', 'department_head', 'registrar', 'bursar']::TEXT[]),
+      ('view_school_fees', ARRAY['registrar', 'bursar']::TEXT[]),
+      ('view_company_fees', ARRAY['bursar']::TEXT[]),
+      ('pay_own_school_fees_wallet', ARRAY['student']::TEXT[]),
+      ('pay_school_fees_wallet', ARRAY['bursar']::TEXT[]),
+      ('manage_school_fees', ARRAY['bursar']::TEXT[]),
+      ('approve_fee_adjustments', ARRAY['bursar']::TEXT[])
+  ) AS fee_permissions(permission_key, role_keys)
+ WHERE COALESCE(bp.status, 'active') = 'active'
+   AND (lower(COALESCE(bp.metadata ->> 'category_key', '')) = 'school'
+        OR lower(COALESCE(bp.business_type, '')) LIKE '%school%')
+   AND br.role_key = ANY(fee_permissions.role_keys)
+ON CONFLICT (business_role_id, permission_key) DO NOTHING;
 
 ALTER TABLE public.business_category_templates ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS business_category_templates_read ON public.business_category_templates;
@@ -373,6 +431,14 @@ BEGIN
     INSERT INTO public.business_profile_modules (business_profile_id, module_key, enabled)
     VALUES (v_profile_id, v_module_key, COALESCE(v_module_enabled, TRUE));
   END LOOP;
+  -- Core CMMS workflows are shared by every business category. Specialist
+  -- capabilities (for example factory production and WIP) remain template-led.
+  INSERT INTO public.business_profile_modules (business_profile_id, module_key, enabled)
+  SELECT v_profile_id, module_key, TRUE
+    FROM unnest(ARRAY['requisitions', 'payroll', 'transport', 'tasks']) AS module_key
+  ON CONFLICT (business_profile_id, module_key) DO UPDATE
+    SET enabled = TRUE,
+        updated_at = now();
   FOR v_item IN SELECT value FROM jsonb_array_elements(v_template.default_departments) LOOP
     INSERT INTO public.business_departments (business_profile_id, department_name, created_by)
     VALUES (v_profile_id, trim(v_item #>> '{}'), auth.uid());
@@ -389,13 +455,24 @@ BEGIN
       ('approve_work_orders', FALSE), ('manage_assets', FALSE), ('approve_disposal', FALSE), ('view_reports', TRUE),
       ('view_department_reports', TRUE), ('view_company_reports', FALSE), ('manage_suppliers', FALSE),
       ('create_purchase_orders', FALSE), ('approve_purchase_orders', FALSE), ('approve_budgets', FALSE),
-      ('unlock_milestones', FALSE), ('manage_users_roles', FALSE)
+      ('unlock_milestones', FALSE), ('manage_users_roles', FALSE),
+      ('view_school_fees', FALSE), ('view_own_student_fees', FALSE),
+      ('view_department_fees', FALSE), ('view_company_fees', FALSE),
+      ('record_fee_payment', FALSE), ('pay_own_school_fees_wallet', FALSE),
+      ('pay_school_fees_wallet', FALSE), ('manage_school_fees', FALSE),
+      ('approve_fee_adjustments', FALSE)
     ) permissions(permission_key, allowed)
     WHERE (trim(v_role_key) = 'business_admin')
        OR (trim(v_role_key) IN ('store_manager','warehouse_manager','production_manager','project_manager') AND permission_key IN ('receive_inventory','edit_inventory','adjust_stock','create_tasks','assign_tasks','create_work_orders','manage_assets','view_reports','view_department_reports','create_purchase_orders'))
        OR (trim(v_role_key) IN ('storeman','inventory_receiver','fulfilment_manager') AND permission_key IN ('view_inventory','receive_inventory','view_reports'))
        OR (trim(v_role_key) IN ('technician','facility_manager','site_manager') AND permission_key IN ('view_inventory','accept_assigned_tasks','create_work_orders','view_reports','view_department_reports'))
-       OR (trim(v_role_key) IN ('reviewer','auditor') AND permission_key IN ('view_reports','view_department_reports','accept_assigned_tasks'));
+       OR (trim(v_role_key) IN ('reviewer','auditor') AND permission_key IN ('view_reports','view_department_reports','accept_assigned_tasks'))
+       OR (trim(v_role_key) IN ('head_teacher','department_head') AND permission_key IN ('view_own_student_fees','view_department_fees'))
+       OR (trim(v_role_key) = 'teacher' AND permission_key IN ('view_own_student_fees'))
+       OR (trim(v_role_key) = 'student' AND permission_key IN ('view_own_student_fees','pay_own_school_fees_wallet'))
+       OR (trim(v_role_key) = 'bursar' AND permission_key IN ('view_school_fees','view_department_fees','view_company_fees','pay_school_fees_wallet','manage_school_fees','approve_fee_adjustments'))
+       OR (trim(v_role_key) = 'registrar' AND permission_key IN ('view_school_fees','view_department_fees'))
+       OR (trim(v_role_key) = 'business_admin' AND permission_key IN ('view_school_fees','view_own_student_fees','view_department_fees','view_company_fees','pay_own_school_fees_wallet','pay_school_fees_wallet','manage_school_fees','approve_fee_adjustments'));
   END LOOP;
   INSERT INTO public.business_member_roles (business_profile_id, auth_user_id, business_role_id, status, assigned_by)
   SELECT v_profile_id, auth.uid(), id, 'active', auth.uid() FROM public.business_roles
@@ -435,9 +512,8 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
    ORDER BY bp.business_name;
 $$;
 
--- Wholesale and factory profiles opt into supplier publishing explicitly, but
--- once published they receive the same global directory and BodaGoera path as
--- dedicated supplier profiles.
+-- Factory and wholesale businesses are supplier-capable by definition. Other
+-- business types must explicitly opt in through Manage Business.
 CREATE OR REPLACE FUNCTION public.publish_business_as_supplier(
   p_business_profile_id UUID,
   p_supplier_type TEXT DEFAULT 'supplier'
@@ -451,6 +527,10 @@ BEGIN
   SELECT user_id INTO v_owner FROM public.business_profiles
    WHERE id = p_business_profile_id AND COALESCE(status, 'active') = 'active';
   IF v_owner IS NULL THEN RAISE EXCEPTION 'Business profile not found or inactive'; END IF;
+  UPDATE public.business_profiles
+     SET metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('supplier_enabled', true),
+         updated_at = now()
+   WHERE id = p_business_profile_id;
   INSERT INTO public.supplier_directory
     (business_profile_id, supplier_user_id, supplier_type, is_published, transport_enabled, transport_provider)
   VALUES (p_business_profile_id, v_owner, COALESCE(NULLIF(trim(p_supplier_type), ''), 'supplier'), TRUE, TRUE, 'bodagoera')
@@ -536,35 +616,41 @@ GRANT EXECUTE ON FUNCTION public.ingest_cmms_operational_event(UUID, TEXT, UUID,
 INSERT INTO public.supplier_directory (business_profile_id, supplier_user_id, supplier_type)
 SELECT bp.id, bp.user_id, 'supplier'
   FROM public.business_profiles bp
- WHERE (
-       lower(COALESCE(bp.metadata ->> 'source', '')) = 'supermarketa_supplier'
-       OR lower(COALESCE(bp.business_type, '')) LIKE '%wholesale%'
-       OR lower(COALESCE(bp.business_type, '')) LIKE '%supplier%'
-       OR lower(COALESCE(bp.business_type, '')) LIKE '%factory%'
-       OR lower(COALESCE(bp.business_type, '')) LIKE '%hardware%'
-       OR lower(COALESCE(bp.business_type, '')) LIKE '%raw material%'
-      )
+ WHERE (lower(COALESCE(bp.metadata ->> 'source', '')) = 'supermarketa_supplier'
+        OR COALESCE((bp.metadata ->> 'supplier_enabled')::boolean, false) = true
+        OR lower(COALESCE(bp.business_type, '')) LIKE '%factory%'
+        OR lower(COALESCE(bp.business_type, '')) LIKE '%manufactur%'
+        OR lower(COALESCE(bp.business_type, '')) LIKE '%wholesale%')
    AND COALESCE(bp.status, 'active') = 'active'
    AND bp.user_id IS NOT NULL
 ON CONFLICT (business_profile_id) DO UPDATE SET
   supplier_user_id = EXCLUDED.supplier_user_id,
   is_published = TRUE, transport_enabled = TRUE, transport_provider = 'bodagoera', updated_at = now();
 
--- New supplier profiles are published automatically. Store-by-store approval
--- remains available only as historical data and is not required for orders.
+-- Remove legacy automatic listings that do not belong to a supplier-capable
+-- business and were not explicitly opted in.
+UPDATE public.supplier_directory sd
+SET is_published = FALSE, updated_at = now()
+FROM public.business_profiles bp
+WHERE bp.id = sd.business_profile_id
+  AND lower(COALESCE(bp.metadata ->> 'source', '')) <> 'supermarketa_supplier'
+  AND COALESCE((bp.metadata ->> 'supplier_enabled')::boolean, false) = false
+  AND lower(COALESCE(bp.business_type, '')) NOT LIKE '%factory%'
+  AND lower(COALESCE(bp.business_type, '')) NOT LIKE '%manufactur%'
+  AND lower(COALESCE(bp.business_type, '')) NOT LIKE '%wholesale%';
+
+-- Factory and wholesale profiles publish automatically; all other profiles
+-- require explicit supplier opt-in.
 CREATE OR REPLACE FUNCTION public.publish_supplier_business_profile()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
   IF NEW.user_id IS NOT NULL
      AND COALESCE(NEW.status, 'active') = 'active'
-     AND (
-       lower(COALESCE(NEW.metadata ->> 'source', '')) = 'supermarketa_supplier'
-       OR lower(COALESCE(NEW.business_type, '')) LIKE '%wholesale%'
-       OR lower(COALESCE(NEW.business_type, '')) LIKE '%supplier%'
-       OR lower(COALESCE(NEW.business_type, '')) LIKE '%factory%'
-       OR lower(COALESCE(NEW.business_type, '')) LIKE '%hardware%'
-       OR lower(COALESCE(NEW.business_type, '')) LIKE '%raw material%'
-     ) THEN
+     AND (lower(COALESCE(NEW.metadata ->> 'source', '')) = 'supermarketa_supplier'
+          OR COALESCE((NEW.metadata ->> 'supplier_enabled')::boolean, false) = true
+          OR lower(COALESCE(NEW.business_type, '')) LIKE '%factory%'
+          OR lower(COALESCE(NEW.business_type, '')) LIKE '%manufactur%'
+          OR lower(COALESCE(NEW.business_type, '')) LIKE '%wholesale%') THEN
     INSERT INTO public.supplier_directory (business_profile_id, supplier_user_id, supplier_type, transport_enabled, transport_provider)
     VALUES (NEW.id, NEW.user_id,
       CASE
@@ -578,6 +664,15 @@ BEGIN
           supplier_type = EXCLUDED.supplier_type,
           is_published = TRUE,
           updated_at = now();
+  ELSE
+    UPDATE public.supplier_directory
+       SET is_published = FALSE, updated_at = now()
+     WHERE business_profile_id = NEW.id
+       AND lower(COALESCE(NEW.metadata ->> 'source', '')) <> 'supermarketa_supplier'
+       AND COALESCE((NEW.metadata ->> 'supplier_enabled')::boolean, false) = false
+       AND lower(COALESCE(NEW.business_type, '')) NOT LIKE '%factory%'
+       AND lower(COALESCE(NEW.business_type, '')) NOT LIKE '%manufactur%'
+       AND lower(COALESCE(NEW.business_type, '')) NOT LIKE '%wholesale%';
   END IF;
   RETURN NEW;
 END;

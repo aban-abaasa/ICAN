@@ -318,7 +318,7 @@ AS $$
          AND ur.is_active = TRUE
          AND r.is_active = TRUE
          AND lower(COALESCE(r.role_name, '')) IN
-             ('admin', 'administrator', 'cmms_admin', 'wallet_admin', 'finance_admin')
+             ('admin', 'administrator', 'cmms_admin', 'business_admin', 'wallet_admin', 'finance_admin')
     )
   );
 $$;
@@ -390,7 +390,7 @@ BEGIN
          AND ur.is_active = TRUE
          AND r.is_active = TRUE
          AND lower(COALESCE(r.role_name, '')) IN
-             ('admin', 'administrator', 'cmms_admin', 'wallet_admin', 'finance_admin')
+             ('admin', 'administrator', 'cmms_admin', 'business_admin', 'wallet_admin', 'finance_admin')
     ) recipients
    WHERE recipients.user_id IS NOT NULL
   ON CONFLICT (transaction_id, shareholder_user_id, notification_type) DO NOTHING;
@@ -426,7 +426,7 @@ BEGIN
                     FROM public.business_profiles bp
                    WHERE bp.id = NEW.business_profile_id)
          OR lower(COALESCE(cu.role, '')) IN
-            ('admin', 'administrator', 'cmms_admin', 'wallet_admin', 'finance_admin')
+            ('admin', 'administrator', 'cmms_admin', 'business_admin', 'wallet_admin', 'finance_admin')
          OR EXISTS (
            SELECT 1
              FROM public.cmms_user_roles ur
@@ -435,7 +435,7 @@ BEGIN
               AND ur.is_active = TRUE
               AND r.is_active = TRUE
               AND lower(COALESCE(r.role_name, '')) IN
-                  ('admin', 'administrator', 'cmms_admin', 'wallet_admin', 'finance_admin')
+                  ('admin', 'administrator', 'cmms_admin', 'business_admin', 'wallet_admin', 'finance_admin')
          )
        );
   END IF;
