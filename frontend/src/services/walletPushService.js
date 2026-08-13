@@ -10,15 +10,20 @@ export async function enableWalletPhoneAlerts() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
     throw new Error('This browser does not support installed-app notifications.');
   }
-  const permission = await Notification.requestPermission();
-  if (permission !== 'granted') throw new Error('Notification permission was not granted.');
   const vapidKey = import.meta.env.VITE_WEB_PUSH_VAPID_PUBLIC_KEY;
-  if (!vapidKey) throw new Error('Phone alerts are not configured yet. Add the VAPID public key.');
+  if (!vapidKey) throw new Error('Phone alerts are not configured for this app.');
+  const permission = Notification.permission === 'granted'
+    ? 'granted'
+    : await Notification.requestPermission();
+  if (permission !== 'granted') throw new Error('Notification permission was not granted.');
   const registration = await navigator.serviceWorker.ready;
-  const subscription = await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: base64UrlToUint8Array(vapidKey),
-  });
+  let subscription = await registration.pushManager.getSubscription();
+  if (!subscription) {
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: base64UrlToUint8Array(vapidKey),
+    });
+  }
   const { error } = await supabase.rpc('ican_register_wallet_push_subscription', {
     p_subscription: subscription.toJSON(),
   });
