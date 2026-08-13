@@ -192,11 +192,12 @@ export class VelocityEngine {
           .order('created_at', { ascending: false });
       }
 
+      // Uses a security-definer feed so the report receives both personal
+      // wallet rows and authorised business-wallet ledger rows. The latter
+      // intentionally have no recipient_user_id to prevent a business
+      // payment from appearing in an owner's personal trading account.
       const coinRes = await this.supabase
-        .from('ican_coin_transactions')
-        .select('*')
-        .or(`sender_user_id.eq.${this.userId},recipient_user_id.eq.${this.userId}`)
-        .order('created_at', { ascending: false });
+        .rpc('get_ican_record_every_transaction_feed');
 
       if (manualRes.error) {
         console.error('VelocityEngine: Error loading manual transactions:', manualRes.error);
@@ -211,10 +212,15 @@ export class VelocityEngine {
       // so calculateMetrics() and buildFinancialDataFromTransactions() work on both
       const coinTxs = (coinRes.data || []).map(tx => {
         const isIncoming = tx.recipient_user_id === this.userId;
+        // Business receipts have no recipient_user_id by design: their value
+        // belongs to the business wallet, rather than an owner's personal
+        // trading wallet. Keep those rows in the business financial record.
+        const isBusinessReceipt = tx.transaction_type === 'transfer_in' &&
+          Boolean(tx.business_profile_id) && !tx.recipient_user_id;
         // transfer_in and transfer_out are mirror rows for one payment. Keep
         // only the row representing this user's side in the report.
         if ((tx.transaction_type === 'transfer_out' && isIncoming) ||
-            (tx.transaction_type === 'transfer_in' && !isIncoming)) return null;
+            (tx.transaction_type === 'transfer_in' && !isIncoming && !isBusinessReceipt)) return null;
         // The shared wallet schema stores the local-currency value as
         // local_amount. Older rows may expose ugx_equivalent, so keep both
         // fallbacks and finally derive UGX from the ICAN amount.
@@ -228,7 +234,7 @@ export class VelocityEngine {
           'ican':          'ICAN wallet'
         };
 
-        const classification = tx.expense_classification ||
+        const classification = isBusinessReceipt ? 'business_income' : tx.expense_classification ||
           (tx.source_app === 'digital-city-era' || /store|supermarket|purchase/i.test(tx.note || '')
             ? 'business_expense' : 'person_transfer');
         const isPersonTransfer = classification === 'person_transfer';
@@ -255,7 +261,7 @@ export class VelocityEngine {
             category:          tx.source_app === 'digital-city-era' ? 'SupermartKera' : (tx.source_app || 'other'),
             source:            tx.source_app,
             source_app:        tx.source_app,
-            record_category:   classification === 'business_expense' ? 'business' : 'personal',
+            record_category:   classification.startsWith('business_') ? 'business' : 'personal',
             reporting_bucket:  reportingBucket,
             accounting_type:   isIncome ? 'revenue' : isExpense ? 'expense' : 'transfer',
             expense_classification: classification,

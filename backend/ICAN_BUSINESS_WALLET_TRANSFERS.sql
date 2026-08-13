@@ -18,6 +18,31 @@ CREATE INDEX IF NOT EXISTS idx_ican_business_wallet_tx_recipient_business
 CREATE INDEX IF NOT EXISTS idx_ican_coin_transactions_business_profile
   ON public.ican_coin_transactions(business_profile_id, created_at DESC);
 
+-- The financial-record feed must include both personal wallet activity and
+-- ledger entries belonging to business wallets the signed-in user may manage.
+-- Business receipt rows deliberately have no recipient_user_id, so a direct
+-- table query by personal wallet ids would otherwise omit them.
+CREATE OR REPLACE FUNCTION public.get_ican_record_every_transaction_feed()
+RETURNS SETOF public.ican_coin_transactions
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT tx.*
+    FROM public.ican_coin_transactions tx
+   WHERE tx.sender_user_id = auth.uid()
+      OR tx.recipient_user_id = auth.uid()
+      OR (
+        tx.business_profile_id IS NOT NULL
+        AND public.pitchin_business_shareholder_access(tx.business_profile_id)
+      )
+   ORDER BY tx.created_at DESC;
+$$;
+
+REVOKE ALL ON FUNCTION public.get_ican_record_every_transaction_feed() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.get_ican_record_every_transaction_feed() TO authenticated;
+
 CREATE OR REPLACE FUNCTION public.resolve_ican_business_wallet(p_wallet_address TEXT)
 RETURNS TABLE (
   business_profile_id UUID,
@@ -62,6 +87,8 @@ SET search_path = public
 AS $$
 DECLARE
   v_sender_balance NUMERIC;
+  v_coin_price NUMERIC;
+  v_local_currency TEXT;
   v_tithe NUMERIC;
   v_net NUMERIC;
   v_wallet public.ican_business_wallets;
@@ -76,6 +103,21 @@ BEGIN
   END IF;
   IF p_source_app NOT IN ('ican', 'digital-city-era', 'farm-agent', 'mybodaguy') THEN
     RAISE EXCEPTION 'Invalid source_app';
+  END IF;
+
+  -- Value this ledger entry in the receiving business's operating currency,
+  -- using the current global ICAN rate, not a fixed UGX conversion.
+  SELECT p.currency_code, p.price_local
+    INTO v_local_currency, v_coin_price
+    FROM public.business_profiles bp
+    LEFT JOIN public.user_accounts ua ON ua.user_id = bp.user_id
+    CROSS JOIN LATERAL public.ican_get_price_by_country(
+      COALESCE(NULLIF(TRIM(ua.country_code), ''), 'US')
+    ) p
+   WHERE bp.id = p_business_profile_id
+   LIMIT 1;
+  IF v_coin_price IS NULL OR v_coin_price <= 0 THEN
+    RAISE EXCEPTION 'Current ICAN price unavailable';
   END IF;
 
   -- Agent BIZ transfers require the authenticated agent's wallet PIN.
@@ -129,15 +171,17 @@ BEGIN
     (sender_user_id, ican_amount, type, transaction_type, status, local_amount, local_currency,
      source_app, reference_id, note, business_profile_id)
   VALUES
-    (p_from_user, p_amount, 'transfer_out', 'transfer_out', 'completed', round(p_amount * 5000, 2), 'UGX', p_source_app,
+    (p_from_user, p_amount, 'transfer_out', 'transfer_out', 'completed', round(p_amount * v_coin_price, 2), v_local_currency, p_source_app,
      p_reference_id, coalesce(p_note, ''), p_business_profile_id)
   RETURNING id INTO v_out_tx;
 
+  -- This is a business-wallet receipt, not a credit to the owner's personal
+  -- ICAN wallet/trading account.
   INSERT INTO public.ican_coin_transactions
     (sender_user_id, ican_amount, type, transaction_type, status, local_amount, local_currency,
      source_app, reference_id, note, business_profile_id)
   VALUES
-    (p_from_user, v_net, 'transfer_in', 'transfer_in', 'completed', round(v_net * 5000, 2), 'UGX', p_source_app,
+    (NULL, v_net, 'transfer_in', 'transfer_in', 'completed', round(v_net * v_coin_price, 2), v_local_currency, p_source_app,
      p_reference_id, coalesce(p_note, '') || ' (net after 10% tithe)', p_business_profile_id)
   RETURNING id INTO v_in_tx;
 
@@ -275,29 +319,21 @@ RETURNS BOOLEAN
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, auth
 AS $$
   SELECT auth.uid() IS NOT NULL AND (
-    -- Sole proprietorships have one accountable wallet administrator: the
-    -- PitchIn business owner. CMMS delegation does not override this rule.
+    -- The business owner remains an authorized administrator for every
+    -- business type.
     EXISTS (
       SELECT 1
         FROM public.business_profiles bp
        WHERE bp.id = p_business_profile_id
-         AND lower(COALESCE(bp.business_type, '')) NOT IN
-             ('limited', 'limited company', 'llc', 'private limited company')
-         AND bp.user_id = auth.uid()
+          AND bp.user_id = auth.uid()
     )
     OR (
-      -- Limited companies may use a delegated PitchIn/business administrator.
+      -- Delegated PitchIn/business administrators may approve any linked
+      -- business wallet, including a sole proprietorship, with its PIN.
       public.ican_business_admin(p_business_profile_id)
-      AND EXISTS (
-        SELECT 1 FROM public.business_profiles bp
-         WHERE bp.id = p_business_profile_id
-           AND lower(COALESCE(bp.business_type, '')) IN
-               ('limited', 'limited company', 'llc', 'private limited company')
-      )
     )
     OR EXISTS (
-      -- A CMMS administrator may assign a wallet-admin/finance-admin role to
-      -- a user for a linked limited company.
+      -- A CMMS administrator may approve a linked business wallet with its PIN.
       SELECT 1
         FROM public.business_profiles bp
         JOIN public.cmms_company_profiles cp
@@ -311,9 +347,7 @@ AS $$
         JOIN auth.users au
           ON lower(au.email) = lower(cu.email)
        WHERE bp.id = p_business_profile_id
-         AND lower(COALESCE(bp.business_type, '')) IN
-             ('limited', 'limited company', 'llc', 'private limited company')
-         AND au.id = auth.uid()
+          AND au.id = auth.uid()
          AND cu.is_active = TRUE
          AND ur.is_active = TRUE
          AND r.is_active = TRUE
@@ -485,14 +519,6 @@ BEGIN
   IF v_is_admin AND NULLIF(TRIM(p_pin), '') IS NULL THEN
     RAISE EXCEPTION 'Business-wallet PIN is required for administrator approval';
   END IF;
-  IF NOT v_is_admin AND EXISTS (
-    SELECT 1 FROM public.business_profiles bp
-     WHERE bp.id = v_tx.business_profile_id
-       AND lower(COALESCE(bp.business_type, '')) NOT IN
-           ('limited', 'limited company', 'llc', 'private limited company')
-  ) THEN
-    RAISE EXCEPTION 'Only the sole-proprietorship business owner can approve this wallet transaction';
-  END IF;
   IF v_is_admin THEN
     SELECT pin_hash INTO v_pin_hash
       FROM public.ican_business_wallet_settings
@@ -605,6 +631,13 @@ DECLARE
   v_tx public.ican_business_wallet_transactions;
   v_source_wallet public.ican_business_wallets;
   v_recipient_wallet public.ican_business_wallets;
+  v_coin_price NUMERIC;
+  v_local_currency TEXT;
+  v_recipient_coin_price NUMERIC;
+  v_recipient_local_currency TEXT;
+  v_recipient_owner_user_id UUID;
+  v_source_ledger_tx UUID;
+  v_recipient_ledger_tx UUID;
 BEGIN
   SELECT * INTO v_tx
     FROM public.ican_business_wallet_transactions
@@ -615,10 +648,33 @@ BEGIN
     RETURN jsonb_build_object('success', true, 'status', 'completed', 'transaction_id', v_tx.id);
   END IF;
   IF v_tx.status <> 'pending_approval' THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Transaction is not executable');
+    RETURN jsonb_build_object(
+      'success', false,
+      'status', v_tx.status,
+      'transaction_id', v_tx.id,
+      'error', CASE v_tx.status
+        WHEN 'rejected' THEN 'Payment request was rejected, usually because the store business wallet has insufficient ICAN balance.'
+        ELSE 'Payment request is not pending approval.'
+      END
+    );
   END IF;
   IF v_tx.approved_ownership_percentage < v_tx.required_approval_percentage THEN
     RETURN jsonb_build_object('success', false, 'error', 'Approval threshold has not been reached');
+  END IF;
+
+  -- The source business determines the accounting currency. Look up the
+  -- current live ICAN price for that country's configured currency.
+  SELECT p.currency_code, p.price_local
+    INTO v_local_currency, v_coin_price
+    FROM public.business_profiles bp
+    LEFT JOIN public.user_accounts ua ON ua.user_id = bp.user_id
+    CROSS JOIN LATERAL public.ican_get_price_by_country(
+      COALESCE(NULLIF(TRIM(ua.country_code), ''), 'US')
+    ) p
+   WHERE bp.id = v_tx.business_profile_id
+   LIMIT 1;
+  IF v_coin_price IS NULL OR v_coin_price <= 0 THEN
+    RAISE EXCEPTION 'Current ICAN price unavailable';
   END IF;
 
   SELECT * INTO v_source_wallet
@@ -646,11 +702,31 @@ BEGIN
      FOR UPDATE;
     IF v_recipient_wallet.id IS NULL THEN RAISE EXCEPTION 'Recipient business wallet not found or inactive'; END IF;
 
+    -- Record the supplier/business receipt in its own accounting currency so
+    -- that both businesses' transaction reports reconcile independently.
+    SELECT bp.user_id, p.currency_code, p.price_local
+      INTO v_recipient_owner_user_id, v_recipient_local_currency, v_recipient_coin_price
+      FROM public.business_profiles bp
+      LEFT JOIN public.user_accounts ua ON ua.user_id = bp.user_id
+      CROSS JOIN LATERAL public.ican_get_price_by_country(
+        COALESCE(NULLIF(TRIM(ua.country_code), ''), 'US')
+      ) p
+     WHERE bp.id = v_tx.recipient_business_profile_id
+     LIMIT 1;
+    IF v_recipient_owner_user_id IS NULL
+       OR v_recipient_coin_price IS NULL
+       OR v_recipient_coin_price <= 0 THEN
+      RAISE EXCEPTION 'Recipient business live ICAN price unavailable';
+    END IF;
+
     UPDATE public.ican_business_wallets
        SET ican_balance = ican_balance + v_tx.amount_ican,
            total_earned = total_earned + v_tx.amount_ican,
            updated_at = now()
      WHERE id = v_recipient_wallet.id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Recipient business wallet credit failed';
+    END IF;
   ELSIF v_tx.recipient_user_id IS NOT NULL THEN
     PERFORM public.get_or_create_ican_wallet(v_tx.recipient_user_id);
     UPDATE public.ican_user_wallets
@@ -665,17 +741,47 @@ BEGIN
      SET ican_balance = ican_balance - v_tx.amount_ican,
          total_spent = total_spent + v_tx.amount_ican,
          updated_at = now()
-   WHERE id = v_source_wallet.id;
+   WHERE id = v_source_wallet.id
+     AND ican_balance >= v_tx.amount_ican;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Source business wallet debit failed';
+  END IF;
   UPDATE public.ican_business_wallet_transactions
      SET status = 'completed', executed_at = now()
    WHERE id = v_tx.id;
 
+  -- local_amount and local_currency are required by the ICAN transaction
+  -- ledger. Convert at the current ICAN price in the business's currency.
   INSERT INTO public.ican_coin_transactions
-    (sender_user_id, recipient_user_id, ican_amount, transaction_type, source_app,
-     reference_id, note, business_profile_id)
+    (sender_user_id, recipient_user_id, ican_amount, type, transaction_type, status,
+     local_amount, local_currency, source_app, reference_id, note, business_profile_id)
   VALUES
-    (v_tx.initiated_by, v_tx.recipient_user_id, v_tx.amount_ican, 'transfer_out',
-     'digital-city-era', v_tx.reference_id, v_tx.note, v_tx.business_profile_id);
+    (v_tx.initiated_by, v_tx.recipient_user_id, v_tx.amount_ican,
+     'transfer_out', 'transfer_out', 'completed', round(v_tx.amount_ican * v_coin_price, 2), v_local_currency,
+     'digital-city-era',
+     v_tx.reference_id, v_tx.note, v_tx.business_profile_id)
+  RETURNING id INTO v_source_ledger_tx;
+  IF v_source_ledger_tx IS NULL THEN
+    RAISE EXCEPTION 'Source business transaction ledger write failed';
+  END IF;
+
+  IF v_tx.recipient_business_profile_id IS NOT NULL THEN
+    -- Do not set recipient_user_id here: this is credited to the supplier's
+    -- business wallet, never to the owner's personal ICAN trading account.
+    INSERT INTO public.ican_coin_transactions
+      (ican_amount, type, transaction_type, status,
+       local_amount, local_currency, source_app, reference_id, note, business_profile_id)
+    VALUES
+      (v_tx.amount_ican, 'transfer_in', 'transfer_in', 'completed',
+       round(v_tx.amount_ican * v_recipient_coin_price, 2), v_recipient_local_currency,
+       'digital-city-era', v_tx.reference_id,
+       COALESCE(v_tx.note, '') || ' (business wallet receipt)',
+       v_tx.recipient_business_profile_id)
+    RETURNING id INTO v_recipient_ledger_tx;
+    IF v_recipient_ledger_tx IS NULL THEN
+      RAISE EXCEPTION 'Recipient business transaction ledger write failed';
+    END IF;
+  END IF;
 
   RETURN jsonb_build_object(
     'success', true,
@@ -684,7 +790,9 @@ BEGIN
     'amount_ican', v_tx.amount_ican,
     'source_business_profile_id', v_tx.business_profile_id,
     'recipient_business_profile_id', v_tx.recipient_business_profile_id,
-    'recipient_user_id', v_tx.recipient_user_id
+    'recipient_user_id', v_tx.recipient_user_id,
+    'source_ledger_transaction_id', v_source_ledger_tx,
+    'recipient_ledger_transaction_id', v_recipient_ledger_tx
   );
 END;
 $$;

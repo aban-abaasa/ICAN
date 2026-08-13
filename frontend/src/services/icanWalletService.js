@@ -151,14 +151,12 @@ export async function getBalance(userId) {
 // ─── Transactions ───────────────────────────────────────────────────────────
 
 export async function getTransactions(userId, limit = 50) {
-  const { data, error } = await supabase
-    .from('ican_coin_transactions')
-    .select('*')
-    .or(`sender_user_id.eq.${userId},recipient_user_id.eq.${userId}`)
-    .order('created_at', { ascending: false })
-    .limit(limit);
+  // The database checks auth.uid() and business ownership/delegated access.
+  // This also returns receipts in a managed business wallet, which deliberately
+  // have no recipient_user_id and were missing from the old personal-only feed.
+  const { data, error } = await supabase.rpc('get_ican_record_every_transaction_feed');
   if (error) throw error;
-  return (data ?? []).map((tx) => ({
+  return (data ?? []).slice(0, limit).map((tx) => ({
     ...tx,
     localAmount: Number(tx.local_amount ?? tx.ugx_floor_value ?? tx.ican_amount * ICAN_TO_UGX),
     localCurrency: tx.local_currency || 'UGX',

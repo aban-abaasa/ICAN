@@ -79,9 +79,9 @@ CREATE OR REPLACE FUNCTION public.ican_emit_business_wallet_notification()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
 AS $$
 BEGIN
-  -- Notify the sender business owner, active co-owners and managers; notify
-  -- the recipient business administrators too, so every party sees the same
-  -- event in their ICANera Wallet inbox regardless of the originating app.
+  -- The source business is notified while approval is pending. A supplier or
+  -- recipient business is notified only after an administrator has approved
+  -- and the wallet transfer has completed.
   INSERT INTO public.ican_wallet_inbox_notifications
     (recipient_user_id, source_app, notification_type, title, message,
      amount_ican, business_wallet_transaction_id, business_profile_id,
@@ -103,9 +103,25 @@ BEGIN
       UNION SELECT bam.auth_user_id FROM public.business_account_members bam WHERE bam.business_profile_id = NEW.business_profile_id
         AND bam.auth_user_id IS NOT NULL AND bam.employment_status = 'active'
         AND COALESCE((bam.permissions ->> 'manage_business')::BOOLEAN, FALSE)
-      UNION SELECT bp.user_id FROM public.business_profiles bp WHERE bp.id = NEW.recipient_business_profile_id
-      UNION SELECT co.user_id FROM public.business_co_owners co WHERE co.business_profile_id = NEW.recipient_business_profile_id
-        AND co.user_id IS NOT NULL AND lower(co.status) IN ('active', 'approved')
+      -- A CMMS administrator can be the authorized wallet approver without
+      -- having a business_profiles or business_account_members row. Include
+      -- that user in the shared ICANera Wallet inbox as well.
+      UNION SELECT au.id
+        FROM public.cmms_company_profiles cp
+        JOIN public.cmms_users cu ON cu.cmms_company_id = cp.id
+        JOIN public.cmms_user_roles ur ON ur.cmms_user_id = cu.id
+        JOIN public.cmms_roles r ON r.id = ur.cmms_role_id
+        JOIN auth.users au ON lower(au.email) = lower(cu.email)
+       WHERE cp.pichin_business_profile_id = NEW.business_profile_id
+         AND cu.is_active = TRUE AND ur.is_active = TRUE AND r.is_active = TRUE
+         AND lower(COALESCE(r.role_name, '')) IN
+             ('admin', 'administrator', 'cmms_admin', 'business_admin', 'wallet_admin', 'finance_admin')
+       UNION SELECT bp.user_id FROM public.business_profiles bp
+         WHERE bp.id = NEW.recipient_business_profile_id
+           AND NEW.status = 'completed'
+       UNION SELECT co.user_id FROM public.business_co_owners co WHERE co.business_profile_id = NEW.recipient_business_profile_id
+         AND co.user_id IS NOT NULL AND lower(co.status) IN ('active', 'approved')
+         AND NEW.status = 'completed'
     ) recipients(user_id)
    WHERE recipients.user_id IS NOT NULL
   ON CONFLICT DO NOTHING;
@@ -122,6 +138,12 @@ DROP TRIGGER IF EXISTS ican_business_wallet_inbox_notification ON public.ican_bu
 CREATE TRIGGER ican_business_wallet_inbox_notification
 AFTER INSERT OR UPDATE OF status ON public.ican_business_wallet_transactions
 FOR EACH ROW EXECUTE FUNCTION public.ican_emit_business_wallet_notification();
+
+-- Backfill the shared inbox for requests created before CMMS wallet admins
+-- were included above. The unique inbox indexes make this idempotent.
+UPDATE public.ican_business_wallet_transactions
+   SET status = status
+ WHERE status = 'pending_approval';
 
 CREATE OR REPLACE FUNCTION public.ican_get_wallet_inbox(p_unread_only BOOLEAN DEFAULT FALSE)
 RETURNS SETOF public.ican_wallet_inbox_notifications

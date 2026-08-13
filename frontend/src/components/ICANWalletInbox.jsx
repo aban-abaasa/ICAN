@@ -1,13 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { Bell, CheckCircle2 } from 'lucide-react';
+import { Bell, CheckCircle2, LockKeyhole } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 import { enableWalletPhoneAlerts } from '../services/walletPushService';
+import { approveBusinessWalletTransaction } from '../services/icanWalletService';
 
 // Shared inbox: records are produced in the database for every connected app.
 export default function ICANWalletInbox() {
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
   const [pushMessage, setPushMessage] = useState('');
+  const [approvalItem, setApprovalItem] = useState(null);
+  const [pin, setPin] = useState('');
+  const [approvalError, setApprovalError] = useState('');
+  const [approving, setApproving] = useState(false);
 
   const load = async () => {
     const { data } = await supabase.rpc('ican_get_wallet_inbox', { p_unread_only: false });
@@ -22,8 +27,29 @@ export default function ICANWalletInbox() {
     const id = setInterval(load, 30000);
     return () => { clearInterval(id); supabase.removeChannel(channel); };
   }, []);
+
   const unread = items.filter((item) => !item.read_at).length;
   const read = async (id) => { await supabase.rpc('ican_mark_wallet_inbox_read', { p_notification_id: id }); await load(); };
+  const selectItem = async (item) => {
+    if (item.notification_type === 'wallet_approval_required' && item.business_wallet_transaction_id) {
+      setApprovalItem(item); setPin(''); setApprovalError('');
+      return;
+    }
+    await read(item.id);
+  };
+  const approve = async () => {
+    if (!/^\d{4,6}$/.test(pin)) { setApprovalError('Enter the 4-6 digit business-wallet PIN.'); return; }
+    setApproving(true); setApprovalError('');
+    try {
+      await approveBusinessWalletTransaction(approvalItem.business_wallet_transaction_id, 'approved', pin);
+      await read(approvalItem.id);
+      setApprovalItem(null); setPin('');
+    } catch (error) {
+      setApprovalError(error?.message || 'Could not approve this wallet payment.');
+    } finally {
+      setApproving(false);
+    }
+  };
 
   return <div className="relative">
     <button onClick={() => setOpen((value) => !value)} className="relative rounded-lg p-2 text-sky-200 hover:bg-sky-400/10" title="ICANera Wallet notifications">
@@ -34,7 +60,8 @@ export default function ICANWalletInbox() {
       <h3 className="mb-2 font-bold text-white">ICANera Wallet notifications</h3>
       <button onClick={async () => { try { await enableWalletPhoneAlerts(); setPushMessage('Phone alerts are enabled for this device.'); } catch (error) { setPushMessage(error.message); } }} className="mb-3 rounded bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white">Enable phone alerts</button>
       {pushMessage && <p className="mb-2 text-xs text-sky-200">{pushMessage}</p>}
-      {items.length === 0 ? <p className="text-sm text-gray-400">No wallet notifications yet.</p> : <div className="max-h-96 space-y-2 overflow-auto">{items.slice(0, 30).map((item) => <button key={item.id} onClick={() => read(item.id)} className={`w-full rounded-lg p-3 text-left ${item.read_at ? 'bg-white/5' : 'bg-sky-500/15 border border-sky-300/30'}`}><div className="flex gap-2"><CheckCircle2 className="mt-0.5 h-4 w-4 text-sky-300" /><div><p className="text-sm font-semibold text-white">{item.title}</p><p className="text-xs text-gray-300">{item.message}</p>{item.amount_ican != null && <p className="mt-1 text-xs text-emerald-300">{Number(item.amount_ican).toLocaleString()} ICAN · {item.source_app}</p>}</div></div></button>)}</div>}
+      {items.length === 0 ? <p className="text-sm text-gray-400">No wallet notifications yet.</p> : <div className="max-h-96 space-y-2 overflow-auto">{items.slice(0, 30).map((item) => <button key={item.id} onClick={() => selectItem(item)} className={`w-full rounded-lg p-3 text-left ${item.read_at ? 'bg-white/5' : 'bg-sky-500/15 border border-sky-300/30'}`}><div className="flex gap-2"><CheckCircle2 className="mt-0.5 h-4 w-4 text-sky-300" /><div><p className="text-sm font-semibold text-white">{item.title}</p><p className="text-xs text-gray-300">{item.message}</p>{item.amount_ican != null && <p className="mt-1 text-xs text-emerald-300">{Number(item.amount_ican).toLocaleString()} ICAN · {item.source_app}</p>}{item.notification_type === 'wallet_approval_required' && <p className="mt-1 text-xs font-semibold text-amber-300">Click to review and approve with PIN</p>}</div></div></button>)}</div>}
+      {approvalItem && <div className="mt-3 rounded-lg border border-amber-300/40 bg-amber-300/10 p-3"><div className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-100"><LockKeyhole className="h-4 w-4" />Approve business-wallet payment</div><p className="mb-3 text-xs text-amber-50/80">Enter the business-wallet PIN to approve and pay {Number(approvalItem.amount_ican || 0).toLocaleString()} ICAN.</p><input autoFocus type="password" inputMode="numeric" maxLength={6} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="Business-wallet PIN" className="mb-2 w-full rounded border border-sky-200/40 bg-slate-900 px-3 py-2 text-white" /><div className="flex justify-end gap-2"><button disabled={approving} onClick={() => { setApprovalItem(null); setPin(''); setApprovalError(''); }} className="rounded px-2 py-1 text-sm text-slate-200">Cancel</button><button disabled={approving || pin.length < 4} onClick={approve} className="rounded bg-emerald-600 px-3 py-1 text-sm font-semibold text-white disabled:opacity-50">{approving ? 'Approving…' : 'Approve & pay'}</button></div>{approvalError && <p className="mt-2 text-xs text-red-300">{approvalError}</p>}</div>}
     </div>}
   </div>;
 }

@@ -1336,19 +1336,21 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
           .eq('user_id', user.id)
           .gte('created_at', start)
           .lte('created_at', end),
+        // The access-controlled feed includes manager-owned business-wallet
+        // payments as well as personal activity. Filter the report period
+        // client-side because the RPC intentionally has no user-id argument.
         supabase
-          .from('ican_coin_transactions')
-          // Use * so reports continue working before the context migration is
-          // deployed. The mapper below supports both old and new schemas.
-          .select('*')
-          .or(`sender_user_id.eq.${user.id},recipient_user_id.eq.${user.id}`)
-          .gte('created_at', start)
-          .lte('created_at', end)
+          .rpc('get_ican_record_every_transaction_feed')
       ]);
       if (manualResult.error) console.error('Report manual transaction error:', manualResult.error);
       if (coinResult.error) console.error('Report ICAN transaction error:', coinResult.error);
 
-      const coinRows = (coinResult.data || []).map((tx) => {
+      const coinRows = (coinResult.data || [])
+        .filter((tx) => {
+          const occurredAt = new Date(tx.created_at);
+          return !Number.isNaN(occurredAt.getTime()) && occurredAt >= new Date(start) && occurredAt <= new Date(end);
+        })
+        .map((tx) => {
         const isIncoming = tx.recipient_user_id === user.id;
         // The payer's transfer_out and recipient's transfer_in are mirror rows.
         // Only report the row belonging to this user's side of the payment.

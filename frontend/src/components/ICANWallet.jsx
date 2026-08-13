@@ -507,12 +507,10 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       const supabase = getSupabaseClient();
 
       const [sharedResult, legacyResult] = await Promise.all([
-        supabase
-          .from('ican_coin_transactions')
-          .select('*')
-          .or('sender_user_id.eq.' + currentUserId + ',recipient_user_id.eq.' + currentUserId)
-          .order('created_at', { ascending: false })
-          .limit(100),
+        // Includes business-wallet rows the signed-in user is entitled to
+        // manage.  A supplier receipt has no personal recipient_user_id, so
+        // querying only personal wallet ids hides a payment that was delivered.
+        supabase.rpc('get_ican_record_every_transaction_feed'),
         supabase
           .from('ican_transactions')
           .select('*')
