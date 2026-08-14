@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS public.cmms_attendance_qr_locations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   cmms_company_id UUID NOT NULL REFERENCES public.cmms_company_profiles(id) ON DELETE CASCADE,
   location_name TEXT NOT NULL,
-  token TEXT NOT NULL UNIQUE DEFAULT encode(gen_random_bytes(24), 'hex'),
+  token TEXT NOT NULL UNIQUE DEFAULT encode(extensions.gen_random_bytes(24), 'hex'),
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -142,7 +142,7 @@ AS $$
 DECLARE
   v_token TEXT;
 BEGIN
-  v_token := encode(gen_random_bytes(24), 'hex');
+  v_token := encode(extensions.gen_random_bytes(24), 'hex');
   
   RETURN v_token;
 END;
@@ -872,7 +872,7 @@ CREATE TABLE IF NOT EXISTS public.cmms_visitor_qr_locations (
   location_name TEXT NOT NULL,
   host_email TEXT,
   purpose TEXT,
-  token TEXT NOT NULL UNIQUE DEFAULT encode(gen_random_bytes(24), 'hex'),
+  token TEXT NOT NULL UNIQUE DEFAULT encode(extensions.gen_random_bytes(24), 'hex'),
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -919,7 +919,7 @@ BEGIN
   SELECT * INTO v_qr FROM public.cmms_visitor_qr_locations WHERE token = trim(p_token) AND is_active FOR UPDATE;
   IF v_qr.id IS NULL THEN RAISE EXCEPTION 'This visitor QR code is invalid or has been deactivated'; END IF;
   SELECT * INTO v_host FROM public.cmms_users WHERE cmms_company_id = v_qr.cmms_company_id AND is_active AND lower(email) = lower(trim(p_host_contact)) LIMIT 1;
-  v_token := encode(gen_random_bytes(24), 'hex');
+  v_token := encode(extensions.gen_random_bytes(24), 'hex');
   INSERT INTO public.cmms_visitor_checkin (cmms_company_id, visitor_name, visitor_email, visitor_phone, visitor_origin, check_in_location, check_in_latitude, check_in_longitude, location_validated, qr_code_token, host_cmms_user_id, host_name, host_email, purpose, status)
   VALUES (v_qr.cmms_company_id, trim(p_visitor_name), NULLIF(trim(p_visitor_email), ''), trim(p_visitor_phone), NULLIF(trim(p_visitor_origin), ''), v_qr.location_name, p_latitude, p_longitude, TRUE, v_token, v_host.id, COALESCE(v_host.full_name, NULLIF(trim(p_host_contact), '')), CASE WHEN v_host.id IS NULL THEN NULL ELSE v_host.email END, COALESCE(NULLIF(trim(p_purpose), ''), v_qr.purpose), 'checked_in')
   RETURNING id INTO v_id;
@@ -928,10 +928,43 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION public.visitor_check_out_with_qr(
+  p_token TEXT, p_visitor_name TEXT, p_visitor_phone TEXT,
+  p_latitude NUMERIC DEFAULT NULL, p_longitude NUMERIC DEFAULT NULL
+) RETURNS JSONB
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE v_qr public.cmms_visitor_qr_locations; v_visitor public.cmms_visitor_checkin;
+BEGIN
+  IF NULLIF(trim(p_visitor_name), '') IS NULL OR NULLIF(trim(p_visitor_phone), '') IS NULL THEN
+    RAISE EXCEPTION 'Name and phone number are required to check out';
+  END IF;
+  SELECT * INTO v_qr FROM public.cmms_visitor_qr_locations WHERE token = trim(p_token) AND is_active;
+  IF v_qr.id IS NULL THEN RAISE EXCEPTION 'This visitor QR code is invalid or has been deactivated'; END IF;
+  SELECT * INTO v_visitor FROM public.cmms_visitor_checkin
+   WHERE cmms_company_id = v_qr.cmms_company_id
+     AND check_in_location = v_qr.location_name
+     AND status = 'checked_in'
+     AND lower(visitor_name) = lower(trim(p_visitor_name))
+     AND visitor_phone = trim(p_visitor_phone)
+   ORDER BY check_in_time DESC LIMIT 1 FOR UPDATE;
+  IF v_visitor.id IS NULL THEN RAISE EXCEPTION 'No active check-in was found for that name and phone number at this location'; END IF;
+  UPDATE public.cmms_visitor_checkin
+     SET check_out_time = now(), check_out_location = v_qr.location_name,
+         check_out_latitude = p_latitude, check_out_longitude = p_longitude,
+         status = 'checked_out', updated_at = now()
+   WHERE id = v_visitor.id;
+  UPDATE public.cmms_visitor_qr_locations SET last_used_at = now() WHERE id = v_qr.id;
+  RETURN jsonb_build_object('success', TRUE, 'visitor_id', v_visitor.id, 'message', 'Your check-out has been recorded.');
+END;
+$$;
+
 REVOKE ALL ON FUNCTION public.create_cmms_visitor_qr_location(UUID, TEXT, TEXT, TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.resolve_cmms_visitor_qr(TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.visitor_check_in_with_qr(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, NUMERIC, NUMERIC) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.visitor_check_out_with_qr(TEXT, TEXT, TEXT, NUMERIC, NUMERIC) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.create_cmms_visitor_qr_location(UUID, TEXT, TEXT, TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.resolve_cmms_visitor_qr(TEXT) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.visitor_check_in_with_qr(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, NUMERIC, NUMERIC) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.visitor_check_out_with_qr(TEXT, TEXT, TEXT, NUMERIC, NUMERIC) TO anon, authenticated;
 NOTIFY pgrst, 'reload schema';

@@ -56,6 +56,14 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
     }
   }, [selectedDate, userRole, isCreator]);
 
+  // Default the QR to the business location so staff do not need to retype it.
+  // The field stays editable for a separate entrance, branch, or worksite.
+  useEffect(() => {
+    if (!qrLocationName.trim() && companyProfile?.location?.trim()) {
+      setQrLocationName(companyProfile.location.trim());
+    }
+  }, [companyProfile?.id, companyProfile?.location]);
+
   const loadMyAttendance = async () => {
     if (!currentUser || !companyProfile) return;
     
@@ -227,15 +235,17 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
   };
 
   const createLocationQr = async () => {
-    if (!qrLocationName.trim() || !companyProfile?.id) {
-      setError('Enter the check-in location name first');
+    const locationName = qrLocationName.trim() || companyProfile?.location?.trim() || '';
+    if (!locationName || !companyProfile?.id) {
+      setError('Set the business location before generating the staff QR code.');
       return;
     }
+    if (locationName !== qrLocationName) setQrLocationName(locationName);
     setLoading(true);
     setError('');
     const { data, error: createError } = await supabase.rpc('create_cmms_attendance_qr_location', {
       p_cmms_company_id: companyProfile.id,
-      p_location_name: qrLocationName.trim()
+      p_location_name: locationName
     });
     setLoading(false);
     if (createError) {
