@@ -847,16 +847,50 @@ BEGIN
 END;
 $$;
 
+-- The QR identifies the location only. The signed-in staff account determines
+-- which open attendance record can be checked out.
+CREATE OR REPLACE FUNCTION public.staff_check_out_with_qr(
+  p_token TEXT,
+  p_latitude NUMERIC DEFAULT NULL,
+  p_longitude NUMERIC DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE
+  v_qr public.cmms_attendance_qr_locations;
+  v_staff public.cmms_users;
+  v_attendance public.cmms_staff_attendance;
+BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Sign in is required before checking out'; END IF;
+  SELECT * INTO v_qr FROM public.cmms_attendance_qr_locations WHERE token = trim(p_token) AND is_active FOR UPDATE;
+  IF v_qr.id IS NULL THEN RAISE EXCEPTION 'This attendance QR code is invalid or has been deactivated'; END IF;
+  SELECT * INTO v_staff FROM public.cmms_users WHERE cmms_company_id = v_qr.cmms_company_id AND is_active AND lower(email) = lower(auth.jwt() ->> 'email') LIMIT 1;
+  IF v_staff.id IS NULL THEN RAISE EXCEPTION 'Your signed-in account is not an active staff member for this business'; END IF;
+  SELECT * INTO v_attendance FROM public.cmms_staff_attendance
+   WHERE cmms_user_id = v_staff.id AND cmms_company_id = v_qr.cmms_company_id AND status = 'checked_in'
+   ORDER BY check_in_time DESC LIMIT 1 FOR UPDATE;
+  IF v_attendance.id IS NULL THEN RAISE EXCEPTION 'You do not have an active check-in to check out'; END IF;
+  UPDATE public.cmms_staff_attendance SET check_out_time = now(), check_out_location = v_qr.location_name,
+    check_out_latitude = p_latitude, check_out_longitude = p_longitude, status = 'checked_out', updated_at = now()
+   WHERE id = v_attendance.id;
+  UPDATE public.cmms_attendance_qr_locations SET last_used_at = now() WHERE id = v_qr.id;
+  RETURN jsonb_build_object('success', TRUE, 'attendance_id', v_attendance.id, 'message', 'Staff check-out recorded');
+END;
+$$;
+
 REVOKE ALL ON FUNCTION public.cmms_attendance_qr_admin(UUID) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.cmms_active_staff(UUID) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.create_cmms_attendance_qr_location(UUID, TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.resolve_cmms_attendance_qr(TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.staff_check_in_with_qr(TEXT, NUMERIC, NUMERIC) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.staff_check_out_with_qr(TEXT, NUMERIC, NUMERIC) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.cmms_attendance_qr_admin(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.cmms_active_staff(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.create_cmms_attendance_qr_location(UUID, TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.resolve_cmms_attendance_qr(TEXT) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.staff_check_in_with_qr(TEXT, NUMERIC, NUMERIC) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.staff_check_out_with_qr(TEXT, NUMERIC, NUMERIC) TO authenticated;
 
 NOTIFY pgrst, 'reload schema';
 
