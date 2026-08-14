@@ -7,6 +7,8 @@ export const CMMS_TOOL_OPTIONS = [
   { id: 'departments', label: 'Departments', permission: 'canManageDepartments', actions: ['view', 'create', 'edit', 'delete'] },
   { id: 'users', label: 'Users and role assignments', permission: 'canManageUsers', actions: ['view', 'create', 'edit', 'assign'] },
   { id: 'inventory', label: 'Inventory', permission: 'canViewInventory', actions: ['view', 'create', 'edit', 'approve'] },
+  { id: 'attendance', label: 'Staff attendance & QR check-in', permission: 'canManageAttendance', actions: ['view', 'create', 'edit', 'approve'] },
+  { id: 'visitor-mgmt', label: 'Visitor management', permission: 'canManageVisitors', actions: ['view', 'create', 'edit', 'flag', 'approve'] },
   { id: 'payroll', label: 'Payroll', permission: 'canViewFinancials', actions: ['view', 'create', 'edit', 'approve'], scopes: true },
   { id: 'fees', label: 'School fees', permission: 'canManageFees', actions: ['view', 'create', 'edit', 'approve'], scopes: true },
   { id: 'production', label: 'Production and WIP', permission: 'canManageProduction', actions: ['view', 'create', 'edit', 'approve'], scopes: true },

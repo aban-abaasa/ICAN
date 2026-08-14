@@ -265,6 +265,21 @@ ON CONFLICT (category_key) DO UPDATE SET
   required_documents = EXCLUDED.required_documents,
   updated_at = now();
 
+-- Attendance is intentionally cross-industry: any CMMS-enabled business may
+-- opt its staff into attendance and visitor management through role access.
+UPDATE public.business_category_templates
+   SET default_modules = COALESCE(default_modules, '{}'::jsonb)
+       || '{"attendance": true, "visitor-mgmt": true}'::jsonb;
+
+-- Make the capability available to existing active businesses as well as new
+-- ones. Individual CMMS role permissions still control actual staff access.
+INSERT INTO public.business_profile_modules (business_profile_id, module_key, enabled)
+SELECT bp.id, attendance_modules.module_key, TRUE
+  FROM public.business_profiles bp
+ CROSS JOIN (VALUES ('attendance'), ('visitor-mgmt')) AS attendance_modules(module_key)
+ WHERE COALESCE(bp.status, 'active') = 'active'
+ON CONFLICT (business_profile_id, module_key) DO UPDATE SET enabled = TRUE;
+
 -- Apply newly introduced school capabilities to existing school profiles.
 -- This keeps the migration additive while making payroll, transport,
 -- requisitions, fees, and standards-based academic records available without

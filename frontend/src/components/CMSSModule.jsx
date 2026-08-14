@@ -53,6 +53,8 @@ import BusinessCategorySelector from './BusinessCategorySelector';
 import CMMSRoleConfiguration, { CMMS_TOOL_OPTIONS } from './CMMSRoleConfiguration.jsx';
 import CMMSFeesPanel from './CMMSFeesPanel.jsx';
 import CMMSOperationsPanel from './CMMSOperationsPanel.jsx';
+import CMSSAttendancePanel from './CMSSAttendancePanel.jsx';
+import CMSSVisitorManagementPanel from './CMSSVisitorManagementPanel.jsx';
 
 const CMMSModule = ({
   onDataUpdate,
@@ -5929,6 +5931,8 @@ const CMMSModule = ({
       { id: 'quality', label: 'Quality Control', icon: CheckCircle },
       { id: 'clinical', label: 'Clinical Operations', icon: Briefcase },
       { id: 'pharmacy', label: 'Pharmacy & Supplies', icon: Package },
+      { id: 'attendance', label: '✅ Staff Attendance', icon: CheckCircle },
+      { id: 'visitor-mgmt', label: '🔍 Visitor Management', icon: Users },
       { id: 'role-config', label: '🔐 Role Configuration', icon: Users },
       { id: 'company', label: '🏢 Company', icon: Building },
       { id: 'departments', label: '🏭 Departments', icon: Building },
@@ -5955,6 +5959,8 @@ const CMMSModule = ({
       departments: { activeBg: 'linear-gradient(135deg, #0ea5e9, #0284c7)', inactiveBg: 'rgba(14, 165, 233, 0.14)', border: 'rgba(103, 232, 249, 0.55)', inactiveText: '#bae6fd' },
       users: { activeBg: 'linear-gradient(135deg, #8b5cf6, #7c3aed)', inactiveBg: 'rgba(139, 92, 246, 0.14)', border: 'rgba(196, 181, 253, 0.55)', inactiveText: '#ddd6fe' },
       inventory: { activeBg: 'linear-gradient(135deg, #16a34a, #15803d)', inactiveBg: 'rgba(34, 197, 94, 0.14)', border: 'rgba(134, 239, 172, 0.55)', inactiveText: '#bbf7d0' },
+      attendance: { activeBg: 'linear-gradient(135deg, #1e40af, #1e3a8a)', inactiveBg: 'rgba(30, 64, 175, 0.14)', border: 'rgba(96, 165, 250, 0.55)', inactiveText: '#bfdbfe' },
+      'visitor-mgmt': { activeBg: 'linear-gradient(135deg, #7c3aed, #6d28d9)', inactiveBg: 'rgba(124, 58, 237, 0.14)', border: 'rgba(196, 181, 253, 0.55)', inactiveText: '#ddd6fe' },
       payroll: { activeBg: 'linear-gradient(135deg, #059669, #047857)', inactiveBg: 'rgba(16, 185, 129, 0.14)', border: 'rgba(110, 231, 183, 0.55)', inactiveText: '#a7f3d0' },
       transport: { activeBg: 'linear-gradient(135deg, #ea580c, #c2410c)', inactiveBg: 'rgba(249, 115, 22, 0.14)', border: 'rgba(253, 186, 116, 0.55)', inactiveText: '#fed7aa' },
       requisitions: { activeBg: 'linear-gradient(135deg, #f59e0b, #d97706)', inactiveBg: 'rgba(245, 158, 11, 0.14)', border: 'rgba(253, 186, 116, 0.55)', inactiveText: '#fde68a' },
@@ -6772,6 +6778,8 @@ const CMMSModule = ({
         {activeTab === 'users' && getTabs().includes('users') && <UserRoleManager />}
         {activeTab === 'role-config' && getTabs().includes('role-config') && <CMMSRoleConfiguration companyId={companyIdToUse} isAdmin={userRole === 'admin' || isCreator} onRolesChanged={setCmmsRoleDefinitions} />}
         {activeTab === 'inventory' && getTabs().includes('inventory') && <InventoryManager />}
+        {activeTab === 'attendance' && getTabs().includes('attendance') && <CMSSAttendancePanel companyProfile={cmmsData.companyProfile} currentUser={user} cmmsUsers={cmmsData.users} userRole={userRole} isCreator={isCreator} />}
+        {activeTab === 'visitor-mgmt' && getTabs().includes('visitor-mgmt') && <CMSSVisitorManagementPanel companyProfile={cmmsData.companyProfile} currentUser={user} cmmsUsers={cmmsData.users} userRole={userRole} isCreator={isCreator} />}
         {activeTab === 'fees' && getTabs().includes('fees') && <CMMSFeesPanel companyId={companyIdToUse} businessProfileId={cmmsData.companyProfile?.pichin_business_profile_id} cmmsUsers={cmmsData.users} studentView={isActiveStudent} />}
         {['production', 'quality', 'clinical', 'pharmacy'].includes(activeTab) && getTabs().includes(activeTab) && <CMMSOperationsPanel companyId={companyIdToUse} businessProfileId={cmmsData.companyProfile?.pichin_business_profile_id} mode={activeTab} />}
         {activeTab === 'payroll' && getTabs().includes('payroll') && (
