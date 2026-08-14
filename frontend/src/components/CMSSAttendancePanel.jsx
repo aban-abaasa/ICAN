@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { QrCode, MapPin, Clock, CheckCircle, AlertCircle, LogOut, RefreshCw, AlertTriangle, Users } from 'lucide-react';
+import { QrCode, MapPin, Clock, CheckCircle, AlertCircle, LogOut, RefreshCw, AlertTriangle, Users, Download } from 'lucide-react';
 import jsQR from 'jsqr';
 import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from '../lib/supabase/client';
 import { publicAppUrl } from '../utils/publicAppUrl';
+import { downloadCmmsQrPdf } from '../utils/downloadCmmsQrPdf';
 
 const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole, isCreator }) => {
   const videoRef = useRef(null);
@@ -254,6 +255,16 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
     }
     const record = Array.isArray(data) ? data[0] : data;
     setGeneratedQr(record ? { ...record, url: `${publicAppUrl()}/staff-attendance?token=${encodeURIComponent(record.token)}` } : null);
+  };
+
+  const downloadStaffQrPdf = async () => {
+    if (!generatedQr?.url) return;
+    try {
+      await downloadCmmsQrPdf({ type: 'staff', url: generatedQr.url, location: generatedQr.location_name, companyName: companyProfile?.company_name });
+    } catch (err) {
+      console.error('Unable to create staff QR PDF:', err);
+      setError('Unable to create the staff QR PDF. Please try again.');
+    }
   };
 
   return (
@@ -528,7 +539,7 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
             <input value={qrLocationName} onChange={(event) => setQrLocationName(event.target.value)} placeholder="Location, e.g. Main entrance" className="flex-1 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-white" />
             <button onClick={createLocationQr} disabled={loading} className="rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white disabled:opacity-60">Create secure QR</button>
           </div>
-          {generatedQr && <div className="rounded-xl bg-white/10 p-5 text-center"><p className="mb-3 font-semibold text-white">{generatedQr.location_name}</p><div className="inline-block rounded-lg bg-white p-3"><QRCodeSVG value={generatedQr.url} size={180} /></div><p className="mt-3 break-all text-xs text-gray-400">{generatedQr.url}</p><p className="mt-2 text-xs text-emerald-300">Only signed-in active staff for this business can check in with this code.</p></div>}
+          {generatedQr && <div className="rounded-xl bg-white/10 p-5 text-center"><p className="mb-3 font-semibold text-white">{generatedQr.location_name}</p><div className="inline-block rounded-lg bg-white p-3"><QRCodeSVG value={generatedQr.url} size={180} /></div><p className="mt-3 break-all text-xs text-gray-400">{generatedQr.url}</p><button onClick={downloadStaffQrPdf} className="mx-auto mt-4 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-700"><Download className="h-4 w-4" />Download PDF</button><p className="mt-2 text-xs text-emerald-300">Only signed-in active staff for this business can check in with this code.</p></div>}
         </div>
       )}
     </div>

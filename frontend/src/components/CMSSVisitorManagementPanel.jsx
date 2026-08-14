@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { QrCode, Users, MapPin, AlertTriangle, CheckCircle, LogOut, RefreshCw, AlertCircle, Mail } from 'lucide-react';
+import { QrCode, Users, MapPin, AlertTriangle, CheckCircle, LogOut, RefreshCw, AlertCircle, Mail, Download } from 'lucide-react';
 import jsQR from 'jsqr';
 import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from '../lib/supabase/client';
 import { publicAppUrl } from '../utils/publicAppUrl';
+import { downloadCmmsQrPdf } from '../utils/downloadCmmsQrPdf';
 
 const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, userRole, isCreator }) => {
   const videoRef = useRef(null);
@@ -272,6 +273,21 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
     setSuccess('✅ Visitor QR payload generated');
   };
 
+  const downloadVisitorQrPdf = async () => {
+    if (!visitorQrCode) return;
+    try {
+      await downloadCmmsQrPdf({
+        type: 'visitor',
+        url: visitorQrCode,
+        location: checkInLocation || companyProfile?.location,
+        companyName: companyProfile?.company_name
+      });
+    } catch (err) {
+      console.error('Unable to create visitor QR PDF:', err);
+      setError('Unable to create the visitor QR PDF. Please try again.');
+    }
+  };
+
   const scanQRCode = (mode) => {
     if (videoRef.current && canvasRef.current) {
       const video = videoRef.current;
@@ -516,6 +532,7 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
                 <QRCodeSVG value={visitorQrCode} size={180} />
               </div>
               <p className="mt-3 break-all text-xs text-gray-400">{visitorQrCode}</p>
+              <button onClick={downloadVisitorQrPdf} className="mx-auto mt-4 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-700"><Download className="h-4 w-4" />Download PDF</button>
               <p className="mt-2 text-xs text-emerald-300">Scan this at the entrance to prefill the location and host fields.</p>
             </div>
           )}
