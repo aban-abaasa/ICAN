@@ -33,9 +33,9 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
         .order('check_in_time', { ascending: false }),
       
       canManage ? supabase
-        .from('cmms_attendance_qr_codes')
+        .from('cmms_attendance_qr_locations')
         .select('*')
-        .eq('company_id', companyProfile.id)
+        .eq('cmms_company_id', companyProfile.id)
         .order('created_at', { ascending: false }) : { data: [], error: null }
     ]);
 
@@ -47,12 +47,40 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
   const generateQRCode = async () => {
     if (!companyProfile?.id) return;
 
-    const locationName = prompt('Enter location name for this attendance QR code:');
-    if (!locationName) return;
+    const getCurrentPosition = () => new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error('This device does not support location services.'));
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0
+      });
+    });
 
-    const { data, error } = await supabase.rpc('generate_cmms_attendance_qr', {
-      p_company_id: companyProfile.id,
-      p_location_name: locationName.trim()
+    let locationName;
+    try {
+      const { coords } = await getCurrentPosition();
+      // Coordinates are reliable even when an address lookup is unavailable.
+      locationName = `GPS: ${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`;
+
+      // Use a readable address when the public reverse-geocoding service responds.
+      try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${coords.latitude}&lon=${coords.longitude}`);
+        const location = await response.json();
+        if (location?.display_name) locationName = location.display_name;
+      } catch {
+        // Keep the precise GPS fallback.
+      }
+    } catch (locationError) {
+      alert(`Unable to get your current location. Allow location access, then try again. (${locationError.message})`);
+      return;
+    }
+
+    const { data, error } = await supabase.rpc('create_cmms_attendance_qr_location', {
+      p_cmms_company_id: companyProfile.id,
+      p_location_name: locationName
     });
 
     if (error) {
@@ -66,7 +94,7 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
 
   const toggleQRCode = async (qrId, currentStatus) => {
     const { error } = await supabase
-      .from('cmms_attendance_qr_codes')
+      .from('cmms_attendance_qr_locations')
       .update({ is_active: !currentStatus })
       .eq('id', qrId);
 
