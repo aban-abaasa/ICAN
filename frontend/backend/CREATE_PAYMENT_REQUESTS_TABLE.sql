@@ -55,11 +55,13 @@ ALTER TABLE public.cash_payment_receipts
   CHECK (expense_classification IN ('personal_expense', 'business_expense'));
 
 CREATE INDEX IF NOT EXISTS idx_cash_payment_receipts_payer ON public.cash_payment_receipts(payer_user_id, recorded_at DESC);
+GRANT SELECT ON public.cash_payment_receipts TO authenticated;
 ALTER TABLE public.cash_payment_receipts ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Cash receipt parties can view receipt" ON public.cash_payment_receipts;
 CREATE POLICY "Cash receipt parties can view receipt" ON public.cash_payment_receipts
   FOR SELECT USING (auth.uid() IN (payer_user_id, recipient_user_id));
 
+DROP FUNCTION IF EXISTS public.record_cash_payment_request(TEXT);
 CREATE OR REPLACE FUNCTION public.record_cash_payment_request(
   p_payment_code TEXT,
   p_expense_classification TEXT DEFAULT 'personal_expense',
