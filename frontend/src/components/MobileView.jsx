@@ -1343,8 +1343,8 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
           .rpc('get_ican_record_every_transaction_feed'),
         supabase
           .from('cash_payment_receipts')
-          .select('id, amount, currency, expense_classification, business_profile_id, recorded_at, payment_requests!inner(description)')
-          .eq('payer_user_id', user.id)
+          .select('id, payer_user_id, recipient_user_id, payer_name, recipient_name, recipient_classification, recipient_business_profile_id, amount, currency, expense_classification, business_profile_id, recorded_at, payment_requests!inner(description)')
+          .or(`payer_user_id.eq.${user.id},recipient_user_id.eq.${user.id}`)
           .gte('recorded_at', start)
           .lte('recorded_at', end)
       ]);
@@ -1402,23 +1402,34 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
       const manualRows = (manualResult.data || []).filter((tx) =>
         tx.status !== 'failed' && Number(tx.amount || 0) !== 0
       );
-      const cashRows = (cashResult.data || []).map((receipt) => ({
+      // New cash QR payments already create a ledger row for each party.  Keep
+      // the receipts query as a legacy fallback, but never count that same
+      // payment twice in reports.
+      const ledgerCashReceiptIds = new Set(manualRows.map((tx) => tx.metadata?.cash_receipt_id).filter(Boolean));
+      const cashRows = (cashResult.data || []).map((receipt) => {
+        if (ledgerCashReceiptIds.has(receipt.id)) return null;
+        const isReceiver = receipt.recipient_user_id === user.id;
+        const isBusinessReceive = isReceiver && receipt.recipient_classification === 'business';
+        return ({
         amount: Number(receipt.amount) || 0,
-        transaction_type: 'expense',
-        description: receipt.payment_requests?.description || 'Cash payment',
+        transaction_type: isReceiver ? 'income' : 'expense',
+        description: receipt.payment_requests?.description || (isReceiver ? 'Cash received' : 'Cash payment'),
         currency: receipt.currency,
         created_at: receipt.recorded_at,
-        business_profile_id: receipt.business_profile_id || null,
+        business_profile_id: isBusinessReceive ? receipt.recipient_business_profile_id : (receipt.business_profile_id || null),
         metadata: {
           category: 'cash', source_app: 'ican',
-          record_category: receipt.expense_classification === 'business_expense' ? 'business' : 'personal',
-          reporting_bucket: receipt.expense_classification === 'business_expense' ? 'operating_expense' : null,
+          record_category: isBusinessReceive || receipt.expense_classification === 'business_expense' ? 'business' : 'personal',
+          reporting_bucket: isReceiver ? 'cash_received_income' : (receipt.expense_classification === 'business_expense' ? 'operating_expense' : null),
           expense_classification: receipt.expense_classification,
-          payment_method: 'cash', receipt_id: receipt.id,
-          business_profile_id: receipt.business_profile_id || null,
+          payment_method: 'cash', receipt_id: receipt.id, direction: isReceiver ? 'received' : 'paid',
+          payer_name: receipt.payer_name, recipient_name: receipt.recipient_name,
+          recipient_classification: receipt.recipient_classification,
+          business_profile_id: isBusinessReceive ? receipt.recipient_business_profile_id : (receipt.business_profile_id || null),
         },
-      }));
-      const rows = [...manualRows, ...cashRows, ...coinRows.filter(Boolean)]
+      });
+      });
+      const rows = [...manualRows, ...cashRows.filter(Boolean), ...coinRows.filter(Boolean)]
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
       const scopedRows = rows.filter((t) => {
         const category = t.record_category || t.metadata?.record_category || 'personal';

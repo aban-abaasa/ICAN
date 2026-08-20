@@ -25,6 +25,18 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 ALTER TABLE public.payment_requests
   ADD COLUMN IF NOT EXISTS payment_method VARCHAR(10) NOT NULL DEFAULT 'ican';
 
+-- Snapshot the receiving destination on the request itself.  This makes the
+-- QR a clear proof of who is receiving the money before it is scanned.
+ALTER TABLE public.payment_requests
+  ADD COLUMN IF NOT EXISTS recipient_classification TEXT NOT NULL DEFAULT 'personal',
+  ADD COLUMN IF NOT EXISTS recipient_business_profile_id UUID,
+  ADD COLUMN IF NOT EXISTS recipient_name TEXT;
+ALTER TABLE public.payment_requests
+  DROP CONSTRAINT IF EXISTS payment_requests_recipient_classification_check;
+ALTER TABLE public.payment_requests
+  ADD CONSTRAINT payment_requests_recipient_classification_check
+  CHECK (recipient_classification IN ('personal', 'business'));
+
 ALTER TABLE public.payment_requests
   DROP CONSTRAINT IF EXISTS payment_requests_payment_method_check;
 ALTER TABLE public.payment_requests
@@ -37,11 +49,15 @@ CREATE TABLE IF NOT EXISTS public.cash_payment_receipts (
   payer_user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT,
   recipient_user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT,
   recipient_name TEXT,
+  payer_name TEXT,
   amount DECIMAL(15, 2) NOT NULL CHECK (amount > 0),
   currency VARCHAR(10) NOT NULL,
   expense_classification TEXT NOT NULL DEFAULT 'personal_expense'
     CHECK (expense_classification IN ('personal_expense', 'business_expense')),
   business_profile_id UUID,
+  recipient_business_profile_id UUID,
+  recipient_classification TEXT NOT NULL DEFAULT 'personal'
+    CHECK (recipient_classification IN ('personal', 'business')),
   receipt_number TEXT NOT NULL UNIQUE,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -50,7 +66,10 @@ CREATE TABLE IF NOT EXISTS public.cash_payment_receipts (
 ALTER TABLE public.cash_payment_receipts
   ADD COLUMN IF NOT EXISTS expense_classification TEXT NOT NULL DEFAULT 'personal_expense',
   ADD COLUMN IF NOT EXISTS business_profile_id UUID,
-  ADD COLUMN IF NOT EXISTS recipient_name TEXT;
+  ADD COLUMN IF NOT EXISTS recipient_business_profile_id UUID,
+  ADD COLUMN IF NOT EXISTS recipient_name TEXT,
+  ADD COLUMN IF NOT EXISTS payer_name TEXT,
+  ADD COLUMN IF NOT EXISTS recipient_classification TEXT NOT NULL DEFAULT 'personal';
 ALTER TABLE public.cash_payment_receipts
   DROP CONSTRAINT IF EXISTS cash_payment_receipts_expense_classification_check;
 ALTER TABLE public.cash_payment_receipts
@@ -63,6 +82,35 @@ ALTER TABLE public.cash_payment_receipts ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Cash receipt parties can view receipt" ON public.cash_payment_receipts;
 CREATE POLICY "Cash receipt parties can view receipt" ON public.cash_payment_receipts
   FOR SELECT USING (auth.uid() IN (payer_user_id, recipient_user_id));
+
+-- A request is a receiver credential: its display name is always derived on
+-- the database, never accepted from the browser.  Business requests use the
+-- selected business profile; personal requests use the account holder name.
+CREATE OR REPLACE FUNCTION public.set_payment_request_recipient_identity()
+RETURNS TRIGGER
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth
+AS $$
+DECLARE
+  v_name TEXT;
+BEGIN
+  IF NEW.recipient_classification = 'business' AND NEW.recipient_business_profile_id IS NOT NULL THEN
+    SELECT business_name INTO v_name FROM public.business_profiles
+      WHERE id = NEW.recipient_business_profile_id AND user_id = NEW.user_id;
+  END IF;
+  IF v_name IS NULL THEN
+    SELECT full_name INTO v_name FROM public.profiles WHERE id = NEW.user_id;
+  END IF;
+  IF v_name IS NULL THEN
+    SELECT COALESCE(raw_user_meta_data->>'full_name', email) INTO v_name FROM auth.users WHERE id = NEW.user_id;
+  END IF;
+  NEW.recipient_name := COALESCE(NULLIF(trim(v_name), ''), 'ICANera recipient');
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS payment_requests_recipient_identity_trigger ON public.payment_requests;
+CREATE TRIGGER payment_requests_recipient_identity_trigger
+  BEFORE INSERT OR UPDATE OF recipient_classification, recipient_business_profile_id ON public.payment_requests
+  FOR EACH ROW EXECUTE FUNCTION public.set_payment_request_recipient_identity();
 
 DROP FUNCTION IF EXISTS public.record_cash_payment_request(TEXT);
 CREATE OR REPLACE FUNCTION public.record_cash_payment_request(
@@ -77,6 +125,7 @@ DECLARE
   v_request public.payment_requests;
   v_receipt public.cash_payment_receipts;
   v_recipient_name TEXT;
+  v_payer_name TEXT;
 BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Sign in is required to record a cash payment'; END IF;
   SELECT * INTO v_request FROM public.payment_requests
@@ -88,15 +137,18 @@ BEGIN
   IF lower(trim(COALESCE(p_expense_classification, ''))) NOT IN ('personal_expense', 'business_expense') THEN
     RAISE EXCEPTION 'Invalid payment classification';
   END IF;
-  SELECT bp.business_name INTO v_recipient_name FROM public.business_profiles bp
-   WHERE bp.user_id = v_request.user_id ORDER BY bp.created_at DESC NULLS LAST LIMIT 1;
-  v_recipient_name := COALESCE(v_recipient_name, 'ICANera recipient');
+  v_recipient_name := COALESCE(v_request.recipient_name, 'ICANera recipient');
+  SELECT COALESCE(NULLIF(trim(p.full_name), ''), u.raw_user_meta_data->>'full_name', u.email)
+    INTO v_payer_name
+    FROM auth.users u LEFT JOIN public.profiles p ON p.id = u.id
+   WHERE u.id = auth.uid();
+  v_payer_name := COALESCE(v_payer_name, 'ICANera payer');
 
   INSERT INTO public.cash_payment_receipts
-    (payment_request_id, payer_user_id, recipient_user_id, recipient_name, amount, currency, expense_classification, business_profile_id, receipt_number)
+    (payment_request_id, payer_user_id, recipient_user_id, recipient_name, payer_name, amount, currency, expense_classification, business_profile_id, recipient_business_profile_id, recipient_classification, receipt_number)
   VALUES
-    (v_request.id, auth.uid(), v_request.user_id, v_recipient_name, v_request.amount, v_request.currency,
-     lower(trim(p_expense_classification)), p_business_profile_id,
+    (v_request.id, auth.uid(), v_request.user_id, v_recipient_name, v_payer_name, v_request.amount, v_request.currency,
+     lower(trim(p_expense_classification)), p_business_profile_id, v_request.recipient_business_profile_id, v_request.recipient_classification,
      'CASH-RCP-' || to_char(now(), 'YYYYMMDDHH24MISS') || '-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8)))
   RETURNING * INTO v_receipt;
 
@@ -107,19 +159,25 @@ BEGIN
   -- Mirror the completed cash event into the normal ICAN transaction ledger,
   -- so both payer and receiver activity and Reports stay in sync.
   INSERT INTO public.ican_transactions
-    (user_id, transaction_type, amount, currency, description, status, metadata, created_at)
+    (user_id, transaction_type, amount, currency, description, status, metadata, business_profile_id, created_at)
   VALUES
-    (auth.uid(), 'cash_payment', v_request.amount, v_request.currency,
+    (auth.uid(), 'expense', v_request.amount, v_request.currency,
      COALESCE(v_request.description, 'Cash payment'), 'completed',
      jsonb_build_object('payment_method', 'cash', 'cash_receipt_id', v_receipt.id,
        'receipt_number', v_receipt.receipt_number, 'expense_classification', v_receipt.expense_classification,
-       'business_profile_id', v_receipt.business_profile_id, 'counterparty_user_id', v_request.user_id), now()),
-    (v_request.user_id, 'cash_received', v_request.amount, v_request.currency,
+       'payer_name', v_receipt.payer_name, 'recipient_name', v_receipt.recipient_name,
+       'recipient_classification', v_receipt.recipient_classification,
+       'business_profile_id', v_receipt.business_profile_id, 'recipient_business_profile_id', v_receipt.recipient_business_profile_id,
+       'counterparty_user_id', v_request.user_id), v_receipt.business_profile_id, now()),
+    (v_request.user_id, 'income', v_request.amount, v_request.currency,
      COALESCE(v_request.description, 'Cash received'), 'completed',
      jsonb_build_object('payment_method', 'cash', 'cash_receipt_id', v_receipt.id,
-       'receipt_number', v_receipt.receipt_number, 'counterparty_user_id', auth.uid()), now());
+       'receipt_number', v_receipt.receipt_number, 'payer_name', v_receipt.payer_name,
+       'recipient_name', v_receipt.recipient_name, 'recipient_classification', v_receipt.recipient_classification,
+       'recipient_business_profile_id', v_receipt.recipient_business_profile_id,
+       'counterparty_user_id', auth.uid()), v_receipt.recipient_business_profile_id, now());
 
-  RETURN jsonb_build_object('success', true, 'receipt_number', v_receipt.receipt_number, 'recipient_name', v_receipt.recipient_name,
+  RETURN jsonb_build_object('success', true, 'receipt_number', v_receipt.receipt_number, 'recipient_name', v_receipt.recipient_name, 'payer_name', v_receipt.payer_name,
     'cash_transaction_id', v_receipt.id, 'recorded_at', v_receipt.recorded_at);
 END;
 $$;

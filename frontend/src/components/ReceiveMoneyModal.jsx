@@ -7,6 +7,8 @@ import React, { useState, useEffect } from 'react';
 import { ArrowDownLeft, Copy, X, Download, Loader } from 'lucide-react';
 import { QRCodeCanvas as QRCode } from 'qrcode.react';
 import paymentRequestService from '../services/paymentRequestService';
+import { getSupabaseClient } from '../lib/supabase/client';
+import { getAllAccessibleBusinessProfiles } from '../services/pitchingService';
 
 const ReceiveMoneyModal = ({ 
   isOpen, 
@@ -28,6 +30,10 @@ const ReceiveMoneyModal = ({
   // Form state
   const [formData, setFormData] = useState(initialFormData);
   const [paymentMethod, setPaymentMethod] = useState('ican');
+  const [recipientClassification, setRecipientClassification] = useState('personal');
+  const [businessProfiles, setBusinessProfiles] = useState([]);
+  const [recipientBusinessProfileId, setRecipientBusinessProfileId] = useState('');
+  const [loadingBusinesses, setLoadingBusinesses] = useState(false);
   // Kept null so a stale receipt view can never be shown; cash receipts are
   // issued only to the payer after they scan and confirm this QR.
   const [cashReceipt] = useState(null);
@@ -44,6 +50,8 @@ const ReceiveMoneyModal = ({
     setSuccessMessage(null);
     setFormData(initialFormData);
     setPaymentMethod('ican');
+    setRecipientClassification('personal');
+    setRecipientBusinessProfileId('');
     setQrData(null);
     setPaymentLink('');
     setActiveRequests([]);
@@ -79,6 +87,33 @@ const ReceiveMoneyModal = ({
     }
   }, [isOpen, step]);
 
+  useEffect(() => {
+    if (!isOpen || recipientClassification !== 'business' || !userId) return undefined;
+    let cancelled = false;
+    const loadBusinesses = async () => {
+      setLoadingBusinesses(true);
+      const supabase = getSupabaseClient();
+      if (!supabase) { setLoadingBusinesses(false); return; }
+      try {
+        // Use the same authority-aware source as Pay: it includes owned,
+        // delegated and co-owned businesses permitted to this account.
+        const { data: { user } } = await supabase.auth.getUser();
+        const profiles = await getAllAccessibleBusinessProfiles(userId, user?.email);
+        if (!cancelled) {
+          setBusinessProfiles(profiles || []);
+          setRecipientBusinessProfileId((current) => current || (profiles?.length === 1 ? profiles[0].id : ''));
+        }
+      } catch (err) {
+        console.error('Unable to load receiving businesses:', err);
+        if (!cancelled) setBusinessProfiles([]);
+      } finally {
+        if (!cancelled) setLoadingBusinesses(false);
+      }
+    };
+    loadBusinesses();
+    return () => { cancelled = true; };
+  }, [isOpen, recipientClassification, userId]);
+
   const loadActiveRequests = async () => {
     try {
       const result = await paymentRequestService.getActivePaymentRequests(userId);
@@ -97,6 +132,10 @@ const ReceiveMoneyModal = ({
       setError('Please enter a valid amount');
       return;
     }
+    if (recipientClassification === 'business' && !recipientBusinessProfileId) {
+      setError('Choose the business that will receive this payment');
+      return;
+    }
 
     try {
       setLoading(true);
@@ -108,7 +147,8 @@ const ReceiveMoneyModal = ({
         formData.amount,
         selectedCurrency,
         formData.description,
-        paymentMethod
+        paymentMethod,
+        { classification: recipientClassification, businessProfileId: recipientBusinessProfileId || null }
       );
 
       if (result.success) {
@@ -166,7 +206,7 @@ const ReceiveMoneyModal = ({
       >
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-bold text-white flex items-center gap-2">
+          <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <ArrowDownLeft className="w-5 h-5 text-cyan-400" />
             Receive Money
           </h3>
@@ -184,6 +224,28 @@ const ReceiveMoneyModal = ({
             <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-3">
               <p className="text-cyan-400 text-xs font-semibold">📌 RECEIVE MONEY</p>
               <p className="text-gray-300 text-sm mt-1">Enter amount for others to pay you</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Receiving as</label>
+              <div className="grid grid-cols-2 gap-2">
+                {[{ value: 'personal', label: 'Personal' }, { value: 'business', label: 'Business' }].map(option => (
+                  <button key={option.value} type="button" onClick={() => setRecipientClassification(option.value)}
+                    className={`px-3 py-3 rounded-lg border text-sm font-semibold transition-all ${recipientClassification === option.value ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200' : 'bg-white/5 border-white/10 text-gray-400'}`}>
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              {recipientClassification === 'business' && (
+                loadingBusinesses ? <p className="mt-2 text-xs text-gray-300">Loading your businesses…</p> : businessProfiles.length ? (
+                  <select value={recipientBusinessProfileId} onChange={(e) => setRecipientBusinessProfileId(e.target.value)}
+                    className="mt-2 w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:border-cyan-400 focus:outline-none">
+                    <option value="" className="text-slate-900">Select receiving business</option>
+                    {businessProfiles.map((business) => <option key={business.id} value={business.id} className="text-slate-900">{business.business_name}</option>)}
+                  </select>
+                ) : <p className="mt-2 text-xs text-amber-300">No accessible business profile was found.</p>
+              )}
+              <p className="text-xs text-gray-400 mt-2">The QR records a verified {recipientClassification} receiving destination.</p>
             </div>
 
             <div>
@@ -302,6 +364,11 @@ const ReceiveMoneyModal = ({
 
             {/* Payment Details */}
             <div className="bg-white/10 rounded-lg p-4 space-y-2">
+              <div className="rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-3 py-2 text-center">
+                <p className="text-xs font-semibold uppercase tracking-wide text-cyan-300">Receiver credential proof</p>
+                <p className="mt-1 font-semibold text-slate-900 dark:text-white">{qrData.recipient_name || (recipientClassification === 'business' ? 'Verified business receiver' : 'Verified personal receiver')}</p>
+                <p className="text-xs text-gray-400">{qrData.recipient_classification || recipientClassification} receiving account</p>
+              </div>
               <div className="text-center">
                 <p className="text-sm text-gray-400">Payment Amount</p>
                 <p className="text-2xl font-bold text-cyan-400">
@@ -409,6 +476,7 @@ const ReceiveMoneyModal = ({
                         <p className="font-semibold text-white">
                           {req.amount} {req.currency}
                         </p>
+                        <p className="text-xs text-cyan-300">{req.recipient_name || 'Verified receiver'} · {req.recipient_classification || 'personal'}</p>
                         {req.description && (
                           <p className="text-xs text-gray-400">{req.description}</p>
                         )}
