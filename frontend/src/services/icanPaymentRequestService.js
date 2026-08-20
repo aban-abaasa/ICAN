@@ -51,8 +51,10 @@ export async function payIcanRequest({
       receiptNumber: receipt.receipt_number, paymentCode, transactionId: receipt.cash_transaction_id,
       amount, currency: request.currency, payerUserId, recipientUserId: request.user_id,
       issuedAt: receipt.recorded_at || new Date().toISOString(), description: request.description || 'Cash payment',
-      recipientName: receipt.recipient_name || 'ICANera recipient',
-      payerName: authData?.user?.user_metadata?.full_name || authData?.user?.email || 'You', paymentMethod: 'cash',
+       recipientName: receipt.recipient_name || 'ICANera recipient',
+       payerName: receipt.payer_name || authData?.user?.user_metadata?.full_name || authData?.user?.email || 'You',
+       recipientClassification: request.recipient_classification || 'personal',
+       paymentMethod: 'cash',
     };
     try { const stored = JSON.parse(localStorage.getItem('ican_payment_receipts') || '[]'); localStorage.setItem('ican_payment_receipts', JSON.stringify([payerReceipt, ...stored].slice(0, 100))); } catch (_) {}
     return { request: { ...request, status: 'completed' }, transfer: null, payerReceipt };

@@ -167,6 +167,8 @@ BEGIN
        'receipt_number', v_receipt.receipt_number, 'expense_classification', v_receipt.expense_classification,
        'payer_name', v_receipt.payer_name, 'recipient_name', v_receipt.recipient_name,
        'recipient_classification', v_receipt.recipient_classification,
+       'record_category', CASE WHEN v_receipt.expense_classification = 'business_expense' THEN 'business' ELSE 'personal' END,
+       'reporting_bucket', CASE WHEN v_receipt.expense_classification = 'business_expense' THEN 'operating_expense' ELSE NULL END,
        'business_profile_id', v_receipt.business_profile_id, 'recipient_business_profile_id', v_receipt.recipient_business_profile_id,
        'counterparty_user_id', v_request.user_id), v_receipt.business_profile_id, now()),
     (v_request.user_id, 'income', v_request.amount, v_request.currency,
@@ -174,6 +176,9 @@ BEGIN
      jsonb_build_object('payment_method', 'cash', 'cash_receipt_id', v_receipt.id,
        'receipt_number', v_receipt.receipt_number, 'payer_name', v_receipt.payer_name,
        'recipient_name', v_receipt.recipient_name, 'recipient_classification', v_receipt.recipient_classification,
+       'record_category', CASE WHEN v_receipt.recipient_classification = 'business' THEN 'business' ELSE 'personal' END,
+       'reporting_bucket', CASE WHEN v_receipt.recipient_classification = 'business' THEN 'sold_income' ELSE 'cash_received_income' END,
+       'accounting_type', 'revenue',
        'recipient_business_profile_id', v_receipt.recipient_business_profile_id,
        'counterparty_user_id', auth.uid()), v_receipt.recipient_business_profile_id, now());
 
