@@ -442,18 +442,18 @@ BEGIN
           jsonb_build_object('source', lower(COALESCE(p_source_app, 'pichin')), 'category_key', v_template.category_key,
                              'operating_mode', v_template.operating_mode) || COALESCE(p_metadata, '{}'::jsonb))
   RETURNING id INTO v_profile_id;
+  -- Category templates only suggest possible features. CMMS starts with every
+  -- feature disabled; the business administrator explicitly enables what fits.
   FOR v_module_key, v_module_enabled IN SELECT key, value::boolean FROM jsonb_each_text(v_template.default_modules) LOOP
     INSERT INTO public.business_profile_modules (business_profile_id, module_key, enabled)
-    VALUES (v_profile_id, v_module_key, COALESCE(v_module_enabled, TRUE));
+    VALUES (v_profile_id, v_module_key, FALSE);
   END LOOP;
-  -- Core CMMS workflows are shared by every business category. Specialist
-  -- capabilities (for example factory production and WIP) remain template-led.
+  -- Keep common CMMS capabilities available for the administrator to opt into,
+  -- but never activate them automatically for a new business.
   INSERT INTO public.business_profile_modules (business_profile_id, module_key, enabled)
-  SELECT v_profile_id, module_key, TRUE
-    FROM unnest(ARRAY['requisitions', 'payroll', 'transport', 'tasks']) AS module_key
-  ON CONFLICT (business_profile_id, module_key) DO UPDATE
-    SET enabled = TRUE,
-        updated_at = now();
+  SELECT v_profile_id, module_key, FALSE
+    FROM unnest(ARRAY['company', 'departments', 'users', 'inventory', 'attendance', 'visitor-mgmt', 'payroll', 'fees', 'production', 'quality', 'clinical', 'pharmacy', 'transport', 'requisitions', 'approvals', 'reports', 'tasks']) AS module_key
+  ON CONFLICT (business_profile_id, module_key) DO NOTHING;
   FOR v_item IN SELECT value FROM jsonb_array_elements(v_template.default_departments) LOOP
     INSERT INTO public.business_departments (business_profile_id, department_name, created_by)
     VALUES (v_profile_id, trim(v_item #>> '{}'), auth.uid());

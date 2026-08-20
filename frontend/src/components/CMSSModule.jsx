@@ -48,7 +48,7 @@ import CMMSPayrollPanel from './CMMSPayrollPanel.jsx';
 import CMMSBookTransportPanel from './CMMSBookTransportPanelV2.jsx';
 import CMSSupplierPurchasePanel from './CMSSupplierPurchasePanel.jsx';
 import SupplierOrderPaymentApprovals from './CMMS/SupplierOrderPaymentApprovals.jsx';
-import { createBusinessProfileFromCategory, findPichinShareholderBusinesses, searchGlobalSuppliers, getBusinessModules } from '../services/businessManagementService';
+import { createBusinessProfileFromCategory, findPichinShareholderBusinesses, searchGlobalSuppliers, getBusinessModules, setBusinessModule } from '../services/businessManagementService';
 import BusinessCategorySelector from './BusinessCategorySelector';
 import CMMSRoleConfiguration, { CMMS_TOOL_OPTIONS } from './CMMSRoleConfiguration.jsx';
 import CMMSFeesPanel from './CMMSFeesPanel.jsx';
@@ -76,6 +76,7 @@ const CMMSModule = ({
   const [availableUserRoles, setAvailableUserRoles] = useState([]);
   const [businessModules, setBusinessModules] = useState([]);
   const [businessModulesLoaded, setBusinessModulesLoaded] = useState(false);
+  const [showModuleConfiguration, setShowModuleConfiguration] = useState(false);
 
   // Role-based permission matrix
   const rolePermissions = {
@@ -1051,22 +1052,26 @@ const CMMSModule = ({
     
     return tabsByRole[userRole] || []; */
     const enabledKeys = new Set(businessModules.map((module) => module.module_key));
-    const baseTools = new Set(['company', 'departments', 'users', 'inventory', 'reports']);
     const moduleForTool = {
+      company: ['company'], departments: ['departments'], users: ['users'],
       inventory: ['inventory', 'assets', 'cmms_assets'], payroll: ['payroll', 'finance'], fees: ['fees', 'school_fees'],
       production: ['production', 'bom', 'wip_locks'], quality: ['quality'], clinical: ['clinical'],
       pharmacy: ['pharmacy'], transport: ['bodagoera_transport', 'transport', 'fleet'],
       requisitions: ['requisitions', 'supplier_marketplace'], tasks: ['tasks', 'work_orders', 'maintenance'],
-      approvals: ['approvals'], reports: ['reports', 'report_cards']
+      approvals: ['approvals'], reports: ['reports', 'report_cards'], attendance: ['attendance'],
+      'visitor-mgmt': ['visitor-mgmt', 'visitor_management']
     };
     const categoryAllows = (toolId) => {
-      if (!cmmsData.companyProfile?.pichin_business_profile_id) return true;
-      if (!businessModulesLoaded || businessModules.length === 0) return baseTools.has(toolId);
+      // Modules are opt-in. A company starts with no operational tabs until a
+      // business administrator deliberately enables the ones it needs.
+      if (!businessModulesLoaded) return false;
       const required = moduleForTool[toolId];
-      return !required || required.some((key) => enabledKeys.has(key));
+      return Boolean(required?.some((key) => enabledKeys.has(key)));
     };
     const availableTools = CMMS_TOOL_OPTIONS.filter((tool) => categoryAllows(tool.id));
-    if (isCreator || userRole === 'admin') return [...availableTools.map((tool) => tool.id), 'role-config'];
+    if (isCreator || userRole === 'admin') {
+      return [...availableTools.map((tool) => tool.id), ...(categoryAllows('users') ? ['role-config'] : [])];
+    }
     const role = cmmsRoleDefinitions.find((item) => normalizeRoleKey(item.role_name) === normalizeRoleKey(userRole) || normalizeRoleKey(item.display_name) === normalizeRoleKey(userRole));
     return role?.tool_access ? availableTools.filter((tool) => role.tool_access[tool.id]).map((tool) => tool.id) : [];
   };
@@ -5917,6 +5922,67 @@ const CMMSModule = ({
     );
   };
 
+  const CMMSModuleConfiguration = () => {
+    const [savingModule, setSavingModule] = useState('');
+    const isAdminUser = isCreator || userRole === 'admin';
+    const enabledKeys = new Set(businessModules.map((module) => module.module_key));
+    const businessProfileId = cmmsData.companyProfile?.pichin_business_profile_id;
+
+    const toggleModule = async (tool) => {
+      if (!businessProfileId || !isAdminUser) return;
+      setSavingModule(tool.id);
+      const result = await setBusinessModule(businessProfileId, tool.id, !enabledKeys.has(tool.id));
+      if (!result.success) {
+        window.alert(result.error || 'Unable to update this CMMS module.');
+      } else {
+        setBusinessModules((current) => {
+          const withoutCurrent = current.filter((module) => module.module_key !== tool.id);
+          return result.data?.enabled ? [...withoutCurrent, result.data] : withoutCurrent;
+        });
+      }
+      setSavingModule('');
+    };
+
+    if (!isAdminUser) {
+      return (
+        <div className="glass-card p-6 text-center">
+          <AlertTriangle className="w-8 h-8 mx-auto mb-3 text-amber-300" />
+          <h3 className="text-lg font-bold text-white">CMMS modules have not been configured</h3>
+          <p className="mt-2 text-sm text-gray-300">Your business administrator must select the CMMS features that apply to this business before tabs become available.</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="glass-card p-4 md:p-6">
+        <div className="mb-5">
+          <h3 className="text-lg font-bold text-white">Choose CMMS features for this business</h3>
+          <p className="mt-1 text-sm text-gray-300">Nothing is enabled by default. Turn on only the tabs your business needs; changes apply immediately for the whole company.</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {CMMS_TOOL_OPTIONS.map((tool) => {
+            const enabled = enabledKeys.has(tool.id);
+            const saving = savingModule === tool.id;
+            return (
+              <button
+                key={tool.id}
+                type="button"
+                onClick={() => toggleModule(tool)}
+                disabled={Boolean(savingModule)}
+                className={`rounded-xl border p-4 text-left transition-all disabled:cursor-wait disabled:opacity-60 ${enabled ? 'border-emerald-400/60 bg-emerald-500/15' : 'border-white/15 bg-white/5 hover:border-blue-400/60'}`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-semibold text-white">{tool.label}</span>
+                  <span className={`rounded-full px-2 py-1 text-xs font-bold ${enabled ? 'bg-emerald-500/25 text-emerald-200' : 'bg-slate-500/25 text-slate-300'}`}>{saving ? 'Saving…' : enabled ? 'Enabled' : 'Off'}</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   // ============================================
   // CMMS TABS WITH 3-DOT MENU COMPONENT
   // ============================================
@@ -6710,6 +6776,16 @@ const CMMSModule = ({
             </div>
           )}
 
+          {(isCreator || userRole === 'admin') && cmmsData.companyProfile?.pichin_business_profile_id && (
+            <button
+              type="button"
+              onClick={() => setShowModuleConfiguration((current) => !current)}
+              className="px-3 py-2 rounded-lg border border-cyan-300/40 bg-cyan-500/10 text-xs font-semibold text-cyan-100 hover:bg-cyan-500/20 transition-all"
+            >
+              {showModuleConfiguration ? 'Close module setup' : 'Configure modules'}
+            </button>
+          )}
+
           <span className="cmms-role-badge px-3 md:px-4 py-1.5 md:py-2 rounded-full text-xs font-semibold whitespace-nowrap">
             {isSwitchingCompany ? '⏳ SWITCHING...' : `🔑 ${(activeRoleDefinition?.display_name || userRole || '').toUpperCase()}`}
           </span>
@@ -6764,15 +6840,19 @@ const CMMSModule = ({
       )}
       */}
 
-      {/* Tabs - Role-Based with 3-Dot Menu Collapse */}
-      <CMSTabsWithMenu 
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        getTabs={getTabs}
-      />
+      {showModuleConfiguration || (businessModulesLoaded && businessModules.length === 0) ? (
+        <CMMSModuleConfiguration />
+      ) : (
+        <>
+          {/* Tabs - Role-Based with 3-Dot Menu Collapse */}
+          <CMSTabsWithMenu
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            getTabs={getTabs}
+          />
 
-      {/* Tab Content */}
-      <div>
+          {/* Tab Content */}
+          <div>
         {activeTab === 'company' && <CompanyProfileManager />}
         {activeTab === 'departments' && getTabs().includes('departments') && <DepartmentManager />}
         {activeTab === 'users' && getTabs().includes('users') && <UserRoleManager />}
@@ -6824,8 +6904,10 @@ const CMMSModule = ({
           </>
         )}
         {activeTab === 'reports' && getTabs().includes('reports') && <ReportsManager />}
-        {activeTab === 'tasks' && getTabs().includes('tasks') && <TasksManager />}
-      </div>
+            {activeTab === 'tasks' && getTabs().includes('tasks') && <TasksManager />}
+          </div>
+        </>
+      )}
       {/* New Company Creation Overlay — for non-admin roles, works regardless of active tab */}
       {showNewCompanyOverlay && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 overflow-y-auto">

@@ -143,8 +143,8 @@ BEGIN
 
     FOR v_late, v_early, v_amount IN
       SELECT
-        CASE WHEN v_settings.deduct_late_arrivals THEN GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (((a.check_in_time AT TIME ZONE v_settings.timezone)::time - v_settings.scheduled_start)) / 60)::INTEGER - v_settings.grace_minutes) ELSE 0 END,
-        CASE WHEN v_settings.deduct_early_departures AND a.check_out_time IS NOT NULL THEN GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (v_settings.scheduled_end - ((a.check_out_time AT TIME ZONE v_settings.timezone)::time)) / 60)::INTEGER) ELSE 0 END,
+        CASE WHEN v_settings.deduct_late_arrivals THEN GREATEST(0, (EXTRACT(EPOCH FROM ((a.check_in_time AT TIME ZONE v_settings.timezone)::time - v_settings.scheduled_start)) / 60)::INTEGER - v_settings.grace_minutes) ELSE 0 END,
+        CASE WHEN v_settings.deduct_early_departures AND a.check_out_time IS NOT NULL THEN GREATEST(0, (EXTRACT(EPOCH FROM (v_settings.scheduled_end - (a.check_out_time AT TIME ZONE v_settings.timezone)::time)) / 60)::INTEGER) ELSE 0 END,
         0::NUMERIC
       FROM public.cmms_staff_attendance a
       WHERE a.cmms_company_id = v_company.id
@@ -162,10 +162,10 @@ BEGIN
     INSERT INTO public.cmms_attendance_payroll_adjustments
       (payroll_entry_id, attendance_id, cmms_company_id, late_minutes, early_leave_minutes, hourly_rate, deduction_amount, calculation, calculated_by)
     SELECT v_row.entry_id, a.id, v_company.id,
-      CASE WHEN v_settings.deduct_late_arrivals THEN GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (((a.check_in_time AT TIME ZONE v_settings.timezone)::time - v_settings.scheduled_start)) / 60)::INTEGER - v_settings.grace_minutes) ELSE 0 END,
-      CASE WHEN v_settings.deduct_early_departures THEN GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (v_settings.scheduled_end - ((a.check_out_time AT TIME ZONE v_settings.timezone)::time)) / 60)::INTEGER) ELSE 0 END,
+      CASE WHEN v_settings.deduct_late_arrivals THEN GREATEST(0, (EXTRACT(EPOCH FROM ((a.check_in_time AT TIME ZONE v_settings.timezone)::time - v_settings.scheduled_start)) / 60)::INTEGER - v_settings.grace_minutes) ELSE 0 END,
+      CASE WHEN v_settings.deduct_early_departures THEN GREATEST(0, (EXTRACT(EPOCH FROM (v_settings.scheduled_end - (a.check_out_time AT TIME ZONE v_settings.timezone)::time)) / 60)::INTEGER) ELSE 0 END,
       v_hourly_rate,
-      ROUND(((CASE WHEN v_settings.deduct_late_arrivals THEN GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (((a.check_in_time AT TIME ZONE v_settings.timezone)::time - v_settings.scheduled_start)) / 60)::INTEGER - v_settings.grace_minutes) ELSE 0 END + CASE WHEN v_settings.deduct_early_departures THEN GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (v_settings.scheduled_end - ((a.check_out_time AT TIME ZONE v_settings.timezone)::time)) / 60)::INTEGER) ELSE 0 END)::NUMERIC / 60) * v_hourly_rate, 2),
+      ROUND(((CASE WHEN v_settings.deduct_late_arrivals THEN GREATEST(0, (EXTRACT(EPOCH FROM ((a.check_in_time AT TIME ZONE v_settings.timezone)::time - v_settings.scheduled_start)) / 60)::INTEGER - v_settings.grace_minutes) ELSE 0 END + CASE WHEN v_settings.deduct_early_departures THEN GREATEST(0, (EXTRACT(EPOCH FROM (v_settings.scheduled_end - (a.check_out_time AT TIME ZONE v_settings.timezone)::time)) / 60)::INTEGER) ELSE 0 END)::NUMERIC / 60) * v_hourly_rate, 2),
       jsonb_build_object('scheduled_start', v_settings.scheduled_start, 'scheduled_end', v_settings.scheduled_end, 'grace_minutes', v_settings.grace_minutes, 'timezone', v_settings.timezone), auth.uid()
     FROM public.cmms_staff_attendance a
     WHERE a.cmms_company_id = v_company.id AND a.cmms_user_id = v_row.cmms_user_id AND a.status = 'checked_out'
