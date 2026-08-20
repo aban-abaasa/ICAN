@@ -128,6 +128,220 @@ CREATE INDEX IF NOT EXISTS idx_cmms_audit_editor
   ON public.cmms_attendance_audit(edited_by);
 
 -- ============================================================
+-- 3.5. ROW-LEVEL SECURITY POLICIES
+-- ============================================================
+
+-- NOTE: These drop statements make the script safe to run more than once.
+DROP POLICY IF EXISTS "Staff can read their own attendance" ON public.cmms_staff_attendance;
+DROP POLICY IF EXISTS "Admins can read company attendance" ON public.cmms_staff_attendance;
+DROP POLICY IF EXISTS "Staff can insert their own attendance" ON public.cmms_staff_attendance;
+DROP POLICY IF EXISTS "Admins can update attendance" ON public.cmms_staff_attendance;
+
+DROP POLICY IF EXISTS "Anyone can check in visitors" ON public.cmms_visitor_checkin;
+DROP POLICY IF EXISTS "Admins can read visitor records" ON public.cmms_visitor_checkin;
+DROP POLICY IF EXISTS "Admins can update visitor records" ON public.cmms_visitor_checkin;
+
+DROP POLICY IF EXISTS "Admins can read audit logs" ON public.cmms_attendance_audit;
+
+DROP POLICY IF EXISTS "Staff can read QR locations" ON public.cmms_attendance_qr_locations;
+DROP POLICY IF EXISTS "Staff can create QR locations" ON public.cmms_attendance_qr_locations;
+DROP POLICY IF EXISTS "Staff can update QR locations" ON public.cmms_attendance_qr_locations;
+
+-- Enable RLS on attendance table
+ALTER TABLE public.cmms_staff_attendance ENABLE ROW LEVEL SECURITY;
+
+-- Allow authenticated staff to read their own attendance records
+CREATE POLICY "Staff can read their own attendance" ON public.cmms_staff_attendance
+  FOR SELECT
+  USING (
+    auth.uid() IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.cmms_users cu
+      WHERE cu.id = cmms_user_id
+        AND cu.is_active
+        AND lower(cu.email) = lower(auth.jwt() ->> 'email')
+    )
+  );
+
+-- Allow company admins to read all attendance for their company
+CREATE POLICY "Admins can read company attendance" ON public.cmms_staff_attendance
+  FOR SELECT
+  USING (
+    auth.uid() IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.cmms_users cu
+      WHERE cu.cmms_company_id = cmms_staff_attendance.cmms_company_id
+        AND cu.is_active
+        AND lower(cu.email) = lower(auth.jwt() ->> 'email')
+        AND (
+          lower(cu.role) IN ('admin', 'administrator', 'cmms_admin')
+          OR EXISTS (
+            SELECT 1 FROM public.cmms_user_roles ur
+            JOIN public.cmms_roles r ON r.id = ur.cmms_role_id
+            WHERE ur.cmms_user_id = cu.id
+              AND ur.is_active
+              AND r.is_active
+              AND lower(r.role_name) IN ('admin', 'administrator', 'cmms_admin')
+          )
+        )
+    )
+  );
+
+-- Allow authenticated staff to insert their own attendance
+CREATE POLICY "Staff can insert their own attendance" ON public.cmms_staff_attendance
+  FOR INSERT
+  WITH CHECK (
+    auth.uid() IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.cmms_users cu
+      WHERE cu.id = cmms_user_id
+        AND cu.is_active
+        AND cu.cmms_company_id = cmms_staff_attendance.cmms_company_id
+        AND lower(cu.email) = lower(auth.jwt() ->> 'email')
+    )
+  );
+
+-- Allow admins to update attendance
+CREATE POLICY "Admins can update attendance" ON public.cmms_staff_attendance
+  FOR UPDATE
+  USING (
+    auth.uid() IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.cmms_users cu
+      WHERE cu.cmms_company_id = cmms_staff_attendance.cmms_company_id
+        AND cu.is_active
+        AND lower(cu.email) = lower(auth.jwt() ->> 'email')
+        AND (
+          lower(cu.role) IN ('admin', 'administrator', 'cmms_admin')
+          OR EXISTS (
+            SELECT 1 FROM public.cmms_user_roles ur
+            JOIN public.cmms_roles r ON r.id = ur.cmms_role_id
+            WHERE ur.cmms_user_id = cu.id
+              AND ur.is_active
+              AND r.is_active
+              AND lower(r.role_name) IN ('admin', 'administrator', 'cmms_admin')
+          )
+        )
+    )
+  );
+
+-- Enable RLS on visitor checkin table
+ALTER TABLE public.cmms_visitor_checkin ENABLE ROW LEVEL SECURITY;
+
+-- Allow anyone to insert visitor checkins
+CREATE POLICY "Anyone can check in visitors" ON public.cmms_visitor_checkin
+  FOR INSERT
+  WITH CHECK (true);
+
+-- Allow admins to read visitor records
+CREATE POLICY "Admins can read visitor records" ON public.cmms_visitor_checkin
+  FOR SELECT
+  USING (
+    auth.uid() IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.cmms_users cu
+      WHERE cu.cmms_company_id = cmms_visitor_checkin.cmms_company_id
+        AND cu.is_active
+        AND lower(cu.email) = lower(auth.jwt() ->> 'email')
+        AND (
+          lower(cu.role) IN ('admin', 'administrator', 'cmms_admin')
+          OR EXISTS (
+            SELECT 1 FROM public.cmms_user_roles ur
+            JOIN public.cmms_roles r ON r.id = ur.cmms_role_id
+            WHERE ur.cmms_user_id = cu.id
+              AND ur.is_active
+              AND r.is_active
+              AND lower(r.role_name) IN ('admin', 'administrator', 'cmms_admin')
+          )
+        )
+    )
+  );
+
+-- Allow admins to update visitor records
+CREATE POLICY "Admins can update visitor records" ON public.cmms_visitor_checkin
+  FOR UPDATE
+  USING (
+    auth.uid() IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.cmms_users cu
+      WHERE cu.cmms_company_id = cmms_visitor_checkin.cmms_company_id
+        AND cu.is_active
+        AND lower(cu.email) = lower(auth.jwt() ->> 'email')
+        AND (
+          lower(cu.role) IN ('admin', 'administrator', 'cmms_admin')
+          OR EXISTS (
+            SELECT 1 FROM public.cmms_user_roles ur
+            JOIN public.cmms_roles r ON r.id = ur.cmms_role_id
+            WHERE ur.cmms_user_id = cu.id
+              AND ur.is_active
+              AND r.is_active
+              AND lower(r.role_name) IN ('admin', 'administrator', 'cmms_admin')
+          )
+        )
+    )
+  );
+
+-- Enable RLS on audit table
+ALTER TABLE public.cmms_attendance_audit ENABLE ROW LEVEL SECURITY;
+
+-- Allow admins to read audit logs
+CREATE POLICY "Admins can read audit logs" ON public.cmms_attendance_audit
+  FOR SELECT
+  USING (
+    auth.uid() IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.cmms_users cu
+      JOIN public.cmms_staff_attendance ca ON ca.cmms_company_id = cu.cmms_company_id
+      WHERE ca.id = cmms_attendance_audit.attendance_id
+        AND cu.is_active
+        AND lower(cu.email) = lower(auth.jwt() ->> 'email')
+        AND (
+          lower(cu.role) IN ('admin', 'administrator', 'cmms_admin')
+          OR EXISTS (
+            SELECT 1 FROM public.cmms_user_roles ur
+            JOIN public.cmms_roles r ON r.id = ur.cmms_role_id
+            WHERE ur.cmms_user_id = cu.id
+              AND ur.is_active
+              AND r.is_active
+              AND lower(r.role_name) IN ('admin', 'administrator', 'cmms_admin')
+          )
+        )
+    )
+  );
+
+-- Enable RLS on QR locations table
+ALTER TABLE public.cmms_attendance_qr_locations ENABLE ROW LEVEL SECURITY;
+
+-- Allow authenticated staff to read QR locations
+CREATE POLICY "Staff can read QR locations" ON public.cmms_attendance_qr_locations
+  FOR SELECT
+  USING (
+    auth.uid() IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.cmms_users cu
+      WHERE cu.cmms_company_id = cmms_attendance_qr_locations.cmms_company_id
+        AND cu.is_active
+        AND lower(cu.email) = lower(auth.jwt() ->> 'email')
+    )
+  );
+
+-- Allow authenticated staff to insert QR locations
+CREATE POLICY "Staff can create QR locations" ON public.cmms_attendance_qr_locations
+  FOR INSERT
+  WITH CHECK (
+    auth.uid() IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.cmms_users cu
+      WHERE cu.cmms_company_id = cmms_attendance_qr_locations.cmms_company_id
+        AND cu.is_active
+        AND lower(cu.email) = lower(auth.jwt() ->> 'email')
+    )
+  );
+
+-- Allow authenticated staff to update QR locations
+CREATE POLICY "Staff can update QR locations" ON public.cmms_attendance_qr_locations
+  FOR UPDATE
+  USING (
+    auth.uid() IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.cmms_users cu
+      WHERE cu.cmms_company_id = cmms_attendance_qr_locations.cmms_company_id
+        AND cu.is_active
+        AND lower(cu.email) = lower(auth.jwt() ->> 'email')
+    )
+  );
+
+-- ============================================================
 -- 4. GENERATE ATTENDANCE QR CODE TOKEN
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.generate_attendance_qr_token(

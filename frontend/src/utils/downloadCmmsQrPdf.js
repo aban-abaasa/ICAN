@@ -13,7 +13,7 @@ export const downloadCmmsQrPdf = async ({ type, url, location, companyName }) =>
 
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(22);
-  pdf.text(companyName || 'ICAN CMMS', pageWidth / 2, 28, { align: 'center' });
+  pdf.text(companyName || 'IcanEra', pageWidth / 2, 28, { align: 'center' });
   pdf.setFontSize(18);
   pdf.text(title, pageWidth / 2, 42, { align: 'center' });
   pdf.setFont('helvetica', 'normal');

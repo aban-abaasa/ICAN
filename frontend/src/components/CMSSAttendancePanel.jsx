@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, Download, Users, QrCode, MapPin, CheckCircle, XCircle } from 'lucide-react';
+import { Calendar, Clock, Download, Users, QrCode, MapPin, CheckCircle, XCircle, Copy, Eye } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from '../lib/supabase/client';
 import { getPublicAppUrl } from '../utils/publicAppUrl';
+import { downloadCmmsQrPdf } from '../utils/downloadCmmsQrPdf';
 
 const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole, isCreator }) => {
   const [attendanceRecords, setAttendanceRecords] = useState([]);
@@ -20,28 +22,69 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
     if (!companyProfile?.id) return;
     setLoading(true);
 
-    const [recordsRes, qrRes] = await Promise.all([
-      supabase
-        .from('cmms_staff_attendance')
-        .select(`
-          *,
-          staff:user_id (id, full_name, email, avatar_url)
-        `)
-        .eq('company_id', companyProfile.id)
-        .gte('check_in_time', `${selectedDate}T00:00:00`)
-        .lte('check_in_time', `${selectedDate}T23:59:59`)
-        .order('check_in_time', { ascending: false }),
-      
-      canManage ? supabase
-        .from('cmms_attendance_qr_locations')
-        .select('*')
-        .eq('cmms_company_id', companyProfile.id)
-        .order('created_at', { ascending: false }) : { data: [], error: null }
-    ]);
+    try {
+      const [recordsRes, qrRes] = await Promise.all([
+        supabase
+          .from('cmms_staff_attendance')
+          .select('*')
+          .eq('cmms_company_id', companyProfile.id)
+          .gte('check_in_time', `${selectedDate}T00:00:00`)
+          .lte('check_in_time', `${selectedDate}T23:59:59`)
+          .order('check_in_time', { ascending: false }),
+        
+        canManage ? supabase
+          .from('cmms_attendance_qr_locations')
+          .select('*')
+          .eq('cmms_company_id', companyProfile.id)
+          .order('created_at', { ascending: false }) : { data: [], error: null }
+      ]);
 
-    if (recordsRes.data) setAttendanceRecords(recordsRes.data);
-    if (qrRes.data) setQrCodes(qrRes.data);
-    setLoading(false);
+      // Log errors for debugging
+      if (recordsRes.error) {
+        console.error('Attendance records error:', recordsRes.error);
+      }
+      if (qrRes.error) {
+        console.error('QR codes error:', qrRes.error);
+      }
+
+      // Fetch user details separately and attach to records
+      if (recordsRes.data && recordsRes.data.length > 0) {
+        const userIds = [...new Set(recordsRes.data.map(r => r.cmms_user_id))];
+        const { data: usersData, error: usersError } = await supabase
+          .from('cmms_users')
+          .select('id, user_name, email, phone')
+          .in('id', userIds);
+        
+        if (usersError) {
+          console.error('Users fetch error:', usersError);
+        }
+
+        const usersMap = {};
+        usersData?.forEach(u => usersMap[u.id] = u);
+        
+        // Attach user data to records with backwards compatible field names
+        recordsRes.data = recordsRes.data.map(record => ({
+          ...record,
+          staff: usersMap[record.cmms_user_id] ? {
+            id: usersMap[record.cmms_user_id].id,
+            full_name: usersMap[record.cmms_user_id].user_name,
+            email: usersMap[record.cmms_user_id].email,
+            phone: usersMap[record.cmms_user_id].phone,
+            avatar_url: null // Not available in cmms_users table
+          } : null
+        }));
+      }
+
+      // Set data even if there are errors (empty arrays)
+      setAttendanceRecords(recordsRes.data || []);
+      setQrCodes(qrRes.data || []);
+    } catch (error) {
+      console.error('Load data error:', error);
+      setAttendanceRecords([]);
+      setQrCodes([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const generateQRCode = async () => {
@@ -78,18 +121,47 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
       return;
     }
 
+    setLoading(true);
     const { data, error } = await supabase.rpc('create_cmms_attendance_qr_location', {
       p_cmms_company_id: companyProfile.id,
       p_location_name: locationName
     });
 
     if (error) {
+      console.error('QR code generation error:', error);
       alert('Failed to generate QR code: ' + error.message);
+      setLoading(false);
       return;
     }
 
+    console.log('QR code generated:', data);
+
+    // If RPC returns data, add it to the state immediately
+    if (data && Array.isArray(data) && data.length > 0) {
+      const newQR = {
+        ...data[0],
+        is_active: true,
+        created_at: new Date().toISOString(),
+        cmms_company_id: companyProfile.id
+      };
+      setQrCodes(prev => [newQR, ...prev]);
+    } else if (data && typeof data === 'object') {
+      // Single object response
+      const newQR = {
+        ...data,
+        is_active: true,
+        created_at: new Date().toISOString(),
+        cmms_company_id: companyProfile.id
+      };
+      setQrCodes(prev => [newQR, ...prev]);
+    }
+
+    // The RPC response contains the new token. Do not immediately replace it
+    // with a list query: a restrictive/stale RLS policy can return an empty
+    // list even though the code was successfully created.
+    setActiveTab('qr-codes');
     alert('QR code generated successfully!');
-    loadData();
+    setLoading(false);
   };
 
   const toggleQRCode = async (qrId, currentStatus) => {
@@ -106,20 +178,19 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
     loadData();
   };
 
-  const downloadQRCode = (token, locationName) => {
+  const downloadQRCode = async (token, locationName) => {
     const url = getPublicAppUrl(`/staff-attendance?token=${token}`);
-    
-    // Generate a simple text file with the URL
-    const content = `ICAN CMMS Staff Attendance\n\nLocation: ${locationName}\nScan URL: ${url}\n\nShare this QR code with staff for attendance tracking.`;
-    const blob = new Blob([content], { type: 'text/plain' });
-    const downloadUrl = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = downloadUrl;
-    a.download = `attendance-qr-${locationName.replace(/\s+/g, '-')}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(downloadUrl);
+    try {
+      await downloadCmmsQrPdf({
+        type: 'staff',
+        url,
+        location: locationName,
+        companyName: companyProfile?.company_name
+      });
+    } catch (error) {
+      console.error('QR PDF download error:', error);
+      alert('Unable to download the QR code. Please try again.');
+    }
   };
 
   const exportAttendance = () => {
@@ -136,7 +207,7 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
         record.staff?.email || '',
         new Date(record.check_in_time).toLocaleTimeString(),
         record.check_out_time ? new Date(record.check_out_time).toLocaleTimeString() : 'Not checked out',
-        record.location_name || '',
+        record.check_in_location || '',
         record.check_out_time ? 'Complete' : 'Active'
       ].join(','))
     ].join('\n');
@@ -262,10 +333,10 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
                       <div>
                         <p className="font-semibold">{record.staff?.full_name || 'Unknown Staff'}</p>
                         <p className="text-sm text-slate-400">{record.staff?.email}</p>
-                        {record.location_name && (
+                        {record.check_in_location && (
                           <p className="text-xs text-slate-500 flex items-center gap-1 mt-1">
                             <MapPin className="h-3 w-3" />
-                            {record.location_name}
+                            {record.check_in_location}
                           </p>
                         )}
                       </div>
@@ -314,63 +385,111 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
             </div>
           ) : (
             <div className="grid gap-4">
-              {qrCodes.map((qr) => (
-                <div
-                  key={qr.id}
-                  className={`p-4 border rounded-lg ${
-                    qr.is_active
-                      ? 'bg-emerald-900/20 border-emerald-700'
-                      : 'bg-slate-800 border-slate-700'
-                  }`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="font-semibold">{qr.location_name}</p>
-                        {qr.is_active ? (
-                          <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-xs rounded-full">
-                            Active
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 bg-slate-700 text-slate-400 text-xs rounded-full">
-                            Inactive
-                          </span>
-                        )}
+              {qrCodes.map((qr) => {
+                const qrUrl = getPublicAppUrl(`/staff-attendance?token=${qr.token}`);
+                return (
+                  <div
+                    key={qr.id}
+                    className={`p-6 border rounded-lg ${
+                      qr.is_active
+                        ? 'bg-emerald-900/20 border-emerald-700'
+                        : 'bg-slate-800 border-slate-700'
+                    }`}
+                  >
+                    <div className="flex flex-col lg:flex-row gap-6">
+                      {/* QR Code Visual */}
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="p-3 bg-white rounded-lg">
+                          <QRCodeSVG 
+                            value={qrUrl} 
+                            size={180}
+                            level="H"
+                            includeMargin={true}
+                          />
+                        </div>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(qrUrl);
+                            alert('QR URL copied to clipboard!');
+                          }}
+                          className="flex items-center gap-2 px-3 py-1 text-xs bg-slate-700 hover:bg-slate-600 rounded-lg"
+                          title="Copy URL"
+                        >
+                          <Copy className="h-3 w-3" />
+                          Copy URL
+                        </button>
                       </div>
-                      <p className="text-xs text-slate-400 mb-2">
-                        Created: {new Date(qr.created_at).toLocaleDateString()}
-                      </p>
-                      <p className="text-xs font-mono text-slate-500 break-all">
-                        Token: {qr.token}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => downloadQRCode(qr.token, qr.location_name)}
-                        className="p-2 bg-slate-700 hover:bg-slate-600 rounded-lg"
-                        title="Download QR Code"
-                      >
-                        <Download className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => toggleQRCode(qr.id, qr.is_active)}
-                        className={`p-2 rounded-lg ${
-                          qr.is_active
-                            ? 'bg-rose-600 hover:bg-rose-700'
-                            : 'bg-emerald-600 hover:bg-emerald-700'
-                        }`}
-                        title={qr.is_active ? 'Deactivate' : 'Activate'}
-                      >
-                        {qr.is_active ? (
-                          <XCircle className="h-4 w-4" />
-                        ) : (
-                          <CheckCircle className="h-4 w-4" />
-                        )}
-                      </button>
+
+                      {/* QR Details */}
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-3">
+                          <p className="font-semibold text-lg">{qr.location_name}</p>
+                          {qr.is_active ? (
+                            <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-xs rounded-full">
+                              Active
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 bg-slate-700 text-slate-400 text-xs rounded-full">
+                              Inactive
+                            </span>
+                          )}
+                        </div>
+                        
+                        <div className="space-y-2 mb-4">
+                          <p className="text-xs text-slate-400">
+                            Created: {new Date(qr.created_at).toLocaleDateString()} at {new Date(qr.created_at).toLocaleTimeString()}
+                          </p>
+                          {qr.last_used_at && (
+                            <p className="text-xs text-slate-400">
+                              Last Used: {new Date(qr.last_used_at).toLocaleDateString()} at {new Date(qr.last_used_at).toLocaleTimeString()}
+                            </p>
+                          )}
+                          <p className="text-xs text-slate-500 break-all font-mono">
+                            Token: {qr.token}
+                          </p>
+                          <p className="text-xs text-slate-500 break-all font-mono">
+                            <a href={qrUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 underline">
+                              {qrUrl}
+                            </a>
+                          </p>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => downloadQRCode(qr.token, qr.location_name)}
+                            className="flex items-center gap-2 px-3 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 rounded-lg"
+                            title="Download QR Code"
+                          >
+                            <Download className="h-4 w-4" />
+                            Download PDF
+                          </button>
+                          <button
+                            onClick={() => toggleQRCode(qr.id, qr.is_active)}
+                            className={`flex items-center gap-2 px-3 py-2 text-sm rounded-lg ${
+                              qr.is_active
+                                ? 'bg-rose-600 hover:bg-rose-700'
+                                : 'bg-emerald-600 hover:bg-emerald-700'
+                            }`}
+                            title={qr.is_active ? 'Deactivate' : 'Activate'}
+                          >
+                            {qr.is_active ? (
+                              <>
+                                <XCircle className="h-4 w-4" />
+                                Deactivate
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle className="h-4 w-4" />
+                                Activate
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
