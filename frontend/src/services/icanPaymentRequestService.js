@@ -46,11 +46,13 @@ export async function payIcanRequest({
     if (error) throw error;
     const receipt = Array.isArray(data) ? data[0] : data;
     if (!receipt?.success) throw new Error(receipt?.message || 'Unable to record this cash payment');
+    const { data: authData } = await supabase.auth.getUser();
     const payerReceipt = {
       receiptNumber: receipt.receipt_number, paymentCode, transactionId: receipt.cash_transaction_id,
       amount, currency: request.currency, payerUserId, recipientUserId: request.user_id,
       issuedAt: receipt.recorded_at || new Date().toISOString(), description: request.description || 'Cash payment',
-      recipientName: receipt.recipient_name || 'ICANera recipient', paymentMethod: 'cash',
+      recipientName: receipt.recipient_name || 'ICANera recipient',
+      payerName: authData?.user?.user_metadata?.full_name || authData?.user?.email || 'You', paymentMethod: 'cash',
     };
     try { const stored = JSON.parse(localStorage.getItem('ican_payment_receipts') || '[]'); localStorage.setItem('ican_payment_receipts', JSON.stringify([payerReceipt, ...stored].slice(0, 100))); } catch (_) {}
     return { request: { ...request, status: 'completed' }, transfer: null, payerReceipt };
