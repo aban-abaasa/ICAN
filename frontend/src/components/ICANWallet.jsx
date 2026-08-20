@@ -39,7 +39,7 @@ import agentService from '../services/agentService';
 import { walletAccountService } from '../services/walletAccountService';
 import universalTransactionService from '../services/universalTransactionService';
 import { sendICAN as sendIcaneracoin, sendICANToBusiness } from '../services/icanWalletService';
-import { payIcanRequest, parseIcanPayCode } from '../services/icanPaymentRequestService';
+import { payIcanRequest, parseIcanPayCode, getIcanPaymentRequest } from '../services/icanPaymentRequestService';
 import { getSupabaseClient } from '../lib/supabase/client';
 import { getUserTrustGroups } from '../services/trustService';
 import { CountryService } from '../services/countryService';
@@ -6804,17 +6804,20 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
             return;
           }
 
-          const pin = window.prompt('Enter your transaction PIN to approve this payment:');
-          if (pin === null) return;
-
-          const pinCheck = await walletAccountService.verifyUserPIN(currentUserId, pin);
-          if (!pinCheck?.success) {
-            alert(pinCheck?.error || 'Incorrect transaction PIN. Payment cancelled.');
-            return;
-          }
-
           try {
             setTransactionInProgress(true);
+            // Physical cash has no wallet debit, so it is recorded without a
+            // wallet PIN. ICAN-wallet transfers still require PIN approval.
+            const request = await getIcanPaymentRequest(paymentCode);
+            if (request.payment_method !== 'cash') {
+              const pin = window.prompt('Enter your transaction PIN to approve this payment:');
+              if (pin === null) return;
+              const pinCheck = await walletAccountService.verifyUserPIN(currentUserId, pin);
+              if (!pinCheck?.success) {
+                alert(pinCheck?.error || 'Incorrect transaction PIN. Payment cancelled.');
+                return;
+              }
+            }
             const result = await payIcanRequest({
               paymentCode,
               payerUserId: currentUserId,

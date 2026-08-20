@@ -20,6 +20,32 @@ export default function IcanPaymentReceiptModal({ receipt, onClose }) {
     link.href = url; link.download = `${receipt.receiptNumber}.txt`; link.click();
     URL.revokeObjectURL(url);
   };
+  const receiptText = [
+    'ICANERA DIGITAL RECEIPT',
+    `Receipt: ${receipt.receiptNumber}`,
+    `Amount: ${Number(receipt.amount).toLocaleString()} ${receipt.currency}`,
+    `Method: ${receipt.paymentMethod === 'cash' ? 'Cash' : 'ICAN Wallet'}`,
+    `Payment code: ${receipt.paymentCode}`,
+    `Transaction: ${receipt.transactionId || 'Recorded on ICAN ledger'}`,
+    `Description: ${receipt.description || 'Payment'}`,
+    `Date: ${new Date(receipt.issuedAt).toLocaleString()}`,
+  ].join('\n');
+  const saveAsPdf = () => {
+    const printWindow = window.open('', '_blank', 'noopener,noreferrer');
+    if (!printWindow) return;
+    const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+    printWindow.document.write(`<html><head><title>${escapeHtml(receipt.receiptNumber)}</title><style>body{font-family:Arial;padding:32px;white-space:pre-wrap;line-height:1.7}h1{font-size:22px}</style></head><body><h1>ICANERA DIGITAL RECEIPT</h1>${escapeHtml(receiptText.replace('ICANERA DIGITAL RECEIPT\n', '')).replace(/\n/g, '<br>')}</body></html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  };
+  const shareReceipt = async () => {
+    if (navigator.share) {
+      await navigator.share({ title: 'ICANera receipt', text: receiptText });
+      return;
+    }
+    await navigator.clipboard?.writeText(receiptText);
+  };
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-md rounded-2xl bg-white p-6 text-slate-900 shadow-2xl">
@@ -35,9 +61,11 @@ export default function IcanPaymentReceiptModal({ receipt, onClose }) {
           <div className="flex justify-between"><span>Transaction</span><strong className="max-w-[190px] truncate">{receipt.transactionId || 'Recorded on ICAN ledger'}</strong></div>
           <div className="flex justify-between"><span>Time</span><strong>{new Date(receipt.issuedAt).toLocaleString()}</strong></div>
         </div>
-        <div className="mt-5 flex gap-3">
-          <button onClick={downloadReceipt} className="flex-1 rounded-xl bg-slate-200 px-4 py-3 font-bold text-slate-800">Download</button>
-          <button onClick={onClose} className="flex-1 rounded-xl bg-orange-500 px-4 py-3 font-bold text-white">Done</button>
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          <button onClick={saveAsPdf} className="rounded-xl bg-slate-200 px-4 py-3 font-bold text-slate-800">Save as PDF</button>
+          <button onClick={shareReceipt} className="rounded-xl bg-sky-600 px-4 py-3 font-bold text-white">Share</button>
+          <button onClick={downloadReceipt} className="rounded-xl bg-slate-100 px-4 py-3 font-bold text-slate-800">Download text</button>
+          <button onClick={onClose} className="rounded-xl bg-orange-500 px-4 py-3 font-bold text-white">Done</button>
         </div>
       </div>
     </div>

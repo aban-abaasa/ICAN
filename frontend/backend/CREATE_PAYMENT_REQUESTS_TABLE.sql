@@ -94,6 +94,21 @@ BEGIN
   UPDATE public.payment_requests
      SET status = 'completed', payer_user_id = auth.uid(), completed_at = now(), updated_at = now()
    WHERE id = v_request.id;
+
+  -- Mirror the completed cash event into the normal ICAN transaction ledger,
+  -- so both payer and receiver activity and Reports stay in sync.
+  INSERT INTO public.ican_transactions
+    (user_id, transaction_type, amount, currency, description, status, metadata, created_at)
+  VALUES
+    (auth.uid(), 'cash_payment', v_request.amount, v_request.currency,
+     COALESCE(v_request.description, 'Cash payment'), 'completed',
+     jsonb_build_object('payment_method', 'cash', 'cash_receipt_id', v_receipt.id,
+       'receipt_number', v_receipt.receipt_number, 'expense_classification', v_receipt.expense_classification,
+       'business_profile_id', v_receipt.business_profile_id, 'counterparty_user_id', v_request.user_id), now()),
+    (v_request.user_id, 'cash_received', v_request.amount, v_request.currency,
+     COALESCE(v_request.description, 'Cash received'), 'completed',
+     jsonb_build_object('payment_method', 'cash', 'cash_receipt_id', v_receipt.id,
+       'receipt_number', v_receipt.receipt_number, 'counterparty_user_id', auth.uid()), now());
   RETURN jsonb_build_object('success', true, 'receipt_number', v_receipt.receipt_number,
     'cash_transaction_id', v_receipt.id, 'recorded_at', v_receipt.recorded_at);
 END;
