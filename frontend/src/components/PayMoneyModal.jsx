@@ -26,6 +26,8 @@ const PayMoneyModal = ({
   const [businessProfiles, setBusinessProfiles] = useState([]);
   const [businessProfileId, setBusinessProfileId] = useState('');
   const [loadingBusinesses, setLoadingBusinesses] = useState(false);
+  const [businessProfilesLoaded, setBusinessProfilesLoaded] = useState(false);
+  const [submittingPayment, setSubmittingPayment] = useState(false);
   
   // Refs for scanner
   const videoRef = useRef(null);
@@ -41,7 +43,9 @@ const PayMoneyModal = ({
     setScanBuffer('');
     setPaymentPurpose('personal');
     setBusinessProfiles([]);
+    setBusinessProfilesLoaded(false);
     setBusinessProfileId('');
+    setSubmittingPayment(false);
     
     // Stop camera if active
     if (streamRef.current) {
@@ -72,6 +76,7 @@ const PayMoneyModal = ({
   useEffect(() => {
     if (!isOpen || paymentPurpose !== 'business' || !userId) return undefined;
     let cancelled = false;
+    setBusinessProfilesLoaded(false);
     setLoadingBusinesses(true);
     (async () => {
       try {
@@ -85,11 +90,21 @@ const PayMoneyModal = ({
       } catch (error) {
         console.error('Unable to load businesses for payment:', error);
       } finally {
-        if (!cancelled) setLoadingBusinesses(false);
+        if (!cancelled) { setLoadingBusinesses(false); setBusinessProfilesLoaded(true); }
       }
     })();
     return () => { cancelled = true; };
   }, [isOpen, paymentPurpose, userId]);
+
+  // A payer with one (or no) available business profile does not need another
+  // confirmation. Selecting Business records the scanned request as soon as
+  // the profile lookup finishes. Multiple businesses still require a choice.
+  useEffect(() => {
+    if (!isOpen || paymentPurpose !== 'business' || !scannedData.trim() || loadingBusinesses || !businessProfilesLoaded || submittingPayment) return;
+    if (businessProfiles.length <= 1) {
+      submitPayment('business', businessProfiles[0]?.id || null);
+    }
+  }, [isOpen, paymentPurpose, scannedData, loadingBusinesses, businessProfilesLoaded, businessProfiles, submittingPayment]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -302,10 +317,15 @@ const PayMoneyModal = ({
     // the business profile before submitting the payment.
   };
 
-  const submitPayment = async () => {
-    if (!onPaymentScanned || !scannedData.trim()) return;
-    if (paymentPurpose === 'business' && businessProfiles.length > 1 && !businessProfileId) return;
-    await onPaymentScanned(scannedData.trim(), paymentPurpose, businessProfileId || null);
+  const submitPayment = async (purpose, profileId = null) => {
+    if (!onPaymentScanned || !scannedData.trim() || submittingPayment) return;
+    if (purpose === 'business' && businessProfiles.length > 1 && !profileId) return;
+    try {
+      setSubmittingPayment(true);
+      await onPaymentScanned(scannedData.trim(), purpose, profileId);
+    } finally {
+      setSubmittingPayment(false);
+    }
   };
 
   const initializeGunScanner = () => {
@@ -411,13 +431,18 @@ const PayMoneyModal = ({
           </div>
 
           <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-            <p className="text-xs text-gray-400 mb-2">Record this payment as</p>
+            <p className="text-xs text-gray-400 mb-2">Choose where to record this payment</p>
             <div className="grid grid-cols-2 gap-2">
               {[
                 { value: 'personal', label: '👤 Personal' },
                 { value: 'business', label: '🏢 Business' },
               ].map((option) => (
-                <button key={option.value} type="button" onClick={() => setPaymentPurpose(option.value)}
+                <button key={option.value} type="button" disabled={submittingPayment} onClick={() => {
+                  setPaymentPurpose(option.value);
+                  // Personal payments are recorded immediately. Business payments
+                  // need a profile only when the payer has more than one.
+                  if (option.value === 'personal') submitPayment('personal');
+                }}
                   className={`px-3 py-2 rounded-lg text-sm font-semibold border transition ${paymentPurpose === option.value ? 'bg-orange-500/20 border-orange-400 text-orange-200' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'}`}>
                   {option.label}
                 </button>
@@ -430,7 +455,7 @@ const PayMoneyModal = ({
             <div className="rounded-lg border border-blue-400/30 bg-blue-500/10 p-3">
               <p className="text-xs text-blue-200 mb-2">Choose the business for this report</p>
               {loadingBusinesses ? <p className="text-xs text-gray-300">Loading your businesses…</p> : businessProfiles.length > 1 ? (
-                <select value={businessProfileId} onChange={e => setBusinessProfileId(e.target.value)} className="w-full rounded-lg bg-slate-800 border border-blue-300/40 px-3 py-2 text-sm text-white">
+                <select value={businessProfileId} onChange={e => { setBusinessProfileId(e.target.value); if (e.target.value) submitPayment('business', e.target.value); }} className="w-full rounded-lg bg-slate-800 border border-blue-300/40 px-3 py-2 text-sm text-white">
                   <option value="">Select a business…</option>
                   {businessProfiles.map(profile => <option key={profile.id} value={profile.id}>{profile.business_name}</option>)}
                 </select>
@@ -457,16 +482,6 @@ const PayMoneyModal = ({
             >
               ✕
             </button>
-            {scannedData.trim() && (
-              <button
-                onClick={() => {
-                  submitPayment();
-                }}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg hover:shadow-lg transition-all font-semibold"
-              >
-                Pay
-              </button>
-            )}
           </div>
         </div>
       </div>

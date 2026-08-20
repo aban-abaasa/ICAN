@@ -19,6 +19,86 @@ CREATE TABLE IF NOT EXISTS public.payment_requests (
   CONSTRAINT valid_currency CHECK (currency IN ('USD', 'UGX', 'KES', 'TZS', 'RWF'))
 );
 
+-- Cash requests use the exact same QR lifecycle as wallet requests, but they
+-- never debit or credit an ICAN wallet. The payer records receipt proof only.
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+ALTER TABLE public.payment_requests
+  ADD COLUMN IF NOT EXISTS payment_method VARCHAR(10) NOT NULL DEFAULT 'ican';
+ALTER TABLE public.payment_requests
+  DROP CONSTRAINT IF EXISTS payment_requests_payment_method_check;
+ALTER TABLE public.payment_requests
+  ADD CONSTRAINT payment_requests_payment_method_check
+  CHECK (payment_method IN ('ican', 'cash'));
+
+CREATE TABLE IF NOT EXISTS public.cash_payment_receipts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  payment_request_id BIGINT NOT NULL UNIQUE REFERENCES public.payment_requests(id) ON DELETE RESTRICT,
+  payer_user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT,
+  recipient_user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT,
+  amount DECIMAL(15, 2) NOT NULL CHECK (amount > 0),
+  currency VARCHAR(10) NOT NULL,
+  expense_classification TEXT NOT NULL DEFAULT 'personal_expense'
+    CHECK (expense_classification IN ('personal_expense', 'business_expense')),
+  business_profile_id UUID,
+  receipt_number TEXT NOT NULL UNIQUE,
+  recorded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.cash_payment_receipts
+  ADD COLUMN IF NOT EXISTS expense_classification TEXT NOT NULL DEFAULT 'personal_expense',
+  ADD COLUMN IF NOT EXISTS business_profile_id UUID;
+ALTER TABLE public.cash_payment_receipts
+  DROP CONSTRAINT IF EXISTS cash_payment_receipts_expense_classification_check;
+ALTER TABLE public.cash_payment_receipts
+  ADD CONSTRAINT cash_payment_receipts_expense_classification_check
+  CHECK (expense_classification IN ('personal_expense', 'business_expense'));
+
+CREATE INDEX IF NOT EXISTS idx_cash_payment_receipts_payer ON public.cash_payment_receipts(payer_user_id, recorded_at DESC);
+ALTER TABLE public.cash_payment_receipts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Cash receipt parties can view receipt" ON public.cash_payment_receipts;
+CREATE POLICY "Cash receipt parties can view receipt" ON public.cash_payment_receipts
+  FOR SELECT USING (auth.uid() IN (payer_user_id, recipient_user_id));
+
+CREATE OR REPLACE FUNCTION public.record_cash_payment_request(
+  p_payment_code TEXT,
+  p_expense_classification TEXT DEFAULT 'personal_expense',
+  p_business_profile_id UUID DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE
+  v_request public.payment_requests;
+  v_receipt public.cash_payment_receipts;
+BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Sign in is required to record a cash payment'; END IF;
+  SELECT * INTO v_request FROM public.payment_requests
+   WHERE payment_code = trim(p_payment_code) AND status = 'pending'
+     AND expires_at > now() AND payment_method = 'cash'
+   FOR UPDATE;
+  IF v_request.id IS NULL THEN RAISE EXCEPTION 'Cash payment request not found, expired, or already completed'; END IF;
+  IF v_request.user_id = auth.uid() THEN RAISE EXCEPTION 'You cannot record your own cash request as payer'; END IF;
+  IF lower(trim(COALESCE(p_expense_classification, ''))) NOT IN ('personal_expense', 'business_expense') THEN
+    RAISE EXCEPTION 'Invalid payment classification';
+  END IF;
+  INSERT INTO public.cash_payment_receipts
+    (payment_request_id, payer_user_id, recipient_user_id, amount, currency, expense_classification, business_profile_id, receipt_number)
+  VALUES
+    (v_request.id, auth.uid(), v_request.user_id, v_request.amount, v_request.currency,
+     lower(trim(p_expense_classification)), p_business_profile_id,
+     'CASH-RCP-' || to_char(now(), 'YYYYMMDDHH24MISS') || '-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8)))
+  RETURNING * INTO v_receipt;
+  UPDATE public.payment_requests
+     SET status = 'completed', payer_user_id = auth.uid(), completed_at = now(), updated_at = now()
+   WHERE id = v_request.id;
+  RETURN jsonb_build_object('success', true, 'receipt_number', v_receipt.receipt_number,
+    'cash_transaction_id', v_receipt.id, 'recorded_at', v_receipt.recorded_at);
+END;
+$$;
+REVOKE ALL ON FUNCTION public.record_cash_payment_request(TEXT, TEXT, UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.record_cash_payment_request(TEXT, TEXT, UUID) TO authenticated;
+
 -- Ensure REST roles can access the table (RLS still applies).
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.payment_requests TO anon, authenticated, service_role;

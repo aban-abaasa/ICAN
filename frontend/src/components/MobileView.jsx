@@ -1329,7 +1329,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setIsLoadingReportMetrics(false); return; }
       const { start, end } = getReportDateRange(filter, customStart, customEnd);
-      const [manualResult, coinResult] = await Promise.all([
+      const [manualResult, coinResult, cashResult] = await Promise.all([
         supabase
           .from('ican_transactions')
           .select('amount, transaction_type, description, created_at, metadata, business_profile_id')
@@ -1340,10 +1340,17 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
         // payments as well as personal activity. Filter the report period
         // client-side because the RPC intentionally has no user-id argument.
         supabase
-          .rpc('get_ican_record_every_transaction_feed')
+          .rpc('get_ican_record_every_transaction_feed'),
+        supabase
+          .from('cash_payment_receipts')
+          .select('id, amount, currency, expense_classification, business_profile_id, recorded_at, payment_requests!inner(description)')
+          .eq('payer_user_id', user.id)
+          .gte('recorded_at', start)
+          .lte('recorded_at', end)
       ]);
       if (manualResult.error) console.error('Report manual transaction error:', manualResult.error);
       if (coinResult.error) console.error('Report ICAN transaction error:', coinResult.error);
+      if (cashResult.error) console.error('Report cash transaction error:', cashResult.error);
 
       const coinRows = (coinResult.data || [])
         .filter((tx) => {
@@ -1395,7 +1402,23 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
       const manualRows = (manualResult.data || []).filter((tx) =>
         tx.status !== 'failed' && Number(tx.amount || 0) !== 0
       );
-      const rows = [...manualRows, ...coinRows.filter(Boolean)]
+      const cashRows = (cashResult.data || []).map((receipt) => ({
+        amount: Number(receipt.amount) || 0,
+        transaction_type: 'expense',
+        description: receipt.payment_requests?.description || 'Cash payment',
+        currency: receipt.currency,
+        created_at: receipt.recorded_at,
+        business_profile_id: receipt.business_profile_id || null,
+        metadata: {
+          category: 'cash', source_app: 'ican',
+          record_category: receipt.expense_classification === 'business_expense' ? 'business' : 'personal',
+          reporting_bucket: receipt.expense_classification === 'business_expense' ? 'operating_expense' : null,
+          expense_classification: receipt.expense_classification,
+          payment_method: 'cash', receipt_id: receipt.id,
+          business_profile_id: receipt.business_profile_id || null,
+        },
+      }));
+      const rows = [...manualRows, ...cashRows, ...coinRows.filter(Boolean)]
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
       const scopedRows = rows.filter((t) => {
         const category = t.record_category || t.metadata?.record_category || 'personal';

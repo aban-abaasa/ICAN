@@ -38,7 +38,11 @@ export async function payIcanRequest({
   if (!Number.isFinite(amount) || amount <= 0) throw new Error('Invalid payment amount');
 
   if (request.payment_method === 'cash') {
-    const { data, error } = await supabase.rpc('record_cash_payment_request', { p_payment_code: paymentCode });
+    const { data, error } = await supabase.rpc('record_cash_payment_request', {
+      p_payment_code: paymentCode,
+      p_expense_classification: expenseClassification,
+      p_business_profile_id: businessProfileId,
+    });
     if (error) throw error;
     const receipt = Array.isArray(data) ? data[0] : data;
     if (!receipt?.success) throw new Error(receipt?.message || 'Unable to record this cash payment');
