@@ -1,140 +1,43 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Check, DollarSign, Loader, ShieldCheck } from 'lucide-react';
-import { getBusinessAccessMembers, getBusinessCompensation, resolveEmployeeAuthIds, saveBusinessCompensation } from '../services/businessManagementService';
+import { Clock3, DollarSign, Loader, WalletCards } from 'lucide-react';
+import { applyAttendanceToPayroll, createBusinessPayrollPeriod, getBusinessAccessMembers, getBusinessCompensation, getBusinessPayrollEntries, getBusinessPayrollPeriods, recordPayrollPayment, resolveEmployeeAuthIds, saveBusinessCompensation } from '../services/businessManagementService';
+import { ICAN_TO_UGX, transferFromBusinessWallet } from '../services/icanWalletService';
 
-export default function CMMSPayrollPanel({ companyProfile, users = [], userRole, isCreator, currentUser, dataScope = 'department' }) {
+const today = new Date().toISOString().slice(0, 10);
+const amount = (value, currency = 'UGX') => `${currency} ${Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+
+export default function CMMSPayrollPanel({ companyProfile, users = [], currentUser, userRole, isCreator }) {
   const businessProfileId = companyProfile?.pichin_business_profile_id;
-  const simpleMode = (companyProfile?.business_mode || 'sole_proprietor') === 'sole_proprietor';
-  const [assignedMembers, setAssignedMembers] = useState([]);
-  const [resolvedUsers, setResolvedUsers] = useState([]);
-  const employeeSource = useMemo(() => [...users, ...resolvedUsers], [users, resolvedUsers]);
+  const [members, setMembers] = useState([]); const [extraUsers, setExtraUsers] = useState([]); const [compensation, setCompensation] = useState([]);
+  const [periods, setPeriods] = useState([]); const [entries, setEntries] = useState([]); const [periodId, setPeriodId] = useState('');
+  const [salary, setSalary] = useState({ employee: '', pay_type: 'monthly', base_salary: '', currency: 'UGX', payroll_status: 'on_pay' });
+  const [dates, setDates] = useState({ start: `${today.slice(0, 8)}01`, end: today }); const [payment, setPayment] = useState({ entry: '', method: 'cash', pin: '' });
+  const [busy, setBusy] = useState(false); const [notice, setNotice] = useState(''); const [error, setError] = useState('');
   const employees = useMemo(() => {
-    const byId = new Map();
-    employeeSource.filter(user => user.authUserId).forEach(user => byId.set(user.authUserId, user));
-    const adminId = currentUser?.id || currentUser?.user?.id || currentUser?.user_id;
-    if (adminId && (isCreator || userRole === 'admin') && !byId.has(adminId)) {
-      byId.set(adminId, {
-        authUserId: adminId,
-        name: currentUser.full_name || currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'Company administrator',
-        email: currentUser.email || '',
-        role: 'admin',
-        isCreator: Boolean(isCreator)
-      });
-    }
-    assignedMembers.filter(member => member.auth_user_id && ['invited', 'active'].includes(member.employment_status || 'active')).forEach(member => {
-      const id = member.auth_user_id;
-      byId.set(id, {
-        authUserId: id,
-        name: member.user?.full_name || member.job_title || 'Assigned employee',
-        email: member.user?.email || '',
-        role: member.role || member.job_title || 'Employee',
-        department: member.department,
-        jobTitle: member.job_title
-      });
-    });
-    return [...byId.values()];
-  }, [assignedMembers, employeeSource, currentUser, userRole, isCreator]);
-  const currentUserId = currentUser?.id || currentUser?.user?.id || currentUser?.user_id;
-  const currentDepartmentId = users.find(candidate => candidate.email?.toLowerCase() === currentUser?.email?.toLowerCase())?.department_id;
-  const visibleEmployees = useMemo(() => {
-    if (dataScope === 'company' || dataScope === 'cross_department') return employees;
-    if (dataScope === 'own') return employees.filter(employee => employee.authUserId === currentUserId);
-    return employees.filter(employee => !currentDepartmentId || employee.department_id === currentDepartmentId || employee.departmentId === currentDepartmentId);
-  }, [dataScope, employees, currentDepartmentId, currentUserId]);
-  const [records, setRecords] = useState([]);
-  const visibleRecords = useMemo(() => {
-    if (dataScope === 'company' || dataScope === 'cross_department') return records;
-    if (dataScope === 'own') return records.filter(record => record.employee_user_id === currentUserId);
-    return records.filter(record => {
-      const employee = employees.find(candidate => candidate.authUserId === record.employee_user_id);
-      return !currentDepartmentId || employee?.department_id === currentDepartmentId || employee?.departmentId === currentDepartmentId;
-    });
-  }, [dataScope, records, employees, currentDepartmentId, currentUserId]);
-  const [employeeId, setEmployeeId] = useState('');
-  const [form, setForm] = useState({ pay_type: 'monthly', base_salary: '', currency: 'UGX', overtime_rate: '', payroll_status: 'on_pay' });
-  const [loading, setLoading] = useState(Boolean(businessProfileId));
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-
-  const load = async () => {
-    if (!businessProfileId) return;
-    setLoading(true);
-    const [result, memberResult, resolvedResult] = await Promise.all([
-      getBusinessCompensation(businessProfileId),
-      getBusinessAccessMembers(businessProfileId),
-      resolveEmployeeAuthIds(users)
-    ]);
-    setRecords(result.data || []);
-    setAssignedMembers(memberResult.data || []);
-    setResolvedUsers(resolvedResult || []);
-    setError(result.error?.message || memberResult.error?.message || '');
-    setLoading(false);
-  };
-
+    const byId = new Map(); const adminId = currentUser?.id || currentUser?.user?.id || currentUser?.user_id;
+    [...users, ...extraUsers].filter(u => u.authUserId).forEach(u => byId.set(u.authUserId, u));
+    members.forEach(m => byId.set(m.auth_user_id, { authUserId: m.auth_user_id, name: m.user?.full_name || m.job_title || 'Employee', email: m.user?.email || '', role: m.job_title || 'Employee' }));
+    if (adminId && (isCreator || userRole === 'admin') && !byId.has(adminId)) byId.set(adminId, { authUserId: adminId, name: currentUser?.full_name || currentUser?.email || 'Administrator', role: 'Administrator' });
+    return [...byId.values()].filter(u => u.authUserId);
+  }, [users, extraUsers, members, currentUser, userRole, isCreator]);
+  const period = periods.find(p => p.id === periodId);
+  const say = (text, bad = false) => { setNotice(bad ? '' : text); setError(bad ? text : ''); };
+  const load = async () => { if (!businessProfileId) return; setBusy(true); const [c, m, u, p] = await Promise.all([getBusinessCompensation(businessProfileId), getBusinessAccessMembers(businessProfileId), resolveEmployeeAuthIds(users), getBusinessPayrollPeriods(businessProfileId)]); setCompensation(c.data || []); setMembers(m.data || []); setExtraUsers(u || []); setPeriods(p.data || []); if (c.error || m.error || p.error) say(c.error?.message || m.error?.message || p.error?.message, true); setBusy(false); };
+  const loadEntries = async id => { setPeriodId(id); const result = await getBusinessPayrollEntries(id); setEntries(result.data || []); if (result.error) say(result.error.message, true); };
   useEffect(() => { load(); }, [businessProfileId, users]);
-
-  const save = async event => {
-    event.preventDefault();
-    if (!businessProfileId) return;
-    if (!employeeId) {
-      setError('Select a CMMS employee.');
-      return;
-    }
-    setSaving(true);
-    setError('');
-    setMessage('');
-    const result = await saveBusinessCompensation(businessProfileId, employeeId, form);
-    if (!result.success) setError(result.error);
-    else {
-      setMessage('Salary saved to the shared business payroll.');
-      setForm({ pay_type: 'monthly', base_salary: '', currency: 'UGX', overtime_rate: '', payroll_status: 'on_pay' });
-      await load();
-    }
-    setSaving(false);
-  };
-
-  const selectEmployee = event => {
-    const id = event.target.value;
-    setEmployeeId(id);
-    const current = visibleRecords.find(record => record.employee_user_id === id);
-    if (current) {
-      setForm({
-        pay_type: current.pay_type || 'monthly',
-        base_salary: current.base_salary ?? '',
-        currency: current.currency || 'UGX',
-        overtime_rate: current.overtime_rate ?? '',
-        payroll_status: current.payroll_status || 'on_pay'
-      });
-    }
-  };
-
-  if (!businessProfileId) {
-    return <div className="rounded-2xl border border-amber-700/40 bg-amber-900/15 p-6 text-sm text-amber-200">Link this CMMS company to its Pichin business profile before using payroll.</div>;
-  }
-
-  return (
-    <div className="space-y-5 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4 md:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-center gap-3"><DollarSign className="h-6 w-6 text-emerald-400" /><div><h2 className="text-xl font-bold text-white">CMMS Payroll</h2><p className="text-sm text-slate-400">Employee compensation for {companyProfile.company_name}</p></div></div>
-        <span className="flex items-center gap-1 rounded-full border border-emerald-700/40 bg-emerald-900/20 px-2 py-1 text-xs text-emerald-300"><ShieldCheck size={13} /> {simpleMode ? 'Sole proprietor mode' : `${companyProfile.business_mode || 'Organisation'} mode`}</span>
-      </div>
-      <p className="text-sm text-slate-400">{simpleMode ? 'Simple payroll: assign a salary or rate to an employee and keep the record in the shared Pichin business account.' : `Role-controlled payroll. Current access: ${userRole || 'member'}${isCreator ? ' (creator)' : ''}. Approval and payroll-period workflows can be added by authorised finance administrators.`}</p>
-
-      {loading ? <div className="flex items-center gap-2 text-sm text-slate-400"><Loader size={16} className="animate-spin" /> Loading payroll...</div> : <>
-        {error && <p className="rounded-lg border border-red-800/50 bg-red-900/20 p-2 text-sm text-red-300">{error}</p>}
-        {message && <p className="rounded-lg border border-emerald-800/50 bg-emerald-900/20 p-2 text-sm text-emerald-300">{message}</p>}
-        <form onSubmit={save} className="grid gap-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4 md:grid-cols-2">
-          <label className="text-sm text-slate-300 md:col-span-2">Employee<select required value={employeeId} onChange={selectEmployee} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white"><option value="">Select employee</option>{visibleEmployees.map(employee => <option key={employee.authUserId} value={employee.authUserId}>{employee.name} — {employee.role || employee.jobTitle || employee.department || 'Employee'}{employee.email ? ` — ${employee.email}` : ''}</option>)}</select>{visibleEmployees.length === 0 && <span className="mt-1 block text-xs text-amber-300">No employees are available in this payroll scope.</span>}</label>
-          <label className="text-sm text-slate-300">Pay type<select value={form.pay_type} onChange={event => setForm(previous => ({ ...previous, pay_type: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white"><option value="monthly">Monthly salary</option><option value="hourly">Hourly</option>{!simpleMode && <><option value="per_ride">Per ride</option><option value="hybrid">Hybrid</option></>}</select></label>
-          <label className="text-sm text-slate-300">Payroll status<select value={form.payroll_status} onChange={event => setForm(previous => ({ ...previous, payroll_status: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white"><option value="on_pay">On pay</option><option value="on_hold">On hold</option><option value="ended">Ended</option></select></label>
-          <label className="text-sm text-slate-300">Currency<input value={form.currency} onChange={event => setForm(previous => ({ ...previous, currency: event.target.value.toUpperCase() }))} maxLength={6} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label>
-          <label className="text-sm text-slate-300">Base amount<input required type="number" min="0.01" step="0.01" value={form.base_salary} onChange={event => setForm(previous => ({ ...previous, base_salary: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label>
-          <label className="text-sm text-slate-300">Overtime/rate<input type="number" min="0" step="0.01" value={form.overtime_rate} onChange={event => setForm(previous => ({ ...previous, overtime_rate: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label>
-          <button disabled={saving || employees.length === 0} className="flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 md:col-span-2">{saving ? <Loader size={16} className="animate-spin" /> : <Check size={16} />} Save salary</button>
-        </form>
-        <div><h3 className="mb-2 text-xs font-semibold text-slate-500">CURRENT COMPENSATION</h3>{visibleRecords.length === 0 ? <p className="text-sm text-slate-500">No compensation records in this scope.</p> : <div className="space-y-2">{visibleRecords.map(record => { const employee = employees.find(candidate => candidate.authUserId === record.employee_user_id); return <div key={record.id} className="flex flex-wrap justify-between gap-2 rounded-lg bg-slate-950/60 px-3 py-2 text-sm"><span className="text-slate-300">{employee?.name || record.employee_user_id}<span className="ml-2 text-xs text-slate-500">{employee?.role || employee?.jobTitle || employee?.department || 'Employee'}</span></span><span className={record.payroll_status === 'on_pay' ? 'text-emerald-300' : 'text-amber-300'}>{record.currency} {Number(record.base_salary).toLocaleString()} / {record.pay_type} · {record.payroll_status === 'on_pay' ? 'On pay' : record.payroll_status === 'on_hold' ? 'On hold' : 'Ended'}</span></div>; })}</div>}</div>
-      </>}
-    </div>
-  );
+  useEffect(() => { if (!periodId && periods[0]?.id) loadEntries(periods[0].id); }, [periods]);
+  const saveSalary = async e => { e.preventDefault(); if (!salary.employee) return say('Select an employee.', true); setBusy(true); const result = await saveBusinessCompensation(businessProfileId, salary.employee, salary); result.success ? say('Salary profile saved.') : say(result.error, true); if (result.success) { setSalary(v => ({ ...v, base_salary: '' })); await load(); } setBusy(false); };
+  const createRun = async e => { e.preventDefault(); if (dates.end < dates.start) return say('Period end must be on or after start.', true); setBusy(true); const result = await createBusinessPayrollPeriod({ businessProfileId, periodStart: dates.start, periodEnd: dates.end, employees, compensation }); if (result.success) { say('Draft payroll created from active salary profiles.'); await load(); await loadEntries(result.data.id); } else say(result.error, true); setBusy(false); };
+  const calculate = async () => { if (!periodId) return say('Select a payroll period.', true); setBusy(true); const result = await applyAttendanceToPayroll(periodId); result.success ? say(`Attendance deductions calculated for ${result.data.length} employee(s).`) : say(result.error, true); if (result.success) await loadEntries(periodId); setBusy(false); };
+  const pay = async e => { e.preventDefault(); const entry = entries.find(x => x.id === payment.entry); if (!entry) return say('Choose an unpaid employee.', true); setBusy(true); try { let transactionId = null; if (payment.method === 'ican') { if ((entry.metadata?.currency || 'UGX') !== 'UGX') throw new Error('ICAN wallet payroll currently supports UGX salary entries only. Record another currency as cash.'); if (!payment.pin) throw new Error('Enter the business-wallet PIN.'); const transfer = await transferFromBusinessWallet({ businessProfileId, recipientUserId: entry.employee_user_id, amount: Number(entry.net_amount) / ICAN_TO_UGX, note: `Payroll ${period?.period_start || ''} - ${period?.period_end || ''}`, referenceId: entry.id, pin: payment.pin }); transactionId = transfer.transaction_id || transfer.id || null; } const result = await recordPayrollPayment({ entryId: entry.id, paymentMethod: payment.method, walletTransactionId: transactionId }); if (!result.success) throw new Error(result.error); say(payment.method === 'ican' ? 'Salary sent through the existing ICAN business wallet.' : 'Cash salary recorded as paid.'); setPayment({ entry: '', method: 'cash', pin: '' }); await loadEntries(periodId); } catch (err) { say(err.message || 'Payment failed.', true); } setBusy(false); };
+  if (!businessProfileId) return <div className="rounded-2xl border border-amber-700/40 bg-amber-900/15 p-6 text-sm text-amber-200">Link this CMMS company to its Pichin business profile before using payroll.</div>;
+  return <div className="space-y-5 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4 md:p-6">
+    <div className="flex items-center gap-3"><DollarSign className="h-6 w-6 text-emerald-400" /><div><h2 className="text-xl font-bold text-white">CMMS Payroll</h2><p className="text-sm text-slate-400">Attendance-adjusted salaries and payment for {companyProfile.company_name}</p></div></div>
+    <p className="text-sm text-slate-400">Create a draft pay period, calculate configured attendance deductions for late arrivals and early departures, review the net salary, then pay by cash or with the existing ICAN business wallet.</p>
+    {error && <p className="rounded-lg border border-red-800/50 bg-red-900/20 p-2 text-sm text-red-300">{error}</p>}{notice && <p className="rounded-lg border border-emerald-800/50 bg-emerald-900/20 p-2 text-sm text-emerald-300">{notice}</p>}
+    {busy && <p className="flex items-center gap-2 text-sm text-slate-400"><Loader size={16} className="animate-spin" /> Updating payroll...</p>}
+    <div className="grid gap-4 lg:grid-cols-2"><form onSubmit={saveSalary} className="grid gap-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4 md:grid-cols-2"><h3 className="font-semibold text-white md:col-span-2">Salary profile</h3><label className="text-sm text-slate-300 md:col-span-2">Employee<select required value={salary.employee} onChange={e => setSalary(v => ({ ...v, employee: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white"><option value="">Select employee</option>{employees.map(x => <option key={x.authUserId} value={x.authUserId}>{x.name} — {x.role}</option>)}</select></label><label className="text-sm text-slate-300">Pay type<select value={salary.pay_type} onChange={e => setSalary(v => ({ ...v, pay_type: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white"><option value="monthly">Monthly</option><option value="hourly">Hourly</option><option value="per_ride">Per ride</option><option value="hybrid">Hybrid</option></select></label><label className="text-sm text-slate-300">Base salary<input required type="number" min="0.01" step="0.01" value={salary.base_salary} onChange={e => setSalary(v => ({ ...v, base_salary: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label><label className="text-sm text-slate-300">Currency<input value={salary.currency} onChange={e => setSalary(v => ({ ...v, currency: e.target.value.toUpperCase() }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label><label className="text-sm text-slate-300">Status<select value={salary.payroll_status} onChange={e => setSalary(v => ({ ...v, payroll_status: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white"><option value="on_pay">On pay</option><option value="on_hold">On hold</option></select></label><button disabled={busy} className="rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white disabled:opacity-50 md:col-span-2">Save salary</button></form>
+      <form onSubmit={createRun} className="grid gap-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4 md:grid-cols-2"><h3 className="flex items-center gap-2 font-semibold text-white md:col-span-2"><Clock3 size={17} className="text-emerald-400" />New attendance payroll run</h3><label className="text-sm text-slate-300">Start<input required type="date" value={dates.start} onChange={e => setDates(v => ({ ...v, start: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label><label className="text-sm text-slate-300">End<input required type="date" value={dates.end} onChange={e => setDates(v => ({ ...v, end: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label><button disabled={busy || !compensation.length} className="rounded-lg bg-sky-600 px-4 py-2 font-semibold text-white disabled:opacity-50">Create draft</button><button type="button" disabled={busy || !periodId || !['draft', 'pending_approval'].includes(period?.status)} onClick={calculate} className="rounded-lg border border-amber-600/60 px-4 py-2 font-semibold text-amber-200 disabled:opacity-50">Calculate attendance</button><p className="text-xs text-slate-500 md:col-span-2">The calculation uses the company’s existing attendance-payroll settings and remains reviewable in the draft.</p></form></div>
+    <section className="rounded-xl border border-slate-800 bg-slate-950/60 p-4"><div className="mb-3 flex flex-wrap justify-between gap-2"><h3 className="font-semibold text-white">Review and pay</h3><select value={periodId} onChange={e => loadEntries(e.target.value)} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"><option value="">Select period</option>{periods.map(p => <option key={p.id} value={p.id}>{p.period_start} to {p.period_end} — {p.status}</option>)}</select></div>{periodId && <><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="border-b border-slate-800 text-xs uppercase text-slate-500"><tr><th className="p-2">Employee</th><th className="p-2">Base</th><th className="p-2">Attendance deduction</th><th className="p-2">Net salary</th><th className="p-2">Status</th></tr></thead><tbody>{entries.map(entry => { const employee = employees.find(x => x.authUserId === entry.employee_user_id); const currency = entry.metadata?.currency || 'UGX'; return <tr key={entry.id} className="border-b border-slate-800/70"><td className="p-2 text-slate-200">{employee?.name || entry.employee_user_id}</td><td className="p-2">{amount(entry.base_amount, currency)}</td><td className="p-2 text-amber-300">-{amount(entry.metadata?.attendance_deduction, currency)}</td><td className="p-2 font-semibold text-emerald-300">{amount(entry.net_amount, currency)}</td><td className="p-2 capitalize text-slate-300">{entry.status}</td></tr>; })}</tbody></table></div><form onSubmit={pay} className="mt-4 grid gap-3 border-t border-slate-800 pt-4 md:grid-cols-4"><label className="text-sm text-slate-300 md:col-span-2">Employee to pay<select required value={payment.entry} onChange={e => setPayment(v => ({ ...v, entry: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white"><option value="">Select unpaid employee</option>{entries.filter(x => x.status !== 'paid').map(x => <option key={x.id} value={x.id}>{employees.find(e => e.authUserId === x.employee_user_id)?.name || x.employee_user_id} — {amount(x.net_amount, x.metadata?.currency)}</option>)}</select></label><label className="text-sm text-slate-300">Method<select value={payment.method} onChange={e => setPayment(v => ({ ...v, method: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white"><option value="cash">Cash</option><option value="ican">ICAN wallet</option></select></label>{payment.method === 'ican' && <label className="text-sm text-slate-300">Wallet PIN<input required type="password" value={payment.pin} onChange={e => setPayment(v => ({ ...v, pin: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label>}<button disabled={busy || !entries.some(x => x.status !== 'paid')} className="flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white disabled:opacity-50"><WalletCards size={16} />{payment.method === 'ican' ? 'Pay with ICAN wallet' : 'Record cash payment'}</button></form></>}</section>
+  </div>;
 }

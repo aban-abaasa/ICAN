@@ -175,6 +175,79 @@ export const saveBusinessCompensation = async (businessProfileId, employeeUserId
   return error ? { success: false, error: error.message } : { success: true, data };
 };
 
+// Payroll periods and entries deliberately use the shared business tables.
+// Payment itself is performed by the existing ICAN business-wallet service.
+export const getBusinessPayrollPeriods = async (businessProfileId) => {
+  const sb = db();
+  if (!sb || !businessProfileId) return { data: [], error: null };
+  const { data, error } = await sb.from('business_payroll_periods').select('*')
+    .eq('business_profile_id', businessProfileId).order('period_start', { ascending: false }).limit(24);
+  return { data: data || [], error };
+};
+
+export const getBusinessPayrollEntries = async (periodId) => {
+  const sb = db();
+  if (!sb || !periodId) return { data: [], error: null };
+  const { data, error } = await sb.from('business_payroll_entries').select('*')
+    .eq('payroll_period_id', periodId).order('created_at');
+  return { data: data || [], error };
+};
+
+export const createBusinessPayrollPeriod = async ({ businessProfileId, periodStart, periodEnd, employees, compensation }) => {
+  const sb = db();
+  if (!sb || !businessProfileId) return { success: false, error: 'Supabase is not configured.' };
+  const { data: auth } = await sb.auth.getUser();
+  const { data: period, error: periodError } = await sb.from('business_payroll_periods').insert({
+    business_profile_id: businessProfileId, period_start: periodStart, period_end: periodEnd, created_by: auth?.user?.id || null
+  }).select().single();
+  if (periodError) return { success: false, error: periodError.message };
+  const activeComp = new Map((compensation || []).filter(item => item.payroll_status === 'on_pay').map(item => [item.employee_user_id, item]));
+  const entries = (employees || []).map(employee => {
+    const pay = activeComp.get(employee.authUserId);
+    return pay ? { payroll_period_id: period.id, business_profile_id: businessProfileId, employee_user_id: employee.authUserId, base_amount: Number(pay.base_salary || 0), metadata: { pay_type: pay.pay_type, currency: pay.currency || 'UGX' } } : null;
+  }).filter(Boolean);
+  if (entries.length) {
+    const { error } = await sb.from('business_payroll_entries').insert(entries);
+    if (error) return { success: false, error: error.message };
+  }
+  return { success: true, data: period };
+};
+
+export const applyAttendanceToPayroll = async (periodId) => {
+  const sb = db();
+  if (!sb) return { success: false, error: 'Supabase is not configured.' };
+  const { data, error } = await sb.rpc('cmms_apply_attendance_payroll_deductions', { p_payroll_period_id: periodId });
+  return error ? { success: false, error: error.message } : { success: true, data: data || [] };
+};
+
+export const recordPayrollPayment = async ({ entryId, paymentMethod, walletTransactionId = null }) => {
+  const sb = db();
+  if (!sb) return { success: false, error: 'Supabase is not configured.' };
+  const { error } = await sb.rpc('complete_cmms_payroll_payment', { p_payroll_entry_id: entryId, p_payment_method: paymentMethod, p_wallet_transaction_id: walletTransactionId });
+  return error ? { success: false, error: error.message } : { success: true };
+};
+
+export const requestPayrollEmployeeApproval = async (entryId) => {
+  const sb = db();
+  if (!sb) return { success: false, error: 'Supabase is not configured.' };
+  const { data, error } = await sb.rpc('request_cmms_payroll_employee_approval', { p_payroll_entry_id: entryId });
+  return error ? { success: false, error: error.message } : { success: true, data };
+};
+
+export const getMyPayrollApprovals = async () => {
+  const sb = db();
+  if (!sb) return { data: [], error: null };
+  const { data, error } = await sb.from('cmms_payroll_employee_approvals').select('*').order('requested_at', { ascending: false });
+  return { data: data || [], error };
+};
+
+export const respondToPayrollApproval = async (approvalId, approved, note = '') => {
+  const sb = db();
+  if (!sb) return { success: false, error: 'Supabase is not configured.' };
+  const { data, error } = await sb.rpc('respond_cmms_payroll_employee_approval', { p_approval_id: approvalId, p_approved: approved, p_note: note || null });
+  return error ? { success: false, error: error.message } : { success: true, data };
+};
+
 export const getAccessibleBusinesses = async ({ userId, email } = {}) => {
   const sb = db();
   if (!sb) return { data: [], error: null };
