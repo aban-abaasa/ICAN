@@ -349,11 +349,11 @@ const PayMoneyModal = ({
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={handleCloseModal}
     >
       <div
-        className="glass-card p-6 w-full max-w-md max-h-[90vh] overflow-y-auto"
+        className="glass-card max-h-[calc(100dvh-1rem)] w-full max-w-md overflow-y-auto rounded-b-none rounded-t-2xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:max-h-[90vh] sm:rounded-2xl sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

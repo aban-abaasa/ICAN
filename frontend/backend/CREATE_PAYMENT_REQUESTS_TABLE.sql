@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS public.cash_payment_receipts (
   payment_request_id BIGINT NOT NULL UNIQUE REFERENCES public.payment_requests(id) ON DELETE RESTRICT,
   payer_user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT,
   recipient_user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT,
+  recipient_name TEXT,
   amount DECIMAL(15, 2) NOT NULL CHECK (amount > 0),
   currency VARCHAR(10) NOT NULL,
   expense_classification TEXT NOT NULL DEFAULT 'personal_expense'
@@ -47,7 +48,8 @@ CREATE TABLE IF NOT EXISTS public.cash_payment_receipts (
 
 ALTER TABLE public.cash_payment_receipts
   ADD COLUMN IF NOT EXISTS expense_classification TEXT NOT NULL DEFAULT 'personal_expense',
-  ADD COLUMN IF NOT EXISTS business_profile_id UUID;
+  ADD COLUMN IF NOT EXISTS business_profile_id UUID,
+  ADD COLUMN IF NOT EXISTS recipient_name TEXT;
 ALTER TABLE public.cash_payment_receipts
   DROP CONSTRAINT IF EXISTS cash_payment_receipts_expense_classification_check;
 ALTER TABLE public.cash_payment_receipts
@@ -73,6 +75,7 @@ AS $$
 DECLARE
   v_request public.payment_requests;
   v_receipt public.cash_payment_receipts;
+  v_recipient_name TEXT;
 BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Sign in is required to record a cash payment'; END IF;
   SELECT * INTO v_request FROM public.payment_requests
@@ -84,10 +87,13 @@ BEGIN
   IF lower(trim(COALESCE(p_expense_classification, ''))) NOT IN ('personal_expense', 'business_expense') THEN
     RAISE EXCEPTION 'Invalid payment classification';
   END IF;
+  SELECT bp.business_name INTO v_recipient_name FROM public.business_profiles bp
+   WHERE bp.user_id = v_request.user_id ORDER BY bp.created_at DESC NULLS LAST LIMIT 1;
+  v_recipient_name := COALESCE(v_recipient_name, 'ICANera recipient');
   INSERT INTO public.cash_payment_receipts
-    (payment_request_id, payer_user_id, recipient_user_id, amount, currency, expense_classification, business_profile_id, receipt_number)
+    (payment_request_id, payer_user_id, recipient_user_id, recipient_name, amount, currency, expense_classification, business_profile_id, receipt_number)
   VALUES
-    (v_request.id, auth.uid(), v_request.user_id, v_request.amount, v_request.currency,
+    (v_request.id, auth.uid(), v_request.user_id, v_recipient_name, v_request.amount, v_request.currency,
      lower(trim(p_expense_classification)), p_business_profile_id,
      'CASH-RCP-' || to_char(now(), 'YYYYMMDDHH24MISS') || '-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8)))
   RETURNING * INTO v_receipt;
@@ -109,7 +115,7 @@ BEGIN
      COALESCE(v_request.description, 'Cash received'), 'completed',
      jsonb_build_object('payment_method', 'cash', 'cash_receipt_id', v_receipt.id,
        'receipt_number', v_receipt.receipt_number, 'counterparty_user_id', auth.uid()), now());
-  RETURN jsonb_build_object('success', true, 'receipt_number', v_receipt.receipt_number,
+  RETURN jsonb_build_object('success', true, 'receipt_number', v_receipt.receipt_number, 'recipient_name', v_receipt.recipient_name,
     'cash_transaction_id', v_receipt.id, 'recorded_at', v_receipt.recorded_at);
 END;
 $$;
