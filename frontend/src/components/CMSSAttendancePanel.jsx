@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from '../lib/supabase/client';
 import { getPublicAppUrl } from '../utils/publicAppUrl';
 import { downloadCmmsQrPdf } from '../utils/downloadCmmsQrPdf';
+import { downloadCmmsRecordsExcel, downloadCmmsRecordsPdf } from '../utils/cmmsRecordExports';
 
 const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole, isCreator }) => {
   const [attendanceRecords, setAttendanceRecords] = useState([]);
@@ -24,13 +25,12 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
 
     try {
       const [recordsRes, qrRes] = await Promise.all([
-        supabase
-          .from('cmms_staff_attendance')
-          .select('*')
-          .eq('cmms_company_id', companyProfile.id)
-          .gte('check_in_time', `${selectedDate}T00:00:00`)
-          .lte('check_in_time', `${selectedDate}T23:59:59`)
-          .order('check_in_time', { ascending: false }),
+        supabase.rpc('get_attendance_records', {
+          p_cmms_company_id: companyProfile.id,
+          p_start_date: selectedDate,
+          p_end_date: selectedDate,
+          p_user_id: null
+        }),
         
         canManage ? supabase
           .from('cmms_attendance_qr_locations')
@@ -47,31 +47,11 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
         console.error('QR codes error:', qrRes.error);
       }
 
-      // Fetch user details separately and attach to records
+      // The records RPC includes staff details and works with the attendance RLS policy.
       if (recordsRes.data && recordsRes.data.length > 0) {
-        const userIds = [...new Set(recordsRes.data.map(r => r.cmms_user_id))];
-        const { data: usersData, error: usersError } = await supabase
-          .from('cmms_users')
-          .select('id, user_name, email, phone')
-          .in('id', userIds);
-        
-        if (usersError) {
-          console.error('Users fetch error:', usersError);
-        }
-
-        const usersMap = {};
-        usersData?.forEach(u => usersMap[u.id] = u);
-        
-        // Attach user data to records with backwards compatible field names
         recordsRes.data = recordsRes.data.map(record => ({
           ...record,
-          staff: usersMap[record.cmms_user_id] ? {
-            id: usersMap[record.cmms_user_id].id,
-            full_name: usersMap[record.cmms_user_id].user_name,
-            email: usersMap[record.cmms_user_id].email,
-            phone: usersMap[record.cmms_user_id].phone,
-            avatar_url: null // Not available in cmms_users table
-          } : null
+          staff: { id: record.cmms_user_id, full_name: record.user_name, email: record.user_email, avatar_url: null }
         }));
       }
 
@@ -193,34 +173,32 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
     }
   };
 
-  const exportAttendance = () => {
+  const attendanceColumns = [
+    { label: 'Date', value: (record) => new Date(record.check_in_time).toLocaleDateString() },
+    { label: 'Staff Name', value: (record) => record.staff?.full_name || 'Unknown' },
+    { label: 'Email', value: (record) => record.staff?.email || '' },
+    { label: 'Check In', value: (record) => new Date(record.check_in_time).toLocaleTimeString() },
+    { label: 'Check Out', value: (record) => record.check_out_time ? new Date(record.check_out_time).toLocaleTimeString() : 'Not checked out' },
+    { label: 'Location', value: (record) => record.check_in_location || '' },
+    { label: 'Status', value: (record) => record.check_out_time ? 'Complete' : 'Active' }
+  ];
+
+  const ensureAttendanceRecords = () => {
     if (attendanceRecords.length === 0) {
       alert('No attendance records to export');
-      return;
+      return false;
     }
+    return true;
+  };
 
-    const csv = [
-      ['Date', 'Staff Name', 'Email', 'Check In', 'Check Out', 'Location', 'Status'].join(','),
-      ...attendanceRecords.map(record => [
-        new Date(record.check_in_time).toLocaleDateString(),
-        record.staff?.full_name || 'Unknown',
-        record.staff?.email || '',
-        new Date(record.check_in_time).toLocaleTimeString(),
-        record.check_out_time ? new Date(record.check_out_time).toLocaleTimeString() : 'Not checked out',
-        record.check_in_location || '',
-        record.check_out_time ? 'Complete' : 'Active'
-      ].join(','))
-    ].join('\n');
+  const exportAttendanceExcel = async () => {
+    if (!ensureAttendanceRecords()) return;
+    await downloadCmmsRecordsExcel({ filename: `attendance-${selectedDate}`, sheetName: 'Attendance', columns: attendanceColumns, rows: attendanceRecords });
+  };
 
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `attendance-${selectedDate}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+  const exportAttendancePdf = async () => {
+    if (!ensureAttendanceRecords()) return;
+    await downloadCmmsRecordsPdf({ filename: `attendance-${selectedDate}`, title: 'Staff Attendance Report', subtitle: `${companyProfile?.company_name || 'CMMS'} • ${selectedDate}`, columns: attendanceColumns, rows: attendanceRecords });
   };
 
   const formatDuration = (checkIn, checkOut) => {
@@ -297,11 +275,14 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
               />
             </div>
             <button
-              onClick={exportAttendance}
+              onClick={exportAttendanceExcel}
               className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg flex items-center gap-2"
             >
               <Download className="h-4 w-4" />
-              Export CSV
+              Excel
+            </button>
+            <button onClick={exportAttendancePdf} className="px-4 py-2 bg-rose-700 hover:bg-rose-600 rounded-lg flex items-center gap-2">
+              <Download className="h-4 w-4" /> PDF
             </button>
           </div>
 

@@ -164,7 +164,7 @@ class PaymentRequestService {
   /**
    * Create a new payment request with unique code
    */
-  async createPaymentRequest(userId, amount, currency, description = '') {
+  async createPaymentRequest(userId, amount, currency, description = '', paymentMethod = 'ican') {
     try {
       const supabase = getRequiredSupabaseClient();
       const ownerUserId = await getAuthenticatedUserId(supabase, userId);
@@ -185,6 +185,7 @@ class PaymentRequestService {
             amount: parsedAmount,
             currency,
             description,
+            payment_method: paymentMethod === 'cash' ? 'cash' : 'ican',
             status: 'pending',
             created_at: new Date().toISOString(),
             expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()

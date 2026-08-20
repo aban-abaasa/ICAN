@@ -883,7 +883,7 @@ const CMMSModule = ({
 
   const handleRoleSelection = (event) => {
     const nextRole = event.target.value;
-    if (!nextRole || isCreator) return;
+    if (!nextRole) return;
     const selectedRole = availableUserRoles.find((role) => normalizeRoleKey(role.role_name) === nextRole);
     if (!selectedRole) return;
     const storageKey = getCmmsRoleStorageKey(user?.email, userCompanyId);
@@ -6059,10 +6059,10 @@ const CMMSModule = ({
     // Mobile view - 3-dot menu only
     if (isMobile) {
       return (
-        <div className="mb-6 border-b border-white border-opacity-10 -mx-4 px-4 py-3">
-          <div className="flex items-center justify-between gap-2">
+        <div className="absolute right-0 top-0 z-40">
+          <div className="flex items-center justify-end">
             {/* Current active tab display */}
-            <div className="text-sm font-semibold" style={{ color: tabPalette[activeTab]?.inactiveText || '#bfdbfe' }}>
+            <div className="hidden text-sm font-semibold" style={{ color: tabPalette[activeTab]?.inactiveText || '#bfdbfe' }}>
               {accessibleTabs.find(t => t.id === activeTab)?.label || '🏢 Company'}
             </div>
 
@@ -6612,7 +6612,7 @@ const CMMSModule = ({
   // MAIN CMMS INTERFACE FOR AUTHORIZED USERS
   // ============================================
   return (
-    <div className="p-4 md:p-6 lg:p-8 cmms-clean-shell">
+    <div className="relative p-0 md:p-6 lg:p-8 cmms-clean-shell">
       <style>{`
         .cmms-clean-shell {
           background: transparent;
@@ -6643,14 +6643,24 @@ const CMMSModule = ({
         .cmms-clean-shell .cmms-subtitle {
           color: #67e8f9;
         }
+
+        @media (max-width: 767px) {
+          .cmms-clean-shell .cmms-top-header {
+            background: transparent;
+            border: 0;
+            border-radius: 0;
+            padding: 12px 52px 10px 0;
+            margin-bottom: 6px;
+          }
+        }
       `}</style>
       {/* Responsive Header with Icon */}
-      <div className="cmms-top-header flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 md:mb-8 pb-4 md:pb-6 border-b border-white border-opacity-20 gap-4">
-        <div className="flex items-center gap-2 sm:gap-4 flex-1">
+      <div className="cmms-top-header flex flex-col md:flex-row items-start md:items-center justify-between mb-6 md:mb-8 pb-4 md:pb-6 border-b border-white border-opacity-20 gap-3 md:gap-4">
+        <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
           <button
             onClick={() => setShowCompanyDetails(!showCompanyDetails)}
             className={`
-              flex flex-col items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-lg 
+              hidden md:flex flex-col items-center justify-center w-20 h-20 rounded-lg
               transition-all transform hover:scale-110 shadow-lg flex-shrink-0
               ${showCompanyDetails
                 ? 'bg-gradient-to-br from-indigo-600 to-indigo-800 ring-2 ring-indigo-400 scale-105'
@@ -6659,20 +6669,21 @@ const CMMSModule = ({
             `}
             title="Company Details"
           >
-            <Building className="w-7 h-7 sm:w-10 sm:h-10 text-white mb-1" />
+            <Building className="w-10 h-10 text-white mb-1" />
             <span className="text-xs text-white font-bold text-center leading-tight">Company</span>
           </button>
           <div className="min-w-0">
             <h2 className="cmms-title text-xl sm:text-2xl font-bold truncate">CMMS</h2>
-            <p className="cmms-subtitle text-xs sm:text-sm mt-1 truncate">
+            <p className="cmms-subtitle text-xs sm:text-sm mt-0.5 md:mt-1 truncate">
               {cmmsData.companyProfile?.company_name || 'Management System'}
+              <span className="hidden md:inline text-slate-300"> • {isSwitchingCompany ? 'Switching…' : (activeRoleDefinition?.display_name || userRole || 'Member')}</span>
             </p>
           </div>
         </div>
         
-        <div className="flex items-center gap-2 sm:gap-4 flex-wrap justify-end w-full sm:w-auto">
+        <div className="flex items-center gap-2 sm:gap-4 flex-wrap justify-end w-full md:w-auto">
           {companyMemberships.length > 1 && (
-            <div className="flex items-end gap-2">
+            <div className="hidden md:flex items-end gap-2">
               <div className="min-w-[220px]">
                 <label className="block text-[10px] uppercase tracking-wide text-gray-400 mb-1">Business profile / CMMS administrator</label>
                 <select
@@ -6734,7 +6745,7 @@ const CMMSModule = ({
                 setTriggerCreateCompany(prev => prev + 1);
               }}
               title="Create New Company"
-              className="flex-shrink-0 p-2 rounded-lg bg-white bg-opacity-10 border border-white border-opacity-20 text-white hover:bg-opacity-20 hover:border-blue-400 transition-all"
+              className="hidden md:flex flex-shrink-0 p-2 rounded-lg bg-white bg-opacity-10 border border-white border-opacity-20 text-white hover:bg-opacity-20 hover:border-blue-400 transition-all"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
@@ -6748,18 +6759,18 @@ const CMMSModule = ({
 
           {/* Notifications Bell */}
           {userCompanyId && (
-            <NotificationsPanel 
+            <div className="hidden md:block"><NotificationsPanel
               userId={user?.id} 
               companyId={userCompanyId}
               onActionClick={(tab) => {
                 console.log(`🔔 Notification action triggered, navigating to: ${tab}`);
                 setActiveTab(tab);
               }}
-            />
+            /></div>
           )}
 
           {!isCreator && availableUserRoles.length > 1 && (
-            <div className="min-w-[190px]">
+            <div className="hidden md:block min-w-[190px]">
               <label className="block text-[10px] uppercase tracking-wide text-gray-400 mb-1">Use CMMS as</label>
               <select
                 value={normalizeRoleKey(userRole)}
@@ -6776,17 +6787,31 @@ const CMMSModule = ({
             </div>
           )}
 
-          {(isCreator || userRole === 'admin') && cmmsData.companyProfile?.pichin_business_profile_id && (
+          <div className="md:hidden w-full">
+            <select
+              value={normalizeRoleKey(userRole)}
+              onChange={handleRoleSelection}
+              disabled={availableUserRoles.length <= 1}
+              aria-label="Choose CMMS role"
+              className="w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm font-semibold text-white focus:border-blue-400 disabled:cursor-default disabled:opacity-90"
+            >
+              {availableUserRoles.length > 0 ? availableUserRoles.map((role) => (
+                <option key={role.id} value={normalizeRoleKey(role.role_name)}>{role.display_name || role.role_name}</option>
+              )) : <option value={normalizeRoleKey(userRole)}>{activeRoleDefinition?.display_name || userRole || 'CMMS role'}</option>}
+            </select>
+          </div>
+
+          {(isCreator || ['admin', 'administrator', 'cmms_admin', 'business_admin'].includes(normalizeRoleKey(userRole))) && cmmsData.companyProfile?.pichin_business_profile_id && (
             <button
               type="button"
               onClick={() => setShowModuleConfiguration((current) => !current)}
-              className="px-3 py-2 rounded-lg border border-cyan-300/40 bg-cyan-500/10 text-xs font-semibold text-cyan-100 hover:bg-cyan-500/20 transition-all"
+              className="inline-flex w-full md:w-auto items-center justify-center px-4 md:px-6 py-2.5 md:py-3 rounded-xl border border-cyan-300/40 bg-cyan-500/10 text-sm font-bold text-cyan-100 hover:bg-cyan-500/20 transition-all"
             >
               {showModuleConfiguration ? 'Close module setup' : 'Configure modules'}
             </button>
           )}
 
-          <span className="cmms-role-badge px-3 md:px-4 py-1.5 md:py-2 rounded-full text-xs font-semibold whitespace-nowrap">
+          <span className="hidden cmms-role-badge px-3 md:px-4 py-1.5 md:py-2 rounded-full text-xs font-semibold whitespace-nowrap">
             {isSwitchingCompany ? '⏳ SWITCHING...' : `🔑 ${(activeRoleDefinition?.display_name || userRole || '').toUpperCase()}`}
           </span>
         </div>

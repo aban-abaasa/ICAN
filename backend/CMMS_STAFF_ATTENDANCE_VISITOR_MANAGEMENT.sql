@@ -1254,3 +1254,89 @@ $$;
 REVOKE ALL ON FUNCTION public.staff_check_out_with_qr(TEXT, NUMERIC, NUMERIC) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.staff_check_out_with_qr(TEXT, NUMERIC, NUMERIC) TO authenticated;
 NOTIFY pgrst, 'reload schema';
+
+-- ============================================================
+-- 15. SECURE RECORD-LOADING FUNCTIONS (STAFF/ADMIN DASHBOARD)
+-- ============================================================
+-- The dashboard must load through these functions instead of selecting the
+-- RLS-protected tables directly. Admins receive company records; active staff
+-- receive only their own attendance. Visitor logs remain admin-only.
+CREATE OR REPLACE FUNCTION public.get_attendance_records(
+  p_cmms_company_id UUID,
+  p_start_date DATE DEFAULT NULL,
+  p_end_date DATE DEFAULT NULL,
+  p_user_id UUID DEFAULT NULL
+)
+RETURNS TABLE (
+  id UUID, cmms_user_id UUID, user_email TEXT, user_name TEXT,
+  check_in_time TIMESTAMPTZ, check_out_time TIMESTAMPTZ,
+  check_in_location TEXT, location_validated BOOLEAN, status TEXT,
+  notes TEXT, edited_at TIMESTAMPTZ, edit_reason TEXT
+)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE
+  v_current_user_id UUID;
+  v_is_admin BOOLEAN;
+BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Sign in is required'; END IF;
+  SELECT id INTO v_current_user_id
+    FROM public.cmms_users
+   WHERE cmms_company_id = p_cmms_company_id AND is_active
+     AND lower(email) = lower(auth.jwt() ->> 'email')
+   LIMIT 1;
+  IF v_current_user_id IS NULL THEN RAISE EXCEPTION 'Active CMMS staff membership is required'; END IF;
+  v_is_admin := public.cmms_attendance_qr_admin(p_cmms_company_id);
+
+  RETURN QUERY
+  SELECT a.id, a.cmms_user_id, u.email, COALESCE(u.full_name, u.user_name),
+         a.check_in_time, a.check_out_time, a.check_in_location,
+         a.location_validated, a.status, a.notes, a.edited_at, a.edit_reason
+    FROM public.cmms_staff_attendance a
+    JOIN public.cmms_users u ON u.id = a.cmms_user_id
+   WHERE a.cmms_company_id = p_cmms_company_id
+     AND (p_start_date IS NULL OR a.check_in_time >= p_start_date::TIMESTAMPTZ)
+     AND (p_end_date IS NULL OR a.check_in_time < (p_end_date + 1)::TIMESTAMPTZ)
+     AND (p_user_id IS NULL OR a.cmms_user_id = p_user_id)
+     AND (v_is_admin OR a.cmms_user_id = v_current_user_id)
+   ORDER BY a.check_in_time DESC;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.get_visitor_records(
+  p_cmms_company_id UUID,
+  p_start_date DATE DEFAULT NULL,
+  p_end_date DATE DEFAULT NULL,
+  p_status TEXT DEFAULT NULL
+)
+RETURNS TABLE (
+  id UUID, visitor_name TEXT, visitor_email TEXT, visitor_phone TEXT,
+  check_in_time TIMESTAMPTZ, check_out_time TIMESTAMPTZ,
+  check_in_location TEXT, location_validated BOOLEAN, host_name TEXT,
+  host_email TEXT, purpose TEXT, status TEXT, flagged_reason TEXT, admin_notes TEXT
+)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public
+AS $$
+BEGIN
+  IF NOT public.cmms_attendance_qr_admin(p_cmms_company_id) THEN
+    RAISE EXCEPTION 'Company administrator access is required to view visitor records';
+  END IF;
+  RETURN QUERY
+  SELECT v.id, v.visitor_name, v.visitor_email, v.visitor_phone,
+         v.check_in_time, v.check_out_time, v.check_in_location,
+         v.location_validated, v.host_name, v.host_email, v.purpose,
+         v.status, v.flagged_reason, v.admin_notes
+    FROM public.cmms_visitor_checkin v
+   WHERE v.cmms_company_id = p_cmms_company_id
+     AND (p_start_date IS NULL OR v.check_in_time >= p_start_date::TIMESTAMPTZ)
+     AND (p_end_date IS NULL OR v.check_in_time < (p_end_date + 1)::TIMESTAMPTZ)
+     AND (p_status IS NULL OR v.status = p_status)
+   ORDER BY v.check_in_time DESC;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.get_attendance_records(UUID, DATE, DATE, UUID) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.get_visitor_records(UUID, DATE, DATE, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.get_attendance_records(UUID, DATE, DATE, UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_visitor_records(UUID, DATE, DATE, TEXT) TO authenticated;
+NOTIFY pgrst, 'reload schema';

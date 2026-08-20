@@ -5,6 +5,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from '../lib/supabase/client';
 import { publicAppUrl } from '../utils/publicAppUrl';
 import { downloadCmmsQrPdf } from '../utils/downloadCmmsQrPdf';
+import { downloadCmmsRecordsExcel, downloadCmmsRecordsPdf } from '../utils/cmmsRecordExports';
 
 const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, userRole, isCreator }) => {
   const videoRef = useRef(null);
@@ -77,13 +78,14 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
     if (!companyProfile) return;
 
     try {
-      const { data } = await supabase.rpc('get_visitor_records', {
+      const { data, error: recordsError } = await supabase.rpc('get_visitor_records', {
         p_cmms_company_id: companyProfile.id,
         p_start_date: selectedDate,
         p_end_date: selectedDate,
         p_status: filterStatus || null
       });
 
+      if (recordsError) throw recordsError;
       setVisitorRecords(data || []);
     } catch (err) {
       console.error('Error loading visitor records:', err);
@@ -271,6 +273,31 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
     }
     setVisitorQrCode(`${publicAppUrl()}/visitor-check-in?token=${encodeURIComponent(record.token)}`);
     setSuccess('✅ Visitor QR payload generated');
+  };
+
+  const visitorColumns = [
+    { label: 'Date', value: (record) => new Date(record.check_in_time).toLocaleDateString() },
+    { label: 'Visitor Name', value: (record) => record.visitor_name },
+    { label: 'Email', value: (record) => record.visitor_email },
+    { label: 'Phone', value: (record) => record.visitor_phone },
+    { label: 'Host', value: (record) => record.host_name || record.host_email },
+    { label: 'Purpose', value: (record) => record.purpose },
+    { label: 'Check In', value: (record) => new Date(record.check_in_time).toLocaleTimeString() },
+    { label: 'Check Out', value: (record) => record.check_out_time ? new Date(record.check_out_time).toLocaleTimeString() : 'Not checked out' },
+    { label: 'Location', value: (record) => record.check_in_location },
+    { label: 'Status', value: (record) => record.status }
+  ];
+
+  const exportVisitors = async (format) => {
+    if (!visitorRecords.length) return setError('No visitor records to export');
+    const filename = `visitor-records-${selectedDate}`;
+    try {
+      if (format === 'excel') await downloadCmmsRecordsExcel({ filename, sheetName: 'Visitors', columns: visitorColumns, rows: visitorRecords });
+      else await downloadCmmsRecordsPdf({ filename, title: 'Visitor Records Report', subtitle: `${companyProfile?.company_name || 'CMMS'} • ${selectedDate}`, columns: visitorColumns, rows: visitorRecords });
+    } catch (exportError) {
+      console.error('Visitor export error:', exportError);
+      setError(`Unable to download ${format.toUpperCase()}. Please try again.`);
+    }
   };
 
   const downloadVisitorQrPdf = async () => {
@@ -586,6 +613,10 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
                 <RefreshCw className="w-4 h-4" />
                 Refresh
               </button>
+            </div>
+            <div className="flex items-end gap-2">
+              <button onClick={() => exportVisitors('excel')} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold flex items-center gap-2"><Download className="w-4 h-4" /> Excel</button>
+              <button onClick={() => exportVisitors('pdf')} className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-semibold flex items-center gap-2"><Download className="w-4 h-4" /> PDF</button>
             </div>
           </div>
 

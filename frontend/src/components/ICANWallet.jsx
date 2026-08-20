@@ -52,6 +52,7 @@ import BuyIcan from './ICAN/BuyIcan';
 import SellIcan from './ICAN/SellIcan';
 import ReceiveMoneyModal from './ReceiveMoneyModal';
 import PayMoneyModal from './PayMoneyModal';
+import IcanPaymentReceiptModal from './IcanPaymentReceiptModal';
 
 const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = null, onTabChange = null }) => {
   const [showBalance, setShowBalance] = useState(true);
@@ -193,6 +194,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   const [showAgentAccountNumber, setShowAgentAccountNumber] = useState(true);
   const [showReceiveMoneyModal, setShowReceiveMoneyModal] = useState(false);
   const [showPayMoneyModal, setShowPayMoneyModal] = useState(false);
+  const [paymentReceipt, setPaymentReceipt] = useState(null);
   
   // Payment Cards State
   const [paymentCards, setPaymentCards] = useState([]);
@@ -6820,7 +6822,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
               counterpartyType: 'business',
               businessProfileId,
             });
-            alert('Payment successful. Receipt: ' + (result.payerReceipt?.receiptNumber || 'available in transaction history'));
+            setPaymentReceipt(result.payerReceipt || null);
             setShowPayMoneyModal(false);
             await loadWalletBalances(currentUserId);
           } catch (error) {
@@ -6831,6 +6833,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           }
         }}
       />
+      <IcanPaymentReceiptModal receipt={paymentReceipt} onClose={() => setPaymentReceipt(null)} />
     </div>
   );
 };

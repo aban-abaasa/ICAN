@@ -8,6 +8,9 @@ export function parseIcanPayCode(value) {
   if (!raw) return null;
   if (raw.toUpperCase().startsWith('ICANPAY:')) return raw.slice(raw.indexOf(':') + 1).trim();
   if (raw.toUpperCase().startsWith('ICANPAY_')) return raw;
+  const linkMatch = raw.match(/\/pay\/(PAY_[A-Z0-9_]+)/i);
+  if (linkMatch) return linkMatch[1];
+  if (/^PAY_[A-Z0-9_]+$/i.test(raw)) return raw;
   return null;
 }
 
@@ -33,6 +36,20 @@ export async function payIcanRequest({
   if (request.user_id === payerUserId) throw new Error('You cannot pay your own request');
   const amount = Number(request.amount);
   if (!Number.isFinite(amount) || amount <= 0) throw new Error('Invalid payment amount');
+
+  if (request.payment_method === 'cash') {
+    const { data, error } = await supabase.rpc('record_cash_payment_request', { p_payment_code: paymentCode });
+    if (error) throw error;
+    const receipt = Array.isArray(data) ? data[0] : data;
+    if (!receipt?.success) throw new Error(receipt?.message || 'Unable to record this cash payment');
+    const payerReceipt = {
+      receiptNumber: receipt.receipt_number, paymentCode, transactionId: receipt.cash_transaction_id,
+      amount, currency: request.currency, payerUserId, recipientUserId: request.user_id,
+      issuedAt: receipt.recorded_at || new Date().toISOString(), description: request.description || 'Cash payment', paymentMethod: 'cash',
+    };
+    try { const stored = JSON.parse(localStorage.getItem('ican_payment_receipts') || '[]'); localStorage.setItem('ican_payment_receipts', JSON.stringify([payerReceipt, ...stored].slice(0, 100))); } catch (_) {}
+    return { request: { ...request, status: 'completed' }, transfer: null, payerReceipt };
+  }
 
   const transfer = await sendICAN({
     fromUserId: payerUserId,

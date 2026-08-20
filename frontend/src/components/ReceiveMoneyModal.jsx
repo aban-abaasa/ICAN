@@ -28,7 +28,9 @@ const ReceiveMoneyModal = ({
   // Form state
   const [formData, setFormData] = useState(initialFormData);
   const [paymentMethod, setPaymentMethod] = useState('ican');
-  const [cashReceipt, setCashReceipt] = useState(null);
+  // Kept null so a stale receipt view can never be shown; cash receipts are
+  // issued only to the payer after they scan and confirm this QR.
+  const [cashReceipt] = useState(null);
 
   // QR Code state
   const [qrData, setQrData] = useState(null);
@@ -42,7 +44,6 @@ const ReceiveMoneyModal = ({
     setSuccessMessage(null);
     setFormData(initialFormData);
     setPaymentMethod('ican');
-    setCashReceipt(null);
     setQrData(null);
     setPaymentLink('');
     setActiveRequests([]);
@@ -101,43 +102,19 @@ const ReceiveMoneyModal = ({
       setLoading(true);
       setError(null);
 
-      // Cash is receipt-only. It must never call a wallet transfer or alter
-      // the user's ICAN balance.
-      if (paymentMethod === 'cash') {
-        const receipt = {
-          receiptNumber: `CASH-RCP-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`,
-          amount: Number(formData.amount),
-          currency: selectedCurrency,
-          description: formData.description || 'Cash received',
-          paymentMethod: 'cash',
-          receivedAt: new Date().toISOString(),
-          recipientUserId: userId,
-        };
-        setCashReceipt(receipt);
-        try {
-          const stored = JSON.parse(localStorage.getItem('ican_cash_receipts') || '[]');
-          localStorage.setItem('ican_cash_receipts', JSON.stringify([receipt, ...stored].slice(0, 100)));
-        } catch {
-          // The on-screen receipt remains available if browser storage is unavailable.
-        }
-        setSuccessMessage('Cash receipt created. No ICAN balance was changed.');
-        setStep('receipt');
-        onSuccess?.(receipt);
-        return;
-      }
-      
       // Create payment request
       const result = await paymentRequestService.createPaymentRequest(
         userId,
         formData.amount,
         selectedCurrency,
-        formData.description
+        formData.description,
+        paymentMethod
       );
 
       if (result.success) {
         setQrData(result.data);
         setPaymentLink(result.paymentLink);
-        setSuccessMessage(`Payment request created for ${formData.amount} ${selectedCurrency}`);
+        setSuccessMessage(`${paymentMethod === 'cash' ? 'Cash' : 'Wallet'} payment request created for ${formData.amount} ${selectedCurrency}`);
         setStep('qrcode');
       }
     } catch (err) {
@@ -146,27 +123,6 @@ const ReceiveMoneyModal = ({
     } finally {
       setLoading(false);
     }
-  };
-
-  const downloadCashReceipt = () => {
-    if (!cashReceipt) return;
-    const text = [
-      'ICANERA DIGITAL RECEIPT',
-      '-----------------------',
-      `Receipt: ${cashReceipt.receiptNumber}`,
-      `Amount: ${cashReceipt.amount.toLocaleString()} ${cashReceipt.currency}`,
-      `Method: Cash`,
-      `Description: ${cashReceipt.description}`,
-      `Date: ${new Date(cashReceipt.receivedAt).toLocaleString()}`,
-      '',
-      'Cash receipt only. No ICAN wallet balance was changed.',
-    ].join('\n');
-    const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${cashReceipt.receiptNumber}.txt`;
-    link.click();
-    URL.revokeObjectURL(url);
   };
 
   const handleCopyLink = () => {
@@ -244,7 +200,7 @@ const ReceiveMoneyModal = ({
                   </button>
                 ))}
               </div>
-              {paymentMethod === 'cash' && <p className="text-xs text-amber-300 mt-2">Cash creates a digital receipt only. Your ICAN balance will not change.</p>}
+              {paymentMethod === 'cash' && <p className="text-xs text-amber-300 mt-2">Show this QR to the payer. They scan it to record the cash payment and download their proof receipt. No ICAN balance changes.</p>}
             </div>
 
             <div>
