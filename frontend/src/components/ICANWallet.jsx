@@ -5433,8 +5433,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
       {/* SEND MODAL */}
       {activeModal === 'send' && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="glass-card p-6 w-full max-w-md">
+        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="glass-card mb-[calc(5.5rem+env(safe-area-inset-bottom))] max-h-[calc(100dvh-6.5rem)] w-full max-w-md overflow-y-auto rounded-b-none rounded-t-2xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:mb-0 sm:max-h-[90vh] sm:rounded-2xl sm:p-6">
             <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
               <Send className="w-5 h-5 text-blue-400" />
               Send Money
@@ -5559,8 +5559,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
       {/* RECEIVE MODAL */}
       {activeModal === 'receive' && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="glass-card p-6 w-full max-w-md">
+        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="glass-card mb-[calc(5.5rem+env(safe-area-inset-bottom))] max-h-[calc(100dvh-6.5rem)] w-full max-w-md overflow-y-auto rounded-b-none rounded-t-2xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:mb-0 sm:max-h-[90vh] sm:rounded-2xl sm:p-6">
             <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
               <ArrowDownLeft className="w-5 h-5 text-cyan-400" />
               Receive Payment

@@ -208,8 +208,8 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
       : 'bg-emerald-100 text-emerald-700 border-emerald-200';
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 via-indigo-50 to-purple-50 overflow-y-auto">
-      <div className="p-2 sm:p-3 md:p-8 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-[calc(0.5rem+env(safe-area-inset-top))]">
+    <div className="min-h-[100dvh] bg-gradient-to-b from-blue-50 via-indigo-50 to-purple-50 overflow-y-auto overscroll-contain">
+      <div className="p-3 sm:p-3 md:p-8 pb-[calc(7.5rem+env(safe-area-inset-bottom))] sm:pb-3 md:pb-8 pt-[calc(0.75rem+env(safe-area-inset-top))]">
         <div className="max-w-5xl mx-auto w-full">
           {/* Header - Mobile Optimized */}
           <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-8">

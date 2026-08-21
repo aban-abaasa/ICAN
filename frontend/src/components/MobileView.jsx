@@ -4791,7 +4791,12 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           onClick={() => setSelectedDetail(null)}
         >
           <div
-            className={`bg-gradient-to-br from-slate-900 to-purple-900 rounded-t-2xl ${isWebDashboard ? 'rounded-2xl w-full max-w-3xl max-h-[85vh]' : 'w-full rounded-t-2xl pb-[calc(7rem+env(safe-area-inset-bottom))]'} pl-6 pr-8 pt-6 overflow-y-auto`}
+            className={`bg-gradient-to-br from-slate-900 to-purple-900 ${isWebDashboard
+              ? 'rounded-t-2xl rounded-2xl w-full max-w-3xl max-h-[85vh] pl-6 pr-8 pt-6'
+              : selectedDetail.tab === 'profile' && selectedDetail.item === 'My Profile'
+                ? 'w-full h-[100dvh] max-h-[100dvh] rounded-none p-0'
+                : 'w-full max-h-[calc(100dvh-env(safe-area-inset-top))] rounded-t-2xl pb-[calc(7rem+env(safe-area-inset-bottom))] pl-6 pr-8 pt-[calc(1.5rem+env(safe-area-inset-top))]'
+            } overflow-y-auto overscroll-contain`}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header - Settings Only */}

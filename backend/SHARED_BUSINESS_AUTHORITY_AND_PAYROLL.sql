@@ -128,6 +128,11 @@ CREATE TABLE IF NOT EXISTS public.business_compensation_profiles (
   pay_type TEXT NOT NULL DEFAULT 'monthly' CHECK (pay_type IN ('monthly', 'hourly', 'per_ride', 'hybrid')),
   base_salary NUMERIC(15,2) NOT NULL DEFAULT 0,
   currency TEXT NOT NULL DEFAULT 'UGX',
+  pay_frequency TEXT NOT NULL DEFAULT 'monthly'
+    CHECK (pay_frequency IN ('hourly', 'daily', 'weekly', 'monthly', 'contract')),
+  contract_start DATE,
+  contract_end DATE,
+  contract_total NUMERIC(15,2),
   effective_from DATE NOT NULL DEFAULT CURRENT_DATE,
   effective_to DATE,
   overtime_rate NUMERIC(15,2) DEFAULT 0,
@@ -142,6 +147,24 @@ CREATE TABLE IF NOT EXISTS public.business_compensation_profiles (
 
 ALTER TABLE public.business_compensation_profiles
   ADD COLUMN IF NOT EXISTS payroll_status TEXT NOT NULL DEFAULT 'on_pay';
+
+ALTER TABLE public.business_compensation_profiles
+  ADD COLUMN IF NOT EXISTS pay_frequency TEXT NOT NULL DEFAULT 'monthly',
+  ADD COLUMN IF NOT EXISTS contract_start DATE,
+  ADD COLUMN IF NOT EXISTS contract_end DATE,
+  ADD COLUMN IF NOT EXISTS contract_total NUMERIC(15,2);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'business_compensation_profiles_pay_frequency_check'
+  ) THEN
+    ALTER TABLE public.business_compensation_profiles
+      ADD CONSTRAINT business_compensation_profiles_pay_frequency_check
+      CHECK (pay_frequency IN ('hourly', 'daily', 'weekly', 'monthly', 'contract'));
+  END IF;
+END $$;
 
 DO $$
 BEGIN

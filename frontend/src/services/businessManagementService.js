@@ -166,13 +166,41 @@ export const saveBusinessCompensation = async (businessProfileId, employeeUserId
   const amount = Number(values.base_salary);
   if (!Number.isFinite(amount) || amount <= 0) return { success: false, error: 'Enter a salary or rate greater than zero.' };
   const { data: authData } = await sb.auth.getUser();
-  const compensation = { business_profile_id: businessProfileId, employee_user_id: employeeUserId, pay_type: values.pay_type || 'monthly', base_salary: amount, currency: String(values.currency || 'UGX').trim().toUpperCase(), effective_from: values.effective_from || new Date().toISOString().slice(0, 10), overtime_rate: Number(values.overtime_rate || 0), payroll_status: values.payroll_status || 'on_pay', notes: values.notes || null, created_by: authData?.user?.id || null };
+  const payFrequency = ['hourly', 'daily', 'weekly', 'monthly', 'contract'].includes(values.pay_frequency) ? values.pay_frequency : (values.pay_type === 'hourly' ? 'hourly' : 'monthly');
+  const compensation = { business_profile_id: businessProfileId, employee_user_id: employeeUserId, pay_type: values.pay_type || (payFrequency === 'hourly' ? 'hourly' : 'monthly'), base_salary: amount, currency: String(values.currency || 'UGX').trim().toUpperCase(), pay_frequency: payFrequency, contract_start: values.contract_start || null, contract_end: values.contract_end || null, contract_total: values.contract_total ? Number(values.contract_total) : null, effective_from: values.effective_from || new Date().toISOString().slice(0, 10), overtime_rate: Number(values.overtime_rate || 0), payroll_status: values.payroll_status || 'on_pay', notes: values.notes || null, created_by: authData?.user?.id || null };
   let { data, error } = await sb.from('business_compensation_profiles').upsert(compensation, { onConflict: 'business_profile_id,employee_user_id,effective_from' }).select().single();
-  if (error && /payroll_status.*schema cache|column .*payroll_status.*does not exist/i.test(error.message || '')) {
-    const { payroll_status: _ignored, ...legacyCompensation } = compensation;
+  if (error && /(payroll_status|pay_frequency|contract_start|contract_end|contract_total).*schema cache|column .*(payroll_status|pay_frequency|contract_start|contract_end|contract_total).*does not exist/i.test(error.message || '')) {
+    const { payroll_status: _status, pay_frequency: _frequency, contract_start: _start, contract_end: _end, contract_total: _total, ...legacyCompensation } = compensation;
     ({ data, error } = await sb.from('business_compensation_profiles').upsert(legacyCompensation, { onConflict: 'business_profile_id,employee_user_id,effective_from' }).select().single());
   }
   return error ? { success: false, error: error.message } : { success: true, data };
+};
+
+const daysInclusive = (start, end) => Math.max(1, Math.floor((new Date(`${end}T00:00:00Z`) - new Date(`${start}T00:00:00Z`)) / 86400000) + 1);
+const weekdayCount = (start, end) => {
+  let count = 0;
+  for (let date = new Date(`${start}T00:00:00Z`); date <= new Date(`${end}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + 1)) {
+    if (date.getUTCDay() !== 0 && date.getUTCDay() !== 6) count += 1;
+  }
+  return count;
+};
+
+const payrollBaseForPeriod = (profile, periodStart, periodEnd) => {
+  const frequency = profile.pay_frequency || (profile.pay_type === 'hourly' ? 'hourly' : 'monthly');
+  const days = daysInclusive(periodStart, periodEnd);
+  if (frequency === 'hourly') return Number(profile.base_salary || 0) * weekdayCount(periodStart, periodEnd) * 8;
+  if (frequency === 'daily') return Number(profile.base_salary || 0) * days;
+  if (frequency === 'weekly') return Number(profile.base_salary || 0) * (days / 7);
+  if (frequency === 'contract') {
+    const contractStart = profile.contract_start || profile.effective_from;
+    const contractEnd = profile.contract_end || profile.effective_to || periodEnd;
+    const overlapStart = contractStart > periodStart ? contractStart : periodStart;
+    const overlapEnd = contractEnd < periodEnd ? contractEnd : periodEnd;
+    if (overlapEnd < overlapStart) return 0;
+    const contractDays = daysInclusive(contractStart, contractEnd);
+    return Number(profile.contract_total || profile.base_salary || 0) * (daysInclusive(overlapStart, overlapEnd) / contractDays);
+  }
+  return Number(profile.base_salary || 0);
 };
 
 // Payroll periods and entries deliberately use the shared business tables.
@@ -193,7 +221,7 @@ export const getBusinessPayrollEntries = async (periodId) => {
   return { data: data || [], error };
 };
 
-export const createBusinessPayrollPeriod = async ({ businessProfileId, periodStart, periodEnd, employees, compensation }) => {
+export const createBusinessPayrollPeriod = async ({ businessProfileId, periodStart, periodEnd, compensation }) => {
   const sb = db();
   if (!sb || !businessProfileId) return { success: false, error: 'Supabase is not configured.' };
   const { data: auth } = await sb.auth.getUser();
@@ -201,16 +229,51 @@ export const createBusinessPayrollPeriod = async ({ businessProfileId, periodSta
     business_profile_id: businessProfileId, period_start: periodStart, period_end: periodEnd, created_by: auth?.user?.id || null
   }).select().single();
   if (periodError) return { success: false, error: periodError.message };
-  const activeComp = new Map((compensation || []).filter(item => item.payroll_status === 'on_pay').map(item => [item.employee_user_id, item]));
-  const entries = (employees || []).map(employee => {
-    const pay = activeComp.get(employee.authUserId);
-    return pay ? { payroll_period_id: period.id, business_profile_id: businessProfileId, employee_user_id: employee.authUserId, base_amount: Number(pay.base_salary || 0), metadata: { pay_type: pay.pay_type, currency: pay.currency || 'UGX' } } : null;
-  }).filter(Boolean);
+  // Saved salary profiles are the payroll source of truth. A staff member
+  // must not be skipped merely because the CMMS user list is stale or filtered.
+  const activeComp = new Map();
+  (compensation || [])
+    .filter(item => item.employee_user_id && item.payroll_status === 'on_pay')
+    .filter(item => item.effective_from <= periodEnd && (!item.effective_to || item.effective_to >= periodStart))
+    .sort((a, b) => String(b.effective_from).localeCompare(String(a.effective_from)))
+    .forEach(item => { if (!activeComp.has(item.employee_user_id)) activeComp.set(item.employee_user_id, item); });
+  const entries = [...activeComp.values()].map(pay => ({
+    payroll_period_id: period.id,
+    business_profile_id: businessProfileId,
+    employee_user_id: pay.employee_user_id,
+    base_amount: Number(payrollBaseForPeriod(pay, periodStart, periodEnd).toFixed(2)),
+    metadata: { pay_type: pay.pay_type, pay_frequency: pay.pay_frequency || (pay.pay_type === 'hourly' ? 'hourly' : 'monthly'), currency: pay.currency || 'UGX', compensation_profile_id: pay.id }
+  }));
   if (entries.length) {
     const { error } = await sb.from('business_payroll_entries').insert(entries);
     if (error) return { success: false, error: error.message };
   }
   return { success: true, data: period };
+};
+
+// A staff pay allocation can be saved after a draft has been opened. Keep
+// draft reviews in sync with the same saved on-pay staff source of truth.
+export const syncBusinessPayrollDraftStaff = async ({ payrollPeriod, compensation }) => {
+  const sb = db();
+  if (!sb || !payrollPeriod || payrollPeriod.status !== 'draft') return { success: true, data: [] };
+  const activeComp = new Map();
+  (compensation || [])
+    .filter(item => item.employee_user_id && item.payroll_status === 'on_pay')
+    .filter(item => item.effective_from <= payrollPeriod.period_end && (!item.effective_to || item.effective_to >= payrollPeriod.period_start))
+    .sort((a, b) => String(b.effective_from).localeCompare(String(a.effective_from)))
+    .forEach(item => { if (!activeComp.has(item.employee_user_id)) activeComp.set(item.employee_user_id, item); });
+  const entries = [...activeComp.values()].map(pay => ({
+    payroll_period_id: payrollPeriod.id,
+    business_profile_id: payrollPeriod.business_profile_id,
+    employee_user_id: pay.employee_user_id,
+    base_amount: Number(payrollBaseForPeriod(pay, payrollPeriod.period_start, payrollPeriod.period_end).toFixed(2)),
+    metadata: { pay_type: pay.pay_type, pay_frequency: pay.pay_frequency || (pay.pay_type === 'hourly' ? 'hourly' : 'monthly'), currency: pay.currency || 'UGX', compensation_profile_id: pay.id }
+  }));
+  if (!entries.length) return { success: true, data: [] };
+  const { data, error } = await sb.from('business_payroll_entries')
+    .upsert(entries, { onConflict: 'payroll_period_id,employee_user_id', ignoreDuplicates: true })
+    .select();
+  return error ? { success: false, error: error.message } : { success: true, data: data || [] };
 };
 
 export const applyAttendanceToPayroll = async (periodId) => {

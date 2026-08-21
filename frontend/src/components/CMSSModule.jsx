@@ -1073,7 +1073,14 @@ const CMMSModule = ({
       return [...availableTools.map((tool) => tool.id), ...(categoryAllows('users') ? ['role-config'] : [])];
     }
     const role = cmmsRoleDefinitions.find((item) => normalizeRoleKey(item.role_name) === normalizeRoleKey(userRole) || normalizeRoleKey(item.display_name) === normalizeRoleKey(userRole));
-    return role?.tool_access ? availableTools.filter((tool) => role.tool_access[tool.id]).map((tool) => tool.id) : [];
+    if (!role?.tool_access) return [];
+    const permittedTools = availableTools.filter((tool) => role.tool_access[tool.id]).map((tool) => tool.id);
+    // Attendance supervisors need a focused payroll screen to set the work
+    // schedule and run the reviewable attendance-deduction calculation.
+    if (permittedTools.includes('attendance') && categoryAllows('payroll') && !permittedTools.includes('payroll')) {
+      permittedTools.push('payroll');
+    }
+    return permittedTools;
   };
 
   // A CMMS company profile is not the business authority. Employee, payroll,
@@ -6895,6 +6902,7 @@ const CMMSModule = ({
             isCreator={isCreator}
             currentUser={user}
             dataScope={getToolScope('payroll')}
+            attendancePayrollOnly={hasToolAction('attendance') && !hasToolAction('payroll')}
           />
         )}
         {activeTab === 'transport' && getTabs().includes('transport') && <CMMSBookTransportPanel companyProfile={cmmsData.companyProfile} />}

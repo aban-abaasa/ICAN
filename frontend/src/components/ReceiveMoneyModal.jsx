@@ -201,7 +201,7 @@ const ReceiveMoneyModal = ({
       onClick={handleCloseModal}
     >
       <div
-        className="glass-card max-h-[calc(100dvh-1rem)] w-full max-w-md overflow-y-auto rounded-b-none rounded-t-2xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:max-h-[90vh] sm:rounded-2xl sm:p-6"
+        className="glass-card mb-[calc(5.5rem+env(safe-area-inset-bottom))] max-h-[calc(100dvh-6.5rem)] w-full max-w-md overflow-y-auto rounded-b-none rounded-t-2xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:mb-0 sm:max-h-[90vh] sm:rounded-2xl sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

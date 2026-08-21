@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { MessageCircle, X, Send, Headphones, Globe, ThumbsUp } from 'lucide-react';
+import { MessageCircle, X, Send, Headphones, Globe, ThumbsUp, Briefcase, Expand, Minimize, GripVertical } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import {
   resolveChatIdentity,
@@ -24,8 +24,20 @@ import {
   replyToLandingMessage,
   subscribeToPublicLandingMessages,
 } from '../services/landingMessagesService';
+import cmmsMessagingService from '../services/cmmsMessagingService';
 
 const dedupe = (list, item) => (list.some((m) => m.id === item.id) ? list : [...list, item]);
+const oldestFirst = (messages = []) => [...messages].sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
+const WIDGET_POSITION_KEY = 'ican_chat_widget_position';
+const ALL_CMMS_RECIPIENTS = '__all_cmms_employees__';
+
+const getSavedPosition = (hasBottomNav) => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(WIDGET_POSITION_KEY));
+    if (Number.isFinite(saved?.left) && Number.isFinite(saved?.top)) return saved;
+  } catch (_) { /* Use the default position. */ }
+  return { left: Math.max(12, window.innerWidth - 76), top: Math.max(12, window.innerHeight - (hasBottomNav ? 112 : 76)) };
+};
 
 const ChatWidget = ({ hasBottomNav = false }) => {
   const { actualTheme } = useTheme();
@@ -38,9 +50,12 @@ const ChatWidget = ({ hasBottomNav = false }) => {
   const [guestLikeKey] = useState(() => getOrCreateGuestLikeKey());
 
   const [open, setOpen] = useState(false);
-  const [channel, setChannel] = useState('support'); // 'support' | 'community'
+  const [fullScreen, setFullScreen] = useState(false);
+  const [position, setPosition] = useState(() => getSavedPosition(hasBottomNav));
+  const [channel, setChannel] = useState('support'); // 'support' | 'community' | 'cmms'
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [dragging, setDragging] = useState(false);
 
   const [supportConvId, setSupportConvId] = useState(null);
   const [supportMessages, setSupportMessages] = useState([]);
@@ -48,15 +63,79 @@ const ChatWidget = ({ hasBottomNav = false }) => {
 
   const [communityThreads, setCommunityThreads] = useState([]);
   const [selectedThreadId, setSelectedThreadId] = useState(null);
+  const [cmmsMessages, setCmmsMessages] = useState([]);
+  const [cmmsTasks, setCmmsTasks] = useState([]);
+  const [cmmsLoading, setCmmsLoading] = useState(false);
+  const [cmmsMembershipVerified, setCmmsMembershipVerified] = useState(false);
+  const [cmmsRecipients, setCmmsRecipients] = useState([]);
+  const [cmmsRecipientId, setCmmsRecipientId] = useState('');
+  const [cmmsComposeError, setCmmsComposeError] = useState('');
 
   const scrollRef = useRef(null);
   const openRef = useRef(open);
   const channelRef = useRef(channel);
+  const dragRef = useRef(null);
+  const dragMovedRef = useRef(false);
   useEffect(() => { openRef.current = open; }, [open]);
   useEffect(() => { channelRef.current = channel; }, [channel]);
 
   const hidden = isDeveloperSession();
   const scopeKey = identity ? (identity.isGuest ? 'guest' : `user_${identity.userId}`) : null;
+  const cmmsCompanyId = !identity?.isGuest ? localStorage.getItem('cmms_company_id') : null;
+  const canCheckCmmsAccess = Boolean(cmmsCompanyId && identity?.authId);
+  const hasCmmsAccess = canCheckCmmsAccess && cmmsMembershipVerified;
+
+  useEffect(() => {
+    const keepWidgetVisible = () => {
+      setPosition((current) => ({
+        left: Math.min(Math.max(8, current.left), Math.max(8, window.innerWidth - 64)),
+        top: Math.min(Math.max(8, current.top), Math.max(8, window.innerHeight - 64)),
+      }));
+    };
+    window.addEventListener('resize', keepWidgetVisible);
+    return () => window.removeEventListener('resize', keepWidgetVisible);
+  }, []);
+
+  useEffect(() => {
+    try { localStorage.setItem(WIDGET_POSITION_KEY, JSON.stringify(position)); } catch (_) { /* Storage is optional. */ }
+  }, [position]);
+
+  useEffect(() => {
+    if (!canCheckCmmsAccess) {
+      setCmmsMessages([]);
+      setCmmsTasks([]);
+      setCmmsMembershipVerified(false);
+      if (channel === 'cmms') setChannel('support');
+      return undefined;
+    }
+    let cancelled = false;
+    const loadCmmsFeed = async () => {
+      setCmmsLoading(true);
+      try {
+        const [messagesResult, tasksResult, usersResult] = await Promise.all([
+          cmmsMessagingService.getUserMessages(cmmsCompanyId),
+          cmmsMessagingService.getUserJobAssignments(cmmsCompanyId),
+          cmmsMessagingService.getCompanyUsers(cmmsCompanyId),
+        ]);
+        if (cancelled) return;
+        const verified = messagesResult.success || tasksResult.success || usersResult.success;
+        setCmmsMembershipVerified(verified);
+        setCmmsMessages(messagesResult.success ? oldestFirst(messagesResult.data) : []);
+        setCmmsTasks(tasksResult.success ? tasksResult.data || [] : []);
+        setCmmsRecipients(usersResult.success ? (usersResult.data || []).filter((user) => (
+          user.id !== identity?.userId
+          && user.id !== identity?.authId
+          && user.email?.toLowerCase() !== identity?.email?.toLowerCase()
+        )) : []);
+        if (!verified && channelRef.current === 'cmms') setChannel('support');
+      } finally {
+        if (!cancelled) setCmmsLoading(false);
+      }
+    };
+    loadCmmsFeed();
+    const intervalId = window.setInterval(loadCmmsFeed, 30000);
+    return () => { cancelled = true; window.clearInterval(intervalId); };
+  }, [canCheckCmmsAccess, cmmsCompanyId]);
 
   useEffect(() => {
     if (hidden) { setIdentityReady(true); return; }
@@ -151,6 +230,28 @@ const ChatWidget = ({ hasBottomNav = false }) => {
     markChannelRead(ch);
   };
 
+  const startDrag = (event) => {
+    if (fullScreen || event.button !== 0) return;
+    dragMovedRef.current = false;
+    dragRef.current = { startX: event.clientX, startY: event.clientY, left: position.left, top: position.top, moved: false };
+    setDragging(true);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
+  const moveDrag = (event) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    const left = Math.min(Math.max(8, drag.left + event.clientX - drag.startX), Math.max(8, window.innerWidth - 64));
+    const top = Math.min(Math.max(8, drag.top + event.clientY - drag.startY), Math.max(8, window.innerHeight - 64));
+    if (Math.abs(event.clientX - drag.startX) > 4 || Math.abs(event.clientY - drag.startY) > 4) {
+      drag.moved = true;
+      dragMovedRef.current = true;
+    }
+    setPosition({ left, top });
+  };
+
+  const endDrag = () => { dragRef.current = null; setDragging(false); };
+
   const ensureIdentity = () => {
     if (identity) return identity;
     const name = guestForm.name.trim();
@@ -188,7 +289,28 @@ const ChatWidget = ({ hasBottomNav = false }) => {
 
     setSending(true);
     try {
-      if (channel === 'community') {
+      if (channel === 'cmms') {
+        if (!cmmsRecipientId) {
+          setCmmsComposeError('Choose a CMMS member before sending.');
+          return;
+        }
+        const recipientIds = cmmsRecipientId === ALL_CMMS_RECIPIENTS
+          ? cmmsRecipients.map((member) => member.id)
+          : [cmmsRecipientId];
+        if (recipientIds.length === 0) throw new Error('There are no other CMMS employees to message.');
+        const results = await Promise.all(recipientIds.map((recipientId) => cmmsMessagingService.sendReportMessage(
+          cmmsCompanyId,
+          null,
+          body,
+          recipientId,
+          'comment'
+        )));
+        const failed = results.find((result) => !result.success);
+        if (failed) throw new Error(failed.error || 'Unable to send CMMS message.');
+        setCmmsComposeError('');
+        const messagesResult = await cmmsMessagingService.getUserMessages(cmmsCompanyId);
+        if (messagesResult.success) setCmmsMessages(oldestFirst(messagesResult.data));
+      } else if (channel === 'community') {
         const senderAuthId = who.isGuest ? null : who.authId;
         if (selectedThreadId) {
           await replyToLandingMessage({ parentId: selectedThreadId, name: who.name, email: who.email, authId: senderAuthId, message: body });
@@ -219,6 +341,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
       setDraft('');
     } catch (err) {
       console.error('[ChatWidget] send failed:', err);
+      if (channel === 'cmms') setCmmsComposeError(err.message || 'Unable to send CMMS message.');
     } finally {
       setSending(false);
     }
@@ -231,28 +354,37 @@ const ChatWidget = ({ hasBottomNav = false }) => {
     }
   };
 
+  const handleDraftChange = (event) => {
+    setDraft(event.target.value);
+    event.target.style.height = 'auto';
+    event.target.style.height = `${Math.min(event.target.scrollHeight, 144)}px`;
+  };
+
   if (hidden || !identityReady) return null;
 
   const needsGuestForm = !identity;
 
   return (
-    <div className={`fixed right-5 z-[999] ${hasBottomNav ? 'bottom-24' : 'bottom-5'}`}>
+    <div className="fixed z-[999]" style={fullScreen ? undefined : { left: position.left, top: position.top }}>
       {open && (
         <div
-          className={`mb-3 flex h-[28rem] w-[22rem] max-w-[90vw] flex-col overflow-hidden rounded-2xl border shadow-2xl ${
+          className={`${fullScreen ? 'fixed inset-0 h-[100dvh] w-full rounded-none' : 'fixed left-1/2 top-1/2 h-[min(28rem,calc(100dvh-2rem))] w-[min(22rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-2xl'} flex flex-col overflow-hidden border shadow-2xl ${
             dark ? 'border-slate-700/50 bg-slate-950' : 'border-slate-200 bg-white'
           }`}
         >
-          <div className="flex items-center justify-between bg-gradient-to-r from-indigo-500 via-purple-600 to-slate-800 px-4 py-3 text-white">
+          <div className={`flex items-center justify-between bg-gradient-to-r from-indigo-500 via-purple-600 to-slate-800 px-4 text-white ${channel === 'cmms' ? 'py-2' : 'py-3'}`}>
             <div>
-              <p className="text-sm font-semibold">{channel === 'community' ? 'Community' : 'ICAN Support'}</p>
-              <p className="text-[11px] text-white/80">
+              <p className="text-sm font-semibold">{channel === 'community' ? 'Community' : channel === 'cmms' ? 'CMMS' : 'ICAN Support'}</p>
+              {channel !== 'cmms' && <p className="text-[11px] text-white/80">
                 {channel === 'community' ? 'Public Q&A — everyone can read this' : 'We usually reply within a few minutes'}
-              </p>
+              </p>}
             </div>
-            <button onClick={() => setOpen(false)} className="rounded-lg p-1.5 hover:bg-white/20 transition">
-              <X className="h-4 w-4" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setFullScreen((value) => !value)} className="rounded-lg p-1.5 hover:bg-white/20 transition" title={fullScreen ? 'Exit full screen' : 'Open full screen'}>
+                {fullScreen ? <Minimize className="h-4 w-4" /> : <Expand className="h-4 w-4" />}
+              </button>
+              <button onClick={() => { setOpen(false); setFullScreen(false); }} className="rounded-lg p-1.5 hover:bg-white/20 transition" title="Close"><X className="h-4 w-4" /></button>
+            </div>
           </div>
 
           <div className={`flex gap-1 border-b px-3 py-2 ${dark ? 'border-slate-700/50 bg-slate-950' : 'border-slate-200 bg-slate-50'}`}>
@@ -277,10 +409,60 @@ const ChatWidget = ({ hasBottomNav = false }) => {
             >
               <Globe className="h-3.5 w-3.5" /> Community
             </button>
+            {hasCmmsAccess && (
+              <button
+                onClick={() => handleSwitchChannel('cmms')}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition ${
+                  channel === 'cmms'
+                    ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white'
+                    : dark ? 'text-slate-400 hover:bg-white/5' : 'text-slate-500 hover:bg-slate-100'
+                }`}
+              >
+                <Briefcase className="h-3.5 w-3.5" /> CMMS
+              </button>
+            )}
           </div>
 
           <div ref={scrollRef} className={`flex-1 space-y-2 overflow-y-auto px-3 py-3 ${dark ? 'bg-slate-950' : 'bg-slate-50'}`}>
-            {channel === 'community' ? (
+            {channel === 'cmms' ? (
+              cmmsLoading && cmmsMessages.length === 0 && cmmsTasks.length === 0 ? (
+                <p className={`mt-6 text-center text-xs ${dark ? 'text-slate-500' : 'text-slate-400'}`}>Loading your CMMS work feed...</p>
+              ) : (
+                <>
+                  <section>
+                    <p className={`mb-2 text-[11px] font-semibold uppercase tracking-wide ${dark ? 'text-slate-400' : 'text-slate-500'}`}>Assigned tasks</p>
+                    {cmmsTasks.length === 0 ? <p className={`rounded-xl border px-3 py-2 text-xs ${dark ? 'border-slate-700/50 text-slate-500' : 'border-slate-200 text-slate-400'}`}>No CMMS tasks are assigned to you.</p> : cmmsTasks.map((task) => (
+                      <div key={task.id} className={`mb-2 rounded-xl border px-3 py-2 ${dark ? 'border-slate-700/50 bg-white/5 text-slate-100' : 'border-slate-200 bg-white text-slate-800'}`}>
+                        <div className="flex items-start justify-between gap-2"><p className="text-sm font-medium">{task.job_title || 'Assigned task'}</p><span className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-[10px] font-semibold capitalize text-indigo-400">{(task.assignment_status || 'pending').replace('_', ' ')}</span></div>
+                        {task.job_description && <p className={`mt-1 text-xs ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{task.job_description}</p>}
+                        {task.due_date && <p className={`mt-1 text-[10px] ${dark ? 'text-slate-500' : 'text-slate-400'}`}>Due {new Date(task.due_date).toLocaleDateString()}</p>}
+                      </div>
+                    ))}
+                  </section>
+                  <section className="pt-2">
+                    <p className={`mb-2 text-[11px] font-semibold uppercase tracking-wide ${dark ? 'text-slate-400' : 'text-slate-500'}`}>Messages</p>
+                    {cmmsMessages.length === 0 ? <p className={`rounded-xl border px-3 py-2 text-xs ${dark ? 'border-slate-700/50 text-slate-500' : 'border-slate-200 text-slate-400'}`}>No CMMS messages yet.</p> : cmmsMessages.map((message) => {
+                      const isOwnMessage = message.sender_email?.toLowerCase() === identity?.email?.toLowerCase();
+                      return (
+                        <div key={message.id} className={`mb-2 flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}>
+                          <div className={`max-w-[85%] rounded-2xl px-3 py-2 ${
+                            isOwnMessage
+                              ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-br-md'
+                              : dark ? 'border border-slate-700/50 bg-white/5 text-slate-100 rounded-bl-md' : 'border border-slate-200 bg-white text-slate-800 rounded-bl-md'
+                          }`}>
+                            <p className={`text-[10px] font-semibold uppercase tracking-wide ${isOwnMessage ? 'text-white/75' : 'text-indigo-400'}`}>
+                              {isOwnMessage ? `You → ${message.recipient_name || 'CMMS member'}` : (message.sender_name || message.sender_email || 'CMMS team')}
+                            </p>
+                            <p className="mt-0.5 whitespace-pre-wrap break-words text-sm">{message.message_text || message.body || ''}</p>
+                            {message.created_at && <p className={`mt-1 text-right text-[10px] ${isOwnMessage ? 'text-white/70' : dark ? 'text-slate-500' : 'text-slate-400'}`}>{new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </section>
+                </>
+              )
+            ) : channel === 'community' ? (
               selectedThread ? (
                 <>
                   <button
@@ -388,7 +570,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
             )}
           </div>
 
-          {needsGuestForm && (
+          {needsGuestForm && channel !== 'cmms' && (
             <div className={`space-y-2 border-t px-3 py-2 ${dark ? 'border-slate-700/50' : 'border-slate-200'}`}>
               <div className="grid grid-cols-2 gap-2">
                 <input
@@ -414,6 +596,22 @@ const ChatWidget = ({ hasBottomNav = false }) => {
           )}
 
           <div className={`border-t px-3 py-3 ${dark ? 'border-slate-700/50' : 'border-slate-200'}`}>
+            {channel === 'cmms' && (
+              <div className="mb-2">
+                <label className={`mb-1 block text-[11px] font-medium ${dark ? 'text-slate-400' : 'text-slate-500'}`} htmlFor="cmms-message-recipient">Send to</label>
+                <select
+                  id="cmms-message-recipient"
+                  value={cmmsRecipientId}
+                  onChange={(event) => { setCmmsRecipientId(event.target.value); setCmmsComposeError(''); }}
+                  className={`w-full rounded-lg border px-2.5 py-2 text-xs outline-none focus:border-indigo-500 ${dark ? 'border-slate-700/50 bg-white/5 text-white' : 'border-slate-200 bg-white text-slate-800'}`}
+                >
+                  <option value="">Choose a CMMS member</option>
+                  {cmmsRecipients.length > 1 && <option value={ALL_CMMS_RECIPIENTS}>All CMMS employees</option>}
+                  {cmmsRecipients.map((member) => <option key={member.id} value={member.id}>{member.name || member.full_name || member.email || 'CMMS member'}</option>)}
+                </select>
+                {cmmsComposeError && <p className="mt-1 text-[11px] text-red-400">{cmmsComposeError}</p>}
+              </div>
+            )}
             {channel === 'community' && selectedThread && (
               <div className={`mb-2 flex items-center justify-between gap-2 text-[11px] ${dark ? 'text-indigo-400' : 'text-indigo-600'}`}>
                 <span className="truncate">Replying to: "{selectedThread.message}"</span>
@@ -423,15 +621,17 @@ const ChatWidget = ({ hasBottomNav = false }) => {
             <div className="flex items-center gap-2">
               <textarea
                 value={draft}
-                onChange={(e) => setDraft(e.target.value)}
+                onChange={handleDraftChange}
                 onKeyDown={handleKeyDown}
                 placeholder={
-                  channel === 'community'
+                  channel === 'cmms'
+                    ? 'Write a direct CMMS message...'
+                    : channel === 'community'
                     ? (selectedThreadId ? 'Write a reply…' : 'Ask something publicly…')
                     : 'Type your message…'
                 }
                 rows={1}
-                className={`flex-1 resize-none rounded-xl border px-3 py-2 text-sm outline-none focus:border-indigo-500 ${
+                className={`max-h-36 min-h-9 flex-1 resize-none overflow-y-auto rounded-xl border px-3 py-2 text-sm outline-none focus:border-indigo-500 ${
                   dark ? 'border-slate-700/50 bg-white/5 text-white placeholder:text-slate-500' : 'border-slate-200 bg-slate-50 text-slate-800'
                 }`}
               />
@@ -447,16 +647,25 @@ const ChatWidget = ({ hasBottomNav = false }) => {
         </div>
       )}
 
-      <button
-        onClick={() => (open ? setOpen(false) : handleOpen())}
-        className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-600 to-slate-800 text-white shadow-2xl transition hover:scale-105"
+      {!fullScreen && <button
+        onPointerDown={startDrag}
+        onPointerMove={moveDrag}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onClick={() => {
+          if (dragMovedRef.current) { dragMovedRef.current = false; return; }
+          if (!dragRef.current && !dragging) (open ? setOpen(false) : handleOpen());
+        }}
+        className={`relative flex h-14 w-14 touch-none items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-600 to-slate-800 text-white shadow-2xl transition hover:scale-105 ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
         title="Chat with us"
       >
         {open ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
+        <GripVertical className="pointer-events-none absolute -right-1 -bottom-1 h-3.5 w-3.5 rounded-full bg-slate-900/50 p-0.5 text-white/80" />
         {!open && supportUnread && (
           <span className="absolute -top-1 -right-1 h-4 w-4 animate-pulse rounded-full border-2 border-white bg-red-500" />
         )}
       </button>
+      }
     </div>
   );
 };

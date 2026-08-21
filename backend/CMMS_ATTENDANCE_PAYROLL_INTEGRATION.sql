@@ -10,6 +10,14 @@
 -- manager configures the policy and applies it to a DRAFT/PENDING payroll
 -- period, where every deduction remains reviewable before approval/payment.
 
+-- A company can use one default schedule, while a custom role can override
+-- it (for example, reception 08:00–17:00 and security 19:00–07:00).
+ALTER TABLE public.cmms_roles
+  ADD COLUMN IF NOT EXISTS attendance_schedule JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+COMMENT ON COLUMN public.cmms_roles.attendance_schedule IS
+  'Optional role-level attendance/payroll schedule: scheduled_start, scheduled_end, grace_minutes, monthly_work_days.';
+
 CREATE TABLE IF NOT EXISTS public.cmms_attendance_payroll_settings (
   cmms_company_id UUID PRIMARY KEY REFERENCES public.cmms_company_profiles(id) ON DELETE CASCADE,
   enabled BOOLEAN NOT NULL DEFAULT FALSE,
@@ -46,16 +54,44 @@ CREATE INDEX IF NOT EXISTS idx_cmms_attendance_payroll_adjustments_entry
 ALTER TABLE public.cmms_attendance_payroll_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cmms_attendance_payroll_adjustments ENABLE ROW LEVEL SECURITY;
 
+-- Attendance supervisors need to maintain the work schedule that their QR
+-- records are measured against. Payroll managers retain this access as well.
+CREATE OR REPLACE FUNCTION public.cmms_can_manage_attendance_payroll(p_company_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT public.cmms_has_permission(p_company_id, 'manage_payroll')
+      OR EXISTS (
+        SELECT 1
+          FROM public.cmms_user_roles ur
+          JOIN public.cmms_roles r ON r.id = ur.cmms_role_id
+         WHERE ur.cmms_company_id = p_company_id
+           AND ur.cmms_user_id = public.cmms_current_user_id_for_company(p_company_id)
+           AND ur.is_active
+           AND r.is_active
+           AND (
+             r.tool_access ->> 'attendance' = 'true'
+             OR COALESCE((r.tool_access -> 'attendance' ->> 'view')::BOOLEAN, FALSE)
+             OR COALESCE((r.tool_access -> 'attendance' ->> 'create')::BOOLEAN, FALSE)
+             OR COALESCE((r.tool_access -> 'attendance' ->> 'edit')::BOOLEAN, FALSE)
+             OR COALESCE((r.tool_access -> 'attendance' ->> 'approve')::BOOLEAN, FALSE)
+           )
+      );
+$$;
+
 DROP POLICY IF EXISTS cmms_attendance_payroll_settings_access ON public.cmms_attendance_payroll_settings;
 CREATE POLICY cmms_attendance_payroll_settings_access ON public.cmms_attendance_payroll_settings
   FOR ALL TO authenticated
-  USING (public.cmms_has_permission(cmms_company_id, 'manage_payroll'))
-  WITH CHECK (public.cmms_has_permission(cmms_company_id, 'manage_payroll'));
+  USING (public.cmms_can_manage_attendance_payroll(cmms_company_id))
+  WITH CHECK (public.cmms_can_manage_attendance_payroll(cmms_company_id));
 
 DROP POLICY IF EXISTS cmms_attendance_payroll_adjustments_access ON public.cmms_attendance_payroll_adjustments;
 CREATE POLICY cmms_attendance_payroll_adjustments_access ON public.cmms_attendance_payroll_adjustments
   FOR SELECT TO authenticated
-  USING (public.cmms_has_permission(cmms_company_id, 'manage_payroll'));
+  USING (public.cmms_can_manage_attendance_payroll(cmms_company_id));
 
 CREATE OR REPLACE FUNCTION public.cmms_apply_attendance_payroll_deductions(
   p_payroll_period_id UUID
@@ -101,8 +137,8 @@ BEGIN
   WHERE pichin_business_profile_id = v_period.business_profile_id
   LIMIT 1;
   IF v_company.id IS NULL THEN RAISE EXCEPTION 'No CMMS company is linked to this payroll business'; END IF;
-  IF NOT public.cmms_has_permission(v_company.id, 'manage_payroll') THEN
-    RAISE EXCEPTION 'You do not have permission to manage payroll for this company';
+  IF NOT public.cmms_can_manage_attendance_payroll(v_company.id) THEN
+    RAISE EXCEPTION 'You do not have permission to manage attendance payroll deductions for this company';
   END IF;
 
   SELECT * INTO v_settings FROM public.cmms_attendance_payroll_settings WHERE cmms_company_id = v_company.id;
@@ -191,5 +227,8 @@ GRANT EXECUTE ON FUNCTION public.cmms_apply_attendance_payroll_deductions(UUID) 
 
 COMMENT ON FUNCTION public.cmms_apply_attendance_payroll_deductions(UUID) IS
   'Applies configured, reviewable attendance deductions to draft payroll entries only.';
+
+REVOKE ALL ON FUNCTION public.cmms_can_manage_attendance_payroll(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.cmms_can_manage_attendance_payroll(UUID) TO authenticated;
 
 NOTIFY pgrst, 'reload schema';
