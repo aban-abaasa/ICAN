@@ -10,7 +10,7 @@ import { User, Mail, Phone, Edit2, Save, X, Upload, Shield, Wallet, Key, LogOut,
 import { StatusUploader } from '../status/StatusUploader';
 import ShareholderApprovalsCenter from '../ShareholderApprovalsCenter';
 
-export const ProfilePage = ({ onClose = null, onLogout = null }) => {
+export const ProfilePage = ({ onClose = null, onLogout = null, isMobilePanel = false }) => {
   const { 
     user, 
     profile, 
@@ -208,7 +208,7 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
       : 'bg-emerald-100 text-emerald-700 border-emerald-200';
 
   return (
-    <div className="min-h-[100dvh] bg-gradient-to-b from-blue-50 via-indigo-50 to-purple-50 overflow-y-auto overscroll-contain">
+    <div className={`${isMobilePanel ? 'h-full min-h-0' : 'min-h-[100dvh]'} bg-gradient-to-b from-blue-50 via-indigo-50 to-purple-50 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden`}>
       <div className="p-3 sm:p-3 md:p-8 pb-[calc(7.5rem+env(safe-area-inset-bottom))] sm:pb-3 md:pb-8 pt-[calc(0.75rem+env(safe-area-inset-top))]">
         <div className="max-w-5xl mx-auto w-full">
           {/* Header - Mobile Optimized */}

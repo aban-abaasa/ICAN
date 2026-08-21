@@ -4796,7 +4796,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               : selectedDetail.tab === 'profile' && selectedDetail.item === 'My Profile'
                 ? 'w-full h-[100dvh] max-h-[100dvh] rounded-none p-0'
                 : 'w-full max-h-[calc(100dvh-env(safe-area-inset-top))] rounded-t-2xl pb-[calc(7rem+env(safe-area-inset-bottom))] pl-6 pr-8 pt-[calc(1.5rem+env(safe-area-inset-top))]'
-            } overflow-y-auto overscroll-contain`}
+            } ${!isWebDashboard && selectedDetail.tab === 'profile' && selectedDetail.item === 'My Profile'
+              ? 'overflow-hidden'
+              : 'overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]'
+            }`}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header - Settings Only */}
@@ -4818,12 +4821,13 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             )}
 
             {/* Content - Single Column */}
-            <div className="space-y-4">
+            <div className={`space-y-4 ${!isWebDashboard && selectedDetail.tab === 'profile' && selectedDetail.item === 'My Profile' ? 'h-full' : ''}`}>
               {/* MY PROFILE */}
               {selectedDetail.tab === 'profile' && selectedDetail.item === 'My Profile' && (
-                <div className="overflow-hidden rounded-lg">
+                <div className={`overflow-hidden rounded-lg ${!isWebDashboard ? 'h-full' : ''}`}>
                   <ProfilePage
                     onClose={() => setSelectedDetail(null)}
+                    isMobilePanel={!isWebDashboard}
                     onLogout={() => {
                       setSelectedDetail(null);
                     }}
