@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, Download, Users, QrCode, MapPin, CheckCircle, XCircle, Copy, Eye } from 'lucide-react';
+import { Calendar, Clock, Download, Users, QrCode, MapPin, CheckCircle, XCircle, Copy, Eye, Search, Filter, Trash2 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from '../lib/supabase/client';
 import { getPublicAppUrl } from '../utils/publicAppUrl';
@@ -11,13 +11,18 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
   const [qrCodes, setQrCodes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('records');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const today = new Date().toISOString().split('T')[0];
+  const [startDate, setStartDate] = useState(today);
+  const [endDate, setEndDate] = useState(today);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedStaffId, setSelectedStaffId] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   const canManage = userRole === 'admin' || isCreator;
 
   useEffect(() => {
     loadData();
-  }, [companyProfile, selectedDate]);
+  }, [companyProfile, startDate, endDate, selectedStaffId]);
 
   const loadData = async () => {
     if (!companyProfile?.id) return;
@@ -27,9 +32,9 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
       const [recordsRes, qrRes] = await Promise.all([
         supabase.rpc('get_attendance_records', {
           p_cmms_company_id: companyProfile.id,
-          p_start_date: selectedDate,
-          p_end_date: selectedDate,
-          p_user_id: null
+          p_start_date: startDate || null,
+          p_end_date: endDate || null,
+          p_user_id: canManage && selectedStaffId ? selectedStaffId : null
         }),
         
         canManage ? supabase
@@ -158,6 +163,16 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
     loadData();
   };
 
+  const deleteQRCode = async (qr) => {
+    if (!window.confirm(`Delete the QR code for ${qr.location_name}? Existing staff attendance records will be kept, but this QR code will stop working immediately.`)) return;
+    const { error } = await supabase.rpc('delete_cmms_attendance_qr_location', { p_qr_id: qr.id });
+    if (error) {
+      alert('Failed to delete QR code: ' + error.message);
+      return;
+    }
+    setQrCodes((current) => current.filter((item) => item.id !== qr.id));
+  };
+
   const downloadQRCode = async (token, locationName) => {
     const url = getPublicAppUrl(`/staff-attendance?token=${token}`);
     try {
@@ -183,8 +198,29 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
     { label: 'Status', value: (record) => record.check_out_time ? 'Complete' : 'Active' }
   ];
 
+  const visibleAttendanceRecords = attendanceRecords.filter((record) => {
+    const query = searchTerm.trim().toLowerCase();
+    const matchesSearch = !query || [record.staff?.full_name, record.staff?.email, record.check_in_location, record.check_out_location]
+      .some((value) => value?.toLowerCase().includes(query));
+    const recordStatus = record.check_out_time ? 'complete' : 'active';
+    return matchesSearch && (statusFilter === 'all' || statusFilter === recordStatus);
+  });
+
+  const staffOptions = cmmsUsers?.filter((user) => user?.is_active !== false)
+    .map((user) => ({ id: user.id, label: user.full_name || user.user_name || user.email || 'Unnamed staff' })) || [];
+  const payrollReadyCount = visibleAttendanceRecords.filter((record) => Boolean(record.check_out_time)).length;
+  const payrollFollowUpCount = visibleAttendanceRecords.length - payrollReadyCount;
+
+  const setDatePreset = (days) => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - (days - 1));
+    setStartDate(start.toISOString().split('T')[0]);
+    setEndDate(end.toISOString().split('T')[0]);
+  };
+
   const ensureAttendanceRecords = () => {
-    if (attendanceRecords.length === 0) {
+    if (visibleAttendanceRecords.length === 0) {
       alert('No attendance records to export');
       return false;
     }
@@ -193,12 +229,12 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
 
   const exportAttendanceExcel = async () => {
     if (!ensureAttendanceRecords()) return;
-    await downloadCmmsRecordsExcel({ filename: `attendance-${selectedDate}`, sheetName: 'Attendance', columns: attendanceColumns, rows: attendanceRecords });
+    await downloadCmmsRecordsExcel({ filename: `attendance-${startDate}-to-${endDate}`, sheetName: 'Attendance', columns: attendanceColumns, rows: visibleAttendanceRecords });
   };
 
   const exportAttendancePdf = async () => {
     if (!ensureAttendanceRecords()) return;
-    await downloadCmmsRecordsPdf({ filename: `attendance-${selectedDate}`, title: 'Staff Attendance Report', subtitle: `${companyProfile?.company_name || 'CMMS'} • ${selectedDate}`, columns: attendanceColumns, rows: attendanceRecords });
+    await downloadCmmsRecordsPdf({ filename: `attendance-${startDate}-to-${endDate}`, title: 'Staff Attendance Report', subtitle: `${companyProfile?.company_name || 'CMMS'} attendance: ${startDate} to ${endDate}`, columns: attendanceColumns, rows: visibleAttendanceRecords });
   };
 
   const formatDuration = (checkIn, checkOut) => {
@@ -264,16 +300,24 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
       {/* Attendance Records Tab */}
       {activeTab === 'records' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex flex-wrap items-center gap-3">
               <Calendar className="h-5 w-5 text-slate-400" />
               <input
                 type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
+                value={startDate}
+                max={endDate || undefined}
+                onChange={(e) => setStartDate(e.target.value)}
                 className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg"
+                aria-label="Attendance start date"
               />
+              <span className="text-sm text-slate-400">to</span>
+              <input type="date" value={endDate} min={startDate || undefined} max={today} onChange={(e) => setEndDate(e.target.value)} className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg" aria-label="Attendance end date" />
+              <button onClick={() => setDatePreset(1)} className="px-3 py-2 text-xs bg-slate-700 hover:bg-slate-600 rounded-lg">Today</button>
+              <button onClick={() => setDatePreset(7)} className="px-3 py-2 text-xs bg-slate-700 hover:bg-slate-600 rounded-lg">7 days</button>
+              <button onClick={() => setDatePreset(30)} className="px-3 py-2 text-xs bg-slate-700 hover:bg-slate-600 rounded-lg">30 days</button>
             </div>
+            <div className="flex flex-wrap gap-2">
             <button
               onClick={exportAttendanceExcel}
               className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg flex items-center gap-2"
@@ -284,16 +328,29 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
             <button onClick={exportAttendancePdf} className="px-4 py-2 bg-rose-700 hover:bg-rose-600 rounded-lg flex items-center gap-2">
               <Download className="h-4 w-4" /> PDF
             </button>
+            </div>
           </div>
 
-          {attendanceRecords.length === 0 ? (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <label className="relative block"><Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" /><input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search staff, email or location" className="w-full rounded-lg border border-slate-700 bg-slate-800 py-2 pl-9 pr-3 text-sm" /></label>
+            {canManage && <select value={selectedStaffId} onChange={(e) => setSelectedStaffId(e.target.value)} className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm"><option value="">All staff</option>{staffOptions.map((staff) => <option key={staff.id} value={staff.id}>{staff.label}</option>)}</select>}
+            <label className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm"><Filter className="h-4 w-4 text-slate-400" /><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full bg-transparent outline-none"><option value="all">All statuses</option><option value="active">Checked in</option><option value="complete">Checked out</option></select></label>
+            <div className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-300">{visibleAttendanceRecords.length} record{visibleAttendanceRecords.length === 1 ? '' : 's'} shown</div>
+          </div>
+
+          <div className="flex flex-wrap gap-3 text-sm">
+            <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-emerald-300">Payroll review ready: {payrollReadyCount}</span>
+            {payrollFollowUpCount > 0 && <span className="rounded-full bg-amber-500/15 px-3 py-1 text-amber-300">Follow up - staff still checked in: {payrollFollowUpCount}</span>}
+          </div>
+
+          {visibleAttendanceRecords.length === 0 ? (
             <div className="text-center py-12 text-slate-400">
               <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p>No attendance records for this date</p>
+              <p>No attendance records match these filters</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {attendanceRecords.map((record) => (
+              {visibleAttendanceRecords.map((record) => (
                 <div
                   key={record.id}
                   className="p-4 bg-slate-800 border border-slate-700 rounded-lg hover:border-slate-600 transition"
@@ -336,12 +393,15 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
                       <p className="text-xs text-slate-400">
                         In: {new Date(record.check_in_time).toLocaleTimeString()}
                       </p>
-                      {record.check_out_time && (
-                        <p className="text-xs text-slate-400">
-                          Out: {new Date(record.check_out_time).toLocaleTimeString()}
-                        </p>
-                      )}
-                    </div>
+                       {record.check_out_time && (
+                         <p className="text-xs text-slate-400">
+                           Out: {new Date(record.check_out_time).toLocaleTimeString()}
+                         </p>
+                       )}
+                       <p className={`mt-2 text-xs ${record.check_out_time ? 'text-emerald-300' : 'text-amber-300'}`}>
+                         {record.check_out_time ? 'Payroll follow-up: ready for payroll review' : 'Payroll follow-up: employee must check out'}
+                       </p>
+                     </div>
                   </div>
                 </div>
               ))}
@@ -464,6 +524,9 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
                                 Activate
                               </>
                             )}
+                          </button>
+                          <button onClick={() => deleteQRCode(qr)} className="flex items-center gap-2 px-3 py-2 text-sm bg-slate-700 hover:bg-red-700 rounded-lg" title="Delete QR code">
+                            <Trash2 className="h-4 w-4" /> Delete
                           </button>
                         </div>
                       </div>

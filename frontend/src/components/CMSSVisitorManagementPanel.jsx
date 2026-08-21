@@ -33,6 +33,10 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
   const [adminNotes, setAdminNotes] = useState('');
   const [flagReason, setFlagReason] = useState('');
   const streamRef = useRef(null);
+  // Visitor identity/contact records are manager-only in the database. Keep
+  // the UI in step with that policy: users with this tool can register a
+  // visitor, while only company managers can open the records/review tabs.
+  const canViewVisitorRecords = userRole === 'admin' || isCreator;
 
   const getRpcErrorMessage = (rpcError, action) => {
     const message = rpcError?.message || '';
@@ -71,8 +75,14 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
 
   // Load visitor records
   useEffect(() => {
-    loadVisitorRecords();
-  }, [selectedDate, filterStatus]);
+    if (canViewVisitorRecords) loadVisitorRecords();
+  }, [selectedDate, filterStatus, canViewVisitorRecords]);
+
+  useEffect(() => {
+    if (!canViewVisitorRecords && activeSubTab !== 'visitor-checkin') {
+      setActiveSubTab('visitor-checkin');
+    }
+  }, [activeSubTab, canViewVisitorRecords]);
 
   const loadVisitorRecords = async () => {
     if (!companyProfile) return;
@@ -372,18 +382,20 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
           <Users className="inline w-4 h-4 mr-2" />
           Register Visitor
         </button>
-        <button
-          onClick={() => setActiveSubTab('visitor-records')}
-          className={`px-4 py-2 rounded-lg font-semibold transition-all ${
-            activeSubTab === 'visitor-records'
-              ? 'bg-indigo-600 text-white'
-              : 'bg-white/10 text-gray-300 hover:bg-white/20'
-          }`}
-        >
-          <Users className="inline w-4 h-4 mr-2" />
-          Visitor Records
-        </button>
-        {(userRole === 'admin' || isCreator) && (
+        {canViewVisitorRecords && (
+          <button
+            onClick={() => setActiveSubTab('visitor-records')}
+            className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+              activeSubTab === 'visitor-records'
+                ? 'bg-indigo-600 text-white'
+                : 'bg-white/10 text-gray-300 hover:bg-white/20'
+            }`}
+          >
+            <Users className="inline w-4 h-4 mr-2" />
+            Visitor Records
+          </button>
+        )}
+        {canViewVisitorRecords && (
           <button
             onClick={() => setActiveSubTab('visitor-edit')}
             className={`px-4 py-2 rounded-lg font-semibold transition-all ${

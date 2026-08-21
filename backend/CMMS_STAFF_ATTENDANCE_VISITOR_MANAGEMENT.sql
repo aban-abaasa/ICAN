@@ -1280,18 +1280,22 @@ DECLARE
   v_is_admin BOOLEAN;
 BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Sign in is required'; END IF;
-  SELECT id INTO v_current_user_id
-    FROM public.cmms_users
-   WHERE cmms_company_id = p_cmms_company_id AND is_active
-     AND lower(email) = lower(auth.jwt() ->> 'email')
+  -- `id` is also a RETURNS TABLE output variable in this PL/pgSQL function.
+  -- Qualifying the column prevents PostgreSQL error 42702 (ambiguous id).
+  SELECT cu.id INTO v_current_user_id
+    FROM public.cmms_users AS cu
+   WHERE cu.cmms_company_id = p_cmms_company_id AND cu.is_active
+     AND lower(cu.email) = lower(auth.jwt() ->> 'email')
    LIMIT 1;
   IF v_current_user_id IS NULL THEN RAISE EXCEPTION 'Active CMMS staff membership is required'; END IF;
   v_is_admin := public.cmms_attendance_qr_admin(p_cmms_company_id);
 
   RETURN QUERY
-  SELECT a.id, a.cmms_user_id, u.email, COALESCE(u.full_name, u.user_name),
-         a.check_in_time, a.check_out_time, a.check_in_location,
-         a.location_validated, a.status, a.notes, a.edited_at, a.edit_reason
+  -- Explicit casts are required because the underlying CMMS profile fields
+  -- are VARCHAR while this RPC declares its public result columns as TEXT.
+  SELECT a.id, a.cmms_user_id, u.email::TEXT, COALESCE(u.full_name, u.user_name)::TEXT,
+         a.check_in_time, a.check_out_time, a.check_in_location::TEXT,
+         a.location_validated, a.status::TEXT, a.notes::TEXT, a.edited_at, a.edit_reason::TEXT
     FROM public.cmms_staff_attendance a
     JOIN public.cmms_users u ON u.id = a.cmms_user_id
    WHERE a.cmms_company_id = p_cmms_company_id
@@ -1322,10 +1326,10 @@ BEGIN
     RAISE EXCEPTION 'Company administrator access is required to view visitor records';
   END IF;
   RETURN QUERY
-  SELECT v.id, v.visitor_name, v.visitor_email, v.visitor_phone,
-         v.check_in_time, v.check_out_time, v.check_in_location,
-         v.location_validated, v.host_name, v.host_email, v.purpose,
-         v.status, v.flagged_reason, v.admin_notes
+  SELECT v.id, v.visitor_name::TEXT, v.visitor_email::TEXT, v.visitor_phone::TEXT,
+         v.check_in_time, v.check_out_time, v.check_in_location::TEXT,
+         v.location_validated, v.host_name::TEXT, v.host_email::TEXT, v.purpose::TEXT,
+         v.status::TEXT, v.flagged_reason::TEXT, v.admin_notes::TEXT
     FROM public.cmms_visitor_checkin v
    WHERE v.cmms_company_id = p_cmms_company_id
      AND (p_start_date IS NULL OR v.check_in_time >= p_start_date::TIMESTAMPTZ)
@@ -1339,4 +1343,36 @@ REVOKE ALL ON FUNCTION public.get_attendance_records(UUID, DATE, DATE, UUID) FRO
 REVOKE ALL ON FUNCTION public.get_visitor_records(UUID, DATE, DATE, TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.get_attendance_records(UUID, DATE, DATE, UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_visitor_records(UUID, DATE, DATE, TEXT) TO authenticated;
+
+-- Remove a no-longer-needed staff QR without touching the immutable attendance
+-- history. Attendance stores the scanned token as text, not a foreign key, so
+-- past check-ins/check-outs remain available for payroll and audit review.
+CREATE OR REPLACE FUNCTION public.delete_cmms_attendance_qr_location(p_qr_id UUID)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_qr public.cmms_attendance_qr_locations;
+BEGIN
+  SELECT * INTO v_qr
+    FROM public.cmms_attendance_qr_locations
+   WHERE id = p_qr_id
+   FOR UPDATE;
+
+  IF v_qr.id IS NULL THEN
+    RAISE EXCEPTION 'Attendance QR code not found';
+  END IF;
+  IF NOT public.cmms_attendance_qr_admin(v_qr.cmms_company_id) THEN
+    RAISE EXCEPTION 'Only a company administrator can delete attendance QR codes';
+  END IF;
+
+  DELETE FROM public.cmms_attendance_qr_locations WHERE id = v_qr.id;
+  RETURN TRUE;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.delete_cmms_attendance_qr_location(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.delete_cmms_attendance_qr_location(UUID) TO authenticated;
 NOTIFY pgrst, 'reload schema';
