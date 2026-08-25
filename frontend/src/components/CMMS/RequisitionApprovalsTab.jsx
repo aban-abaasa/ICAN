@@ -66,7 +66,7 @@ const mapRequisitionFromDb = (req) => ({
   items: Array.isArray(req.items) ? req.items.map(normalizeLineItem) : []
 });
 
-const RequisitionApprovalsTab = ({ userRole, companyId, cmmsData, setCmmsData }) => {
+const RequisitionApprovalsTab = ({ userRole, canApprove = false, companyId, cmmsData, setCmmsData }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [decisionTargetId, setDecisionTargetId] = useState(null);
   const [notesById, setNotesById] = useState({});
@@ -79,9 +79,11 @@ const RequisitionApprovalsTab = ({ userRole, companyId, cmmsData, setCmmsData })
   const [financeCashoutMethod, setFinanceCashoutMethod] = useState('cash');
   const hasLoaded = useRef(false);
 
-  const canUseApprovalsTab = APPROVAL_TAB_ROLES.includes(userRole);
-  const canHandleDepartmentStage = DEPARTMENT_STAGE_ROLES.includes(userRole);
-  const isFinanceOfficer = userRole === 'finance';
+  // Custom company roles do not use the retired fixed role names. Their
+  // explicit Approvals > approve grant is therefore the authority here.
+  const canUseApprovalsTab = canApprove || APPROVAL_TAB_ROLES.includes(userRole);
+  const canHandleDepartmentStage = canApprove || DEPARTMENT_STAGE_ROLES.includes(userRole);
+  const isFinanceOfficer = canApprove || userRole === 'finance';
   const canHandleFinanceStage = isFinanceOfficer;
 
   const loadRequisitions = useCallback(

@@ -16,14 +16,8 @@ import { supabase } from '../lib/supabase/client';
 
 export const getFilteredReports = async (companyId, dataScope = 'department') => {
   try {
-    // Company/cross-department scopes use the company report RPC, while the
-    // role-aware RPC remains the safe default for department/own views.
-    if (dataScope === 'company' || dataScope === 'cross_department') {
-      const { data: companyData, error: companyError } = await supabase.rpc('fn_get_company_reports', {
-        p_company_id: companyId
-      });
-      if (!companyError) return { success: true, data: companyData || [] };
-    }
+    // Always use the role-aware RPC. The older company-wide RPC admitted any
+    // active company member and could bypass a role's chosen report scope.
     const { data, error } = await supabase
       .rpc('fn_get_filtered_reports', {
         p_company_id: companyId

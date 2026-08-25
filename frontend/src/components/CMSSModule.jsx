@@ -55,6 +55,7 @@ import CMMSFeesPanel from './CMMSFeesPanel.jsx';
 import CMMSOperationsPanel from './CMMSOperationsPanel.jsx';
 import CMSSAttendancePanel from './CMSSAttendancePanel.jsx';
 import CMSSVisitorManagementPanel from './CMSSVisitorManagementPanel.jsx';
+import CMMSEmployeeSelfService from './CMMSEmployeeSelfService.jsx';
 
 const CMMSModule = ({
   onDataUpdate,
@@ -1100,13 +1101,26 @@ const CMMSModule = ({
       const required = moduleForTool[toolId];
       return Boolean(required?.some((key) => enabledKeys.has(key)));
     };
-    const availableTools = CMMS_TOOL_OPTIONS.filter((tool) => categoryAllows(tool.id));
+    // A role assignment is an explicit grant from the company administrator.
+    // Older companies (and new ones awaiting business-level setup) can have no
+    // enabled business-module records yet. Do not turn that missing optional
+    // configuration into a denial of the tools the role was granted.
+    const hasBusinessModuleConfiguration = businessModules.length > 0;
+    const availableTools = CMMS_TOOL_OPTIONS.filter((tool) => (
+      businessModulesLoaded
+      && (!hasBusinessModuleConfiguration || categoryAllows(tool.id))
+    ));
     if (isCreator || userRole === 'admin') {
       return [...availableTools.map((tool) => tool.id), ...(categoryAllows('users') ? ['role-config'] : [])];
     }
     const role = cmmsRoleDefinitions.find((item) => normalizeRoleKey(item.role_name) === normalizeRoleKey(userRole) || normalizeRoleKey(item.display_name) === normalizeRoleKey(userRole));
     if (!role?.tool_access) return [];
-    const permittedTools = availableTools.filter((tool) => role.tool_access[tool.id]).map((tool) => tool.id);
+    // Listing a module requires explicit view access. The other configured
+    // actions (create, edit, approve, assign, etc.) are checked separately
+    // before the corresponding controls are enabled.
+    const permittedTools = availableTools
+      .filter((tool) => hasToolAction(tool.id, 'view'))
+      .map((tool) => tool.id);
     // Attendance supervisors need a focused payroll screen to set the work
     // schedule and run the reviewable attendance-deduction calculation.
     if (permittedTools.includes('attendance') && categoryAllows('payroll') && !permittedTools.includes('payroll')) {
@@ -1387,12 +1401,10 @@ const CMMSModule = ({
       }));
     };
 
-    const canCreateRequisition = isCreator || normalizeRoleKey(userRole) === 'admin'
-      || hasToolAction('requisitions', 'create')
-      || ['technician', 'supervisor', 'coordinator'].includes(userRole);
-    const canApproveSupervisor = hasToolAction('approvals', 'approve') || ['supervisor', 'coordinator'].includes(userRole);
-    const canApproveCoordinator = hasToolAction('approvals', 'approve') || ['coordinator', 'finance'].includes(userRole);
-    const canApproveFinance = hasToolAction('approvals', 'approve') || userRole === 'finance';
+    const canCreateRequisition = hasToolAction('requisitions', 'create');
+    const canApproveSupervisor = hasToolAction('approvals', 'approve');
+    const canApproveCoordinator = hasToolAction('approvals', 'approve');
+    const canApproveFinance = hasToolAction('approvals', 'approve');
 
     const handleCreateRequisition = async () => {
       if (!canCreateRequisition) {
@@ -2024,7 +2036,7 @@ const CMMSModule = ({
     const [isCreatingJob, setIsCreatingJob] = useState(false);
 
     // Determine if user can assign jobs
-    const canAssignJobs = hasToolAction('tasks', 'assign') || ['admin', 'coordinator', 'supervisor'].includes(userRole);
+    const canAssignJobs = hasToolAction('tasks', 'assign');
 
     // Load all data on mount
     useEffect(() => {
@@ -2761,8 +2773,13 @@ const CMMSModule = ({
   // REPORTS & ANALYTICS (ROLE-BASED)
   // ============================================
   const ReportsManager = () => {
-    const canViewAnalytics = hasPermission('canViewFinancials') || hasPermission('canManageUsers');
+    // Analytics aggregate company data, so a report reader needs an explicit
+    // company-wide Reports scope. Department/own readers receive only the
+    // written reports returned by the role-aware report service.
+    const canViewAnalytics = hasToolAction('reports', 'view') && getToolScope('reports') === 'company';
     const canViewCompanyReports = canViewCompanyReportsByRole(userRole);
+    const canCreateReports = hasToolAction('reports', 'create');
+    const canExportReports = hasToolAction('reports', 'export');
     const [isSubmittingCompanyReport, setIsSubmittingCompanyReport] = useState(false);
     const [isRefreshingReports, setIsRefreshingReports] = useState(false);
     const [expandedReportId, setExpandedReportId] = useState(null);
@@ -2858,6 +2875,10 @@ const CMMSModule = ({
     }, [activeTab, companyIdToUse, refreshCompanyReports]);
 
     const handleSubmitCompanyReport = async () => {
+      if (!canCreateReports) {
+        alert('Your role can view reports but cannot create a written report.');
+        return;
+      }
       if (!companyIdToUse) {
         alert('❌ Company profile is required before writing reports.');
         return;
@@ -2916,6 +2937,51 @@ const CMMSModule = ({
 
     const openReportsCount = companyReports.filter((report) => (report.status || 'open') === 'open').length;
     const highSeverityCount = companyReports.filter((report) => ['high', 'critical'].includes(String(report.severity || '').toLowerCase())).length;
+
+    const printWrittenReport = (report) => {
+      if (!canExportReports) {
+        alert('Your role does not have permission to print or export reports.');
+        return;
+      }
+      const safe = (value) => String(value || '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+      const printWindow = window.open('', '_blank', 'noopener,noreferrer');
+      if (!printWindow) { alert('Allow pop-ups to print or save this report as PDF.'); return; }
+      printWindow.document.write(`<!doctype html><html><head><title>${safe(report.report_title || 'CMMS Report')}</title><style>body{font-family:Arial,sans-serif;max-width:760px;margin:40px auto;color:#111;line-height:1.5}h1{margin-bottom:4px}.meta{color:#555;font-size:13px;border-bottom:1px solid #ddd;padding-bottom:16px;margin-bottom:20px}.body{white-space:pre-wrap}@media print{body{margin:20px}}</style></head><body><h1>${safe(report.report_title || 'CMMS Report')}</h1><div class="meta">Category: ${safe(report.report_category || 'general')} · Severity: ${safe(report.severity || 'medium')} · Status: ${safe(report.status || 'open')}<br>Written by: ${safe(report.reporter_name || report.reporter_email || 'Member')}<br>${safe(new Date(report.created_at).toLocaleString())}</div><div class="body">${safe(report.report_body)}</div><script>window.onload=()=>window.print()</script></body></html>`);
+      printWindow.document.close();
+    };
+
+    const downloadCollectedReportsPdf = async () => {
+      if (!canExportReports) {
+        alert('Your role does not have permission to export reports.');
+        return;
+      }
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF();
+      const scopeLabel = { own: 'Personal reports', department: 'Department reports', cross_department: 'Cross-department reports', company: 'Company-wide reports' }[getToolScope('reports')] || 'Role-authorized reports';
+      let y = 18;
+      const addLine = (text, size = 10) => {
+        doc.setFontSize(size);
+        const lines = doc.splitTextToSize(String(text || ''), 180);
+        lines.forEach((line) => {
+          if (y > 278) { doc.addPage(); y = 18; }
+          doc.text(line, 15, y); y += size === 16 ? 8 : 5;
+        });
+      };
+      addLine(cmmsData.companyProfile?.company_name || 'CMMS', 16);
+      addLine(`Collected reports — ${scopeLabel}`, 12);
+      addLine(`Generated: ${new Date().toLocaleString()} · Reports included: ${companyReports.length}`);
+      y += 4;
+      if (!companyReports.length) addLine('No reports are available for your assigned role and data scope.');
+      companyReports.forEach((report, index) => {
+        if (y > 250) { doc.addPage(); y = 18; }
+        addLine(`${index + 1}. ${report.report_title || 'Untitled report'}`, 12);
+        addLine(`Category: ${report.report_category || 'general'} | Severity: ${report.severity || 'medium'} | Status: ${report.status || 'open'}`);
+        addLine(`Written by: ${report.reporter_name || report.reporter_email || 'Member'} | ${new Date(report.created_at).toLocaleString()}`);
+        addLine(report.report_body || 'No report details provided.');
+        y += 4;
+      });
+      doc.save(`CMMS_Collected_Reports_${new Date().toISOString().slice(0, 10)}.pdf`);
+    };
 
     const generateInventoryReport = () => {
       const lowStockCount = cmmsData.inventory.filter(i => i.quantity_in_stock <= (i.reorder_level || 0)).length;
@@ -3196,7 +3262,7 @@ const CMMSModule = ({
             <span className="text-xs text-gray-400">Writer role: <span className="text-blue-300 uppercase font-semibold">{userRole || 'member'}</span></span>
             <button
               onClick={handleSubmitCompanyReport}
-              disabled={isSubmittingCompanyReport || !companyIdToUse}
+              disabled={!canCreateReports || isSubmittingCompanyReport || !companyIdToUse}
               className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-semibold"
             >
               {isSubmittingCompanyReport ? 'Submitting...' : 'Submit Report'}
@@ -3226,6 +3292,12 @@ const CMMSModule = ({
                 <div className="text-xl font-bold text-green-300">{companyReports.filter((r) => (r.status || '').toLowerCase() === 'resolved').length}</div>
               </div>
             </div>
+
+            {canExportReports && (
+              <button type="button" onClick={downloadCollectedReportsPdf} className="mb-4 rounded-lg bg-cyan-600 px-3 py-2 text-xs font-semibold text-white hover:bg-cyan-500">
+                Export all accessible reports as one PDF ({companyReports.length})
+              </button>
+            )}
 
             {companyReports.length === 0 ? (
               <div className="text-center py-6 text-gray-400 text-sm">No reports yet. Be the first member to write one.</div>
@@ -3292,6 +3364,11 @@ const CMMSModule = ({
                             <span>By: <span className="text-purple-300">{report.reporter_name || report.reporter_email || 'Member'}</span></span>
                             <span>{new Date(report.created_at).toLocaleString()}</span>
                           </div>
+                          {canExportReports && (
+                            <button type="button" onClick={() => printWrittenReport(report)} className="mt-3 rounded-lg border border-cyan-400/40 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/20">
+                              Print / Save PDF
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -3314,7 +3391,7 @@ const CMMSModule = ({
           </div>
         )}
 
-        {canViewAnalytics && (
+        {canViewAnalytics && canExportReports && (
           <>
         {/* Inventory Report */}
         <div className="glass-card p-4 md:p-6">
@@ -6796,6 +6873,36 @@ const CMMSModule = ({
             </button>
           )}
 
+          {/* Keep the company/business-administrator switcher available on
+              phones as well. It deliberately uses the same handler as the
+              desktop selector so it reloads the selected membership, role,
+              modules, and company-scoped data together. */}
+          {companyMemberships.length > 1 && (
+            <div className="md:hidden w-full">
+              <label className="block text-[10px] uppercase tracking-wide text-gray-400 mb-1">Business profile / CMMS administrator</label>
+              <select
+                value={userCompanyId || companyIdToUse || ''}
+                onChange={handleSwitchCompany}
+                disabled={isSwitchingCompany}
+                aria-label="Choose business profile or CMMS administrator"
+                className="w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm font-semibold text-white focus:border-blue-400 disabled:cursor-wait disabled:opacity-60"
+              >
+                {companyMemberships.map((membership) => {
+                  const companyLabel = membership.company_name || `Company ${membership.cmms_company_id.slice(0, 8)}`;
+                  const membershipRole = membership.is_pichin_business_admin || membership.is_creator
+                    ? 'Business Administrator'
+                    : resolveUserRole(membership.effective_role, membership.role_labels);
+
+                  return (
+                    <option key={membership.cmms_company_id} value={membership.cmms_company_id}>
+                      {companyLabel} • {membershipRole}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          )}
+
           {/* Notifications Bell */}
           {userCompanyId && (
             <div className="hidden md:block"><NotificationsPanel
@@ -6904,7 +7011,14 @@ const CMMSModule = ({
       )}
       */}
 
-      {showModuleConfiguration || (businessModulesLoaded && businessModules.length === 0) ? (
+      {showModuleConfiguration || (
+        // The empty-module setup screen belongs only to the business
+        // administrator. A member's role/tool assignment remains usable even
+        // while the administrator has not configured business modules.
+        (isCreator || userRole === 'admin')
+        && businessModulesLoaded
+        && businessModules.length === 0
+      ) ? (
         <CMMSModuleConfiguration />
       ) : (
         <>
@@ -6927,17 +7041,34 @@ const CMMSModule = ({
         {activeTab === 'fees' && getTabs().includes('fees') && <CMMSFeesPanel companyId={companyIdToUse} businessProfileId={cmmsData.companyProfile?.pichin_business_profile_id} cmmsUsers={cmmsData.users} studentView={isActiveStudent} />}
         {['production', 'quality', 'clinical', 'pharmacy'].includes(activeTab) && getTabs().includes(activeTab) && <CMMSOperationsPanel companyId={companyIdToUse} businessProfileId={cmmsData.companyProfile?.pichin_business_profile_id} mode={activeTab} />}
         {activeTab === 'payroll' && getTabs().includes('payroll') && (
-          <CMMSPayrollPanel
-            companyProfile={cmmsData.companyProfile}
-            users={cmmsData.users}
-            userRole={userRole}
-            isCreator={isCreator}
-            currentUser={user}
-            dataScope={getToolScope('payroll')}
-            attendancePayrollOnly={hasToolAction('attendance') && !hasToolAction('payroll')}
-          />
+          getToolScope('payroll') === 'own' ? <CMMSEmployeeSelfService companyProfile={cmmsData.companyProfile} mode="payroll" /> : getToolScope('payroll') !== 'company' && !hasToolAction('attendance') ? (
+            <div className="rounded-2xl border border-amber-700/40 bg-amber-900/15 p-6 text-sm text-amber-100">
+              Payroll compensation, payment, and staff-wide records require a company-wide Payroll assignment. Your role has a more limited data scope, so this sensitive information is not loaded.
+            </div>
+          ) : <CMMSPayrollPanel
+              companyProfile={cmmsData.companyProfile}
+              users={cmmsData.users}
+              userRole={userRole}
+              isCreator={isCreator}
+              currentUser={user}
+              canCreate={hasToolAction('payroll', 'create')}
+              canEdit={hasToolAction('payroll', 'edit')}
+              canApprove={hasToolAction('payroll', 'approve')}
+              attendancePayrollOnly={hasToolAction('attendance') && !hasToolAction('payroll')}
+            />
         )}
-        {activeTab === 'transport' && getTabs().includes('transport') && <CMMSBookTransportPanel companyProfile={cmmsData.companyProfile} />}
+        {activeTab === 'transport' && getTabs().includes('transport') && (
+          getToolScope('transport') === 'own' ? <CMMSEmployeeSelfService companyProfile={cmmsData.companyProfile} mode="transport" /> : getToolScope('transport') !== 'company' ? (
+            <div className="rounded-2xl border border-amber-700/40 bg-amber-900/15 p-6 text-sm text-amber-100">
+              Company transport contracts, employee allocations, fares, and ride history require a company-wide Transport assignment. Your role has a more limited data scope, so these records are not loaded.
+            </div>
+          ) : <CMMSBookTransportPanel
+              companyProfile={cmmsData.companyProfile}
+              canCreate={hasToolAction('transport', 'create')}
+              canEdit={hasToolAction('transport', 'edit')}
+              canAssign={hasToolAction('transport', 'assign')}
+            />
+        )}
         {activeTab === 'requisitions' && getTabs().includes('requisitions') && (
           <>
             <CMSSupplierPurchasePanel
@@ -6958,10 +7089,11 @@ const CMMSModule = ({
           <>
             <SupplierOrderPaymentApprovals
               companyId={companyIdToUse}
-              canApprove={userRole === 'admin' || userRole === 'business_admin' || isCreator}
+              canApprove={hasToolAction('approvals', 'approve')}
             />
             <RequisitionApprovalsTab
               userRole={userRole}
+              canApprove={hasToolAction('approvals', 'approve')}
               companyId={companyIdToUse}
               cmmsData={cmmsData}
               setCmmsData={setCmmsData}

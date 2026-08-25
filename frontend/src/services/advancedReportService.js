@@ -6,7 +6,9 @@
 
 import { supabase as supabaseClient } from '../lib/supabase/client';
 
-const OPENAI_API_KEY = import.meta.env?.VITE_OPENAI_API_KEY || process.env?.REACT_APP_OPENAI_API_KEY;
+// Vite exposes browser environment variables through import.meta.env.
+// Do not reference process.env: process is not defined in the browser bundle.
+const OPENAI_API_KEY = import.meta.env?.VITE_OPENAI_API_KEY || '';
 
 const FINANCE_KNOWLEDGE_BRAIN = {
   pillars: [

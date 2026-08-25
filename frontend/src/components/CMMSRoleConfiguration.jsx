@@ -15,7 +15,7 @@ export const CMMS_TOOL_OPTIONS = [
   { id: 'quality', label: 'Quality control', permission: 'canManageQuality', actions: ['view', 'create', 'edit', 'approve'], scopes: true },
   { id: 'clinical', label: 'Clinical operations', permission: 'canManageClinical', actions: ['view', 'create', 'edit', 'approve'], scopes: true },
   { id: 'pharmacy', label: 'Pharmacy and supplies', permission: 'canManagePharmacy', actions: ['view', 'create', 'edit', 'approve'], scopes: true },
-  { id: 'transport', label: 'Transport', permission: 'canManageTransport', actions: ['view', 'create', 'edit', 'approve', 'assign'] },
+  { id: 'transport', label: 'Transport', permission: 'canManageTransport', actions: ['view', 'create', 'edit', 'approve', 'assign'], scopes: true },
   { id: 'requisitions', label: 'Requisitions and supplier orders', permission: 'canViewRequisitions', actions: ['view', 'create', 'edit', 'purchase', 'approve', 'assign'], scopes: true },
   { id: 'approvals', label: 'Approvals', permission: 'canApproveRequisitions', actions: ['view', 'approve', 'reject'], scopes: true },
   { id: 'reports', label: 'Reports', permission: 'canViewReports', actions: ['view', 'create', 'export'], scopes: true },
@@ -62,7 +62,10 @@ const CMMSRoleConfiguration = ({ companyId, isAdmin, onRolesChanged }) => {
         ...(current.tool_access || {}),
         [tool.id]: selectedTools[tool.id]
           ? false
-          : { view: true }
+          // Reporting is the basic employee voice: when an administrator
+          // enables Reports for a role it can submit a report by default.
+          // The administrator can still uncheck Create or Export afterwards.
+          : tool.id === 'reports' ? { view: true, create: true } : { view: true }
       }
     }));
   };
@@ -163,7 +166,7 @@ const CMMSRoleConfiguration = ({ companyId, isAdmin, onRolesChanged }) => {
                       <input type="checkbox" checked={hasAction(tool, action)} onChange={() => toggleAction(tool, action)} />
                       {action}
                     </label>)}
-                    {tool.scopes && <label className="flex items-center gap-2 basis-full text-xs text-gray-300 mt-1">Data scope
+                    {tool.scopes && <label className="flex items-center gap-2 basis-full text-xs text-gray-300 mt-1">Data scope <span className="text-gray-500">(own, department, cross-department, or company-wide)</span>
                       <select value={getScope(tool)} onChange={(event) => setScope(tool, event.target.value)} className="rounded bg-slate-900 border border-white/20 px-2 py-1 text-white">
                         <option value="own">Own records only</option>
                         <option value="department">Department only</option>

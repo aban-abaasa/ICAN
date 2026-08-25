@@ -6,7 +6,7 @@ const blankContract = { contract_name: '', billing_cycle: 'monthly', monthly_lim
 const blankRequest = { contract_id: '', vehicle_type: 'car', ride_count: 1, pickup: '', dropoff: '', scheduled_at: '', recurrence: 'once' };
 const money = (value, currency = 'UGX') => `${currency} ${Number(value || 0).toLocaleString()}`;
 
-export default function CMMSBookTransportPanel({ companyProfile }) {
+export default function CMMSBookTransportPanel({ companyProfile, canCreate = false, canEdit = false, canAssign = false }) {
   const businessProfileId = companyProfile?.pichin_business_profile_id;
   const [contracts, setContracts] = useState([]);
   const [workers, setWorkers] = useState([]);
@@ -51,7 +51,7 @@ export default function CMMSBookTransportPanel({ companyProfile }) {
   useEffect(() => { load(); }, [businessProfileId]);
 
   const createContract = async event => {
-    event.preventDefault(); setSaving(true); setError(''); setMessage('');
+    event.preventDefault(); if (!canCreate) { setError('Your role cannot create transport contracts.'); return; } setSaving(true); setError(''); setMessage('');
     if (!businessProfileId || !contractForm.contract_name.trim()) { setError('Enter a contract name first.'); setSaving(false); return; }
     const { data: auth } = await supabase.auth.getUser();
     const { data, error: insertError } = await supabase.from('mbg_corporate_transport_contracts').insert({
@@ -65,7 +65,7 @@ export default function CMMSBookTransportPanel({ companyProfile }) {
   };
 
   const submitRequest = async event => {
-    event.preventDefault(); setSaving(true); setError(''); setMessage('');
+    event.preventDefault(); if (!canCreate) { setError('Your role cannot create transport requests.'); return; } setSaving(true); setError(''); setMessage('');
     const selected = contracts.find(c => c.id === requestForm.contract_id);
     if (!businessProfileId || !selected || selected.status !== 'active') { setError('Select an active contract first.'); setSaving(false); return; }
     const { data: auth } = await supabase.auth.getUser();
@@ -79,7 +79,7 @@ export default function CMMSBookTransportPanel({ companyProfile }) {
   };
 
   const cancelRequest = async id => {
-    setCancelling(id); setError('');
+    if (!canEdit) { setError('Your role cannot edit transport requests.'); return; } setCancelling(id); setError('');
     const { error: updateError } = await supabase.from('mbg_corporate_ride_requests').update({ status: 'cancelled' }).eq('id', id).eq('business_profile_id', businessProfileId).eq('status', 'pending');
     if (updateError) setError(updateError.message);
     else { setRequests(previous => previous.map(row => row.id === id ? { ...row, status: 'cancelled' } : row)); setMessage('Pending transport request cancelled.'); }
@@ -87,7 +87,7 @@ export default function CMMSBookTransportPanel({ companyProfile }) {
   };
 
   const allocateWorker = async event => {
-    event.preventDefault(); setSaving(true); setError(''); setMessage('');
+    event.preventDefault(); if (!canAssign) { setError('Your role cannot assign company transport.'); return; } setSaving(true); setError(''); setMessage('');
     if (!businessProfileId || !workerEmail.trim()) { setError('Enter the employee Gmail address used in BodaGo.'); setSaving(false); return; }
     const { error: allocationError } = await supabase.rpc('mbg_allocate_company_transport_worker', {
       p_business_profile_id: businessProfileId,
