@@ -32,7 +32,7 @@ ALTER TABLE IF EXISTS public.cmms_roles
 
 -- Add new check constraint to allow permission levels 1-10
 ALTER TABLE IF EXISTS public.cmms_roles
-  ADD CONSTRAINT valid_permission_level CHECK (permission_level BETWEEN 1 AND 10);
+  ADD CONSTRAINT valid_permission_level CHECK (permission_level BETWEEN 0 AND 100);
 
 UPDATE public.cmms_roles
 SET display_name = INITCAP(role_name)
@@ -144,6 +144,13 @@ WHERE NOT EXISTS (SELECT 1 FROM public.cmms_roles WHERE role_name = 'staff');
 -- 2. PL/pgSQL FUNCTION: CREATE COMPANY WITH ADMIN USER
 -- ============================================================
 
+-- PostgreSQL cannot change a RETURNS TABLE row type through CREATE OR REPLACE.
+-- This setup version intentionally owns this legacy helper's result shape, so
+-- remove only its exact signature before recreating it.
+DROP FUNCTION IF EXISTS public.fn_create_cmms_company(
+  VARCHAR, VARCHAR, UUID, VARCHAR, VARCHAR, VARCHAR, VARCHAR, VARCHAR
+);
+
 CREATE OR REPLACE FUNCTION public.fn_create_cmms_company(
   p_company_name VARCHAR,
   p_email VARCHAR,
@@ -213,6 +220,8 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- 3. PL/pgSQL FUNCTION: CREATE DEPARTMENT
 -- ============================================================
 
+DROP FUNCTION IF EXISTS public.fn_create_cmms_department(UUID, VARCHAR, TEXT, VARCHAR, UUID);
+
 CREATE OR REPLACE FUNCTION public.fn_create_cmms_department(
   p_company_id UUID,
   p_department_name VARCHAR,
@@ -252,16 +261,19 @@ BEGIN
   
   RETURN QUERY SELECT v_dept_id, 'SUCCESS'::VARCHAR, 'Department created successfully'::TEXT;
   
-EXCEPTION WHEN unique_violation THEN
-  RETURN QUERY SELECT NULL::UUID, 'ERROR'::VARCHAR, 'Department name already exists in this company'::TEXT;
-EXCEPTION WHEN OTHERS THEN
-  RETURN QUERY SELECT NULL::UUID, 'ERROR'::VARCHAR, SQLERRM::TEXT;
+EXCEPTION
+  WHEN unique_violation THEN
+    RETURN QUERY SELECT NULL::UUID, 'ERROR'::VARCHAR, 'Department name already exists in this company'::TEXT;
+  WHEN OTHERS THEN
+    RETURN QUERY SELECT NULL::UUID, 'ERROR'::VARCHAR, SQLERRM::TEXT;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ============================================================
 -- 4. PL/pgSQL FUNCTION: UPDATE DEPARTMENT
 -- ============================================================
+
+DROP FUNCTION IF EXISTS public.fn_update_cmms_department(UUID, VARCHAR, TEXT, VARCHAR, BOOLEAN);
 
 CREATE OR REPLACE FUNCTION public.fn_update_cmms_department(
   p_department_id UUID,
@@ -290,16 +302,19 @@ BEGIN
     RETURN QUERY SELECT 'ERROR'::VARCHAR, 'Department not found'::TEXT;
   END IF;
   
-EXCEPTION WHEN unique_violation THEN
-  RETURN QUERY SELECT 'ERROR'::VARCHAR, 'Department name already exists in this company'::TEXT;
-EXCEPTION WHEN OTHERS THEN
-  RETURN QUERY SELECT 'ERROR'::VARCHAR, SQLERRM::TEXT;
+EXCEPTION
+  WHEN unique_violation THEN
+    RETURN QUERY SELECT 'ERROR'::VARCHAR, 'Department name already exists in this company'::TEXT;
+  WHEN OTHERS THEN
+    RETURN QUERY SELECT 'ERROR'::VARCHAR, SQLERRM::TEXT;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ============================================================
 -- 5. PL/pgSQL FUNCTION: DELETE DEPARTMENT (Soft Delete)
 -- ============================================================
+
+DROP FUNCTION IF EXISTS public.fn_delete_cmms_department(UUID);
 
 CREATE OR REPLACE FUNCTION public.fn_delete_cmms_department(
   p_department_id UUID
@@ -335,6 +350,8 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- ============================================================
 -- 6. PL/pgSQL FUNCTION: GET COMPANY STATS
 -- ============================================================
+
+DROP FUNCTION IF EXISTS public.fn_get_company_stats(UUID);
 
 CREATE OR REPLACE FUNCTION public.fn_get_company_stats(p_company_id UUID)
 RETURNS TABLE(

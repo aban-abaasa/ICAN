@@ -727,6 +727,23 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
     onConfirm: null
   });
 
+  // Supermarketa hands off to ICANera as
+  // ?business_profile_id=<uuid>&source_app=supermarketa#cmms. Previously the
+  // hash was not consumed, so the user landed on the default Manage Business
+  // view instead of CMMS.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const requestedBusinessProfileId = url.searchParams.get('business_profile_id');
+    const destination = url.hash.replace(/^#/, '').toLowerCase();
+    if (destination !== 'cmms') return;
+
+    if (requestedBusinessProfileId) {
+      sessionStorage.setItem('cmms_requested_business_profile_id', requestedBusinessProfileId);
+    }
+    setShowCmmsPanel(true);
+    setActiveBottomTab('cmms');
+  }, []);
+
   // ====== VOICE RECOGNITION STATE ======
   const [isListening, setIsListening] = useState(false);
   const [voiceInterim, setVoiceInterim] = useState('');

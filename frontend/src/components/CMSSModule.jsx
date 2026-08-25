@@ -276,12 +276,33 @@ const CMMSModule = ({
       return null;
     }
 
+    // A linked Pichin profile is the shared business authority. Prefer it to
+    // an older cached CMMS tenant, otherwise CMMS can open a stale company
+    // even though the user has already chosen a business in Pitchin.
+    const pichinAdminMemberships = memberships.filter((membership) => (
+      membership.pichin_business_profile_id && (
+        membership.is_pichin_business_admin
+        || membership.is_creator
+        || resolveUserRole(membership.effective_role, membership.role_labels) === 'admin'
+      )
+    ));
+
     const storedCompanyId = preferredCompanyId || getStoredActiveCompanyId(userEmail);
     if (storedCompanyId) {
-      const storedMembership = memberships.find((membership) => membership.cmms_company_id === storedCompanyId);
+      const storedMembership = pichinAdminMemberships.find((membership) => membership.cmms_company_id === storedCompanyId);
       if (storedMembership) {
         return storedMembership;
       }
+    }
+
+    if (pichinAdminMemberships.length > 0) {
+      return pichinAdminMemberships[0];
+    }
+
+    // Preserve the saved selection for legacy CMMS-only companies.
+    if (storedCompanyId) {
+      const storedMembership = memberships.find((membership) => membership.cmms_company_id === storedCompanyId);
+      if (storedMembership) return storedMembership;
     }
 
     const adminMembership = memberships.find((membership) => (
@@ -356,6 +377,8 @@ const CMMSModule = ({
     // Check authorization and load company data from database
   const checkAuthorizationAndLoadCompanyData = async () => {
     try {
+      const requestedBusinessProfileId = sessionStorage.getItem('cmms_requested_business_profile_id')
+        || new URL(window.location.href).searchParams.get('business_profile_id');
       // Check 1: User must exist (or have cached data)
       const cachedCompanyId = getStoredActiveCompanyId(user?.email);
       const cachedRole = localStorage.getItem('cmms_user_role');
@@ -390,8 +413,13 @@ const CMMSModule = ({
             architecture: row.architecture
           }));
           setCompanyMemberships(pichinMemberships);
-          const activePichinMembership = chooseActiveMembership(pichinMemberships, user.email);
+          const requestedPichinMembership = requestedBusinessProfileId
+            ? pichinMemberships.find((membership) => membership.pichin_business_profile_id === requestedBusinessProfileId)
+            : null;
+          const activePichinMembership = requestedPichinMembership
+            || chooseActiveMembership(pichinMemberships, user.email);
           if (activePichinMembership) {
+            sessionStorage.removeItem('cmms_requested_business_profile_id');
             await applyActiveMembership(activePichinMembership);
             return;
           }
@@ -473,7 +501,10 @@ const CMMSModule = ({
 
           setCompanyMemberships(memberships);
 
-          const activeMembership = chooseActiveMembership(memberships, user.email);
+          const requestedMembership = requestedBusinessProfileId
+            ? memberships.find((membership) => membership.pichin_business_profile_id === requestedBusinessProfileId)
+            : null;
+          const activeMembership = requestedMembership || chooseActiveMembership(memberships, user.email);
           if (!activeMembership) {
             throw new Error('Unable to resolve an active CMMS company membership');
           }
@@ -485,6 +516,7 @@ const CMMSModule = ({
             memberships: memberships.length
           });
 
+          sessionStorage.removeItem('cmms_requested_business_profile_id');
           await applyActiveMembership(activeMembership);
           return;
         } else if (user?.email) {

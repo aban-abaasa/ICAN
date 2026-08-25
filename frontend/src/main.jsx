@@ -24,8 +24,17 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>,
 );
 
-// Register Service Worker for PWA functionality
-if ('serviceWorker' in navigator) {
+// The production PWA caches app assets for offline use. Keep it disabled in
+// Vite development: a cached bundle can otherwise preserve old environment
+// variables after .env changes and make Supabase look unconfigured.
+if (import.meta.env.DEV && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations()
+    .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
+    .then(() => console.info('[PWA] Service workers disabled for local development.'))
+    .catch((error) => console.warn('[PWA] Could not disable local service worker:', error));
+}
+
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
       .then(registration => {
