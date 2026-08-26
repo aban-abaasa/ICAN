@@ -14,6 +14,7 @@ import { CountryService } from '../services/countryService';
 import { getSupabaseClient } from '../lib/supabase/client';
 import { sendAgentFiatToBusiness } from '../services/icanWalletService';
 import { useIcanPrice } from '../hooks/useIcanPrice';
+import PINRecoveryModal from './PINRecoveryModal';
 
 /**
  * 🏪 AGENT DASHBOARD
@@ -77,6 +78,9 @@ const AgentDashboard = () => {
   const [agentMessage, setAgentMessage] = useState(null);
   const [showPinInput, setShowPinInput] = useState(false);
   const [showFingerprintSetup, setShowFingerprintSetup] = useState(false);
+  const [showPINRecovery, setShowPINRecovery] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState(null);
+  const [currentUserEmail, setCurrentUserEmail] = useState(null);
 
   // Collapsible Agent Info State
   const [showAgentIdCard, setShowAgentIdCard] = useState(true);
@@ -91,6 +95,11 @@ const AgentDashboard = () => {
     const loadCountryAndCurrency = async () => {
       const supabase = getSupabaseClient();
       const { data: { user } } = await supabase.auth.getUser();
+
+      if (user?.id) {
+        setCurrentUserId(user.id);
+        setCurrentUserEmail(user.email || null);
+      }
 
       // Prefer server-side selected country to avoid stale localStorage values.
       let countryCode = null;
@@ -933,6 +942,15 @@ const AgentDashboard = () => {
                       </button>
                     </div>
                     <p className="text-xs text-gray-500 mt-1">Used to authorize transactions</p>
+                    <button
+                      type="button"
+                      onClick={() => setShowPINRecovery(true)}
+                      disabled={!currentUserId}
+                      className="w-full flex items-center justify-between mt-3 p-2 bg-slate-700/30 rounded-lg hover:bg-slate-700/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <span className="text-sm text-gray-300">🆘 Forgot PIN / Locked Out?</span>
+                      <span className="text-xs text-orange-400">→</span>
+                    </button>
                   </div>
 
                   {/* Fingerprint Toggle */}
@@ -987,6 +1005,15 @@ const AgentDashboard = () => {
               </form>
             </div>
           </div>
+        )}
+
+        {currentUserId && (
+          <PINRecoveryModal
+            isOpen={showPINRecovery}
+            onClose={() => setShowPINRecovery(false)}
+            userId={currentUserId}
+            userEmail={currentUserEmail}
+          />
         )}
 
         {/* ============================================ */}

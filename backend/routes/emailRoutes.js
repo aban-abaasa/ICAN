@@ -25,7 +25,7 @@ const sendEmail = async ({ to, from, subject, html }) => {
 
 const fromEmail = process.env.SENDER_EMAIL || 'aronnykevin@gmail.com';
 const supportEmail = process.env.SUPPORT_EMAIL || 'support@ican.ug';
-const appUrl = process.env.APP_URL || 'http://localhost:5173';
+const appUrl = process.env.APP_URL || 'https://icanera.space';
 
 // Service-role client for the self-service PIN reset route below — needed to
 // verify the caller's session and to write pin_reset_tokens rows regardless
