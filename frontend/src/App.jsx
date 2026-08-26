@@ -8,6 +8,7 @@ import MobileView from './components/MobileView';
 import ActionQueue from './components/ActionQueue';
 import { SplashScreen } from './components/SplashScreen';
 import ICANDevPanel, { SESSION_KEY as ICAN_DEV_KEY } from './components/ICANDevPanel';
+import ResetPinPage from './components/ResetPinPage';
 import ChatWidget from './components/ChatWidget';
 import { offlineManager } from './lib/offlineManager';
 import { Loader2, AlertCircle } from 'lucide-react';
@@ -59,6 +60,12 @@ const App = () => {
     }
     return false;
   });
+  const [isResetPinPath, setIsResetPinPath] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.location.pathname === '/reset-pin';
+    }
+    return false;
+  });
   const [isMobile, setIsMobile] = useState(() => {
     // Safe check for window object (SSR compatibility)
     if (typeof window !== 'undefined') {
@@ -107,6 +114,7 @@ const App = () => {
   useEffect(() => {
     const handlePopState = () => {
       setIsResetPasswordPath(window.location.pathname === '/reset-password');
+      setIsResetPinPath(window.location.pathname === '/reset-pin');
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -135,7 +143,7 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    if (user || isRecoveryMode || isResetPasswordPath) return;
+    if (user || isRecoveryMode || isResetPasswordPath || isResetPinPath) return;
 
     const publicView = showLanding ? 'landing' : 'auth';
 
@@ -155,11 +163,11 @@ const App = () => {
     }
 
     lastPublicViewRef.current = publicView;
-  }, [user, showLanding, isRecoveryMode, isResetPasswordPath]);
+  }, [user, showLanding, isRecoveryMode, isResetPasswordPath, isResetPinPath]);
 
   useEffect(() => {
     const handlePopState = (event) => {
-      if (user || isRecoveryMode || isResetPasswordPath) return;
+      if (user || isRecoveryMode || isResetPasswordPath || isResetPinPath) return;
 
       const view = event.state?.__icanApp?.publicView;
       if (view === 'landing' || view === 'auth') {
@@ -174,7 +182,7 @@ const App = () => {
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [user, isRecoveryMode, isResetPasswordPath]);
+  }, [user, isRecoveryMode, isResetPasswordPath, isResetPinPath]);
 
   const handleRecoveryHandled = () => {
     clearRecoveryMode();
@@ -185,6 +193,11 @@ const App = () => {
     }
 
     setIsResetPasswordPath(false);
+  };
+
+  const handlePinResetDone = () => {
+    setShowLanding(false);
+    setIsResetPinPath(false);
   };
 
   // Developer panel — silent intercept, no auth session required
@@ -234,6 +247,15 @@ const App = () => {
           initialView="reset-password"
           onRecoveryHandled={handleRecoveryHandled}
         />
+      </ErrorBoundary>
+    );
+  }
+
+  if (isResetPinPath) {
+    return (
+      <ErrorBoundary>
+        <SplashScreen show={showSplash} onHide={() => setShowSplash(false)} />
+        <ResetPinPage onDone={handlePinResetDone} />
       </ErrorBoundary>
     );
   }

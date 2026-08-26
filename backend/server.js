@@ -24,9 +24,13 @@ const cron = require('node-cron');
 const { refreshGlobalInflation } = require('./services/inflationRefreshService');
 
 // ES6 module imports for email routes
-// pinResetRoutes.js is intentionally NOT mounted — PIN reset / account unlock
-// is now dev-panel-only (see ICAN/backend/PIN_RECOVERY_AND_ACCOUNT_UNLOCK.sql
-// and the "Recovery" tab in ICANDevPanel.jsx). There is no self-service path.
+// pinResetRoutes.js is intentionally NOT mounted — the dev-panel-reviewed
+// flow (ICAN/backend/PIN_RECOVERY_AND_ACCOUNT_UNLOCK.sql, "Recovery" tab in
+// ICANDevPanel.jsx) still goes only through that panel. There IS now a
+// separate self-service path though: POST /api/email/request-pin-reset in
+// emailRoutes.js emails a magic reset link (see
+// backend/PIN_RESET_EMAIL_SELFSERVICE.sql), mirroring the sign-in page's
+// Forgot Password. Offered as an alternative, not a replacement.
 let emailRoutes;
 
 // Load ES6 modules

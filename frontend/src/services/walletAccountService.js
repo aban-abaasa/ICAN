@@ -35,15 +35,23 @@ class WalletAccountService {
 
   /**
    * Generate a unique account number
-   * Format: ICAN-XXXXXXXXXXXXX (16 digits total)
+   * Format: 16 digits, purely numeric — no letter prefix. The first digit
+   * encodes account type (1 = personal, 2 = business) so a number alone
+   * still tells you which kind of user_accounts row it is, matching how
+   * PIN_RESET_ACCOUNT_TYPE_AND_SIGNUP_OTP.sql's account_type-scoped reset
+   * distinguishes the two. The fixed 16-digit length is also what
+   * ICANWallet.jsx's recipient lookup uses to tell an account number apart
+   * from a phone number (no phone number in this app is 16 digits).
+   * @param {'personal'|'business'} accountType
    * @returns {string} Unique account number
    */
-  generateAccountNumber() {
-    // Generate 16 random digits
-    const digits = Math.floor(Math.random() * 10000000000000000)
+  generateAccountNumber(accountType = 'personal') {
+    const typeDigit = accountType === 'business' ? '2' : '1';
+    // 15 more random digits
+    const digits = Math.floor(Math.random() * 1000000000000000)
       .toString()
-      .padStart(16, '0');
-    return `ICAN-${digits}`;
+      .padStart(15, '0');
+    return `${typeDigit}${digits}`;
   }
 
   /**
@@ -140,7 +148,7 @@ class WalletAccountService {
       }
 
       // Generate unique account number
-      const accountNumber = this.generateAccountNumber();
+      const accountNumber = this.generateAccountNumber('personal');
       const pinHash = hashPIN(pin);
 
       // Create account
@@ -821,7 +829,7 @@ class WalletAccountService {
       }
 
       // Generate unique account number
-      const accountNumber = this.generateAccountNumber();
+      const accountNumber = this.generateAccountNumber('business');
       const pinHash = hashPIN(pin);
 
       // Create business wallet account

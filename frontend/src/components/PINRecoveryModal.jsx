@@ -1,28 +1,35 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Lock, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { X, Lock, Clock, CheckCircle, XCircle, AlertCircle, Mail } from 'lucide-react';
 import { getSupabaseClient } from '../lib/supabase/client';
 
 /**
  * 🔐 PIN RECOVERY MODAL
  *
  * Appears when an account is locked (too many failed PIN attempts) or the
- * user has forgotten their PIN. Submits a request and waits for a developer
- * to review and resolve it from the dev panel — there is no self-service
- * unlock here by design, so a locked account can't just unlock itself.
- *
- * Pass groupId/groupName when this is for a shared group wallet PIN rather
- * than the caller's own personal/business account.
+ * user has forgotten their PIN. For a personal/business account (no
+ * groupId), offers two alternative paths:
+ *  - "Email me a reset link" — self-service, mirrors the sign-in page's
+ *    Forgot Password. Backend generates a one-time token and emails it
+ *    (POST /api/email/request-pin-reset); the emailed link lands on
+ *    ResetPinPage, which redeems it via the redeem_pin_reset_token() RPC
+ *    (see backend/PIN_RESET_EMAIL_SELFSERVICE.sql).
+ *  - "Request developer review" — the original flow: submits a request and
+ *    waits for a developer to resolve it from the dev panel.
+ * Group wallet PINs (groupId set) only offer the developer-review path,
+ * since a shared PIN's recovery shouldn't be a single member's call.
  */
 const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, groupName = null }) => {
   const [requestType, setRequestType] = useState('pin_reset'); // 'pin_reset' | 'account_unlock'
   const [reason, setReason] = useState('');
-  const [step, setStep] = useState('request'); // 'request', 'pending', 'resolved'
+  const [step, setStep] = useState(groupId ? 'request' : 'choose'); // 'choose', 'request', 'pending', 'resolved', 'email_request', 'email_sent'
   const [requestId, setRequestId] = useState(null);
   const [statusMessage, setStatusMessage] = useState('');
   const [resolvedStatus, setResolvedStatus] = useState(null); // 'completed' | 'rejected'
   const [newPin, setNewPin] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [emailSentTo, setEmailSentTo] = useState(null);
+  const [accountType, setAccountType] = useState('personal'); // 'personal' | 'business' — ignored for group wallets
   const pollRef = useRef(null);
 
   useEffect(() => {
@@ -113,7 +120,7 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
         p_user_id: userId,
         p_request_type: requestType,
         p_reason: fullReason,
-        ...(groupId ? { p_group_id: groupId } : {})
+        ...(groupId ? { p_group_id: groupId } : { p_account_type: accountType })
       });
 
       if (err) throw err;
@@ -129,6 +136,45 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
     } catch (err) {
       console.error('Recovery request error:', err);
       setError(err.message || 'Error submitting request');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRequestEmailReset = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const supabase = getSupabaseClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+
+      if (!accessToken) {
+        throw new Error('Your session expired — please sign in again.');
+      }
+
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+      const response = await fetch(`${backendUrl}/api/email/request-pin-reset`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ accountType })
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to send reset link');
+      }
+
+      setEmailSentTo(userEmail);
+      setStep('email_sent');
+    } catch (err) {
+      console.error('Email PIN reset request error:', err);
+      setError(err.message || 'Failed to send reset link');
     } finally {
       setLoading(false);
     }
@@ -150,6 +196,103 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
           </button>
         </div>
 
+        {/* Step 0: Choose a recovery path (personal/business accounts only) */}
+        {step === 'choose' && (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Which account?</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAccountType('personal')}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                    accountType === 'personal'
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
+                  }`}
+                >
+                  Personal (ICAN)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAccountType('business')}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                    accountType === 'business'
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
+                  }`}
+                >
+                  Business
+                </button>
+              </div>
+            </div>
+
+            <p className="text-sm text-gray-600">How would you like to recover access?</p>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex gap-2">
+                <AlertCircle size={18} className="text-red-600 flex-shrink-0" />
+                <p className="text-sm text-red-800">{error}</p>
+              </div>
+            )}
+
+            <button
+              onClick={handleRequestEmailReset}
+              disabled={loading}
+              className="w-full text-left bg-blue-50 hover:bg-blue-100 disabled:opacity-50 border border-blue-200 rounded-lg p-4 flex gap-3 transition-colors"
+            >
+              <Mail className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
+              <div>
+                <p className="font-medium text-blue-900">
+                  {loading ? 'Sending...' : 'Email me a reset link'}
+                </p>
+                <p className="text-xs text-blue-700 mt-1">
+                  We'll send a one-time link to {userEmail || 'your registered email'} to set a new PIN yourself.
+                </p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => { setError(null); setStep('request'); }}
+              disabled={loading}
+              className="w-full text-left bg-gray-50 hover:bg-gray-100 disabled:opacity-50 border border-gray-200 rounded-lg p-4 flex gap-3 transition-colors"
+            >
+              <Clock className="text-gray-600 flex-shrink-0 mt-0.5" size={20} />
+              <div>
+                <p className="font-medium text-gray-900">Request developer review</p>
+                <p className="text-xs text-gray-600 mt-1">
+                  A developer reviews and resolves your request from the dev panel instead.
+                </p>
+              </div>
+            </button>
+          </div>
+        )}
+
+        {/* Step: link sent */}
+        {step === 'email_sent' && (
+          <div className="space-y-4 text-center py-2">
+            <div className="flex justify-center">
+              <CheckCircle size={48} className="text-green-500" />
+            </div>
+            <p className="font-semibold text-green-600">Check your email</p>
+            <p className="text-sm text-gray-600">
+              We've sent a PIN reset link to {emailSentTo || 'your registered email'}. It expires in 30 minutes and works once.
+            </p>
+            <button
+              onClick={onClose}
+              className="w-full bg-gray-800 hover:bg-gray-900 text-white font-medium py-2 rounded-lg transition-colors"
+            >
+              Close
+            </button>
+            <button
+              onClick={() => { setError(null); setStep('choose'); }}
+              className="w-full text-sm text-blue-600 hover:text-blue-800"
+            >
+              Back to recovery options
+            </button>
+          </div>
+        )}
+
         {/* Step 1: Submit a request */}
         {step === 'request' && (
           <div className="space-y-4">
@@ -159,6 +302,20 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
                 Submit your request below and check back here for the outcome.
               </p>
             </div>
+
+            {!groupId && (
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={() => { setError(null); setStep('choose'); }}
+                  className="text-xs text-blue-600 hover:text-blue-800"
+                >
+                  ← Back to recovery options
+                </button>
+                <span className="text-xs text-gray-500">
+                  {accountType === 'business' ? 'Business account' : 'Personal (ICAN) account'}
+                </span>
+              </div>
+            )}
 
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex gap-2">
@@ -262,7 +419,7 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
             {resolvedStatus === 'completed' && (
               <button
                 onClick={() => {
-                  setStep('request');
+                  setStep(groupId ? 'request' : 'choose');
                   setRequestId(null);
                   setResolvedStatus(null);
                   setNewPin(null);

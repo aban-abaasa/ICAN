@@ -173,6 +173,13 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     fingerprintEnabled: false,
     phonePhoneEnabled: false
   });
+  // Email verification gate before a wallet PIN can be set for the first
+  // time — mirrors the magic-mail PIN reset flow (backend/routes/emailRoutes.js
+  // POST /request-account-otp, verified via verify_account_creation_otp()).
+  // A short typed code is used here (not a link) so the multi-field
+  // creation form doesn't lose its state to a redirect.
+  const [personalOtp, setPersonalOtp] = useState({ sent: false, verified: false, code: '', loading: false, error: null });
+  const [businessOtp, setBusinessOtp] = useState({ sent: false, verified: false, code: '', loading: false, error: null });
   const [accountEditForm, setAccountEditForm] = useState({
     accountHolderName: '',
     phoneNumber: '',
@@ -1284,12 +1291,13 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       let recipientUser = null;
       let lookupError = null;
       
-      if (recipientIdentifier.toUpperCase().startsWith('ICAN-')) {
-        // Search by account number (ICAN format) - case insensitive
+      if (/^\d{16}$/.test(recipientIdentifier.trim())) {
+        // Search by account number — 16 raw digits, no phone number in this
+        // app is that long, so length alone disambiguates it from a phone.
         const { data, error } = await supabase
           .from('user_accounts')
           .select('user_id, account_holder_name, account_number')
-          .ilike('account_number', recipientIdentifier)
+          .eq('account_number', recipientIdentifier.trim())
           .maybeSingle();
         recipientUser = data;
         lookupError = error;
@@ -1435,11 +1443,11 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         return;
       }
 
-      if (recipientIdentifier.toUpperCase().startsWith('ICAN-')) {
+      if (/^\d{16}$/.test(recipientIdentifier.trim())) {
         const { data, error } = await supabase
           .from('user_accounts')
           .select('user_id, account_holder_name, account_number')
-          .ilike('account_number', recipientIdentifier)
+          .eq('account_number', recipientIdentifier.trim())
           .maybeSingle();
         recipientUser = data;
         lookupError = error;
@@ -1998,6 +2006,62 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     }
   };
 
+  // 📧 Email verification (OTP) before first-time PIN creation — shared by
+  // both the personal and business "Create Account" forms.
+  const requestAccountEmailOtp = async (email, accountType, setOtpState) => {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setOtpState(prev => ({ ...prev, error: 'Enter a valid email address first' }));
+      return;
+    }
+    setOtpState(prev => ({ ...prev, loading: true, error: null }));
+    try {
+      const supabase = getSupabaseClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) throw new Error('Your session expired — please sign in again.');
+
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+      const response = await fetch(`${backendUrl}/api/email/request-account-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ email, accountType })
+      });
+      const data = await response.json();
+      if (!data.success) throw new Error(data.message || 'Failed to send verification code');
+
+      setOtpState(prev => ({ ...prev, sent: true, loading: false }));
+    } catch (error) {
+      setOtpState(prev => ({ ...prev, loading: false, error: error.message || 'Failed to send verification code' }));
+    }
+  };
+
+  const verifyAccountEmailOtp = async (code, accountType, setOtpState) => {
+    if (!/^\d{6}$/.test(code)) {
+      setOtpState(prev => ({ ...prev, error: 'Enter the 6-digit code from your email' }));
+      return;
+    }
+    setOtpState(prev => ({ ...prev, loading: true, error: null }));
+    try {
+      const supabase = getSupabaseClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Authentication required');
+
+      const { data, error: err } = await supabase.rpc('verify_account_creation_otp', {
+        p_user_id: user.id,
+        p_account_type: accountType,
+        p_code: code
+      });
+      if (err) throw err;
+
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row?.success) throw new Error(row?.message || 'Incorrect code');
+
+      setOtpState(prev => ({ ...prev, verified: true, loading: false }));
+    } catch (error) {
+      setOtpState(prev => ({ ...prev, loading: false, error: error.message || 'Verification failed' }));
+    }
+  };
+
   // 🎯 WALLET ACCOUNT CREATION HANDLER
   const handleCreateAccount = async (e) => {
     e.preventDefault();
@@ -2010,6 +2074,15 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         setAccountMessage({
           type: 'error',
           text: 'Please fill in all required fields including PIN'
+        });
+        setAccountCreationLoading(false);
+        return;
+      }
+
+      if (!personalOtp.verified) {
+        setAccountMessage({
+          type: 'error',
+          text: 'Please verify your email address first'
         });
         setAccountCreationLoading(false);
         return;
@@ -2080,6 +2153,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         fingerprintEnabled: false,
         phonePhoneEnabled: false
       });
+      setPersonalOtp({ sent: false, verified: false, code: '', loading: false, error: null });
 
       // Close modal after success
       setTimeout(() => {
@@ -2349,10 +2423,16 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         return;
       }
 
+      if (!businessOtp.verified) {
+        alert('❌ Please verify your email address first');
+        setAccountCreationLoading(false);
+        return;
+      }
+
       // Get current user
       const supabase = getSupabaseClient();
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) {
         alert('❌ You must be logged in to create a wallet account');
         setAccountCreationLoading(false);
@@ -2391,6 +2471,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         confirmNewPin: '',
         phoneOtp: ''
       });
+      setBusinessOtp({ sent: false, verified: false, code: '', loading: false, error: null });
       setEditingBusinessProfile(null);
 
       // Refresh business profiles to show new wallet account
@@ -4881,9 +4962,15 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 <input
                   type="email"
                   value={accountEditForm.email}
-                  onChange={(e) => setAccountEditForm({ ...accountEditForm, email: e.target.value })}
+                  disabled={businessOtp.verified}
+                  onChange={(e) => {
+                    setAccountEditForm({ ...accountEditForm, email: e.target.value });
+                    if (businessOtp.sent || businessOtp.verified) {
+                      setBusinessOtp({ sent: false, verified: false, code: '', loading: false, error: null });
+                    }
+                  }}
                   placeholder="Enter email address"
-                  className="w-full px-4 py-2.5 rounded-lg bg-slate-700/50 border border-cyan-500/30 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all"
+                  className="w-full px-4 py-2.5 rounded-lg bg-slate-700/50 border border-cyan-500/30 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all disabled:opacity-60"
                 />
               </div>
 
@@ -4910,16 +4997,75 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 />
               </div>
 
+              {/* Email verification — only required the first time a wallet
+                  (and its PIN) is created for this business; not shown when
+                  just editing an existing business wallet's details. */}
+              {(!editingBusinessProfile.user_accounts || editingBusinessProfile.user_accounts.length === 0) && (
+                <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
+                  <h3 className="text-purple-300 font-semibold mb-2 flex items-center gap-2 text-sm">
+                    📧 Verify Your Email {businessOtp.verified && <span className="text-green-400">✓ Verified</span>}
+                  </h3>
+                  {!businessOtp.verified && (
+                    <>
+                      <p className="text-gray-400 text-xs mb-3">
+                        We'll email a 6-digit code to confirm this address before you can set a PIN.
+                      </p>
+                      {businessOtp.error && <p className="text-red-400 text-xs mb-2">{businessOtp.error}</p>}
+                      {!businessOtp.sent ? (
+                        <button
+                          type="button"
+                          disabled={businessOtp.loading || !accountEditForm.email}
+                          onClick={() => requestAccountEmailOtp(accountEditForm.email, 'business', setBusinessOtp)}
+                          className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-lg font-medium text-sm transition-all"
+                        >
+                          {businessOtp.loading ? 'Sending...' : 'Send Verification Code'}
+                        </button>
+                      ) : (
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={businessOtp.code}
+                            onChange={(e) => setBusinessOtp(prev => ({ ...prev, code: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
+                            placeholder="6-digit code"
+                            className="flex-1 px-4 py-2 bg-slate-700/50 border border-purple-500/30 rounded-lg text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none tracking-widest text-center"
+                          />
+                          <button
+                            type="button"
+                            disabled={businessOtp.loading}
+                            onClick={() => verifyAccountEmailOtp(businessOtp.code, 'business', setBusinessOtp)}
+                            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-lg font-medium text-sm transition-all"
+                          >
+                            {businessOtp.loading ? 'Checking...' : 'Verify'}
+                          </button>
+                        </div>
+                      )}
+                      {businessOtp.sent && (
+                        <button
+                          type="button"
+                          disabled={businessOtp.loading}
+                          onClick={() => requestAccountEmailOtp(accountEditForm.email, 'business', setBusinessOtp)}
+                          className="mt-2 text-xs text-purple-300 hover:text-purple-200"
+                        >
+                          Resend code
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
               {/* PIN */}
               <div>
                 <label className="block text-sm font-semibold text-gray-300 mb-2">Create PIN (4-6 digits)</label>
                 <input
                   type="password"
                   value={accountEditForm.newPin}
+                  disabled={(!editingBusinessProfile.user_accounts || editingBusinessProfile.user_accounts.length === 0) && !businessOtp.verified}
                   onChange={(e) => setAccountEditForm({ ...accountEditForm, newPin: e.target.value })}
                   placeholder="Enter 4-6 digit PIN"
                   maxLength="6"
-                  className="w-full px-4 py-2.5 rounded-lg bg-slate-700/50 border border-cyan-500/30 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all"
+                  className="w-full px-4 py-2.5 rounded-lg bg-slate-700/50 border border-cyan-500/30 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all disabled:opacity-60"
                 />
               </div>
 
@@ -4929,10 +5075,11 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 <input
                   type="password"
                   value={accountEditForm.confirmNewPin}
+                  disabled={(!editingBusinessProfile.user_accounts || editingBusinessProfile.user_accounts.length === 0) && !businessOtp.verified}
                   onChange={(e) => setAccountEditForm({ ...accountEditForm, confirmNewPin: e.target.value })}
                   placeholder="Confirm your PIN"
                   maxLength="6"
-                  className="w-full px-4 py-2.5 rounded-lg bg-slate-700/50 border border-cyan-500/30 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all"
+                  className="w-full px-4 py-2.5 rounded-lg bg-slate-700/50 border border-cyan-500/30 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all disabled:opacity-60"
                 />
               </div>
             </div>
@@ -4954,7 +5101,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     handleCreateBusinessWallet(editingBusinessProfile);
                   }
                 }}
-                disabled={accountCreationLoading || !accountEditForm.accountHolderName || !accountEditForm.email || !accountEditForm.phoneNumber || (!editingBusinessProfile.user_accounts || editingBusinessProfile.user_accounts.length === 0 ? (!accountEditForm.newPin || !accountEditForm.confirmNewPin) : false)}
+                disabled={accountCreationLoading || !accountEditForm.accountHolderName || !accountEditForm.email || !accountEditForm.phoneNumber || (!editingBusinessProfile.user_accounts || editingBusinessProfile.user_accounts.length === 0 ? (!accountEditForm.newPin || !accountEditForm.confirmNewPin || !businessOtp.verified) : false)}
                 className="flex-1 px-4 py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {accountCreationLoading ? 'Saving...' : (editingBusinessProfile.user_accounts && editingBusinessProfile.user_accounts.length > 0 ? 'Update Account' : 'Create Account')}
@@ -5479,7 +5626,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 </label>
                 <input
                   type="text"
-                  placeholder={sendMethod === 'mobile' ? '+256701234567' : 'ICAN-20260210105243-ace25eb0 | +256701234567 | user@example.com'}
+                  placeholder={sendMethod === 'mobile' ? '+256701234567' : '1002345678901234 | +256701234567 | user@example.com'}
                   value={sendForm.recipient}
                   onChange={(e) => setSendForm({ ...sendForm, recipient: e.target.value })}
                   className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none transition-all"
@@ -6079,21 +6226,86 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 <input
                   type="email"
                   value={accountCreationForm.email}
-                  onChange={(e) => setAccountCreationForm({ ...accountCreationForm, email: e.target.value })}
+                  disabled={personalOtp.verified}
+                  onChange={(e) => {
+                    setAccountCreationForm({ ...accountCreationForm, email: e.target.value });
+                    if (personalOtp.sent || personalOtp.verified) {
+                      setPersonalOtp({ sent: false, verified: false, code: '', loading: false, error: null });
+                    }
+                  }}
                   placeholder="you@example.com"
-                  className="w-full px-4 py-3 bg-slate-700/50 border border-purple-500/30 hover:border-purple-500/60 rounded-lg text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none transition-all"
+                  className="w-full px-4 py-3 bg-slate-700/50 border border-purple-500/30 hover:border-purple-500/60 rounded-lg text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none transition-all disabled:opacity-60"
                 />
               </div>
 
+              {/* Email verification (required before PIN can be set) */}
+              <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
+                <h3 className="text-purple-300 font-semibold mb-2 flex items-center gap-2">
+                  📧 Verify Your Email {personalOtp.verified && <span className="text-green-400">✓ Verified</span>}
+                </h3>
+                {!personalOtp.verified && (
+                  <>
+                    <p className="text-gray-400 text-sm mb-3">
+                      We'll email a 6-digit code to confirm this address before you can set a PIN.
+                    </p>
+                    {personalOtp.error && <p className="text-red-400 text-xs mb-2">{personalOtp.error}</p>}
+                    {!personalOtp.sent ? (
+                      <button
+                        type="button"
+                        disabled={personalOtp.loading || !accountCreationForm.email}
+                        onClick={() => requestAccountEmailOtp(accountCreationForm.email, 'personal', setPersonalOtp)}
+                        className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-lg font-medium transition-all"
+                      >
+                        {personalOtp.loading ? 'Sending...' : 'Send Verification Code'}
+                      </button>
+                    ) : (
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={personalOtp.code}
+                          onChange={(e) => setPersonalOtp(prev => ({ ...prev, code: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
+                          placeholder="6-digit code"
+                          className="flex-1 px-4 py-2 bg-slate-700/50 border border-purple-500/30 rounded-lg text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none tracking-widest text-center"
+                        />
+                        <button
+                          type="button"
+                          disabled={personalOtp.loading}
+                          onClick={() => verifyAccountEmailOtp(personalOtp.code, 'personal', setPersonalOtp)}
+                          className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-lg font-medium transition-all"
+                        >
+                          {personalOtp.loading ? 'Checking...' : 'Verify'}
+                        </button>
+                      </div>
+                    )}
+                    {personalOtp.sent && (
+                      <button
+                        type="button"
+                        disabled={personalOtp.loading}
+                        onClick={() => requestAccountEmailOtp(accountCreationForm.email, 'personal', setPersonalOtp)}
+                        className="mt-2 text-xs text-purple-300 hover:text-purple-200"
+                      >
+                        Resend code
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+
               {/* PIN Setup */}
-              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-4">
+              <div className={`bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-4 ${!personalOtp.verified ? 'opacity-50' : ''}`}>
                 <h3 className="text-blue-400 font-semibold mb-3 flex items-center gap-2">
                   🔐 Set Your PIN (Required)
                 </h3>
-                <p className="text-gray-400 text-sm mb-3">Your 4-6 digit PIN protects your account. You'll use this for transactions.</p>
+                <p className="text-gray-400 text-sm mb-3">
+                  {personalOtp.verified
+                    ? "Your 4-6 digit PIN protects your account. You'll use this for transactions."
+                    : 'Verify your email above to set your PIN.'}
+                </p>
                 <input
                   type="password"
                   value={accountCreationForm.pin}
+                  disabled={!personalOtp.verified}
                   onChange={(e) => {
                     const value = e.target.value.replace(/\D/g, '');
                     if (value.length <= 6) {
@@ -6102,7 +6314,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                   }}
                   placeholder="Enter 4-6 digits"
                   maxLength="6"
-                  className="w-full px-4 py-3 bg-slate-700/50 border border-blue-500/30 hover:border-blue-500/60 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none transition-all text-center text-2xl tracking-widest"
+                  className="w-full px-4 py-3 bg-slate-700/50 border border-blue-500/30 hover:border-blue-500/60 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none transition-all text-center text-2xl tracking-widest disabled:cursor-not-allowed"
                 />
                 <p className="text-gray-500 text-xs mt-2">
                   {accountCreationForm.pin.length === 0 ? '0' : accountCreationForm.pin.length} / 6 digits
@@ -6175,7 +6387,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 </button>
                 <button
                   type="submit"
-                  disabled={accountCreationLoading}
+                  disabled={accountCreationLoading || !personalOtp.verified}
                   className="flex-1 px-4 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white rounded-lg font-semibold transition-all disabled:opacity-50"
                 >
                   {accountCreationLoading ? '⏳ Creating Account...' : '✨ Create Account'}

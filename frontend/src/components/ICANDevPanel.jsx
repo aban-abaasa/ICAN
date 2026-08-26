@@ -697,6 +697,12 @@ const RecoveryTab = () => {
     setResolvingId(requestId);
     setError(null);
     try {
+      // ican_dev_resolve_recovery_request() now reads account_type straight off
+      // the request row (set by request_account_unlock() when the requester
+      // chose Personal vs Business in PINRecoveryModal.jsx) and scopes the
+      // reset to just that account — nothing extra to pass here. NULL
+      // account_type (legacy requests) keeps resetting every user_accounts
+      // row for the user, same as before this change.
       const { data, error: err } = await supabase.rpc('ican_dev_resolve_recovery_request', {
         dev_token: DEV_TOKEN,
         p_request_id: requestId,
@@ -730,7 +736,9 @@ const RecoveryTab = () => {
             {r.account_number} · {r.email} · {r.phone_number}
           </p>
           <p className="mt-1 text-xs" style={{ color:'var(--dp-muted)' }}>
-            {r.request_type === 'pin_reset' ? 'Forgot PIN' : 'Account locked'} · failed attempts: {r.failed_pin_attempts ?? '—'}
+            {r.request_type === 'pin_reset' ? 'Forgot PIN' : 'Account locked'}
+            {r.account_type ? ` · ${r.account_type === 'business' ? 'Business' : 'Personal'} account` : ''}
+            {' '}· failed attempts: {r.failed_pin_attempts ?? '—'}
             {r.pin_locked_until ? ` · locked until ${new Date(r.pin_locked_until).toLocaleString()}` : ''}
           </p>
           {r.reason && <p className="mt-1.5 text-xs italic" style={{ color:'var(--dp-sub)' }}>&ldquo;{r.reason}&rdquo;</p>}
