@@ -18,6 +18,7 @@ import {
   Package,
   Wrench,
   AlertTriangle,
+  AlertCircle,
   CheckCircle,
   Trash2,
   Plus,
@@ -4099,6 +4100,22 @@ const CMMSModule = ({
     const [verificationStatus, setVerificationStatus] = useState({});
     const [showDepartmentForm, setShowDepartmentForm] = useState(false);
     const [isSavingDepartment, setIsSavingDepartment] = useState(false);
+
+    // Toasts for the Add User flow, replacing native alert() popups with an
+    // in-app notification that inherits the active app theme (light/dark/
+    // purple/green/ocean) instead of the OS-styled alert box.
+    const [toasts, setToasts] = useState([]);
+    const showToast = ({ type = 'info', title, message, duration = 6000 }) => {
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      setToasts(prev => [...prev, { id, type, title, message }]);
+      if (duration) {
+        setTimeout(() => {
+          setToasts(prev => prev.filter(t => t.id !== id));
+        }, duration);
+      }
+    };
+    const dismissToast = (id) => setToasts(prev => prev.filter(t => t.id !== id));
+
     const [departmentForm, setDepartmentForm] = useState({
       department_name: '',
       description: '',
@@ -4216,22 +4233,22 @@ const CMMSModule = ({
 
     const handleAddUser = async () => {
       if (!newUser.email) {
-        alert('âŒ Please search and select a user from the dropdown');
+        showToast({ type: 'error', title: 'No user selected', message: 'Search and select an ICAN user from the dropdown first.' });
         return;
       }
 
       if (!newUser.name) {
-        alert('âŒ Please select a valid user');
+        showToast({ type: 'error', title: 'Invalid user', message: 'Please select a valid user from the search results.' });
         return;
       }
 
       if (!newUser.role) {
-        alert('âŒ Please select a role');
+        showToast({ type: 'error', title: 'Role required', message: 'Choose a role for this user before continuing.' });
         return;
       }
 
       if (roleNeedsDepartment && !newUser.department_id) {
-        alert('âŒ Please select a department for this role.');
+        showToast({ type: 'error', title: 'Department required', message: 'This role needs a department — please select one.' });
         return;
       }
 
@@ -4239,7 +4256,12 @@ const CMMSModule = ({
       if (!isVerified) {
         const verification = await verifyICANUser(newUser.email);
         if (!verification.exists) {
-          alert('âŒ User must have an ICAN account.\n\nPlease ask the user to:\n1. Sign up for ICAN\n2. Complete their ICAN profile\n3. Then they can be added to CMMS');
+          showToast({
+            type: 'error',
+            title: 'No ICAN account found',
+            message: 'Ask them to sign up for ICAN and complete their profile — then they can be added to CMMS.',
+            duration: 8000
+          });
           return;
         }
       }
@@ -4273,11 +4295,11 @@ const CMMSModule = ({
             .eq('id', userId);
 
           if (updateUserError) {
-            alert('âŒ Failed to update existing user: ' + updateUserError.message);
+            showToast({ type: 'error', title: "Couldn't update user", message: updateUserError.message });
             return;
           }
         } else if (checkError && checkError.code !== 'PGRST116') {
-          alert('âŒ Error checking user: ' + checkError.message);
+          showToast({ type: 'error', title: "Couldn't verify user", message: checkError.message });
           return;
         } else {
           const { data: insertedUser, error: userError } = await supabase
@@ -4299,7 +4321,7 @@ const CMMSModule = ({
             .single();
 
           if (userError || !insertedUser) {
-            alert('âŒ Error adding user to database: ' + (userError?.message || 'Unknown error'));
+            showToast({ type: 'error', title: "Couldn't add user", message: userError?.message || 'Unknown error' });
             return;
           }
 
@@ -4313,7 +4335,7 @@ const CMMSModule = ({
         });
 
         if (assignRoleError) {
-          alert('âš ï¸ User added but role assignment failed: ' + assignRoleError.message);
+          showToast({ type: 'warning', title: 'User added, but role assignment failed', message: assignRoleError.message, duration: 8000 });
           return;
         }
 
@@ -4323,7 +4345,7 @@ const CMMSModule = ({
             p_cmms_user_id: userId,
           });
           if (studentSyncError) {
-            alert('User was given the CMMS Student role, but the School Fees student link failed: ' + studentSyncError.message);
+            showToast({ type: 'warning', title: 'Role assigned, but student link failed', message: studentSyncError.message, duration: 8000 });
             return;
           }
         }
@@ -4359,10 +4381,15 @@ const CMMSModule = ({
         setEmailSearchQuery('');
         setSearchResults([]);
 
-        alert(`âœ… User added to CMMS successfully!\n\nðŸ“¬ Notification sent to ${newUser.email}\nðŸ”‘ Role: ${normalizeRoleKey(newUser.role)}\nðŸ¢ Department: ${selectedDepartment?.department_name || 'Not assigned'}`);
+        showToast({
+          type: 'success',
+          title: 'User added to CMMS',
+          message: `${newUser.name} was added as ${normalizeRoleKey(newUser.role)}${selectedDepartment ? ` in ${selectedDepartment.department_name}` : ''}. A notification was sent to ${newUser.email}.`,
+          duration: 7000
+        });
       } catch (error) {
         console.error('Exception adding user:', error);
-        alert('âŒ Error: ' + error.message);
+        showToast({ type: 'error', title: 'Something went wrong', message: error.message });
       }
     };
 
@@ -4502,6 +4529,46 @@ const CMMSModule = ({
 
     return (
       <div className="space-y-6">
+        {/* Toasts for the Add User flow — theme-aware replacement for the old
+            native alert() popups. */}
+        <div className="fixed top-4 right-4 z-[100] flex w-full max-w-sm flex-col gap-2 pointer-events-none">
+          {toasts.map(t => {
+            const styles = {
+              success: { border: 'border-emerald-500/30', iconBg: 'bg-emerald-500/15', iconColor: 'text-emerald-400', Icon: CheckCircle2 },
+              error: { border: 'border-red-500/30', iconBg: 'bg-red-500/15', iconColor: 'text-red-400', Icon: AlertCircle },
+              warning: { border: 'border-amber-500/30', iconBg: 'bg-amber-500/15', iconColor: 'text-amber-400', Icon: AlertTriangle }
+            }[t.type] || { border: 'border-blue-500/30', iconBg: 'bg-blue-500/15', iconColor: 'text-blue-400', Icon: AlertCircle };
+            const ToastIcon = styles.Icon;
+            return (
+              <div
+                key={t.id}
+                className={`pointer-events-auto flex items-start gap-3 rounded-xl border ${styles.border} bg-slate-900 bg-opacity-95 backdrop-blur-sm p-4 shadow-2xl transition-all duration-200 ease-out animate-[cmms-toast-in_0.2s_ease-out]`}
+              >
+                <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${styles.iconBg} ${styles.iconColor}`}>
+                  <ToastIcon className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white">{t.title}</p>
+                  {t.message && <p className="mt-0.5 text-xs text-slate-400 break-words">{t.message}</p>}
+                </div>
+                <button
+                  onClick={() => dismissToast(t.id)}
+                  className="text-slate-500 hover:text-slate-300 transition-colors flex-shrink-0"
+                  aria-label="Dismiss"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+        <style>{`
+          @keyframes cmms-toast-in {
+            from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+          }
+        `}</style>
+
         {userRole === 'admin' && (
           <div className="glass-card p-4 bg-green-500 bg-opacity-10 border-l-4 border-green-500">
             <p className="text-green-300 font-semibold text-sm">Admin full access is active.</p>
@@ -5303,12 +5370,15 @@ const CMMSModule = ({
       }).catch(() => {});
       return () => { active = false; };
     }, []);
-    // Get storemen for current department from cmmsData
+    // Users eligible to be assigned as storeman for a department.
+    // Any active member of the department can be picked here — assigning
+    // them doesn't require they already hold the 'storeman' role; admin
+    // can designate anyone in the department as its responsible storeman.
     const getStoremenForDepartment = (deptId) => {
       if (!deptId) return [];
-      return cmmsData.users?.filter(u => 
-        u.department_id === deptId && 
-        (normalizeRoleKey(u.role) === 'storeman' || normalizeRoleKey(u.role) === 'admin')
+      return cmmsData.users?.filter(u =>
+        u.department_id === deptId &&
+        u.is_active !== false
       ) || [];
     };
 
@@ -5579,21 +5649,21 @@ const CMMSModule = ({
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs text-gray-300">Assign Storeman <span className="text-red-400">*</span></label>
+                <label className="text-xs text-gray-300">Assign Storeman <span className="text-gray-500">(optional)</span></label>
                 <select
                   value={newItem.assigned_storeman_id}
                   onChange={(e) => setNewItem({...newItem, assigned_storeman_id: e.target.value})}
-                  disabled={isAddingItem || !newItem.department_id || storemen.length === 0}
+                  disabled={isAddingItem || !newItem.department_id}
                   className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white disabled:opacity-50"
                 >
-                  <option value="">{!newItem.department_id ? 'Select Department First' : storemen.length === 0 ? 'No Storemen Available' : 'Select Storeman...'}</option>
+                  <option value="">{!newItem.department_id ? 'Select Department First' : storemen.length === 0 ? 'No one in this department yet' : 'No storeman assigned'}</option>
                   {storemen.map(storeman => (
                     <option key={storeman.id} value={storeman.id}>
                       {storeman.name || storeman.user_name}
                     </option>
                   ))}
                 </select>
-                <p className="text-[11px] text-gray-400">Responsible storeman for this department.</p>
+                <p className="text-[11px] text-gray-400">Any team member in this department can be made responsible — admin can assign it to anyone, not just existing storemen.</p>
               </div>
 
               <div className="space-y-2">
