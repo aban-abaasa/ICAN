@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, ChevronRight, ChevronDown, ChevronUp, CheckCircle, Clock, Lock, Fingerprint, QrCode, Download, AlertCircle, Users, TrendingUp, Shield, FileText, DollarSign, Printer, ArrowLeft } from 'lucide-react';
 import QRCode from 'qrcode';
+import { jsPDF } from 'jspdf';
 import { getSupabase, createNotification, createInvestmentNotification } from '../services/pitchingService';
 import { walletTransactionService } from '../services/walletTransactionService';
-import { convertToIcanCoins } from '../services/icanCoinPrice';
+import { getLiveShareOffer } from '../services/pitchinValuationService';
+import { useIcanPrice } from '../hooks/useIcanPrice';
 import ShareholderSignatureModal from './ShareholderSignatureModal';
 
 /**
@@ -49,6 +51,17 @@ import ShareholderSignatureModal from './ShareholderSignatureModal';
  * - Transactions tracked for regulatory compliance regardless of currency
  * - No currency restriction - investor choice is respected
  */
+
+// Why the live share offer is unusable. Mirrors the map in Pitchin.jsx — the
+// flow explains what is missing rather than quietly pricing off the stale
+// pitches.share_price column.
+const LIVE_OFFER_BLOCKED_MESSAGE = {
+  'no-business-profile': 'This pitch is not linked to a business profile yet, so it has no live share value to invest against.',
+  'shares-not-configured': 'The owner has not set how many shares this business has yet. Investing opens once they do.',
+  'no-live-price': 'This business has no live share value yet - its recorded transactions do not add up to a positive value.',
+  'issued-shares-unreadable': 'Could not confirm how many shares are still unsold. Please try again in a moment.',
+  default: 'Live share value is unavailable for this business right now. Please try again in a moment.'
+};
 
 // ============================================
 // DEADLINE COUNTDOWN COMPONENT
@@ -194,9 +207,32 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
   const [stage, setStage] = useState(0); // 0: Intent, 1: Documents, 2: Agreement, 3: Shares, 4: Shares Info, 5: Wallet Summary, 6: PIN Verification, 7: Pending, 8: Finalized
   const [investmentType, setInvestmentType] = useState(null); // 'buy', 'partner', 'support'
   const [sharesAmount, setSharesAmount] = useState('');
-  const [sharePrice, setSharePrice] = useState(pitch?.share_price || 100);
-  const [totalInvestment, setTotalInvestment] = useState(0);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+
+  // LIVE SHARE OFFER - the only share price/count this flow transacts on.
+  // Seeded from the valuation Pitchin computed on the Invest tap, then re-read
+  // here so a modal left open can't seal at a stale price. The static
+  // pitches.share_price / pitches.shares_available columns are never read.
+  const [liveOffer, setLiveOffer] = useState(() => (
+    Number(pitch?.live_share_price_ugx) > 0
+      ? {
+          available: true,
+          sharePriceUgx: Number(pitch.live_share_price_ugx),
+          totalShares: Number(pitch.live_total_shares) || null,
+          sharesIssued: Number(pitch.live_shares_issued) || 0,
+          sharesAvailable: Number(pitch.live_shares_available) || 0,
+          businessValueUgx: Number(pitch.live_business_value_ugx) || null,
+          computedAt: pitch.live_computed_at || null
+        }
+      : null
+  ));
+  const [offerLoading, setOfferLoading] = useState(false);
+  const [offerError, setOfferError] = useState('');
+  // investor_shares row that holds this investor's shares from the moment they
+  // pay until the 60% approval flips it to 'approved'. It is counted as issued
+  // straight away, so the live "still unsold" figure everyone else sees drops
+  // immediately instead of only at approval time.
+  const [reservedShareRowId, setReservedShareRowId] = useState(null);
   
   // Documents
   const [sellerDocuments, setSellerDocuments] = useState(null);
@@ -434,12 +470,71 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
     }
   };
 
-  // Calculate total investment
+  // Re-read the live share offer on open (and whenever the seller profile
+  // resolves). Nothing here falls back to pitch.share_price / shares_available:
+  // if the live read fails the flow stays unpriced and cannot be sealed.
+  const offerBusinessProfileId = sellerBusinessProfile?.id || pitch?.business_profile_id || pitch?.business_profiles?.id;
+  const offerBusinessOwnerUserId = sellerBusinessProfile?.user_id || pitch?.business_profiles?.user_id || pitch?.user_id;
+
   useEffect(() => {
-    if (sharesAmount && sharePrice) {
-      setTotalInvestment(parseFloat(sharesAmount) * parseFloat(sharePrice));
-    }
-  }, [sharesAmount, sharePrice]);
+    let cancelled = false;
+    if (!offerBusinessProfileId) return undefined;
+
+    (async () => {
+      setOfferLoading(true);
+      setOfferError('');
+      try {
+        const offer = await getLiveShareOffer(offerBusinessProfileId, offerBusinessOwnerUserId);
+        if (cancelled) return;
+        if (offer.available) {
+          setLiveOffer(offer);
+        } else {
+          setLiveOffer(null);
+          setOfferError(LIVE_OFFER_BLOCKED_MESSAGE[offer.reason] || LIVE_OFFER_BLOCKED_MESSAGE.default);
+        }
+      } catch (err) {
+        if (cancelled) return;
+        console.warn('Live share offer read failed:', err?.message);
+        setLiveOffer(null);
+        setOfferError(LIVE_OFFER_BLOCKED_MESSAGE.default);
+      } finally {
+        if (!cancelled) setOfferLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [offerBusinessProfileId, offerBusinessOwnerUserId]);
+
+  // LIVE ICAN COIN VALUE - ican_get_price_in_currency(), refreshed every 60s.
+  // Replaces the hardcoded ICAN_COIN_PRICES table: every coin figure below is
+  // priced off the live market price, not a constant baked into the bundle.
+  //   price_local  = value of 1 icaneracoin in allowedCurrency
+  //   rate_to_ugx  = UGX per 1 unit of allowedCurrency (1 for UGX itself)
+  const { price: icanPrice } = useIcanPrice(allowedCurrency);
+  const icanPriceLocal = Number(icanPrice?.price_local) > 0 ? Number(icanPrice.price_local) : null;
+  const ugxPerLocal = Number(icanPrice?.rate_to_ugx) > 0 ? Number(icanPrice.rate_to_ugx) : null;
+  const icanPriceUgx = (icanPriceLocal != null && ugxPerLocal != null) ? icanPriceLocal * ugxPerLocal : null;
+
+  // The valuation is UGX-denominated; show it in the investor's currency using
+  // the same live rate table the coin price comes from. 0 while either live
+  // read is still pending, which keeps every "Continue"/"Authorize" gate shut.
+  const sharePriceUgx = liveOffer?.sharePriceUgx ?? null;
+  const sharePrice = (sharePriceUgx != null && ugxPerLocal != null) ? sharePriceUgx / ugxPerLocal : 0;
+  const sharesRequested = parseFloat(sharesAmount) || 0;
+  const totalInvestmentUgx = sharePriceUgx != null ? sharesRequested * sharePriceUgx : 0;
+  const totalInvestment = sharesRequested * sharePrice;
+
+  const liveTotalShares = liveOffer?.totalShares ?? null;
+  const liveSharesAvailable = liveOffer?.sharesAvailable ?? 0;
+  const pricingReady = sharePriceUgx != null && ugxPerLocal != null && icanPriceUgx != null;
+  // Equity is the investor's slice of the live share register, not the
+  // equity_offering percentage typed into the pitch listing.
+  const equityStakePercent = (liveTotalShares > 0 && sharesRequested > 0)
+    ? (sharesRequested / liveTotalShares) * 100
+    : 0;
+  const exceedsAvailableShares = sharesRequested > liveSharesAvailable;
+  const investmentInIcanCoins = icanPriceLocal != null ? totalInvestment / icanPriceLocal : 0;
+  const sharePriceInIcan = icanPriceLocal != null ? sharePrice / icanPriceLocal : 0;
 
   // Fetch seller documents when component loads
   useEffect(() => {
@@ -774,65 +869,83 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
         // Fallback: Check if seller has nested business_co_owners from pitch data (seller's profile)
         const sellerCoOwners = sellerBusinessProfile?.business_co_owners || pitch?.business_profiles?.business_co_owners || [];
         if (sellerCoOwners && sellerCoOwners.length > 0) {
-          console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Found shareholders in seller business profile (pitch.business_profiles.business_co_owners)');
-          
+          console.log('Found shareholders in seller business profile (pitch.business_profiles.business_co_owners)');
+
           // Filter out the current investor
           const otherCoOwners = sellerCoOwners.filter(owner => owner.user_id !== currentUser?.id && owner.owner_email !== currentUser?.email);
-          console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã‚Â  Filtering: ${sellerCoOwners.length} total sellers shareholders -> ${otherCoOwners.length} after excluding investor`);
-          
-          const mappedShareholders = otherCoOwners.map(owner => ({
-            id: owner.id,
-            user_id: owner.user_id,
-            name: owner.owner_name || owner.name || 'Unknown Shareholder',
-            email: owner.owner_email || owner.email,
-            ownership: owner.ownership_share || owner.ownershipShare,
-            role: owner.role,
-            isBusiness: false,
+          console.log(`Filtering: ${sellerCoOwners.length} total sellers shareholders -> ${otherCoOwners.length} after excluding investor`);
+
+          if (otherCoOwners.length > 0) {
+            const mappedShareholders = otherCoOwners.map(owner => ({
+              id: owner.id,
+              user_id: owner.user_id,
+              name: owner.owner_name || owner.name || 'Unknown Shareholder',
+              email: owner.owner_email || owner.email,
+              ownership: owner.ownership_share || owner.ownershipShare,
+              role: owner.role,
+              isBusiness: false,
+              signed: false,
+              isLinked: !!owner.user_id
+            }));
+            setRealShareholders(mappedShareholders);
+            const threshold = calculateApprovalThreshold(mappedShareholders.length);
+            setRequiredApprovalCount(threshold);
+            return;
+          }
+        }
+
+        // No co-owners exist anywhere (sole proprietorship, or every
+        // registered co-owner turned out to be this investor). The approver
+        // here MUST be the actual business owner, never the investor
+        // themselves - an investor cannot be the one who approves releasing
+        // their own escrowed funds. business_profiles doesn't carry a
+        // name/email, so resolve the owner's identity from profiles by
+        // their user_id.
+        const ownerUserId = sellerBusinessProfile?.user_id || pitch?.business_profiles?.user_id;
+        if (ownerUserId && ownerUserId !== currentUser?.id) {
+          console.log('No registered co-owners - falling back to the business owner as sole approver');
+          let ownerName = sellerBusinessProfile?.business_name ? `${sellerBusinessProfile.business_name} Owner` : 'Business Owner';
+          let ownerEmail = null;
+          try {
+            const { data: ownerProfile } = await supabase
+              .from('profiles')
+              .select('full_name, email')
+              .eq('id', ownerUserId)
+              .maybeSingle();
+            if (ownerProfile?.full_name) ownerName = ownerProfile.full_name;
+            if (ownerProfile?.email) ownerEmail = ownerProfile.email;
+          } catch (profileErr) {
+            console.warn('Could not resolve owner profile:', profileErr?.message);
+          }
+          setRealShareholders([{
+            id: ownerUserId,
+            user_id: ownerUserId,
+            name: ownerName,
+            email: ownerEmail,
+            ownership: 100,
+            role: 'Owner',
+            isBusiness: true,
             signed: false,
-            isLinked: !!owner.user_id
-          }));
-          setRealShareholders(mappedShareholders);
-          const threshold = calculateApprovalThreshold(mappedShareholders.length);
-          setRequiredApprovalCount(threshold);
+            isLinked: true
+          }]);
+          setRequiredApprovalCount(1);
           return;
         }
-        
-        // Final fallback: Use current user only
-        if (currentUser?.id && currentUser?.email) {
-          console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Using currentUser as fallback');
-          setRealShareholders([{
-            id: currentUser.id,
-            user_id: currentUser.id,
-            name: currentUser.user_metadata?.full_name || 'Investor',
-            email: currentUser.email,
-            ownership: 100,
-            role: 'Investor',
-            isBusiness: false,
-            signed: false,
-            isLinked: true
-          }]);
-          setRequiredApprovalCount(1);
-        }
+
+        // The owner could not be identified (RLS blocked the profile read, or
+        // the pitch is missing business_profile_id/user_id entirely). There is
+        // no one else it could honestly be, so leave the approver list empty
+        // rather than let the investor sign off on their own investment -
+        // verifyWalletPin() below refuses to proceed while this is empty.
+        console.warn('Could not identify the business owner - approval cannot proceed until this is resolved');
+        setRealShareholders([]);
+        setRequiredApprovalCount(0);
       } catch (err) {
-        console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Shareholder fetch error:', err?.message);
-        // Fallback to current user on any error
-        if (currentUser?.id && currentUser?.email) {
-          setRealShareholders([{
-            id: currentUser.id,
-            user_id: currentUser.id,
-            name: currentUser.user_metadata?.full_name || 'Investor',
-            email: currentUser.email,
-            ownership: 100,
-            role: 'Investor',
-            isBusiness: false,
-            signed: false,
-            isLinked: true
-          }]);
-          setRequiredApprovalCount(1);
-        } else {
-          setRealShareholders([]);
-          setRequiredApprovalCount(0);
-        }
+        console.warn('Shareholder fetch error:', err?.message);
+        // Same rule on error: never fall back to the investor approving
+        // themselves. Leave the list empty and let verifyWalletPin() block.
+        setRealShareholders([]);
+        setRequiredApprovalCount(0);
       }
     };
 
@@ -1087,27 +1200,41 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
 
           console.log('ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€¦Ã‚Â½Ãƒâ€šÃ‚Â¯ 60% APPROVAL THRESHOLD MET - Recording investor as shareholder...');
 
-          // Record investor share ownership NOW (only after approval)
-          const { data: shareData, error: shareError } = await supabase
-            .from('investor_shares')
-            .insert([{
-              investor_id: currentUser?.id,
-              investor_email: currentUser?.email,
-              investor_name: currentUser?.user_metadata?.full_name || 'Investor',
-              pitch_id: pitch.id,
-              business_profile_id: sellerBusinessProfile?.id || pitch?.business_profile_id,
-              investment_id: escrowId,
-              shares_owned: parseInt(sharesAmount),
-              share_price: sharePrice,
-              total_investment: totalInvestment,
-              currency: allowedCurrency,
-              status: 'approved', // NOW APPROVED (no longer pending)
-              locked_until_threshold: false, // Shares are now unlocked
-              transaction_reference: 'APPROVED-' + escrowId,
-              notes: 'ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Investor became shareholder after 60% shareholder approval',
-              created_at: new Date().toISOString()
-            }])
-            .select();
+          // Promote the reservation created at payment time rather than
+          // inserting a second row - a duplicate would double-count these
+          // shares in the live issued total and shrink everyone else's
+          // available count by twice the amount actually bought.
+          const approvedShareRow = {
+            status: 'approved',
+            locked_until_threshold: false, // Shares are now unlocked
+            transaction_reference: 'APPROVED-' + escrowId,
+            notes: 'Investor became shareholder after 60% shareholder approval',
+            updated_at: new Date().toISOString()
+          };
+
+          const { data: shareData, error: shareError } = reservedShareRowId
+            ? await supabase
+                .from('investor_shares')
+                .update(approvedShareRow)
+                .eq('id', reservedShareRowId)
+                .select()
+            : await supabase
+                .from('investor_shares')
+                .insert([{
+                  investor_id: currentUser?.id,
+                  investor_email: currentUser?.email,
+                  investor_name: currentUser?.user_metadata?.full_name || 'Investor',
+                  pitch_id: pitch.id,
+                  business_profile_id: sellerBusinessProfile?.id || pitch?.business_profile_id,
+                  investment_id: escrowId,
+                  shares_owned: parseInt(sharesAmount),
+                  share_price: sharePrice,
+                  total_investment: totalInvestment,
+                  currency: allowedCurrency,
+                  created_at: new Date().toISOString(),
+                  ...approvedShareRow
+                }])
+                .select();
 
           if (shareError && shareError.code !== 'PGRST116') {
             console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Could not record investor shares:', shareError);
@@ -1122,9 +1249,15 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
           // ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾ REDUCE SELLER'S SHARES - Update business_co_owners proportionally
           console.log('\nÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€šÃ‚Â¼ Reducing seller shares and adding investor as co-owner...');
           try {
-            const equityOffering = parseFloat(pitch?.equity_offering || 10); // Equity being offered (%)
-            const investorOwnershipNew = equityOffering / 100; // Convert % to decimal (e.g., 10% = 0.10)
-            
+            // The investor's stake is the slice of the LIVE share register they
+            // actually bought, not the equity_offering percentage typed into the
+            // pitch listing (which is a marketing figure, unrelated to how many
+            // shares changed hands). Bail out rather than write a made-up stake.
+            if (!(liveTotalShares > 0)) {
+              throw new Error('Live total share count unavailable - refusing to write an ownership percentage');
+            }
+            const equityOffering = (parseInt(sharesAmount) / liveTotalShares) * 100;
+
             console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã‚Â  Equity being offered: ${equityOffering}%`);
             console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã‚Â  Investor getting: ${equityOffering}% of new valuation`);
 
@@ -1132,34 +1265,65 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
             const sellerUserId = sellerBusinessProfile?.user_id;
             const sellerCurrent = realShareholders.find(s => s.user_id === sellerUserId);
             const sellerCurrentShare = sellerCurrent?.ownership || 0;
-            
-            console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã‚Â  Seller current ownership: ${sellerCurrentShare}%`);
-            
+
+            console.log(`Seller current ownership: ${sellerCurrentShare}%`);
+
             // Calculate new ownership shares (dilution effect)
             // Old shareholders' new share = old_share * (1 - equity_offering/100)
             // New investor's share = equity_offering
             const dilutionFactor = 1 - (equityOffering / 100);
             const sellerNewShare = Math.round((sellerCurrentShare * dilutionFactor) * 100) / 100;
-            
-            console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã‚Â  Seller new ownership (after dilution): ${sellerNewShare}%`);
-            console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã‚Â  Dilution factor: ${dilutionFactor.toFixed(2)} (${((1 - dilutionFactor) * 100).toFixed(1)}% dilution)`);
 
-            // Update seller's ownership in business_co_owners
-            if (sellerCurrent?.id) {
-              const { error: updateError } = await supabase
+            console.log(`Seller new ownership (after dilution): ${sellerNewShare}%`);
+            console.log(`Dilution factor: ${dilutionFactor.toFixed(2)} (${((1 - dilutionFactor) * 100).toFixed(1)}% dilution)`);
+
+            // Persist the seller's diluted ownership. sellerCurrent.id is only a
+            // real business_co_owners primary key when a co-owner row already
+            // existed - for a sole proprietorship's FIRST investment there is
+            // none yet (fetchRealShareholders falls back to the owner's auth
+            // user id in that case), so UPDATE-by-id would silently match
+            // nothing and the owner's stake would never be recorded. Look the
+            // row up directly instead of trusting which fallback path built
+            // sellerCurrent, and INSERT one for the owner if it truly doesn't
+            // exist yet - otherwise the owner drops out of future approval
+            // votes entirely.
+            if (sellerUserId) {
+              const { data: existingSellerRow } = await supabase
                 .from('business_co_owners')
-                .update({
-                  ownership_share: sellerNewShare,
-                  updated_at: new Date().toISOString()
-                })
-                .eq('id', sellerCurrent.id);
+                .select('id')
+                .eq('business_profile_id', pitch.business_profile_id)
+                .eq('user_id', sellerUserId)
+                .maybeSingle();
 
-              if (updateError) {
-                console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Could not update seller shares:', updateError.message);
+              const { error: sellerWriteError } = existingSellerRow?.id
+                ? await supabase
+                    .from('business_co_owners')
+                    .update({
+                      ownership_share: sellerNewShare,
+                      updated_at: new Date().toISOString()
+                    })
+                    .eq('id', existingSellerRow.id)
+                : await supabase
+                    .from('business_co_owners')
+                    .insert([{
+                      business_profile_id: pitch.business_profile_id,
+                      owner_name: sellerCurrent?.name || sellerBusinessProfile?.business_name || 'Business Owner',
+                      owner_email: sellerCurrent?.email,
+                      user_id: sellerUserId,
+                      ownership_share: sellerNewShare,
+                      role: 'Owner',
+                      status: 'active',
+                      created_at: new Date().toISOString()
+                    }]);
+
+              if (sellerWriteError) {
+                console.warn('Could not persist seller shares:', sellerWriteError.message);
               } else {
-                console.log(`ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Seller shares updated: ${sellerCurrentShare}% ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ ${sellerNewShare}%`);
+                console.log(`Seller shares ${existingSellerRow?.id ? 'updated' : 'recorded for the first time'}: ${sellerCurrentShare}% -> ${sellerNewShare}%`);
               }
             }
+
+
 
             // Add investor as new co-owner in business_co_owners
             const { error: addInvestorError } = await supabase
@@ -1239,7 +1403,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
     };
 
     checkAndRecordInvestor();
-  }, [stage, signatures.length, sharesAmount, escrowId]);
+  }, [stage, signatures.length, sharesAmount, escrowId, reservedShareRowId]);
 
   // Verify Wallet PIN and record as sealed signature - PROCESS REAL WALLET TRANSFER
   const verifyWalletPin = async () => {
@@ -1252,11 +1416,31 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
       setError('Wallet PINs do not match');
       return;
     }
-    
+
+    // Nothing may be sealed without a live share price AND a live ICAN market
+    // price - the amounts below are all derived from those two figures.
+    if (!pricingReady) {
+      setError(offerError || 'Live share value is still loading. Please wait a moment and try again.');
+      return;
+    }
+
+    // Approval requires a real approver. getActualShareholders() deliberately
+    // returns [] rather than the investor themselves when no co-owner/owner
+    // could be identified (see fetchRealShareholders). Every investment type
+    // - buy, partner, and support - goes through the same 60%-shareholder-seal
+    // flow after this point, so this applies regardless of investmentType:
+    // proceeding here would let the agreement (and any escrowed funds) move
+    // into a state that no one but the investor could ever approve, since an
+    // investor is never allowed to approve their own investment.
+    if (getActualShareholders().length === 0) {
+      setError('Could not identify who needs to approve this investment. Please try again shortly, or contact support if this persists.');
+      return;
+    }
+
     try {
       setLoading(true);
       const supabase = getSupabase();
-      
+
       // Use the actual pitch ID for investment_id (not a random UUID)
       const investmentId = pitch.id;
       const transactionRef = 'TXN-' + Math.random().toString(36).substr(2, 9).toUpperCase();
@@ -1295,8 +1479,8 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
         return;
       }
       
-      // Convert investment to ICAN coins for validation
-      const investmentInIcanCoins = convertToIcanCoins(totalInvestment, allowedCurrency);
+      // investmentInIcanCoins comes from the live market price (see the
+      // useIcanPrice block above) - do not re-derive it from a fixed rate here.
       const currentBalance = parseFloat(walletData.ican_balance) || 0;
       
       // Check sufficient ICAN coin balance
@@ -1313,52 +1497,31 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
       // ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â IMPORTANT: SEND NOTIFICATIONS FIRST before deducting coins
       // This ensures coins are only removed if notification succeeds
       console.log('\nÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â¬ STEP: Triggering shareholder notifications BEFORE coin deduction...');
+      // Re-check the LIVE share register before anyone is notified or charged.
+      // The offer loaded when this modal opened can be minutes old, and another
+      // investor may have taken the remaining shares in the meantime.
+      if (sharesRequested > 0) {
+        const freshOffer = await getLiveShareOffer(offerBusinessProfileId, offerBusinessOwnerUserId);
+        if (!freshOffer.available) {
+          setError(LIVE_OFFER_BLOCKED_MESSAGE[freshOffer.reason] || LIVE_OFFER_BLOCKED_MESSAGE.default);
+          return;
+        }
+        if (sharesRequested > freshOffer.sharesAvailable) {
+          setError(`Not enough shares left. Only ${freshOffer.sharesAvailable} of ${freshOffer.totalShares} shares are still unsold.`);
+          setLiveOffer(freshOffer);
+          return;
+        }
+        setLiveOffer(freshOffer);
+      }
+
       await triggerShareholderNotifications(investmentId);
       console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Shareholder notifications sent successfully - Safe to proceed with coin deduction');
       
-      // STEP 2B: DEDUCT SHARES from available pool
-      if (sharesAmount && sharesAmount > 0) {
-        // Get current shares available from pitch
-        const { data: pitchData, error: pitchError } = await supabase
-          .from('pitches')
-          .select('id, shares_available, total_shares')
-          .eq('id', pitch.id)
-          .single();
-        
-        if (pitchError) {
-          setError('Could not get pitch share information: ' + pitchError.message);
-          return;
-        }
-        
-        const newSharesAvailable = pitchData.shares_available - parseInt(sharesAmount);
-        
-        if (newSharesAvailable < 0) {
-          setError(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Not enough shares available. Only ${pitchData.shares_available} shares remaining.`);
-          return;
-        }
-        
-        // Update pitch with new shares available
-        const { data: updatedPitch, error: updatePitchError } = await supabase
-          .from('pitches')
-          .update({
-            shares_available: newSharesAvailable,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', pitch.id)
-          .select();
-        
-        if (updatePitchError) {
-          setError('Failed to update available shares: ' + updatePitchError.message);
-          return;
-        }
-        
-        console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Shares deducted from available pool:');
-        console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Shares purchased: ' + sharesAmount);
-        console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Shares available before: ' + pitchData.shares_available);
-        console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Shares available after: ' + newSharesAvailable);
-        console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Total shares in pitch: ' + pitchData.total_shares);
-      }
-      
+      // Shares are not deducted from pitches.shares_available any more. That
+      // column is a static seed value; the live register is investor_shares,
+      // which the approval step below writes to and getLiveShareOffer() reads
+      // back, so the remaining count recomputes itself from real ownership.
+
       // STEP 3: Record ICAN coin blockchain transaction
       const { data: blockchainTxn, error: blockchainError } = await supabase
         .from('ican_coin_blockchain_txs')
@@ -1366,8 +1529,8 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
           user_id: currentUser?.id,
           tx_type: 'purchase',
           ican_amount: investmentInIcanCoins,
-          price_per_coin: 5000, // UGX per coin
-          total_value_ugx: totalInvestment,
+          price_per_coin: icanPriceUgx, // live ICAN market price (UGX per coin)
+          total_value_ugx: totalInvestmentUgx,
           from_address: currentUser?.email,
           to_address: 'escrow',
           status: 'completed'
@@ -1401,7 +1564,43 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
       }
       
       console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ ICAN Wallet balance updated (COINS DEDUCTED)');
-      
+
+      // STEP 4B: RESERVE the shares on the live register now that the coins are
+      // actually spent. investor_shares is the live share ledger, and
+      // fn_get_business_issued_shares counts pending_approval rows, so from this
+      // moment these shares stop showing as available to anyone else. This is
+      // what pitches.shares_available used to do, moved onto real ownership data
+      // so the count can never drift from who actually holds what.
+      if (sharesRequested > 0) {
+        const { data: reservedRows, error: reserveError } = await supabase
+          .from('investor_shares')
+          .insert([{
+            investor_id: currentUser?.id,
+            investor_email: currentUser?.email,
+            investor_name: currentUser?.user_metadata?.full_name || 'Investor',
+            pitch_id: pitch.id,
+            business_profile_id: sellerBusinessProfile?.id || pitch?.business_profile_id,
+            investment_id: investmentId,
+            shares_owned: parseInt(sharesAmount),
+            share_price: sharePrice,
+            total_investment: totalInvestment,
+            currency: allowedCurrency,
+            status: 'pending_approval',
+            locked_until_threshold: true,
+            transaction_reference: transactionRef,
+            notes: 'Reserved at payment authorisation, priced at the live share value. Unlocks at 60% shareholder approval.',
+            created_at: new Date().toISOString()
+          }])
+          .select();
+
+        if (reserveError) {
+          console.warn('Could not reserve shares on the live register:', reserveError.message);
+        } else if (reservedRows?.[0]?.id) {
+          setReservedShareRowId(reservedRows[0].id);
+          console.log('Shares reserved on live register: ' + sharesAmount + ' (pending_approval)');
+        }
+      }
+
       // STEP 5: Create credit transaction in blockchain ledger (for record-keeping)
       // This tracks the investment going to escrow
       const { data: creditTxn, error: creditError } = await supabase
@@ -1410,8 +1609,8 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
           user_id: currentUser?.id,
           tx_type: 'transfer',
           ican_amount: investmentInIcanCoins,
-          price_per_coin: 5000,
-          total_value_ugx: totalInvestment,
+          price_per_coin: icanPriceUgx, // live ICAN market price (UGX per coin)
+          total_value_ugx: totalInvestmentUgx,
           from_address: currentUser?.email,
           to_address: 'escrow_pool',
           status: 'completed'
@@ -2082,6 +2281,110 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
     link.click();
   };
 
+  // Download the MOU + QR seal as a single PDF - a portable record other
+  // shareholders can review/approve from outside the app, not just a preview
+  // stuck inside this modal. Text-and-image PDF via jsPDF, matching the house
+  // pattern already used for CMMS QR handouts (utils/downloadCmmsQrPdf.js).
+  const downloadMouPdf = () => {
+    if (!qrCodeUrl) return;
+
+    const shareholderSignatures = signatures.filter(s => s.type === 'shareholder' && (s.status === 'signed' || s.status === 'pin_verified'));
+    const totalShareholders = getActualShareholders().length;
+    const approvalPercent = totalShareholders > 0 ? ((shareholderSignatures.length / totalShareholders) * 100).toFixed(1) : '0.0';
+
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 18;
+    const contentWidth = pageWidth - margin * 2;
+    let y = 20;
+
+    const ensureSpace = (needed) => {
+      if (y + needed > pageHeight - margin) {
+        pdf.addPage();
+        y = 20;
+      }
+    };
+
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(18);
+    pdf.text('Investment Agreement (MOU)', pageWidth / 2, y, { align: 'center' });
+    y += 8;
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(11);
+    pdf.setTextColor(90);
+    pdf.text(sellerBusinessProfile?.business_name || pitch?.title || 'Business', pageWidth / 2, y, { align: 'center' });
+    y += 10;
+    pdf.setDrawColor(200);
+    pdf.line(margin, y, pageWidth - margin, y);
+    y += 9;
+    pdf.setTextColor(30);
+
+    const addField = (label, value) => {
+      ensureSpace(7);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(10);
+      pdf.text(`${label}:`, margin, y);
+      pdf.setFont('helvetica', 'normal');
+      const valueLines = pdf.splitTextToSize(String(value ?? 'N/A'), contentWidth - 50);
+      pdf.text(valueLines, margin + 50, y);
+      y += 7 * valueLines.length;
+    };
+
+    addField('Pitch', pitch?.title);
+    addField('Investor', currentUser?.user_metadata?.full_name || currentUser?.email);
+    addField('Investment Type', investmentType === 'buy' ? 'Equity Purchase' : investmentType === 'partner' ? 'Partnership Agreement' : 'Financial Support');
+    if (sharesRequested > 0) {
+      addField('Shares Purchased', `${sharesRequested.toLocaleString()} of ${liveTotalShares ? liveTotalShares.toLocaleString() : 'N/A'} live shares (${equityStakePercent.toFixed(2)}% equity)`);
+      addField('Live Share Price', pricingReady ? `${allowedCurrency} ${sharePrice.toFixed(2)} per share (${sharePriceInIcan.toFixed(4)} icaneracoin)` : 'N/A');
+    }
+    addField('Total Investment', `${allowedCurrency} ${totalInvestment.toFixed(2)}`);
+    addField('Escrow ID', escrowId || pitch?.id || 'N/A');
+    addField('Shareholder Approval', `${shareholderSignatures.length}/${totalShareholders} signed - ${approvalPercent}% (60% required to release funds)`);
+    y += 3;
+
+    if (sellerDocuments?.mou_content) {
+      ensureSpace(14);
+      pdf.setDrawColor(200);
+      pdf.line(margin, y, pageWidth - margin, y);
+      y += 9;
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(13);
+      pdf.text('Memorandum of Understanding', margin, y);
+      y += 8;
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(10);
+      const mouLines = pdf.splitTextToSize(String(sellerDocuments.mou_content), contentWidth);
+      mouLines.forEach((line) => {
+        ensureSpace(5.5);
+        pdf.text(line, margin, y);
+        y += 5.5;
+      });
+      y += 4;
+    }
+
+    ensureSpace(75);
+    pdf.setDrawColor(200);
+    pdf.line(margin, y, pageWidth - margin, y);
+    y += 10;
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(13);
+    pdf.text('Agreement Seal', pageWidth / 2, y, { align: 'center' });
+    y += 6;
+    const qrSize = 55;
+    pdf.addImage(qrCodeUrl, 'PNG', (pageWidth - qrSize) / 2, y, qrSize, qrSize);
+    y += qrSize + 6;
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9);
+    pdf.setTextColor(110);
+    pdf.text('Scan to verify this agreement in the ICAN Escrow System.', pageWidth / 2, y, { align: 'center' });
+    y += 5;
+    pdf.text(`Generated: ${new Date().toLocaleString()}`, pageWidth / 2, y, { align: 'center' });
+
+    const safeName = (pitch?.title || 'agreement').trim().replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'agreement';
+    pdf.save(`ican-mou-${safeName}-${escrowId || 'draft'}.pdf`);
+  };
+
   const hasValue = (value) => value !== null && value !== undefined && String(value).trim() !== '';
   const hasBusinessPlan = hasValue(sellerDocuments?.business_plan_content);
   const hasFinancialProjection = hasValue(sellerDocuments?.financial_projection_content);
@@ -2174,7 +2477,6 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
     return Number.isFinite(parsed) ? parsed.toLocaleString() : value;
   };
 
-  const investmentInIcanCoins = convertToIcanCoins(totalInvestment, allowedCurrency);
   const investmentId = escrowId || pitch?.id;
   const signedShareholderCount = signatures.filter((s) => s.type === 'shareholder' || !s.type).length;
   const totalShareholderCount = getActualShareholders().length;
@@ -2552,8 +2854,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                         ['Category', pitch?.category || 'Technology'],
                         ['Pitch Description', pitch?.description || 'No description provided'],
                         ['Already Raised', pitch?.raised_amount || pitch?.raised || '0'],
-                        ['Funding Goal', pitch?.target_funding || pitch?.goal || '500000'],
-                        ['Equity Offering', pitch?.equity_offering || pitch?.equity || '10']
+                        // The seller's advertised figures. Shown for context only -
+                        // what an investor actually pays and receives comes from the
+                        // live share register below, never from these.
+                        ['Funding Goal (as listed)', pitch?.target_funding || pitch?.goal || 'Not stated'],
+                        ['Equity Offering (as listed)', pitch?.equity_offering || pitch?.equity || 'Not stated']
                       ].map(([label, value]) => (
                         <li key={label} className="px-3.5 py-3">
                           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
@@ -2593,8 +2898,9 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                         ['Business', sellerBusinessProfile?.business_name || pitch?.title || 'the business'],
                         ['Pitch', pitch?.title || 'N/A'],
                         ['Pitch Description', pitch?.description || 'No description provided'],
-                        ['Funding Goal', pitch?.target_funding || pitch?.goal || '500000'],
-                        ['Equity Offered', pitch?.equity_offering || pitch?.equity || '10'],
+                        ['Pricing Basis', 'Shares are priced from this business’s live recorded value, recomputed at the moment you invest. The listed pitch price is not used.'],
+                        ['Live Share Price', pricingReady ? `${allowedCurrency} ${sharePrice.toFixed(2)} per share (${sharePriceInIcan.toFixed(4)} icaneracoin)` : 'Loading live value...'],
+                        ['Live Share Register', liveTotalShares ? `${liveSharesAvailable.toLocaleString()} of ${liveTotalShares.toLocaleString()} shares still unsold` : 'Unavailable'],
                         ['Payment Method', 'ICAN Wallet with escrow protection'],
                         ['Escrow Protection', 'All investments are held in ICAN escrow pending multi-signature approval from existing shareholders.'],
                         ['Release Requirement', '60% of shareholders (minimum 10 members) must sign to release funds.'],
@@ -2658,9 +2964,14 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                     <ul className="rounded-lg border border-slate-700/70 bg-slate-900/40 divide-y divide-slate-700/60 overflow-hidden">
                       {[
                         ['Pitch', pitch?.title || 'N/A'],
-                        ['Funding Goal', pitch?.target_funding || pitch?.goal || '500000'],
-                        ['Total Equity', pitch?.equity_offering || pitch?.equity || '10'],
-                        ['Per Share Price', `${sharePrice.toFixed(2)} ICAN`]
+                        ['Live Business Value', liveOffer?.businessValueUgx != null
+                          ? `UGX ${Math.round(liveOffer.businessValueUgx).toLocaleString()}`
+                          : 'Unavailable'],
+                        ['Total Shares (live)', liveTotalShares ? liveTotalShares.toLocaleString() : 'Not configured'],
+                        ['Shares Still Unsold', liveTotalShares ? `${liveSharesAvailable.toLocaleString()} of ${liveTotalShares.toLocaleString()}` : 'Unavailable'],
+                        ['Live Share Price', pricingReady
+                          ? `${allowedCurrency} ${sharePrice.toFixed(2)}  (${sharePriceInIcan.toFixed(4)} icaneracoin)`
+                          : 'Loading live value...']
                       ].map(([label, value]) => (
                         <li key={label} className="px-3.5 py-3">
                           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
@@ -2671,6 +2982,17 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                   </div>
                 )}
               </div>
+
+              {!pricingReady && (
+                <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4">
+                  <p className="text-amber-200 text-sm">
+                    {offerError || (offerLoading ? 'Loading this business’s live share value...' : 'Waiting for the live ICAN market price...')}
+                  </p>
+                  <p className="text-amber-300/70 text-xs mt-1">
+                    Shares are priced from live business data and the live icaneracoin price. Nothing can be bought until both are available.
+                  </p>
+                </div>
+              )}
 
               <div className="space-y-3 rounded-xl border border-slate-700/80 bg-slate-900/40 p-4">
                 <label className="block text-slate-300 font-semibold text-sm">
@@ -2683,7 +3005,9 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                   onChange={(e) => setSharesAmount(e.target.value)}
                   placeholder="Enter number of shares (0 for non-equity investment)"
                   min="0"
-                  className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500"
+                  max={liveSharesAvailable || undefined}
+                  disabled={!pricingReady}
+                  className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 disabled:opacity-50"
                 />
                 <p className="text-xs text-slate-400">
                   {sharesAmount === '0' || sharesAmount === ''
@@ -2718,11 +3042,20 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                           </p>
                         </div>
                         <p className="text-xs text-slate-400">
-                          Equity Stake: ~{((parseFloat(sharesAmount) / 1000) * (parseFloat(pitch?.equity_offering || '10') || 10)).toFixed(2)}% of {pitch?.equity_offering || '10%'} offering
+                          Equity Stake: {equityStakePercent.toFixed(2)}% &mdash; {sharesRequested.toLocaleString()} of {liveTotalShares?.toLocaleString()} live shares
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          {investmentInIcanCoins.toFixed(2)} icaneracoin at the live price of {allowedCurrency} {icanPriceLocal?.toFixed(2)} per coin
                         </p>
                       </>
                     )}
                   </div>
+                )}
+
+                {exceedsAvailableShares && (
+                  <p className="text-xs text-red-300">
+                    Only {liveSharesAvailable.toLocaleString()} share{liveSharesAvailable === 1 ? ' is' : 's are'} still unsold.
+                  </p>
                 )}
               </div>
 
@@ -2736,7 +3069,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
 
               <button
                 onClick={() => setStage(5)}
-                disabled={!sharesAmount || (investmentType === 'buy' && totalInvestment === 0)}
+                disabled={
+                  !sharesAmount ||
+                  exceedsAvailableShares ||
+                  (investmentType === 'buy' && (!pricingReady || totalInvestment === 0))
+                }
                 className="w-full px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition"
               >
                 Proceed to ICAN
@@ -3059,14 +3396,14 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                         </div>
 
                         <div className={`rounded-lg p-3 border ${
-                          walletBalance >= convertToIcanCoins(totalInvestment, allowedCurrency)
+                          walletBalance >= investmentInIcanCoins
                             ? 'bg-green-500/10 border-green-500/30' 
                             : 'bg-red-500/10 border-red-500/30'
                         }`}>
-                          <span className={walletBalance >= convertToIcanCoins(totalInvestment, allowedCurrency) ? 'text-green-400 text-sm' : 'text-red-400 text-sm'}>
-                            {walletBalance >= convertToIcanCoins(totalInvestment, allowedCurrency) 
+                          <span className={walletBalance >= investmentInIcanCoins ? 'text-green-400 text-sm' : 'text-red-400 text-sm'}>
+                            {walletBalance >= investmentInIcanCoins 
                               ? 'ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Sufficient Funds' 
-                              : `ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Need ${(convertToIcanCoins(totalInvestment, allowedCurrency) - walletBalance).toFixed(2)} more`
+                              : `ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Need ${(investmentInIcanCoins - walletBalance).toFixed(2)} more`
                             }
                           </span>
                         </div>
@@ -3132,7 +3469,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-slate-400">Investment Amount (ICAN):</span>
-                      <span className="text-2xl font-bold text-yellow-400">ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ {convertToIcanCoins(totalInvestment, allowedCurrency).toFixed(2)} coins</span>
+                      <span className="text-2xl font-bold text-yellow-400">ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ {investmentInIcanCoins.toFixed(2)} coins</span>
                       <span className="text-xs text-slate-400">= {allowedCurrency} {totalInvestment.toFixed(0)}</span>
                     </div>
                     <div className="flex items-center justify-between">
@@ -3144,7 +3481,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                     <div className="border-t border-slate-700 pt-3 flex items-center justify-between">
                       <span className="text-slate-400">ICAN Coins Remaining:</span>
                       <span className={`text-xl font-semibold ${(walletBalance - totalInvestment) < 0 ? 'text-red-400' : 'text-green-400'}`}>
-                        ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ {(walletBalance - convertToIcanCoins(totalInvestment, allowedCurrency)).toFixed(2)} coins
+                        ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ {(walletBalance - investmentInIcanCoins).toFixed(2)} coins
                       </span>
                     </div>
                     <div className="border-t border-slate-700 pt-3 flex items-center justify-between">
@@ -3193,17 +3530,17 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
 
               <button
                 onClick={() => {
-                  const investmentInCoins = convertToIcanCoins(totalInvestment, allowedCurrency);
+                  const investmentInCoins = investmentInIcanCoins;
                   if (walletBalance < investmentInCoins) {
                     alert(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Insufficient balance!\n\nYour wallet: ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ ${walletBalance.toFixed(2)} ICAN coins\nRequired: ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ ${investmentInCoins.toFixed(2)} ICAN coins\nShortfall: ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ ${(investmentInCoins - walletBalance).toFixed(2)}`);
                     return;
                   }
                   setStage(6);
                 }}
-                disabled={walletBalance < convertToIcanCoins(totalInvestment, allowedCurrency)}
+                disabled={walletBalance < investmentInIcanCoins}
                 className="w-full px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition"
               >
-                {walletBalance < convertToIcanCoins(totalInvestment, allowedCurrency) ? `ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Insufficient Balance (ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ ${(convertToIcanCoins(totalInvestment, allowedCurrency) - walletBalance).toFixed(2)} short)` : 'Authorize with PIN'}
+                {walletBalance < investmentInIcanCoins ? `ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Insufficient Balance (ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ ${(investmentInIcanCoins - walletBalance).toFixed(2)} short)` : 'Authorize with PIN'}
               </button>
             </div>
           )}
@@ -4057,6 +4394,14 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                     <Download className="w-5 h-5" />
                     Download QR Seal
                   </button>
+                  <button
+                    onClick={downloadMouPdf}
+                    disabled={!qrCodeUrl}
+                    className="px-4 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition flex items-center justify-center gap-2"
+                  >
+                    <FileText className="w-5 h-5" />
+                    Download MOU + Seal (PDF)
+                  </button>
                 </div>
               ) : (
                 <div className="bg-yellow-500/10 border border-yellow-500/50 rounded-lg p-4 text-center">
@@ -4152,10 +4497,10 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                         <span className="font-semibold">Currency:</span>
                         <span>{allowedCurrency} (Locked to {userCountry})</span>
                       </div>
-                      {pitch?.equity_offering && (
+                      {liveTotalShares > 0 && (
                         <div className="flex justify-between">
                           <span className="font-semibold">Equity Stake:</span>
-                          <span>~{((parseFloat(sharesAmount || 0) / 1000) * (parseFloat(pitch.equity_offering) || 10)).toFixed(2)}% of {pitch.equity_offering} offering</span>
+                          <span>{equityStakePercent.toFixed(2)}% ({sharesRequested.toLocaleString()} of {liveTotalShares.toLocaleString()} live shares)</span>
                         </div>
                       )}
                     </div>
@@ -4480,6 +4825,14 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                   >
                     <Download className="w-5 h-5" />
                     Download QR Seal
+                  </button>
+                  <button
+                    onClick={downloadMouPdf}
+                    disabled={!qrCodeUrl}
+                    className="px-4 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition flex items-center justify-center gap-2"
+                  >
+                    <FileText className="w-5 h-5" />
+                    Download MOU + Seal (PDF)
                   </button>
                 </div>
               ) : (

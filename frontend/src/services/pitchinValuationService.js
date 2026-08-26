@@ -538,6 +538,90 @@ export async function calculateLiveShareValue(businessProfileId, businessOwnerUs
   return result;
 }
 
+// ─── Live share offer: the only share price/count the invest flow may use ────
+// pitches.share_price / pitches.total_shares / pitches.shares_available are
+// static columns seeded once (ADD_SHARE_COLUMNS.sql, POPULATE_PITCH_SHARES.sql)
+// and never recomputed, so the invest flow must not read them. Everything an
+// investor transacts against comes from here instead: the live valuation above
+// for price, business_profiles.total_shares for the share count, and the actual
+// investor_shares ownership ledger for what is still unsold.
+
+/**
+ * Live share offer for a PitchIn business.
+ *
+ * @returns {Promise<{available: boolean, reason: string|null, sharePriceUgx: number|null,
+ *   totalShares: number|null, sharesIssued: number, sharesAvailable: number,
+ *   icanMarketPriceUgx: number|null, businessValueUgx: number|null, computedAt: string|null}>}
+ *
+ * `available: false` means the pitch cannot be invested in right now; `reason`
+ * says why so the UI can explain it rather than silently falling back to a
+ * stale listed price.
+ */
+export async function getLiveShareOffer(businessProfileId, businessOwnerUserId) {
+  const blocked = (reason, extra = {}) => ({
+    available: false,
+    reason,
+    sharePriceUgx: null,
+    totalShares: null,
+    sharesIssued: 0,
+    sharesAvailable: 0,
+    icanMarketPriceUgx: null,
+    businessValueUgx: null,
+    computedAt: null,
+    ...extra
+  });
+
+  if (!businessProfileId) return blocked('no-business-profile');
+
+  const valuation = await calculateLiveShareValue(businessProfileId, businessOwnerUserId, {
+    saveSnapshot: false
+  });
+
+  if (valuation.needsShareSetup) return blocked('shares-not-configured');
+  if (!(Number(valuation.sharePriceUgx) > 0)) {
+    // A zero/negative live price means the business currently values at nothing
+    // (or less) — there is no honest price to sell a share at.
+    return blocked('no-live-price', {
+      totalShares: valuation.totalShares,
+      businessValueUgx: valuation.businessValueUgx
+    });
+  }
+
+  // Must go through the RPC: investor_shares is RLS-scoped to
+  // "investor_id = auth.uid()", so a plain table select returns only the rows
+  // this caller owns and would report a nearly-sold-out business as wide open.
+  // fn_get_business_issued_shares is SECURITY DEFINER and returns just the
+  // aggregate count (see backend/PITCHIN_LIVE_SHARE_AVAILABILITY.sql).
+  const { data, error } = await supabase.rpc('fn_get_business_issued_shares', {
+    p_business_profile_id: businessProfileId
+  });
+
+  if (error) {
+    // Treating an unreadable ledger as "zero issued" would let the business be
+    // oversold, so this blocks the investment rather than guessing.
+    console.warn('[Valuation] Issued share read failed:', error.message);
+    return blocked('issued-shares-unreadable', {
+      totalShares: valuation.totalShares,
+      businessValueUgx: valuation.businessValueUgx
+    });
+  }
+
+  const sharesIssued = parseInt(data) || 0;
+  const totalShares = valuation.totalShares;
+
+  return {
+    available: true,
+    reason: null,
+    sharePriceUgx: valuation.sharePriceUgx,
+    totalShares,
+    sharesIssued,
+    sharesAvailable: Math.max(0, totalShares - sharesIssued),
+    icanMarketPriceUgx: valuation.breakdown?.ican_market_price ?? null,
+    businessValueUgx: valuation.businessValueUgx,
+    computedAt: valuation.computedAt
+  };
+}
+
 // ─── Business data links CRUD ─────────────────────────────────────────────────
 
 export async function saveDataLink(businessProfileId, sourceApp, sourceEntityId, sourceEntityName) {

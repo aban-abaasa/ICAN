@@ -42,7 +42,18 @@ import {
   getPitchMetrics
 } from '../services/pitchInteractionsService';
 import { getUserNotifications } from '../services/investmentNotificationsService';
-import { calculateLiveShareValue } from '../services/pitchinValuationService';
+import { getLiveShareOffer } from '../services/pitchinValuationService';
+
+// Why an Invest tap can't open the signing flow. Each case is a missing piece
+// of live data — the flow never falls back to the listed pitch price, so the
+// investor is told what's missing instead of being shown a stale number.
+const LIVE_OFFER_BLOCKED_MESSAGE = {
+  'no-business-profile': 'This pitch is not linked to a business profile yet, so it has no live share value to invest against.',
+  'shares-not-configured': 'The owner has not set how many shares this business has yet. Investing opens once they do.',
+  'no-live-price': 'This business has no live share value yet — its recorded transactions do not add up to a positive value.',
+  'issued-shares-unreadable': 'Could not confirm how many shares are still unsold. Please try again in a moment.',
+  default: 'Live share value is unavailable for this business right now. Please try again in a moment.'
+};
 
 const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusinessProfile = false, onBusinessProfileRequestConsumed = null, navRef = null, onTabChange = null }) => {
   const [pitches, setPitches] = useState([]);
@@ -1076,31 +1087,41 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
       console.error('Error recording investment interest:', error);
     }
     
-    // Use the current business valuation for the investment flow. The listed
-    // pitch price remains the fallback when live valuation data is unavailable.
-    let investmentPitch = pitch;
+    // Price and size the investment from the live ICAN valuation only. The
+    // pitches.share_price / shares_available columns are seeded once and never
+    // recomputed, so they are deliberately NOT used as a fallback — without a
+    // live price and a live share count the pitch simply isn't investable yet.
     const businessProfileId = pitch.business_profile_id || pitch.business_profiles?.id;
     const businessOwnerUserId = pitch.business_profiles?.user_id || pitch.user_id;
-    if (businessProfileId && businessOwnerUserId) {
-      try {
-        const liveValue = await calculateLiveShareValue(
-          businessProfileId,
-          businessOwnerUserId,
-          { saveSnapshot: false }
-        );
-        if (Number.isFinite(Number(liveValue?.sharePriceUgx)) && liveValue.sharePriceUgx > 0) {
-          investmentPitch = {
-            ...pitch,
-            share_price: liveValue.sharePriceUgx,
-            live_share_price_ugx: liveValue.sharePriceUgx,
-            live_business_value_ugx: liveValue.businessValueUgx,
-            live_total_shares: liveValue.totalShares
-          };
-        }
-      } catch (valuationError) {
-        console.warn('[Pitchin] Live share valuation unavailable; using listed pitch price:', valuationError.message);
-      }
+
+    let offer;
+    try {
+      offer = await getLiveShareOffer(businessProfileId, businessOwnerUserId);
+    } catch (valuationError) {
+      console.warn('[Pitchin] Live share valuation failed:', valuationError.message);
+      alert('Live share value is unavailable for this business right now. Please try again in a moment.');
+      return;
     }
+
+    if (!offer.available) {
+      alert(LIVE_OFFER_BLOCKED_MESSAGE[offer.reason] || LIVE_OFFER_BLOCKED_MESSAGE.default);
+      return;
+    }
+    if (offer.sharesAvailable <= 0) {
+      alert(`All ${offer.totalShares.toLocaleString()} shares in this business are already taken. There are no shares left to buy.`);
+      return;
+    }
+
+    const investmentPitch = {
+      ...pitch,
+      live_share_price_ugx: offer.sharePriceUgx,
+      live_total_shares: offer.totalShares,
+      live_shares_issued: offer.sharesIssued,
+      live_shares_available: offer.sharesAvailable,
+      live_business_value_ugx: offer.businessValueUgx,
+      live_ican_market_price_ugx: offer.icanMarketPriceUgx,
+      live_computed_at: offer.computedAt
+    };
 
     // Use ShareSigningFlow for investment (businessProfile can be null for investors)
     console.log('🔍 INVEST BUTTON CLICKED - Pitch data being passed to ShareSigningFlow:');
