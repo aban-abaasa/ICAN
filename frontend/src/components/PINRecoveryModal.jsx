@@ -181,7 +181,7 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-2000 p-4">
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[2000] p-4">
       <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">

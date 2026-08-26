@@ -1,12 +1,27 @@
 import { Router } from 'express';
-import sgMail from '@sendgrid/mail';
+import axios from 'axios';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 
 const router = Router();
 
-// Initialize SendGrid with API key
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+// Sends via Resend's REST API (https://resend.com/docs/api-reference/emails/send-email).
+// Takes the same { to, from, subject, html } shape the SendGrid SDK used, so
+// none of the call sites below needed to change beyond this helper.
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const sendEmail = async ({ to, from, subject, html }) => {
+  try {
+    await axios.post(
+      'https://api.resend.com/emails',
+      { from, to, subject, html },
+      { headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    // Surface Resend's actual reason (e.g. unverified domain, bad API key)
+    // instead of axios's generic "Request failed with status code 4xx".
+    throw new Error(error.response?.data?.message || error.message);
+  }
+};
 
 const fromEmail = process.env.SENDER_EMAIL || 'aronnykevin@gmail.com';
 const supportEmail = process.env.SUPPORT_EMAIL || 'support@ican.ug';
@@ -26,7 +41,7 @@ const adminSupabase =
     : null;
 
 /**
- * 📧 EMAIL ROUTES - Backend SendGrid Integration
+ * 📧 EMAIL ROUTES - Backend Resend Integration
  * Handles all email sending operations securely
  */
 
@@ -112,7 +127,7 @@ router.post('/send-pin-reset', async (req, res) => {
       html: htmlContent
     };
 
-    await sgMail.send(msg);
+    await sendEmail(msg);
 
     console.log('✅ PIN reset email sent to:', to);
     return res.status(200).json({
@@ -263,7 +278,7 @@ router.post('/request-pin-reset', async (req, res) => {
       `
     };
 
-    await sgMail.send(msg);
+    await sendEmail(msg);
     console.log('✅ Self-service PIN reset email sent to:', recipientEmail, 'account type:', accountType, 'token row:', inserted.id);
 
     return res.status(200).json({
@@ -390,7 +405,7 @@ router.post('/request-account-otp', async (req, res) => {
       `
     };
 
-    await sgMail.send(msg);
+    await sendEmail(msg);
     console.log('✅ Account creation OTP sent to:', email, 'account type:', accountType);
 
     return res.status(200).json({
@@ -476,7 +491,7 @@ router.post('/send-account-unlocked', async (req, res) => {
       html: htmlContent
     };
 
-    await sgMail.send(msg);
+    await sendEmail(msg);
 
     console.log('✅ Account unlocked email sent to:', to);
     return res.status(200).json({
@@ -559,7 +574,7 @@ router.post('/send-unlock-request', async (req, res) => {
       html: htmlContent
     };
 
-    await sgMail.send(msg);
+    await sendEmail(msg);
 
     console.log('✅ Unlock request email sent to:', to);
     return res.status(200).json({
@@ -598,14 +613,14 @@ router.post('/send-test', async (req, res) => {
           <body style="font-family: Arial; padding: 20px;">
             <h1>✅ Test Email Successful!</h1>
             <p>This is a test email from ICAN.</p>
-            <p>SendGrid integration is working correctly.</p>
+            <p>Resend integration is working correctly.</p>
             <p>Sent at: ${new Date().toLocaleString()}</p>
           </body>
         </html>
       `
     };
 
-    await sgMail.send(msg);
+    await sendEmail(msg);
 
     console.log('✅ Test email sent to:', to);
     return res.status(200).json({

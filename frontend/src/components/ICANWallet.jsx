@@ -36,7 +36,7 @@ import { cardTransactionService } from '../services/cardTransactionService';
 import { walletService } from '../services/walletService';
 import paymentMethodDetector from '../services/paymentMethodDetector';
 import agentService from '../services/agentService';
-import { walletAccountService } from '../services/walletAccountService';
+import { walletAccountService, hashPIN } from '../services/walletAccountService';
 import universalTransactionService from '../services/universalTransactionService';
 import { sendICAN as sendIcaneracoin, sendICANToBusiness } from '../services/icanWalletService';
 import { payIcanRequest, parseIcanPayCode, getIcanPaymentRequest } from '../services/icanPaymentRequestService';
@@ -53,6 +53,7 @@ import SellIcan from './ICAN/SellIcan';
 import ReceiveMoneyModal from './ReceiveMoneyModal';
 import PayMoneyModal from './PayMoneyModal';
 import IcanPaymentReceiptModal from './IcanPaymentReceiptModal';
+import PINRecoveryModal from './PINRecoveryModal';
 
 const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = null, onTabChange = null }) => {
   const [showBalance, setShowBalance] = useState(true);
@@ -180,6 +181,12 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   // creation form doesn't lose its state to a redirect.
   const [personalOtp, setPersonalOtp] = useState({ sent: false, verified: false, code: '', loading: false, error: null });
   const [businessOtp, setBusinessOtp] = useState({ sent: false, verified: false, code: '', loading: false, error: null });
+  // Same email-OTP gate, reused for the "Edit Account Information" form —
+  // changing the email to a new address requires re-verifying that address
+  // before the change is saved (otherwise a hijacked session could silently
+  // redirect the account to an attacker-controlled inbox for PIN resets).
+  const [editEmailOtp, setEditEmailOtp] = useState({ sent: false, verified: false, code: '', loading: false, error: null });
+  const [originalAccountEmail, setOriginalAccountEmail] = useState('');
   const [accountEditForm, setAccountEditForm] = useState({
     accountHolderName: '',
     phoneNumber: '',
@@ -194,6 +201,10 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   const [editingBusinessProfile, setEditingBusinessProfile] = useState(null);
   const [accountEditLoading, setAccountEditLoading] = useState(false);
   const [accountMessage, setAccountMessage] = useState(null);
+  // Offers the self-service "email me a reset link" / "request developer
+  // review" flow (PINRecoveryModal) once a PIN change hits the 3-attempt
+  // lockout, instead of leaving the user stuck on a dead-end error.
+  const [showPINRecovery, setShowPINRecovery] = useState(false);
   const [showSettingsPanel, setShowSettingsPanel] = useState(false);
   const [agentAccount, setAgentAccount] = useState(null);
   const [agentAccountLoading, setAgentAccountLoading] = useState(false);
@@ -2340,10 +2351,23 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         return;
       }
 
+      // Changing the email requires re-verifying the new address first —
+      // otherwise a hijacked session could silently redirect the account
+      // to an attacker-controlled inbox for future PIN resets.
+      const emailChanged = accountEditForm.email.trim().toLowerCase() !== originalAccountEmail.trim().toLowerCase();
+      if (emailChanged && !editEmailOtp.verified) {
+        setAccountMessage({
+          type: 'error',
+          text: 'Please verify your new email address first'
+        });
+        setAccountEditLoading(false);
+        return;
+      }
+
       // Get current user
       const supabase = getSupabaseClient();
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) {
         setAccountMessage({
           type: 'error',
@@ -2378,6 +2402,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
       // Update user account state
       setUserAccount(result.account);
+      setOriginalAccountEmail(result.account?.email || accountEditForm.email);
+      setEditEmailOtp({ sent: false, verified: false, code: '', loading: false, error: null });
 
       // Close modal after success
       setTimeout(() => {
@@ -2533,7 +2559,10 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         return;
       }
 
-      // If PIN was changed, update it
+      // If PIN was changed, verify the current PIN against this specific
+      // business account first (not walletAccountService.verifyUserPIN,
+      // which looks up by user_id alone and could match the wrong account
+      // for a user who also has a personal wallet), then hash and store it.
       if (accountEditForm.newPin && accountEditForm.confirmNewPin) {
         if (accountEditForm.newPin !== accountEditForm.confirmNewPin) {
           alert('❌ PINs do not match');
@@ -2547,10 +2576,48 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           return;
         }
 
+        if (!accountEditForm.currentPin) {
+          alert('❌ Enter your current PIN to set a new one');
+          setAccountCreationLoading(false);
+          return;
+        }
+
+        const { data: pinRow, error: pinFetchError } = await supabase
+          .from('user_accounts')
+          .select('pin_hash, pin_attempts, pin_locked_until')
+          .eq('id', account.id)
+          .single();
+
+        if (pinFetchError || !pinRow) {
+          alert('❌ Could not verify current PIN');
+          setAccountCreationLoading(false);
+          return;
+        }
+
+        if (pinRow.pin_locked_until && new Date(pinRow.pin_locked_until) > new Date()) {
+          alert('❌ Account locked due to too many failed PIN attempts. Try again later.');
+          setAccountCreationLoading(false);
+          return;
+        }
+
+        if (hashPIN(accountEditForm.currentPin) !== pinRow.pin_hash) {
+          const newAttempts = (pinRow.pin_attempts || 0) + 1;
+          const lockedUntil = newAttempts >= 3 ? new Date(Date.now() + 30 * 60 * 1000).toISOString() : null;
+          await supabase
+            .from('user_accounts')
+            .update({ pin_attempts: newAttempts, pin_locked_until: lockedUntil })
+            .eq('id', account.id);
+          alert(`❌ Incorrect current PIN. Attempts remaining: ${Math.max(0, 3 - newAttempts)}`);
+          setAccountCreationLoading(false);
+          return;
+        }
+
         const { error: pinError } = await supabase
           .from('user_accounts')
           .update({
-            pin_hash: accountEditForm.newPin, // Note: In production, this should be hashed
+            pin_hash: hashPIN(accountEditForm.newPin),
+            pin_attempts: 0,
+            pin_locked_until: null,
             updated_at: new Date().toISOString()
           })
           .eq('id', account.id);
@@ -4314,6 +4381,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     email: userAccount.email,
                     preferredCurrency: registeredCurrency
                   });
+                  setOriginalAccountEmail(userAccount.email);
+                  setEditEmailOtp({ sent: false, verified: false, code: '', loading: false, error: null });
                   setShowAccountEdit(true);
                 }}
                 className="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:translate-y-[-1px]"
@@ -5195,6 +5264,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     email: userAccount.email,
                     preferredCurrency: registeredCurrency
                   });
+                  setOriginalAccountEmail(userAccount.email);
+                  setEditEmailOtp({ sent: false, verified: false, code: '', loading: false, error: null });
                   setShowAccountEdit(true);
                 }}
                 className="w-full px-3 py-2 bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 rounded-lg text-sm font-medium transition-all border border-purple-500/30"
@@ -5278,6 +5349,36 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 <span className="text-sm text-gray-300">Notifications</span>
                 <input type="checkbox" defaultChecked className="w-4 h-4 rounded accent-green-500" />
               </label>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!userAccount) return;
+                  setAccountEditForm({
+                    accountHolderName: userAccount.account_holder_name,
+                    phoneNumber: userAccount.phone_number,
+                    email: userAccount.email,
+                    preferredCurrency: registeredCurrency
+                  });
+                  setOriginalAccountEmail(userAccount.email);
+                  setEditEmailOtp({ sent: false, verified: false, code: '', loading: false, error: null });
+                  setShowPinChangeSection(true);
+                  setShowAccountEdit(true);
+                }}
+                disabled={!userAccount}
+                className="w-full flex items-center justify-between p-2 bg-slate-700/30 rounded-lg hover:bg-slate-700/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span className="text-sm text-gray-300">🔐 Change PIN</span>
+                <span className="text-xs text-purple-400">→</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowPINRecovery(true)}
+                disabled={!currentUserId}
+                className="w-full flex items-center justify-between p-2 bg-slate-700/30 rounded-lg hover:bg-slate-700/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span className="text-sm text-gray-300">🆘 Forgot PIN / Locked Out?</span>
+                <span className="text-xs text-orange-400">→</span>
+              </button>
             </div>
           </div>
           </div>
@@ -6070,11 +6171,73 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 <input
                   type="email"
                   value={accountEditForm.email}
-                  onChange={(e) => setAccountEditForm({ ...accountEditForm, email: e.target.value })}
+                  onChange={(e) => {
+                    setAccountEditForm({ ...accountEditForm, email: e.target.value });
+                    if (editEmailOtp.sent || editEmailOtp.verified) {
+                      setEditEmailOtp({ sent: false, verified: false, code: '', loading: false, error: null });
+                    }
+                  }}
                   placeholder="you@example.com"
                   className="w-full px-4 py-3 bg-slate-700/50 border border-purple-500/30 hover:border-purple-500/60 rounded-lg text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none transition-all"
                 />
               </div>
+
+              {/* Email verification — only required when the address is
+                  actually being changed from what's on file. */}
+              {accountEditForm.email.trim().toLowerCase() !== originalAccountEmail.trim().toLowerCase() && (
+                <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
+                  <h3 className="text-purple-300 font-semibold mb-2 flex items-center gap-2 text-sm">
+                    📧 Verify Your New Email {editEmailOtp.verified && <span className="text-green-400">✓ Verified</span>}
+                  </h3>
+                  {!editEmailOtp.verified && (
+                    <>
+                      <p className="text-gray-400 text-xs mb-3">
+                        We'll email a 6-digit code to confirm this new address before it's saved.
+                      </p>
+                      {editEmailOtp.error && <p className="text-red-400 text-xs mb-2">{editEmailOtp.error}</p>}
+                      {!editEmailOtp.sent ? (
+                        <button
+                          type="button"
+                          disabled={editEmailOtp.loading || !accountEditForm.email}
+                          onClick={() => requestAccountEmailOtp(accountEditForm.email, 'personal', setEditEmailOtp)}
+                          className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-lg font-medium text-sm transition-all"
+                        >
+                          {editEmailOtp.loading ? 'Sending...' : 'Send Verification Code'}
+                        </button>
+                      ) : (
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={editEmailOtp.code}
+                            onChange={(e) => setEditEmailOtp(prev => ({ ...prev, code: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
+                            placeholder="6-digit code"
+                            className="flex-1 px-4 py-2 bg-slate-700/50 border border-purple-500/30 rounded-lg text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none tracking-widest text-center"
+                          />
+                          <button
+                            type="button"
+                            disabled={editEmailOtp.loading}
+                            onClick={() => verifyAccountEmailOtp(editEmailOtp.code, 'personal', setEditEmailOtp)}
+                            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-lg font-medium text-sm transition-all"
+                          >
+                            {editEmailOtp.loading ? 'Checking...' : 'Verify'}
+                          </button>
+                        </div>
+                      )}
+                      {editEmailOtp.sent && (
+                        <button
+                          type="button"
+                          disabled={editEmailOtp.loading}
+                          onClick={() => requestAccountEmailOtp(accountEditForm.email, 'personal', setEditEmailOtp)}
+                          className="mt-2 text-xs text-purple-300 hover:text-purple-200"
+                        >
+                          Resend code
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
 
               {/* Preferred Currency */}
               <div>
@@ -6146,6 +6309,16 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     >
                       {accountEditLoading ? '⏳ Changing PIN...' : '💾 Save Changes'}
                     </button>
+
+                    {accountMessage?.type === 'error' && accountMessage.text.toLowerCase().includes('locked') && currentUserId && (
+                      <button
+                        type="button"
+                        onClick={() => setShowPINRecovery(true)}
+                        className="w-full mt-2 px-3 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-semibold transition-all"
+                      >
+                        🔐 Forgot PIN / Account Locked? Recover Access
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -6162,7 +6335,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 </button>
                 <button
                   type="submit"
-                  disabled={accountEditLoading}
+                  disabled={accountEditLoading || (accountEditForm.email.trim().toLowerCase() !== originalAccountEmail.trim().toLowerCase() && !editEmailOtp.verified)}
                   className="flex-1 px-4 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white rounded-lg font-semibold transition-all disabled:opacity-50"
                 >
                   {accountEditLoading ? '⏳ Saving...' : '💾 Save Changes'}
@@ -6171,6 +6344,15 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
             </form>
           </div>
         </div>
+      )}
+
+      {currentUserId && (
+        <PINRecoveryModal
+          isOpen={showPINRecovery}
+          onClose={() => setShowPINRecovery(false)}
+          userId={currentUserId}
+          userEmail={userEmail}
+        />
       )}
 
       {/* 🎯 CREATE WALLET ACCOUNT MODAL */}

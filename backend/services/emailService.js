@@ -1,14 +1,27 @@
-import sgMail from '@sendgrid/mail';
+import axios from 'axios';
 
-// Initialize SendGrid with API key
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+// Sends via Resend's REST API — see backend/routes/emailRoutes.js for the
+// same helper (this file isn't currently wired into server.js, but is kept
+// consistent with the live email-sending path).
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const sendEmail = async ({ to, from, subject, html }) => {
+  try {
+    await axios.post(
+      'https://api.resend.com/emails',
+      { from, to, subject, html },
+      { headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    throw new Error(error.response?.data?.message || error.message);
+  }
+};
 
 const fromEmail = process.env.SENDER_EMAIL || 'aronnykevin@gmail.com';
 const supportEmail = process.env.SUPPORT_EMAIL || 'support@ican.ug';
 const appUrl = process.env.APP_URL || 'http://localhost:3000';
 
 /**
- * Email Service - Wraps SendGrid API calls
+ * Email Service - Wraps Resend API calls
  * Used by PIN reset routes and other backend operations
  */
 
@@ -60,7 +73,7 @@ const emailService = {
         `
       };
 
-      await sgMail.send(msg);
+      await sendEmail(msg);
       return { success: true, message: 'PIN reset email sent' };
     } catch (error) {
       console.error('Error sending PIN reset email:', error);
@@ -111,7 +124,7 @@ const emailService = {
         `
       };
 
-      await sgMail.send(msg);
+      await sendEmail(msg);
       return { success: true, message: 'Account unlocked email sent' };
     } catch (error) {
       console.error('Error sending account unlocked email:', error);
@@ -163,7 +176,7 @@ const emailService = {
         `
       };
 
-      await sgMail.send(msg);
+      await sendEmail(msg);
       return { success: true, message: 'Unlock request confirmation email sent' };
     } catch (error) {
       console.error('Error sending unlock request email:', error);

@@ -621,10 +621,14 @@ class WalletAccountService {
         };
       }
 
+      // Scoped to account_type: 'personal' — a user_id can own both a
+      // personal and a business user_accounts row, and an unscoped update
+      // would touch (and fail .single() on) both.
       const { data, error } = await this.supabase
         .from('user_accounts')
         .update(updateData)
         .eq('user_id', userId)
+        .eq('account_type', 'personal')
         .select()
         .single();
 
