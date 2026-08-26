@@ -79,7 +79,12 @@ CREATE OR REPLACE FUNCTION public.redeem_pin_reset_token(
   p_new_pin_hash text
 )
 RETURNS TABLE (success boolean, message text)
-SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
+-- extensions is needed on the search_path because Supabase installs
+-- pgcrypto into the `extensions` schema by default, not `public` — a
+-- SECURITY DEFINER function only sees the schemas listed here, so an
+-- unqualified digest() call below would otherwise fail with
+-- "function digest(text, unknown) does not exist".
+SECURITY DEFINER SET search_path = public, extensions LANGUAGE plpgsql AS $$
 DECLARE
   v_token_hash text;
   v_row record;

@@ -5002,7 +5002,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
       {/* Edit Business Account Modal */}
       {editingBusinessProfile && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[200] p-4 pt-20 sm:pt-4">
           <div className="bg-gradient-to-b from-slate-800 to-slate-900 rounded-2xl border border-cyan-500/50 w-full max-w-md p-6 shadow-2xl">
             <h2 className="text-2xl font-bold text-white mb-1">
               {editingBusinessProfile.user_accounts && editingBusinessProfile.user_accounts.length > 0 ? 'Update Wallet Account' : 'Create Wallet Account'}
@@ -6124,8 +6124,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
       {/* 🎯 EDIT WALLET ACCOUNT MODAL */}
       {showAccountEdit && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="glass-card p-8 w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[200] p-4 pt-20 sm:pt-4">
+          <div className="glass-card p-8 w-full max-w-md max-h-[85vh] overflow-y-auto">
             <h2 className="text-3xl font-bold text-white mb-6 flex items-center gap-2">
               ✏️ Edit Account Information
             </h2>

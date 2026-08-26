@@ -608,9 +608,9 @@ const AgentDashboard = () => {
     const actionButtonText = isCashIn ? '✅ Confirm Cash-In' : '✅ Confirm Cash-Out';
 
     return (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[200] p-4 pt-20 sm:pt-4">
         {/* Modal Container - Responsive with scroll handling */}
-        <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-purple-500/30 rounded-lg w-full max-w-md max-h-[90vh] sm:max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+        <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-purple-500/30 rounded-lg w-full max-w-md max-h-[85vh] sm:max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
           
           {/* Fixed Header */}
           <div className="flex-shrink-0 bg-gradient-to-r from-slate-800 to-slate-700 border-b border-purple-500/20 px-6 sm:px-8 py-4 sm:py-5">
@@ -846,8 +846,8 @@ const AgentDashboard = () => {
         {/* ============================================ */}
 
         {showAgentEdit && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="glass-card p-8 w-full max-w-md max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[200] p-4 pt-20 sm:pt-4">
+            <div className="glass-card p-8 w-full max-w-md max-h-[85vh] overflow-y-auto">
               <h2 className="text-3xl font-bold text-white mb-6 flex items-center gap-2">
                 ✏️ Edit Agent Profile
               </h2>

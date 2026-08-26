@@ -363,9 +363,36 @@ const GroupWalletPINModal = ({
                 ← Back
               </button>
             )}
+
+            {/* Forgot PIN — always available in change mode, called out when locked */}
+            {mode === 'change' && (
+              <button
+                type="button"
+                onClick={() => setShowPINRecovery(true)}
+                disabled={!currentUser?.id}
+                className={`w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                  isAccountLocked
+                    ? 'bg-orange-500 hover:bg-orange-600 text-white'
+                    : 'text-slate-400 hover:text-slate-300'
+                }`}
+              >
+                🆘 Forgot PIN / Locked Out?
+              </button>
+            )}
           </form>
         </div>
       </div>
+
+      {currentUser?.id && (
+        <PINRecoveryModal
+          isOpen={showPINRecovery}
+          onClose={() => setShowPINRecovery(false)}
+          userId={currentUser.id}
+          userEmail={currentUser.email}
+          groupId={groupId}
+          groupName={groupName}
+        />
+      )}
     </div>
   );
 };
