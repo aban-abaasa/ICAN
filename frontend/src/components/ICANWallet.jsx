@@ -1123,9 +1123,6 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         setSelectedCurrency(registeredCurrency); // Update form to show user's actual country currency
         console.log(`🌍 User's registered country: ${userCountryValue}, Currency: ${registeredCurrency}`);
 
-        // Ensure wallet accounts exist for all currencies
-        await walletAccountService.ensureWalletAccountsExist(user.id);
-
         // Load wallet balances
         await loadWalletBalances(user.id);
         await loadTrustAccountSummary(user.id, userCountryValue);

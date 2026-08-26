@@ -708,66 +708,6 @@ class WalletAccountService {
   }
 
   /**
-   * Ensure wallet accounts exist for all currencies
-   * Creates missing wallet_accounts entries if they don't exist
-   * @param {string} userId - User ID
-   * @returns {Promise<Object>} Result
-   */
-  async ensureWalletAccountsExist(userId) {
-    try {
-      // CRITICAL: Check authentication BEFORE querying
-      this.supabase = getSupabaseClient();
-      const { data: { user: authUser }, error: authError } = await this.supabase.auth.getUser();
-      
-      if (authError || !authUser) {
-        console.warn('⚠️ ensureWalletAccountsExist: User not authenticated');
-        return { success: false, error: 'User not authenticated' };
-      }
-      
-      const currencies = ['USD', 'UGX', 'KES'];
-
-      // Check which currencies are missing
-      const { data: existingAccounts } = await this.supabase
-        .from('wallet_accounts')
-        .select('currency')
-        .eq('user_id', userId);
-
-      const existingCurrencies = existingAccounts?.map(a => a.currency) || [];
-      const missingCurrencies = currencies.filter(c => !existingCurrencies.includes(c));
-
-      if (missingCurrencies.length === 0) {
-        console.log('✅ All wallet accounts exist for user');
-        return { success: true, created: 0 };
-      }
-
-      // Create missing wallet accounts
-      const walletEntries = missingCurrencies.map(currency => ({
-        user_id: userId,
-        currency: currency,
-        balance: 0,
-        status: 'active',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }));
-
-      const { error } = await this.supabase
-        .from('wallet_accounts')
-        .insert(walletEntries);
-
-      if (error) {
-        console.warn('⚠️ Could not create wallet accounts:', error);
-        return { success: false, error: error.message };
-      }
-
-      console.log('✅ Created wallet accounts for:', missingCurrencies);
-      return { success: true, created: missingCurrencies.length };
-    } catch (error) {
-      console.error('❌ Error in ensureWalletAccountsExist:', error);
-      return { success: false, error: error.message };
-    }
-  }
-
-  /**
    * Create wallet account for business profile
    * @param {Object} params - Business wallet parameters
    * @param {string} params.businessId - Business profile ID

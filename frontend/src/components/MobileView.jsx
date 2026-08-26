@@ -3750,10 +3750,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         }
 
         setCurrentUserId(user.id);
-        
-        // Ensure wallet accounts exist
-        await walletAccountService.ensureWalletAccountsExist(user.id);
-        
+
         // Load wallet data
         await loadWalletAccounts(user.id);
         
