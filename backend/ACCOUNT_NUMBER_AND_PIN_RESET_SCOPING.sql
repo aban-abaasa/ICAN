@@ -23,6 +23,17 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto; -- redeem_pin_reset_token() below uses 
 -- 'ICAN-<timestamp>-<uuid prefix>', which ICANWallet.jsx's recipient
 -- lookup can no longer match now that lookup detects account numbers
 -- by a 16-digit numeric pattern instead of an "ICAN-" prefix.
+--
+-- SUPERSEDED: this Part 1 recreated the trigger under the GENERIC name
+-- (on_auth_user_created / handle_new_user()) — the exact name
+-- FIX_AUTO_SIGNUP_TRIGGER_NAMESPACE_ICAN.sql had deliberately moved away
+-- from, since auth.users is shared by 4 apps and whichever app's migration
+-- runs last in the Supabase SQL editor reclaims that generic name. Because
+-- the OLD namespaced trigger (on_auth_user_created_ican) was never dropped
+-- here, both existed and new signups kept getting the old 'ICAN-...'
+-- format. Do not re-run this Part 1 — run
+-- FIX_DUPLICATE_SIGNUP_TRIGGERS_NUMERIC_ACCOUNT.sql instead, which drops
+-- both trigger names and reinstates exactly one, under the namespaced name.
 -- ----------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER

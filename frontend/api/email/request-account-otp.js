@@ -5,15 +5,23 @@
  * Ports ICAN/backend/routes/emailRoutes.js's POST /api/email/request-account-otp
  * (the Express dev server) to this project's actual production home. That
  * Express server is dev-only — it's never deployed — so ICANWallet.jsx's
- * "verify your email" step 404'd/failed to fetch for every real visitor.
+ * "verify your email" step failed to fetch for every real visitor.
  * See SIGNUP_EMAIL_OTP_VERIFICATION.sql for the account_creation_otps table
  * and verify_account_creation_otp() RPC this code hash feeds into.
  *
- * This file (and the sibling api/*.js functions already in this project)
+ * MUST live under ICAN/frontend/api/ — that's the actual Vercel project
+ * root (see ICAN/frontend/vercel.json, which has a catch-all SPA rewrite
+ * "/(.*)" -> "/"). ICAN/vercel.json, one level up, is a *different*,
+ * unused config; a copy of this file placed at ICAN/api/email/... is
+ * outside the deployed project entirely and never gets picked up — it
+ * silently falls through to the SPA rewrite, so a POST there 405s with an
+ * empty body ("unexpected end of JSON input" on the client) instead of
+ * ever reaching this code.
+ *
+ * This file (like the sibling api/*.js functions already in this project)
  * uses only Node built-ins (fetch, crypto) instead of @supabase/supabase-js
- * or axios — vercel.json's installCommand only installs frontend/'s
- * node_modules, so a package that isn't a Node built-in won't be present
- * for a function running from ICAN/api/**.
+ * or axios, since this project's install step doesn't guarantee those are
+ * present for a serverless function.
  *
  * Route: POST /api/email/request-account-otp
  * Required env vars (Vercel dashboard, Production + Preview):
