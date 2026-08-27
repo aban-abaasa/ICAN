@@ -3,6 +3,7 @@ import { ThumbsUp, MessageCircle, Share2, Clock, Users, FileText, Zap, AlertCirc
 import PitchVideoRecorder from './PitchVideoRecorder';
 import SmartContractGenerator from './SmartContractGenerator';
 import ShareSigningFlow from './ShareSigningFlow';
+import InvestmentProgressView from './InvestmentProgressView';
 import BusinessProfileForm from './BusinessProfileForm';
 import BusinessProfileSelector from './BusinessProfileSelector';
 import BusinessCategorySelector from './BusinessCategorySelector';
@@ -90,6 +91,11 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
   useEffect(() => { if (navRef) navRef.current = _setActiveTab; return () => { if (navRef) navRef.current = null; }; }, [navRef]);
   const [selectedForContract, setSelectedForContract] = useState(null);
   const [selectedForInvestment, setSelectedForInvestment] = useState(null); // For ShareSigningFlow
+  const [selectedForProgress, setSelectedForProgress] = useState(null); // { pitch, agreement } - for InvestmentProgressView
+  // My existing investment agreement (if any) against the business profile
+  // currently being viewed via viewingPitcher -- drives the "View My
+  // Investment Progress" button in the viewing-pitcher banner below.
+  const [viewingPitcherOwnAgreement, setViewingPitcherOwnAgreement] = useState(null);
   const [videoErrors, setVideoErrors] = useState({});
   const [businessProfiles, setBusinessProfiles] = useState([]);
   const [currentBusinessProfile, setCurrentBusinessProfile] = useState(null);
@@ -1057,15 +1063,69 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
     setShowRecorder(true);
   };
 
+  // When opening a business profile's pitches (viewingPitcher), check whether
+  // the current user already has an investment agreement against it, so the
+  // banner below can offer a direct "View My Investment Progress" link --
+  // previously the only way to reach InvestmentProgressView was re-clicking
+  // Invest, which silently redirected instead of being a real entry point.
+  useEffect(() => {
+    let cancelled = false;
+    const checkOwnAgreement = async () => {
+      if (!viewingPitcher?.business_profile_id || !currentUser?.id) {
+        setViewingPitcherOwnAgreement(null);
+        return;
+      }
+      try {
+        const supabase = getSupabase();
+        const { data } = await supabase
+          .from('investment_agreements')
+          .select('id, status, pitch_id, business_profile_id, total_investment, shares_amount, approval_deadline')
+          .eq('business_profile_id', viewingPitcher.business_profile_id)
+          .eq('investor_id', currentUser.id)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        if (!cancelled) setViewingPitcherOwnAgreement(data?.[0] || null);
+      } catch (err) {
+        console.warn('[Pitchin] Could not check for an existing agreement on this business profile:', err?.message);
+        if (!cancelled) setViewingPitcherOwnAgreement(null);
+      }
+    };
+    checkOwnAgreement();
+    return () => { cancelled = true; };
+  }, [viewingPitcher?.business_profile_id, currentUser?.id]);
+
   const handleSmartContractClick = async (pitch) => {
     if (!currentUser) {
       alert('Please login to invest');
       return;
     }
-    
+
+    // Smart routing: if this investor already submitted an investment for
+    // this pitch that's still awaiting shareholder approval (or just got
+    // sealed), don't reopen the full multi-stage signing flow -- show their
+    // approval progress instead.
+    try {
+      const supabase = getSupabase();
+      const { data: existingAgreements } = await supabase
+        .from('investment_agreements')
+        .select('id, status, business_profile_id, total_investment, shares_amount')
+        .eq('pitch_id', pitch.id)
+        .eq('investor_id', currentUser.id)
+        .in('status', ['signing', 'sealed'])
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (existingAgreements && existingAgreements.length > 0) {
+        setSelectedForProgress({ pitch, agreement: existingAgreements[0] });
+        return;
+      }
+    } catch (checkError) {
+      console.warn('[Pitchin] Could not check for an existing investment agreement, proceeding to new investment flow:', checkError?.message);
+    }
+
     // 📝 NOTE: Removed business profile requirement for investors
     // Investors can now invest without having a business profile
-    
+
     // Record investment interest in database
     try {
       const result = await recordInvestmentInterest(pitch.id, currentUser.id);
@@ -1698,6 +1758,17 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
             {(viewingPitcher.name || 'P').charAt(0).toUpperCase()}
           </div>
           <span className="text-white text-xs font-semibold flex-1 truncate">{viewingPitcher.name}'s Pitches</span>
+          {viewingPitcherOwnAgreement && (
+            <button
+              onClick={() => {
+                const matchingPitch = pitches.find((p) => p.id === viewingPitcherOwnAgreement.pitch_id);
+                setSelectedForProgress({ pitch: matchingPitch || { id: viewingPitcherOwnAgreement.pitch_id }, agreement: viewingPitcherOwnAgreement });
+              }}
+              className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-500/20 border border-blue-400/40 text-blue-200 hover:bg-blue-500/30 transition-colors flex-shrink-0"
+            >
+              📊 My Investment
+            </button>
+          )}
           <button
             onClick={() => setViewingPitcher(null)}
             className="text-slate-400 hover:text-white text-xs font-medium transition-colors flex items-center gap-1"
@@ -2204,8 +2275,23 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
         <ShareSigningFlow
           pitch={selectedForInvestment}
           onClose={() => setSelectedForInvestment(null)}
+          onInvestmentSubmitted={(payload) => {
+            setSelectedForInvestment(null);
+            setSelectedForProgress(payload);
+          }}
           businessProfile={currentBusinessProfile}
           currentUser={currentUser}
+        />
+      )}
+
+      {/* Investment Progress Modal - shown instead of ShareSigningFlow when
+          the investor already has a submitted agreement for this pitch */}
+      {selectedForProgress && (
+        <InvestmentProgressView
+          pitch={selectedForProgress.pitch}
+          agreement={selectedForProgress.agreement}
+          currentUser={currentUser}
+          onClose={() => setSelectedForProgress(null)}
         />
       )}
 
@@ -2384,8 +2470,23 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
         <ShareSigningFlow
           pitch={selectedForInvestment}
           onClose={() => setSelectedForInvestment(null)}
+          onInvestmentSubmitted={(payload) => {
+            setSelectedForInvestment(null);
+            setSelectedForProgress(payload);
+          }}
           businessProfile={currentBusinessProfile}
           currentUser={currentUser}
+        />
+      )}
+
+      {/* Investment Progress Modal - shown instead of ShareSigningFlow when
+          the investor already has a submitted agreement for this pitch */}
+      {selectedForProgress && (
+        <InvestmentProgressView
+          pitch={selectedForProgress.pitch}
+          agreement={selectedForProgress.agreement}
+          currentUser={currentUser}
+          onClose={() => setSelectedForProgress(null)}
         />
       )}
 

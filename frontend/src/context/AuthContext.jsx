@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { getSupabaseClient } from '../lib/supabase/client';
 import { offlineAuthManager } from '../lib/offlineAuthManager';
 import { syncManager } from '../lib/syncManager';
+import { uploadToR2, resolveMediaValue } from '../services/r2StorageService';
 
 const AuthContext = createContext({});
 
@@ -79,10 +80,12 @@ export const AuthProvider = ({ children }) => {
         .eq('id', userId)
         .single();
 
-      // If profile exists, use it
+      // If profile exists, use it (resolving an R2-backed avatar to a live URL)
       if (data) {
-        setProfile(data);
-        return data;
+        const resolvedAvatarUrl = await resolveMediaValue(data.avatar_url);
+        const resolvedData = resolvedAvatarUrl === data.avatar_url ? data : { ...data, avatar_url: resolvedAvatarUrl };
+        setProfile(resolvedData);
+        return resolvedData;
       }
 
       // Profile doesn't exist - create one from auth user metadata
@@ -160,37 +163,29 @@ export const AuthProvider = ({ children }) => {
       console.error('Profile update error:', error);
       throw error;
     }
-    setProfile(data);
-    return data;
+
+    const resolvedAvatarUrl = await resolveMediaValue(data.avatar_url);
+    const resolvedData = resolvedAvatarUrl === data.avatar_url ? data : { ...data, avatar_url: resolvedAvatarUrl };
+    setProfile(resolvedData);
+    return resolvedData;
   };
 
   // Upload avatar
   const uploadAvatar = async (file) => {
     if (!user) throw new Error('Not authenticated');
-    
+
     const supabase = getSupabase();
     if (!supabase) throw new Error('Supabase not initialized');
 
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-    const filePath = `avatars/${fileName}`;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('Not authenticated');
 
-    // Upload to Supabase Storage
-    const { error: uploadError } = await supabase.storage
-      .from('user-content')
-      .upload(filePath, file, { upsert: true });
+    const result = await uploadToR2({ file, folder: 'avatars', accessToken: session.access_token });
+    if (!result.success) throw new Error(result.error || 'Failed to upload avatar');
 
-    if (uploadError) throw uploadError;
-
-    // Get public URL
-    const { data: { publicUrl } } = supabase.storage
-      .from('user-content')
-      .getPublicUrl(filePath);
-
-    // Update profile with new avatar URL
-    await updateProfile({ avatar_url: publicUrl });
-
-    return publicUrl;
+    // updateProfile stores the r2:// marker and resolves it to a live URL for the returned/state profile
+    const updated = await updateProfile({ avatar_url: result.url });
+    return updated.avatar_url;
   };
 
   // Get initials for avatar fallback

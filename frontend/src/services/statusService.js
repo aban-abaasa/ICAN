@@ -6,20 +6,8 @@
 
 import { supabase } from '../lib/supabase';
 import { calculateFileHash, registerStatusOnBlockchain } from './blockchainService';
+import { uploadToR2, resolveMediaValues, deleteFromR2, isR2Key, fromR2Value } from './r2StorageService';
 
-const MIME_TO_EXTENSION = {
-  'image/jpeg': 'jpg',
-  'image/png': 'png',
-  'image/webp': 'webp',
-  'video/mp4': 'mp4',
-  'video/quicktime': 'mov',
-  'video/webm': 'webm'
-};
-
-const inferExtensionFromMime = (mimeType = '') => MIME_TO_EXTENSION[mimeType] || 'bin';
-
-const buildStorageMimeErrorMessage = (mimeType) =>
-  `Storage rejected file type "${mimeType || 'unknown'}". Ensure "pitches" bucket allows video/mp4, video/quicktime, and video/webm MIME types in Supabase Storage.`;
 
 /**
  * Upload status media to Supabase Storage
@@ -61,72 +49,26 @@ export const uploadStatusMedia = async (userId, file, options = {}) => {
     const fileHash = await calculateFileHash(file);
     console.log(`✓ File hash: ${fileHash}`);
 
-    // Generate filename
-    const fileName = typeof file.name === 'string' ? file.name : '';
-    const fileExt =
-      (fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '') ||
-      inferExtensionFromMime(file.type);
-    const timestamp = Date.now();
-    const random = Math.random().toString(36).substring(2, 8);
-    const filename = `${userId}-${timestamp}-${random}.${fileExt}`;
-    const filePath = `statuses/${userId}/${filename}`;
-
-    // Upload to 'pitches' bucket (same as pitch videos - supports all media types)
-    const uploadWithMime = async (contentType) =>
-      supabase.storage
-        .from('pitches')
-        .upload(filePath, file, {
-          upsert: false,
-          contentType
-        });
-
-    let { error: uploadError } = await uploadWithMime(file.type || 'application/octet-stream');
-
-    if (uploadError && String(uploadError.message || '').toLowerCase().includes('mime type')) {
-      const mimeFallbacks = ['application/octet-stream', 'video/quicktime', 'video/webm'];
-      for (const fallbackMime of mimeFallbacks) {
-        if (!fallbackMime || fallbackMime === file.type) {
-          continue;
-        }
-
-        const retry = await uploadWithMime(fallbackMime);
-        uploadError = retry.error;
-        if (!uploadError) {
-          break;
-        }
-      }
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      throw new Error('Not authenticated - cannot upload status media');
     }
 
-    if (uploadError) {
-      if (String(uploadError.message || '').toLowerCase().includes('mime type')) {
-        throw new Error(buildStorageMimeErrorMessage(file.type));
-      }
-      throw uploadError;
+    const result = await uploadToR2({
+      file,
+      folder: 'statuses',
+      accessToken: session.access_token
+    });
+
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to upload status media');
     }
 
-    // Get signed URL (24-hour expiry) - same bucket as pitches
-    const { data: signedData, error: urlError } = await supabase.storage
-      .from('pitches')
-      .createSignedUrl(filePath, 86400); // 24 hours
-
-    if (urlError) {
-      console.warn('Could not create signed URL, falling back to public URL:', urlError);
-      const { data: publicData } = supabase.storage
-        .from('pitches')
-        .getPublicUrl(filePath);
-      return { 
-        url: publicData?.publicUrl, 
-        path: filePath,
-        fileHash,
-        error: null 
-      };
-    }
-
-    return { 
-      url: signedData?.signedUrl, 
-      path: filePath,
+    return {
+      url: result.url,
+      path: result.key,
       fileHash,
-      error: null 
+      error: null
     };
   } catch (error) {
     console.error('Status media upload error:', error);
@@ -256,38 +198,56 @@ export const getActiveStatuses = async (userId = null) => {
 
     if (error) throw error;
 
-    // Refresh signed URLs for all statuses (in parallel)
-    const statusesWithUrls = await Promise.all(
-      (data || []).map(async (status) => {
-        try {
-          if (!status?.media_url || status.media_type === 'text') {
-            return status;
-          }
-
-          // Detect bucket and extract path from media_url
-          const { bucketName, filePath } = extractBucketAndPath(status.media_url);
-          
-          // Generate fresh signed URL from correct bucket
-          const { data: signedData } = await supabase.storage
-            .from(bucketName)
-            .createSignedUrl(filePath, 3600); // 1 hour for viewing
-
-          return {
-            ...status,
-            media_url: signedData?.signedUrl || status.media_url
-          };
-        } catch (err) {
-          console.warn(`Could not refresh URL for status ${status.id}:`, err);
-          return status; // Return original if refresh fails
-        }
-      })
-    );
+    // Refresh media URLs for all statuses (in parallel)
+    const statusesWithUrls = await refreshStatusMediaUrls(data || []);
 
     return { statuses: statusesWithUrls || [], error: null };
   } catch (error) {
     console.error('Get statuses error:', error);
     return { statuses: [], error };
   }
+};
+
+/**
+ * Helper: refresh media_url for a batch of statuses. R2-backed statuses
+ * (media_url starting with r2://) get a fresh presigned URL via the backend;
+ * legacy Supabase-hosted statuses keep the existing per-row signed-URL refresh
+ * (always re-signed, since a previously stored https URL may have expired).
+ */
+const refreshStatusMediaUrls = async (statuses) => {
+  const r2Items = statuses.filter((s) => isR2Key(s?.media_url));
+  const resolvedR2 = r2Items.length > 0 ? await resolveMediaValues(r2Items, ['media_url']) : [];
+  const resolvedById = new Map(resolvedR2.map((s) => [s.id, s.media_url]));
+
+  return Promise.all(
+    statuses.map(async (status) => {
+      if (isR2Key(status?.media_url)) {
+        return { ...status, media_url: resolvedById.get(status.id) || status.media_url };
+      }
+
+      try {
+        if (!status?.media_url || status.media_type === 'text') {
+          return status;
+        }
+
+        // Detect bucket and extract path from media_url
+        const { bucketName, filePath } = extractBucketAndPath(status.media_url);
+
+        // Generate fresh signed URL from correct bucket
+        const { data: signedData } = await supabase.storage
+          .from(bucketName)
+          .createSignedUrl(filePath, 3600); // 1 hour for viewing
+
+        return {
+          ...status,
+          media_url: signedData?.signedUrl || status.media_url
+        };
+      } catch (err) {
+        console.warn(`Could not refresh URL for status ${status.id}:`, err);
+        return status; // Return original if refresh fails
+      }
+    })
+  );
 };
 
 /**
@@ -394,32 +354,8 @@ export const getUserStatuses = async (userId) => {
 
     if (error) throw error;
 
-    // Refresh signed URLs for all statuses (in parallel)
-    const statusesWithUrls = await Promise.all(
-      (data || []).map(async (status) => {
-        try {
-          if (!status?.media_url || status.media_type === 'text') {
-            return status;
-          }
-
-          // Detect bucket and extract path from media_url
-          const { bucketName, filePath: pathToSign } = extractBucketAndPath(status.media_url);
-          
-          // Generate fresh signed URL from correct bucket
-          const { data: signedData } = await supabase.storage
-            .from(bucketName)
-            .createSignedUrl(pathToSign, 3600); // 1 hour for viewing
-
-          return {
-            ...status,
-            media_url: signedData?.signedUrl || status.media_url
-          };
-        } catch (err) {
-          console.warn(`Could not refresh URL for status ${status.id}:`, err);
-          return status; // Return original if refresh fails
-        }
-      })
-    );
+    // Refresh media URLs for all statuses (in parallel)
+    const statusesWithUrls = await refreshStatusMediaUrls(data || []);
 
     return { statuses: statusesWithUrls || [], error: null };
   } catch (error) {
@@ -504,9 +440,19 @@ export const deleteStatus = async (statusId, userId = null) => {
 
     // Delete media file from storage if it exists (and is not a shared pitch video)
     if (status?.media_url) {
-      // Only delete if it's a user-uploaded file (starts with Supabase storage domain)
-      // Don't delete if it's a shared pitch video (those are managed separately)
-      if (status.media_url.includes('user-content')) {
+      if (isR2Key(status.media_url)) {
+        const { data: { session } } = await supabase.auth.getSession();
+        const { success, error } = await deleteFromR2({
+          key: fromR2Value(status.media_url),
+          accessToken: session?.access_token
+        });
+        if (success) {
+          console.log(`   ✅ Media file deleted from R2`);
+          storageDeletedCount++;
+        } else {
+          console.warn(`   ⚠️  Could not delete media from R2:`, error);
+        }
+      } else if (status.media_url.includes('user-content')) {
         try {
           // Extract file path from Supabase URL
           // URL formats:

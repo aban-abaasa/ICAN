@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { FileText, Fingerprint, Lock, Download, CheckCircle, AlertCircle, Eye, EyeOff, Loader, Edit, Sparkles, Eye as EyeIcon, Lock as LockIcon, ArrowLeft, X } from 'lucide-react';
 import QRCode from 'qrcode';
+import { checkBusinessProfileEditPermission } from '../services/pitchingService';
 
 /**
  * SmartContractGenerator - Enhanced Agreement with AI Simplification
@@ -62,41 +63,64 @@ const SmartContractGenerator = ({ businessProfile, pitch, currentUser, onClose }
 
   // Detect owner and initialize
   React.useEffect(() => {
-    // Detect if current user is the owner of the business profile
-    const isCurrentUserOwner = businessProfile?.user_id === currentUser?.id;
-    setIsOwner(isCurrentUserOwner);
+    let cancelled = false;
 
-    // Owner sees SETUP mode (fill T&C only)
-    // Non-owner sees SIGN mode (request signature)
-    if (isCurrentUserOwner) {
-      setMode('setup');
-      setStep(0);
-      
-      const fullName = currentUser.user_metadata?.full_name || 
-                      currentUser.user_metadata?.name || 
-                      currentUser.email?.split('@')[0] || 
-                      'Pitch Creator';
-      setOwnerName(fullName);
-      setOwnerEmail(currentUser.email);
-      setOwnerRole('Pitch Creator/Founder');
-      
-      console.log('👑 Owner mode: Setting up T&C');
-    } else {
-      // Non-owner: show signing request interface
-      setMode('sign');
-      
-      // Auto-fill signer info from current user
-      if (currentUser) {
-        const fullName = currentUser.user_metadata?.full_name || 
-                        currentUser.user_metadata?.name || 
-                        currentUser.email?.split('@')[0] || 
-                        'Investor';
-        setSignerName(fullName);
-        setSignerEmail(currentUser.email || '');
+    const detectOwnership = async () => {
+      // Owner OR co-owner of the business profile both count as "owner" here —
+      // matches the pitches RLS insert policy (fix_pitches_rls_v2.sql) and
+      // checkBusinessProfileEditPermission, which already treat them the same
+      // way everywhere else in the app. A naive user_id-only check misroutes
+      // co-owners into the investor "sign" fallback below, which was never
+      // meant to be seen by anyone actually entitled to set up the agreement.
+      let isCurrentUserOwner = businessProfile?.user_id === currentUser?.id;
+
+      if (!isCurrentUserOwner && businessProfile?.id && currentUser?.id) {
+        const permission = await checkBusinessProfileEditPermission(
+          businessProfile.id,
+          currentUser.id,
+          currentUser.email
+        );
+        isCurrentUserOwner = !!permission.canEdit;
       }
-      
-      console.log('🤝 Investor/Partner mode: Ready to sign');
-    }
+
+      if (cancelled) return;
+      setIsOwner(isCurrentUserOwner);
+
+      // Owner (or co-owner) sees SETUP mode (fill T&C only)
+      // Everyone else sees SIGN mode (request signature)
+      if (isCurrentUserOwner) {
+        setMode('setup');
+        setStep(0);
+
+        const fullName = currentUser.user_metadata?.full_name ||
+                        currentUser.user_metadata?.name ||
+                        currentUser.email?.split('@')[0] ||
+                        'Pitch Creator';
+        setOwnerName(fullName);
+        setOwnerEmail(currentUser.email);
+        setOwnerRole('Pitch Creator/Founder');
+
+        console.log('👑 Owner mode: Setting up T&C');
+      } else {
+        // Non-owner: show signing request interface
+        setMode('sign');
+
+        // Auto-fill signer info from current user
+        if (currentUser) {
+          const fullName = currentUser.user_metadata?.full_name ||
+                          currentUser.user_metadata?.name ||
+                          currentUser.email?.split('@')[0] ||
+                          'Investor';
+          setSignerName(fullName);
+          setSignerEmail(currentUser.email || '');
+        }
+
+        console.log('🤝 Investor/Partner mode: Ready to sign');
+      }
+    };
+
+    detectOwnership();
+    return () => { cancelled = true; };
   }, [businessProfile, currentUser]);
 
   // Initialize signers from business profile on mount

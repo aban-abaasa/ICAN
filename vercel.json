@@ -15,6 +15,10 @@
     {
       "path": "/api/report-automation?mode=monthly",
       "schedule": "55 1 1 * *"
+    },
+    {
+      "path": "/api/investment-expiry-sweep",
+      "schedule": "0 * * * *"
     }
   ]
 }

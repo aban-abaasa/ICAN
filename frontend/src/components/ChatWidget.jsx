@@ -81,7 +81,15 @@ const ChatWidget = ({ hasBottomNav = false }) => {
 
   const hidden = isDeveloperSession();
   const scopeKey = identity ? (identity.isGuest ? 'guest' : `user_${identity.userId}`) : null;
-  const cmmsCompanyId = !identity?.isGuest ? localStorage.getItem('cmms_company_id') : null;
+  // Mirrors CMSSModule.jsx's per-user company scoping: 'cmms_company_id' alone is a
+  // shared browser-level cache that can point at a company from a different CMMS
+  // user/session, so prefer the email-scoped key before falling back to it.
+  const getScopedCmmsCompanyId = (email) => {
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    const scopedValue = normalizedEmail ? localStorage.getItem(`cmms_active_company::${normalizedEmail}`) : null;
+    return scopedValue || localStorage.getItem('cmms_company_id');
+  };
+  const cmmsCompanyId = !identity?.isGuest ? getScopedCmmsCompanyId(identity?.email) : null;
   const canCheckCmmsAccess = Boolean(cmmsCompanyId && identity?.authId);
   const hasCmmsAccess = canCheckCmmsAccess && cmmsMembershipVerified;
 

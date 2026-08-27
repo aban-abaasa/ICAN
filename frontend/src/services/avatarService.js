@@ -5,6 +5,7 @@
  */
 
 import { supabase } from '../lib/supabase';
+import { uploadToR2 } from './r2StorageService';
 
 /**
  * Validate file before upload
@@ -32,16 +33,7 @@ export const validateAvatarFile = (file, options = {}) => {
 };
 
 /**
- * Generate unique filename for avatar
- */
-export const generateAvatarFilename = (userId) => {
-  const timestamp = Date.now();
-  const random = Math.random().toString(36).substring(2, 8);
-  return `${userId}-${timestamp}-${random}.jpg`;
-};
-
-/**
- * Upload avatar to Supabase Storage
+ * Upload avatar to Cloudflare R2 storage
  * @param {string} userId - User ID
  * @param {File} file - Avatar image file
  * @returns {Promise<{url: string, error: Object|null}>}
@@ -54,26 +46,25 @@ export const uploadAvatarToStorage = async (userId, file) => {
       throw new Error(validation.error);
     }
 
-    // Generate filename
-    const filename = generateAvatarFilename(userId);
-    const filePath = `avatars/${filename}`;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      throw new Error('Not authenticated - cannot upload avatar');
+    }
 
-    // Upload to Supabase Storage
-    const { data, error: uploadError } = await supabase.storage
-      .from('user-content')
-      .upload(filePath, file, { upsert: true });
+    const result = await uploadToR2({
+      file,
+      folder: 'avatars',
+      accessToken: session.access_token
+    });
 
-    if (uploadError) throw uploadError;
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to upload avatar');
+    }
 
-    // Get public URL
-    const { data: publicData } = supabase.storage
-      .from('user-content')
-      .getPublicUrl(filePath);
-
-    return { 
-      url: publicData?.publicUrl, 
-      path: filePath,
-      error: null 
+    return {
+      url: result.url,
+      path: result.key,
+      error: null
     };
   } catch (error) {
     console.error('Avatar upload error:', error);
@@ -135,6 +126,5 @@ export default {
   uploadAvatar,
   uploadAvatarToStorage,
   updateProfileAvatar,
-  validateAvatarFile,
-  generateAvatarFilename
+  validateAvatarFile
 };

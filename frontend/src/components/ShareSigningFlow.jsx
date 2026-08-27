@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, ChevronRight, ChevronDown, ChevronUp, CheckCircle, Clock, Lock, Fingerprint, QrCode, Download, AlertCircle, Users, TrendingUp, Shield, FileText, DollarSign, Printer, ArrowLeft } from 'lucide-react';
 import QRCode from 'qrcode';
 import { jsPDF } from 'jspdf';
-import { getSupabase, createNotification, createInvestmentNotification } from '../services/pitchingService';
+import { getSupabase, createNotification, createInvestmentNotification, getAllAccessibleBusinessProfiles } from '../services/pitchingService';
 import { walletTransactionService } from '../services/walletTransactionService';
 import { getLiveShareOffer } from '../services/pitchinValuationService';
 import { useIcanPrice } from '../hooks/useIcanPrice';
@@ -160,7 +160,7 @@ const DeadlineCountdown = ({ notificationTime, onExpired }) => {
   );
 };
 
-const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
+const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInvestmentSubmitted }) => {
   // Debug: Log what we received
   useEffect(() => {
     console.log('ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â ShareSigningFlow mounted with:');
@@ -254,6 +254,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
     shareOverview: true,
     walletSummary: true,
     walletCoins: true,
+    paymentSource: true,
     walletBreakdown: false,
     walletShareholders: false,
     paymentSummary: true,
@@ -299,7 +300,19 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
   const [icanAccountNumber, setIcanAccountNumber] = useState(null);
   const [icanAccountHolder, setIcanAccountHolder] = useState(null);
   const [walletTab, setWalletTab] = useState('wallet');
-  
+
+  // Which account pays for this investment: the investor's personal ICAN
+  // wallet, or a business wallet they operate (see pitchin_business_wallet_operator).
+  // Debited instantly either way -- this is the investor spending money they
+  // already control, not the multi-owner-approval business-to-business transfer flow.
+  const [paymentSourceType, setPaymentSourceType] = useState('personal');
+  const [paymentSourceBusinessProfileId, setPaymentSourceBusinessProfileId] = useState(null);
+  const [payerBusinessProfiles, setPayerBusinessProfiles] = useState([]);
+  const [loadingPayerProfiles, setLoadingPayerProfiles] = useState(false);
+  // The investment_agreements row created by create_investment_escrow, kept
+  // around so it can be handed to InvestmentProgressView once submitted.
+  const [createdAgreement, setCreatedAgreement] = useState(null);
+
   // Seller's business profile (for displaying correct creator/business info)
   const [sellerBusinessProfile, setSellerBusinessProfile] = useState(null);
   const [loadingSellerProfile, setLoadingSellerProfile] = useState(true);
@@ -322,6 +335,26 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
       setActiveDocumentPage(null);
     }
   }, [stage, activeDocumentPage]);
+
+  // Load the business profiles this investor can pay from (owned/co-owned/team
+  // member), each carrying .ican_wallet.ican_balance, for the payment-source picker.
+  useEffect(() => {
+    let cancelled = false;
+    const loadPayerProfiles = async () => {
+      if (!currentUser?.id) return;
+      setLoadingPayerProfiles(true);
+      try {
+        const profiles = await getAllAccessibleBusinessProfiles(currentUser.id, currentUser.email);
+        if (!cancelled) setPayerBusinessProfiles(profiles || []);
+      } catch (err) {
+        console.warn('Could not load payer business profiles:', err?.message);
+      } finally {
+        if (!cancelled) setLoadingPayerProfiles(false);
+      }
+    };
+    loadPayerProfiles();
+    return () => { cancelled = true; };
+  }, [currentUser?.id]);
 
   // Fallback mock shareholders (only if real shareholders not available)
   const mockShareholders = [
@@ -526,6 +559,15 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
   const sharesRequested = parseFloat(sharesAmount) || 0;
   const totalInvestmentUgx = sharePriceUgx != null ? sharesRequested * sharePriceUgx : 0;
   const totalInvestment = sharesRequested * sharePrice;
+
+  // Whichever account is currently selected as the payment source -- personal
+  // wallet, or one of the investor's own business wallets.
+  const selectedPayerBusinessProfile = paymentSourceType === 'business'
+    ? payerBusinessProfiles.find((p) => p.id === paymentSourceBusinessProfileId)
+    : null;
+  const effectivePayableBalance = paymentSourceType === 'business'
+    ? Number(selectedPayerBusinessProfile?.ican_wallet?.ican_balance) || 0
+    : walletBalance;
 
   const liveTotalShares = liveOffer?.totalShares ?? null;
   const liveSharesAvailable = liveOffer?.sharesAvailable ?? 0;
@@ -1429,6 +1471,10 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
       setError('Wallet PINs do not match');
       return;
     }
+    if (paymentSourceType === 'business' && !paymentSourceBusinessProfileId) {
+      setError('Please select a business account to pay from');
+      return;
+    }
 
     // Nothing may be sealed without a live share price AND a live ICAN market
     // price - the amounts below are all derived from those two figures.
@@ -1560,23 +1606,56 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
       console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Fiat Amount: ' + allowedCurrency + ' ' + totalInvestment.toFixed(2));
       console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ New balance: ' + (currentBalance - investmentInIcanCoins).toFixed(2) + ' ICAN coins');
       
-      // STEP 4: Update user ICAN wallet balance (DEDUCT coins)
-      const { data: updatedWallet, error: updateError } = await supabase
-        .from('ican_user_wallets')
-        .update({
-          ican_balance: currentBalance - investmentInIcanCoins,
-          total_spent: (parseFloat(walletData.total_spent) || 0) + investmentInIcanCoins,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', walletData.id)
-        .select();
-      
-      if (updateError) {
-        setError('Failed to update ICAN wallet balance: ' + updateError.message);
-        return;
+      // STEP 4/5/6: Check for an existing agreement first (retry scenario --
+      // if one already exists, the payment source was already debited and
+      // must not be charged again), otherwise atomically debit the chosen
+      // payment source and create the agreement via create_investment_escrow
+      // (see backend/INVESTMENT_ESCROW_PAYMENT_SOURCE_AND_EXPIRY.sql). This
+      // replaces the old direct wallet UPDATE + separate escrow ledger insert
+      // with one atomic, row-locked server-side operation that also sets the
+      // 3-day approval_deadline and records which account to refund if it expires.
+      const { data: existingAgreement } = await supabase
+        .from('investment_agreements')
+        .select('*')
+        .eq('escrow_id', investmentId)
+        .eq('investor_id', currentUser?.id)
+        .single();
+
+      let agreementId;
+      let agreementRecord;
+
+      if (existingAgreement?.id) {
+        agreementId = existingAgreement.id;
+        agreementRecord = existingAgreement;
+        console.log('Investment agreement already exists: ' + agreementId + ' (using existing from retry)');
+      } else {
+        const { data: escrowAgreement, error: escrowError } = await supabase.rpc('create_investment_escrow', {
+          p_pitch_id: pitch.id,
+          p_business_profile_id: sellerBusinessProfile?.id || pitch?.business_profile_id,
+          p_investment_type: investmentType || 'support',
+          p_shares_amount: sharesAmount || 0,
+          p_share_price: sharesAmount > 0 ? totalInvestment / sharesAmount : 0,
+          p_total_investment: totalInvestment,
+          p_escrow_id: investmentId,
+          p_device_id: 'web_platform',
+          p_device_location: 'in_app',
+          p_investor_pin_hash: walletPin.substring(0, 1) + '****' + walletPin.substring(walletPin.length - 1),
+          p_source_type: paymentSourceType,
+          p_source_business_profile_id: paymentSourceType === 'business' ? paymentSourceBusinessProfileId : null
+        });
+
+        if (escrowError) {
+          setError('Failed to create investment escrow: ' + escrowError.message);
+          return;
+        }
+
+        agreementRecord = escrowAgreement;
+        agreementId = agreementRecord?.id;
+        console.log('Investment escrow created: ' + agreementId);
       }
-      
-      console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ ICAN Wallet balance updated (COINS DEDUCTED)');
+
+      setCreatedAgreement(agreementRecord);
+      console.log('ICAN Wallet balance updated (COINS DEDUCTED)');
 
       // STEP 4B: RESERVE the shares on the live register now that the coins are
       // actually spent. investor_shares is the live share ledger, and
@@ -1614,85 +1693,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
         }
       }
 
-      // STEP 5: Create credit transaction in blockchain ledger (for record-keeping)
-      // This tracks the investment going to escrow
-      const { data: creditTxn, error: creditError } = await supabase
-        .from('ican_coin_blockchain_txs')
-        .insert([{
-          user_id: currentUser?.id,
-          tx_type: 'transfer',
-          ican_amount: investmentInIcanCoins,
-          price_per_coin: icanPriceUgx, // live ICAN market price (UGX per coin)
-          total_value_ugx: totalInvestmentUgx,
-          from_address: currentUser?.email,
-          to_address: 'escrow_pool',
-          status: 'completed'
-        }])
-        .select();
-      
-      if (creditError) {
-        console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Warning: Escrow ledger entry failed:', creditError);
-        // Don't fail the investment if this fails - the main transaction already succeeded
-      }
-      
-      console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ ICAN investment transaction completed:');
-      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ ICAN Amount: ' + investmentInIcanCoins.toFixed(2) + ' coins');
-      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Fiat Amount: ' + allowedCurrency + ' ' + totalInvestment.toFixed(2));
-      console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Transaction Reference: ' + transactionRef);
-      
-      // STEP 6A: Check if investment agreement already exists (for retry scenarios)
-      const { data: existingAgreement } = await supabase
-        .from('investment_agreements')
-        .select('id')
-        .eq('escrow_id', investmentId)
-        .eq('investor_id', currentUser?.id)
-        .single();
-      
-      let agreementId;
-      
-      if (existingAgreement?.id) {
-        // Agreement already exists, use it
-        agreementId = existingAgreement.id;
-        console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Investment agreement already exists: ' + agreementId + ' (using existing from retry)');
-      } else {
-        // Create new investment agreement
-        const { data: agreementData, error: agreementError } = await supabase
-          .from('investment_agreements')
-          .insert([{
-            pitch_id: pitch.id,
-            investor_id: currentUser?.id,
-            business_profile_id: sellerBusinessProfile?.id || pitch?.business_profile_id,
-            investment_type: investmentType || 'support',
-            shares_amount: sharesAmount || 0,
-            share_price: sharesAmount > 0 ? totalInvestment / sharesAmount : 0,
-            total_investment: totalInvestment,
-            status: 'signing',
-            escrow_id: investmentId,
-            device_id: 'web_platform',
-            device_location: 'in_app',
-            investor_pin_hash: walletPin.substring(0, 1) + '****' + walletPin.substring(walletPin.length - 1)
-          }])
-          .select()
-          .single();
-        
-        if (agreementError) {
-          console.error('Investment agreement insert failed (raw error object):', agreementError);
-          const details = [agreementError.message, agreementError.details, agreementError.hint, agreementError.code]
-            .filter(Boolean)
-            .join(' | ');
-          let fallback = 'Unknown error';
-          try {
-            const serialized = JSON.stringify(agreementError, Object.getOwnPropertyNames(agreementError));
-            if (serialized && serialized !== '{}') fallback = serialized;
-          } catch (_) { /* ignore serialization failures */ }
-          setError('Failed to create investment agreement: ' + (details || fallback));
-          return;
-        }
-        
-        agreementId = agreementData?.id;
-        console.log('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Investment agreement created: ' + agreementId);
-      }
-      
+      console.log('ICAN investment transaction completed:');
+      console.log('   - ICAN Amount: ' + investmentInIcanCoins.toFixed(2) + ' coins');
+      console.log('   - Fiat Amount: ' + allowedCurrency + ' ' + totalInvestment.toFixed(2));
+      console.log('   - Transaction Reference: ' + transactionRef);
+
       // STEP 6B: Create investor signature record with correct schema
       const investorSig = {
         agreement_id: agreementId,
@@ -2125,6 +2130,18 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
       console.log('   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Approval percent:', sealData.approvalPercent, '%');
       
       setStage(7); // Move to pending signatures
+
+      // Submission is done: shareholders have been notified and funds are in
+      // escrow. Land the investor directly on their live approval-progress
+      // screen (InvestmentProgressView, via the parent's onInvestmentSubmitted)
+      // instead of just closing this modal and hoping they find their way
+      // back -- there was previously no reliable path back to it.
+      alert('✅ Investment submitted! Shareholders have been notified and your funds are secured in escrow. You have 3 days to reach 60% shareholder approval, or it is refunded automatically.');
+      if (onInvestmentSubmitted && createdAgreement) {
+        onInvestmentSubmitted({ pitch, agreement: createdAgreement });
+      } else {
+        onClose();
+      }
     } catch (err) {
       setError('Failed to generate QR code: ' + err.message);
       console.error('QR code generation error:', err);
@@ -3225,6 +3242,80 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
               <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
                 <button
                   type="button"
+                  onClick={() => toggleFlowPanel('paymentSource')}
+                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
+                >
+                  <span className="font-semibold text-white">Pay From</span>
+                  {flowPanels.paymentSource ? (
+                    <ChevronUp className="w-5 h-5 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-slate-400" />
+                  )}
+                </button>
+
+                {flowPanels.paymentSource && (
+                  <div className="px-4 pb-4 space-y-3">
+                    <p className="text-xs text-slate-400">Choose which account this investment is deducted from.</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { setPaymentSourceType('personal'); setPaymentSourceBusinessProfileId(null); }}
+                        className={`px-3 py-2.5 rounded-lg border text-sm font-semibold transition ${
+                          paymentSourceType === 'personal'
+                            ? 'bg-blue-500/20 border-blue-400 text-blue-200'
+                            : 'bg-slate-800/60 border-slate-700 text-slate-300 hover:bg-slate-800'
+                        }`}
+                      >
+                        👤 Personal Wallet
+                      </button>
+                      <button
+                        type="button"
+                        disabled={payerBusinessProfiles.length === 0}
+                        onClick={() => setPaymentSourceType('business')}
+                        className={`px-3 py-2.5 rounded-lg border text-sm font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed ${
+                          paymentSourceType === 'business'
+                            ? 'bg-blue-500/20 border-blue-400 text-blue-200'
+                            : 'bg-slate-800/60 border-slate-700 text-slate-300 hover:bg-slate-800'
+                        }`}
+                      >
+                        🏢 Business Wallet
+                      </button>
+                    </div>
+
+                    {paymentSourceType === 'business' && (
+                      <div className="space-y-2">
+                        {loadingPayerProfiles ? (
+                          <p className="text-xs text-slate-400">Loading your business accounts...</p>
+                        ) : payerBusinessProfiles.length === 0 ? (
+                          <p className="text-xs text-slate-400">No business accounts you operate were found.</p>
+                        ) : (
+                          <select
+                            value={paymentSourceBusinessProfileId || ''}
+                            onChange={(e) => setPaymentSourceBusinessProfileId(e.target.value || null)}
+                            className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white"
+                          >
+                            <option value="">Select a business account...</option>
+                            {payerBusinessProfiles.map((profile) => (
+                              <option key={profile.id} value={profile.id}>
+                                {profile.business_name} — {Number(profile.ican_wallet?.ican_balance || 0).toFixed(2)} ICAN
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                        {selectedPayerBusinessProfile && (
+                          <p className="text-xs text-slate-400">
+                            Available: {effectivePayableBalance.toFixed(2)} ICAN
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
+                <button
+                  type="button"
                   onClick={() => toggleFlowPanel('walletBreakdown')}
                   className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
                 >
@@ -3527,13 +3618,15 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                     </div>
                     <div className="border-t border-slate-700 pt-3 flex items-center justify-between">
                       <span className="text-slate-400">ICAN Coins Remaining:</span>
-                      <span className={`text-xl font-semibold ${(walletBalance - totalInvestment) < 0 ? 'text-red-400' : 'text-green-400'}`}>
-                        ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ {(walletBalance - investmentInIcanCoins).toFixed(2)} coins
+                      <span className={`text-xl font-semibold ${(effectivePayableBalance - totalInvestment) < 0 ? 'text-red-400' : 'text-green-400'}`}>
+                        ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ {(effectivePayableBalance - investmentInIcanCoins).toFixed(2)} coins
                       </span>
                     </div>
                     <div className="border-t border-slate-700 pt-3 flex items-center justify-between">
                       <span className="text-slate-400">ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½ Payment Method:</span>
-                      <span className="text-sm font-semibold text-yellow-300">ICAN Coins (Premium Digital Currency)</span>
+                      <span className="text-sm font-semibold text-yellow-300">
+                        {paymentSourceType === 'business' ? `${selectedPayerBusinessProfile?.business_name || 'Business'} Wallet` : 'Personal Wallet'} (ICAN Coins)
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -3577,17 +3670,21 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
 
               <button
                 onClick={() => {
+                  if (paymentSourceType === 'business' && !paymentSourceBusinessProfileId) {
+                    alert('Please select a business account to pay from.');
+                    return;
+                  }
                   const investmentInCoins = investmentInIcanCoins;
-                  if (walletBalance < investmentInCoins) {
-                    alert(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Insufficient balance!\n\nYour wallet: ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ ${walletBalance.toFixed(2)} ICAN coins\nRequired: ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ ${investmentInCoins.toFixed(2)} ICAN coins\nShortfall: ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ ${(investmentInCoins - walletBalance).toFixed(2)}`);
+                  if (effectivePayableBalance < investmentInCoins) {
+                    alert(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Insufficient balance!\n\nYour wallet: ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ ${effectivePayableBalance.toFixed(2)} ICAN coins\nRequired: ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ ${investmentInCoins.toFixed(2)} ICAN coins\nShortfall: ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ ${(investmentInCoins - effectivePayableBalance).toFixed(2)}`);
                     return;
                   }
                   setStage(6);
                 }}
-                disabled={walletBalance < investmentInIcanCoins}
+                disabled={effectivePayableBalance < investmentInIcanCoins || (paymentSourceType === 'business' && !paymentSourceBusinessProfileId)}
                 className="w-full px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition"
               >
-                {walletBalance < investmentInIcanCoins ? `ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Insufficient Balance (ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ ${(investmentInIcanCoins - walletBalance).toFixed(2)} short)` : 'Authorize with PIN'}
+                {paymentSourceType === 'business' && !paymentSourceBusinessProfileId ? 'Select a business account' : effectivePayableBalance < investmentInIcanCoins ? `ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Insufficient Balance (ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ ${(investmentInIcanCoins - effectivePayableBalance).toFixed(2)} short)` : 'Authorize with PIN'}
               </button>
             </div>
           )}

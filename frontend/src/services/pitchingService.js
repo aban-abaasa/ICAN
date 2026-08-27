@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { getSupabaseClient } from '../lib/supabase/client';
+import { uploadToR2, resolveMediaValues, deleteFromR2, isR2Key, fromR2Value } from './r2StorageService';
 
 // Use the shared singleton client from client.js with lazy initialization
 let supabaseInstance = null;
@@ -470,8 +471,11 @@ export const getAllPitches = async (limit = 20, offset = 0) => {
     // 🎥 Filter and validate video URLs
     if (data && data.length > 0) {
       console.log(`🔍 DEBUG: Query returned ${data.length} pitches, now validating...`);
-      
-      const validPitches = data.filter((pitch, index) => {
+
+      // Resolve any r2:// keys to live presigned URLs before validating
+      const resolvedData = await resolveMediaValues(data, ['video_url', 'thumbnail_url']);
+
+      const validPitches = resolvedData.filter((pitch, index) => {
         console.log(`  Validating ${index + 1}. "${pitch.title}"`);
         
         if (!pitch.video_url) {
@@ -559,8 +563,8 @@ export const getUserPitches = async (userId) => {
     });
 
     console.log(`📌 Total pitches: ${pitches?.length}, User pitches: ${userPitches.length}`);
-    
-    return userPitches;
+
+    return resolveMediaValues(userPitches, ['video_url', 'thumbnail_url']);
   } catch (error) {
     console.error('Error fetching user pitches:', error);
     return [];
@@ -700,92 +704,113 @@ export const deletePitch = async (pitchId, userId = null) => {
 
     let storageDeletedCount = 0;
 
-    // Delete video file from storage if it exists (and is not a blob URL)
+    // Delete video file if it exists (and is not a blob URL)
     if (pitchData?.video_url && !pitchData.video_url.startsWith('blob:')) {
-      try {
-        // Extract file path from Supabase URL
-        // URL formats:
-        // - Signed: https://xyz.supabase.co/storage/v1/object/sign/pitches/UUID/timestamp_filename?token=...
-        // - Public: https://xyz.supabase.co/storage/v1/object/public/pitches/UUID/timestamp_filename
-        
-        let filePath = null;
-
-        // Try to extract from signed URL (with token)
-        if (pitchData.video_url.includes('?token=')) {
-          const urlWithoutToken = pitchData.video_url.split('?')[0];
-          const match = urlWithoutToken.match(/pitches\/(.+)$/);
-          if (match) {
-            filePath = match[1];
-          }
-        } 
-        // Try to extract from public URL
-        else if (pitchData.video_url.includes('/pitches/')) {
-          const match = pitchData.video_url.match(/\/pitches\/(.+)$/);
-          if (match) {
-            filePath = match[1];
-          }
-        }
-
-        if (filePath) {
-          console.log(`   🎥 Video file path: pitches/${filePath}`);
-          const { error: storageError } = await sb.storage
-            .from('pitches')
-            .remove([filePath]);
-
-          if (storageError) {
-            console.warn(`   ⚠️  Could not delete video from storage:`, storageError.message);
-            // Continue with database deletion even if storage deletion fails
-          } else {
-            console.log(`   ✅ Video file deleted from Supabase storage`);
-            storageDeletedCount++;
-          }
+      if (isR2Key(pitchData.video_url)) {
+        const { success, error } = await deleteFromR2({
+          key: fromR2Value(pitchData.video_url),
+          accessToken: session?.access_token
+        });
+        if (success) {
+          console.log(`   ✅ Video file deleted from R2`);
+          storageDeletedCount++;
         } else {
-          console.warn(`   ⚠️  Could not extract file path from URL: ${pitchData.video_url}`);
+          console.warn(`   ⚠️  Could not delete video from R2:`, error);
         }
-      } catch (storageErr) {
-        console.warn('⚠️  Error parsing video URL or deleting from storage:', storageErr.message);
-        // Continue with database deletion
+      } else {
+        try {
+          // Extract file path from legacy Supabase URL
+          // - Signed: https://xyz.supabase.co/storage/v1/object/sign/pitches/UUID/timestamp_filename?token=...
+          // - Public: https://xyz.supabase.co/storage/v1/object/public/pitches/UUID/timestamp_filename
+          let filePath = null;
+
+          if (pitchData.video_url.includes('?token=')) {
+            const urlWithoutToken = pitchData.video_url.split('?')[0];
+            const match = urlWithoutToken.match(/pitches\/(.+)$/);
+            if (match) {
+              filePath = match[1];
+            }
+          } else if (pitchData.video_url.includes('/pitches/')) {
+            const match = pitchData.video_url.match(/\/pitches\/(.+)$/);
+            if (match) {
+              filePath = match[1];
+            }
+          }
+
+          if (filePath) {
+            console.log(`   🎥 Video file path: pitches/${filePath}`);
+            const { error: storageError } = await sb.storage
+              .from('pitches')
+              .remove([filePath]);
+
+            if (storageError) {
+              console.warn(`   ⚠️  Could not delete video from storage:`, storageError.message);
+              // Continue with database deletion even if storage deletion fails
+            } else {
+              console.log(`   ✅ Video file deleted from Supabase storage`);
+              storageDeletedCount++;
+            }
+          } else {
+            console.warn(`   ⚠️  Could not extract file path from URL: ${pitchData.video_url}`);
+          }
+        } catch (storageErr) {
+          console.warn('⚠️  Error parsing video URL or deleting from storage:', storageErr.message);
+          // Continue with database deletion
+        }
       }
     } else if (pitchData?.video_url?.startsWith('blob:')) {
-      console.log(`   ℹ️  Video is a blob URL (not saved to Supabase) - skipping storage deletion`);
+      console.log(`   ℹ️  Video is a blob URL (not saved) - skipping storage deletion`);
     }
 
-    // Delete thumbnail from storage if it exists
+    // Delete thumbnail if it exists
     if (pitchData?.thumbnail_url && !pitchData.thumbnail_url.startsWith('blob:')) {
-      try {
-        let thumbPath = null;
-
-        if (pitchData.thumbnail_url.includes('?token=')) {
-          const urlWithoutToken = pitchData.thumbnail_url.split('?')[0];
-          const match = urlWithoutToken.match(/pitches\/(.+)$/);
-          if (match) {
-            thumbPath = match[1];
-          }
-        } else if (pitchData.thumbnail_url.includes('/pitches/')) {
-          const match = pitchData.thumbnail_url.match(/\/pitches\/(.+)$/);
-          if (match) {
-            thumbPath = match[1];
-          }
+      if (isR2Key(pitchData.thumbnail_url)) {
+        const { success, error } = await deleteFromR2({
+          key: fromR2Value(pitchData.thumbnail_url),
+          accessToken: session?.access_token
+        });
+        if (success) {
+          console.log(`   ✅ Thumbnail deleted from R2`);
+          storageDeletedCount++;
+        } else {
+          console.warn(`   ⚠️  Could not delete thumbnail from R2:`, error);
         }
+      } else {
+        try {
+          let thumbPath = null;
 
-        if (thumbPath) {
-          console.log(`   🖼️  Thumbnail file path: pitches/${thumbPath}`);
-          const { error: thumbError } = await sb.storage
-            .from('pitches')
-            .remove([thumbPath]);
-
-          if (thumbError) {
-            console.warn(`   ⚠️  Could not delete thumbnail from storage:`, thumbError.message);
-          } else {
-            console.log(`   ✅ Thumbnail deleted from Supabase storage`);
-            storageDeletedCount++;
+          if (pitchData.thumbnail_url.includes('?token=')) {
+            const urlWithoutToken = pitchData.thumbnail_url.split('?')[0];
+            const match = urlWithoutToken.match(/pitches\/(.+)$/);
+            if (match) {
+              thumbPath = match[1];
+            }
+          } else if (pitchData.thumbnail_url.includes('/pitches/')) {
+            const match = pitchData.thumbnail_url.match(/\/pitches\/(.+)$/);
+            if (match) {
+              thumbPath = match[1];
+            }
           }
+
+          if (thumbPath) {
+            console.log(`   🖼️  Thumbnail file path: pitches/${thumbPath}`);
+            const { error: thumbError } = await sb.storage
+              .from('pitches')
+              .remove([thumbPath]);
+
+            if (thumbError) {
+              console.warn(`   ⚠️  Could not delete thumbnail from storage:`, thumbError.message);
+            } else {
+              console.log(`   ✅ Thumbnail deleted from Supabase storage`);
+              storageDeletedCount++;
+            }
+          }
+        } catch (thumbErr) {
+          console.warn('⚠️  Error deleting thumbnail:', thumbErr.message);
         }
-      } catch (thumbErr) {
-        console.warn('⚠️  Error deleting thumbnail:', thumbErr.message);
       }
     } else if (pitchData?.thumbnail_url?.startsWith('blob:')) {
-      console.log(`   ℹ️  Thumbnail is a blob URL (not saved to Supabase) - skipping storage deletion`);
+      console.log(`   ℹ️  Thumbnail is a blob URL (not saved) - skipping storage deletion`);
     }
 
     // Delete pitch record from database
@@ -1615,12 +1640,12 @@ export const getUserNotifications = async (userId) => {
  * Upload Service
  */
 
-// Upload video to storage
+// Upload video to Cloudflare R2 storage
 export const uploadVideo = async (file, pitchId) => {
   try {
     const sb = getSupabase();
     if (!sb) {
-      const errorMsg = '❌ CRITICAL: Supabase not configured - videos CANNOT be saved. Configure .env.local with VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY';
+      const errorMsg = '❌ CRITICAL: Supabase not configured - cannot verify authentication for upload';
       console.error(errorMsg);
       return { success: false, error: errorMsg, url: null, isDemoMode: false };
     }
@@ -1628,146 +1653,38 @@ export const uploadVideo = async (file, pitchId) => {
     // Check authentication status
     const { data: { session } } = await sb.auth.getSession();
     if (!session) {
-      const errorMsg = '❌ CRITICAL: Not authenticated - cannot upload videos to Supabase. Please sign in first.';
+      const errorMsg = '❌ CRITICAL: Not authenticated - cannot upload videos. Please sign in first.';
       console.error(errorMsg);
       return { success: false, error: errorMsg, url: null, isDemoMode: false };
     }
 
     console.log(`📹 Uploading video for pitch ${pitchId}...`);
-    
-    // Generate filename if file doesn't have one (Blob objects don't have .name property)
-    const videoFileName = file.name || `pitch-video-${Date.now()}.webm`;
+
     const fileSizeMB = (file.size / 1024 / 1024).toFixed(2);
-    
-    console.log(`   File: ${videoFileName} (${fileSizeMB}MB)`);
+    console.log(`   File: ${file.name || 'unnamed'} (${fileSizeMB}MB)`);
     console.log(`   User: ${session.user.email}`);
-    
+
     // Warn if file is large (should be < 50MB for fast playback)
     if (file.size > 50 * 1024 * 1024) {
       console.warn(`⚠️  Video is ${fileSizeMB}MB - consider compressing to < 50MB for faster playback`);
       console.warn('   💡 Tip: Use HandBrake or FFmpeg to compress: ffmpeg -i input.webm -c:v libvp8 -crf 30 output.webm');
     }
 
-    const timestamp = Date.now();
-    const fileName = `${pitchId}/${timestamp}_${videoFileName}`;
-    
-    console.log(`   Uploading to: pitches/${fileName}`);
+    const result = await uploadToR2({
+      file,
+      folder: 'pitches',
+      accessToken: session.access_token
+    });
 
-    // Upload the video with retry logic
-    let uploadError = null;
-    let uploadData = null;
-    
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      console.log(`   Attempt ${attempt}/3...`);
-      
-      const { data, error } = await sb.storage
-        .from('pitches')
-        .upload(fileName, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (!error) {
-        uploadData = data;
-        break;
-      }
-      
-      uploadError = error;
-      console.warn(`   ⚠️  Attempt ${attempt} failed:`, error.message);
-      
-      // Don't retry on auth errors
-      if (error.message?.includes('Unauthorized') || error.message?.includes('JWT')) {
-        break;
-      }
-      
-      // Wait before retry (exponential backoff)
-      if (attempt < 3) {
-        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-      }
+    if (!result.success) {
+      console.error('❌ R2 upload FAILED - VIDEO NOT SAVED');
+      console.error('   Error:', result.error);
+      return { success: false, error: result.error || 'Upload failed', url: null };
     }
 
-    if (uploadError) {
-      console.error('❌ Storage upload FAILED - VIDEO NOT SAVED');
-      console.error('   Error:', uploadError.message);
-      console.error('   ');
-      console.error('   ⚠️  VIDEO WILL NOT PERSIST AFTER REFRESH');
-      console.error('   ');
-      console.error('   Detailed error analysis:');
-      
-      // Detailed error analysis
-      if (uploadError.message?.includes('row violates') || uploadError.message?.includes('RLS')) {
-        console.error('🔐 RLS POLICY ERROR');
-        console.error('   The bucket policies are not configured correctly');
-        console.error('   Fix:');
-        console.error('   1. Go to Supabase Dashboard');
-        console.error('   2. Storage → pitches → Policies tab');
-        console.error('   3. Check all 4 policies are enabled');
-        console.error('   4. If missing, run fix_pitches_storage_policies.sql again');
-      } else if (uploadError.message?.includes('Bucket not found')) {
-        console.error('🪣 BUCKET NOT FOUND');
-        console.error('   The "pitches" bucket does not exist');
-        console.error('   Create it: Supabase Storage → Create Bucket (name: pitches)');
-      } else if (uploadError.message?.includes('Unauthorized') || uploadError.message?.includes('403')) {
-        console.error('🔑 PERMISSION DENIED');
-        console.error('   Your user does not have upload permissions');
-        console.error('   Check: RLS policies and authentication');
-      } else if (uploadError.message?.includes('network') || uploadError.message?.includes('ERR')) {
-        console.error('🌐 NETWORK ERROR');
-        console.error('   Check your internet connection');
-      }
-      
-      // REJECT the upload instead of silently falling back
-      console.error('');
-      console.error('❌ REJECTING UPLOAD - Please fix the error above and try again');
-      return { success: false, error: uploadError.message || 'Upload failed', url: null };
-    }
+    console.log(`✅ Upload successful! Key: ${result.key}`);
 
-    if (!uploadData) {
-      console.error('❌ Upload returned no data - VIDEO NOT SAVED');
-      return { success: false, error: 'Upload returned no data', url: null };
-    }
-
-    console.log(`✅ Upload successful!`);
-    console.log(`   Path: ${uploadData.path}`);
-
-    // Get public URL (works with RLS policies allowing public SELECT)
-    const { data: urlData } = sb.storage
-      .from('pitches')
-      .getPublicUrl(fileName);
-
-    if (!urlData || !urlData.publicUrl) {
-      console.error('❌ Could not generate public URL - VIDEO NOT ACCESSIBLE');
-      return { success: false, error: 'Could not generate public URL', url: null };
-    }
-
-    let videoUrl = urlData.publicUrl;
-
-    // Also generate a signed URL as fallback (valid for 1 year)
-    // This bypasses RLS policies and works even if public access is blocked
-    try {
-      const oneDayInSeconds = 365 * 24 * 60 * 60; // 1 year
-      const { data: signedData, error: signError } = await sb.storage
-        .from('pitches')
-        .createSignedUrl(fileName, oneDayInSeconds);
-
-      if (signError) {
-        console.warn('⚠️  Could not create signed URL:', signError.message);
-      } else if (signedData?.signedUrl) {
-        console.log(`🔐 Signed URL: ${signedData.signedUrl.substring(0, 80)}...`);
-        // Use signed URL instead - it has better compatibility
-        videoUrl = signedData.signedUrl;
-      }
-    } catch (signErr) {
-      console.warn('⚠️  Error creating signed URL:', signErr.message);
-    }
-
-    // Log full URL details for debugging
-    console.log(`🔗 Video URL: ${videoUrl.substring(0, 80)}...`);
-    console.log(`   Format: ${videoUrl.includes('sign=') ? 'Signed URL' : 'Public URL'}`);
-    console.log(`   Bucket: pitches`);
-    console.log(`   Path: ${fileName}`);
-    
-    return { success: true, url: videoUrl, path: uploadData.path, isDemoMode: false };
+    return { success: true, url: result.url, path: result.key, isDemoMode: false };
   } catch (error) {
     console.error('❌ Unexpected error uploading video:', error);
     console.error('   VIDEO NOT SAVED - Please try again');
@@ -1775,7 +1692,7 @@ export const uploadVideo = async (file, pitchId) => {
   }
 };
 
-// Upload thumbnail
+// Upload thumbnail to Cloudflare R2 storage
 export const uploadThumbnail = async (file, pitchId) => {
   try {
     const sb = getSupabase();
@@ -1793,33 +1710,19 @@ export const uploadThumbnail = async (file, pitchId) => {
 
     console.log(`🖼️  Uploading thumbnail for pitch ${pitchId}...`);
 
-    // Generate filename if file doesn't have one
-    const thumbFileName = file.name || `thumbnail-${Date.now()}.jpg`;
-    const fileName = `thumbnails/${pitchId}/${Date.now()}_${thumbFileName}`;
-    
-    const { data, error } = await sb.storage
-      .from('pitches')
-      .upload(fileName, file, {
-        cacheControl: '3600',
-        upsert: false
-      });
+    const result = await uploadToR2({
+      file,
+      folder: 'pitches',
+      accessToken: session.access_token
+    });
 
-    if (error) {
-      console.error('❌ Thumbnail upload error:', error);
+    if (!result.success) {
+      console.error('❌ Thumbnail upload error:', result.error);
       console.log('   Falling back to local blob URL...');
       return { success: true, url: URL.createObjectURL(file), path: 'local', isDemoMode: true };
     }
 
-    const { data: urlData } = sb.storage
-      .from('pitches')
-      .getPublicUrl(fileName);
-
-    if (!urlData || !urlData.publicUrl) {
-      console.warn('⚠️  Could not generate public URL for thumbnail');
-      return { success: true, url: URL.createObjectURL(file), path: 'local', isDemoMode: true };
-    }
-
-    return { success: true, url: urlData.publicUrl, path: data.path, isDemoMode: false };
+    return { success: true, url: result.url, path: result.key, isDemoMode: false };
   } catch (error) {
     console.error('❌ Error uploading thumbnail:', error);
     console.log('   Falling back to local blob URL');
