@@ -3,20 +3,19 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "cd frontend && npm run build",
-    "dev": "cd frontend && npm run dev",
-    "preview": "cd frontend && npm run preview",
-    "backend": "node backend/server.js",
-    "start": "node backend/server.js",
+    "build": "cd ../frontend && npm run build",
+    "dev": "cd ../frontend && npm run dev",
+    "preview": "cd ../frontend && npm run preview",
+    "backend": "node server.js",
+    "backend:watch": "nodemon server.js",
+    "start": "node server.js",
+    "dev:all": "concurrently -n backend,frontend -c blue,green \"npm run backend\" \"npm run dev\"",
     "setup:business-members": "node setup-business-members.js",
     "setup:members:windows": ".\\setup-business-members.ps1",
     "setup:members:unix": "bash setup-business-members.sh",
     "migrate:co-owners-to-members": "node -e \"require('./setup-business-members.js')\" --migrate",
     "verify:business-members": "node -e \"console.log('✓ Setup verification required - run: npm run setup:business-members')\""
   },
-  "workspaces": [
-    "frontend"
-  ],
   "dependencies": {
     "@sendgrid/mail": "^8.1.6",
     "@supabase/supabase-js": "^2.91.0",
@@ -28,6 +27,7 @@
     "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "concurrently": "^9.1.0",
     "nodemon": "^3.0.2"
   }
 }
