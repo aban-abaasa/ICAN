@@ -40,6 +40,10 @@ const AgentDashboard = () => {
     currency: 'UGX', // Will update with local currency
     description: ''
   });
+  // 'ican' | 'biz' — explicit choice of which kind of account the customer
+  // gave the agent, replacing reliance on the agent remembering to type a
+  // "BIZ-" prefix themselves.
+  const [cashInAccountKind, setCashInAccountKind] = useState('ican');
 
   // Cash-Out Form
   const [cashOutForm, setCashOutForm] = useState({
@@ -48,6 +52,7 @@ const AgentDashboard = () => {
     currency: 'UGX', // Will update with local currency
     phoneNumber: ''
   });
+  const [cashOutAccountKind, setCashOutAccountKind] = useState('ican');
 
   // Float Top-Up Form
   const [topUpForm, setTopUpForm] = useState({
@@ -196,6 +201,19 @@ const AgentDashboard = () => {
   const isBusinessWalletAddress = (value) =>
     String(value || '').trim().toUpperCase().startsWith('BIZ-');
 
+  // The PitchIn business wallet address format is 'BIZ-ICAN-' + a uuid (see
+  // resolve_ican_business_wallet / ICAN_BUSINESS_WALLET_TRANSFERS.sql). If
+  // the agent selects "BIZ" and pastes just the code the customer read off
+  // their business wallet screen, fill the prefix back in rather than
+  // failing the lookup on a technicality.
+  const normalizeAccountIdForKind = (value, kind) => {
+    const trimmed = String(value || '').trim();
+    if (kind === 'biz' && trimmed && !trimmed.toUpperCase().startsWith('BIZ-')) {
+      return `BIZ-ICAN-${trimmed}`;
+    }
+    return trimmed;
+  };
+
   const notifyBusinessWalletRequiresIcanSend = (walletAddress) => {
     setNotification({
       type: 'error',
@@ -214,8 +232,9 @@ const AgentDashboard = () => {
     // Show confirmation modal instead of directly processing
     if (!showConfirmation) {
       try {
-        if (isBusinessWalletAddress(cashInForm.userAccountId)) {
-          notifyBusinessWalletRequiresIcanSend(cashInForm.userAccountId);
+        const userAccountId = normalizeAccountIdForKind(cashInForm.userAccountId, cashInAccountKind);
+        if (isBusinessWalletAddress(userAccountId)) {
+          notifyBusinessWalletRequiresIcanSend(userAccountId);
           return;
         }
 
@@ -223,21 +242,21 @@ const AgentDashboard = () => {
         const { data: userAccount, error: userError } = await agentService.supabase
           .from('user_accounts')
           .select('user_id, account_holder_name')
-          .eq('account_number', cashInForm.userAccountId)
+          .eq('account_number', userAccountId)
           .maybeSingle();
 
         if (userError || !userAccount) {
           setNotification({
             type: 'error',
             title: '❌ Customer Not Found',
-            message: `Account ${cashInForm.userAccountId} not found`
+            message: `Account ${userAccountId} not found`
           });
           return;
         }
 
         setConfirmationData({
           type: 'cashIn',
-          userAccountId: cashInForm.userAccountId,
+          userAccountId,
           customerName: userAccount.account_holder_name,
           amount: cashInForm.amount,
           currency: cashInForm.currency,
@@ -284,6 +303,7 @@ const AgentDashboard = () => {
           message: `Request created for ${amount} ${currency} to ${confirmationData.customerName}. User must confirm with their PIN to complete.`
         });
         setCashInForm({ userAccountId: '', amount: '', currency: localCurrency, description: '' });
+        setCashInAccountKind('ican');
         await refreshFloatBalances();
         await refreshRecentTransactions();
       } else {
@@ -312,9 +332,10 @@ const AgentDashboard = () => {
     // Show confirmation modal instead of directly processing
     if (!showConfirmation) {
       try {
-        if (isBusinessWalletAddress(cashOutForm.userAccountId)) {
+        const userAccountId = normalizeAccountIdForKind(cashOutForm.userAccountId, cashOutAccountKind);
+        if (isBusinessWalletAddress(userAccountId)) {
           const { data, error } = await agentService.supabase.rpc('resolve_ican_business_wallet', {
-            p_wallet_address: cashOutForm.userAccountId.trim(),
+            p_wallet_address: userAccountId,
           });
           const businessWallet = Array.isArray(data) ? data[0] : data;
 
@@ -322,7 +343,7 @@ const AgentDashboard = () => {
             setNotification({
               type: 'error',
               title: '❌ Business Wallet Not Found',
-              message: `Business wallet ${cashOutForm.userAccountId} not found or inactive`
+              message: `Business wallet ${userAccountId} not found or inactive`
             });
             return;
           }
@@ -342,14 +363,14 @@ const AgentDashboard = () => {
           setConfirmationData({
             type: 'cashOut',
             isBusinessIcan: true,
-            userAccountId: cashOutForm.userAccountId.trim(),
+            userAccountId,
             businessProfileId: businessWallet.business_profile_id,
             customerName: businessWallet.business_name || 'PitchIn Business',
             amount: localAmount,
             icanAmount,
             coinPrice,
             currency: cashOutForm.currency,
-            description: `ICAN business-wallet transfer from ${cashOutForm.userAccountId.trim()}`
+            description: `ICAN business-wallet transfer from ${userAccountId}`
           });
           setConfirmationAction('cashOut');
           setShowConfirmation(true);
@@ -360,21 +381,21 @@ const AgentDashboard = () => {
         const { data: userAccount, error: userError } = await agentService.supabase
           .from('user_accounts')
           .select('user_id, account_holder_name')
-          .eq('account_number', cashOutForm.userAccountId)
+          .eq('account_number', userAccountId)
           .maybeSingle();
 
         if (userError || !userAccount) {
           setNotification({
             type: 'error',
             title: '❌ Customer Not Found',
-            message: `Account ${cashOutForm.userAccountId} not found`
+            message: `Account ${userAccountId} not found`
           });
           return;
         }
 
         setConfirmationData({
           type: 'cashOut',
-          userAccountId: cashOutForm.userAccountId,
+          userAccountId,
           customerName: userAccount.account_holder_name,
           amount: cashOutForm.amount,
           currency: cashOutForm.currency
@@ -430,6 +451,7 @@ const AgentDashboard = () => {
             message: `${confirmationData.icanAmount.toFixed(4)} icaneracoin sent to ${confirmationData.customerName}. The business received ${Number(result.business_received || 0).toFixed(4)} icaneracoin after tithe.`
           });
           setCashOutForm({ userAccountId: '', amount: '', currency: localCurrency, phoneNumber: '' });
+          setCashOutAccountKind('ican');
         }
         return;
       }
@@ -1227,10 +1249,38 @@ const AgentDashboard = () => {
               
               <form onSubmit={handleCashIn} className="space-y-4">
                 <div>
-                  <label className="block text-gray-300 font-semibold mb-2">User Account ID</label>
+                  <label className="block text-gray-300 font-semibold mb-2">Account Type</label>
+                  <div className="flex gap-2">
+                    {[
+                      { key: 'ican', label: '👤 ICAN' },
+                      { key: 'biz', label: '🏢 BIZ' },
+                    ].map((opt) => (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => setCashInAccountKind(opt.key)}
+                        className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-all ${
+                          cashInAccountKind === opt.key
+                            ? 'bg-purple-600 border-purple-600 text-white'
+                            : 'bg-slate-700/50 border-slate-600 text-gray-300'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Cash-in only supports ICAN (personal or business) wallet accounts — a PitchIn BIZ wallet is topped up from the Send tab instead.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-gray-300 font-semibold mb-2">
+                    {cashInAccountKind === 'biz' ? 'PitchIn Business Wallet Code' : 'User Account Number'}
+                  </label>
                   <input
                     type="text"
-                    placeholder="e.g., ICAN-... or BIZ-..."
+                    placeholder={cashInAccountKind === 'biz' ? 'BIZ-ICAN-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' : '1002345678901234'}
                     value={cashInForm.userAccountId}
                     onChange={(e) => setCashInForm({...cashInForm, userAccountId: e.target.value})}
                     className="w-full bg-slate-700/50 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
@@ -1292,10 +1342,38 @@ const AgentDashboard = () => {
               
               <form onSubmit={handleCashOut} className="space-y-4">
                 <div>
-                  <label className="block text-gray-300 font-semibold mb-2">Customer Account Number</label>
+                  <label className="block text-gray-300 font-semibold mb-2">Account Type</label>
+                  <div className="flex gap-2">
+                    {[
+                      { key: 'ican', label: '👤 ICAN' },
+                      { key: 'biz', label: '🏢 BIZ' },
+                    ].map((opt) => (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => setCashOutAccountKind(opt.key)}
+                        className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-all ${
+                          cashOutAccountKind === opt.key
+                            ? 'bg-purple-600 border-purple-600 text-white'
+                            : 'bg-slate-700/50 border-slate-600 text-gray-300'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    ICAN = a personal or business wallet account number. BIZ = a PitchIn business wallet — cash is converted to icaneracoin at the current price.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-gray-300 font-semibold mb-2">
+                    {cashOutAccountKind === 'biz' ? 'PitchIn Business Wallet Code' : 'Customer Account Number'}
+                  </label>
                   <input
                     type="text"
-                    placeholder="e.g., ICAN-... or BIZ-..."
+                    placeholder={cashOutAccountKind === 'biz' ? 'BIZ-ICAN-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' : '1002345678901234'}
                     value={cashOutForm.userAccountId}
                     onChange={(e) => setCashOutForm({...cashOutForm, userAccountId: e.target.value})}
                     className="w-full bg-slate-700/50 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"

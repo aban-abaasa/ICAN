@@ -137,19 +137,71 @@ class WalletAccountService {
 
       this.supabase = getSupabaseClient();
 
-      // Check if user already has an account
+      const pinHash = hashPIN(pin);
+
+      // The signup trigger (handle_new_user in
+      // ACCOUNT_NUMBER_AND_PIN_RESET_SCOPING.sql) auto-creates a bare, active
+      // user_accounts row for every new user — with an account_number but no
+      // pin_hash — so this "Create Account" form's job is really to *finish*
+      // that row (name, phone, and a PIN verified via the emailed OTP in
+      // requestAccountEmailOtp/verifyAccountEmailOtp), not to insert a new
+      // one. Only reject as a duplicate once a PIN has actually been set —
+      // that's the real signal a personal account is already usable.
       const existingAccount = await this.checkUserAccount(userId);
       if (existingAccount) {
+        if (existingAccount.pin_hash) {
+          return {
+            success: false,
+            error: 'User already has an active wallet account',
+            account: existingAccount
+          };
+        }
+
+        const { data, error } = await this.supabase
+          .from('user_accounts')
+          .update({
+            account_holder_name: accountHolderName,
+            phone_number: phoneNumber,
+            email: email,
+            pin_hash: pinHash,
+            pin_created_at: new Date().toISOString(),
+            preferred_currency: preferredCurrency,
+            fingerprint_enabled: biometrics.fingerprintEnabled || false,
+            phone_pin_enabled: biometrics.phonePhoneEnabled || false,
+            biometric_enabled: (biometrics.fingerprintEnabled || biometrics.phonePhoneEnabled) || false,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingAccount.id)
+          .select()
+          .single();
+
+        if (error) {
+          console.error('❌ Error completing auto-created user account:', error);
+          return {
+            success: false,
+            error: error.message || 'Failed to set up wallet account'
+          };
+        }
+
+        console.log('✅ Wallet account set up successfully:', {
+          accountNumber: data.account_number,
+          userId: data.user_id,
+          accountHolder: data.account_holder_name
+        });
+
+        await this._ensureCurrencyWallets(userId);
+
         return {
-          success: false,
-          error: 'User already has an active wallet account',
-          account: existingAccount
+          success: true,
+          account: data,
+          message: 'Wallet account created successfully'
         };
       }
 
-      // Generate unique account number
+      // No row at all (shouldn't normally happen given the signup trigger,
+      // but keeps this working if that trigger is ever missing) — generate a
+      // fresh account number and insert.
       const accountNumber = this.generateAccountNumber('personal');
-      const pinHash = hashPIN(pin);
 
       // Create account
       const { data, error } = await this.supabase
@@ -199,30 +251,7 @@ class WalletAccountService {
         accountHolder: data.account_holder_name
       });
 
-      // Create wallet entries for each supported currency using backend function
-      // This bypasses RLS policies which block direct INSERT
-      const currencies = ['USD', 'UGX', 'KES'];
-      
-      for (const currency of currencies) {
-        try {
-          const { data: walletsData, error: walletError } = await this.supabase
-            .rpc('ensure_recipient_wallet_exists', {
-              p_user_id: userId,
-              p_curr: currency
-            });
-
-          const walletData = walletsData && walletsData.length > 0 ? walletsData[0] : null;
-
-          if (walletError) {
-            console.warn(`⚠️ Warning: Could not create wallet for ${currency}:`, walletError);
-            // Don't fail account creation if individual wallet creation fails
-          } else {
-            console.log(`✅ Wallet created for ${currency}:`, walletData);
-          }
-        } catch (error) {
-          console.warn(`⚠️ Error creating wallet for ${currency}:`, error);
-        }
-      }
+      await this._ensureCurrencyWallets(userId);
 
       return {
         success: true,
@@ -235,6 +264,38 @@ class WalletAccountService {
         success: false,
         error: error.message || 'An error occurred while creating wallet account'
       };
+    }
+  }
+
+  /**
+   * Create wallet entries for each supported currency using the backend
+   * function (bypasses RLS policies which block a direct client-side INSERT).
+   * Shared by both the "finish an auto-created bare account" and the
+   * "insert a brand new account" paths in createUserAccount().
+   * @param {string} userId - User ID
+   */
+  async _ensureCurrencyWallets(userId) {
+    const currencies = ['USD', 'UGX', 'KES'];
+
+    for (const currency of currencies) {
+      try {
+        const { data: walletsData, error: walletError } = await this.supabase
+          .rpc('ensure_recipient_wallet_exists', {
+            p_user_id: userId,
+            p_curr: currency
+          });
+
+        const walletData = walletsData && walletsData.length > 0 ? walletsData[0] : null;
+
+        if (walletError) {
+          console.warn(`⚠️ Warning: Could not create wallet for ${currency}:`, walletError);
+          // Don't fail account creation if individual wallet creation fails
+        } else {
+          console.log(`✅ Wallet created for ${currency}:`, walletData);
+        }
+      } catch (error) {
+        console.warn(`⚠️ Error creating wallet for ${currency}:`, error);
+      }
     }
   }
 
@@ -281,11 +342,23 @@ class WalletAccountService {
       }
 
       const account = await this.getUserAccount(userId);
-      
+
       if (!account) {
         return {
           success: false,
           error: 'Account not found'
+        };
+      }
+
+      // The signup trigger auto-creates the row before a PIN is ever set —
+      // treat that the same as "nothing to verify against" rather than
+      // falling through to the hash comparison below, which would always
+      // fail against a null pin_hash and count as a wrong attempt, locking
+      // an account whose owner never got the chance to set a PIN.
+      if (!account.pin_hash) {
+        return {
+          success: false,
+          error: 'PIN not set up yet. Finish creating your wallet account first.'
         };
       }
 

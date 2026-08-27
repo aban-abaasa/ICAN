@@ -82,6 +82,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   const [activeModal, setActiveModal] = useState(null); // 'send', 'receive', 'topup'
   const [sendForm, setSendForm] = useState({ recipient: '', amount: '', description: '' });
   const [sendMethod, setSendMethod] = useState('ican'); // 'ican' | 'mobile' | 'icaneracoin' — explicit choice, replaces the old recipient-string heuristic
+  const [recipientAccountKind, setRecipientAccountKind] = useState('ican'); // 'ican' | 'biz' — explicit choice, replaces relying on the sender remembering to type a "BIZ-" prefix themselves
   const [receiveForm, setReceiveForm] = useState({ amount: '', description: '' });
   const [topupForm, setTopupForm] = useState({ amount: '', paymentInput: '', method: null, detectedMethod: null });
   const [withdrawForm, setWithdrawForm] = useState({ method: '', phoneAccount: '', amount: '', bankName: '' });
@@ -1206,25 +1207,40 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   }, [activeTab, currentUserId]);
 
   // �💳 SEND MONEY HANDLER - Support both ICAN users and MOMO
+  // The PitchIn business wallet address format is 'BIZ-ICAN-' + a uuid
+  // (see resolve_ican_business_wallet / ICAN_BUSINESS_WALLET_TRANSFERS.sql).
+  // Business owners copy that whole string from BusinessProfileCard.jsx, but
+  // if a sender pastes only the code after 'BIZ-ICAN-' this fills the prefix
+  // back in rather than failing the lookup on a technicality.
+  const normalizeRecipientForKind = (value, kind) => {
+    const trimmed = String(value || '').trim();
+    if (kind === 'biz' && trimmed && !trimmed.toUpperCase().startsWith('BIZ-')) {
+      return `BIZ-ICAN-${trimmed}`;
+    }
+    return trimmed;
+  };
+
   const handleSendMoney = async (e) => {
     e.preventDefault();
     if (!sendForm.recipient || !sendForm.amount) {
       alert('Please fill in recipient and amount');
       return;
     }
-    
+
     setTransactionInProgress(true);
-    
+
     try {
       if (sendMethod === 'mobile') {
         // Explicit mobile money send — no more guessing from the string shape
         await handleSendViaMOMO(sendForm.recipient, sendForm.amount, sendForm.description);
       } else if (sendMethod === 'icaneracoin') {
         // Send icaneracoin (ICAN coin) — separate balance from local currency
-        await handleSendICANCoin(sendForm.recipient, sendForm.amount, sendForm.description);
+        const recipient = normalizeRecipientForKind(sendForm.recipient, recipientAccountKind);
+        await handleSendICANCoin(recipient, sendForm.amount, sendForm.description);
       } else {
         // Send to ICAN Wallet User (account number, phone, or email lookup)
-        await handleSendToICANUser(sendForm.recipient, sendForm.amount, sendForm.description);
+        const recipient = normalizeRecipientForKind(sendForm.recipient, recipientAccountKind);
+        await handleSendToICANUser(recipient, sendForm.amount, sendForm.description);
       }
     } catch (error) {
       console.error('❌ Send error:', error);
@@ -1235,9 +1251,10 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         error: error.message
       });
     }
-    
+
     setSendForm({ recipient: '', amount: '', description: '' });
     setSendMethod('ican');
+    setRecipientAccountKind('ican');
     setTransactionInProgress(false);
 
     // Auto close after 3 seconds
@@ -4347,22 +4364,43 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
         {/* 🎯 ACCOUNT INFO CARD - OR CREATE ACCOUNT PROMPT */}
         <div className="space-y-4">
-          {!userAccount ? (
-          // ✅ NO ACCOUNT - SHOW CREATE BUTTON
+          {!userAccount || !userAccount.pin_hash ? (
+          // ✅ NO ACCOUNT, OR the signup trigger already auto-created a bare
+          // row (account number assigned, no PIN yet) — either way the user
+          // still needs to go through this form's email-OTP-verified PIN
+          // setup before the account is actually usable.
           <div className="solid-card p-6" style={walletUi.containerCard}>
             <div className="flex flex-col items-center text-center space-y-4">
               <div className="p-4 bg-cyan-500/30 rounded-full">
                 <Wallet className="w-8 h-8 text-cyan-400" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-white mb-1">Create Your First Wallet Account</h3>
-                <p className="text-gray-300 text-sm">Set up your ICAN wallet to start sending, receiving, and managing money</p>
+                <h3 className="text-lg font-bold text-white mb-1">
+                  {userAccount ? 'Finish Setting Up Your Wallet' : 'Create Your First Wallet Account'}
+                </h3>
+                <p className="text-gray-300 text-sm">
+                  {userAccount
+                    ? 'Verify your email and set a PIN to activate your ICAN wallet'
+                    : 'Set up your ICAN wallet to start sending, receiving, and managing money'}
+                </p>
               </div>
               <button
-                onClick={() => setShowAccountCreation(true)}
+                onClick={() => {
+                  if (userAccount) {
+                    // Bare, auto-created row — carry over what's already on
+                    // file so the user isn't retyping their own email/name.
+                    setAccountCreationForm((prev) => ({
+                      ...prev,
+                      accountHolderName: userAccount.account_holder_name || prev.accountHolderName,
+                      phoneNumber: userAccount.phone_number || prev.phoneNumber,
+                      email: userAccount.email || userEmail || prev.email
+                    }));
+                  }
+                  setShowAccountCreation(true);
+                }}
                 className="w-full px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white font-bold rounded-lg transition-all border border-cyan-400 shadow-lg hover:shadow-cyan-500/50"
               >
-                ✨ Create Wallet Account
+                ✨ {userAccount ? 'Finish Wallet Setup' : 'Create Wallet Account'}
               </button>
             </div>
           </div>
@@ -5718,13 +5756,51 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 </p>
               </div>
 
+              {sendMethod !== 'mobile' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Recipient Type</label>
+                  <div className="flex gap-2">
+                    {[
+                      { key: 'ican', label: '👤 ICAN' },
+                      { key: 'biz', label: '🏢 BIZ' },
+                    ].map((opt) => (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => setRecipientAccountKind(opt.key)}
+                        className={`flex-1 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium border transition-all ${
+                          recipientAccountKind === opt.key
+                            ? 'bg-purple-600 border-purple-600 text-white'
+                            : 'bg-white/10 border-white/20 text-gray-300'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    ICAN = a personal or business wallet account number, phone, or email. BIZ = a PitchIn business wallet code (from that business's profile).
+                  </p>
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  {sendMethod === 'mobile' ? '📱 Recipient Phone Number' : '👤 Recipient (ICAN Account, Phone, or Email)'}
+                  {sendMethod === 'mobile'
+                    ? '📱 Recipient Phone Number'
+                    : recipientAccountKind === 'biz'
+                      ? '🏢 Recipient (PitchIn Business Wallet Code)'
+                      : '👤 Recipient (ICAN Account, Phone, or Email)'}
                 </label>
                 <input
                   type="text"
-                  placeholder={sendMethod === 'mobile' ? '+256701234567' : '1002345678901234 | +256701234567 | user@example.com'}
+                  placeholder={
+                    sendMethod === 'mobile'
+                      ? '+256701234567'
+                      : recipientAccountKind === 'biz'
+                        ? 'BIZ-ICAN-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+                        : '1002345678901234 | +256701234567 | user@example.com'
+                  }
                   value={sendForm.recipient}
                   onChange={(e) => setSendForm({ ...sendForm, recipient: e.target.value })}
                   className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none transition-all"
@@ -5732,7 +5808,9 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 <p className="text-xs text-gray-400 mt-1">
                   {sendMethod === 'mobile'
                     ? 'Sent directly to this mobile money number'
-                    : 'Send to ICAN account number, phone number, or email address'}
+                    : recipientAccountKind === 'biz'
+                      ? "Paste the business's wallet code — the 'BIZ-ICAN-' prefix is added automatically if you leave it out"
+                      : 'Send to ICAN account number, phone number, or email address'}
                 </p>
               </div>
 
@@ -5773,6 +5851,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     setActiveModal(null);
                     setSendForm({ recipient: '', amount: '', description: '' });
                     setSendMethod('ican');
+                    setRecipientAccountKind('ican');
                   }}
                   className="flex-1 px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-all"
                 >
