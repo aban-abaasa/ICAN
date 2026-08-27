@@ -48,7 +48,13 @@ CREATE OR REPLACE FUNCTION public.verify_account_creation_otp(
   p_code text
 )
 RETURNS TABLE (success boolean, message text)
-SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
+-- extensions is needed on the search_path because Supabase installs
+-- pgcrypto into the `extensions` schema by default, not `public` — a
+-- SECURITY DEFINER function only sees the schemas listed here, so an
+-- unqualified digest() call below would otherwise fail with
+-- "function digest(text, unknown) does not exist" (same fix as
+-- redeem_pin_reset_token in ACCOUNT_NUMBER_AND_PIN_RESET_SCOPING.sql).
+SECURITY DEFINER SET search_path = public, extensions LANGUAGE plpgsql AS $$
 DECLARE
   v_row record;
   v_code_hash text;

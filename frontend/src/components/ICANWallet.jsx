@@ -41,6 +41,7 @@ import universalTransactionService from '../services/universalTransactionService
 import { sendICAN as sendIcaneracoin, sendICANToBusiness } from '../services/icanWalletService';
 import { payIcanRequest, parseIcanPayCode, getIcanPaymentRequest } from '../services/icanPaymentRequestService';
 import { getSupabaseClient } from '../lib/supabase/client';
+import { getBackendUrl } from '../lib/backendUrl';
 import { getUserTrustGroups } from '../services/trustService';
 import { CountryService } from '../services/countryService';
 import { getAllAccessibleBusinessProfiles } from '../services/pitchingService';
@@ -2045,7 +2046,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       const accessToken = sessionData?.session?.access_token;
       if (!accessToken) throw new Error('Your session expired — please sign in again.');
 
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+      const backendUrl = getBackendUrl();
       const response = await fetch(`${backendUrl}/api/email/request-account-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
