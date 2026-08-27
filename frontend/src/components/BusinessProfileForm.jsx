@@ -9,7 +9,8 @@ import BusinessProfileDocuments from './BusinessProfileDocuments';
 const STRUCTURE_LIMITS = {
   sole_proprietorship: 1,
   organisation: 5,
-  enterprise: 20
+  enterprise: 20,
+  limited_by_guarantee: 5
 };
 
 const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfile, initialBusinessCategory = null }) => {
@@ -617,6 +618,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                     <option value="sole_proprietorship">Sole Proprietorship — 1 shareholder</option>
                     <option value="organisation">Organisation — up to 5 shareholders</option>
                     <option value="enterprise">Enterprise — up to 20 shareholders</option>
+                    <option value="limited_by_guarantee">Limited by Guarantee — up to 5 guarantors</option>
                   </select>
                   <p className="text-slate-400 text-xs mt-1">Choose the ownership and management level for this business.</p>
                 </div>

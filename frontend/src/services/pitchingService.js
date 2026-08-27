@@ -436,6 +436,7 @@ export const getAllPitches = async (limit = 20, offset = 0) => {
           business_name,
           description,
           business_type,
+          business_structure,
           founded_year,
           total_capital
         )

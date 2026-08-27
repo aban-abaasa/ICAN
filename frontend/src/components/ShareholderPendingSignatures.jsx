@@ -10,14 +10,14 @@ const ShareholderPendingSignatures = ({ onApprovalComplete }) => {
   const [slideProgress, setSlideProgress] = useState({});
 
   useEffect(() => {
-    loadPendingApprovals();
-    const interval = setInterval(loadPendingApprovals, 5000); // Refresh every 5 seconds
+    loadPendingApprovals(true);
+    const interval = setInterval(() => loadPendingApprovals(false), 5000); // Refresh every 5 seconds
     return () => clearInterval(interval);
   }, []);
 
-  const loadPendingApprovals = async () => {
+  const loadPendingApprovals = async (isInitialLoad = false) => {
     try {
-      setLoading(true);
+      if (isInitialLoad) setLoading(true);
       const { getSupabase } = await import('../services/pitchingService');
       const supabase = getSupabase();
       const { data: { user } } = await supabase.auth.getUser();
@@ -37,10 +37,13 @@ const ShareholderPendingSignatures = ({ onApprovalComplete }) => {
       let fetchError;
 
       // First attempt: Query by shareholder_id
+      // Scoped to investment approvals only (notification_type: 'investment_signed') so
+      // unrelated member-roster-edit approval requests never show up in this list.
       const { data: byId, error: errorById } = await supabase
         .from('shareholder_notifications')
         .select('*')
         .eq('shareholder_id', user.id)
+        .eq('notification_type', 'investment_signed')
         .is('read_at', null)
         .order('created_at', { ascending: false });
 
@@ -55,6 +58,7 @@ const ShareholderPendingSignatures = ({ onApprovalComplete }) => {
           .from('shareholder_notifications')
           .select('*')
           .eq('shareholder_email', user.email)
+          .eq('notification_type', 'investment_signed')
           .is('read_at', null)
           .is('shareholder_id', null)  // Only fetch if shareholder_id is NULL
           .order('created_at', { ascending: false });
@@ -100,20 +104,25 @@ const ShareholderPendingSignatures = ({ onApprovalComplete }) => {
 
       if (updateError) throw updateError;
 
-      // Get the count of shareholders who have approved (including current user)
+      // Get the count of shareholders who have approved (including current user).
+      // Scoped to investment approvals and excludes rejected notifications --
+      // handleReject also stamps read_at, so without these filters a rejection
+      // would be miscounted as an approval here.
       const { data: approvedApprovals, error: countError } = await supabase
         .from('shareholder_notifications')
         .select('id', { count: 'exact' })
         .eq('business_profile_id', notification.business_profile_id)
+        .eq('notification_type', 'investment_signed')
         .not('read_at', 'is', null);
 
       if (!countError && approvedApprovals) {
-        // Get total shareholder count  
+        // Get total shareholder count -- only real shareholders (active, with equity) count
         const { data: totalMembers } = await supabase
           .from('business_co_owners')
           .select('id', { count: 'exact' })
           .eq('business_profile_id', notification.business_profile_id)
-          .in('status', ['active', null]);
+          .in('status', ['active', null])
+          .gt('ownership_share', 0);
 
         const totalCount = totalMembers?.length || 1;
         // Count is already correct - includes current user's approval from the UPDATE

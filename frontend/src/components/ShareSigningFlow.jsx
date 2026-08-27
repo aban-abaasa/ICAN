@@ -418,11 +418,14 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
       }
 
       // Get total co-owners from business_co_owners table
-      const { data: coOwners, error: coOwnersError } = await supabase
+      // Only real shareholders count: active (or unset) status AND actual equity (> 0%)
+      const { data: coOwnersRaw, error: coOwnersError } = await supabase
         .from('business_co_owners')
-        .select('id')
+        .select('id, status, ownership_share')
         .eq('business_profile_id', businessProfileId)
-        .eq('status', 'active');
+        .gt('ownership_share', 0);
+
+      const coOwners = (coOwnersRaw || []).filter(o => !o.status || o.status === 'active');
 
       if (coOwnersError) {
         console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Error fetching co-owners:', coOwnersError?.message);
@@ -815,8 +818,12 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
           investor_check: `${o.user_id} === ${currentUser?.id} ? ${o.user_id === currentUser?.id}`
         })));
 
-        // Filter active co-owners only
-        const activeCoOwners = allCoOwners.filter(owner => !owner.status || owner.status === 'active');
+        // Filter to real shareholders only: active (or unset) status AND actual equity (> 0%).
+        // Co-owner rows with no ownership_share (e.g. a CTO/CFO added with no equity) are
+        // team members, not shareholders, and must not get an approval vote.
+        const activeCoOwners = allCoOwners.filter(owner =>
+          (!owner.status || owner.status === 'active') && parseFloat(owner.ownership_share) > 0
+        );
         console.log(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã‚Â  Fetched ${allCoOwners.length} total co-owners, ${activeCoOwners.length} are active`);
         
         // IMPORTANT: Exclude the investor (current user) from shareholders list
@@ -871,9 +878,15 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
         if (sellerCoOwners && sellerCoOwners.length > 0) {
           console.log('Found shareholders in seller business profile (pitch.business_profiles.business_co_owners)');
 
-          // Filter out the current investor
-          const otherCoOwners = sellerCoOwners.filter(owner => owner.user_id !== currentUser?.id && owner.owner_email !== currentUser?.email);
-          console.log(`Filtering: ${sellerCoOwners.length} total sellers shareholders -> ${otherCoOwners.length} after excluding investor`);
+          // Filter out the current investor, and keep only real shareholders:
+          // active (or unset) status AND actual equity (> 0%)
+          const otherCoOwners = sellerCoOwners.filter(owner =>
+            owner.user_id !== currentUser?.id &&
+            owner.owner_email !== currentUser?.email &&
+            (!owner.status || owner.status === 'active') &&
+            parseFloat(owner.ownership_share ?? owner.ownershipShare) > 0
+          );
+          console.log(`Filtering: ${sellerCoOwners.length} total sellers shareholders -> ${otherCoOwners.length} after excluding investor and non-shareholders`);
 
           if (otherCoOwners.length > 0) {
             const mappedShareholders = otherCoOwners.map(owner => ({
@@ -1082,7 +1095,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
         // Use limit(1) instead of single() to handle RLS edge cases
         const { data, error } = await supabase
           .from('business_profiles')
-          .select('id, user_id, business_name, description, business_type, founded_year, total_capital')
+          .select('id, user_id, business_name, description, business_type, business_structure, founded_year, total_capital')
           .eq('id', pitch.business_profile_id)
           .limit(1);
 
@@ -1649,7 +1662,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
             pitch_id: pitch.id,
             investor_id: currentUser?.id,
             business_profile_id: sellerBusinessProfile?.id || pitch?.business_profile_id,
-            investment_type: investmentType || 'buy',
+            investment_type: investmentType || 'support',
             shares_amount: sharesAmount || 0,
             share_price: sharesAmount > 0 ? totalInvestment / sharesAmount : 0,
             total_investment: totalInvestment,
@@ -1663,7 +1676,16 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
           .single();
         
         if (agreementError) {
-          setError('Failed to create investment agreement: ' + agreementError.message);
+          console.error('Investment agreement insert failed (raw error object):', agreementError);
+          const details = [agreementError.message, agreementError.details, agreementError.hint, agreementError.code]
+            .filter(Boolean)
+            .join(' | ');
+          let fallback = 'Unknown error';
+          try {
+            const serialized = JSON.stringify(agreementError, Object.getOwnPropertyNames(agreementError));
+            if (serialized && serialized !== '{}') fallback = serialized;
+          } catch (_) { /* ignore serialization failures */ }
+          setError('Failed to create investment agreement: ' + (details || fallback));
           return;
         }
         
@@ -1691,7 +1713,16 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
         .select();
       
       if (sigError) {
-        setError('Failed to record investor signature: ' + sigError.message);
+        console.error('Investor signature insert failed (raw error object):', sigError);
+        const details = [sigError.message, sigError.details, sigError.hint, sigError.code]
+          .filter(Boolean)
+          .join(' | ');
+        let fallback = 'Unknown error';
+        try {
+          const serialized = JSON.stringify(sigError, Object.getOwnPropertyNames(sigError));
+          if (serialized && serialized !== '{}') fallback = serialized;
+        } catch (_) { /* ignore serialization failures */ }
+        setError('Failed to record investor signature: ' + (details || fallback));
         return;
       }
       
@@ -1721,7 +1752,16 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
         .select();
       
       if (approvalError) {
-        setError('Failed to create approval record: ' + approvalError.message);
+        console.error('Investment approval record upsert failed (raw error object):', approvalError);
+        const details = [approvalError.message, approvalError.details, approvalError.hint, approvalError.code]
+          .filter(Boolean)
+          .join(' | ');
+        let fallback = 'Unknown error';
+        try {
+          const serialized = JSON.stringify(approvalError, Object.getOwnPropertyNames(approvalError));
+          if (serialized && serialized !== '{}') fallback = serialized;
+        } catch (_) { /* ignore serialization failures */ }
+        setError('Failed to create approval record: ' + (details || fallback));
         return;
       }
       
@@ -1771,8 +1811,9 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
       // STEP 9: Notify ALL MEMBERS (Business Owner + All Shareholders) of new investment
       console.log('\nÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â§ NOTIFYING ALL BUSINESS MEMBERS OF NEW INVESTMENT...');
       try {
-        const investmentTypeLabel = investmentType === 'buy' ? 'Equity Investment' : 
-                                    investmentType === 'partner' ? 'Partnership' : 'Support/Grant';
+        const investmentTypeLabel = investmentType === 'buy' ? 'Equity Investment' :
+                                    investmentType === 'partner' ? 'Partnership' :
+                                    investmentType === 'guarantor' ? 'Guarantor Agreement' : 'Support/Grant';
         
         const investorName = currentUser?.user_metadata?.full_name || currentUser?.email;
         const baseMessage = `${investorName} has signed and transferred ${allowedCurrency} ${totalInvestment.toFixed(2)} for your pitch "${pitch.title}". ${sharesAmount ? `Shares: ${sharesAmount}` : 'Partnership agreement'}.`;
@@ -2140,8 +2181,8 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                 shareholder_email: shareholderEmail,
                 shareholder_name: shareholderName,
                 notification_type: 'investment_signed',
-                notification_title: `ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Investment Approval Required`,
-                notification_message: `ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€šÃ‚Â° Investment approval needed: ${sellerBusinessProfile?.business_name} is requesting your approval for "${pitch.title}". Amount: ${allowedCurrency} ${totalInvestment.toFixed(2)}. Slide to approve - funds will be transferred when 60% of shareholders approve.`,
+                notification_title: `✅ Investment Approval Required`,
+                notification_message: `💰 Investment approval needed: ${sellerBusinessProfile?.business_name} is requesting your approval for "${pitch.title}". Amount: ${allowedCurrency} ${totalInvestment.toFixed(2)}. Slide to approve - funds will be transferred when 60% of shareholders approve.`,
                 investor_name: user?.user?.user_metadata?.full_name || user?.user?.email || 'Investor',
                 investor_email: user?.user?.email,
                 investment_amount: totalInvestment || 0,
@@ -2333,7 +2374,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
 
     addField('Pitch', pitch?.title);
     addField('Investor', currentUser?.user_metadata?.full_name || currentUser?.email);
-    addField('Investment Type', investmentType === 'buy' ? 'Equity Purchase' : investmentType === 'partner' ? 'Partnership Agreement' : 'Financial Support');
+    addField('Investment Type', investmentType === 'buy' ? 'Equity Purchase' : investmentType === 'partner' ? 'Partnership Agreement' : investmentType === 'guarantor' ? 'Guarantor Agreement' : 'Financial Support');
     if (sharesRequested > 0) {
       addField('Shares Purchased', `${sharesRequested.toLocaleString()} of ${liveTotalShares ? liveTotalShares.toLocaleString() : 'N/A'} live shares (${equityStakePercent.toFixed(2)}% equity)`);
       addField('Live Share Price', pricingReady ? `${allowedCurrency} ${sharePrice.toFixed(2)} per share (${sharePriceInIcan.toFixed(4)} icaneracoin)` : 'N/A');
@@ -2657,8 +2698,14 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                 {[
                   { id: 'buy', label: 'Buy Equity', desc: 'Own shares of the business' },
                   { id: 'partner', label: 'Partner', desc: 'Strategic partnership deal' },
-                  { id: 'support', label: 'Support', desc: 'Provide financial support' }
-                ].map((type) => (
+                  { id: 'support', label: 'Support', desc: 'Provide financial support' },
+                  { id: 'guarantor', label: 'Become a Guarantor', desc: "Guarantee this business's obligations" }
+                ]
+                  // Companies limited by guarantee have no share capital to sell, but can take on guarantors.
+                  .filter(type => type.id !== 'guarantor' || sellerBusinessProfile?.business_structure === 'limited_by_guarantee')
+                  // Sole proprietorships have a single owner and cannot sell equity/shares.
+                  .filter(type => type.id !== 'buy' || sellerBusinessProfile?.business_structure !== 'sole_proprietorship')
+                  .map((type) => (
                   <li key={type.id}>
                     <button
                       onClick={() => {
@@ -2894,7 +2941,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                   <div className="px-4 pb-4">
                     <ul className="rounded-lg border border-slate-700/70 bg-slate-900/40 divide-y divide-slate-700/60 overflow-hidden">
                       {[
-                        ['Investment Type', investmentType === 'buy' ? 'Equity Purchase' : investmentType === 'partner' ? 'Partnership Agreement' : 'Financial Support'],
+                        ['Investment Type', investmentType === 'buy' ? 'Equity Purchase' : investmentType === 'partner' ? 'Partnership Agreement' : investmentType === 'guarantor' ? 'Guarantor Agreement' : 'Financial Support'],
                         ['Business', sellerBusinessProfile?.business_name || pitch?.title || 'the business'],
                         ['Pitch', pitch?.title || 'N/A'],
                         ['Pitch Description', pitch?.description || 'No description provided'],
@@ -3025,7 +3072,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                       <>
                         <p className="text-blue-300 font-semibold">Partner/Supporter Investment</p>
                         <p className="text-blue-200 text-sm">
-                          You will support this pitch without equity stake. Investment type: {investmentType === 'partner' ? 'Partnership' : 'Support'}
+                          You will support this pitch without equity stake. Investment type: {investmentType === 'partner' ? 'Partnership' : investmentType === 'guarantor' ? 'Guarantor' : 'Support'}
                         </p>
                       </>
                     ) : (
@@ -3116,7 +3163,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                         })()],
                         ['Investor Name', currentUser?.user_metadata?.full_name || currentUser?.email || 'Unknown Investor'],
                         ['Investor Email', currentUser?.email || 'No email'],
-                        ['Investment Type', investmentType === 'buy' ? 'Equity Purchase' : investmentType === 'partner' ? 'Partnership' : 'Support'],
+                        ['Investment Type', investmentType === 'buy' ? 'Equity Purchase' : investmentType === 'partner' ? 'Partnership' : investmentType === 'guarantor' ? 'Guarantor' : 'Support'],
                         ['Amount', `${allowedCurrency} ${totalInvestment.toFixed(2)}`]
                       ].map(([label, value]) => (
                         <li key={label} className="px-3.5 py-3">
@@ -4328,7 +4375,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                           <div className="flex justify-between gap-3"><span className="font-semibold">Pitch:</span><span className="text-right">{pitch?.title}</span></div>
                           <div className="flex justify-between gap-3"><span className="font-semibold">Business:</span><span className="text-right">{sellerBusinessProfile?.business_name || pitch?.title || 'the business'}</span></div>
                           <div className="flex justify-between gap-3"><span className="font-semibold">Investor:</span><span className="text-right">{currentUser?.email}</span></div>
-                          <div className="flex justify-between gap-3"><span className="font-semibold">Investment Type:</span><span className="text-right">{investmentType === 'buy' ? 'Equity Purchase' : investmentType === 'partner' ? 'Partnership' : 'Support'}</span></div>
+                          <div className="flex justify-between gap-3"><span className="font-semibold">Investment Type:</span><span className="text-right">{investmentType === 'buy' ? 'Equity Purchase' : investmentType === 'partner' ? 'Partnership' : investmentType === 'guarantor' ? 'Guarantor' : 'Support'}</span></div>
                           <div className="flex justify-between gap-3"><span className="font-semibold">Shares:</span><span className="text-right">{sharesAmount || 'N/A'} {sharePrice ? `@ ${allowedCurrency}${sharePrice.toFixed(2)}/share` : ''}</span></div>
                           <div className="flex justify-between gap-3"><span className="font-semibold">Investment Amount:</span><span className="text-right">{allowedCurrency} {totalInvestment.toFixed(2)}</span></div>
                         </div>
@@ -4482,7 +4529,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose }) => {
                     </div>
                     <div className="flex justify-between">
                       <span className="font-semibold">Investment Type:</span>
-                      <span>{investmentType === 'buy' ? 'Equity Purchase' : investmentType === 'partner' ? 'Partnership' : 'Support'}</span>
+                      <span>{investmentType === 'buy' ? 'Equity Purchase' : investmentType === 'partner' ? 'Partnership' : investmentType === 'guarantor' ? 'Guarantor' : 'Support'}</span>
                     </div>
                     <div className="border-t pt-3">
                       <div className="flex justify-between">
