@@ -4393,11 +4393,43 @@ const CMMSModule = ({
       }
     };
 
-    const handleDeleteUser = (userId) => {
-      setCmmsData(prev => ({
-        ...prev,
-        users: prev.users.filter(u => u.id !== userId)
-      }));
+    const handleDeleteUser = async (targetUser) => {
+      if (!hasPermission('canDeleteUsers')) {
+        alert('❌ Only Admin users can remove employees.');
+        return;
+      }
+      if (targetUser.isCreator) {
+        alert('❌ The company creator cannot be removed.');
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `⚠️ REMOVE EMPLOYEE\n\n` +
+        `You are about to permanently remove:\n"${targetUser.name}" (${targetUser.email})\n\n` +
+        `This deletes their CMMS account completely, along with their attendance and role records. This cannot be undone.\n\n` +
+        `Continue?`
+      );
+      if (!confirmed) return;
+
+      try {
+        const { data, error: removeError } = await supabase.rpc('remove_cmms_employee', {
+          p_company_id: userCompanyId,
+          p_user_id: targetUser.id,
+          p_hard_delete: true
+        });
+
+        if (removeError) throw removeError;
+
+        setCmmsData(prev => ({
+          ...prev,
+          users: prev.users.filter(u => u.id !== targetUser.id)
+        }));
+
+        alert(`✅ ${data?.message || `${targetUser.name} was removed.`}`);
+      } catch (error) {
+        console.error('Error removing employee:', error);
+        alert(`❌ Failed to remove employee:\n${error.message}`);
+      }
     };
 
     const handleAssignAdmin = async (targetUser) => {
@@ -4903,13 +4935,15 @@ const CMMSModule = ({
                             👑 Creator Admin
                           </div>
                         )}
-                        <button
-                          onClick={() => handleDeleteUser(user.id)}
-                          className="px-3 py-1.5 bg-red-500 bg-opacity-30 text-red-300 rounded text-xs md:text-sm hover:bg-opacity-50 font-semibold transition-all"
-                          title="Remove this user from CMMS"
-                        >
-                          🗑️ Remove
-                        </button>
+                        {hasPermission('canDeleteUsers') && !user.isCreator && (
+                          <button
+                            onClick={() => handleDeleteUser(user)}
+                            className="px-3 py-1.5 bg-red-500 bg-opacity-30 text-red-300 rounded text-xs md:text-sm hover:bg-opacity-50 font-semibold transition-all"
+                            title="Permanently remove this user from CMMS"
+                          >
+                            🗑️ Remove
+                          </button>
+                        )}
                       </div>
                     </div>
 

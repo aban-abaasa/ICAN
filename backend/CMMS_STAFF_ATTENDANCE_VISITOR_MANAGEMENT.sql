@@ -23,7 +23,11 @@ CREATE TABLE IF NOT EXISTS public.cmms_staff_attendance (
   check_out_latitude NUMERIC(10, 8),
   check_out_longitude NUMERIC(11, 8),
   location_validated BOOLEAN DEFAULT false,
-  qr_code_token TEXT UNIQUE,
+  -- Not UNIQUE: this records which location QR was scanned. The same
+  -- location QR is a shared, reusable capability meant to be scanned by
+  -- every employee at that location, so many attendance rows legitimately
+  -- share the same token (see staff_check_in_with_qr).
+  qr_code_token TEXT,
   status TEXT DEFAULT 'checked_in', -- checked_in, checked_out
   notes TEXT,
   edited_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
