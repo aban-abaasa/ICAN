@@ -325,10 +325,22 @@ const applyThemeImmediate = (themeId) => {
         color: ${colors.text} !important;
         border-color: ${colors.border} !important;
       }
-      
+
       input:focus, textarea:focus, select:focus, button:focus {
         border-color: ${colors.primary} !important;
         --tw-ring-color: ${colors.primary} !important;
+      }
+
+      /* ==================== TRANSPARENT ICON BUTTONS ====================
+         Opt-out for icon-only buttons that must stay see-through regardless
+         of theme (e.g. the video overlay action rail in Pitchin) -- the
+         blanket "button" rule above otherwise paints every button with the
+         theme's surface color, which is wrong for controls layered on top
+         of video/image content. */
+      button.icon-btn-transparent {
+        background-color: transparent !important;
+        background-image: none !important;
+        border-color: transparent !important;
       }
       
       input::placeholder, textarea::placeholder {

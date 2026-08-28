@@ -28,13 +28,24 @@ const PitchDetailsForm = ({ isOpen, onClose, onSubmit, currentBusinessProfile })
     try {
       setIsSubmitting(true);
       setSubmitError('');
-      
+
+      // Completion above only reflects local form state — persist the
+      // documents to the database now so the publish-time check in
+      // Pitchin.jsx (which reads business_documents directly) actually
+      // finds them saved and marked complete.
+      if (businessDocRef.current?.saveDocuments) {
+        const saveResult = await businessDocRef.current.saveDocuments();
+        if (!saveResult?.success) {
+          throw new Error(saveResult?.error || 'Failed to save documents. Please try again.');
+        }
+      }
+
       console.log('📤 Submitting with business profile:', currentBusinessProfile);
-      
+
       if (!onSubmit) {
         throw new Error('onSubmit callback is not defined');
       }
-      
+
       await onSubmit(currentBusinessProfile);
       
       console.log('✅ Pitch submitted successfully');

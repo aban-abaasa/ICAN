@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import {
   FileText,
   Upload,
@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { getSupabase } from '../services/pitchingService';
 
-const BusinessProfileDocuments = ({ businessProfile, onDocumentsComplete, onCancel }) => {
+const BusinessProfileDocuments = forwardRef(({ businessProfile, onDocumentsComplete, onCancel }, ref) => {
   const [documents, setDocuments] = useState({
     businessPlan: { content: '', file: null, completed: false },
     financialProjection: { content: '', file: null, completed: false },
@@ -299,6 +299,12 @@ const BusinessProfileDocuments = ({ businessProfile, onDocumentsComplete, onCanc
 
     try {
       const supabase = getSupabase();
+      if (!supabase) {
+        throw new Error('Supabase connection not available!');
+      }
+      if (!businessProfile?.id) {
+        throw new Error('Business Profile ID is missing!');
+      }
 
       const documentData = {
         business_profile_id: businessProfile.id,
@@ -338,14 +344,6 @@ const BusinessProfileDocuments = ({ businessProfile, onDocumentsComplete, onCanc
       console.log('💾 Saving documents to database...');
       console.log('Business Profile ID:', businessProfile.id);
       console.log('Document data being saved:', documentData);
-
-      if (!businessProfile?.id) {
-        throw new Error('Business Profile ID is missing!');
-      }
-
-      if (!supabase) {
-        throw new Error('Supabase connection not available!');
-      }
 
       // Check if document exists - use regular select, not single()
       console.log('🔍 Checking if documents already exist...');
@@ -404,13 +402,29 @@ const BusinessProfileDocuments = ({ businessProfile, onDocumentsComplete, onCanc
       if (onDocumentsComplete) {
         onDocumentsComplete(documentData);
       }
+
+      return { success: true, data: documentData };
     } catch (error) {
       console.error('❌ Error saving documents:', error);
       setSaveStatus('❌ ERROR: ' + (error.message || 'Failed to save documents to database'));
+      return { success: false, error: error.message || 'Failed to save documents to database' };
     } finally {
       setLoading(false);
     }
   };
+
+  // Exposed so parent flows (PitchDetailsForm, PitchVideoRecorder) can force
+  // a real database save before letting a pitch publish — completion in this
+  // component's local state alone doesn't persist anything.
+  useImperativeHandle(ref, () => ({
+    saveDocuments,
+    isAllComplete: () =>
+      documents.businessPlan.completed &&
+      documents.financialProjection.completed &&
+      documents.valueProposition.completed &&
+      documents.mou.completed &&
+      documents.shareAllocation.completed
+  }));
 
   const completedCount = [
     documents.businessPlan.completed,
@@ -705,7 +719,7 @@ const BusinessProfileDocuments = ({ businessProfile, onDocumentsComplete, onCanc
           </div>
         </div>
       );
-    };
+});
 
 // Document Section Component
 const DocumentSection = ({
@@ -806,5 +820,7 @@ const FileUploadBox = ({ label, onChange }) => {
     </div>
   );
 };
+
+BusinessProfileDocuments.displayName = 'BusinessProfileDocuments';
 
 export default BusinessProfileDocuments;

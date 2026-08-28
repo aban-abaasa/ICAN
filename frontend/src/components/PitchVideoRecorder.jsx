@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, Mic, Square, Play, Upload, X, RotateCcw, Pin, Maximize, Minimize, Smartphone, Scissors, CheckCircle, SwitchCamera, Sparkles, ArrowLeft, Rocket } from 'lucide-react';
+import { Camera, Mic, Square, Play, Upload, X, RotateCcw, Pin, Maximize, Minimize, Smartphone, Scissors, CheckCircle, SwitchCamera, Sparkles, ArrowLeft, Rocket, MoreVertical } from 'lucide-react';
 import { uploadVideo, getSupabase } from '../services/pitchingService';
 import { VideoClipper } from './status/SimpleVideoClipper';
 import BusinessProfileDocuments from './BusinessProfileDocuments';
@@ -15,6 +15,7 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
   const fullscreenRef = useRef(null);
   const videoRefs = useRef({});
   const recordedChunksRef = useRef([]);
+  const documentsRef = useRef(null);
   
   const [isRecording, setIsRecording] = useState(false);
   const [recordedChunks, setRecordedChunks] = useState([]);
@@ -38,6 +39,7 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
   const [completedDocumentsData, setCompletedDocumentsData] = useState(null); // Store completed document data
   const [showPitchDetailsForm, setShowPitchDetailsForm] = useState(false); // Control PitchDetailsForm visibility
   const [workflowStatus, setWorkflowStatus] = useState(''); // Show workflow status messages
+  const [showMoreMenu, setShowMoreMenu] = useState(false); // Secondary controls dropdown (⋮)
   
   const [formData, setFormData] = useState({
     title: '',
@@ -838,55 +840,6 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                   />
                 </div>
 
-                {/* Video Controls Overlay in Preview - Bottom Center */}
-                <div className="absolute bottom-28 sm:bottom-32 left-0 right-0 flex items-center justify-center gap-2 sm:gap-4 z-40">
-                  {/* Play/Pause Button */}
-                  <button
-                    onClick={() => {
-                      const video = videoRefs.current['preview'];
-                      if (video) {
-                        if (video.paused) {
-                          video.play();
-                        } else {
-                          video.pause();
-                        }
-                      }
-                    }}
-                    className="w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-blue-500/80 hover:bg-blue-500 backdrop-blur-md border border-blue-400 sm:border-2 text-white flex items-center justify-center transition-all shadow-xl hover:scale-105"
-                    title="Play/Pause"
-                  >
-                    <Play className="w-5 h-5 sm:w-7 sm:h-7 fill-white" />
-                  </button>
-
-                  {/* Volume Toggle */}
-                  <button
-                    onClick={() => {
-                      const video = videoRefs.current['preview'];
-                      if (video) {
-                        video.muted = !video.muted;
-                      }
-                    }}
-                    className="w-9 h-9 sm:w-12 sm:h-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white flex items-center justify-center transition-all"
-                    title="Toggle Sound"
-                  >
-                    <span className="text-sm sm:text-lg">🔊</span>
-                  </button>
-
-                  {/* Fullscreen Toggle */}
-                  <button
-                    onClick={() => {
-                      const video = videoRefs.current['preview'];
-                      if (video?.requestFullscreen) {
-                        video.requestFullscreen();
-                      }
-                    }}
-                    className="w-9 h-9 sm:w-12 sm:h-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white flex items-center justify-center transition-all"
-                    title="Fullscreen"
-                  >
-                    <Maximize className="w-4 h-4 sm:w-5 sm:h-5" />
-                  </button>
-                </div>
-
                 {/* Preview Info Indicator */}
                 <div className="absolute top-3 left-3 sm:top-4 sm:left-4 bg-black/60 backdrop-blur-md px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-full border border-white/30 z-40">
                   <p className="text-white font-semibold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2">
@@ -897,92 +850,12 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
               </>
             )}
 
-            {/* Top Right camera mode label removed for cleaner mobile recording UI */}
-
-            {/* Top Left - Back Button - Preview Only */}
-            {previewUrl && onClose && (
-            <button
-              onClick={onClose}
-              className="absolute top-3 left-3 sm:top-4 sm:left-4 flex items-center justify-center sm:justify-start gap-2 w-9 h-9 sm:w-auto sm:h-auto sm:px-4 sm:py-2 rounded-lg bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white text-sm font-medium transition-all hover:scale-105 active:scale-95 z-40"
-              title="Close preview"
-            >
-              <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              <span className="hidden sm:inline">Back</span>
-            </button>
-            )}
-
-            {/* Left Side Controls - Vertical Stack */}
-            <div className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 sm:gap-3 z-40">
-              {/* Back Button */}
-              {onClose && (
-                <button
-                  onClick={onClose}
-                  className="flex items-center justify-center w-8 h-8 sm:w-12 sm:h-12 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 sm:border-2 text-white transition-all hover:scale-105 active:scale-95 shadow-lg"
-                  title="Back"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
-                </button>
-              )}
-
-              {/* Upload Video Button */}
-              <label className="w-8 h-8 sm:w-12 sm:h-12 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 sm:border-2 text-white flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-lg"
-                title="Upload Video">
-                <Upload className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
-                <input
-                  type="file"
-                  accept="video/*"
-                  onChange={handleUploadVideo}
-                  className="hidden"
-                />
-              </label>
-            </div>
-
-            {/* Right Side Controls - Vertical Stack */}
-            <div className="absolute right-3 sm:right-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 sm:gap-3 z-40">
-              {/* Camera Toggle Button */}
-              <button
-                onClick={toggleCamera}
-                disabled={!hasMultipleCameras}
-                title={hasMultipleCameras ? `Switch to ${facingMode === 'user' ? 'Back' : 'Front'} Camera` : 'Only one camera available'}
-                className={`w-8 h-8 sm:w-12 sm:h-12 rounded-full backdrop-blur-md border sm:border-2 flex items-center justify-center transition-all shadow-lg ${
-                  hasMultipleCameras
-                    ? 'bg-blue-500/20 hover:bg-blue-500/40 border-blue-400/50 text-blue-300 hover:scale-105 active:scale-95'
-                    : 'bg-white/5 border-white/10 text-white/30 cursor-not-allowed opacity-50'
-                }`}
-              >
-                <SwitchCamera className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
-              </button>
-
-              {/* Fullscreen Toggle */}
-              <button
-                onClick={toggleFullscreen}
-                className="w-8 h-8 sm:w-12 sm:h-12 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 sm:border-2 text-white flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow-lg"
-                title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-              >
-                {isFullscreen ? (
-                  <Minimize className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
-                ) : (
-                  <Maximize className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
-                )}
-              </button>
-
-              {/* Recording Timer - Vertical */}
-              {isRecording && (
-                <div className="flex flex-col items-center justify-center px-3 py-2 rounded-full bg-red-500/20 border border-red-500/50 backdrop-blur-md">
-                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                  <span className="text-white font-semibold text-xs mt-1 whitespace-nowrap">
-                    {Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, '0')}
-                  </span>
-                </div>
-              )}
-            </div>
-
             {/* Stop Recording Button - Center of Video (Works in all views: portrait, wide, fullscreen) */}
             {isRecording && (
             <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-40 flex items-center justify-center">
               {/* Subtle background glow for fullscreen visibility */}
               <div className="absolute w-20 h-20 rounded-full bg-red-500/20 blur-xl"></div>
-              
+
               {/* Stop Button */}
               <button
                 onClick={stopRecording}
@@ -994,54 +867,162 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
             </div>
             )}
 
-            {/* Preview Action Buttons - Right Side Vertical Stack (Only during Preview) */}
-            {previewUrl && (
-            <div className="absolute right-3 sm:right-4 bottom-20 sm:bottom-24 flex flex-col items-center gap-2 sm:gap-3 z-40">
-              {/* Retake Button */}
-              <button
-                onClick={() => setPreviewUrl(null)}
-                className="w-10 h-10 sm:w-auto sm:h-auto sm:px-5 sm:py-2 rounded-full bg-orange-500/90 hover:bg-orange-600 backdrop-blur-md border border-orange-400 sm:border-2 text-white font-semibold transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2 shadow-lg"
-                title="Record again"
-              >
-                <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="hidden sm:inline">Retake</span>
-              </button>
+            {/* Recording Timer */}
+            {isRecording && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/20 border border-red-500/50 backdrop-blur-md">
+                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                <span className="text-white font-semibold text-xs whitespace-nowrap">
+                  {Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, '0')}
+                </span>
+              </div>
+            )}
 
-              {/* Edit/Trim Button */}
-              <button
-                onClick={() => setShowVideoClipper(true)}
-                className="w-10 h-10 sm:w-auto sm:h-auto sm:px-5 sm:py-2 rounded-full bg-blue-500/90 hover:bg-blue-600 backdrop-blur-md border border-blue-400 sm:border-2 text-white font-semibold transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2 shadow-lg"
-                title="Trim or edit video"
-              >
-                <Scissors className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="hidden sm:inline">Edit</span>
-              </button>
+            {/* Unified Control Bar — Back, a "⋯" menu for secondary actions, and the
+                primary Next CTA. Everything used to live scattered across corners at
+                different heights, which is what let controls (including "Next")
+                overlap or land outside the visible viewport on some screen sizes. */}
+            {!isRecording && (
+              <div className="absolute bottom-3 sm:bottom-5 left-0 right-0 z-40 px-3 flex justify-center">
+                <div className="relative flex items-center gap-1.5 sm:gap-2 bg-black/50 backdrop-blur-md border border-white/15 rounded-full px-2 py-1.5 sm:px-2.5 sm:py-2 shadow-xl">
+                  {onClose && (
+                    <button
+                      onClick={onClose}
+                      title="Back"
+                      className="flex-shrink-0 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all hover:scale-105 active:scale-95"
+                    >
+                      <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+                    </button>
+                  )}
 
-              {/* Next Button */}
-              <button
-                onClick={() => {
-                  console.log('📝 Next clicked - Checking business profile...');
-                  
-                  // If no profile selected, show profile selector first
-                  if (!selectedProfile) {
-                    console.log('⚠️ No business profile selected - showing selector');
-                    setShowProfileModal(true);
-                    return;
-                  }
-                  
-                  // Profile is selected, open documents form
-                  console.log('✅ Opening documents form with profile:', selectedProfile.name);
-                  setWorkflowPhase('documents');
-                  setIsFormExpanded(true);
-                  setWorkflowStatus('📋 Complete all documents to publish');
-                }}
-                className="w-10 h-10 sm:w-auto sm:h-auto sm:px-5 sm:py-2 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 border border-green-400 sm:border-2 text-white font-bold transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2 shadow-xl"
-                title="Proceed to document upload"
-              >
-                <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="hidden sm:inline">Next</span>
-              </button>
-            </div>
+                  {!previewUrl && (
+                    <label
+                      title="Upload Video"
+                      className="flex-shrink-0 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95"
+                    >
+                      <Upload className="w-4 h-4 sm:w-5 sm:h-5" />
+                      <input
+                        type="file"
+                        accept="video/*"
+                        onChange={handleUploadVideo}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
+
+                  <button
+                    onClick={() => setShowMoreMenu(prev => !prev)}
+                    title="More options"
+                    className={`flex-shrink-0 w-9 h-9 sm:w-11 sm:h-11 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-95 ${
+                      showMoreMenu ? 'bg-white/25 text-white' : 'bg-white/10 hover:bg-white/20 text-white'
+                    }`}
+                  >
+                    <MoreVertical className="w-4 h-4 sm:w-5 sm:h-5" />
+                  </button>
+
+                  {previewUrl && (
+                    <button
+                      onClick={() => {
+                        console.log('📝 Next clicked - Checking business profile...');
+
+                        // If no profile selected, show profile selector first
+                        if (!selectedProfile) {
+                          console.log('⚠️ No business profile selected - showing selector');
+                          setShowProfileModal(true);
+                          return;
+                        }
+
+                        // Profile is selected, open documents form
+                        console.log('✅ Opening documents form with profile:', selectedProfile.name);
+                        setWorkflowPhase('documents');
+                        setIsFormExpanded(true);
+                        setWorkflowStatus('📋 Complete all documents to publish');
+                      }}
+                      title="Proceed to document upload"
+                      className="flex-shrink-0 h-9 sm:h-11 px-4 sm:px-5 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold transition-all hover:scale-105 active:scale-95 flex items-center gap-2 shadow-xl"
+                    >
+                      <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5" />
+                      <span>Next</span>
+                    </button>
+                  )}
+
+                  {/* Secondary actions dropdown */}
+                  {showMoreMenu && (
+                    <>
+                      {/* Click-outside-to-close backdrop */}
+                      <div
+                        className="fixed inset-0 z-40"
+                        onClick={() => setShowMoreMenu(false)}
+                      />
+                      <div className="absolute bottom-full left-0 mb-2 z-50 min-w-[190px] bg-slate-900/95 backdrop-blur-md border border-white/15 rounded-xl shadow-2xl overflow-hidden py-1">
+                        {!previewUrl && (
+                          <button
+                            onClick={() => { toggleCamera(); setShowMoreMenu(false); }}
+                            disabled={!hasMultipleCameras}
+                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
+                              hasMultipleCameras ? 'text-white hover:bg-white/10' : 'text-white/30 cursor-not-allowed'
+                            }`}
+                          >
+                            <SwitchCamera className="w-4 h-4 flex-shrink-0" />
+                            <span>Switch to {facingMode === 'user' ? 'Back' : 'Front'} Camera</span>
+                          </button>
+                        )}
+
+                        {previewUrl && (
+                          <>
+                            <button
+                              onClick={() => {
+                                const video = videoRefs.current['preview'];
+                                if (video) {
+                                  if (video.paused) video.play();
+                                  else video.pause();
+                                }
+                                setShowMoreMenu(false);
+                              }}
+                              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors"
+                            >
+                              <Play className="w-4 h-4 flex-shrink-0" />
+                              <span>Play / Pause</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                const video = videoRefs.current['preview'];
+                                if (video) video.muted = !video.muted;
+                                setShowMoreMenu(false);
+                              }}
+                              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors"
+                            >
+                              <span className="w-4 text-center flex-shrink-0">🔊</span>
+                              <span>Toggle Sound</span>
+                            </button>
+                            <button
+                              onClick={() => { setPreviewUrl(null); setShowMoreMenu(false); }}
+                              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors"
+                            >
+                              <RotateCcw className="w-4 h-4 flex-shrink-0" />
+                              <span>Retake</span>
+                            </button>
+                            <button
+                              onClick={() => { setShowVideoClipper(true); setShowMoreMenu(false); }}
+                              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors"
+                            >
+                              <Scissors className="w-4 h-4 flex-shrink-0" />
+                              <span>Trim / Edit</span>
+                            </button>
+                          </>
+                        )}
+
+                        <button
+                          onClick={() => { toggleFullscreen(); setShowMoreMenu(false); }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors"
+                        >
+                          {isFullscreen ? <Minimize className="w-4 h-4 flex-shrink-0" /> : <Maximize className="w-4 h-4 flex-shrink-0" />}
+                          <span>{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
             )}
           </div>
           </div>
@@ -1073,6 +1054,7 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
               <div className="p-6 max-h-[70vh] overflow-y-auto">
                 {selectedProfile ? (
                   <BusinessProfileDocuments
+                    ref={documentsRef}
                     businessProfile={selectedProfile}
                     onDocumentsComplete={(docs) => {
                       console.log('Documents completed:', docs);
@@ -1113,12 +1095,22 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                       setWorkflowStatus('❌ Please complete all document fields first');
                       return;
                     }
-                    
-                    // Close the modal first
-                    setIsFormExpanded(false);
-                    setWorkflowStatus('🚀 Uploading your pitch video...');
-                    
+
                     try {
+                      // Completion above is only local form state — persist to the
+                      // database now, since Pitchin.jsx's publish check reads
+                      // business_documents directly and requires it saved there.
+                      setWorkflowStatus('💾 Saving documents...');
+                      const saveResult = await documentsRef.current?.saveDocuments();
+                      if (!saveResult?.success) {
+                        setWorkflowStatus('❌ ' + (saveResult?.error || 'Failed to save documents. Please try again.'));
+                        return;
+                      }
+
+                      // Close the modal first
+                      setIsFormExpanded(false);
+                      setWorkflowStatus('🚀 Uploading your pitch video...');
+
                       // Use direct video submit with completed documents
                       await handleDirectVideoSubmit(completedDocumentsData, selectedProfile);
                     } catch (error) {
