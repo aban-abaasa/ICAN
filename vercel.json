@@ -3,6 +3,11 @@
   "devCommand": "npm --prefix frontend run dev",
   "installCommand": "npm --prefix frontend install",
   "outputDirectory": "frontend/dist",
+  "rewrites": [
+    { "source": "/status/:id", "destination": "/api/share-preview?type=status&id=:id" },
+    { "source": "/pitchin/:id", "destination": "/api/share-preview?type=pitch&id=:id" },
+    { "source": "/(.*)", "destination": "/" }
+  ],
   "crons": [
     {
       "path": "/api/report-automation?mode=daily",
