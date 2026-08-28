@@ -97,9 +97,11 @@ const PitchinPreview = ({ onGetStarted, authId = null }) => {
                         poster={pitch.thumbnail_url || undefined}
                         className="w-full h-full object-cover"
                         controls
+                        autoPlay
                         muted
+                        loop
                         playsInline
-                        preload="none"
+                        preload="auto"
                         crossOrigin="anonymous"
                         onError={() => setVideoErrors((prev) => ({ ...prev, [pitch.id]: true }))}
                       />

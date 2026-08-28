@@ -102,6 +102,11 @@ export const MyStatusSummary = ({ userId, onStatusClick }) => {
               ) : status.media_type === 'video' ? (
                 <video
                   src={status.media_url}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  preload="auto"
                   className="w-full h-full object-cover group-hover:brightness-75 transition-all"
                 />
               ) : (

@@ -105,6 +105,11 @@ export const StatusFeed = () => {
                       <>
                         <video
                           src={status.media_url}
+                          autoPlay
+                          muted
+                          loop
+                          playsInline
+                          preload="auto"
                           className="w-full h-full object-cover group-hover:brightness-75 transition-all"
                         />
                         {status.caption && (
@@ -229,6 +234,11 @@ export const StatusFeed = () => {
                       <>
                         <video
                           src={status.media_url}
+                          autoPlay
+                          muted
+                          loop
+                          playsInline
+                          preload="auto"
                           className="w-full h-full object-cover group-hover:brightness-75 transition-all"
                         />
                         {status.caption && (
