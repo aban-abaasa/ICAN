@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Heart, Share2, Send, MessageCircle, AlertCircle, Loader, Check } from 'lucide-react';
+import { X, Heart, Share2, Send, MessageCircle, AlertCircle, AlertTriangle, Loader, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { AuthPage } from './auth';
 import { getStatusById, incrementStatusView } from '../services/statusService';
@@ -31,12 +31,14 @@ const PublicStatusViewer = ({ statusId }) => {
   const [messageText, setMessageText] = useState('');
   const [sending, setSending] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [mediaBroken, setMediaBroken] = useState(false);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       setLoading(true);
+      setMediaBroken(false);
       const { status: data, expired: isExpired } = await getStatusById(statusId);
       if (cancelled) return;
       if (!data) {
@@ -142,10 +144,32 @@ const PublicStatusViewer = ({ statusId }) => {
   return (
     <div className="fixed inset-0 bg-black z-50 flex items-center justify-center">
       <div className="relative w-full h-full flex items-center justify-center">
-        {status.media_type === 'image' ? (
-          <img src={status.media_url} alt="Update" className="w-full h-full object-contain" />
+        {mediaBroken && (status.media_type === 'image' || status.media_type === 'video') ? (
+          <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-slate-900">
+            <AlertTriangle className="w-8 h-8 text-white/40" />
+            <span className="text-sm text-white/40">Preview unavailable</span>
+          </div>
+        ) : status.media_type === 'image' ? (
+          <img
+            src={status.media_url}
+            alt="Update"
+            className="w-full h-full object-contain"
+            onError={() => {
+              console.error('Failed to load shared status image:', status.media_url);
+              setMediaBroken(true);
+            }}
+          />
         ) : status.media_type === 'video' ? (
-          <video src={status.media_url} autoPlay controls className="w-full h-full object-contain" />
+          <video
+            src={status.media_url}
+            autoPlay
+            controls
+            className="w-full h-full object-contain"
+            onError={() => {
+              console.error('Failed to load shared status video:', status.media_url);
+              setMediaBroken(true);
+            }}
+          />
         ) : (
           <div style={{ backgroundColor: status.background_color || '#6366f1' }} className="w-full h-full flex items-center justify-center p-8">
             <p className="text-4xl font-bold text-white text-center max-w-2xl">{status.caption}</p>

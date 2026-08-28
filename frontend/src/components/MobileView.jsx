@@ -992,6 +992,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [sharedContent, setSharedContent] = useState(null); // Store shared content from external apps
   const [userStatuses, setUserStatuses] = useState([]);
   const [loadingStatuses, setLoadingStatuses] = useState(false);
+  const [brokenStatusMediaIds, setBrokenStatusMediaIds] = useState(() => new Set());
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [showAvatarView, setShowAvatarView] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
@@ -6853,24 +6854,50 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             {/* Horizontal Scrolling Updates */}
             <div className="overflow-x-auto pb-4 -mr-4 pr-4 scrollbar-hide pt-10">
               <div className="flex gap-3 min-w-min">
-                {userStatuses.map(status => (
+                {userStatuses.map(status => {
+                  // media_type should be 'image'/'video', but fall back to sniffing
+                  // media_url's extension so a mismatched/missing value still renders
+                  // the real thumbnail here instead of silently showing an empty card.
+                  const normalizedType = (status.media_type || '').toLowerCase().trim();
+                  const effectiveType = ['image', 'video'].includes(normalizedType)
+                    ? normalizedType
+                    : status.media_url
+                      ? (/\.(mp4|mov|webm|m4v)(\?|$)/i.test(status.media_url) ? 'video' : 'image')
+                      : 'text';
+                  return (
                   <div
                     key={status.id}
                     onClick={openStatusViewer}
                     className="group relative rounded-2xl overflow-hidden cursor-pointer w-56 h-32 bg-black flex-shrink-0 hover:scale-105 transition-transform duration-300 border border-white/10"
                   >
                     {/* Update Content */}
-                    {status.media_type === 'image' ? (
+                    {(effectiveType === 'image' || effectiveType === 'video') && brokenStatusMediaIds.has(status.id) ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 bg-slate-800">
+                        <AlertTriangle className="w-5 h-5 text-white/50" />
+                        <span className="text-[10px] text-white/50">Preview unavailable</span>
+                      </div>
+                    ) : effectiveType === 'image' ? (
                       <img
                         src={status.media_url}
                         alt="Update"
                         className="w-full h-full object-cover group-hover:brightness-75 transition-all"
+                        onError={() => {
+                          console.error('Failed to load status image preview:', status.media_url);
+                          setBrokenStatusMediaIds(prev => new Set(prev).add(status.id));
+                        }}
                       />
-                    ) : status.media_type === 'video' ? (
+                    ) : effectiveType === 'video' ? (
                       <>
                         <video
                           src={status.media_url}
+                          muted
+                          playsInline
+                          preload="metadata"
                           className="w-full h-full object-cover group-hover:brightness-75 transition-all"
+                          onError={() => {
+                            console.error('Failed to load status video preview:', status.media_url);
+                            setBrokenStatusMediaIds(prev => new Set(prev).add(status.id));
+                          }}
                         />
                         <div className="absolute inset-0 flex items-center justify-center bg-black/20">
                           <Play className="w-6 h-6 text-white/80" />
@@ -6916,7 +6943,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       </span>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 

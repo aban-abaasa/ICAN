@@ -6,7 +6,7 @@
 
 import { supabase } from '../lib/supabase';
 import { calculateFileHash, registerStatusOnBlockchain } from './blockchainService';
-import { uploadToR2, resolveMediaValues, deleteFromR2, isR2Key, fromR2Value } from './r2StorageService';
+import { resolveMediaValues, deleteFromR2, isR2Key, fromR2Value } from './r2StorageService';
 
 
 /**
@@ -54,19 +54,29 @@ export const uploadStatusMedia = async (userId, file, options = {}) => {
       throw new Error('Not authenticated - cannot upload status media');
     }
 
-    const result = await uploadToR2({
-      file,
-      folder: 'statuses',
-      accessToken: session.access_token
-    });
+    // Upload directly to the private 'user-content' Supabase Storage bucket
+    const fileExt = (file.name?.split('.').pop() || 'bin').toLowerCase();
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).slice(2, 8);
+    const filePath = `statuses/${userId}/${timestamp}-${random}.${fileExt}`;
 
-    if (!result.success) {
-      throw new Error(result.error || 'Failed to upload status media');
-    }
+    const { error: uploadError } = await supabase.storage
+      .from('user-content')
+      .upload(filePath, file, { upsert: false, contentType: file.type });
+
+    if (uploadError) throw uploadError;
+
+    // Bucket is private — return a signed URL for immediate use; the viewing
+    // path (refreshStatusMediaUrls) re-signs it on every fetch anyway.
+    const { data: signedData, error: signError } = await supabase.storage
+      .from('user-content')
+      .createSignedUrl(filePath, 3600);
+
+    if (signError) throw signError;
 
     return {
-      url: result.url,
-      path: result.key,
+      url: signedData.signedUrl,
+      path: filePath,
       fileHash,
       error: null
     };
@@ -115,9 +125,9 @@ export const createStatus = async (userId, statusData) => {
       return { status: null, error: new Error(errorMsg) };
     }
 
-    // VALIDATION: Ensure URL is a valid absolute URL or an r2:// storage key
-    if (media_url && !media_url.startsWith('http') && !isR2Key(media_url)) {
-      const errorMsg = '❌ ERROR: Invalid media URL. Must be a complete URL starting with https:// or an r2:// storage key';
+    // VALIDATION: Ensure URL is from Supabase or is a valid absolute URL
+    if (media_url && !media_url.startsWith('http')) {
+      const errorMsg = '❌ ERROR: Invalid media URL. Must be a complete Supabase URL starting with https://';
       console.error(errorMsg);
       console.error('Received URL:', media_url);
       return { status: null, error: new Error(errorMsg) };
