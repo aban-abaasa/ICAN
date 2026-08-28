@@ -72,11 +72,19 @@ router.post('/presign-get-batch', async (req, res) => {
 
     const uniqueKeys = [...new Set(keys.filter(Boolean))];
     const urls = {};
-    await Promise.all(
-      uniqueKeys.map(async (key) => {
-        urls[key] = await r2.getDownloadUrl({ key });
-      })
+    // Promise.all would let one key's signing error reject the whole
+    // batch, leaving every other (otherwise fine) key unresolved too --
+    // allSettled keeps one bad/slow key from blanking the rest.
+    const results = await Promise.allSettled(
+      uniqueKeys.map((key) => r2.getDownloadUrl({ key }))
     );
+    results.forEach((result, i) => {
+      if (result.status === 'fulfilled') {
+        urls[uniqueKeys[i]] = result.value;
+      } else {
+        console.error(`Error signing download URL for key ${uniqueKeys[i]}:`, result.reason);
+      }
+    });
 
     return res.json({ success: true, urls });
   } catch (error) {

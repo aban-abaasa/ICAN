@@ -6858,12 +6858,17 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   // media_type should be 'image'/'video', but fall back to sniffing
                   // media_url's extension so a mismatched/missing value still renders
                   // the real thumbnail here instead of silently showing an empty card.
+                  // A row can also claim media_type: 'image'/'video' while media_url
+                  // itself is empty (a failed/partial save) -- without the hasMediaUrl
+                  // guard that renders <img src={undefined}>, which shows nothing and
+                  // never fires onError, so the card looks blank with no way to tell why.
                   const normalizedType = (status.media_type || '').toLowerCase().trim();
-                  const effectiveType = ['image', 'video'].includes(normalizedType)
-                    ? normalizedType
-                    : status.media_url
-                      ? (/\.(mp4|mov|webm|m4v)(\?|$)/i.test(status.media_url) ? 'video' : 'image')
-                      : 'text';
+                  const hasMediaUrl = Boolean(status.media_url && String(status.media_url).trim());
+                  const effectiveType = hasMediaUrl
+                    ? (['image', 'video'].includes(normalizedType)
+                        ? normalizedType
+                        : (/\.(mp4|mov|webm|m4v)(\?|$)/i.test(status.media_url) ? 'video' : 'image'))
+                    : 'text';
                   return (
                   <div
                     key={status.id}

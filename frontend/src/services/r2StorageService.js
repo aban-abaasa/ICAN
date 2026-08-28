@@ -86,22 +86,32 @@ export const resolveMediaValues = async (rows, fields) => {
 
   if (keys.size === 0) return rows;
 
+  // This batch call runs on first paint alongside a burst of other
+  // startup requests (auth, dashboard, wallet, feed), so a single
+  // transient failure/timeout here is common -- without a retry, an
+  // r2:// key that loses that race is stuck unresolved (raw "r2://..."
+  // as an <img>/<video> src, which can't load) until something later
+  // re-fetches the same rows, e.g. opening the full Updates page.
   let urls = {};
-  try {
-    const backendUrl = getBackendUrl();
-    const res = await fetch(`${backendUrl}/api/storage/presign-get-batch`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ keys: [...keys] }),
-    });
-    const data = await res.json();
-    if (res.ok && data?.success) {
-      urls = data.urls || {};
-    } else {
-      console.warn('Could not resolve R2 media URLs:', data?.error);
+  const backendUrl = getBackendUrl();
+  const attempts = 3;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const res = await fetch(`${backendUrl}/api/storage/presign-get-batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keys: [...keys] }),
+      });
+      const data = await res.json();
+      if (res.ok && data?.success) {
+        urls = data.urls || {};
+        break;
+      }
+      console.warn(`Could not resolve R2 media URLs (attempt ${attempt}/${attempts}):`, data?.error);
+    } catch (error) {
+      console.warn(`Could not resolve R2 media URLs (attempt ${attempt}/${attempts}):`, error.message);
     }
-  } catch (error) {
-    console.warn('Could not resolve R2 media URLs:', error.message);
+    if (attempt < attempts) await new Promise((resolve) => setTimeout(resolve, attempt * 500));
   }
 
   return rows.map((row) => {
