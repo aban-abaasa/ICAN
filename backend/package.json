@@ -17,6 +17,8 @@
     "verify:business-members": "node -e \"console.log('✓ Setup verification required - run: npm run setup:business-members')\""
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1119.0",
+    "@aws-sdk/s3-request-presigner": "^3.1119.0",
     "@sendgrid/mail": "^8.1.6",
     "@supabase/supabase-js": "^2.91.0",
     "axios": "^1.13.2",

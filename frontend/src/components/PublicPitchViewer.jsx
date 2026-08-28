@@ -94,6 +94,8 @@ const PublicPitchViewer = ({ pitchId }) => {
   };
 
   const openComments = async () => {
+    if (authLoading) return;
+    if (!user) { requireAuth('signup'); return; }
     setShowComments(true);
     if (comments.length === 0) {
       setLoadingComments(true);
@@ -119,6 +121,8 @@ const PublicPitchViewer = ({ pitchId }) => {
   };
 
   const handleShare = async () => {
+    if (authLoading) return;
+    if (!user) { requireAuth('signup'); return; }
     const shareUrl = `https://icanera.space/pitchin/${pitch.id}`;
     const shareData = {
       title: pitch.title || 'Check out this pitch!',
@@ -282,7 +286,11 @@ const PublicPitchViewer = ({ pitchId }) => {
           <span className="text-white text-xs font-bold drop-shadow-lg">Invest</span>
         </button>
 
-        <div className="flex flex-col items-center gap-1">
+        <button
+          onClick={() => { if (!authLoading && !user) requireAuth('signup'); }}
+          className="icon-btn-transparent flex flex-col items-center gap-1"
+          title="Pitcher"
+        >
           {bizPhoto ? (
             <img
               src={bizPhoto}
@@ -297,7 +305,7 @@ const PublicPitchViewer = ({ pitchId }) => {
           >
             {bizName.charAt(0).toUpperCase()}
           </div>
-        </div>
+        </button>
       </div>
 
       {/* Comments panel */}

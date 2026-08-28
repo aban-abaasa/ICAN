@@ -93,6 +93,8 @@ const PublicStatusViewer = ({ statusId }) => {
   };
 
   const handleShare = async () => {
+    if (authLoading) return;
+    if (!user) { setShowAuthModal(true); return; }
     const shareUrl = `https://icanera.space/status/${status.id}`;
     try {
       if (navigator.share) {
@@ -189,7 +191,11 @@ const PublicStatusViewer = ({ statusId }) => {
         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black to-transparent p-4 z-30">
           <div className="flex items-center justify-between gap-3">
             <button
-              onClick={() => setLiked((v) => !v)}
+              onClick={() => {
+                if (authLoading) return;
+                if (!user) { setShowAuthModal(true); return; }
+                setLiked((v) => !v);
+              }}
               className={`icon-btn-transparent p-3 rounded-full backdrop-blur-sm transition-all ${liked ? 'bg-red-500/30 text-red-400' : 'bg-white/10 text-white hover:bg-white/20'}`}
             >
               <Heart className={`w-6 h-6 ${liked ? 'fill-current' : ''}`} />
@@ -198,7 +204,11 @@ const PublicStatusViewer = ({ statusId }) => {
               {copied ? <Check className="w-6 h-6 text-green-400" /> : <Share2 className="w-6 h-6" />}
             </button>
             <button
-              onClick={() => setShowComments((v) => !v)}
+              onClick={() => {
+                if (authLoading) return;
+                if (!user) { setShowAuthModal(true); return; }
+                setShowComments((v) => !v);
+              }}
               className="icon-btn-transparent flex-1 flex items-center justify-center gap-2 p-3 rounded-full backdrop-blur-sm bg-white/10 text-white hover:bg-white/20 transition-all"
             >
               <MessageCircle className="w-6 h-6" />

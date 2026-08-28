@@ -115,9 +115,9 @@ export const createStatus = async (userId, statusData) => {
       return { status: null, error: new Error(errorMsg) };
     }
 
-    // VALIDATION: Ensure URL is from Supabase or is a valid absolute URL
-    if (media_url && !media_url.startsWith('http')) {
-      const errorMsg = '❌ ERROR: Invalid media URL. Must be a complete Supabase URL starting with https://';
+    // VALIDATION: Ensure URL is a valid absolute URL or an r2:// storage key
+    if (media_url && !media_url.startsWith('http') && !isR2Key(media_url)) {
+      const errorMsg = '❌ ERROR: Invalid media URL. Must be a complete URL starting with https:// or an r2:// storage key';
       console.error(errorMsg);
       console.error('Received URL:', media_url);
       return { status: null, error: new Error(errorMsg) };
