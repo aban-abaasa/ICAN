@@ -28,10 +28,18 @@ DROP TRIGGER IF EXISTS business_profile_ican_wallet ON public.business_profiles;
 DROP FUNCTION IF EXISTS public.get_pitchin_business_wallet_transactions(UUID, INTEGER);
 DROP FUNCTION IF EXISTS public.get_or_create_pitchin_business_wallet(UUID);
 
+-- wallet_address is numeric-only, matching the personal/business
+-- user_accounts.account_number convention (16 digits, leading digit
+-- distinguishes the kind): 1 = personal fiat, 2 = business fiat,
+-- 3 = this dedicated PitchIn business ICAN-coin wallet. See
+-- MIGRATE_BUSINESS_WALLET_ADDRESS_TO_NUMERIC.sql for the backfill of any
+-- existing 'BIZ-...' rows created before this format switched.
 CREATE TABLE IF NOT EXISTS public.ican_business_wallets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   business_profile_id UUID NOT NULL UNIQUE REFERENCES public.business_profiles(id) ON DELETE CASCADE,
-  wallet_address TEXT NOT NULL UNIQUE DEFAULT 'BIZ-' || upper(substr(md5(gen_random_uuid()::text), 1, 16)),
+  wallet_address TEXT NOT NULL UNIQUE DEFAULT
+    '3' || TO_CHAR(NOW(), 'YYYYMMDDHH24MISS') ||
+      (ABS(('x' || SUBSTRING(MD5(gen_random_uuid()::text), 1, 8))::bit(32)::int) % 10)::text,
   ican_balance NUMERIC(18,8) NOT NULL DEFAULT 0 CHECK (ican_balance >= 0),
   total_earned NUMERIC(18,8) NOT NULL DEFAULT 0,
   total_spent NUMERIC(18,8) NOT NULL DEFAULT 0,
@@ -40,6 +48,14 @@ CREATE TABLE IF NOT EXISTS public.ican_business_wallets (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- CREATE TABLE IF NOT EXISTS only sets the default on first install, so
+-- pin it explicitly for installs that already had this table under the old
+-- 'BIZ-...' default.
+ALTER TABLE public.ican_business_wallets
+  ALTER COLUMN wallet_address SET DEFAULT
+    '3' || TO_CHAR(NOW(), 'YYYYMMDDHH24MISS') ||
+      (ABS(('x' || SUBSTRING(MD5(gen_random_uuid()::text), 1, 8))::bit(32)::int) % 10)::text;
 
 CREATE TABLE IF NOT EXISTS public.ican_business_wallet_settings (
   business_profile_id UUID PRIMARY KEY REFERENCES public.business_profiles(id) ON DELETE CASCADE,

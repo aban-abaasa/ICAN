@@ -1208,18 +1208,13 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   }, [activeTab, currentUserId]);
 
   // �💳 SEND MONEY HANDLER - Support both ICAN users and MOMO
-  // The PitchIn business wallet address format is 'BIZ-ICAN-' + a uuid
-  // (see resolve_ican_business_wallet / ICAN_BUSINESS_WALLET_TRANSFERS.sql).
-  // Business owners copy that whole string from BusinessProfileCard.jsx, but
-  // if a sender pastes only the code after 'BIZ-ICAN-' this fills the prefix
-  // back in rather than failing the lookup on a technicality.
-  const normalizeRecipientForKind = (value, kind) => {
-    const trimmed = String(value || '').trim();
-    if (kind === 'biz' && trimmed && !trimmed.toUpperCase().startsWith('BIZ-')) {
-      return `BIZ-ICAN-${trimmed}`;
-    }
-    return trimmed;
-  };
+  // The PitchIn business wallet address is 16 digits, leading digit 3 (see
+  // resolve_ican_business_wallet / ICAN_BUSINESS_WALLET_TRANSFERS.sql and
+  // MIGRATE_BUSINESS_WALLET_ADDRESS_TO_NUMERIC.sql) — same numeric shape as
+  // a personal/business fiat account number, just a different leading digit.
+  const normalizeRecipientForKind = (value, kind) => String(value || '').trim();
+
+  const isBusinessWalletAddress = (value) => /^3\d{15}$/.test(String(value || '').trim());
 
   const handleSendMoney = async (e) => {
     e.preventDefault();
@@ -1276,9 +1271,10 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         throw new Error('User not authenticated');
       }
 
-      // BIZ-* addresses belong to dedicated PitchIn business wallets, not to
-      // user_accounts. Route them through the atomic ICAN business transfer.
-      if (recipientIdentifier.trim().toUpperCase().startsWith('BIZ-')) {
+      // Leading-digit-3 addresses belong to dedicated PitchIn business
+      // wallets, not to user_accounts. Route them through the atomic ICAN
+      // business transfer.
+      if (isBusinessWalletAddress(recipientIdentifier)) {
         const { data, error } = await supabase.rpc('resolve_ican_business_wallet', {
           p_wallet_address: recipientIdentifier.trim(),
         });
@@ -1432,9 +1428,10 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       let recipientUser = null;
       let lookupError = null;
 
-      // BIZ-* is the public address of a dedicated business wallet, not a
-      // user_accounts.account_number. Resolve it before personal-account lookup.
-      if (recipientIdentifier.trim().toUpperCase().startsWith('BIZ-')) {
+      // A leading-digit-3 address is the public address of a dedicated
+      // business wallet, not a user_accounts.account_number. Resolve it
+      // before personal-account lookup.
+      if (isBusinessWalletAddress(recipientIdentifier)) {
         const { data, error } = await supabase.rpc('resolve_ican_business_wallet', {
           p_wallet_address: recipientIdentifier.trim(),
         });
@@ -5780,7 +5777,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     ))}
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
-                    ICAN = a personal or business wallet account number, phone, or email. BIZ = a PitchIn business wallet code (from that business's profile).
+                    ICAN = a personal or business wallet account number, phone, or email. BIZ = a PitchIn business wallet number (from that business's profile).
                   </p>
                 </div>
               )}
@@ -5790,7 +5787,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                   {sendMethod === 'mobile'
                     ? '📱 Recipient Phone Number'
                     : recipientAccountKind === 'biz'
-                      ? '🏢 Recipient (PitchIn Business Wallet Code)'
+                      ? '🏢 Recipient (PitchIn Business Wallet Number)'
                       : '👤 Recipient (ICAN Account, Phone, or Email)'}
                 </label>
                 <input
@@ -5799,7 +5796,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     sendMethod === 'mobile'
                       ? '+256701234567'
                       : recipientAccountKind === 'biz'
-                        ? 'BIZ-ICAN-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+                        ? '3002345678901234'
                         : '1002345678901234 | +256701234567 | user@example.com'
                   }
                   value={sendForm.recipient}
@@ -5810,7 +5807,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                   {sendMethod === 'mobile'
                     ? 'Sent directly to this mobile money number'
                     : recipientAccountKind === 'biz'
-                      ? "Paste the business's wallet code — the 'BIZ-ICAN-' prefix is added automatically if you leave it out"
+                      ? "Enter the business's 16-digit wallet number (starts with 3)"
                       : 'Send to ICAN account number, phone number, or email address'}
                 </p>
               </div>

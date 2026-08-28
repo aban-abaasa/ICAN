@@ -6,11 +6,11 @@
 
 import { supabase } from '../lib/supabase';
 import { calculateFileHash, registerStatusOnBlockchain } from './blockchainService';
-import { resolveMediaValues, deleteFromR2, isR2Key, fromR2Value } from './r2StorageService';
+import { resolveMediaValues, deleteFromR2, isR2Key, fromR2Value, uploadToR2 } from './r2StorageService';
 
 
 /**
- * Upload status media to Supabase Storage
+ * Upload status media to Cloudflare R2 storage
  * @param {string} userId - User ID
  * @param {File} file - Media file (image/video)
  * @param {Object} options - Upload options
@@ -54,29 +54,14 @@ export const uploadStatusMedia = async (userId, file, options = {}) => {
       throw new Error('Not authenticated - cannot upload status media');
     }
 
-    // Upload directly to the private 'user-content' Supabase Storage bucket
-    const fileExt = (file.name?.split('.').pop() || 'bin').toLowerCase();
-    const timestamp = Date.now();
-    const random = Math.random().toString(36).slice(2, 8);
-    const filePath = `statuses/${userId}/${timestamp}-${random}.${fileExt}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('user-content')
-      .upload(filePath, file, { upsert: false, contentType: file.type });
-
-    if (uploadError) throw uploadError;
-
-    // Bucket is private — return a signed URL for immediate use; the viewing
-    // path (refreshStatusMediaUrls) re-signs it on every fetch anyway.
-    const { data: signedData, error: signError } = await supabase.storage
-      .from('user-content')
-      .createSignedUrl(filePath, 3600);
-
-    if (signError) throw signError;
+    const result = await uploadToR2({ file, folder: 'statuses', accessToken: session.access_token });
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to upload status media');
+    }
 
     return {
-      url: signedData.signedUrl,
-      path: filePath,
+      url: result.url,
+      path: result.key,
       fileHash,
       error: null
     };
@@ -119,15 +104,15 @@ export const createStatus = async (userId, statusData) => {
 
     // VALIDATION: Reject blob URLs - they won't persist after page reload
     if (media_url && media_url.startsWith('blob:')) {
-      const errorMsg = '❌ ERROR: Cannot save blob URLs to database. Videos must be uploaded to Supabase first. Use uploadStatusMedia() before creating status.';
+      const errorMsg = '❌ ERROR: Cannot save blob URLs to database. Media must be uploaded first. Use uploadStatusMedia() before creating status.';
       console.error(errorMsg);
       console.error('Received blob URL:', media_url);
       return { status: null, error: new Error(errorMsg) };
     }
 
-    // VALIDATION: Ensure URL is from Supabase or is a valid absolute URL
-    if (media_url && !media_url.startsWith('http')) {
-      const errorMsg = '❌ ERROR: Invalid media URL. Must be a complete Supabase URL starting with https://';
+    // VALIDATION: Ensure URL is an r2:// storage key or a valid absolute URL
+    if (media_url && !media_url.startsWith('http') && !isR2Key(media_url)) {
+      const errorMsg = '❌ ERROR: Invalid media URL. Must be an r2:// storage key or a complete URL starting with https://';
       console.error(errorMsg);
       console.error('Received URL:', media_url);
       return { status: null, error: new Error(errorMsg) };
@@ -269,7 +254,12 @@ const refreshStatusMediaUrls = async (statuses) => {
   return Promise.all(
     statuses.map(async (status) => {
       if (isR2Key(status?.media_url)) {
-        return { ...status, media_url: resolvedById.get(status.id) || status.media_url };
+        const resolved = resolvedById.get(status.id);
+        // Never hand back the raw r2:// marker -- it isn't a fetchable URL
+        // and would otherwise land in an <img>/<video> src as-is.
+        if (resolved && resolved !== status.media_url) return { ...status, media_url: resolved };
+        if (!resolved) console.warn(`Could not resolve R2 media for status ${status.id}`);
+        return { ...status, media_url: resolved || null };
       }
 
       try {
@@ -281,17 +271,22 @@ const refreshStatusMediaUrls = async (statuses) => {
         const { bucketName, filePath } = extractBucketAndPath(status.media_url);
 
         // Generate fresh signed URL from correct bucket
-        const { data: signedData } = await supabase.storage
+        const { data: signedData, error: signError } = await supabase.storage
           .from(bucketName)
           .createSignedUrl(filePath, 3600); // 1 hour for viewing
 
+        if (signError) {
+          console.warn(`Could not sign media URL for status ${status.id}:`, signError.message);
+          return { ...status, media_url: null };
+        }
+
         return {
           ...status,
-          media_url: signedData?.signedUrl || status.media_url
+          media_url: signedData?.signedUrl || null
         };
       } catch (err) {
         console.warn(`Could not refresh URL for status ${status.id}:`, err);
-        return status; // Return original if refresh fails
+        return { ...status, media_url: null };
       }
     })
   );

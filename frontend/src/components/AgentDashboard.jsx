@@ -41,8 +41,7 @@ const AgentDashboard = () => {
     description: ''
   });
   // 'ican' | 'biz' — explicit choice of which kind of account the customer
-  // gave the agent, replacing reliance on the agent remembering to type a
-  // "BIZ-" prefix themselves.
+  // gave the agent.
   const [cashInAccountKind, setCashInAccountKind] = useState('ican');
 
   // Cash-Out Form
@@ -198,21 +197,13 @@ const AgentDashboard = () => {
     setRecentTransactions(transactions);
   };
 
-  const isBusinessWalletAddress = (value) =>
-    String(value || '').trim().toUpperCase().startsWith('BIZ-');
+  // The PitchIn business wallet address is 16 digits, leading digit 3 (see
+  // resolve_ican_business_wallet / ICAN_BUSINESS_WALLET_TRANSFERS.sql and
+  // MIGRATE_BUSINESS_WALLET_ADDRESS_TO_NUMERIC.sql) — same numeric shape as
+  // a personal/business fiat account number, just a different leading digit.
+  const isBusinessWalletAddress = (value) => /^3\d{15}$/.test(String(value || '').trim());
 
-  // The PitchIn business wallet address format is 'BIZ-ICAN-' + a uuid (see
-  // resolve_ican_business_wallet / ICAN_BUSINESS_WALLET_TRANSFERS.sql). If
-  // the agent selects "BIZ" and pastes just the code the customer read off
-  // their business wallet screen, fill the prefix back in rather than
-  // failing the lookup on a technicality.
-  const normalizeAccountIdForKind = (value, kind) => {
-    const trimmed = String(value || '').trim();
-    if (kind === 'biz' && trimmed && !trimmed.toUpperCase().startsWith('BIZ-')) {
-      return `BIZ-ICAN-${trimmed}`;
-    }
-    return trimmed;
-  };
+  const normalizeAccountIdForKind = (value, kind) => String(value || '').trim();
 
   const notifyBusinessWalletRequiresIcanSend = (walletAddress) => {
     setNotification({
@@ -1276,11 +1267,11 @@ const AgentDashboard = () => {
 
                 <div>
                   <label className="block text-gray-300 font-semibold mb-2">
-                    {cashInAccountKind === 'biz' ? 'PitchIn Business Wallet Code' : 'User Account Number'}
+                    {cashInAccountKind === 'biz' ? 'PitchIn Business Wallet Number' : 'User Account Number'}
                   </label>
                   <input
                     type="text"
-                    placeholder={cashInAccountKind === 'biz' ? 'BIZ-ICAN-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' : '1002345678901234'}
+                    placeholder={cashInAccountKind === 'biz' ? '3002345678901234' : '1002345678901234'}
                     value={cashInForm.userAccountId}
                     onChange={(e) => setCashInForm({...cashInForm, userAccountId: e.target.value})}
                     className="w-full bg-slate-700/50 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
@@ -1369,11 +1360,11 @@ const AgentDashboard = () => {
 
                 <div>
                   <label className="block text-gray-300 font-semibold mb-2">
-                    {cashOutAccountKind === 'biz' ? 'PitchIn Business Wallet Code' : 'Customer Account Number'}
+                    {cashOutAccountKind === 'biz' ? 'PitchIn Business Wallet Number' : 'Customer Account Number'}
                   </label>
                   <input
                     type="text"
-                    placeholder={cashOutAccountKind === 'biz' ? 'BIZ-ICAN-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' : '1002345678901234'}
+                    placeholder={cashOutAccountKind === 'biz' ? '3002345678901234' : '1002345678901234'}
                     value={cashOutForm.userAccountId}
                     onChange={(e) => setCashOutForm({...cashOutForm, userAccountId: e.target.value})}
                     className="w-full bg-slate-700/50 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
