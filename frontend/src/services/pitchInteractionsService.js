@@ -4,6 +4,7 @@
  */
 
 import { getSupabase } from './pitchingService';
+import { resolveMediaValues } from './r2StorageService';
 
 // =============================================
 // LIKES SERVICE
@@ -200,7 +201,39 @@ export const getPitchComments = async (pitchId) => {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    if (!data || data.length === 0) return [];
+
+    // Enrich each comment with the commenter's real profile photo/name so the
+    // updator is identifiable, not just their stored display-name snapshot.
+    // profiles RLS is "auth.uid() = id", so a plain select would only ever
+    // return the CALLER's own row -- other commenters' photos would never
+    // show. fn_get_public_profile_info is SECURITY DEFINER and returns only
+    // id/full_name/avatar_url (backend/PITCHIN_PUBLIC_PROFILE_INFO_RPC.sql).
+    try {
+      const userIds = [...new Set(data.map(c => c.user_id).filter(Boolean))];
+      if (userIds.length > 0) {
+        const { data: profiles } = await sb
+          .rpc('fn_get_public_profile_info', { p_user_ids: userIds });
+        // avatar_url can be an r2:// key that needs a live presigned URL.
+        const resolvedProfiles = await resolveMediaValues(profiles || [], ['avatar_url']);
+
+        const profileById = new Map(resolvedProfiles.map(p => [p.id, p]));
+        return data.map(comment => {
+          const commenterProfile = profileById.get(comment.user_id);
+          return commenterProfile
+            ? {
+                ...comment,
+                user_name: commenterProfile.full_name || comment.user_name,
+                avatar_url: commenterProfile.avatar_url || null,
+              }
+            : comment;
+        });
+      }
+    } catch (enrichError) {
+      console.warn('Could not enrich comments with commenter profiles:', enrichError?.message);
+    }
+
+    return data;
   } catch (error) {
     console.error('Error fetching comments:', error);
     return [];

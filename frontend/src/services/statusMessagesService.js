@@ -4,6 +4,7 @@
  */
 
 import { supabase } from '../lib/supabase';
+import { resolveMediaValues } from './r2StorageService';
 
 /**
  * Send a message reply to a status
@@ -82,10 +83,46 @@ export const getStatusMessages = async (statusId) => {
 
     if (error) throw error;
 
-    return { messages: data || [], error: null };
+    const enriched = await enrichMessagesWithSenderProfiles(data || []);
+    return { messages: enriched, error: null };
   } catch (error) {
     console.error('Get status messages error:', error);
     return { messages: [], error };
+  }
+};
+
+/**
+ * Attach each message's real sender profile photo/name (sender_avatar_url,
+ * sender_full_name) -- ican_status_messages only stores sender_id, so this is
+ * a separate batched `profiles` lookup, same pattern as statusService's
+ * enrichStatusesWithPosterProfiles.
+ */
+const enrichMessagesWithSenderProfiles = async (messages) => {
+  if (!messages || messages.length === 0) return messages;
+  try {
+    const senderIds = [...new Set(messages.map(m => m.sender_id).filter(Boolean))];
+    if (senderIds.length === 0) return messages;
+
+    // profiles RLS is "auth.uid() = id", so a plain select would only ever
+    // return the CALLER's own row -- other senders' photos would never show.
+    // fn_get_public_profile_info is SECURITY DEFINER and returns only
+    // id/full_name/avatar_url (backend/PITCHIN_PUBLIC_PROFILE_INFO_RPC.sql).
+    const { data: profiles, error } = await supabase
+      .rpc('fn_get_public_profile_info', { p_user_ids: senderIds });
+    if (error) throw error;
+    // avatar_url can be an r2:// key that needs a live presigned URL.
+    const resolvedProfiles = await resolveMediaValues(profiles || [], ['avatar_url']);
+
+    const profileById = new Map(resolvedProfiles.map(p => [p.id, p]));
+    return messages.map(message => {
+      const sender = profileById.get(message.sender_id);
+      return sender
+        ? { ...message, sender_full_name: sender.full_name || null, sender_avatar_url: sender.avatar_url || null }
+        : message;
+    });
+  } catch (err) {
+    console.warn('Could not enrich status messages with sender profiles:', err?.message);
+    return messages;
   }
 };
 
@@ -143,7 +180,12 @@ export const subscribeToStatusMessages = (statusId, callback) => {
           filter: `status_id=eq.${statusId}`
         },
         (payload) => {
-          callback(payload.new);
+          // Realtime INSERT payloads carry only the raw row -- enrich with the
+          // sender's real photo/name before handing it to the UI, same as the
+          // initial getStatusMessages load.
+          enrichMessagesWithSenderProfiles([payload.new])
+            .then(([enriched]) => callback(enriched || payload.new))
+            .catch(() => callback(payload.new));
         }
       )
       .subscribe();

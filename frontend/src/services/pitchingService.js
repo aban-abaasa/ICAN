@@ -370,6 +370,117 @@ export const fetchAnyUsers = async (limit = 20) => {
  * Pitch Service - All Supabase operations for pitches
  */
 
+const PITCH_WITH_BUSINESS_SELECT = `
+  id,
+  title,
+  description,
+  pitch_type,
+  category,
+  video_url,
+  thumbnail_url,
+  target_funding,
+  raised_amount,
+  equity_offering,
+  has_ip,
+  status,
+  views_count,
+  likes_count,
+  comments_count,
+  shares_count,
+  created_at,
+  business_profile_id,
+  business_profiles(
+    id,
+    user_id,
+    business_name,
+    description,
+    business_type,
+    business_structure,
+    founded_year,
+    total_capital,
+    avatar_url
+  )
+`;
+
+/**
+ * Mutates each pitch's business_profiles in place with real photos:
+ * business_profiles.avatar_url (the business's own logo, resolved if it's an
+ * r2:// key) takes priority; business_profiles.owner_full_name/owner_avatar_url
+ * (the owner's personal profile, via the public RPC below) is the fallback
+ * used when the business hasn't set its own logo. Shared by getAllPitches and
+ * getPitchById so a pitch looks identical whether it came from the feed or a
+ * shared link.
+ */
+const enrichPitchesWithProfilePhotos = async (sb, pitches) => {
+  try {
+    const bizProfiles = pitches.map(p => p.business_profiles).filter(Boolean);
+    const resolvedBizProfiles = await resolveMediaValues(bizProfiles, ['avatar_url']);
+    const resolvedById = new Map(resolvedBizProfiles.map(bp => [bp.id, bp.avatar_url]));
+    pitches.forEach(pitch => {
+      if (pitch.business_profiles) {
+        pitch.business_profiles.avatar_url = resolvedById.get(pitch.business_profiles.id) || null;
+      }
+    });
+  } catch (bizAvatarError) {
+    console.warn('Could not resolve business logo URLs:', bizAvatarError?.message);
+  }
+
+  // profiles RLS is "auth.uid() = id" (ADD_PROFILE_COLUMNS.sql), so a plain
+  // select only ever returns the CALLER's own row -- every other viewer would
+  // see nothing but initials. fn_get_public_profile_info is SECURITY DEFINER
+  // and returns only id/full_name/avatar_url (backend/PITCHIN_PUBLIC_PROFILE_INFO_RPC.sql).
+  try {
+    const ownerIds = [...new Set(pitches.map(p => p.business_profiles?.user_id).filter(Boolean))];
+    if (ownerIds.length > 0) {
+      const { data: owners } = await sb.rpc('fn_get_public_profile_info', { p_user_ids: ownerIds });
+      const resolvedOwners = await resolveMediaValues(owners || [], ['avatar_url']);
+      const ownerById = new Map(resolvedOwners.map(o => [o.id, o]));
+      pitches.forEach(pitch => {
+        const owner = pitch.business_profiles?.user_id ? ownerById.get(pitch.business_profiles.user_id) : null;
+        if (owner && pitch.business_profiles) {
+          pitch.business_profiles.owner_full_name = owner.full_name || null;
+          pitch.business_profiles.owner_avatar_url = owner.avatar_url || null;
+        }
+      });
+    }
+  } catch (ownerError) {
+    console.warn('Could not enrich pitches with pitcher profile photos:', ownerError?.message);
+  }
+
+  return pitches;
+};
+
+/**
+ * Fetch a single pitch by id, for a shared /pitchin/:pitchId link.
+ * pitches RLS is "USING (true)" (fix_pitches_public_view.sql) -- readable
+ * with no auth at all, same as the feed, so a shared link opens the video
+ * directly for a signed-out visitor instead of forcing them through login
+ * first. video_url/thumbnail_url and the pitcher's photo are resolved the
+ * same way getAllPitches does, so the shared view looks identical to the feed.
+ */
+export const getPitchById = async (pitchId) => {
+  try {
+    const sb = getSupabase();
+    if (!sb) return null;
+
+    const { data, error } = await sb
+      .from('pitches')
+      .select(PITCH_WITH_BUSINESS_SELECT)
+      .eq('id', pitchId)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) return null;
+
+    const [resolved] = await resolveMediaValues([data], ['video_url', 'thumbnail_url']);
+    await enrichPitchesWithProfilePhotos(sb, [resolved]);
+    return resolved;
+  } catch (error) {
+    console.error('Error fetching pitch by id:', error);
+    return null;
+  }
+};
+
 // Fetch all published pitches
 export const getAllPitches = async (limit = 20, offset = 0) => {
   try {
@@ -412,36 +523,7 @@ export const getAllPitches = async (limit = 20, offset = 0) => {
 
     const { data, error } = await sb
       .from('pitches')
-      .select(`
-        id,
-        title,
-        description,
-        pitch_type,
-        category,
-        video_url,
-        thumbnail_url,
-        target_funding,
-        raised_amount,
-        equity_offering,
-        has_ip,
-        status,
-        views_count,
-        likes_count,
-        comments_count,
-        shares_count,
-        created_at,
-        business_profile_id,
-        business_profiles(
-          id,
-          user_id,
-          business_name,
-          description,
-          business_type,
-          business_structure,
-          founded_year,
-          total_capital
-        )
-      `, { count: 'exact' })
+      .select(PITCH_WITH_BUSINESS_SELECT, { count: 'exact' })
       .not('video_url', 'is', null)  // Only show pitches with videos
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
@@ -509,7 +591,9 @@ export const getAllPitches = async (limit = 20, offset = 0) => {
         isDraft: pitch.status === 'draft',
         isPending: pitch.status === 'pending'
       }));
-      
+
+      await enrichPitchesWithProfilePhotos(sb, enrichedPitches);
+
       return enrichedPitches;
     }
     

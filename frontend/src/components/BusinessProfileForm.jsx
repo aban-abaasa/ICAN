@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Building2, Users, Plus, X, Trash2, PieChart, Loader, Search, CheckCircle2, AlertCircle, Wallet, FileText, Bell, Clock, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { createBusinessProfile, updateBusinessProfile, getSupabase, verifyICANUser, searchICANUsers, saveBusinessCoOwners } from '../services/pitchingService';
+import { uploadToR2, resolveMediaValue } from '../services/r2StorageService';
 import { registerBusinessWallet, setBusinessWalletPin } from '../services/icanWalletService';
 import { memberApprovalService } from '../services/memberApprovalService';
 import { createBusinessProfileFromCategory, publishBusinessAsSupplier } from '../services/businessManagementService';
@@ -31,8 +32,11 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
     website: '',
     description: '',
     businessAddress: '',
-    foundedYear: new Date().getFullYear()
+    foundedYear: new Date().getFullYear(),
+    avatarUrl: '' // r2:// key or legacy https URL -- the business's own logo, separate from the owner's personal photo
   });
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState(''); // resolved, renderable URL for the <img> preview
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const [coOwners, setCoOwners] = useState([]);
 
@@ -84,9 +88,13 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
         website: editingProfile.website || '',
         description: editingProfile.description || '',
         businessAddress: editingProfile.business_address || '',
-        foundedYear: editingProfile.founded_year || new Date().getFullYear()
+        foundedYear: editingProfile.founded_year || new Date().getFullYear(),
+        avatarUrl: editingProfile.avatar_url || ''
       });
-      
+      if (editingProfile.avatar_url) {
+        resolveMediaValue(editingProfile.avatar_url).then(setAvatarPreviewUrl);
+      }
+
       // Load co-owners - map database fields to form fields
       if (editingProfile.business_co_owners && editingProfile.business_co_owners.length > 0) {
         const mappedCoOwners = editingProfile.business_co_owners.map((owner, index) => ({
@@ -295,6 +303,48 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
     });
   };
 
+  // Business logo/avatar -- separate from the owner's personal profile photo
+  // (which Pitchin falls back to when this isn't set). Instant local preview
+  // via a blob URL so the picture shows immediately; the r2:// key returned
+  // by the upload is what actually gets saved on submit.
+  const handleAvatarSelect = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file later
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please choose an image file');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image must be under 5MB');
+      return;
+    }
+
+    setAvatarPreviewUrl(URL.createObjectURL(file));
+    setUploadingAvatar(true);
+    try {
+      const sb = getSupabase();
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) {
+        alert('Please sign in to upload a logo');
+        return;
+      }
+
+      const result = await uploadToR2({ file, folder: 'avatars', accessToken: session.access_token });
+      if (!result.success) {
+        alert('Failed to upload logo: ' + (result.error || 'Unknown error'));
+        return;
+      }
+      handleBusinessChange('avatarUrl', result.url);
+    } catch (error) {
+      console.error('Logo upload error:', error);
+      alert('Failed to upload logo: ' + error.message);
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   const handleCreateProfile = async () => {
     if (!businessData.businessName) {
       alert('Please fill in business name');
@@ -372,6 +422,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
         description: businessData.description,
         business_address: businessData.businessAddress,
         founded_year: businessData.foundedYear,
+        avatar_url: businessData.avatarUrl || null,
         status: 'active',
         verification_status: 'pending',
         // Notification Settings
@@ -588,6 +639,45 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                     placeholder="e.g., TechStartup Inc."
                     className="w-full bg-slate-700 text-white rounded-lg px-4 py-2 border border-slate-600 focus:border-blue-500 focus:outline-none"
                   />
+                </div>
+
+                <div className="col-span-2">
+                  <label className="text-slate-300 text-sm block mb-2">Business Logo</label>
+                  <p className="text-slate-400 text-xs mb-2">
+                    Shown as the Pitcher avatar in the video feed. Leave unset to use your own personal photo instead.
+                  </p>
+                  <div className="flex items-center gap-3">
+                    {avatarPreviewUrl ? (
+                      <img
+                        src={avatarPreviewUrl}
+                        alt="Business logo"
+                        className="w-16 h-16 rounded-full object-cover border border-slate-600 flex-shrink-0"
+                      />
+                    ) : (
+                      <div className="w-16 h-16 rounded-full bg-slate-700 border border-slate-600 flex items-center justify-center flex-shrink-0">
+                        <Building2 className="w-7 h-7 text-slate-500" />
+                      </div>
+                    )}
+                    <label className="cursor-pointer bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium px-4 py-2 rounded-lg border border-slate-600 transition">
+                      {uploadingAvatar ? 'Uploading...' : avatarPreviewUrl ? 'Change Logo' : 'Upload Logo'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleAvatarSelect}
+                        disabled={uploadingAvatar}
+                        className="hidden"
+                      />
+                    </label>
+                    {avatarPreviewUrl && !uploadingAvatar && (
+                      <button
+                        type="button"
+                        onClick={() => { setAvatarPreviewUrl(''); handleBusinessChange('avatarUrl', ''); }}
+                        className="text-slate-400 hover:text-red-400 text-sm font-medium transition"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {initialBusinessCategory?.display_name && <div className="col-span-2 rounded-lg border border-indigo-400/30 bg-indigo-500/10 p-3 text-sm text-indigo-100"><span className="font-semibold">Selected business category:</span> {initialBusinessCategory.display_name}<span className="mt-1 block text-xs text-indigo-200/70">CMMS will enable the modules and workflows configured specifically for this business category.</span></div>}

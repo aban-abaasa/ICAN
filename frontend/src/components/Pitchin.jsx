@@ -45,11 +45,12 @@ import {
 } from '../services/pitchInteractionsService';
 import { getUserNotifications } from '../services/investmentNotificationsService';
 import { getLiveShareOffer } from '../services/pitchinValuationService';
+import { resolveMediaValue } from '../services/r2StorageService';
 
 // Why an Invest tap can't open the signing flow. Each case is a missing piece
 // of live data — the flow never falls back to the listed pitch price, so the
 // investor is told what's missing instead of being shown a stale number.
-const LIVE_OFFER_BLOCKED_MESSAGE = {
+export const LIVE_OFFER_BLOCKED_MESSAGE = {
   'no-business-profile': 'This pitch is not linked to a business profile yet, so it has no live share value to invest against.',
   'shares-not-configured': 'The owner has not set how many shares this business has yet. Investing opens once they do.',
   'no-live-price': 'This business has no live share value yet — its recorded transactions do not add up to a positive value.',
@@ -111,6 +112,10 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
   const [likedPitches, setLikedPitches] = useState(new Set());
   const [investedPitches, setInvestedPitches] = useState(new Set()); // track pitches user showed interest in
   const [viewingPitcher, setViewingPitcher] = useState(null); // { name, business_profile_id, user_id } | null
+  const [businessDetailsPitch, setBusinessDetailsPitch] = useState(null); // pitch whose business details modal is open (Pitcher icon tap)
+  const [businessOwnerProfile, setBusinessOwnerProfile] = useState(null); // { full_name, avatar_url } for businessDetailsPitch's owner
+  const [businessLiveOffer, setBusinessLiveOffer] = useState(null); // live getLiveShareOffer() result for businessDetailsPitch
+  const [businessLiveOfferLoading, setBusinessLiveOfferLoading] = useState(false);
   const [showComments, setShowComments] = useState(null); // pitch id for comments modal
   const [comments, setComments] = useState({});
   const [newComment, setNewComment] = useState('');
@@ -839,7 +844,11 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
   const handleShare = async (pitchId) => {
     try {
       const pitch = pitches.find(p => p.id === pitchId);
-      const shareUrl = `${window.location.origin}/pitchin/${pitchId}`;
+      // The canonical domain, not window.location.origin -- a link opened
+      // from a dev/preview origin would be dead for whoever receives it.
+      // main.jsx resolves this exact path to PublicPitchViewer, which opens
+      // the video directly with no login required to just watch it.
+      const shareUrl = `https://icanera.space/pitchin/${pitchId}`;
       const shareData = {
         title: pitch?.title || 'Check out this pitch!',
         text: pitch?.description || 'Discover this amazing investment opportunity on ICAN',
@@ -899,8 +908,14 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
       const result = await addPitchComment(pitchId, currentUser.id, userName, newComment.trim());
 
       if (result.success) {
-        // Add to local state
-        const newCommentObj = result.data;
+        // Add to local state. avatar_url isn't returned by the insert (it lives
+        // on `profiles`, not `pitch_comments`) -- fill it in from the auth
+        // metadata now for an immediate photo, same as getPitchComments does
+        // from the `profiles` table on the next real fetch.
+        const newCommentObj = {
+          ...result.data,
+          avatar_url: currentUser.user_metadata?.avatar_url || currentUser.user_metadata?.picture || null,
+        };
         setComments(prev => ({
           ...prev,
           [pitchId]: [newCommentObj, ...(prev[pitchId] || [])]
@@ -1094,6 +1109,70 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
     checkOwnAgreement();
     return () => { cancelled = true; };
   }, [viewingPitcher?.business_profile_id, currentUser?.id]);
+
+  // When the Business Details modal opens (Pitcher icon tap), fetch the
+  // business owner's real profile photo/name from `profiles` -- getAllPitches
+  // already embeds owner_avatar_url/owner_full_name on business_profiles, so
+  // this only runs as a fallback when that enrichment didn't happen (e.g. a
+  // pitch that came from a fetch path other than getAllPitches).
+  useEffect(() => {
+    let cancelled = false;
+    const biz = businessDetailsPitch?.business_profiles;
+    if (biz && (biz.owner_avatar_url || biz.owner_full_name)) {
+      setBusinessOwnerProfile({ avatar_url: biz.owner_avatar_url, full_name: biz.owner_full_name });
+      return;
+    }
+    const ownerId = biz?.user_id || businessDetailsPitch?.user_id;
+    if (!ownerId) {
+      setBusinessOwnerProfile(null);
+      return;
+    }
+    const loadOwnerProfile = async () => {
+      try {
+        const supabase = getSupabase();
+        // profiles RLS is "auth.uid() = id" -- a plain select only returns the
+        // caller's own row, so a non-owner viewer would get nothing back here.
+        // fn_get_public_profile_info is SECURITY DEFINER and exposes only
+        // id/full_name/avatar_url (backend/PITCHIN_PUBLIC_PROFILE_INFO_RPC.sql).
+        const { data } = await supabase
+          .rpc('fn_get_public_profile_info', { p_user_ids: [ownerId] });
+        const owner = data?.[0] || null;
+        // avatar_url can be an r2:// key that needs a live presigned URL.
+        if (owner?.avatar_url) owner.avatar_url = await resolveMediaValue(owner.avatar_url);
+        if (!cancelled) setBusinessOwnerProfile(owner);
+      } catch (err) {
+        console.warn('[Pitchin] Could not load business owner profile:', err?.message);
+        if (!cancelled) setBusinessOwnerProfile(null);
+      }
+    };
+    loadOwnerProfile();
+    return () => { cancelled = true; };
+  }, [businessDetailsPitch?.business_profiles?.user_id, businessDetailsPitch?.user_id]);
+
+  // Live shares/value for the Business Details modal -- same getLiveShareOffer
+  // the Invest flow prices against, so the modal never shows a stale listed
+  // number. `available: false` cases are surfaced via LIVE_OFFER_BLOCKED_MESSAGE
+  // instead of silently falling back to pitch.target_funding/equity_offering.
+  useEffect(() => {
+    let cancelled = false;
+    const businessProfileId = businessDetailsPitch?.business_profile_id || businessDetailsPitch?.business_profiles?.id;
+    const businessOwnerUserId = businessDetailsPitch?.business_profiles?.user_id || businessDetailsPitch?.user_id;
+    if (!businessProfileId) {
+      setBusinessLiveOffer(null);
+      setBusinessLiveOfferLoading(false);
+      return;
+    }
+    setBusinessLiveOfferLoading(true);
+    setBusinessLiveOffer(null);
+    getLiveShareOffer(businessProfileId, businessOwnerUserId)
+      .then((offer) => { if (!cancelled) setBusinessLiveOffer(offer); })
+      .catch((err) => {
+        console.warn('[Pitchin] Live share offer failed for business details modal:', err?.message);
+        if (!cancelled) setBusinessLiveOffer({ available: false, reason: 'default' });
+      })
+      .finally(() => { if (!cancelled) setBusinessLiveOfferLoading(false); });
+    return () => { cancelled = true; };
+  }, [businessDetailsPitch?.business_profile_id, businessDetailsPitch?.business_profiles?.id, businessDetailsPitch?.business_profiles?.user_id, businessDetailsPitch?.user_id]);
 
   const handleSmartContractClick = async (pitch) => {
     if (!currentUser) {
@@ -1475,17 +1554,24 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
                         <span className="text-pink-300 text-[9px] font-bold drop-shadow-lg">Create</span>
                       </button>
 
-                      {/* Pitcher Avatar — tap to view all their pitches */}
+                      {/* Pitcher Avatar — tap to view this business's details */}
                       <button
-                        onClick={() => setViewingPitcher({
-                          name: pitch.business_profiles?.business_name || pitch.business_profiles?.name || 'Pitcher',
-                          business_profile_id: pitch.business_profile_id,
-                          user_id: pitch.user_id,
-                        })}
+                        onClick={() => setBusinessDetailsPitch(pitch)}
                         className="icon-btn-transparent flex flex-col items-center gap-0.5"
-                        title="See all from this pitcher"
+                        title="View business details"
                       >
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-pink-500 to-orange-400 flex items-center justify-center text-white font-bold text-sm border border-white/30 transition-all hover:scale-110">
+                        {(pitch.business_profiles?.avatar_url || pitch.business_profiles?.owner_avatar_url) ? (
+                          <img
+                            src={pitch.business_profiles.avatar_url || pitch.business_profiles.owner_avatar_url}
+                            alt={pitch.business_profiles?.business_name || 'Pitcher'}
+                            className="w-9 h-9 rounded-full object-cover border border-white/30 transition-all hover:scale-110"
+                            onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                          />
+                        ) : null}
+                        <div
+                          className="w-9 h-9 rounded-full bg-gradient-to-br from-pink-500 to-orange-400 items-center justify-center text-white font-bold text-sm border border-white/30 transition-all hover:scale-110"
+                          style={{ display: (pitch.business_profiles?.avatar_url || pitch.business_profiles?.owner_avatar_url) ? 'none' : 'flex' }}
+                        >
                           {(pitch.business_profiles?.business_name || pitch.business_profiles?.name || 'P').charAt(0).toUpperCase()}
                         </div>
                         <span className="text-pink-300 text-[9px] font-bold drop-shadow-lg">Pitcher</span>
@@ -2105,17 +2191,24 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
                           <span className="text-pink-300 text-[9px] font-bold drop-shadow-lg">Create</span>
                         </button>
 
-                        {/* Pitcher Avatar — tap to view all their pitches */}
+                        {/* Pitcher Avatar — tap to view this business's details */}
                         <button
-                          onClick={() => setViewingPitcher({
-                            name: pitch.business_profiles?.business_name || pitch.business_profiles?.name || 'Pitcher',
-                            business_profile_id: pitch.business_profile_id,
-                            user_id: pitch.user_id,
-                          })}
+                          onClick={() => setBusinessDetailsPitch(pitch)}
                           className="icon-btn-transparent flex flex-col items-center gap-0.5"
-                          title="See all from this pitcher"
+                          title="View business details"
                         >
-                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-pink-500 to-orange-400 flex items-center justify-center text-white font-bold text-sm border border-white/30 transition-all hover:scale-110">
+                          {(pitch.business_profiles?.avatar_url || pitch.business_profiles?.owner_avatar_url) ? (
+                            <img
+                              src={pitch.business_profiles.avatar_url || pitch.business_profiles.owner_avatar_url}
+                              alt={pitch.business_profiles?.business_name || 'Pitcher'}
+                              className="w-9 h-9 rounded-full object-cover border border-white/30 transition-all hover:scale-110"
+                              onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                            />
+                          ) : null}
+                          <div
+                            className="w-9 h-9 rounded-full bg-gradient-to-br from-pink-500 to-orange-400 items-center justify-center text-white font-bold text-sm border border-white/30 transition-all hover:scale-110"
+                            style={{ display: (pitch.business_profiles?.avatar_url || pitch.business_profiles?.owner_avatar_url) ? 'none' : 'flex' }}
+                          >
                             {(pitch.business_profiles?.business_name || pitch.business_profiles?.name || 'P').charAt(0).toUpperCase()}
                           </div>
                           <span className="text-pink-300 text-[9px] font-bold drop-shadow-lg">Pitcher</span>
@@ -2357,7 +2450,18 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
                 (comments[showComments] || []).map((comment) => (
                   <div key={comment.id} className="bg-slate-700/50 rounded-lg p-3">
                     <div className="flex items-center gap-2 mb-2">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-bold">
+                      {comment.avatar_url ? (
+                        <img
+                          src={comment.avatar_url}
+                          alt={comment.user_name || comment.user?.name || 'Commenter'}
+                          className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                          onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                        />
+                      ) : null}
+                      <div
+                        className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                        style={{ display: comment.avatar_url ? 'none' : 'flex' }}
+                      >
                         {(comment.user_name || comment.user?.name || 'U')[0]?.toUpperCase()}
                       </div>
                       <div className="flex-1">
@@ -2592,7 +2696,18 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
                 (comments[showComments] || []).map((comment) => (
                   <div key={comment.id} className="bg-slate-700/50 rounded-lg p-3">
                     <div className="flex items-center gap-2 mb-2">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-bold">
+                      {comment.avatar_url ? (
+                        <img
+                          src={comment.avatar_url}
+                          alt={comment.user_name || comment.user?.name || 'Commenter'}
+                          className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                          onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                        />
+                      ) : null}
+                      <div
+                        className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                        style={{ display: comment.avatar_url ? 'none' : 'flex' }}
+                      >
                         {(comment.user_name || comment.user?.name || 'U')[0]?.toUpperCase()}
                       </div>
                       <div className="flex-1">
@@ -2909,6 +3024,143 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
           </div>
         </div>
       )}
+
+      {/* Business Details Modal — opened by tapping a pitch's Pitcher icon */}
+      {businessDetailsPitch && (() => {
+        const biz = businessDetailsPitch.business_profiles || {};
+        const displayName = biz.business_name || biz.name || 'Business';
+        const ownerName = businessOwnerProfile?.full_name;
+        // The business's own logo (set in BusinessProfileForm) takes priority
+        // over the owner's personal photo, which is only a fallback.
+        const ownerPhoto = biz.avatar_url || businessOwnerProfile?.avatar_url;
+        return (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+            <div className="bg-slate-800 rounded-2xl w-full max-w-md max-h-[85vh] flex flex-col">
+              <div className="flex items-center justify-between p-4 border-b border-slate-700">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-pink-400" />
+                  Business Details
+                </h3>
+                <button
+                  onClick={() => setBusinessDetailsPitch(null)}
+                  className="icon-btn-transparent text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-700 transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <div className="flex items-center gap-3">
+                  {ownerPhoto ? (
+                    <img
+                      src={ownerPhoto}
+                      alt={ownerName || displayName}
+                      className="w-14 h-14 rounded-full object-cover flex-shrink-0 border border-white/20"
+                      onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                    />
+                  ) : null}
+                  <div
+                    className="w-14 h-14 rounded-full bg-gradient-to-br from-pink-500 to-orange-400 items-center justify-center text-white font-bold text-xl flex-shrink-0 border border-white/20"
+                    style={{ display: ownerPhoto ? 'none' : 'flex' }}
+                  >
+                    {displayName.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-white font-bold text-base truncate">{displayName}</p>
+                    {ownerName && (
+                      <p className="text-slate-400 text-xs truncate">Pitched by {ownerName}</p>
+                    )}
+                  </div>
+                </div>
+
+                {biz.description && (
+                  <p className="text-slate-300 text-sm">{biz.description}</p>
+                )}
+
+                <div className="grid grid-cols-2 gap-2">
+                  {biz.business_type && (
+                    <div className="bg-white/5 rounded-lg p-2">
+                      <p className="text-slate-500 text-xs">Type</p>
+                      <p className="text-white text-sm font-semibold truncate">{biz.business_type}</p>
+                    </div>
+                  )}
+                  {biz.business_structure && (
+                    <div className="bg-white/5 rounded-lg p-2">
+                      <p className="text-slate-500 text-xs">Structure</p>
+                      <p className="text-white text-sm font-semibold truncate">{biz.business_structure}</p>
+                    </div>
+                  )}
+                  {biz.founded_year && (
+                    <div className="bg-white/5 rounded-lg p-2">
+                      <p className="text-slate-500 text-xs">Founded</p>
+                      <p className="text-white text-sm font-semibold">{biz.founded_year}</p>
+                    </div>
+                  )}
+                  {typeof biz.total_capital === 'number' && (
+                    <div className="bg-white/5 rounded-lg p-2">
+                      <p className="text-slate-500 text-xs">Total Capital</p>
+                      <p className="text-white text-sm font-semibold">{formatCurrency(biz.total_capital)}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Live shares & value -- the same getLiveShareOffer() the Invest
+                    flow prices against, not the static target_funding/raised_amount
+                    columns (those are seeded once and never recomputed). */}
+                {businessLiveOfferLoading ? (
+                  <div className="bg-white/5 p-3 rounded-lg flex items-center gap-2 text-slate-400 text-sm">
+                    <Loader className="w-4 h-4 animate-spin" />
+                    Loading live share value...
+                  </div>
+                ) : businessLiveOffer?.available ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="bg-white/5 rounded-lg p-2">
+                      <p className="text-slate-500 text-xs">Live Business Value</p>
+                      <p className="text-white text-sm font-bold">UGX {Math.round(businessLiveOffer.businessValueUgx).toLocaleString()}</p>
+                    </div>
+                    <div className="bg-white/5 rounded-lg p-2">
+                      <p className="text-slate-500 text-xs">Live Share Price</p>
+                      <p className="text-white text-sm font-bold">UGX {Math.round(businessLiveOffer.sharePriceUgx).toLocaleString()}</p>
+                    </div>
+                    <div className="bg-white/5 rounded-lg p-2">
+                      <p className="text-slate-500 text-xs">Shares Available</p>
+                      <p className="text-white text-sm font-bold">
+                        {businessLiveOffer.sharesAvailable.toLocaleString()} of {businessLiveOffer.totalShares.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="bg-white/5 rounded-lg p-2">
+                      <p className="text-slate-500 text-xs">Equity Offering</p>
+                      <p className="text-white text-sm font-bold">{businessDetailsPitch.equity_offering || 0}%</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-amber-500/10 border border-amber-500/40 rounded-lg p-3">
+                    <p className="text-amber-200 text-sm">
+                      {LIVE_OFFER_BLOCKED_MESSAGE[businessLiveOffer?.reason] || LIVE_OFFER_BLOCKED_MESSAGE.default}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-4 border-t border-slate-700 flex gap-2">
+                <button
+                  onClick={() => {
+                    setViewingPitcher({
+                      name: displayName,
+                      business_profile_id: businessDetailsPitch.business_profile_id,
+                      user_id: businessDetailsPitch.user_id,
+                    });
+                    setBusinessDetailsPitch(null);
+                  }}
+                  className="flex-1 bg-pink-500 hover:bg-pink-600 text-white rounded-lg font-semibold py-2 text-sm transition"
+                >
+                  See all pitches from this business
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Fullscreen Video Player Modal */}
       {videoPlayerPitch && (

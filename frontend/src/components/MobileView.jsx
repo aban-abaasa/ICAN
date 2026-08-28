@@ -6888,11 +6888,32 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     )}
 
                     {/* Gradient Overlay on hover */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-all"></div>
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
 
                     {/* Duration Badge */}
                     <div className="absolute top-2 right-2 bg-black/70 backdrop-blur-sm px-2 py-1 rounded-full text-xs text-white font-medium">
                       {Math.ceil((new Date(status.expires_at) - new Date()) / (1000 * 60 * 60))}h
+                    </div>
+
+                    {/* Poster identity — real profile photo, not a placeholder */}
+                    <div className="absolute bottom-2 left-2 flex items-center gap-1.5 min-w-0 max-w-[85%]">
+                      {status.poster_avatar_url ? (
+                        <img
+                          src={status.poster_avatar_url}
+                          alt={status.poster_full_name || 'Poster'}
+                          className="w-6 h-6 rounded-full object-cover border border-white/40 flex-shrink-0"
+                          onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                        />
+                      ) : null}
+                      <div
+                        className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 items-center justify-center text-white text-[10px] font-bold border border-white/40 flex-shrink-0"
+                        style={{ display: status.poster_avatar_url ? 'none' : 'flex' }}
+                      >
+                        {(status.poster_full_name || 'U').charAt(0).toUpperCase()}
+                      </div>
+                      <span className="text-white text-xs font-medium truncate drop-shadow-lg">
+                        {status.user_id === (authContextUser?.id || userProfile?.id) ? 'You' : (status.poster_full_name || 'User')}
+                      </span>
                     </div>
                   </div>
                 ))}

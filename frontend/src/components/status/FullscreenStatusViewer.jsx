@@ -13,8 +13,17 @@ import {
 } from '../../services/statusMessagesService';
 import { useAuth } from '../../context/AuthContext';
 
+const timeAgo = (timestamp) => {
+  if (!timestamp) return 'Now';
+  const minutes = Math.floor((Date.now() - new Date(timestamp).getTime()) / 60000);
+  if (minutes < 1) return 'Now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ago`;
+};
+
 export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) => {
-  const { user } = useAuth();
+  const { user, getAvatarUrl, getDisplayName, getInitials } = useAuth();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [progress, setProgress] = useState(0);
   const [liked, setLiked] = useState(false);
@@ -337,13 +346,33 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
           {/* User info overlay */}
           <div className="absolute top-12 left-0 right-0 px-4 z-30 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white font-bold border-2 border-white">
-                U
-              </div>
-              <div>
-                <p className="text-white font-semibold">@User</p>
-                <p className="text-white/70 text-xs">Now</p>
-              </div>
+              {(() => {
+                const isOwn = currentStatus.user_id === user?.id;
+                const posterName = isOwn ? getDisplayName() : (currentStatus.poster_full_name || 'User');
+                const posterPhoto = isOwn ? getAvatarUrl() : currentStatus.poster_avatar_url;
+                return (
+                  <>
+                    {posterPhoto ? (
+                      <img
+                        src={posterPhoto}
+                        alt={posterName}
+                        className="w-10 h-10 rounded-full object-cover border-2 border-white flex-shrink-0"
+                        onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                      />
+                    ) : null}
+                    <div
+                      className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 items-center justify-center text-white font-bold border-2 border-white flex-shrink-0"
+                      style={{ display: posterPhoto ? 'none' : 'flex' }}
+                    >
+                      {isOwn ? getInitials(posterName) : posterName.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-white font-semibold">{isOwn ? 'You' : posterName}</p>
+                      <p className="text-white/70 text-xs">{timeAgo(currentStatus.created_at)}</p>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
 
             {/* View count */}
@@ -370,11 +399,20 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
 
               <button
                 onClick={() => {
-                  navigator.share?.({
-                    title: 'Check this status',
-                    text: currentStatus.caption,
-                    url: window.location.href
-                  }).catch(() => {});
+                  // A real per-status deep link, not the current page URL --
+                  // this is what PublicStatusViewer (main.jsx) resolves for a
+                  // signed-out recipient, so it has to point at this exact
+                  // status, not wherever the sharer happened to be.
+                  const shareUrl = `https://icanera.space/status/${currentStatus.id}`;
+                  if (navigator.share) {
+                    navigator.share({
+                      title: 'Check this update on ICANEra',
+                      text: currentStatus.caption,
+                      url: shareUrl
+                    }).catch(() => {});
+                  } else {
+                    navigator.clipboard.writeText(shareUrl).catch(() => {});
+                  }
                 }}
                 className="p-3 rounded-full backdrop-blur-sm bg-white/10 text-white hover:bg-white/20 transition-all"
                 title="Share"
@@ -407,23 +445,39 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
                     </div>
                   ) : (
                     <>
-                      {statusMessages.map((msg) => (
-                        <div key={msg.id} className="bg-white/5 rounded-lg p-2.5 border border-white/10 min-w-0">
-                          <div className="flex items-start gap-2 min-w-0">
-                            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                              {(msg.sender_id === user?.id ? 'Y' : 'U')}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-semibold text-white">
-                                {msg.sender_id === user?.id ? 'You' : `User`}
-                              </p>
-                              <p className="text-xs text-white/90 break-words leading-relaxed">
-                                {msg.message_text}
-                              </p>
+                      {statusMessages.map((msg) => {
+                        const isOwn = msg.sender_id === user?.id;
+                        const senderName = isOwn ? getDisplayName() : (msg.sender_full_name || 'User');
+                        const senderPhoto = isOwn ? getAvatarUrl() : msg.sender_avatar_url;
+                        return (
+                          <div key={msg.id} className="bg-white/5 rounded-lg p-2.5 border border-white/10 min-w-0">
+                            <div className="flex items-start gap-2 min-w-0">
+                              {senderPhoto ? (
+                                <img
+                                  src={senderPhoto}
+                                  alt={senderName}
+                                  className="w-7 h-7 rounded-full object-cover flex-shrink-0"
+                                  onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                                />
+                              ) : null}
+                              <div
+                                className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                                style={{ display: senderPhoto ? 'none' : 'flex' }}
+                              >
+                                {isOwn ? getInitials(senderName) : senderName.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-semibold text-white">
+                                  {isOwn ? 'You' : senderName}
+                                </p>
+                                <p className="text-xs text-white/90 break-words leading-relaxed">
+                                  {msg.message_text}
+                                </p>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                       <div ref={messagesEndRef} />
                     </>
                   )}

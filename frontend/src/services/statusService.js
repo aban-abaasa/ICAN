@@ -200,11 +200,48 @@ export const getActiveStatuses = async (userId = null) => {
 
     // Refresh media URLs for all statuses (in parallel)
     const statusesWithUrls = await refreshStatusMediaUrls(data || []);
+    const enrichedStatuses = await enrichStatusesWithPosterProfiles(statusesWithUrls);
 
-    return { statuses: statusesWithUrls || [], error: null };
+    return { statuses: enrichedStatuses || [], error: null };
   } catch (error) {
     console.error('Get statuses error:', error);
     return { statuses: [], error };
+  }
+};
+
+/**
+ * Attach each status's poster real profile photo/name (poster_avatar_url,
+ * poster_full_name) so the "Updates" UI can show who actually posted it
+ * instead of a generic placeholder. ican_statuses only stores user_id, so
+ * this is a separate batched `profiles` lookup rather than a nested select
+ * (no declared FK for PostgREST embedding between the two tables).
+ */
+const enrichStatusesWithPosterProfiles = async (statuses) => {
+  if (!statuses || statuses.length === 0) return statuses;
+  try {
+    const userIds = [...new Set(statuses.map(s => s.user_id).filter(Boolean))];
+    if (userIds.length === 0) return statuses;
+
+    // profiles RLS is "auth.uid() = id", so a plain select would only ever
+    // return the CALLER's own row -- other posters' photos would never show.
+    // fn_get_public_profile_info is SECURITY DEFINER and returns only
+    // id/full_name/avatar_url (backend/PITCHIN_PUBLIC_PROFILE_INFO_RPC.sql).
+    const { data: profiles, error } = await supabase
+      .rpc('fn_get_public_profile_info', { p_user_ids: userIds });
+    if (error) throw error;
+    // avatar_url can be an r2:// key that needs a live presigned URL.
+    const resolvedProfiles = await resolveMediaValues(profiles || [], ['avatar_url']);
+
+    const profileById = new Map(resolvedProfiles.map(p => [p.id, p]));
+    return statuses.map(status => {
+      const poster = profileById.get(status.user_id);
+      return poster
+        ? { ...status, poster_full_name: poster.full_name || null, poster_avatar_url: poster.avatar_url || null }
+        : status;
+    });
+  } catch (err) {
+    console.warn('Could not enrich statuses with poster profiles:', err?.message);
+    return statuses;
   }
 };
 
@@ -339,6 +376,43 @@ export const getStatusViewers = async (statusId) => {
 };
 
 /**
+ * Fetch a single status by id, for a shared /status/:statusId link.
+ * ican_statuses grants SELECT to anon (CREATE_STATUS_FEATURES.sql, USING
+ * visibility IN ('public','followers') OR user_id = auth.uid()), so this
+ * works with no auth at all -- a shared link opens the update directly for a
+ * signed-out visitor. Returns null for a private/other-user's status, or one
+ * that has already expired (24h TTL), so the caller can show a clear message
+ * instead of silently rendering nothing.
+ */
+export const getStatusById = async (statusId) => {
+  try {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+
+    const { data, error } = await supabase
+      .from('ican_statuses')
+      .select('*')
+      .eq('id', statusId)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) return { status: null, expired: false, error: null };
+
+    const isExpired = new Date(data.expires_at).getTime() <= Date.now();
+    const isOwner = authUser?.id === data.user_id;
+    const isVisible = data.visibility === 'public' || data.visibility === 'followers' || isOwner;
+    if (!isVisible) return { status: null, expired: false, error: null };
+    if (isExpired && !isOwner) return { status: null, expired: true, error: null };
+
+    const [withUrl] = await refreshStatusMediaUrls([data]);
+    const [enriched] = await enrichStatusesWithPosterProfiles([withUrl]);
+    return { status: enriched, expired: false, error: null };
+  } catch (error) {
+    console.error('Get status by id error:', error);
+    return { status: null, expired: false, error };
+  }
+};
+
+/**
  * Get user's own statuses
  * @param {string} userId - User ID
  * @returns {Promise<{statuses: Array, error: Object|null}>}
@@ -356,8 +430,9 @@ export const getUserStatuses = async (userId) => {
 
     // Refresh media URLs for all statuses (in parallel)
     const statusesWithUrls = await refreshStatusMediaUrls(data || []);
+    const enrichedStatuses = await enrichStatusesWithPosterProfiles(statusesWithUrls);
 
-    return { statuses: statusesWithUrls || [], error: null };
+    return { statuses: enrichedStatuses || [], error: null };
   } catch (error) {
     console.error('Get user statuses error:', error);
     return { statuses: [], error };
