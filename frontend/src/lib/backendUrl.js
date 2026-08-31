@@ -1,21 +1,17 @@
-// Resolves the base URL for calls to the Express dev backend
-// (ICAN/backend/server.js) and to this project's Vercel serverless
-// functions (ICAN/api/**).
+// Resolves the base URL for calls to this project's Vercel serverless
+// functions (ICAN/api/**), which is the only backend that's ever actually
+// running — there is no local Express server to fall back to.
 //
-// The two run in genuinely different places:
-// - Locally, Vite (frontend) and the Express server run on different
-//   ports/origins, so local dev needs an absolute http://localhost:5000.
-// - On Vercel, the serverless functions under ICAN/api/** are deployed at
-//   the SAME origin as the built frontend — a relative fetch ('' + path)
-//   is what actually reaches them. Defaulting to 'http://localhost:5000'
-//   in production, like the old inline fallbacks did, resolves to nothing
-//   on a real visitor's machine and fails with a bare "Failed to fetch".
+// On Vercel, those functions are deployed at the SAME origin as the built
+// frontend, so a relative fetch ('' + path) is what reaches them there.
+// In local dev the Vite origin (localhost:3001) has no such functions, so
+// local dev must point at the deployed origin instead.
 //
-// VITE_BACKEND_URL still wins when explicitly set (e.g. pointing a local
-// frontend at a separately-hosted backend instead of localhost:5000).
+// VITE_BACKEND_URL wins when explicitly set (e.g. pointing at a preview
+// deployment instead of production).
 export const getBackendUrl = () => {
   if (import.meta.env.VITE_BACKEND_URL !== undefined) return import.meta.env.VITE_BACKEND_URL;
-  return import.meta.env.DEV ? 'http://localhost:5000' : '';
+  return import.meta.env.DEV ? (import.meta.env.VITE_APP_URL || '') : '';
 };
 
 export default getBackendUrl;

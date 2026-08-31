@@ -9,6 +9,7 @@
  */
 
 import { supabase } from '../lib/supabase/client';
+import { resolveMediaValues } from './r2StorageService';
 
 // ============================================================
 // 1. GET FILTERED REPORTS (Based on user role)
@@ -32,11 +33,15 @@ export const getFilteredReports = async (companyId, dataScope = 'department') =>
       };
     }
 
+    // photo_url may hold an r2:// key (new uploads) instead of a live URL --
+    // resolve it here so every caller gets a fetchable link either way.
+    const resolved = await resolveMediaValues(data || [], ['photo_url']);
+
     return {
       success: true,
       data: dataScope === 'own'
-        ? (data || []).filter((report) => report.is_own_report)
-        : data || [],
+        ? resolved.filter((report) => report.is_own_report)
+        : resolved,
       stats: {
         totalReports: data?.length || 0,
         ownReports: data?.filter(r => r.is_own_report)?.length || 0,
@@ -65,7 +70,9 @@ export const createFilteredReport = async (companyId, reportData) => {
       severity = 'medium',
       reportBody = '',
       departmentId = null,
-      visibilityLevel = 'department'
+      visibilityLevel = 'department',
+      photoUrl = null,
+      photoPath = null
     } = reportData;
 
     const { data, error } = await supabase
@@ -76,7 +83,9 @@ export const createFilteredReport = async (companyId, reportData) => {
         p_severity: severity,
         p_report_body: reportBody,
         p_department_id: departmentId,
-        p_visibility_level: visibilityLevel
+        p_visibility_level: visibilityLevel,
+        p_photo_url: photoUrl,
+        p_photo_path: photoPath
       });
 
     if (error) {

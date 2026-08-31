@@ -5,8 +5,10 @@
  * pitch/status visibility. Keys are unguessable, backend-generated paths.
  */
 import { getDownloadUrl } from '../_lib/r2Client.js';
+import { applyCors } from '../_lib/cors.js';
 
 export default async function handler(req, res) {
+  if (applyCors(req, res)) return;
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }

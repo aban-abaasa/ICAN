@@ -161,7 +161,7 @@ export const getUserNotifications = async (userId, { unreadOnly = false, limit =
       sb
         .from(SOURCE.LEGACY)
         .select('*')
-        .eq('recipient_id', userId)
+        .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(limit)
     )
@@ -310,7 +310,7 @@ export const subscribeToUserNotifications = (userId, callback) => {
         event: 'INSERT',
         schema: 'public',
         table: SOURCE.LEGACY,
-        filter: `recipient_id=eq.${userId}`
+        filter: `user_id=eq.${userId}`
       },
       (payload) => {
         const [normalized] = normalizeNotifications({ rows: [payload.new], source: SOURCE.LEGACY });

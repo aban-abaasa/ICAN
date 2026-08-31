@@ -14,7 +14,7 @@ const adminSupabase =
       })
     : null;
 
-const ALLOWED_FOLDERS = ['pitches', 'statuses', 'avatars'];
+const ALLOWED_FOLDERS = ['pitches', 'statuses', 'avatars', 'cmms-reports'];
 
 const getAuthenticatedUser = async (req) => {
   const authHeader = req.headers.authorization || '';
@@ -27,7 +27,7 @@ const getAuthenticatedUser = async (req) => {
 
 /**
  * POST /api/storage/presign-upload
- * Body: { folder: 'pitches'|'statuses'|'avatars', filename, contentType }
+ * Body: { folder: 'pitches'|'statuses'|'avatars'|'cmms-reports', filename, contentType }
  */
 router.post('/presign-upload', async (req, res) => {
   try {

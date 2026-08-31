@@ -1673,16 +1673,18 @@ export const createNotification = async (notificationData) => {
 
     // Only create notification if recipient is the current user (RLS requirement)
     // For now, skip notifications that aren't for the current user
-    if (notificationData.recipient_id && notificationData.recipient_id !== user.id) {
+    const requestedRecipient = notificationData.recipient_id || notificationData.user_id;
+    if (requestedRecipient && requestedRecipient !== user.id) {
       console.log('Skipping notification - recipient is not current user');
       return { success: true }; // Don't fail - just skip
     }
 
+    const { recipient_id: _recipientId, ...restNotificationData } = notificationData;
     const { data, error } = await sb
       .from('notifications')
       .insert([{
-        ...notificationData,
-        recipient_id: user.id // Ensure recipient_id is current user
+        ...restNotificationData,
+        user_id: user.id // Ensure user_id is current user
       }])
       .select();
 
@@ -1707,7 +1709,7 @@ export const getUserNotifications = async (userId) => {
     const { data, error } = await sb
       .from('notifications')
       .select('*')
-      .eq('recipient_id', userId)
+      .eq('user_id', userId)
       .eq('status', 'unread')
       .order('created_at', { ascending: false })
       .limit(10);

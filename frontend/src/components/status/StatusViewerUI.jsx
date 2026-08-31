@@ -104,15 +104,28 @@ export const StatusViewerUI = ({ onOpenStatusUploader = null, onOpenProfileEdit 
 
           {/* Status Thumbnail with WhatsApp-style ring */}
           <div className="relative w-9 h-9 rounded-full overflow-hidden flex-shrink-0">
-            {currentStatus?.thumbnail_url ? (
+            {currentStatus?.media_type === 'image' && currentStatus?.media_url ? (
               <img
-                src={currentStatus.thumbnail_url}
+                src={currentStatus.media_url}
                 alt="Status"
                 className="w-full h-full object-cover"
               />
+            ) : currentStatus?.media_type === 'video' && currentStatus?.media_url ? (
+              <video
+                src={currentStatus.media_url}
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="auto"
+                className="w-full h-full object-cover"
+              />
             ) : (
-              <div className="w-full h-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-bold">
-                {currentStatus?.created_by?.charAt(0) || 'S'}
+              <div
+                style={{ backgroundColor: currentStatus?.background_color || undefined }}
+                className="w-full h-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-bold"
+              >
+                {currentStatus?.poster_full_name?.charAt(0) || 'S'}
               </div>
             )}
             {/* WhatsApp-style gradient ring for unviewed status */}
@@ -122,7 +135,7 @@ export const StatusViewerUI = ({ onOpenStatusUploader = null, onOpenProfileEdit 
           {/* Status Info */}
           <div className="hidden sm:flex flex-col gap-0.5 min-w-0">
             <span className="text-xs font-medium text-white truncate">
-              {currentStatus?.created_by || 'Status'}
+              {currentStatus?.poster_full_name || 'Status'}
             </span>
             <span className="text-xs text-gray-400">
               {currentStatus?.view_count || 0} views

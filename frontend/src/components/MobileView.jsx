@@ -3525,22 +3525,19 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       // Check if user has owned/co-owned business profiles
       const [
         ownedBusinessByUserIdResult,
-        coOwnedByUserIdResult,
-        coOwnedByOwnerIdResult
+        coOwnedByUserIdResult
       ] = await Promise.all([
         // Only query by user_id (owner_email doesn't exist in business_profiles)
         supabase.from('business_profiles').select('id').eq('user_id', userId).limit(1),
-        supabase.from('business_co_owners').select('business_profile_id').eq('user_id', userId).limit(1),
-        supabase.from('business_co_owners').select('business_profile_id').eq('owner_id', userId).limit(1)
+        // business_co_owners has no owner_id column, only user_id
+        supabase.from('business_co_owners').select('business_profile_id').eq('user_id', userId).limit(1)
       ]);
 
       const hasOwnedBusinessByUserId = !ownedBusinessByUserIdResult.error && (ownedBusinessByUserIdResult.data?.length || 0) > 0;
       const hasCoOwnedBusinessByUserId = !coOwnedByUserIdResult.error && (coOwnedByUserIdResult.data?.length || 0) > 0;
-      const hasCoOwnedBusinessByOwnerId = !coOwnedByOwnerIdResult.error && (coOwnedByOwnerIdResult.data?.length || 0) > 0;
       accounts.business.exists = (
         hasOwnedBusinessByUserId ||
-        hasCoOwnedBusinessByUserId ||
-        hasCoOwnedBusinessByOwnerId
+        hasCoOwnedBusinessByUserId
       );
 
       // Trust account only appears when user is in at least one trust group
