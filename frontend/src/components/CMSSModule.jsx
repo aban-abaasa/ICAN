@@ -2031,6 +2031,7 @@ const CMMSModule = ({
     const [isLoadingConversation, setIsLoadingConversation] = useState(false);
     const [isLoadingUsers, setIsLoadingUsers] = useState(false);
     const [userSearchQuery, setUserSearchQuery] = useState(''); // Search state for filtering users
+    const chatBottomRef = useRef(null); // Keeps the newest message pinned in view
 
     // State for job assignment
     const [jobAssignmentForm, setJobAssignmentForm] = useState({
@@ -2094,6 +2095,13 @@ const CMMSModule = ({
       }
     }, [selectedUserToMessage, companyIdToUse, loadUserMessages]);
 
+    // Keep the newest message in view - on initial load and as new messages arrive/are sent
+    useEffect(() => {
+      if (!isLoadingConversation) {
+        chatBottomRef.current?.scrollIntoView({ block: 'end' });
+      }
+    }, [currentConversationMessages, isLoadingConversation]);
+
     const loadUserTasks = async () => {
       setIsLoadingTasks(true);
       try {
@@ -2113,7 +2121,12 @@ const CMMSModule = ({
       try {
         const result = await cmmsMessagingService.getJobsAssignedByMe(companyIdToUse);
         if (result.success) {
-          setAssignedByMeTasks((result.data || []).filter(j => j.assigned_by_user_id === user?.id));
+          // assigned_by_user_id is a cmms_users.id, but `user` here is the app-wide
+          // profile (user={userProfile} in MobileView) whose .id is a different
+          // identity space - comparing ids never matches. Match on email instead,
+          // the same way the rest of this component resolves "my CMMS identity".
+          const myEmail = (user?.email || '').toLowerCase();
+          setAssignedByMeTasks((result.data || []).filter(j => (j.assigned_by_user_email || '').toLowerCase() === myEmail));
         }
       } catch (error) {
         console.error('Error loading assigned-by-me tasks:', error);
@@ -2173,7 +2186,7 @@ const CMMSModule = ({
 
     // Component to render a message and its replies
     const MessageThread = ({ message, level = 0 }) => {
-      const isOwnMessage = message.sender_id === user?.id;
+      const isOwnMessage = (message.sender_email || '').toLowerCase() === (user?.email || '').toLowerCase();
       const indentLevel = level > 0 ? 3 : 0; // Only indent replies
       
       return (
@@ -2636,12 +2649,12 @@ const CMMSModule = ({
                   <div className="p-4 text-center">
                     <p className="text-gray-400 text-xs">Loading users...</p>
                   </div>
-                ) : companyUsers.filter(u => u.id !== user?.id).length === 0 ? (
+                ) : companyUsers.filter(u => (u.email || '').toLowerCase() !== (user?.email || '').toLowerCase()).length === 0 ? (
                   <div className="p-4 text-center">
                     <p className="text-gray-400 text-xs">No other users to message</p>
                   </div>
                 ) : companyUsers
-                    .filter(u => u.id !== user?.id)
+                    .filter(u => (u.email || '').toLowerCase() !== (user?.email || '').toLowerCase())
                     .filter(u => {
                       const searchLower = userSearchQuery.toLowerCase();
                       return (
@@ -2655,7 +2668,7 @@ const CMMSModule = ({
                 ) : (
                   <div className="space-y-1 p-2">
                     {companyUsers
-                      .filter(u => u.id !== user?.id)
+                      .filter(u => (u.email || '').toLowerCase() !== (user?.email || '').toLowerCase())
                       .filter(u => {
                         const searchLower = userSearchQuery.toLowerCase();
                         return (
@@ -2729,6 +2742,7 @@ const CMMSModule = ({
                       <MessageThread key={thread.id} message={thread} />
                     ))
                   )}
+                  <div ref={chatBottomRef} />
                 </div>
 
                 {/* Message Input - Fixed Layout for Mobile */}
@@ -2784,10 +2798,10 @@ const CMMSModule = ({
                     <option value="">Select user...</option>
                     {isLoadingUsers ? (
                       <option disabled>Loading users...</option>
-                    ) : companyUsers.filter(u => u.id !== user?.id).length === 0 ? (
+                    ) : companyUsers.filter(u => (u.email || '').toLowerCase() !== (user?.email || '').toLowerCase()).length === 0 ? (
                       <option disabled>No other users available</option>
                     ) : (
-                      companyUsers.filter(u => u.id !== user?.id).map(userItem => (
+                      companyUsers.filter(u => (u.email || '').toLowerCase() !== (user?.email || '').toLowerCase()).map(userItem => (
                         <option key={userItem.id} value={userItem.id}>
                           {userItem.name ? `${userItem.name} (${userItem.email})` : userItem.email}
                         </option>

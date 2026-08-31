@@ -23,6 +23,42 @@
 --      who assigned the job is fed progress in their notifications feed.
 --   5. Updates fn_get_job_assignments / fn_get_user_job_assignments to
 --      return the new progress columns so the UI can render them.
+--   6. Fixes fn_update_job_assignment_status resolving the caller's
+--      cmms_users row by email alone (LIMIT 1, no company filter) before
+--      knowing the assignment's company - for a user who is a member of
+--      more than one CMMS company under the same email, that could pick
+--      the wrong company_id and make the assignment lookup return nothing,
+--      surfacing as "Job assignment not found or unauthorized" even to the
+--      correct assignee. It now resolves the assignment (and its real
+--      company_id) first, then scopes the user lookup to that company.
+--   7. Fixes fn_update_job_assignment_status letting an explicit (stale)
+--      progress_percentage override the 100%/0% implied by a status of
+--      completed/pending - the status dropdown in the UI passes the task's
+--      current percentage alongside the new status rather than NULL, so
+--      marking a task "completed" while it was e.g. 40% left it at 40%
+--      instead of jumping to 100%. Status now always wins for those two.
+--   8. Fixes fn_get_job_assignments error 42702 "column reference \"id\" is
+--      ambiguous". RETURNS TABLE(id UUID, ...) makes "id" an implicit
+--      variable at function scope, so the unqualified `WHERE id = ...` in
+--      the assigned_to/assigned_by name/email subqueries collided with it.
+--      Both subqueries now use an explicit table alias.
+--   9. Fixes every name lookup here (fn_assign_job's assigner, fn_update_
+--      job_assignment_status's actor, fn_get_job_assignments' assigned_to/
+--      assigned_by, fn_get_user_job_assignments' assigned_by) reading
+--      cmms_users.name - a column added later (see CMMS_REPORT_MESSAGING_
+--      SYSTEM.sql) that nothing ever populates. The frontend writes new
+--      members to cmms_users.user_name, so .name is NULL for effectively
+--      everyone and every one of these was silently falling back to
+--      showing someone's email address instead of their name. All now
+--      read COALESCE(cu.name, cu.user_name).
+--  10. Backfills rows already stuck with the bug fix #7 describes - e.g. a
+--      task showing "completed" with "Progress 0%" in the assigner's
+--      Progress tab. Fix #7 only stops it happening on *future* status
+--      updates; it does nothing for a row that was already saved wrong
+--      before this migration was deployed. One-time UPDATE below forces
+--      completed -> 100% and pending -> 0% for any row that still
+--      disagrees, same rule fn_update_job_assignment_status now enforces
+--      going forward.
 --
 -- Safe to re-run.
 -- ============================================================
@@ -40,6 +76,20 @@ ADD COLUMN IF NOT EXISTS progress_notes TEXT;
 
 ALTER TABLE public.cmms_job_assignments
 ADD COLUMN IF NOT EXISTS last_progress_update TIMESTAMPTZ;
+
+-- ============================================================
+-- 1a. BACKFILL: repair rows saved before fix #7 existed, where the
+-- displayed status and progress_percentage disagree (e.g. "completed"
+-- sitting at an old in-progress percentage instead of 100%).
+-- ============================================================
+
+UPDATE public.cmms_job_assignments
+SET progress_percentage = 100, updated_at = NOW()
+WHERE assignment_status = 'completed' AND progress_percentage <> 100;
+
+UPDATE public.cmms_job_assignments
+SET progress_percentage = 0, updated_at = NOW()
+WHERE assignment_status = 'pending' AND progress_percentage <> 0;
 
 -- ============================================================
 -- 2. HELPER: fn_create_cmms_notification
@@ -132,7 +182,7 @@ BEGIN
     SELECT email INTO v_auth_email FROM auth.users WHERE id = v_auth_uid;
   END IF;
 
-  SELECT cu.id, cu.name, LOWER(TRIM(COALESCE(cu.role, 'member')))
+  SELECT cu.id, COALESCE(cu.name, cu.user_name), LOWER(TRIM(COALESCE(cu.role, 'member')))
   INTO v_assigner_id, v_assigner_name, v_assigner_role
   FROM public.cmms_users cu
   WHERE cu.cmms_company_id = p_company_id
@@ -275,26 +325,32 @@ BEGIN
     SELECT email INTO v_auth_email FROM auth.users WHERE id = v_auth_uid;
   END IF;
 
-  SELECT cu.id, cu.name, cu.cmms_company_id, cu.role
-  INTO v_auth_user_id, v_auth_user_name, v_company_id, v_assignment_role
+  -- Resolve the assignment FIRST to learn its real company_id. Looking up
+  -- the caller's cmms_users row by email alone (no company filter) picks an
+  -- arbitrary row via LIMIT 1 when the same email belongs to cmms_users in
+  -- more than one company - that previously caused the company-scoped
+  -- assignment lookup below to find nothing, surfacing as "Job assignment
+  -- not found or unauthorized" even for the correct assignee.
+  SELECT cja.company_id, cja.assigned_to_user_id, cja.assigned_by_user_id, cja.job_title
+  INTO v_company_id, v_assignment_user_id, v_assigned_by_user_id, v_job_title
+  FROM public.cmms_job_assignments cja
+  WHERE cja.id = p_assignment_id;
+
+  IF v_company_id IS NULL THEN
+    RETURN QUERY SELECT FALSE, 'Job assignment not found'::VARCHAR, NULL::JSON;
+    RETURN;
+  END IF;
+
+  SELECT cu.id, COALESCE(cu.name, cu.user_name), cu.role
+  INTO v_auth_user_id, v_auth_user_name, v_assignment_role
   FROM public.cmms_users cu
   WHERE LOWER(cu.email) = LOWER(v_auth_email)
+    AND cu.cmms_company_id = v_company_id
     AND cu.is_active = TRUE
   LIMIT 1;
 
   IF v_auth_user_id IS NULL THEN
-    RETURN QUERY SELECT FALSE, 'Not a CMMS member'::VARCHAR, NULL::JSON;
-    RETURN;
-  END IF;
-
-  SELECT cja.assigned_to_user_id, cja.assigned_by_user_id, cja.job_title
-  INTO v_assignment_user_id, v_assigned_by_user_id, v_job_title
-  FROM public.cmms_job_assignments cja
-  WHERE cja.id = p_assignment_id
-    AND cja.company_id = v_company_id;
-
-  IF v_assignment_user_id IS NULL THEN
-    RETURN QUERY SELECT FALSE, 'Job assignment not found or unauthorized'::VARCHAR, NULL::JSON;
+    RETURN QUERY SELECT FALSE, 'Not a CMMS member of this company'::VARCHAR, NULL::JSON;
     RETURN;
   END IF;
 
@@ -317,11 +373,16 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Derive a sensible progress value when the caller only sent a status
+  -- Completed/pending always pin progress to 100/0 - a task can't be
+  -- "completed" while still showing its old in-progress percentage, which
+  -- is what happened when the caller (e.g. the status dropdown) echoed back
+  -- the task's existing percentage alongside the new status instead of
+  -- passing NULL. Status wins over an explicit percentage for those two;
+  -- otherwise fall back to whatever percentage the caller actually sent.
   v_effective_progress := CASE
-    WHEN p_progress_percentage IS NOT NULL THEN p_progress_percentage
     WHEN p_new_status = 'completed' THEN 100
     WHEN p_new_status = 'pending' THEN 0
+    WHEN p_progress_percentage IS NOT NULL THEN p_progress_percentage
     ELSE NULL
   END;
 
@@ -446,11 +507,11 @@ BEGIN
     cja.report_id,
     cja.company_id,
     cja.assigned_to_user_id,
-    (SELECT name FROM public.cmms_users WHERE id = cja.assigned_to_user_id) AS assigned_to_user_name,
-    (SELECT email FROM public.cmms_users WHERE id = cja.assigned_to_user_id) AS assigned_to_user_email,
+    (SELECT COALESCE(cu2.name, cu2.user_name) FROM public.cmms_users cu2 WHERE cu2.id = cja.assigned_to_user_id) AS assigned_to_user_name,
+    (SELECT cu2.email FROM public.cmms_users cu2 WHERE cu2.id = cja.assigned_to_user_id) AS assigned_to_user_email,
     cja.assigned_by_user_id,
-    (SELECT name FROM public.cmms_users WHERE id = cja.assigned_by_user_id) AS assigned_by_user_name,
-    (SELECT email FROM public.cmms_users WHERE id = cja.assigned_by_user_id) AS assigned_by_user_email,
+    (SELECT COALESCE(cu3.name, cu3.user_name) FROM public.cmms_users cu3 WHERE cu3.id = cja.assigned_by_user_id) AS assigned_by_user_name,
+    (SELECT cu3.email FROM public.cmms_users cu3 WHERE cu3.id = cja.assigned_by_user_id) AS assigned_by_user_email,
     cja.job_title,
     cja.job_description,
     cja.assignment_status,
@@ -546,7 +607,7 @@ BEGIN
     cja.priority,
     cja.due_date,
     cja.assigned_by_user_id,
-    (SELECT u.name FROM public.cmms_users u WHERE u.id = cja.assigned_by_user_id) AS assigned_by_name,
+    (SELECT COALESCE(u.name, u.user_name) FROM public.cmms_users u WHERE u.id = cja.assigned_by_user_id) AS assigned_by_name,
     (SELECT u.email FROM public.cmms_users u WHERE u.id = cja.assigned_by_user_id) AS assigned_by_email,
     cja.created_at,
     cja.updated_at,

@@ -20,6 +20,7 @@ const paymentsRoutes = require('./routes/paymentsRoutes');
 const withdrawalRoutes = require('./routes/withdrawalRoutes');
 const accountRoutes = require('./routes/accountRoutes');
 const aiAnalysisRoutes = require('./routes/aiAnalysisRoutes');
+const taxRulesRoutes = require('./routes/taxRulesRoutes');
 const storageRoutes = require('./routes/storageRoutes');
 const cron = require('node-cron');
 const { refreshGlobalInflation } = require('./services/inflationRefreshService');
@@ -119,6 +120,7 @@ app.use('/api/account', accountRoutes);
 
 // AI Analysis Routes (OpenAI proxy for transaction analysis)
 app.use('/api/ai-analysis', aiAnalysisRoutes);
+app.use('/api/tax-rules', taxRulesRoutes);
 
 // Storage Routes (Cloudflare R2 presigned URLs for video/image feeds)
 app.use('/api/storage', storageRoutes);

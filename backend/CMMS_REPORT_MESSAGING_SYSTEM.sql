@@ -4,6 +4,14 @@
 -- - Users can send messages/comments on reports
 -- - Admins/Coordinators/Supervisors can assign users to jobs
 -- - Message threading and replies support
+--
+-- Fix (safe to re-run): every sender_name/recipient_name/assigned_by_name/
+-- other_user_name lookup below read cmms_users.name directly. The original
+-- schema (CMMS_COMPLETE_SCHEMA.sql) stores the member's display name in
+-- cmms_users.user_name - .name was added later and nothing populates it -
+-- so these all silently fell back to showing an email address instead of a
+-- name in the Messages tab, the "assign job" user picker, and the
+-- conversation list. All now read COALESCE(cu.name, cu.user_name).
 -- ============================================================
 
 -- ============================================================
@@ -233,7 +241,7 @@ BEGIN
   RETURN QUERY
   SELECT
     cu.id,
-    cu.name,
+    COALESCE(cu.name, cu.user_name) AS name,
     cu.email,
     cu.role,
     cu.department_id,
@@ -241,7 +249,7 @@ BEGIN
   FROM public.cmms_users cu
   WHERE cu.cmms_company_id = p_company_id
     AND cu.is_active = TRUE
-  ORDER BY cu.name ASC;
+  ORDER BY COALESCE(cu.name, cu.user_name) ASC;
 END;
 $$;
 
@@ -422,9 +430,9 @@ BEGIN
   )
   SELECT
     mh.id,
-    (SELECT u.name FROM public.cmms_users u WHERE u.id = mh.sender_id) AS sender_name,
+    (SELECT COALESCE(u.name, u.user_name) FROM public.cmms_users u WHERE u.id = mh.sender_id) AS sender_name,
     (SELECT u.email FROM public.cmms_users u WHERE u.id = mh.sender_id) AS sender_email,
-    (SELECT u.name FROM public.cmms_users u WHERE u.id = mh.recipient_id) AS recipient_name,
+    (SELECT COALESCE(u.name, u.user_name) FROM public.cmms_users u WHERE u.id = mh.recipient_id) AS recipient_name,
     (SELECT u.email FROM public.cmms_users u WHERE u.id = mh.recipient_id) AS recipient_email,
     mh.message_text,
     mh.message_type,
@@ -496,10 +504,10 @@ BEGIN
     m.report_id,
     COALESCE(ccr.report_title, '')::VARCHAR,
     m.sender_id,
-    (SELECT u.name FROM public.cmms_users u WHERE u.id = m.sender_id) AS sender_name,
+    (SELECT COALESCE(u.name, u.user_name) FROM public.cmms_users u WHERE u.id = m.sender_id) AS sender_name,
     (SELECT u.email FROM public.cmms_users u WHERE u.id = m.sender_id) AS sender_email,
     m.recipient_id,
-    (SELECT u.name FROM public.cmms_users u WHERE u.id = m.recipient_id) AS recipient_name,
+    (SELECT COALESCE(u.name, u.user_name) FROM public.cmms_users u WHERE u.id = m.recipient_id) AS recipient_name,
     (SELECT u.email FROM public.cmms_users u WHERE u.id = m.recipient_id) AS recipient_email,
     m.message_text,
     m.message_type,
@@ -691,7 +699,7 @@ BEGIN
     cja.assignment_status,
     cja.priority,
     cja.due_date,
-    (SELECT u.name FROM public.cmms_users u WHERE u.id = cja.assigned_by_user_id) AS assigned_by_name,
+    (SELECT COALESCE(u.name, u.user_name) FROM public.cmms_users u WHERE u.id = cja.assigned_by_user_id) AS assigned_by_name,
     (SELECT u.email FROM public.cmms_users u WHERE u.id = cja.assigned_by_user_id) AS assigned_by_email,
     cja.created_at,
     cja.updated_at,
@@ -779,10 +787,10 @@ BEGIN
     m.report_id,
     COALESCE(ccr.report_title, '')::VARCHAR,
     m.sender_id,
-    sender_user.name AS sender_name,
+    COALESCE(sender_user.name, sender_user.user_name) AS sender_name,
     sender_user.email AS sender_email,
     m.recipient_id,
-    recipient_user.name AS recipient_name,
+    COALESCE(recipient_user.name, recipient_user.user_name) AS recipient_name,
     recipient_user.email AS recipient_email,
     m.message_text,
     m.message_type,
@@ -869,7 +877,7 @@ BEGIN
   conversation_stats AS (
     SELECT
       cp.other_user_id,
-      (SELECT u.name FROM public.cmms_users u WHERE u.id = cp.other_user_id) AS other_user_name,
+      (SELECT COALESCE(u.name, u.user_name) FROM public.cmms_users u WHERE u.id = cp.other_user_id) AS other_user_name,
       (SELECT u.email FROM public.cmms_users u WHERE u.id = cp.other_user_id) AS other_user_email,
       (
         SELECT m.message_text

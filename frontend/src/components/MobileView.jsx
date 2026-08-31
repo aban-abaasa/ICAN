@@ -72,6 +72,7 @@ import SearchModal from './SearchModal';
 import ThemeSwitcher from './ThemeSwitcher';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { useCountry } from '../hooks/useCountry';
 import { BusinessLoanCalculator } from './BusinessLoanCalculator';
 import { jsPDF } from 'jspdf';
 import * as XLSX from 'xlsx';
@@ -81,6 +82,8 @@ import {
   generateIncomeStatement,
   generateCountryComplianceReport,
 } from '../services/advancedReportService';
+import ReportPreviewCard from './reports/ReportPreviewCard';
+import { COUNTRIES } from '../constants/countries';
 import { VelocityEngine } from '../utils/velocityEngine';
 import { supabase } from '../lib/supabase/client';
 import { deleteTransaction } from '../services/supabaseTransactions';
@@ -618,6 +621,7 @@ const FeatureCardWithSlideshow = ({
 const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const { actualTheme } = useTheme();
   const { isOfflineMode, queueAction, user: authContextUser } = useAuth();
+  const { country: userSignupCountry } = useCountry();
   const [authUser, setAuthUser] = useState(null);
   
   // Get the actual Supabase auth user
@@ -1945,14 +1949,10 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
     'custom-analysis': { name: ' Custom Report', icon: '', desc: 'Personalized financial analysis' }
   };
 
-  // Supported countries for tax compliance
-  const countries = [
-    { code: 'UG', name: 'Uganda', flag: '', tax: '30%', authority: 'URA' },
-    { code: 'KE', name: 'Kenya', flag: '', tax: '30%', authority: 'KRA' },
-    { code: 'TZ', name: 'Tanzania', flag: '', tax: '30%', authority: 'TRA' },
-    { code: 'RW', name: 'Rwanda', flag: '', tax: '30%', authority: 'RRA' },
-    { code: 'US', name: 'United States', flag: '', tax: '37%', authority: 'IRS' }
-  ];
+  // Countries for the tax jurisdiction picker — the full worldwide list;
+  // actual tax rules are resolved per-country by the backend on generation
+  // (see COUNTRIES in constants/countries.js and fetchCountryTaxRules).
+  const countries = COUNTRIES;
 
   // Generate report summary
   const generateReportSummary = () => {
@@ -2007,6 +2007,24 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
     })();
     return () => { cancelled = true; };
   }, [showReportingSystem]);
+
+  // Default the tax jurisdiction to the selected business's own registered
+  // country when known (a Pitch In business may be registered somewhere
+  // other than the investor-user's personal country), else fall back to the
+  // user's own signup country (useCountry / user_accounts.country_code).
+  // The manual dropdown remains available as an override either way.
+  useEffect(() => {
+    if (reportBusinessId) {
+      const business = reportBusinessProfiles.find((p) => p.id === reportBusinessId);
+      if (business?.country) {
+        setSelectedCountry(business.country);
+        return;
+      }
+    }
+    if (userSignupCountry) {
+      setSelectedCountry(userSignupCountry);
+    }
+  }, [reportBusinessId, reportBusinessProfiles, userSignupCountry]);
 
   // Reset the Record Transaction modal's dropdown selections each time it opens,
   // and load the user's accessible businesses so the "which business" dropdown
@@ -8990,18 +9008,23 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   </div>
                 </div>
 
-                {/* Country selector for tax reports */}
+                {/* Country selector for tax reports — any country works: a
+                    hand-verified core has real tax rules, everything else
+                    gets an AI-generated (and cached) entry the first time
+                    it's used, shown via the source note in the preview
+                    above after generating. */}
                 {reportTypes[selectedReportType]?.requiresCountry && (
                   <div className="bg-white/5 border border-white/10 rounded-xl p-3">
                     <p className="text-xs font-semibold text-gray-400 mb-2">🌍 Tax Jurisdiction</p>
-                    <div className="flex gap-2 flex-wrap">
+                    <select
+                      value={selectedCountry}
+                      onChange={(e) => setSelectedCountry(e.target.value)}
+                      className="w-full bg-white/10 text-white text-xs rounded-lg px-2 py-2 border border-white/20 focus:outline-none focus:border-purple-400"
+                    >
                       {countries.map(c => (
-                        <button key={c.code} onClick={() => setSelectedCountry(c.code)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${selectedCountry === c.code ? 'bg-purple-600 border-purple-400 text-white' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'}`}>
-                          {c.flag} {c.name} ({c.tax})
-                        </button>
+                        <option key={c.code} value={c.code} className="text-gray-900">{c.name}</option>
                       ))}
-                    </div>
+                    </select>
                   </div>
                 )}
 
@@ -9171,6 +9194,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       <div className="bg-green-900/30 border border-green-500/40 rounded-xl p-3 space-y-2">
                         <p className="text-green-400 font-semibold text-xs">✅ Saved to Supabase — {generatedReportData.generated}</p>
                         <p className="text-gray-400 text-xs">{generatedReportData.reportName?.trim()} · {countries.find(c => c.code === selectedCountry)?.name || 'Uganda'}</p>
+                        {/* Computed report numbers + AI insights — previously generated and
+                            saved but never actually shown to the user here. */}
+                        <div className="bg-white rounded-lg p-3 -mx-1">
+                          <ReportPreviewCard report={generatedReportData} />
+                        </div>
                         {/* Export action buttons */}
                         <div className="flex flex-wrap gap-2 pt-1">
                           {/* CSV */}

@@ -530,7 +530,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                   No public questions yet — ask something below.
                 </p>
               ) : (
-                communityThreads.map((t) => (
+                [...communityThreads].reverse().map((t) => (
                   <button
                     key={t.id}
                     onClick={() => setSelectedThreadId(t.id)}

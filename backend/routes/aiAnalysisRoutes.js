@@ -11,6 +11,7 @@
  */
 
 const express = require('express');
+const { callAI } = require('../services/aiProviderService');
 const router = express.Router();
 
 const buildFinanceTutorSystemPrompt = () => {
@@ -135,21 +136,9 @@ const normalizeMessages = (messages = []) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const apiKey = process.env.OPENAI_API_KEY;
-
-    // If no API key configured, return 503 (service unavailable)
-    if (!apiKey) {
-      console.warn('⚠️ OPENAI_API_KEY not configured in environment');
-      return res.status(503).json({
-        error: 'AI service not configured',
-        message: 'OpenAI API key is not set. Please configure OPENAI_API_KEY in environment variables.',
-        statusCode: 503
-      });
-    }
-
     // Extract and validate request body
     const incoming = req.body || {};
-    
+
     if (!incoming.messages || !Array.isArray(incoming.messages)) {
       return res.status(400).json({
         error: 'Bad request',
@@ -158,38 +147,30 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Build payload for OpenAI
-    const upstreamPayload = {
-      ...incoming,
-      model: incoming.model || 'gpt-3.5-turbo',
-      temperature: typeof incoming.temperature === 'number' ? incoming.temperature : 0.5,
-      max_tokens: incoming.max_tokens || 900,
-      messages: normalizeMessages(incoming.messages)
-    };
+    const messages = normalizeMessages(incoming.messages);
+    const temperature = typeof incoming.temperature === 'number' ? incoming.temperature : 0.5;
+    const maxTokens = incoming.max_tokens || 900;
 
-    console.log(`🤖 Calling OpenAI API with model: ${upstreamPayload.model}`);
-
-    // Call OpenAI API
-    const upstream = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify(upstreamPayload)
-    });
-
-    // Read response
-    const data = await upstream.json();
-
-    // If OpenAI returned an error, pass it through
-    if (!upstream.ok) {
-      console.error('❌ OpenAI API error:', data);
-      return res.status(upstream.status).json(data);
+    let result;
+    try {
+      result = await callAI({ messages, temperature, maxTokens });
+    } catch (aiError) {
+      console.error('❌ AI provider error:', aiError.message);
+      return res.status(503).json({
+        error: 'AI service not configured or failed',
+        message: aiError.message,
+        statusCode: 503
+      });
     }
 
-    console.log('✅ OpenAI response received successfully');
-    return res.status(200).json(data);
+    console.log(`✅ AI response received via ${result.provider}`);
+    // Keep the response OpenAI-shaped (choices[0].message.content) regardless
+    // of which provider actually served it — every frontend caller reads
+    // data.choices[0]?.message?.content, so this contract must stay stable.
+    return res.status(200).json({
+      choices: [{ message: { role: 'assistant', content: result.content } }],
+      provider: result.provider
+    });
   } catch (err) {
     console.error('❌ AI proxy error:', err);
     return res.status(502).json({

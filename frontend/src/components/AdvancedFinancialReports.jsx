@@ -10,8 +10,6 @@ import {
   FileText,
   TrendingUp,
   DollarSign,
-  AlertCircle,
-  CheckCircle,
   Loader,
   Globe,
   Zap,
@@ -30,8 +28,11 @@ import {
   getSavedReports,
   exportReport
 } from '../services/advancedReportService';
+import ReportPreviewCard from './reports/ReportPreviewCard';
+import { useCountry } from '../hooks/useCountry';
 
 const AdvancedFinancialReports = ({ userId, transactions, userProfile }) => {
+  const { country: userSignupCountry } = useCountry();
   const [activeTab, setActiveTab] = useState('generate');
   const [selectedReportType, setSelectedReportType] = useState('tax-return');
   const [selectedCountry, setSelectedCountry] = useState('UG');
@@ -48,6 +49,13 @@ const AdvancedFinancialReports = ({ userId, transactions, userProfile }) => {
     setSupportedCountries(getSupportedCountries());
     loadSavedReports();
   }, [userId]);
+
+  // Default the jurisdiction to the user's own signup country
+  // (user_accounts.country_code) instead of a hardcoded 'UG'. The dropdown
+  // above remains available as an override.
+  useEffect(() => {
+    if (userSignupCountry) setSelectedCountry(userSignupCountry);
+  }, [userSignupCountry]);
 
   useEffect(() => {
     const runAutomation = async () => {
@@ -230,33 +238,24 @@ const AdvancedFinancialReports = ({ userId, transactions, userProfile }) => {
             </div>
           </div>
 
-          {/* Country Selection */}
+          {/* Country Selection — any country works: a hand-verified core has
+              real tax rules, everything else gets an AI-generated (and
+              cached) entry the first time it's used, shown via the source
+              badge in the report preview after generating. */}
           <div>
-            <h2 className="text-xl font-bold text-gray-800 mb-4">🌍 Select Country</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <Globe className="w-5 h-5" />
+              Select Country
+            </h2>
+            <select
+              value={selectedCountry}
+              onChange={(e) => setSelectedCountry(e.target.value)}
+              className="w-full bg-white text-gray-900 border-2 border-gray-200 rounded-lg px-4 py-3 text-sm font-semibold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer"
+            >
               {supportedCountries.map(country => (
-                <div
-                  key={country.code}
-                  onClick={() => setSelectedCountry(country.code)}
-                  className={`p-4 rounded-lg cursor-pointer transition-all border-2 ${
-                    selectedCountry === country.code
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 bg-white hover:border-gray-300'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                        <Globe className="w-4 h-4" />
-                        {country.name}
-                      </h3>
-                      <p className="text-xs text-gray-600 mt-1">{country.regulatoryBody}</p>
-                    </div>
-                    <span className="text-sm font-bold text-gray-500">{country.currency}</span>
-                  </div>
-                </div>
+                <option key={country.code} value={country.code}>{country.name}</option>
               ))}
-            </div>
+            </select>
           </div>
 
           {/* Generate Button */}
@@ -346,130 +345,7 @@ const AdvancedFinancialReports = ({ userId, transactions, userProfile }) => {
 
             {/* Modal Body */}
             <div className="p-6 space-y-6">
-              {/* Summary Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {generatedReport.type === 'tax-return' && (
-                  <>
-                    <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                      <p className="text-sm text-green-600 font-semibold">Total Income</p>
-                      <p className="text-2xl font-bold text-green-800 mt-2">
-                        {generatedReport.currency} {generatedReport.incomeSection?.totalGrossIncome?.toLocaleString() || 0}
-                      </p>
-                    </div>
-                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                      <p className="text-sm text-blue-600 font-semibold">Deductions</p>
-                      <p className="text-2xl font-bold text-blue-800 mt-2">
-                        {generatedReport.currency} {generatedReport.deductionsSection?.totalDeductions?.toLocaleString() || 0}
-                      </p>
-                    </div>
-                    <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
-                      <p className="text-sm text-orange-600 font-semibold">Tax Liability</p>
-                      <p className="text-2xl font-bold text-orange-800 mt-2">
-                        {generatedReport.currency} {generatedReport.taxCalculation?.totalTaxLiability?.toLocaleString() || 0}
-                      </p>
-                    </div>
-                    <div className={`p-4 rounded-lg border-2 ${
-                      generatedReport.taxCalculation?.taxPayable > 0
-                        ? 'bg-red-50 border-red-200'
-                        : 'bg-green-50 border-green-200'
-                    }`}>
-                      <p className="text-sm font-semibold">{generatedReport.taxCalculation?.taxPayable > 0 ? 'Tax Payable' : 'Refund Due'}</p>
-                      <p className={`text-2xl font-bold mt-2 ${
-                        generatedReport.taxCalculation?.taxPayable > 0 ? 'text-red-800' : 'text-green-800'
-                      }`}>
-                        {generatedReport.currency} {Math.abs(generatedReport.taxCalculation?.taxPayable)?.toLocaleString() || 0}
-                      </p>
-                    </div>
-                  </>
-                )}
-
-                {generatedReport.type === 'balance-sheet' && (
-                  <>
-                    <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                      <p className="text-sm text-green-600 font-semibold">Total Assets</p>
-                      <p className="text-2xl font-bold text-green-800 mt-2">
-                        {generatedReport.currency} {generatedReport.assets?.totalAssets?.toLocaleString() || 0}
-                      </p>
-                    </div>
-                    <div className="bg-red-50 p-4 rounded-lg border border-red-200">
-                      <p className="text-sm text-red-600 font-semibold">Total Liabilities</p>
-                      <p className="text-2xl font-bold text-red-800 mt-2">
-                        {generatedReport.currency} {generatedReport.liabilities?.totalLiabilities?.toLocaleString() || 0}
-                      </p>
-                    </div>
-                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                      <p className="text-sm text-blue-600 font-semibold">Total Equity</p>
-                      <p className="text-2xl font-bold text-blue-800 mt-2">
-                        {generatedReport.currency} {generatedReport.equity?.totalEquity?.toLocaleString() || 0}
-                      </p>
-                    </div>
-                    <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-                      <p className="text-sm text-purple-600 font-semibold">Debt-to-Equity</p>
-                      <p className="text-2xl font-bold text-purple-800 mt-2">
-                        {generatedReport.ratios?.debtToEquity?.toFixed(2) || 0}
-                      </p>
-                    </div>
-                  </>
-                )}
-
-                {generatedReport.type === 'income-statement' && (
-                  <>
-                    <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                      <p className="text-sm text-green-600 font-semibold">Revenue</p>
-                      <p className="text-2xl font-bold text-green-800 mt-2">
-                        {generatedReport.currency} {generatedReport.revenue?.totalRevenue?.toLocaleString() || 0}
-                      </p>
-                    </div>
-                    <div className="bg-red-50 p-4 rounded-lg border border-red-200">
-                      <p className="text-sm text-red-600 font-semibold">Operating Expenses</p>
-                      <p className="text-2xl font-bold text-red-800 mt-2">
-                        {generatedReport.currency} {generatedReport.operatingExpenses?.totalOperatingExpenses?.toLocaleString() || 0}
-                      </p>
-                    </div>
-                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                      <p className="text-sm text-blue-600 font-semibold">Net Income</p>
-                      <p className="text-2xl font-bold text-blue-800 mt-2">
-                        {generatedReport.currency} {generatedReport.netIncome?.amount?.toLocaleString() || 0}
-                      </p>
-                    </div>
-                    <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-                      <p className="text-sm text-purple-600 font-semibold">Profit Margin</p>
-                      <p className="text-2xl font-bold text-purple-800 mt-2">
-                        {generatedReport.netIncome?.margin || '0%'}
-                      </p>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* AI Insights Section */}
-              {generatedReport.taxOptimization?.aiRecommendations && (
-                <div className="bg-gradient-to-br from-yellow-50 to-orange-50 border-l-4 border-yellow-500 p-6 rounded-lg">
-                  <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-3">
-                    <Zap className="w-5 h-5 text-yellow-600" />
-                    AI-Powered Optimization Strategy
-                  </h3>
-                  <p className="text-gray-700">{generatedReport.taxOptimization.aiRecommendations}</p>
-                </div>
-              )}
-
-              {/* Compliance Requirements */}
-              {generatedReport.complianceRequirements && (
-                <div className="bg-blue-50 border border-blue-200 p-6 rounded-lg">
-                  <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-4">
-                    <CheckCircle className="w-5 h-5 text-blue-600" />
-                    Compliance Checklist
-                  </h3>
-                  <div className="space-y-2">
-                    {generatedReport.complianceChecklist?.map((item, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <input type="checkbox" className="w-4 h-4" />
-                        <span className="text-gray-700">{item.item}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <ReportPreviewCard report={generatedReport} />
 
               {/* Export Section */}
               <div className="bg-gray-50 p-6 rounded-lg">

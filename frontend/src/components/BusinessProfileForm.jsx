@@ -6,6 +6,7 @@ import { registerBusinessWallet, setBusinessWalletPin } from '../services/icanWa
 import { memberApprovalService } from '../services/memberApprovalService';
 import { createBusinessProfileFromCategory, publishBusinessAsSupplier } from '../services/businessManagementService';
 import BusinessProfileDocuments from './BusinessProfileDocuments';
+import { COUNTRIES } from '../constants/countries';
 
 const STRUCTURE_LIMITS = {
   sole_proprietorship: 1,
@@ -29,6 +30,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
     businessStructure: 'organisation',
     registrationNumber: '',
     taxId: '',
+    country: '',
     website: '',
     description: '',
     businessAddress: '',
@@ -85,6 +87,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
         businessStructure: editingProfile.business_structure || (editingProfile.business_type === 'Sole Proprietorship' ? 'sole_proprietorship' : 'organisation'),
         registrationNumber: editingProfile.registration_number || '',
         taxId: editingProfile.tax_id || '',
+        country: editingProfile.country || '',
         website: editingProfile.website || '',
         description: editingProfile.description || '',
         businessAddress: editingProfile.business_address || '',
@@ -418,6 +421,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
         business_structure: businessData.businessStructure,
         registration_number: businessData.registrationNumber,
         tax_id: businessData.taxId,
+        country: businessData.country || null,
         website: businessData.website,
         description: businessData.description,
         business_address: businessData.businessAddress,
@@ -744,6 +748,22 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                     placeholder="e.g., EIN: 12-3456789"
                     className="w-full bg-slate-700 text-white rounded-lg px-4 py-2 border border-slate-600 focus:border-blue-500 focus:outline-none"
                   />
+                </div>
+
+                <div>
+                  {/* Drives which country's tax rules a report generated for
+                      this business defaults to (see AdvancedFinancialReports). */}
+                  <label className="text-slate-300 text-sm block mb-2">Country</label>
+                  <select
+                    value={businessData.country}
+                    onChange={(e) => handleBusinessChange('country', e.target.value)}
+                    className="w-full bg-slate-700 text-white rounded-lg px-4 py-2 border border-slate-600 focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="">Select country...</option>
+                    {COUNTRIES.map((c) => (
+                      <option key={c.code} value={c.code}>{c.name}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="col-span-2">

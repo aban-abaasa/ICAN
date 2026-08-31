@@ -5,6 +5,7 @@
  */
 
 import { supabase as supabaseClient } from '../lib/supabase/client';
+import { COUNTRIES } from '../constants/countries';
 
 // Vite exposes browser environment variables through import.meta.env.
 // Do not reference process.env: process is not defined in the browser bundle.
@@ -119,137 +120,53 @@ Output style:
 - For reports, include key ratio interpretation and next best actions.`;
 };
 
-// Country Tax Regulations Configuration
-const COUNTRY_REGULATIONS = {
-  'UG': {
-    name: 'Uganda',
-    currency: 'UGX',
-    taxRates: {
-      corporate: 0.30,
-      personal: 0.30,
-      vat: 0.18,
-      capitalGains: 0.20
-    },
-    deductibleExpenses: [
-      'business_expenses',
-      'depreciation',
-      'employee_salaries',
-      'utilities',
-      'office_equipment',
-      'professional_fees',
-      'advertising'
-    ],
-    filingDate: 'June 30',
-    regulatoryBody: 'Uganda Revenue Authority (URA)',
-    requirements: [
-      'Itemized expense records',
-      'Income source documentation',
-      'Investment proof',
-      'Business registration'
-    ]
-  },
-  'KE': {
-    name: 'Kenya',
-    currency: 'KES',
-    taxRates: {
-      corporate: 0.30,
-      personal: 0.30,
-      vat: 0.16,
-      capitalGains: 0.15
-    },
-    deductibleExpenses: [
-      'business_expenses',
-      'depreciation',
-      'employee_salaries',
-      'utilities',
-      'office_rent',
-      'insurance'
-    ],
-    filingDate: 'June 30',
-    regulatoryBody: 'Kenya Revenue Authority (KRA)',
-    requirements: [
-      'PIN (Personal Identification Number)',
-      'Monthly ITR filing',
-      'Expense receipts',
-      'Bank statements'
-    ]
-  },
-  'TZ': {
-    name: 'Tanzania',
-    currency: 'TZS',
-    taxRates: {
-      corporate: 0.30,
-      personal: 0.30,
-      vat: 0.18,
-      capitalGains: 0.20
-    },
-    deductibleExpenses: [
-      'business_expenses',
-      'employee_compensation',
-      'utilities',
-      'office_supplies',
-      'professional_services'
-    ],
-    filingDate: 'June 30',
-    regulatoryBody: 'Tanzania Revenue Authority (TRA)',
-    requirements: [
-      'TIN (Tax Identification Number)',
-      'Expense documentation',
-      'Income records',
-      'Annual reconciliation'
-    ]
-  },
-  'RW': {
-    name: 'Rwanda',
-    currency: 'RWF',
-    taxRates: {
-      corporate: 0.30,
-      personal: 0.30,
-      vat: 0.18,
-      capitalGains: 0.20
-    },
-    deductibleExpenses: [
-      'business_operating_expenses',
-      'employee_salaries',
-      'utilities',
-      'insurance',
-      'depreciation'
-    ],
-    filingDate: 'March 31',
-    regulatoryBody: 'Rwanda Revenue Authority (RRA)',
-    requirements: [
-      'TIN registration',
-      'Monthly VAT returns',
-      'Quarterly tax payments',
-      'Detailed transaction logs'
-    ]
-  },
-  'US': {
-    name: 'United States',
-    currency: 'USD',
-    taxRates: {
-      corporate: 0.21,
-      personal: 0.37,
-      vat: 0,
-      capitalGains: 0.20
-    },
-    deductibleExpenses: [
-      'business_expenses',
-      'home_office',
-      'vehicle_expenses',
-      'education',
-      'medical_insurance',
-      'retirement_contributions'
-    ],
-    filingDate: 'April 15',
-    regulatoryBody: 'Internal Revenue Service (IRS)',
-    requirements: [
-      'EIN or SSN',
-      'Form 1099s',
-      'Schedule C (Self-employed)',
-      'Qualified business expense documentation'
-    ]
+/**
+ * Fetch a country's tax rules from the worldwide tax engine
+ * (GET /api/tax-rules/:countryCode — backend/routes/taxRulesRoutes.js).
+ *
+ * Backed by public.country_tax_rules: a small hand-verified core (seeded via
+ * ADD_COUNTRY_TAX_RULES.sql) plus AI-generated-and-cached rows for every
+ * other country, since ICAN users can pick any country at signup. Throws on
+ * failure rather than silently falling back to made-up numbers.
+ */
+export const fetchCountryTaxRules = async (countryCode) => {
+  const code = String(countryCode || '').trim().toUpperCase();
+  if (!code) throw new Error('A country code is required to fetch tax rules');
+
+  const response = await fetch(`/api/tax-rules/${code}`);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.message || body.error || `Could not load tax rules for ${code}`);
   }
+  return response.json();
+};
+
+/**
+ * Marginal tax over progressive brackets, e.g.
+ * [{ upTo: 235000, rate: 0 }, { upTo: 335000, rate: 0.10 }, { upTo: null, rate: 0.40 }]
+ * When the country's brackets are monthly (typical for PAYE-style regimes),
+ * the annual taxable amount is converted to a monthly-equivalent, taxed
+ * band-by-band, then annualized back — the standard approximation for
+ * applying monthly PAYE bands to an annual figure.
+ */
+const calculateProgressiveTax = (taxableAmount, brackets = [], period = 'annual') => {
+  if (!Array.isArray(brackets) || brackets.length === 0 || taxableAmount <= 0) return 0;
+
+  const divisor = period === 'monthly' ? 12 : 1;
+  const baseAmount = taxableAmount / divisor;
+
+  let tax = 0;
+  let lowerBound = 0;
+  for (const band of brackets) {
+    const upTo = band.upTo === null || band.upTo === undefined ? Infinity : Number(band.upTo);
+    const rate = Number(band.rate) || 0;
+    if (baseAmount <= lowerBound) break;
+    const taxableInBand = Math.min(baseAmount, upTo) - lowerBound;
+    if (taxableInBand > 0) tax += taxableInBand * rate;
+    lowerBound = upTo;
+    if (baseAmount <= upTo) break;
+  }
+  return tax * divisor;
 };
 
 /**
@@ -698,10 +615,7 @@ export const getDailyArchiveReports = async (userId, limit = 31) => {
  * Generate comprehensive tax return with country regulations
  */
 export const generateTaxReturn = async (financialData, countryCode = 'UG', userId) => {
-  const regulations = COUNTRY_REGULATIONS[countryCode];
-  if (!regulations) {
-    throw new Error(`Country code ${countryCode} not supported`);
-  }
+  const regulations = await fetchCountryTaxRules(countryCode);
 
   const {
     totalIncome = 0,
@@ -718,34 +632,37 @@ export const generateTaxReturn = async (financialData, countryCode = 'UG', userI
   const deductibleAmount = deductions
     .reduce((sum, d) => sum + (d.amount || 0), 0);
   const taxableIncome = Math.max(0, totalIncome - deductibleAmount);
-  const incomeTax = taxableIncome * regulations.taxRates.personal;
-  const capitalGainsTax = capitalGains * regulations.taxRates.capitalGains;
+  const incomeTax = calculateProgressiveTax(taxableIncome, regulations.personal_tax_brackets, regulations.personal_tax_period);
+  const capitalGainsTax = capitalGains * (regulations.capital_gains_rate || 0);
   const totalTaxLiability = incomeTax + capitalGainsTax;
   const taxPayable = Math.max(0, totalTaxLiability - taxPaid);
 
   // Call OpenAI for tax optimization recommendations
   const aiAnalysis = await callOpenAIForAnalysis(
-    `Analyze this tax return for ${regulations.name}: 
+    `Analyze this tax return for ${regulations.country_name}:
     - Total Income: ${totalIncome}
     - Taxable Income: ${taxableIncome}
     - Tax Liability: ${totalTaxLiability}
     - Deductions: ${deductibleAmount}
-    
-    Provide 3 key tax optimization strategies specific to ${regulations.name}, considering ${regulations.regulatoryBody} requirements.
+
+    Provide 3 key tax optimization strategies specific to ${regulations.country_name}, considering ${regulations.regulatory_body} requirements.
     Focus on: maximizing deductions, timing strategies, and compliance.`,
-    { country: regulations.name, year: filingPeriod, reportType: 'Tax Return' }
+    { country: regulations.country_name, year: filingPeriod, reportType: 'Tax Return' }
   );
 
   const taxReturn = {
     id: `TAX_${userId}_${filingPeriod}_${Date.now()}`,
     type: 'tax-return',
     country: countryCode,
-    countryName: regulations.name,
+    countryName: regulations.country_name,
     filingPeriod,
-    filingDeadline: regulations.filingDate,
+    filingDeadline: regulations.filing_date,
     currency: regulations.currency,
-    taxRegulator: regulations.regulatoryBody,
-    
+    taxRegulator: regulations.regulatory_body,
+    dataSource: regulations.source,
+    sourceCitation: regulations.source_citation,
+    lastVerifiedAt: regulations.last_verified_at,
+
     // Income Section
     incomeSection: {
       businessIncome,
@@ -759,7 +676,7 @@ export const generateTaxReturn = async (financialData, countryCode = 'UG', userI
     // Deductions Section (Country-specific)
     deductionsSection: {
       personalDeductions: deductions
-        .filter(d => regulations.deductibleExpenses.includes(d.category))
+        .filter(d => (regulations.deductible_expenses || []).includes(d.category))
         .map(d => ({
           category: d.category,
           amount: d.amount,
@@ -768,9 +685,9 @@ export const generateTaxReturn = async (financialData, countryCode = 'UG', userI
         })),
       totalDeductions: deductibleAmount,
       nonDeductible: deductions
-        .filter(d => !regulations.deductibleExpenses.includes(d.category))
+        .filter(d => !(regulations.deductible_expenses || []).includes(d.category))
         .reduce((sum, d) => sum + (d.amount || 0), 0),
-      description: `Deductions compliant with ${regulations.regulatoryBody} requirements`
+      description: `Deductions compliant with ${regulations.regulatory_body} requirements`
     },
 
     // Taxable Income
@@ -783,28 +700,29 @@ export const generateTaxReturn = async (financialData, countryCode = 'UG', userI
 
     // Tax Calculation (Country-specific rates)
     taxCalculation: {
-      incomeTaxRate: (regulations.taxRates.personal * 100).toFixed(1) + '%',
+      incomeTaxRate: taxableIncome > 0 ? `${((incomeTax / taxableIncome) * 100).toFixed(1)}% (effective, progressive)` : '0.0%',
+      personalTaxBrackets: regulations.personal_tax_brackets,
       incomeTax,
-      capitalGainsTaxRate: (regulations.taxRates.capitalGains * 100).toFixed(1) + '%',
+      capitalGainsTaxRate: ((regulations.capital_gains_rate || 0) * 100).toFixed(1) + '%',
       capitalGainsTax,
       otherTaxes: 0,
       totalTaxLiability,
       taxPaid,
       taxPayable: Math.max(0, taxPayable),
-      description: `Tax calculated at applicable ${regulations.name} rates`
+      description: `Tax calculated at applicable ${regulations.country_name} progressive rates`
     },
 
     // Compliance Requirements
     complianceRequirements: {
       requiredDocuments: regulations.requirements,
       filingStatus: taxPayable > 0 ? 'TAX PAYABLE' : taxPayable < 0 ? 'TAX REFUNDABLE' : 'ZERO LIABILITY',
-      dueDate: regulations.filingDate,
+      dueDate: regulations.filing_date,
       penalties: {
         lateFiling: 'Penalty of 10-20% of unpaid tax per month',
         missingDocumentation: 'Penalty of 5,000-50,000 ' + regulations.currency,
         inaccuracies: 'Penalty of 20-100% of understated tax'
       },
-      description: `Full compliance with ${regulations.regulatoryBody} requirements`
+      description: `Full compliance with ${regulations.regulatory_body} requirements`
     },
 
     // AI-Powered Tax Optimization
@@ -814,7 +732,7 @@ export const generateTaxReturn = async (financialData, countryCode = 'UG', userI
       strategies: [
         {
           strategy: 'Expense Maximization',
-          impact: `Identify and document all ${regulations.deductibleExpenses.join(', ')}`,
+          impact: `Identify and document all ${(regulations.deductible_expenses || []).join(', ')}`,
           potentialSavings: Math.round(totalIncome * 0.10)
         },
         {
@@ -846,9 +764,9 @@ export const generateTaxReturn = async (financialData, countryCode = 'UG', userI
     complianceChecklist: [
       { item: 'Gather all income documentation', completed: false },
       { item: 'Organize expense receipts by category', completed: false },
-      { item: `Verify ${regulations.name} tax regulations`, completed: false },
+      { item: `Verify ${regulations.country_name} tax regulations`, completed: false },
       { item: 'Consult with tax professional', completed: false },
-      { item: `File with ${regulations.regulatoryBody} by ${regulations.filingDate}`, completed: false },
+      { item: `File with ${regulations.regulatory_body} by ${regulations.filing_date}`, completed: false },
       { item: 'Pay tax liability if due', completed: false }
     ]
   };
@@ -878,7 +796,7 @@ export const generateTaxReturn = async (financialData, countryCode = 'UG', userI
  * Generate Professional Balance Sheet
  */
 export const generateBalanceSheet = async (financialData, countryCode = 'UG', userId) => {
-  const regulations = COUNTRY_REGULATIONS[countryCode];
+  const regulations = await fetchCountryTaxRules(countryCode);
 
   const {
     assets = { cash: 0, investments: 0, equipment: 0, property: 0, other: 0 },
@@ -899,16 +817,20 @@ export const generateBalanceSheet = async (financialData, countryCode = 'UG', us
     - Total Equity: ${totalEquity}
     - Current Ratio: ${assets.cash / (totalLiabilities || 1)}
     
-    Provide insights on financial health, solvency, and recommendations for improvement in ${regulations.name}.`,
-    { country: regulations.name, reportType: 'Balance Sheet' }
+    Provide insights on financial health, solvency, and recommendations for improvement in ${regulations.country_name}.`,
+    { country: regulations.country_name, reportType: 'Balance Sheet' }
   );
 
   const balanceSheet = {
     id: `BS_${userId}_${Date.now()}`,
     type: 'balance-sheet',
     reportDate,
-    country: regulations.name,
+    country: regulations.country_name,
+    countryCode,
     currency: regulations.currency,
+    dataSource: regulations.source,
+    sourceCitation: regulations.source_citation,
+    lastVerifiedAt: regulations.last_verified_at,
 
     // Assets Section
     assets: {
@@ -1004,7 +926,7 @@ export const generateBalanceSheet = async (financialData, countryCode = 'UG', us
  * Generate Professional Income Statement
  */
 export const generateIncomeStatement = async (financialData, countryCode = 'UG', userId, options = {}) => {
-  const regulations = COUNTRY_REGULATIONS[countryCode];
+  const regulations = await fetchCountryTaxRules(countryCode);
 
   const {
     revenue = 0,
@@ -1031,16 +953,20 @@ export const generateIncomeStatement = async (financialData, countryCode = 'UG',
     - Net Income: ${netIncome}
     - Net Profit Margin: ${netProfitMargin}%
     
-    Provide insights on profitability, expense management, and growth opportunities in ${regulations.name}.`,
-    { country: regulations.name, period: reportPeriod, reportType: 'Income Statement' }
+    Provide insights on profitability, expense management, and growth opportunities in ${regulations.country_name}.`,
+    { country: regulations.country_name, period: reportPeriod, reportType: 'Income Statement' }
   );
 
   const incomeStatement = {
     id: `IS_${userId}_${Date.now()}`,
     type: 'income-statement',
     reportPeriod,
-    country: regulations.name,
+    country: regulations.country_name,
+    countryCode,
     currency: regulations.currency,
+    dataSource: regulations.source,
+    sourceCitation: regulations.source_citation,
+    lastVerifiedAt: regulations.last_verified_at,
 
     // Revenue Section
     revenue: {
@@ -1148,47 +1074,49 @@ export const generateIncomeStatement = async (financialData, countryCode = 'UG',
  * Generate Country-Compliant Financial Report Summary
  */
 export const generateCountryComplianceReport = async (financialData, countryCode = 'UG', userId) => {
-  const regulations = COUNTRY_REGULATIONS[countryCode];
-  if (!regulations) {
-    throw new Error(`Country code ${countryCode} not supported`);
-  }
+  const regulations = await fetchCountryTaxRules(countryCode);
 
   // Call OpenAI for country-specific compliance analysis
   const complianceAnalysis = await callOpenAIForAnalysis(
-    `As a tax expert for ${regulations.name}, analyze these financials and provide a compliance checklist:
-    - Regulatory Body: ${regulations.regulatoryBody}
-    - Filing Deadline: ${regulations.filingDate}
-    - Required Documents: ${regulations.requirements.join(', ')}
-    
-    What are the top 5 compliance priorities and how to ensure full adherence to ${regulations.name} tax laws?`,
-    { country: regulations.name, reportType: 'Compliance Report' }
+    `As a tax expert for ${regulations.country_name}, analyze these financials and provide a compliance checklist:
+    - Regulatory Body: ${regulations.regulatory_body}
+    - Filing Deadline: ${regulations.filing_date}
+    - Required Documents: ${(regulations.requirements || []).join(', ')}
+
+    What are the top 5 compliance priorities and how to ensure full adherence to ${regulations.country_name} tax laws?`,
+    { country: regulations.country_name, reportType: 'Compliance Report' }
   );
 
   return {
-    country: regulations.name,
+    country: regulations.country_name,
     countryCode,
-    regulatoryBody: regulations.regulatoryBody,
+    regulatoryBody: regulations.regulatory_body,
     currency: regulations.currency,
-    taxRates: regulations.taxRates,
-    filingDeadline: regulations.filingDate,
+    taxRates: {
+      personalTaxBrackets: regulations.personal_tax_brackets,
+      corporate: regulations.corporate_tax_rate,
+      vat: regulations.vat_rate,
+      capitalGains: regulations.capital_gains_rate
+    },
+    filingDeadline: regulations.filing_date,
     complianceAnalysis: complianceAnalysis || 'Compliance analysis pending',
     requiredDocuments: regulations.requirements,
-    deductibleExpenses: regulations.deductibleExpenses,
+    deductibleExpenses: regulations.deductible_expenses,
+    dataSource: regulations.source,
+    sourceCitation: regulations.source_citation,
+    lastVerifiedAt: regulations.last_verified_at,
     generatedDate: new Date().toISOString()
   };
 };
 
 /**
- * Get all supported countries
+ * List of world countries for the report country picker. Any country can be
+ * selected — a hand-verified core has real tax rules seeded in the
+ * country_tax_rules table, and every other country gets an AI-generated
+ * (and cached) entry on first use via fetchCountryTaxRules/GET
+ * /api/tax-rules/:countryCode. This no longer reads from a fixed local list.
  */
-export const getSupportedCountries = () => {
-  return Object.entries(COUNTRY_REGULATIONS).map(([code, data]) => ({
-    code,
-    name: data.name,
-    currency: data.currency,
-    regulatoryBody: data.regulatoryBody
-  }));
-};
+export const getSupportedCountries = () => COUNTRIES.map((c) => ({ code: c.code, name: c.name }));
 
 /**
  * Fetch saved reports from Supabase
