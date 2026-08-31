@@ -368,10 +368,16 @@ export const getUserJobAssignments = async (companyId) => {
 };
 
 /**
- * Update job assignment status
- * Uses SECURITY DEFINER function to avoid RLS permission issues
+ * Update job assignment status, and optionally its progress percentage/notes.
+ * Uses SECURITY DEFINER function to avoid RLS permission issues.
+ * Feeds a notification to whichever side (assigner/assignee) didn't make
+ * the change, so the person who assigned the task can track its progress.
+ * @param {string} assignmentId
+ * @param {string} newStatus - pending | accepted | in_progress | completed | rejected
+ * @param {number|null} progressPercentage - 0-100, optional
+ * @param {string|null} progressNotes - optional
  */
-export const updateJobStatus = async (assignmentId, newStatus) => {
+export const updateJobStatus = async (assignmentId, newStatus, progressPercentage = null, progressNotes = null) => {
   try {
     if (!['pending', 'accepted', 'in_progress', 'completed', 'rejected'].includes(newStatus)) {
       return {
@@ -384,7 +390,9 @@ export const updateJobStatus = async (assignmentId, newStatus) => {
     const { data, error } = await supabase
       .rpc('fn_update_job_assignment_status', {
         p_assignment_id: assignmentId,
-        p_new_status: newStatus
+        p_new_status: newStatus,
+        p_progress_percentage: progressPercentage,
+        p_progress_notes: progressNotes
       });
 
     if (error) {
@@ -499,6 +507,42 @@ export const deleteJobAssignment = async (assignmentId) => {
     return {
       success: false,
       error: error.message
+    };
+  }
+};
+
+/**
+ * Get jobs the current user has assigned to others (or all company jobs,
+ * for admin/coordinator/supervisor), so the assigner can track progress.
+ * @param {string} companyId - Company UUID
+ */
+export const getJobsAssignedByMe = async (companyId) => {
+  try {
+    const { data, error } = await supabase
+      .rpc('fn_get_job_assignments', {
+        p_company_id: companyId,
+        p_report_id: null
+      });
+
+    if (error) {
+      console.error('Error fetching assigned jobs:', error);
+      return {
+        success: false,
+        error: error.message,
+        data: []
+      };
+    }
+
+    return {
+      success: true,
+      data: Array.isArray(data) ? data : []
+    };
+  } catch (error) {
+    console.error('Service error:', error);
+    return {
+      success: false,
+      error: error.message,
+      data: []
     };
   }
 };
@@ -633,6 +677,7 @@ export default {
   getConversationList,
   assignJobToUser,
   getUserJobAssignments,
+  getJobsAssignedByMe,
   updateJobStatus,
   getReportJobs,
   deleteJobAssignment,

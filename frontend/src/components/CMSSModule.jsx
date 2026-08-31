@@ -2009,13 +2009,18 @@ const CMMSModule = ({
   // ============================================
   const TasksManager = () => {
     // Tab state for mobile UX
-    const [tasksTab, setTasksTab] = useState('tasks'); // 'tasks', 'messages', 'assign'
+    const [tasksTab, setTasksTab] = useState('tasks'); // 'tasks', 'messages', 'assign', 'progress'
 
     // State for tasks
     const [userTasks, setUserTasks] = useState([]);
     const [isLoadingTasks, setIsLoadingTasks] = useState(false);
     const [expandedTaskId, setExpandedTaskId] = useState(null);
     const [taskFilter, setTaskFilter] = useState('all');
+    const [progressDraft, setProgressDraft] = useState({}); // { [taskId]: { percentage, notes } }
+
+    // State for tasks this user has assigned to others (progress tracking)
+    const [assignedByMeTasks, setAssignedByMeTasks] = useState([]);
+    const [isLoadingAssignedByMe, setIsLoadingAssignedByMe] = useState(false);
 
     // State for messaging
     const [companyUsers, setCompanyUsers] = useState([]);
@@ -2045,8 +2050,11 @@ const CMMSModule = ({
       if (companyIdToUse) {
         loadUserTasks();
         loadCompanyUsers();
+        if (canAssignJobs) {
+          loadAssignedByMeTasks();
+        }
       }
-    }, [companyIdToUse]);
+    }, [companyIdToUse, canAssignJobs]);
 
     const loadUserMessages = useCallback(async () => {
       if (!selectedUserToMessage?.id) return;
@@ -2097,6 +2105,20 @@ const CMMSModule = ({
         console.error('Error loading tasks:', error);
       } finally {
         setIsLoadingTasks(false);
+      }
+    };
+
+    const loadAssignedByMeTasks = async () => {
+      setIsLoadingAssignedByMe(true);
+      try {
+        const result = await cmmsMessagingService.getJobsAssignedByMe(companyIdToUse);
+        if (result.success) {
+          setAssignedByMeTasks((result.data || []).filter(j => j.assigned_by_user_id === user?.id));
+        }
+      } catch (error) {
+        console.error('Error loading assigned-by-me tasks:', error);
+      } finally {
+        setIsLoadingAssignedByMe(false);
       }
     };
 
@@ -2194,8 +2216,20 @@ const CMMSModule = ({
       );
     };
 
-    const handleUpdateTaskStatus = async (taskId, newStatus) => {
-      const result = await cmmsMessagingService.updateJobStatus(taskId, newStatus);
+    const handleUpdateTaskStatus = async (taskId, newStatus, progressPercentage = null, progressNotes = null) => {
+      const result = await cmmsMessagingService.updateJobStatus(taskId, newStatus, progressPercentage, progressNotes);
+      if (result.success) {
+        await loadUserTasks();
+      } else {
+        alert(`Error: ${result.error}`);
+      }
+    };
+
+    const handleSaveProgress = async (task) => {
+      const draft = progressDraft[task.id] || {};
+      const percentage = draft.percentage !== undefined ? Number(draft.percentage) : task.progress_percentage;
+      const notes = draft.notes !== undefined ? draft.notes : task.progress_notes;
+      const result = await cmmsMessagingService.updateJobStatus(task.id, task.assignment_status, percentage, notes);
       if (result.success) {
         await loadUserTasks();
       } else {
@@ -2316,6 +2350,7 @@ const CMMSModule = ({
           });
           await loadUserTasks();
           await loadUserMessages();
+          await loadAssignedByMeTasks();
         } else {
           alert(`Error: ${result.error}`);
         }
@@ -2350,7 +2385,7 @@ const CMMSModule = ({
     return (
       <div className="w-full">
         {/* ========== MOBILE TAB NAVIGATION ========== */}
-        <div className="mb-4 md:mb-6 grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-3">
+        <div className={`mb-4 md:mb-6 grid grid-cols-2 ${canAssignJobs ? 'md:grid-cols-4' : 'md:grid-cols-2'} gap-2 md:gap-3`}>
           {/* Tab 1: Your Assigned Tasks */}
           <button
             onClick={() => setTasksTab('tasks')}
@@ -2389,6 +2424,21 @@ const CMMSModule = ({
             >
               <span className="text-sm md:text-base">🎯</span>
               <span className="hidden sm:inline">Assign</span>
+            </button>
+          )}
+
+          {/* Tab 4: Track Progress of tasks I assigned (only for admins/coordinators/supervisors) */}
+          {canAssignJobs && (
+            <button
+              onClick={() => { setTasksTab('progress'); loadAssignedByMeTasks(); }}
+              className={`w-full px-3 md:px-4 py-2 md:py-3 rounded-lg font-semibold text-xs md:text-sm transition-all border-2 flex items-center justify-center gap-2 ${
+                tasksTab === 'progress'
+                  ? 'bg-purple-600 text-white border-purple-500 shadow-lg'
+                  : 'bg-slate-700 text-gray-300 border-slate-600 hover:bg-slate-600'
+              }`}
+            >
+              <span className="text-sm md:text-base">📈</span>
+              <span className="hidden sm:inline">Progress</span>
             </button>
           )}
         </div>
@@ -2495,7 +2545,7 @@ const CMMSModule = ({
                           {task.assignment_status !== 'completed' && task.assignment_status !== 'rejected' && (
                             <select
                               value={task.assignment_status}
-                              onChange={(e) => handleUpdateTaskStatus(task.id, e.target.value)}
+                              onChange={(e) => handleUpdateTaskStatus(task.id, e.target.value, task.progress_percentage, task.progress_notes)}
                               className="w-full bg-slate-700 text-white text-xs rounded px-2 py-1.5 border border-slate-600 focus:border-emerald-500"
                             >
                               <option value="pending">⏳ Pending</option>
@@ -2504,6 +2554,52 @@ const CMMSModule = ({
                               <option value="completed">✅ Completed</option>
                             </select>
                           )}
+
+                          {/* Progress tracking - feeds a notification to whoever assigned this task */}
+                          <div className="pt-2 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <label className="text-xs font-semibold text-gray-300">Progress</label>
+                              <span className="text-xs text-emerald-300 font-semibold">
+                                {progressDraft[task.id]?.percentage ?? task.progress_percentage ?? 0}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="5"
+                              value={progressDraft[task.id]?.percentage ?? task.progress_percentage ?? 0}
+                              onChange={(e) => setProgressDraft(prev => ({
+                                ...prev,
+                                [task.id]: { ...prev[task.id], percentage: e.target.value }
+                              }))}
+                              disabled={task.assignment_status === 'completed' || task.assignment_status === 'rejected'}
+                              className="w-full accent-emerald-500 disabled:opacity-50"
+                            />
+                            <textarea
+                              placeholder="Progress notes (visible to whoever assigned this task)..."
+                              value={progressDraft[task.id]?.notes ?? task.progress_notes ?? ''}
+                              onChange={(e) => setProgressDraft(prev => ({
+                                ...prev,
+                                [task.id]: { ...prev[task.id], notes: e.target.value }
+                              }))}
+                              disabled={task.assignment_status === 'completed' || task.assignment_status === 'rejected'}
+                              className="w-full bg-slate-700 text-white text-xs rounded px-2 py-1.5 border border-slate-600 focus:border-emerald-500 placeholder-gray-500 disabled:opacity-50 h-16 resize-none"
+                            />
+                            {task.assignment_status !== 'completed' && task.assignment_status !== 'rejected' && (
+                              <button
+                                onClick={() => handleSaveProgress(task)}
+                                className="w-full py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white text-xs rounded font-semibold transition-all"
+                              >
+                                Save Progress
+                              </button>
+                            )}
+                            {task.last_progress_update && (
+                              <p className="text-xs text-gray-500">
+                                Last updated {new Date(task.last_progress_update).toLocaleString()}
+                              </p>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -2764,6 +2860,83 @@ const CMMSModule = ({
               <p className="text-blue-300 text-xs md:text-sm">
                 💡 <strong>Tip:</strong> Jobs assigned here will be added to the recipient's "Your Assigned Tasks" list and will receive a notification.
               </p>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: TRACK PROGRESS OF TASKS I ASSIGNED (Admin/Coordinator/Supervisor only) */}
+        {tasksTab === 'progress' && canAssignJobs && (
+          <div className="space-y-4">
+            <div className="glass-card p-4 md:p-6">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <h3 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
+                  📈 Tasks You Assigned
+                </h3>
+                <button
+                  onClick={loadAssignedByMeTasks}
+                  disabled={isLoadingAssignedByMe}
+                  className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-xs text-white"
+                >
+                  {isLoadingAssignedByMe ? 'Refreshing...' : 'Refresh'}
+                </button>
+              </div>
+              <p className="text-gray-300 text-xs md:text-sm">
+                Live status and progress of jobs you assigned to others. You'll also get a notification whenever the assignee updates their progress.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              {isLoadingAssignedByMe ? (
+                <div className="glass-card p-6 text-center">
+                  <Loader className="w-8 h-8 text-purple-400 animate-spin mx-auto mb-3" />
+                  <p className="text-gray-300">Loading tasks you assigned...</p>
+                </div>
+              ) : assignedByMeTasks.length === 0 ? (
+                <div className="glass-card p-6 text-center">
+                  <Briefcase className="w-12 h-12 text-gray-500 mx-auto mb-3 opacity-50" />
+                  <p className="text-gray-300">You haven't assigned any tasks yet</p>
+                </div>
+              ) : (
+                assignedByMeTasks.map(task => (
+                  <div key={task.id} className="glass-card border border-slate-700 p-4">
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-white font-semibold text-sm truncate">{task.job_title}</h4>
+                        <p className="text-gray-400 text-xs mt-1 truncate">
+                          Assigned to {task.assigned_to_user_name || task.assigned_to_user_email}
+                        </p>
+                      </div>
+                      <span className={`text-xs px-2 py-1 rounded border font-semibold flex-shrink-0 ${statusColors[task.assignment_status]}`}>
+                        {task.assignment_status}
+                      </span>
+                    </div>
+
+                    <div className="mt-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs text-gray-400">Progress</span>
+                        <span className="text-xs text-purple-300 font-semibold">{task.progress_percentage ?? 0}%</span>
+                      </div>
+                      <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-purple-500 to-emerald-500 transition-all"
+                          style={{ width: `${task.progress_percentage ?? 0}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {task.progress_notes && (
+                      <p className="text-gray-300 text-xs mt-2 italic">"{task.progress_notes}"</p>
+                    )}
+
+                    <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
+                      {task.due_date && <span>📅 Due {new Date(task.due_date).toLocaleDateString()}</span>}
+                      {task.last_progress_update && (
+                        <span>Updated {new Date(task.last_progress_update).toLocaleString()}</span>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}
