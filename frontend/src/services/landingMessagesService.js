@@ -190,7 +190,7 @@ export const devDeleteLandingMessage = async (devToken, messageId) => {
   if (error) throw error;
 };
 
-export const devReplyToLandingMessage = async (devToken, parentId, body, teamName = 'ICAN Team') => {
+export const devReplyToLandingMessage = async (devToken, parentId, body, teamName = 'IcanEra Team') => {
   const { data, error } = await supabase.rpc('dev_reply_landing_message', {
     dev_token: devToken,
     parent_id: parentId,

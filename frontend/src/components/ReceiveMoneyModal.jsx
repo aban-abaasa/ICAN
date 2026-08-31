@@ -251,7 +251,7 @@ const ReceiveMoneyModal = ({
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Receive method</label>
               <div className="grid grid-cols-2 gap-2">
-                {[{ value: 'ican', label: '💠 ICAN Wallet' }, { value: 'cash', label: '💵 Cash' }].map(option => (
+                {[{ value: 'ican', label: '💠 IcanEra Wallet' }, { value: 'cash', label: '💵 Cash' }].map(option => (
                   <button
                     key={option.value}
                     type="button"
@@ -262,7 +262,7 @@ const ReceiveMoneyModal = ({
                   </button>
                 ))}
               </div>
-              {paymentMethod === 'cash' && <p className="text-xs text-amber-300 mt-2">Show this QR to the payer. They scan it to record the cash payment and download their proof receipt. No ICAN balance changes.</p>}
+              {paymentMethod === 'cash' && <p className="text-xs text-amber-300 mt-2">Show this QR to the payer. They scan it to record the cash payment and download their proof receipt. No IcanEra balance changes.</p>}
             </div>
 
             <div>
@@ -332,7 +332,7 @@ const ReceiveMoneyModal = ({
             <div className="rounded-xl border border-emerald-400/40 bg-emerald-500/10 p-5 text-center">
               <div className="text-4xl mb-2">✅</div>
               <h4 className="text-xl font-bold text-emerald-300">Digital cash receipt</h4>
-              <p className="text-sm text-gray-300 mt-1">No ICAN balance was changed.</p>
+              <p className="text-sm text-gray-300 mt-1">No IcanEra balance was changed.</p>
             </div>
             <div className="rounded-lg bg-white/10 p-4 space-y-2 text-sm text-gray-200">
               <div className="flex justify-between"><span>Receipt</span><strong>{cashReceipt.receiptNumber}</strong></div>

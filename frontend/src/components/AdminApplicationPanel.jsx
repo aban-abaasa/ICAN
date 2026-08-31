@@ -464,7 +464,7 @@ const AdminApplicationPanel = ({ groupId, onClose }) => {
                   <div className="grid grid-cols-3 gap-3 mb-5">
                     <div className="bg-slate-700/50 rounded-lg p-4 border-l-4 border-l-amber-500">
                       <p className="text-xs text-gray-400 mb-1">💵 Loan Amount</p>
-                      <p className="text-xl font-bold text-amber-400">{loan.loan_amount} ICAN</p>
+                      <p className="text-xl font-bold text-amber-400">{loan.loan_amount} IcanEra</p>
                     </div>
                     <div className="bg-slate-700/50 rounded-lg p-4 border-l-4 border-l-blue-500">
                       <p className="text-xs text-gray-400 mb-1">📋 Purpose</p>
@@ -670,7 +670,7 @@ const AdminApplicationPanel = ({ groupId, onClose }) => {
                   <div className="grid grid-cols-3 gap-3 mb-5">
                     <div className="bg-slate-700/50 rounded-lg p-4 border-l-4 border-l-amber-500">
                       <p className="text-xs text-gray-400 mb-1">💵 Loan Amount</p>
-                      <p className="text-xl font-bold text-amber-400">{loan.loan_amount} ICAN</p>
+                      <p className="text-xl font-bold text-amber-400">{loan.loan_amount} IcanEra</p>
                     </div>
                     <div className="bg-slate-700/50 rounded-lg p-4 border-l-4 border-l-blue-500">
                       <p className="text-xs text-gray-400 mb-1">📋 Purpose</p>

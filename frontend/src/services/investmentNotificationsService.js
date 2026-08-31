@@ -106,7 +106,7 @@ export const notifyShareholdersSignatureRequest = async (agreementId, investorId
         senderId: investorId,
         notificationType: 'signature_request',
         title: `✍️ Signature Required: ${pitchTitle}`,
-        message: `A new investment agreement for "${pitchTitle}" requires your signature. ${agreement.total_investment} ICAN investment pending your approval.`,
+        message: `A new investment agreement for "${pitchTitle}" requires your signature. ${agreement.total_investment} IcanEra investment pending your approval.`,
         agreementId: agreement.id,
         pitchId: agreement.pitch_id,
         businessProfileId: agreement.business_profile_id,

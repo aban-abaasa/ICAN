@@ -5,6 +5,77 @@
  */
 
 import { supabase } from '../client';
+import { analyzeTransactionWithAI } from '../../../services/accountingAIService';
+
+// CMMS inventory spans spare parts, tools, consumables and equipment — not
+// just resale stock — so whether a purchase is a fixed asset, current-asset
+// stock, or a plain expense is decided by the AI accounting classifier
+// rather than assumed. "Inventory/Stock" accounts stay current-asset (COGS
+// bucket); any other Asset/Investment classification is a depreciable fixed
+// asset (Capital Investments bucket); everything else falls through as a
+// normal operating expense.
+const mapAccountingAnalysisToLedgerType = (analysis) => {
+  const a = analysis?.accountingAnalysis;
+  if (!a) return null;
+  const account = (a.account || '').toLowerCase();
+  const isStockAccount = account.includes('inventory') || account.includes('stock');
+  if (a.classification === 'Asset' && !isStockAccount) return 'asset';
+  if (a.classification === 'Investment' || (a.classification === 'Asset' && isStockAccount)) return 'cogs';
+  return null;
+};
+
+/**
+ * Classify and record an ICAN ledger entry for a CMMS inventory purchase or
+ * restock, so it flows into the shared Financial Summary report feed under
+ * the right bucket (Capital Investments vs Stock Purchases vs plain expense).
+ * Best-effort: never blocks or fails the inventory write it's called from.
+ */
+const recordCmmsInventoryLedgerEntry = async (companyId, { itemName, category, amount, note }) => {
+  if (!amount || amount <= 0) return;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data: company } = await supabase
+      .from('cmms_company_profiles')
+      .select('pichin_business_profile_id')
+      .eq('id', companyId)
+      .maybeSingle();
+
+    const description = `${itemName || 'Inventory item'}${category ? ` (${category})` : ''} — CMMS inventory${note ? `: ${note}` : ''}`;
+    const analysis = await analyzeTransactionWithAI({
+      description,
+      amount,
+      type: 'expense',
+      accountingType: 'business',
+      productName: itemName
+    });
+    const accountingType = mapAccountingAnalysisToLedgerType(analysis);
+
+    const { error } = await supabase.from('ican_transactions').insert([{
+      user_id: user.id,
+      transaction_type: 'expense',
+      amount,
+      currency: 'UGX',
+      description,
+      status: 'completed',
+      business_profile_id: company?.pichin_business_profile_id || null,
+      metadata: {
+        category: 'cmms_inventory',
+        source_app: 'cmms',
+        record_category: 'business',
+        accounting_type: accountingType,
+        product_name: itemName,
+        cmms_company_id: companyId,
+        ai_classification: analysis?.accountingAnalysis?.classification || null,
+        ai_powered: Boolean(analysis?.accountingAnalysis?.aiPowered)
+      }
+    }]);
+    if (error) console.warn('⚠️ Could not record CMMS inventory ledger entry:', error.message);
+  } catch (err) {
+    console.warn('⚠️ CMMS inventory ledger entry failed:', err.message);
+  }
+};
 
 const normalizeCmmsRoleKey = (rawRole) => {
   if (!rawRole) return '';
@@ -1003,6 +1074,16 @@ export const addInventoryItem = async (companyId, itemData) => {
       unit_price: mappedItem.unit_price,
       is_active: mappedItem.is_active
     });
+
+    // Fire-and-forget: classify and record this purchase in the shared
+    // ledger so the Financial Summary report sees it. Never blocks item
+    // creation if classification or the ledger write fails.
+    recordCmmsInventoryLedgerEntry(companyId, {
+      itemName: mappedItem.item_name,
+      category: mappedItem.category,
+      amount: mappedItem.quantity_in_stock * unitPrice
+    });
+
     return { data: mappedItem, error: null };
   } catch (error) {
     console.error('âŒ Error adding inventory item:', error);
@@ -1115,12 +1196,12 @@ export const updateInventoryQuantity = async (itemId, newQuantity, reason = 'Qua
   try {
     let cmmsUserId = null;
     const { data: { user } } = await supabase.auth.getUser();
+    const { data: existingItem } = await supabase
+      .from('cmms_inventory_items')
+      .select('cmms_company_id, quantity_in_stock, unit_price, item_name, category')
+      .eq('id', itemId)
+      .maybeSingle();
     if (user?.email) {
-      const { data: existingItem } = await supabase
-        .from('cmms_inventory_items')
-        .select('cmms_company_id')
-        .eq('id', itemId)
-        .maybeSingle();
       cmmsUserId = await resolveCmmsUserIdByEmail(existingItem?.cmms_company_id, user.email);
     }
 
@@ -1140,6 +1221,20 @@ export const updateInventoryQuantity = async (itemId, newQuantity, reason = 'Qua
 
     // Quantity audit logging is handled by DB trigger on cmms_inventory_items.
     void reason;
+
+    // A quantity increase is a restock purchase — classify and record it in
+    // the shared ledger so the report picks it up. Decreases (consumption)
+    // aren't new financial events since the stock was already capitalized.
+    const previousQuantity = parseFloat(existingItem?.quantity_in_stock) || 0;
+    const restockedQty = (parseFloat(newQuantity) || 0) - previousQuantity;
+    if (restockedQty > 0 && existingItem?.cmms_company_id) {
+      recordCmmsInventoryLedgerEntry(existingItem.cmms_company_id, {
+        itemName: existingItem.item_name,
+        category: existingItem.category,
+        amount: restockedQty * (parseFloat(existingItem.unit_price) || 0),
+        note: 'restock'
+      });
+    }
 
     return { data: mapCmmsInventoryItem(data), error: null };
   } catch (error) {

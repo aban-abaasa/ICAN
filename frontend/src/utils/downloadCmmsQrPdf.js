@@ -24,6 +24,6 @@ export const downloadCmmsQrPdf = async ({ type, url, location, companyName }) =>
   pdf.text('Scan this code with your phone to continue.', pageWidth / 2, 210, { align: 'center' });
   pdf.setFontSize(9);
   pdf.setTextColor(90);
-  pdf.text(type === 'staff' ? 'Staff must sign in with their own ICAN account before checking in.' : 'Visitors can use this code to register their arrival or departure.', pageWidth / 2, 220, { align: 'center' });
+  pdf.text(type === 'staff' ? 'Staff must sign in with their own IcanEra account before checking in.' : 'Visitors can use this code to register their arrival or departure.', pageWidth / 2, 220, { align: 'center' });
   pdf.save(`ican-cmms-${type}-qr-${safeFilename(location)}.pdf`);
 };

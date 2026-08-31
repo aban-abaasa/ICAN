@@ -150,51 +150,51 @@ const LandingPage = ({ onGetStarted }) => {
   // Footer section data with nested dropdown content
   const footerSections = {
     about: {
-      title: 'About ICANera',
-      content: 'ICANera is a revolutionary financial ecosystem designed to transform volatility into global capital. We empower individuals and communities to build generational wealth through democratic savings groups, secure transactions, and innovative financial tools. Our mission is to provide accessible, transparent, and transformative financial solutions.',
+      title: 'About IcanEra',
+      content: 'IcanEra is a revolutionary financial ecosystem designed to transform volatility into global capital. We empower individuals and communities to build generational wealth through democratic savings groups, secure transactions, and innovative financial tools. Our mission is to provide accessible, transparent, and transformative financial solutions.',
       description: 'Learn more about our mission'
     },
     blog: {
       title: 'Blog & Resources',
-      content: 'Discover latest insights on financial growth, investment strategies, SACCO management, and wealth building. Our blog features expert tips, success stories, and practical guides to help you maximize your financial potential on ICANera.',
+      content: 'Discover latest insights on financial growth, investment strategies, SACCO management, and wealth building. Our blog features expert tips, success stories, and practical guides to help you maximize your financial potential on IcanEra.',
       links: [
         { title: 'Building Wealth Through Community', content: 'Learn how democratic savings groups empower communities to build generational wealth together. Discover strategies for managing group finances, building trust, and maximizing collective growth potential.' },
-        { title: 'Digital Wallet Security Guide', content: 'Master the security features of your ICANera wallet. Understand encryption, two-factor authentication, PIN management, and best practices to keep your funds protected at all times.' },
+        { title: 'Digital Wallet Security Guide', content: 'Master the security features of your IcanEra wallet. Understand encryption, two-factor authentication, PIN management, and best practices to keep your funds protected at all times.' },
         { title: 'Investment Tips for Beginners', content: 'Start your investment journey with confidence. Learn fundamental investment principles, risk management, portfolio diversification, and how to grow your wealth through smart financial decisions.' },
         { title: 'SACCO Group Best Practices', content: 'Optimize your SACCO group operations with proven strategies. From member recruitment to fund management, transparency protocols, and conflict resolution—everything you need for group success.' }
       ],
       description: 'Read our latest articles'
     },
     careers: {
-      title: 'Careers at ICANera',
+      title: 'Careers at IcanEra',
       content: 'Join our growing team and be part of the financial revolution. We\'re seeking passionate individuals across engineering, product, design, and business development to help transform how people manage their wealth.',
       links: [
         { title: 'Engineering Opportunities', content: 'Help us build the future of fintech. We\'re looking for backend engineers, frontend developers, mobile engineers, and DevOps specialists who are passionate about creating transformative financial technology.' },
         { title: 'Product & Design Roles', content: 'Shape the user experience that millions depend on. Join our product and design teams to build intuitive interfaces, define product strategy, and create delightful user experiences.' },
         { title: 'Sales & Business Development', content: 'Drive growth and expand our market reach. We need visionary sales professionals and business development experts to partner with enterprises and grow our ecosystem.' },
-        { title: 'Customer Support Team', content: 'Be the voice of ICANera. Help our users succeed with exceptional support, relationship building, and community engagement across all channels.' }
+        { title: 'Customer Support Team', content: 'Be the voice of IcanEra. Help our users succeed with exceptional support, relationship building, and community engagement across all channels.' }
       ],
       description: 'View open positions'
     },
     privacy: {
       title: 'Privacy Policy',
-      content: 'At ICANera, your data privacy and security is paramount. We employ industry-leading encryption, transparent data practices, and strict compliance with global privacy regulations to protect your personal and financial information.',
+      content: 'At IcanEra, your data privacy and security is paramount. We employ industry-leading encryption, transparent data practices, and strict compliance with global privacy regulations to protect your personal and financial information.',
       links: [
         { title: 'Data Protection Standards', content: 'We employ military-grade encryption (AES-256) for all data at rest and TLS 1.2+ for data in transit. Our infrastructure is compliant with ISO 27001 and regularly audited by third-party security firms.' },
         { title: 'User Privacy Rights', content: 'You have the right to access, modify, or delete your personal data at any time. We never sell or share your data with third parties without explicit consent. Your financial information remains exclusively yours.' },
         { title: 'Cookie Policy', content: 'We use essential cookies to provide secure authentication and functional cookies to improve user experience. You can manage cookie preferences in your account settings. No tracking cookies are used without consent.' },
-        { title: 'GDPR Compliance', content: 'ICANera fully complies with GDPR regulations for European users. We have established Data Processing Agreements with all partners and ensure your right to be forgotten is respected.' }
+        { title: 'GDPR Compliance', content: 'IcanEra fully complies with GDPR regulations for European users. We have established Data Processing Agreements with all partners and ensure your right to be forgotten is respected.' }
       ],
       description: 'Your privacy matters to us'
     },
     terms: {
       title: 'Terms of Service',
-      content: 'Our comprehensive terms of service outline the rights and responsibilities of users interacting with the ICANera platform. By using ICANera, you agree to our terms and commit to responsible financial engagement.',
+      content: 'Our comprehensive terms of service outline the rights and responsibilities of users interacting with the IcanEra platform. By using IcanEra, you agree to our terms and commit to responsible financial engagement.',
       links: [
         { title: 'User Responsibilities', content: 'Users must provide accurate information, protect their credentials, comply with applicable laws, and use the platform responsibly. You are responsible for all activities under your account and must notify us of unauthorized access immediately.' },
-        { title: 'Platform Limitations', content: 'ICANera provides the platform "as is" without warranties. We are not liable for third-party services, user content, or losses from unauthorized access. Service interruptions may occur for maintenance, security, or regulatory compliance.' },
+        { title: 'Platform Limitations', content: 'IcanEra provides the platform "as is" without warranties. We are not liable for third-party services, user content, or losses from unauthorized access. Service interruptions may occur for maintenance, security, or regulatory compliance.' },
         { title: 'Dispute Resolution', content: 'We encourage users to contact our support team first. Unresolved disputes will be handled through binding arbitration rather than court proceedings. Both parties agree to good-faith negotiation before pursuing legal action.' },
-        { title: 'Intellectual Property', content: 'All ICANera content, code, and brand elements are protected intellectual property. Users receive a personal, non-exclusive license to use the platform. Unauthorized reproduction, modification, or distribution is prohibited.' }
+        { title: 'Intellectual Property', content: 'All IcanEra content, code, and brand elements are protected intellectual property. Users receive a personal, non-exclusive license to use the platform. Unauthorized reproduction, modification, or distribution is prohibited.' }
       ],
       description: 'Terms apply to all users'
     }
@@ -234,7 +234,7 @@ const LandingPage = ({ onGetStarted }) => {
       image: '/images/ICANwallet.png',
       title: 'Move Money Instantly',
       subtitle: 'Global Transfers',
-      description: 'Send money across borders in seconds using ICAN coins. Zero fees, blockchain-backed, completely transparent.',
+      description: 'Send money across borders in seconds using IcanEra coins. Zero fees, blockchain-backed, completely transparent.',
       whyJoin: 'Send to Kenya, Uganda, Tanzania instantly - no bank delays',
       features: ['Instant transfers', 'Zero fees', 'Blockchain secured', 'Multi-currency', 'No delays'],
       realMessage: 'International transfers that actually work like we promised'
@@ -315,7 +315,7 @@ const LandingPage = ({ onGetStarted }) => {
       image: '/images/trust.png',
       title: 'Know Your Wealth Potential',
       subtitle: 'Opportunity Rating',
-      description: 'Get your ICAN Opportunity Rating - a score showing your readiness for global opportunities and investment.',
+      description: 'Get your IcanEra Opportunity Rating - a score showing your readiness for global opportunities and investment.',
       whyJoin: 'Understand your true financial potential',
       features: ['Financial assessment', 'Opportunity unlocking', 'Growth recommendations', 'Global readiness', 'Custom guidance'],
       realMessage: 'Your path to global financial opportunities starts here'
@@ -350,7 +350,7 @@ const LandingPage = ({ onGetStarted }) => {
     {
       image: '/images/ICANera 3.png',
       title: 'Unlock Premium Features',
-      subtitle: 'ICAN Premium',
+      subtitle: 'IcanEra Premium',
       description: 'Premium features for power users - advanced analytics, priority support, exclusive opportunities.',
       whyJoin: 'Level up your financial game with elite features',
       features: ['Advanced analytics', 'Priority support', 'Exclusive deals', 'Higher limits', 'VIP access'],
@@ -378,8 +378,8 @@ const LandingPage = ({ onGetStarted }) => {
     {
       image: '/images/ICANera i.png',
       title: 'Built On Solid Foundation',
-      subtitle: 'ICAN Core Technology',
-      description: 'The foundation powering all ICAN features. Secure, scalable, designed for billions of transactions.',
+      subtitle: 'IcanEra Core Technology',
+      description: 'The foundation powering all IcanEra features. Secure, scalable, designed for billions of transactions.',
       whyJoin: 'Trust the bedrock of modern financial technology',
       features: ['Secure infrastructure', 'Blockchain foundation', 'Scalability', 'Integration hub', 'Future-proof'],
       realMessage: 'Technology that scales with your ambitions'
@@ -462,7 +462,7 @@ const LandingPage = ({ onGetStarted }) => {
     },
     {
       image: '/images/trust.png',
-      title: 'ICAN Opportunities',
+      title: 'IcanEra Opportunities',
       subtitle: 'Global access',
       description: 'Readiness assessment'
     },
@@ -480,13 +480,13 @@ const LandingPage = ({ onGetStarted }) => {
     },
     {
       image: '/images/ICANera1.png',
-      title: 'ICAN Ecosystem',
+      title: 'IcanEra Ecosystem',
       subtitle: 'All-in-one platform',
       description: 'Integrated experience'
     },
     {
       image: '/images/ICANera 3.png',
-      title: 'ICAN Premium',
+      title: 'IcanEra Premium',
       subtitle: 'Elite features',
       description: 'Power users'
     },
@@ -508,7 +508,7 @@ const LandingPage = ({ onGetStarted }) => {
   const badgeInfo = [
     {
       title: 'Complete Financial Solutions',
-      description: 'ICAN\'s comprehensive suite of integrated platforms designed to empower your financial journey—from opportunity discovery to wealth management and beyond'
+      description: 'IcanEra\'s comprehensive suite of integrated platforms designed to empower your financial journey—from opportunity discovery to wealth management and beyond'
     },
     {
       title: '🚀 Smart Financial Management',
@@ -524,7 +524,7 @@ const LandingPage = ({ onGetStarted }) => {
     },
     {
       title: '🌍 Global Opportunities',
-      description: 'Access international investment opportunities and get your ICAN Opportunity Rating for global business readiness'
+      description: 'Access international investment opportunities and get your IcanEra Opportunity Rating for global business readiness'
     },
     {
       title: '🤝 Community Powered',
@@ -625,7 +625,7 @@ const LandingPage = ({ onGetStarted }) => {
     {
       name: 'Sarah Okoye',
       role: 'Finance Manager',
-      text: 'ICAN transformed how we manage our group finances. The dashboard is intuitive and powerful.',
+      text: 'IcanEra transformed how we manage our group finances. The dashboard is intuitive and powerful.',
       avatar: '👩‍💼'
     },
     {
@@ -650,8 +650,8 @@ const LandingPage = ({ onGetStarted }) => {
     const posts = threads
       .filter((t) => t.message && t.message.trim().length >= 15)
       .map((t) => ({
-        name: t.name || 'ICANera community member',
-        role: t.user_id ? 'ICANera member' : 'Community visitor',
+        name: t.name || 'IcanEra community member',
+        role: t.user_id ? 'IcanEra member' : 'Community visitor',
         text: t.message.trim(),
         avatar: t.user_id ? '💼' : '💬'
       }));
@@ -728,7 +728,7 @@ const LandingPage = ({ onGetStarted }) => {
       }
       if (cancelled) return;
 
-      const id = { authId: authUser.id, name: name || 'ICANera user', email };
+      const id = { authId: authUser.id, name: name || 'IcanEra user', email };
       setIdentity(id);
       setContactForm((prev) => ({
         ...prev,
@@ -1068,19 +1068,19 @@ const LandingPage = ({ onGetStarted }) => {
                     <div className="text-sm text-gray-300 leading-relaxed space-y-4">
                       <div className="space-y-2">
                         <p className="font-semibold text-yellow-200">🚀 One IcanEra Platform - Replace All Business Apps</p>
-                        <p className="text-xs">IcanEra unifies your entire business ecosystem. Every transaction recorded across SupermartKera retail, BodaGoEra delivery, AgriBone agriculture, and enterprise operations - all powered by icaneracoin blockchain security.</p>
+                        <p className="text-xs">IcanEra unifies your entire business ecosystem. Every transaction recorded across SupermartKera retail, BodaGoEra delivery, AgriBone agriculture, and enterprise operations - all powered by IcanEra blockchain security.</p>
                       </div>
                       <div className="space-y-2">
                         <p className="font-semibold text-purple-200">💼 Enterprise CMMS - Role-Based Hierarchy & Supplier Integration</p>
                         <p className="text-xs">Complete role-based access from admin to staff with structured approval workflows. Manage employees, assets, equipment, and salaries. Integrated supplier portal in SupermartKera for seamless ordering - receive inventory from suppliers worldwide via BodaGoEra's cross-border delivery (ships, airplanes, door-to-door service). Track everything with comprehensive business reports.</p>
                       </div>
                       <div className="space-y-2">
-                        <p className="font-semibold text-amber-200">💳 IcanEraWallette - Universal Payment & Money Management</p>
-                        <p className="text-xs">Send and receive money across borders instantly. Trade in icaneracoin, top up your wallet, and pay for products in-store with cash, wallet coins, or real money. Separate accounts for TRUST groups, business, and personal finances - track every transaction with complete clarity and control. All transactions blockchain-verified to stabilize icaneracoin value and beat inflation.</p>
+                        <p className="font-semibold text-amber-200">💳 IcanEra Wallet - Universal Payment & Money Management</p>
+                        <p className="text-xs">Send and receive money across borders instantly. Trade in IcanEra, top up your wallet, and pay for products in-store with cash, wallet coins, or real money. Separate accounts for TRUST groups, business, and personal finances - track every transaction with complete clarity and control. All transactions blockchain-verified to stabilize IcanEra value and beat inflation.</p>
                       </div>
                       <div className="space-y-2">
                         <p className="font-semibold text-pink-200">🏦 TRUST + Blockchain SACCO</p>
-                        <p className="text-xs">Blockchain-secured TRUST groups with agent withdrawals and deposits directly in ICANera Wallet. Every transaction is immutably recorded for complete transparency and security.</p>
+                        <p className="text-xs">Blockchain-secured TRUST groups with agent withdrawals and deposits directly in IcanEra Wallet. Every transaction is immutably recorded for complete transparency and security.</p>
                       </div>
                       <div className="space-y-2">
                         <p className="font-semibold text-green-200">💰 PitchIn - Public Stock Market & Real-Time Share Valuation</p>
@@ -1092,7 +1092,7 @@ const LandingPage = ({ onGetStarted }) => {
                       </div>
                       <div className="space-y-2">
                         <p className="font-semibold text-cyan-200">🔐 Blockchain-Secured Messaging & Transaction Stability</p>
-                        <p className="text-xs">Every message in the application is blockchain-verified for security. Immutable communication records add value and trust to every interaction. All transactions blockchain-recorded to stabilize icaneracoin value - natural market fluctuation beats inflation while protecting your purchasing power.</p>
+                        <p className="text-xs">Every message in the application is blockchain-verified for security. Immutable communication records add value and trust to every interaction. All transactions blockchain-recorded to stabilize IcanEra value - natural market fluctuation beats inflation while protecting your purchasing power.</p>
                       </div>
                     </div>
                     
@@ -1135,19 +1135,19 @@ const LandingPage = ({ onGetStarted }) => {
                 <div className="text-sm md:text-base 2xl:text-lg text-gray-300 leading-relaxed space-y-4">
                   <div className="space-y-3">
                     <p className="font-semibold text-yellow-200">🚀 IcanEra - The Ultimate Business Platform</p>
-                    <p>SupermartKera, AgriBone, BodaGoEra, and all business modules unified in one powerful platform. Every transaction across retail, agriculture, delivery, and enterprise is recorded with blockchain-secured icaneracoin power. One wallet, one ecosystem, infinite possibilities.</p>
+                    <p>SupermartKera, AgriBone, BodaGoEra, and all business modules unified in one powerful platform. Every transaction across retail, agriculture, delivery, and enterprise is recorded with blockchain-secured IcanEra power. One wallet, one ecosystem, infinite possibilities.</p>
                   </div>
                   <div className="space-y-3">
                     <p className="font-semibold text-purple-200">💼 Enterprise-Grade CMMS with Complete Supply Chain Integration</p>
                     <p>Comprehensive Computerized Maintenance Management System with role-based access hierarchy from admin to staff. Each level has structured functions for employee management, asset tracking, equipment monitoring, and salary processing. Finalize all approvals and payments through secure workflows. Seamlessly integrated supplier portal in SupermartKera allows you to order and receive inventory from suppliers worldwide. BodaGoEra handles cross-border delivery via ships, airplanes, and door-to-door service for complete source-to-destination logistics. Generate professional business reports, automate approval workflows, and maintain complete audit trails with superior blockchain integration.</p>
                   </div>
                   <div className="space-y-3">
-                    <p className="font-semibold text-amber-200">💳 IcanEraWallette - Universal Payment System & Money Management</p>
-                    <p>Send and receive money across borders instantly with zero delays. Trade seamlessly in icaneracoin, top up your wallet from multiple sources, and enjoy flexible payment options. Pay for products in SupermartKera stores using cash, wallet coins (icaneracoin), or real money - all tracked automatically. Separate dedicated accounts for TRUST group savings, business operations, and personal finances ensure complete clarity. Track every transaction across all accounts with real-time updates, detailed transaction history, and comprehensive financial control. Every transaction is blockchain-verified to provide stability to icaneracoin value - while the coin fluctuates naturally with market demand, the blockchain foundation consistently beats inflation and protects your wealth. Your money, your way, completely organized and inflation-resistant.</p>
+                    <p className="font-semibold text-amber-200">💳 IcanEra Wallet - Universal Payment System & Money Management</p>
+                    <p>Send and receive money across borders instantly with zero delays. Trade seamlessly in IcanEra, top up your wallet from multiple sources, and enjoy flexible payment options. Pay for products in SupermartKera stores using cash, wallet coins (IcanEra), or real money - all tracked automatically. Separate dedicated accounts for TRUST group savings, business operations, and personal finances ensure complete clarity. Track every transaction across all accounts with real-time updates, detailed transaction history, and comprehensive financial control. Every transaction is blockchain-verified to provide stability to IcanEra value - while the coin fluctuates naturally with market demand, the blockchain foundation consistently beats inflation and protects your wealth. Your money, your way, completely organized and inflation-resistant.</p>
                   </div>
                   <div className="space-y-3">
                     <p className="font-semibold text-pink-200">🏦 Blockchain TRUST & SACCO with Agent Network</p>
-                    <p>Blockchain-secured TRUST groups offering 8-15% returns with complete transparency. Agent-enabled withdrawals and deposits directly in ICANera Wallet. Every SACCO transaction is immutably recorded on the blockchain for unshakable trust and accountability.</p>
+                    <p>Blockchain-secured TRUST groups offering 8-15% returns with complete transparency. Agent-enabled withdrawals and deposits directly in IcanEra Wallet. Every SACCO transaction is immutably recorded on the blockchain for unshakable trust and accountability.</p>
                   </div>
                   <div className="space-y-3">
                     <p className="font-semibold text-green-200">💰 PitchIn - Public Stock Market with Real-Time Share Valuation</p>
@@ -1159,7 +1159,7 @@ const LandingPage = ({ onGetStarted }) => {
                   </div>
                   <div className="space-y-3">
                     <p className="font-semibold text-cyan-200">🔐 Blockchain-Secured Messaging & Transaction Stability</p>
-                    <p>Every message in IcanEra is blockchain-verified and immutably recorded. Enhanced security, complete audit trails, and tamper-proof communication records add unprecedented value to your business operations and legal compliance. All transactions are blockchain-recorded to provide stability to icaneracoin value. While the coin naturally fluctuates with real market demand and trading activity, the blockchain foundation ensures it consistently beats inflation, protecting and growing your purchasing power over time. True digital currency that works for you, not against you.</p>
+                    <p>Every message in IcanEra is blockchain-verified and immutably recorded. Enhanced security, complete audit trails, and tamper-proof communication records add unprecedented value to your business operations and legal compliance. All transactions are blockchain-recorded to provide stability to IcanEra value. While the coin naturally fluctuates with real market demand and trading activity, the blockchain foundation ensures it consistently beats inflation, protecting and growing your purchasing power over time. True digital currency that works for you, not against you.</p>
                   </div>
                 </div>
                 
@@ -1631,10 +1631,10 @@ const LandingPage = ({ onGetStarted }) => {
           <div className="text-center mb-10 md:mb-14">
             <p className="text-xs md:text-sm font-black uppercase tracking-[0.35em] text-teal-400">Community Board</p>
             <h2 className={`mt-3 text-2xl md:text-4xl lg:text-5xl font-black leading-tight ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>
-              Ask ICANera anything
+              Ask IcanEra anything
             </h2>
             <p className={`mt-3 max-w-2xl mx-auto text-sm md:text-base leading-relaxed ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>
-              Public questions from the ICANera community — anyone can read these. The ICANera team can remove any message.
+              Public questions from the IcanEra community — anyone can read these. The IcanEra team can remove any message.
             </p>
           </div>
 
@@ -1644,7 +1644,7 @@ const LandingPage = ({ onGetStarted }) => {
             className={`border ican-cove-card p-5 md:p-8 mb-10 md:mb-14 ${isDarkTheme ? 'bg-slate-900/80 border-slate-600/40' : 'bg-white border-slate-300/70'}`}
           >
             <h3 className={`text-lg md:text-xl font-bold mb-4 ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>
-              {identity ? `Welcome back, ${identity.name}.` : 'Talk to the ICANera team.'}
+              {identity ? `Welcome back, ${identity.name}.` : 'Talk to the IcanEra team.'}
             </h3>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
@@ -1715,19 +1715,19 @@ const LandingPage = ({ onGetStarted }) => {
                     <span className={`flex items-center gap-2 text-sm font-medium ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>
                       <Lock className="w-4 h-4" /> Private
                     </span>
-                    <span className={`mt-1 block text-xs leading-5 ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>Only you and the ICANera team can see this.</span>
+                    <span className={`mt-1 block text-xs leading-5 ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>Only you and the IcanEra team can see this.</span>
                   </span>
                 </label>
               </div>
             ) : identity ? (
               <p className={`mt-4 text-xs leading-5 ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>
-                Messages here are public — anyone can see them, but the ICANera team can remove any message.{' '}
-                Connect your ICAN wallet after signing in to unlock private messages.
+                Messages here are public — anyone can see them, but the IcanEra team can remove any message.{' '}
+                Connect your IcanEra wallet after signing in to unlock private messages.
               </p>
             ) : (
               <p className={`mt-4 text-xs leading-5 ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>
-                Messages here are public — anyone can see them, but the ICANera team can remove any message.
-                Sign in with an ICAN wallet to choose public or private for your own messages.
+                Messages here are public — anyone can see them, but the IcanEra team can remove any message.
+                Sign in with an IcanEra wallet to choose public or private for your own messages.
               </p>
             )}
 
@@ -1832,7 +1832,7 @@ const LandingPage = ({ onGetStarted }) => {
                             <p className={`text-xs font-semibold ${
                               r.sender_role === 'dev' ? 'text-cyan-300' : (isDarkTheme ? 'text-white' : 'text-slate-900')
                             }`}>
-                              {r.sender_role === 'dev' ? 'ICANera Team' : (r.name || 'Website visitor')}
+                              {r.sender_role === 'dev' ? 'IcanEra Team' : (r.name || 'Website visitor')}
                             </p>
                             <div className="flex items-center gap-2">
                               {r.reward_reason && (
@@ -1964,9 +1964,9 @@ const LandingPage = ({ onGetStarted }) => {
             </p>
             {identity?.authId === selectedContributor.authId && (
               <div className="mt-4 rounded-xl border border-cyan-400/30 bg-cyan-400/10 p-3">
-                <p className="text-xs uppercase tracking-wide text-cyan-300">Your ICAN balance</p>
+                <p className="text-xs uppercase tracking-wide text-cyan-300">Your IcanEra balance</p>
                 <p className="mt-1 text-xl font-bold text-cyan-200">
-                  {balanceLoading ? '…' : `${(contributorBalance ?? 0).toFixed(2)} ICAN`}
+                  {balanceLoading ? '…' : `${(contributorBalance ?? 0).toFixed(2)} IcanEra`}
                 </p>
               </div>
             )}

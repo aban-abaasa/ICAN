@@ -391,7 +391,7 @@ const TrustSystem = ({
       });
 
       if (result.success) {
-        setMessage({ type: 'success', text: '✓ TRUST group created with ICAN wallet!' });
+        setMessage({ type: 'success', text: '✓ TRUST group created with IcanEra wallet!' });
         setGroupForm({
           name: '',
           description: '',
@@ -538,7 +538,7 @@ const TrustSystem = ({
 
         if (createError) {
           console.error('❌ Could not create ICAN Wallet:', createError);
-          setMessage({ type: 'error', text: '❌ Could not create your ICAN wallet. Please try again.' });
+          setMessage({ type: 'error', text: '❌ Could not create your IcanEra wallet. Please try again.' });
           return;
         }
 
@@ -585,7 +585,7 @@ const TrustSystem = ({
 
     // Verify ICAN wallet exists before processing
     if (!hasICANWallet) {
-      setMessage({ type: 'error', text: '❌ Please set up your ICAN wallet first to make contributions' });
+      setMessage({ type: 'error', text: '❌ Please set up your IcanEra wallet first to make contributions' });
       return;
     }
 
@@ -612,7 +612,7 @@ const TrustSystem = ({
 
       if (!walletData) {
         console.error('❌ Wallet not found for contribution');
-        setMessage({ type: 'error', text: '❌ ICAN wallet not found. Please refresh and try again.' });
+        setMessage({ type: 'error', text: '❌ IcanEra wallet not found. Please refresh and try again.' });
         setLoading(false);
         return;
       }
@@ -624,7 +624,7 @@ const TrustSystem = ({
       // Verify user has enough coins for contribution
       const contributionAmount = parseFloat(contributeForm.amount);
       if (coinBalance < contributionAmount) {
-        setMessage({ type: 'error', text: `❌ Insufficient ICAN coins. You have ${coinBalance.toFixed(2)} ICAN but need ${contributionAmount.toFixed(2)} ICAN.` });
+        setMessage({ type: 'error', text: `❌ Insufficient IcanEra coins. You have ${coinBalance.toFixed(2)} IcanEra but need ${contributionAmount.toFixed(2)} IcanEra.` });
         setLoading(false);
         return;
       }
@@ -640,7 +640,7 @@ const TrustSystem = ({
       });
 
       if (result.success) {
-        setMessage({ type: 'success', text: '✓ Contribution recorded and verified on blockchain using your ICAN wallet!' });
+        setMessage({ type: 'success', text: '✓ Contribution recorded and verified on blockchain using your IcanEra wallet!' });
         setContributeForm({ amount: '', paymentMethod: 'ican' });
         setShowContributeModal(false);
         
@@ -961,8 +961,8 @@ const TrustSystem = ({
           <div className="p-4 rounded-lg mb-6 bg-amber-500/15 border border-amber-500/40 flex items-start gap-3">
             <Wallet className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="text-amber-300 font-semibold text-sm sm:text-base">ICAN Wallet Required</p>
-              <p className="text-amber-200/70 text-xs sm:text-sm mt-1">You need an active ICAN wallet account to join trust groups and make contributions. Set up your ICAN wallet first to get started.</p>
+              <p className="text-amber-300 font-semibold text-sm sm:text-base">IcanEra Wallet Required</p>
+              <p className="text-amber-200/70 text-xs sm:text-sm mt-1">You need an active IcanEra wallet account to join trust groups and make contributions. Set up your IcanEra wallet first to get started.</p>
             </div>
           </div>
         )}
@@ -1057,7 +1057,7 @@ const TrustSystem = ({
                     {/* Monthly Contribution & Total Saved */}
                     <div className="space-y-2 mb-4 text-xs sm:text-sm">
                       <p className="text-slate-700">
-                        <span className="text-slate-500">Monthly:</span> <span className="font-semibold text-amber-600">₿{group.monthly_contribution} ICAN</span>
+                        <span className="text-slate-500">Monthly:</span> <span className="font-semibold text-amber-600">₿{group.monthly_contribution} IcanEra</span>
                       </p>
                       {group.members && Array.isArray(group.members) && group.members.length > 0 && (
                         <p className="text-emerald-700">
@@ -1124,12 +1124,12 @@ const TrustSystem = ({
                         <span className="text-slate-400">Members:</span> {group.member_count || 0}/{group.max_members}
                       </p>
                       <p className="text-slate-300">
-                        <span className="text-slate-400">Monthly:</span> ₿{group.monthly_contribution} ICAN
+                        <span className="text-slate-400">Monthly:</span> ₿{group.monthly_contribution} IcanEra
                       </p>
                       {/* Show total savings/contributions */}
                       {group.members && Array.isArray(group.members) && group.members.length > 0 && (
                         <p className="text-emerald-300 font-semibold">
-                          <span className="text-slate-400">Saved:</span> ₿{(group.members.reduce((sum, m) => sum + (parseFloat(m.total_contributed) || 0), 0)).toFixed(8)} ICAN
+                          <span className="text-slate-400">Saved:</span> ₿{(group.members.reduce((sum, m) => sum + (parseFloat(m.total_contributed) || 0), 0)).toFixed(8)} IcanEra
                         </p>
                       )}
                       <p className="text-slate-300">
@@ -1284,15 +1284,15 @@ const TrustSystem = ({
                   </div>
 
                   <div>
-                    <label className="block text-white font-semibold mb-2">Currency (ICAN Coins Only)</label>
+                    <label className="block text-white font-semibold mb-2">Currency (IcanEra Coins Only)</label>
                     <div className="w-full px-4 py-3 bg-gradient-to-r from-green-700/35 to-emerald-700/15 border-2 border-green-300/75 rounded-lg text-white font-semibold">
-                      ₿ ICAN - ICAN Coins
+                      ₿ IcanEra - IcanEra Coins
                     </div>
                   </div>
                 </div>
 
                 <div>
-                    <label className="block text-white font-semibold mb-2">Monthly Contribution Amount (ICAN Coins) *</label>
+                    <label className="block text-white font-semibold mb-2">Monthly Contribution Amount (IcanEra Coins) *</label>
                     <div className="relative">
                       <span className="absolute left-3 top-3 text-green-300 font-bold">₿</span>
                       <input
@@ -1306,32 +1306,32 @@ const TrustSystem = ({
                         className="w-full pl-10 pr-4 py-3 bg-emerald-950/70 border-2 border-green-400/80 rounded-lg text-white placeholder-slate-300/70 focus:outline-none focus:border-lime-300"
                       />
                     </div>
-                    <p className="text-slate-100 text-sm mt-2">Each member contributes this amount in ICAN coins monthly</p>
+                    <p className="text-slate-100 text-sm mt-2">Each member contributes this amount in IcanEra coins monthly</p>
                 </div>
 
                 {/* Trust ICAN Wallet Setup */}
                 <div className="border-4 border-green-400/80 rounded-xl p-4 bg-gradient-to-r from-green-900/45 to-emerald-900/25">
                   <h3 className="text-white font-bold mb-3 flex items-center gap-2">
                     <Wallet size={20} className="text-green-300" />
-                    Trust ICAN Wallet Setup (Required)
+                    Trust IcanEra Wallet Setup (Required)
                   </h3>
-                  
+
                   {!groupForm.walletCreated ? (
                     <div className="space-y-3">
-                      <p className="text-slate-100 text-sm">Every trust group needs a dedicated ICAN wallet for member transactions and withdrawals.</p>
+                      <p className="text-slate-100 text-sm">Every trust group needs a dedicated IcanEra wallet for member transactions and withdrawals.</p>
                       <button
                         type="button"
                         onClick={() => {
                           // Simulate wallet creation
-                          setGroupForm({ 
-                            ...groupForm, 
-                            walletCreated: true, 
-                            groupWalletAddress: `ICAN-GROUP-${currentUser?.id?.substring(0, 8)}-${Date.now()}`
+                          setGroupForm({
+                            ...groupForm,
+                            walletCreated: true,
+                            groupWalletAddress: `IcanEra-GROUP-${currentUser?.id?.substring(0, 8)}-${Date.now()}`
                           });
                         }}
                         className="w-full px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white rounded-lg transition-all font-semibold text-sm border-2 border-lime-300/80"
                       >
-                        + Create Trust ICAN Wallet
+                        + Create Trust IcanEra Wallet
                       </button>
                     </div>
                   ) : (
@@ -1448,10 +1448,10 @@ const TrustSystem = ({
                     <div key={group.id} className="flex items-center justify-between p-4 bg-slate-900/50 rounded-lg">
                       <div className="flex-1">
                         <p className="text-white font-semibold">{group.name}</p>
-                        <p className="text-slate-400 text-sm">{group.member_count || 0} members • ₿{group.monthly_contribution}/month ICAN</p>
+                        <p className="text-slate-400 text-sm">{group.member_count || 0} members • ₿{group.monthly_contribution}/month IcanEra</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-emerald-400 font-semibold">₿{(group.total_contributed || 0).toFixed(2)} ICAN</p>
+                        <p className="text-emerald-400 font-semibold">₿{(group.total_contributed || 0).toFixed(2)} IcanEra</p>
                         <p className="text-slate-500 text-xs">contributed</p>
                       </div>
                     </div>
@@ -1636,7 +1636,7 @@ const TrustSystem = ({
                             <div className="mb-4 p-3 border border-emerald-500/40 bg-emerald-500/10 rounded-lg">
                               <p className="text-emerald-400 text-xs sm:text-sm font-semibold flex items-center gap-2">
                                 <span>✅</span>
-                                <span>Trust ICAN Wallet Active</span>
+                                <span>Trust IcanEra Wallet Active</span>
                               </p>
                               <div className="mt-2 space-y-1.5 text-xs text-emerald-300/80">
                                 <p className="flex items-start gap-2">
@@ -1645,7 +1645,7 @@ const TrustSystem = ({
                                 </p>
                                 <p className="flex items-start gap-2">
                                   <span>•</span>
-                                  <span>Min withdrawal: <span className="font-bold">₿10 ICAN</span></span>
+                                  <span>Min withdrawal: <span className="font-bold">₿10 IcanEra</span></span>
                                 </p>
                                 <p className="flex items-start gap-2">
                                   <span>•</span>
@@ -1657,7 +1657,7 @@ const TrustSystem = ({
                             <div className="mb-4 p-3 border border-amber-500/40 bg-amber-500/10 rounded-lg animate-pulse">
                               <p className="text-amber-400 text-xs sm:text-sm font-semibold flex items-center gap-2">
                                 <span>⏳</span>
-                                <span>Setting Up Trust ICAN Wallet...</span>
+                                <span>Setting Up Trust IcanEra Wallet...</span>
                               </p>
                               <div className="mt-2 space-y-1.5 text-xs text-amber-300/80">
                                 <p className="flex items-start gap-2">
@@ -1666,7 +1666,7 @@ const TrustSystem = ({
                                 </p>
                                 <p className="flex items-start gap-2">
                                   <span>•</span>
-                                  <span>Min withdrawal: <span className="font-bold">₿10 ICAN</span></span>
+                                  <span>Min withdrawal: <span className="font-bold">₿10 IcanEra</span></span>
                                 </p>
                                 <p className="flex items-start gap-2">
                                   <span>•</span>
@@ -1768,7 +1768,7 @@ const TrustSystem = ({
                   <p className="text-amber-300 text-xs sm:text-sm font-semibold flex items-center gap-2">
                     <span>💰</span> Member Fee
                   </p>
-                  <p className="text-2xl sm:text-3xl font-bold text-amber-400 mt-2">₿{selectedGroup.monthly_contribution} ICAN</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-amber-400 mt-2">₿{selectedGroup.monthly_contribution} IcanEra</p>
                   <p className="text-amber-300/60 text-xs mt-1">Monthly contribution required</p>
                 </div>
 
@@ -1813,7 +1813,7 @@ const TrustSystem = ({
                           <p className="text-emerald-300 text-xs sm:text-sm font-semibold flex items-center gap-2">
                             <span>💎</span> Your Contribution
                           </p>
-                          <p className="text-2xl sm:text-3xl font-bold text-emerald-400 mt-1">₿{userContribution.toFixed(8)} ICAN</p>
+                          <p className="text-2xl sm:text-3xl font-bold text-emerald-400 mt-1">₿{userContribution.toFixed(8)} IcanEra</p>
                         </div>
                         <span className={`text-emerald-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
                           ▼
@@ -1837,7 +1837,7 @@ const TrustSystem = ({
                                 style={{ width: `${Math.min(progressPercent, 100)}%` }}
                               ></div>
                             </div>
-                            <p className="text-xs text-emerald-300/70 text-center">Next target: ₿{monthlyReq} ICAN/month</p>
+                            <p className="text-xs text-emerald-300/70 text-center">Next target: ₿{monthlyReq} IcanEra/month</p>
                           </div>
                         </div>
                       )}
@@ -1895,7 +1895,7 @@ const TrustSystem = ({
                               {isFullyPaid ? 'Payment Complete' : 'Amount Owed'}
                             </p>
                             <p className={`text-2xl sm:text-3xl font-bold mt-1 ${isFullyPaid ? 'text-green-400' : 'text-orange-400'}`}>
-                              ₿{amountOwed.toFixed(8)} ICAN
+                              ₿{amountOwed.toFixed(8)} IcanEra
                             </p>
                           </div>
                           <span className={`transition-transform ${isExpanded ? 'rotate-180' : ''} ${isFullyPaid ? 'text-green-400' : 'text-orange-400'}`}>
@@ -1928,7 +1928,7 @@ const TrustSystem = ({
                           <p className="text-slate-400 text-xs sm:text-sm">{member.role}</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-emerald-400 text-xs sm:text-sm font-medium">₿{member.total_contributed || 0} ICAN</p>
+                          <p className="text-emerald-400 text-xs sm:text-sm font-medium">₿{member.total_contributed || 0} IcanEra</p>
                           <p className="text-slate-400 text-xs">contributed</p>
                         </div>
                       </div>
@@ -1944,7 +1944,7 @@ const TrustSystem = ({
               {!hasICANWallet && (
                 <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-start gap-2">
                   <AlertCircle size={18} className="text-amber-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-amber-300 text-xs sm:text-sm">Set up your ICAN wallet to join this group</p>
+                  <p className="text-amber-300 text-xs sm:text-sm">Set up your IcanEra wallet to join this group</p>
                 </div>
               )}
 
@@ -1954,7 +1954,7 @@ const TrustSystem = ({
                 disabled={loading || !hasICANWallet}
                 className="w-full px-4 py-3 bg-amber-600 hover:bg-amber-500 active:bg-amber-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium text-base"
               >
-                {!hasICANWallet ? '🔒 ICAN Wallet Required' : loading ? 'Joining...' : '✨ Join Group'}
+                {!hasICANWallet ? '🔒 IcanEra Wallet Required' : loading ? 'Joining...' : '✨ Join Group'}
               </button>
             </div>
           </div>
@@ -2043,7 +2043,7 @@ const TrustSystem = ({
                   </div>
 
                   <div>
-                    <label className="block text-slate-300 font-semibold mb-2 text-sm">Monthly Contribution (ICAN Coins)</label>
+                    <label className="block text-slate-300 font-semibold mb-2 text-sm">Monthly Contribution (IcanEra Coins)</label>
                     <div className="relative">
                       <span className="absolute left-3 top-3 text-amber-400 font-bold">₿</span>
                       <input
@@ -2070,7 +2070,7 @@ const TrustSystem = ({
               {manageModalTab === 'account' && (
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
-                    <h3 className="font-bold text-white text-base sm:text-lg">💰 Trust ICAN Account</h3>
+                    <h3 className="font-bold text-white text-base sm:text-lg">💰 Trust IcanEra Account</h3>
                     <button
                       onClick={async () => {
                         console.log('🔄 Manually refreshing group data from database...');
@@ -2156,7 +2156,7 @@ const TrustSystem = ({
                             <div className="space-y-3">
                               {/* ICAN Amount */}
                               <div className="flex justify-between items-center p-3 sm:p-4 bg-slate-900/40 rounded-lg border border-green-500/20">
-                                <span className="text-green-300 text-xs sm:text-sm font-medium">Total ICAN Collected:</span>
+                                <span className="text-green-300 text-xs sm:text-sm font-medium">Total IcanEra Collected:</span>
                                 <span className="text-green-400 font-bold text-lg sm:text-xl">₿{totalICANContributed.toFixed(8)}</span>
                               </div>
                               
@@ -2169,7 +2169,7 @@ const TrustSystem = ({
                               {/* Exchange Rate */}
                               <div className="text-center p-2 bg-slate-900/30 rounded border border-slate-700">
                                 <p className="text-slate-400 text-xs">Exchange Rate</p>
-                                <p className="text-amber-300 font-semibold text-sm">1 ICAN = 5,000 UGX</p>
+                                <p className="text-amber-300 font-semibold text-sm">1 IcanEra = 5,000 UGX</p>
                               </div>
                             </div>
                           );
@@ -2212,7 +2212,7 @@ const TrustSystem = ({
                     <div className="bg-emerald-500/10 border border-emerald-500/40 rounded-lg p-4">
                       <p className="text-emerald-400 text-sm font-semibold flex items-center gap-2 mb-3">
                         <span>✅</span>
-                        <span>Trust ICAN Wallet Active</span>
+                        <span>Trust IcanEra Wallet Active</span>
                       </p>
                       <div className="space-y-2 text-xs sm:text-sm text-emerald-300/80">
                         <p className="flex items-start gap-2">
@@ -2221,7 +2221,7 @@ const TrustSystem = ({
                         </p>
                         <p className="flex items-start gap-2">
                           <span>•</span>
-                          <span>Balance: <span className="font-bold text-emerald-400 text-sm">₿0.00 ICAN</span></span>
+                          <span>Balance: <span className="font-bold text-emerald-400 text-sm">₿0.00 IcanEra</span></span>
                         </p>
                       </div>
                     </div>
@@ -2229,7 +2229,7 @@ const TrustSystem = ({
                     <div className="bg-amber-500/10 border border-amber-500/40 rounded-lg p-4 animate-pulse">
                       <p className="text-amber-400 text-sm font-semibold flex items-center gap-2">
                         <span>⏳</span>
-                        <span>Creating Trust ICAN Wallet...</span>
+                        <span>Creating Trust IcanEra Wallet...</span>
                       </p>
                     </div>
                   )}
@@ -2240,7 +2240,7 @@ const TrustSystem = ({
                     <div className="space-y-2 text-xs sm:text-sm text-blue-200/80">
                       <p className="flex items-start gap-2">
                         <span className="font-bold text-blue-300 min-w-fit">Min:</span>
-                        <span>Minimum withdrawal <span className="font-bold">₿10 ICAN</span></span>
+                        <span>Minimum withdrawal <span className="font-bold">₿10 IcanEra</span></span>
                       </p>
                       <p className="flex items-start gap-2">
                         <span className="font-bold text-blue-300 min-w-fit">Vote:</span>
@@ -2289,7 +2289,7 @@ const TrustSystem = ({
                   )}
 
                   <p className="text-slate-400 text-xs sm:text-sm p-3 bg-slate-900/30 border border-slate-700 rounded-lg">
-                    💡 Full account management available in ICAN Wallet app. This trust account auto-receives all member contributions.
+                    💡 Full account management available in IcanEra Wallet app. This trust account auto-receives all member contributions.
                   </p>
                 </div>
               )}
@@ -2309,7 +2309,7 @@ const TrustSystem = ({
                                 {member.role}
                               </span>
                             </p>
-                            <p className="text-slate-400 text-xs sm:text-sm">₿{member.total_contributed || 0} ICAN contributed</p>
+                            <p className="text-slate-400 text-xs sm:text-sm">₿{member.total_contributed || 0} IcanEra contributed</p>
                           </div>
                           <div className="flex gap-1.5 flex-shrink-0">
                             {member.role !== 'creator' && (
@@ -2410,7 +2410,7 @@ const TrustSystem = ({
                     <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
                       <p className="text-green-400 text-xs font-semibold">💰 Your Available</p>
                       <p className="text-2xl font-bold text-green-300 mt-2">₿{parseFloat(selectedGroup.userAvailableBalance || 0).toFixed(8)}</p>
-                      <p className="text-green-400/60 text-xs mt-1">ICAN coins available</p>
+                      <p className="text-green-400/60 text-xs mt-1">IcanEra coins available</p>
                     </div>
                   </div>
                   
@@ -2476,7 +2476,7 @@ const TrustSystem = ({
                 <div className="space-y-2 text-sm">
                   <p className="flex justify-between">
                     <span className="text-slate-400">Monthly Contribution:</span>
-                    <span className="font-semibold text-amber-400">₿{groupForJoinApplication.monthly_contribution} ICAN</span>
+                    <span className="font-semibold text-amber-400">₿{groupForJoinApplication.monthly_contribution} IcanEra</span>
                   </p>
                   <p className="flex justify-between">
                     <span className="text-slate-400">Available Spots:</span>
@@ -2591,7 +2591,7 @@ const TrustSystem = ({
                 <div className="bg-gradient-to-br from-amber-600/20 to-amber-500/10 border border-amber-500/30 rounded-lg sm:rounded-xl p-3 sm:p-4">
                   <p className="text-xs text-amber-300 font-semibold uppercase tracking-wide mb-1">📊 Group</p>
                   <h3 className="text-lg sm:text-xl font-bold text-white mb-2">{selectedGroup.name}</h3>
-                  <p className="text-xs sm:text-sm text-amber-200/70">Monthly Target: <span className="font-semibold text-amber-300">₿{selectedGroup.monthly_contribution} ICAN</span></p>
+                  <p className="text-xs sm:text-sm text-amber-200/70">Monthly Target: <span className="font-semibold text-amber-300">₿{selectedGroup.monthly_contribution} IcanEra</span></p>
                 </div>
 
                 {/* Cryptocurrency Card - Web UI Detail */}
@@ -2599,10 +2599,10 @@ const TrustSystem = ({
                   <p className="text-xs text-amber-300 font-semibold uppercase tracking-wide mb-1">💎 Cryptocurrency</p>
                   <h3 className="text-lg sm:text-xl font-bold text-white mb-2 flex items-center gap-2">
                     <span className="text-2xl">₿</span>
-                    ICAN Coin
+                    IcanEra Coin
                   </h3>
                   <p className="text-xs sm:text-sm text-amber-200/70 mb-2">
-                    <span className="font-semibold text-amber-300">1 ICAN</span> = ~5,000 UGX
+                    <span className="font-semibold text-amber-300">1 IcanEra</span> = ~5,000 UGX
                   </p>
                   <p className="text-xs text-amber-200/50">Your country: Uganda</p>
                 </div>
@@ -2610,7 +2610,7 @@ const TrustSystem = ({
 
               {/* Amount Input Section */}
               <div>
-                <label className="block text-slate-300 font-semibold mb-3 text-sm sm:text-base">Contribution Amount (ICAN Coins)</label>
+                <label className="block text-slate-300 font-semibold mb-3 text-sm sm:text-base">Contribution Amount (IcanEra Coins)</label>
                 <div className="relative mb-4">
                   <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-amber-400 font-bold text-lg">₿</span>
                   <input
@@ -2656,7 +2656,7 @@ const TrustSystem = ({
                 {contributeForm.amount && (
                   <div className="p-2 sm:p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg mb-4">
                     <p className="text-amber-300 text-xs sm:text-sm font-semibold">
-                      ✓ Ready to contribute: ₿{parseFloat(contributeForm.amount).toFixed(2)} ICAN
+                      ✓ Ready to contribute: ₿{parseFloat(contributeForm.amount).toFixed(2)} IcanEra
                     </p>
                   </div>
                 )}
@@ -2671,8 +2671,8 @@ const TrustSystem = ({
                   <div className="flex items-start gap-3 sm:gap-4">
                     <div className="text-3xl flex-shrink-0">💳</div>
                     <div className="flex-1">
-                      <h3 className="text-base sm:text-lg font-bold text-white mb-1">ICAN Account</h3>
-                      <p className="text-xs sm:text-sm text-blue-200/80">Send money directly from your ICAN Wallet</p>
+                      <h3 className="text-base sm:text-lg font-bold text-white mb-1">IcanEra Account</h3>
+                      <p className="text-xs sm:text-sm text-blue-200/80">Send money directly from your IcanEra Wallet</p>
                       <div className="inline-flex items-center gap-2 px-2.5 py-1 mt-2 bg-blue-600/40 border border-blue-400/50 rounded-full">
                         <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
                         <span className="text-xs font-semibold text-blue-300">Available & Secure</span>
@@ -2685,7 +2685,7 @@ const TrustSystem = ({
                 <div className="bg-cyan-600/20 border border-cyan-500/30 rounded-lg p-3 mt-3 flex gap-2">
                   <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-400 flex-shrink-0 mt-0.5" />
                   <p className="text-xs sm:text-sm text-cyan-200/80">
-                    <span className="font-semibold">Secure ICAN Transfer:</span> Your contribution will be deducted directly from your ICAN wallet balance and recorded on the blockchain.
+                    <span className="font-semibold">Secure IcanEra Transfer:</span> Your contribution will be deducted directly from your IcanEra wallet balance and recorded on the blockchain.
                   </p>
                 </div>
               </div>
@@ -2704,14 +2704,14 @@ const TrustSystem = ({
                 <div className="p-4 bg-red-500/15 border border-red-500/40 rounded-lg flex items-start gap-3">
                   <AlertCircle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-red-300 text-sm font-semibold mb-2">⚠️ ICAN Wallet Required</p>
-                    <p className="text-red-200 text-xs">You must set up your ICAN wallet to make contributions. Please go to your profile and create a wallet first.</p>
+                    <p className="text-red-300 text-sm font-semibold mb-2">⚠️ IcanEra Wallet Required</p>
+                    <p className="text-red-200 text-xs">You must set up your IcanEra wallet to make contributions. Please go to your profile and create a wallet first.</p>
                   </div>
                 </div>
               ) : (
                 <div className="p-3 sm:p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg flex items-start gap-2">
                   <CheckCircle size={18} className="text-emerald-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-emerald-300 text-xs sm:text-sm">✓ Your ICAN wallet is verified and ready for contributions</p>
+                  <p className="text-emerald-300 text-xs sm:text-sm">✓ Your IcanEra wallet is verified and ready for contributions</p>
                 </div>
               )}
 
@@ -2740,7 +2740,7 @@ const TrustSystem = ({
                 }}
                 className="flex-1 px-6 py-3 sm:py-4 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 active:from-amber-700 active:to-amber-600 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-lg transition-all font-semibold text-base sm:text-lg shadow-lg shadow-amber-600/30 disabled:shadow-none"
               >
-                {!hasICANWallet && '🔒 ICAN Wallet Required'}
+                {!hasICANWallet && '🔒 IcanEra Wallet Required'}
                 {hasICANWallet && !contributeForm.amount && '👉 Enter Amount (Click ₿1)'}
                 {hasICANWallet && contributeForm.amount && !loading && '✅ Confirm Contribution'}
                 {loading && '⏳ Processing...'}

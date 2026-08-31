@@ -116,7 +116,7 @@ export const getBusinessAccessMembers = async (businessProfileId) => {
   const ids = data.map(member => member.auth_user_id).filter(Boolean);
   const { data: users } = await sb.from('all_users').select('id, user_id, email, full_name').in('user_id', ids);
   const byId = new Map((users || []).map(item => [item.user_id || item.id, item]));
-  return { data: data.map(member => ({ ...member, user: byId.get(member.auth_user_id) || { email: 'ICAN account', full_name: member.auth_user_id } })), error: null };
+  return { data: data.map(member => ({ ...member, user: byId.get(member.auth_user_id) || { email: 'IcanEra account', full_name: member.auth_user_id } })), error: null };
 };
 
 export const resolveEmployeeAuthIds = async (employees = []) => {

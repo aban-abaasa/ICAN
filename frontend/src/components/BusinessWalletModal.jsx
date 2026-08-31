@@ -98,8 +98,8 @@ const BusinessWalletModal = ({ profile, onClose }) => {
           {!loading && !error && wallet && (
             <>
               <div className="rounded-2xl bg-gradient-to-br from-emerald-700 to-teal-800 p-5">
-                <p className="text-sm text-emerald-100">Available ICAN balance</p>
-                <p className="mt-1 text-3xl font-bold text-white">{Number(wallet.ican_balance || 0).toLocaleString()} ICAN</p>
+                <p className="text-sm text-emerald-100">Available IcanEra balance</p>
+                <p className="mt-1 text-3xl font-bold text-white">{Number(wallet.ican_balance || 0).toLocaleString()} IcanEra</p>
                 <p className="mt-1 text-sm text-emerald-100">≈ {(Number(wallet.ican_balance || 0) * 5000).toLocaleString()} UGX</p>
                 <button onClick={copyAddress} className="mt-4 flex items-center gap-2 text-xs text-emerald-100 hover:text-white" title="Copy business wallet address">
                   <span className="font-mono">{wallet.wallet_address}</span><Copy className="h-3.5 w-3.5" />
@@ -144,7 +144,7 @@ const BusinessWalletModal = ({ profile, onClose }) => {
                             </div>
                           </div>
                           <span className={`font-semibold ${incoming ? 'text-blue-400' : 'text-orange-400'}`}>
-                            {incoming ? '+' : '-'}{Number(transaction.amount_ican || 0).toLocaleString()} ICAN
+                            {incoming ? '+' : '-'}{Number(transaction.amount_ican || 0).toLocaleString()} IcanEra
                           </span>
                         </div>
                       );

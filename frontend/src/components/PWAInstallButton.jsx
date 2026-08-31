@@ -97,7 +97,7 @@ export function PWAInstallButton() {
       onClick={handleInstallClick}
       disabled={installing}
       className="flex items-center gap-2 px-3 md:px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 active:from-blue-800 active:to-blue-900 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-lg font-medium text-xs md:text-sm transition transform hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl"
-      title="Install ICANera - One click install"
+      title="Install IcanEra - One click install"
     >
       <Download size={16} className="md:w-[18px] md:h-[18px]" />
       <span className="hidden sm:inline">{installing ? 'Installing...' : 'Install'}</span>

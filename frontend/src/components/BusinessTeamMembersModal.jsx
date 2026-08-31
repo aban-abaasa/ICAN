@@ -78,7 +78,7 @@ const BusinessTeamMembersModal = ({ profile, onClose }) => {
         </div>
 
         <p className="text-slate-400 text-sm mb-4">
-          Give an existing ICAN account access to record transactions for{' '}
+          Give an existing IcanEra account access to record transactions for{' '}
           <span className="text-white font-semibold">{profile.business_name}</span>. This does not grant
           ownership or equity.
         </p>
@@ -122,8 +122,8 @@ const BusinessTeamMembersModal = ({ profile, onClose }) => {
 
           {query.trim().length >= 2 && !searching && results.length === 0 && (
             <div className="absolute top-full left-0 right-0 mt-1 bg-slate-800 border border-orange-500 rounded shadow-lg z-20 p-3">
-              <p className="text-orange-300 text-sm">No ICAN account found matching "{query}"</p>
-              <p className="text-slate-400 text-xs mt-1">They must sign up for ICAN first.</p>
+              <p className="text-orange-300 text-sm">No IcanEra account found matching "{query}"</p>
+              <p className="text-slate-400 text-xs mt-1">They must sign up for IcanEra first.</p>
             </div>
           )}
         </div>

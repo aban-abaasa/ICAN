@@ -85,8 +85,13 @@ import {
 import ReportPreviewCard from './reports/ReportPreviewCard';
 import { COUNTRIES } from '../constants/countries';
 import { VelocityEngine } from '../utils/velocityEngine';
+import { journeyStages, determineCurrentStage, calculateStageProgress, getNextMilestone } from '../utils/journeyStages';
+import { getSharePriceHistory, getLatestSnapshot } from '../services/pitchinShareBlockchainService';
+import DailyTrackingChart from './DailyTrackingChart';
+import BusinessTrendChart from './BusinessTrendChart';
 import { supabase } from '../lib/supabase/client';
 import { deleteTransaction } from '../services/supabaseTransactions';
+import { analyzeTransactionWithAI } from '../services/accountingAIService';
 import DataCleanupModal from './DataCleanupModal';
 import { walletAccountService } from '../services/walletAccountService';
 import { walletService } from '../services/walletService';
@@ -112,7 +117,7 @@ import {
 } from '../services/sharedContentService';
 
 const PROFILE_CONFIG_STORAGE_PREFIX = 'ican_profile_configuration';
-const DEFAULT_PROFILE_LEGAL_DISCLAIMER = 'NOT LEGAL OR FINANCIAL ADVICE: The ICAN Capital Engine is a risk assessment and organizational tool. All analysis, recommendations, and scores are for informational purposes only. Consult qualified professionals before making legal, financial, or business decisions.';
+const DEFAULT_PROFILE_LEGAL_DISCLAIMER = 'NOT LEGAL OR FINANCIAL ADVICE: The IcanEra Capital Engine is a risk assessment and organizational tool. All analysis, recommendations, and scores are for informational purposes only. Consult qualified professionals before making legal, financial, or business decisions.';
 
 const buildProfileConfigStorageKey = (userId, email) =>
   `${PROFILE_CONFIG_STORAGE_PREFIX}_${userId || email || 'guest'}`;
@@ -150,7 +155,7 @@ const getWalletTabKey = (tabName = '') => {
 
 const getWalletTabLabel = (tabName = '') => {
   const key = getWalletTabKey(tabName);
-  if (key === 'ican') return 'ICAN';
+  if (key === 'ican') return 'IcanEra';
   return tabName;
 };
 
@@ -618,6 +623,16 @@ const FeatureCardWithSlideshow = ({
   );
 };
 
+// Static Tailwind class sets per journey stage (1-4) for the Progress card.
+// Kept as literal strings (not built via template interpolation) so Tailwind's
+// JIT scanner picks them all up regardless of which stage is active at runtime.
+const STAGE_STYLES = {
+  1: { cardBg: 'from-red-900/60 to-red-900/40', cardBorder: 'border-red-500/60', barGradient: 'from-red-500 to-red-400', badgeText: 'text-red-300', titleText: 'text-red-100/80', activeBtn: 'bg-gradient-to-br from-red-600/50 to-red-700/40 border-red-500/60', activeIcon: 'text-red-400', activeLabel: 'text-red-300' },
+  2: { cardBg: 'from-yellow-900/60 to-yellow-900/40', cardBorder: 'border-yellow-500/60', barGradient: 'from-yellow-500 to-yellow-400', badgeText: 'text-yellow-300', titleText: 'text-yellow-100/80', activeBtn: 'bg-gradient-to-br from-yellow-600/40 to-yellow-700/30 border-yellow-500/40', activeIcon: 'text-yellow-400', activeLabel: 'text-yellow-300' },
+  3: { cardBg: 'from-blue-900/60 to-blue-900/40', cardBorder: 'border-blue-500/60', barGradient: 'from-blue-500 to-blue-400', badgeText: 'text-blue-300', titleText: 'text-blue-100/80', activeBtn: 'bg-gradient-to-br from-blue-600/40 to-blue-700/30 border-blue-500/40', activeIcon: 'text-blue-400', activeLabel: 'text-blue-300' },
+  4: { cardBg: 'from-green-900/60 to-green-900/40', cardBorder: 'border-green-500/60', barGradient: 'from-green-500 to-green-400', badgeText: 'text-green-300', titleText: 'text-green-100/80', activeBtn: 'bg-gradient-to-br from-green-600/40 to-green-700/30 border-green-500/40', activeIcon: 'text-green-400', activeLabel: 'text-green-300' },
+};
+
 const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const { actualTheme } = useTheme();
   const { isOfflineMode, queueAction, user: authContextUser } = useAuth();
@@ -900,16 +915,96 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
     roi: false
   });
 
-  // Metric Period Data - stores daily/weekly/monthly/yearly data
+  // Metric Period Data - stores daily/weekly/monthly/yearly data. `loaded`
+  // (not the value itself, which may legitimately be 0) tracks whether this
+  // metric has been fetched for the current scope.
   const [metricPeriodData, setMetricPeriodData] = useState({
-    income: { daily: 0, weekly: 0, monthly: 0, yearly: 0, loading: false },
-    expense: { daily: 0, weekly: 0, monthly: 0, yearly: 0, loading: false },
-    netProfit: { daily: 0, weekly: 0, monthly: 0, yearly: 0, loading: false },
-    transactions: { daily: 0, weekly: 0, monthly: 0, yearly: 0, loading: false },
-    savingsRate: { daily: '0%', weekly: '0%', monthly: '0%', yearly: '0%', loading: false },
-    netWorth: { daily: 0, weekly: 0, monthly: 0, yearly: 0, loading: false },
-    roi: { daily: '0%', weekly: '0%', monthly: '0%', yearly: '0%', loading: false }
+    income: { daily: 0, weekly: 0, monthly: 0, yearly: 0, loading: false, loaded: false },
+    expense: { daily: 0, weekly: 0, monthly: 0, yearly: 0, loading: false, loaded: false },
+    netProfit: { daily: 0, weekly: 0, monthly: 0, yearly: 0, loading: false, loaded: false },
+    transactions: { daily: 0, weekly: 0, monthly: 0, yearly: 0, loading: false, loaded: false },
+    savingsRate: { daily: '0%', weekly: '0%', monthly: '0%', yearly: '0%', loading: false, loaded: false },
+    netWorth: { daily: 0, weekly: 0, monthly: 0, yearly: 0, loading: false, loaded: false },
+    roi: { daily: '0%', weekly: '0%', monthly: '0%', yearly: '0%', loading: false, loaded: false }
   });
+
+  // Progress / Analytics dashboard scope — lets the user view either their
+  // personal numbers, one business's numbers, or everything combined.
+  const [dashboardScope, setDashboardScope] = useState('personal'); // 'personal' | 'business' | 'all'
+  const [dashboardBusinessId, setDashboardBusinessId] = useState('');
+  const [dashboardBusinessProfiles, setDashboardBusinessProfiles] = useState([]);
+  const [dashboardNetWorth, setDashboardNetWorth] = useState(0);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [dailyTrackingData, setDailyTrackingData] = useState([]);
+  const [businessTrendData, setBusinessTrendData] = useState([]);
+  const [businessTrendLoading, setBusinessTrendLoading] = useState(false);
+  const [dashboardTrend, setDashboardTrend] = useState({ direction: 'stable', confidence: 0 });
+
+  // Financial Trends chart: a named preset (1M/3M/1Y/5Y/All) picks the window,
+  // VelocityEngine.getRangeSeries() auto-picks the bucket size (day/week/
+  // month/year) for it, and tapping a point drills into that bucket at finer
+  // granularity — trendZoomStack holds the trail back out. The loaded
+  // VelocityEngine instance is cached in a ref so zooming/drilling recomputes
+  // instantly over already-fetched transactions instead of refetching.
+  const dashboardEngineRef = useRef(null);
+  const [trendPreset, setTrendPreset] = useState('1m');
+  const [trendGranularity, setTrendGranularity] = useState('daily');
+  const [trendRangeLabel, setTrendRangeLabel] = useState(null);
+  const [trendCurrentRange, setTrendCurrentRange] = useState(null); // { start, end }
+  const [trendZoomStack, setTrendZoomStack] = useState([]); // [{ start, end }, ...] — "back" trail
+
+  const trendScopedBusinessId = () => (dashboardScope === 'business' ? (dashboardBusinessId || null) : null);
+
+  const formatTrendRangeLabel = (start, end) => {
+    const opts = { month: 'short', day: 'numeric', year: 'numeric' };
+    return `${start.toLocaleDateString(undefined, opts)} – ${end.toLocaleDateString(undefined, opts)}`;
+  };
+
+  const applyTrendRange = (start, end) => {
+    const engine = dashboardEngineRef.current;
+    if (!engine) return;
+    const { data, granularity } = engine.getRangeSeries(dashboardScope, trendScopedBusinessId(), { start, end });
+    setDailyTrackingData(data);
+    setTrendGranularity(granularity);
+    setTrendRangeLabel(formatTrendRangeLabel(start, end));
+    setTrendCurrentRange({ start, end });
+  };
+
+  // Preset tap (1M/3M/1Y/5Y/All): jump straight to that window, clearing any
+  // in-progress drill-down.
+  const handleTrendPresetChange = (presetId) => {
+    const engine = dashboardEngineRef.current;
+    setTrendPreset(presetId);
+    setTrendZoomStack([]);
+    if (!engine) return;
+    const { start, end } = engine.getPresetRange(presetId, dashboardScope, trendScopedBusinessId());
+    applyTrendRange(start, end);
+  };
+
+  // Tap a point on a zoomed-out chart (weekly/monthly/yearly buckets): zoom
+  // into that bucket's own span, which naturally renders at finer granularity.
+  const handleTrendDrill = (point) => {
+    const engine = dashboardEngineRef.current;
+    if (!engine || !point?.bucketStart || !trendCurrentRange) return;
+    const bucketRange = engine.getBucketRange(point.bucketStart, trendGranularity);
+    setTrendZoomStack((prev) => [...prev, trendCurrentRange]);
+    applyTrendRange(bucketRange.start, bucketRange.end);
+  };
+
+  const handleTrendBack = () => {
+    if (trendZoomStack.length === 0) return;
+    const restored = trendZoomStack[trendZoomStack.length - 1];
+    setTrendZoomStack(trendZoomStack.slice(0, -1));
+    applyTrendRange(restored.start, restored.end);
+  };
+
+  const handleTrendResetZoom = () => {
+    const engine = dashboardEngineRef.current;
+    setTrendZoomStack([]);
+    if (!engine) return;
+    const { start, end } = engine.getPresetRange(trendPreset, dashboardScope, trendScopedBusinessId());
+    applyTrendRange(start, end);
+  };
 
   // Modal State Variables (7 action button modals)
   const [showJourneyDetails, setShowJourneyDetails] = useState(false);
@@ -1028,7 +1123,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [selectedCountry, setSelectedCountry] = useState('UG');
   const [dateRange] = useState('current-month');
   const [exportFormat, setExportFormat] = useState('pdf');
-  const [reportTitle, setReportTitle] = useState('ICAN Financial Report');
+  const [reportTitle, setReportTitle] = useState('IcanEra Financial Report');
   const [includeAIAnalysis, setIncludeAIAnalysis] = useState(true);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [generatedReportData, setGeneratedReportData] = useState(null);
@@ -1388,8 +1483,14 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
         const amount = parseFloat(
           tx.local_amount ?? tx.ugx_equivalent ?? tx.ugx_floor_value ?? ((tx.ican_amount || 0) * 5000)
         ) || 0;
+        // business_profile_id is the one signal every business-tagged wallet
+        // transaction carries, regardless of which app sent it — CMMS payroll/
+        // supplier payments and other non-SupermartKera business apps go through
+        // the wallet as plain source_app:'ican' transfers (CMMS has no source_app
+        // of its own), so source_app-only heuristics miss them entirely.
+        const hasBusinessTag = Boolean(tx.business_profile_id);
         const classification = tx.expense_classification ||
-          (tx.source_app === 'digital-city-era' || /store|supermarket|purchase/i.test(tx.note || '')
+          (hasBusinessTag || tx.source_app === 'digital-city-era' || /store|supermarket|purchase/i.test(tx.note || '')
             ? 'business_expense' : 'person_transfer');
         const isPersonTransfer = classification === 'person_transfer';
         const isBusinessExpense = classification === 'business_expense' && !isIncoming;
@@ -1398,14 +1499,14 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
         return {
           amount,
           transaction_type: isPersonTransfer ? 'transfer' : isIncome ? 'income' : isBusinessExpense || tx.transaction_type === 'tithe' ? 'expense' : 'transfer',
-          description: tx.merchant_name || tx.note || `${tx.source_app || 'ICAN wallet'} — ${tx.transaction_type || 'transfer'}`,
+          description: tx.merchant_name || tx.note || `${tx.source_app || 'IcanEra wallet'} — ${tx.transaction_type || 'transfer'}`,
           currency: tx.local_currency || 'UGX',
           created_at: tx.created_at,
           business_profile_id: tx.business_profile_id || null,
           metadata: {
             category: tx.source_app === 'digital-city-era' ? 'SupermartKera' : (tx.source_app || 'ican'),
             source_app: tx.source_app,
-            record_category: classification === 'business_expense' ? 'business' : 'personal',
+            record_category: (hasBusinessTag || classification === 'business_expense') ? 'business' : 'personal',
             reporting_bucket: tx.transaction_type === 'tithe' ? 'tithe_payment' :
               isBusinessExpense ? 'operating_expense' : isIncome ? 'sold_income' : null,
             expense_classification: classification,
@@ -1504,6 +1605,41 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
       };
 
       const rowsWithBucket = scopedRows.map((t) => ({ ...t, _bucket: inferReportingBucket(t) }));
+
+      // Rule-based inference above already reads accounting_type/reporting_bucket
+      // metadata (e.g. CMMS inventory writes this) plus common keyword patterns.
+      // For what's left — business expenses with no bucket and no source metadata
+      // to go on, regardless of which app they came from — fall back to the AI
+      // accounting classifier so stock vs fixed-asset vs plain-expense purchases
+      // still land in the right line. Capped to the largest amounts so one
+      // report load doesn't fire off unbounded AI calls.
+      const aiFallbackCandidates = rowsWithBucket
+        .filter((t) => t._bucket === null &&
+          t.transaction_type === 'expense' &&
+          (t.record_category || t.metadata?.record_category) === 'business' &&
+          !t.metadata?.accounting_type)
+        .sort((a, b) => (parseFloat(b.amount) || 0) - (parseFloat(a.amount) || 0))
+        .slice(0, 12);
+
+      if (aiFallbackCandidates.length) {
+        const classifications = await Promise.all(aiFallbackCandidates.map((t) =>
+          analyzeTransactionWithAI({
+            description: t.description || t.metadata?.category || 'Business expense',
+            amount: parseFloat(t.amount) || 0,
+            type: t.transaction_type,
+            accountingType: 'business'
+          }).catch(() => null)
+        ));
+        classifications.forEach((result, idx) => {
+          const account = (result?.accountingAnalysis?.account || '').toLowerCase();
+          const isStockAccount = account.includes('inventory') || account.includes('stock');
+          let bucket = null;
+          if (result?.accountingAnalysis?.classification === 'Asset' && !isStockAccount) bucket = 'capital_asset';
+          else if (result?.accountingAnalysis?.classification === 'Investment' ||
+            (result?.accountingAnalysis?.classification === 'Asset' && isStockAccount)) bucket = 'bought_stock';
+          if (bucket) aiFallbackCandidates[idx]._bucket = bucket;
+        });
+      }
 
       const totalIncome = rowsWithBucket.filter(t => t.transaction_type === 'income').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
       const totalOutflows = rowsWithBucket.filter(t => t.transaction_type === 'expense').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
@@ -2008,6 +2144,96 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
     return () => { cancelled = true; };
   }, [showReportingSystem]);
 
+  // Load business profiles + scoped analytics data for the Financial Trends
+  // panel — real transactions (VelocityEngine) and, for a selected business,
+  // real Pitchin valuation snapshots. Runs on mount and re-runs whenever the
+  // personal/business scope selection changes.
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user || cancelled) return;
+
+        if (dashboardBusinessProfiles.length === 0) {
+          const profiles = await getAllAccessibleBusinessProfiles(user.id, user.email);
+          if (!cancelled) setDashboardBusinessProfiles(profiles || []);
+        }
+
+        setDashboardLoading(true);
+        const scopedBusinessId = dashboardScope === 'business' ? (dashboardBusinessId || null) : null;
+
+        const engine = new VelocityEngine(user.id);
+        await engine.loadAllTransactions();
+        if (cancelled) return;
+        dashboardEngineRef.current = engine;
+
+        const metricKeys = ['income', 'expense', 'netProfit', 'transactions', 'savingsRate', 'netWorth', 'roi'];
+        const nextMetricPeriodData = {};
+        metricKeys.forEach((key) => {
+          nextMetricPeriodData[key] = {
+            daily: engine.getPeriodMetric(key, 'daily', dashboardScope, scopedBusinessId),
+            weekly: engine.getPeriodMetric(key, 'weekly', dashboardScope, scopedBusinessId),
+            monthly: engine.getPeriodMetric(key, 'monthly', dashboardScope, scopedBusinessId),
+            yearly: engine.getPeriodMetric(key, 'yearly', dashboardScope, scopedBusinessId),
+            loading: false,
+            loaded: true
+          };
+        });
+        if (!cancelled) setMetricPeriodData(nextMetricPeriodData);
+        if (!cancelled) {
+          setTrendZoomStack([]);
+          const initialRange = engine.getPresetRange(trendPreset, dashboardScope, scopedBusinessId);
+          const initialSeries = engine.getRangeSeries(dashboardScope, scopedBusinessId, initialRange);
+          setDailyTrackingData(initialSeries.data);
+          setTrendGranularity(initialSeries.granularity);
+          setTrendRangeLabel(formatTrendRangeLabel(initialRange.start, initialRange.end));
+          setTrendCurrentRange(initialRange);
+        }
+        if (!cancelled) setDashboardTrend(engine.calculateTrends(engine.getScopedTransactions(dashboardScope, scopedBusinessId)));
+
+        // Net worth driving the Progress stage: prefer the real Pitchin
+        // business valuation when a specific business is selected, since it
+        // reflects the business's actual assets/revenue/profit — not just
+        // its wallet cash flow. Fall back to the engine's scoped net worth
+        // (income - expense) when no valuation snapshot exists yet.
+        let netWorth = engine.calculateMetrics(dashboardScope, scopedBusinessId).netWorth;
+        if (scopedBusinessId) {
+          try {
+            const snapshot = await getLatestSnapshot(scopedBusinessId);
+            if (snapshot?.business_value_ugx) netWorth = Number(snapshot.business_value_ugx);
+          } catch (err) {
+            console.error('Failed to load latest business snapshot:', err);
+          }
+        }
+        if (!cancelled) setDashboardNetWorth(netWorth);
+
+        if (scopedBusinessId) {
+          setBusinessTrendLoading(true);
+          try {
+            const history = await getSharePriceHistory(scopedBusinessId, 30);
+            if (!cancelled) setBusinessTrendData(history);
+          } catch (err) {
+            console.error('Failed to load business trend history:', err);
+            if (!cancelled) setBusinessTrendData([]);
+          } finally {
+            if (!cancelled) setBusinessTrendLoading(false);
+          }
+        } else {
+          setBusinessTrendData([]);
+        }
+      } catch (err) {
+        console.error('Failed to load dashboard analytics:', err);
+      } finally {
+        if (!cancelled) setDashboardLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dashboardScope, dashboardBusinessId]);
+
   // Default the tax jurisdiction to the selected business's own registered
   // country when known (a Pitch In business may be registered somewhere
   // other than the investor-user's personal country), else fall back to the
@@ -2100,7 +2326,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
       const welcomeMessage = {
         id: Date.now(),
         type: 'ai',
-        content: ` Hello, friend! I'm your ICAN AI companion, here to support your financial journey with God's wisdom.
+        content: ` Hello, friend! I'm your IcanEra AI companion, here to support your financial journey with God's wisdom.
 
 I can see you're in the **Survival Stage** - what a blessing! God is building something beautiful in your life.
 
@@ -2743,8 +2969,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     // Toggle dropdown
     setMetricDropdowns({...metricDropdowns, [metricKey]: !metricDropdowns[metricKey]});
 
-    // Fetch data if not already loaded
-    if (!metricDropdowns[metricKey] && !metricPeriodData[metricKey].daily) {
+    // Fetch data if not already loaded for the current personal/business scope
+    if (!metricDropdowns[metricKey] && !metricPeriodData[metricKey].loaded) {
       setMetricPeriodData(prev => ({
         ...prev,
         [metricKey]: {...prev[metricKey], loading: true}
@@ -2760,11 +2986,13 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         const engine = new VelocityEngine(metricUserId);
         await engine.loadAllTransactions(); // Ensure data is loaded
 
-        // Get period data using velocityEngine
-        const dailyData = engine.getPeriodMetric(metricKey, 'daily');
-        const weeklyData = engine.getPeriodMetric(metricKey, 'weekly');
-        const monthlyData = engine.getPeriodMetric(metricKey, 'monthly');  
-        const yearlyData = engine.getPeriodMetric(metricKey, 'yearly');
+        const scopedBusinessId = dashboardScope === 'business' ? (dashboardBusinessId || null) : null;
+
+        // Get period data using velocityEngine, scoped to the selected dashboard lens
+        const dailyData = engine.getPeriodMetric(metricKey, 'daily', dashboardScope, scopedBusinessId);
+        const weeklyData = engine.getPeriodMetric(metricKey, 'weekly', dashboardScope, scopedBusinessId);
+        const monthlyData = engine.getPeriodMetric(metricKey, 'monthly', dashboardScope, scopedBusinessId);
+        const yearlyData = engine.getPeriodMetric(metricKey, 'yearly', dashboardScope, scopedBusinessId);
 
         setMetricPeriodData(prev => ({
           ...prev,
@@ -2773,7 +3001,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             weekly: weeklyData || 0,
             monthly: monthlyData || 0,
             yearly: yearlyData || 0,
-            loading: false
+            loading: false,
+            loaded: true
           }
         }));
       } catch (error) {
@@ -2791,7 +3020,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             weekly: weeklyData || 0,
             monthly: monthlyData || 0,
             yearly: yearlyData || 0,
-            loading: false
+            loading: false,
+            loaded: true
           }
         }));
       }
@@ -3153,7 +3383,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `ICAN-Transactions-${period}-${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `IcanEra-Transactions-${period}-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -3214,7 +3444,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       doc.setDrawColor(59, 130, 246);   // blue-500
       doc.roundedRect(14, y, pageW - 28, 7, 1, 1, 'S');
       doc.setFontSize(7); doc.setTextColor(30, 64, 175); doc.setFont('helvetica', 'normal');
-      doc.text('🔐  Business transactions are secured with ICAN SHA-256 Blockchain hashes', 17, y + 4.5);
+      doc.text('🔐  Business transactions are secured with IcanEra SHA-256 Blockchain hashes', 17, y + 4.5);
       y += 11;
     }
 
@@ -3279,11 +3509,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       doc.setFillColor(15, 23, 42);
       doc.rect(0, 286, pageW, 11, 'F');
       doc.setFontSize(7); doc.setTextColor(100, 116, 139);
-      doc.text('ICAN · Confidential · 🔐 Blockchain Secured', 14, 292);
+      doc.text('IcanEra · Confidential · 🔐 Blockchain Secured', 14, 292);
       doc.text(`Page ${i} of ${pages}`, pageW - 14, 292, { align: 'right' });
     }
 
-    doc.save(`ICAN-Transactions-${period}-${new Date().toISOString().split('T')[0]}.pdf`);
+    doc.save(`IcanEra-Transactions-${period}-${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   // Share transactions summary via Web Share API (mobile) or clipboard
@@ -3869,7 +4099,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     { label: 'Wallet', icon: DollarSign, color: 'bg-gradient-to-br from-teal-500 to-teal-600' },
     { label: 'Tith', icon: Heart, color: 'bg-gradient-to-br from-yellow-500 to-yellow-600' },
     { label: 'Reports', icon: PieChart, color: 'bg-gradient-to-br from-rose-500 to-rose-600' },
-    { label: 'ICAN AI', icon: Brain, color: 'bg-gradient-to-br from-violet-500 to-violet-600' }
+    { label: 'IcanEra AI', icon: Brain, color: 'bg-gradient-to-br from-violet-500 to-violet-600' }
   ];
 
   // Carousel content with images
@@ -3925,11 +4155,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     },
     {
       title: 'Trade',
-      subtitle: 'Part 9: ICAN Coins',
+      subtitle: 'Part 9: IcanEra Coins',
       color: 'from-yellow-600 to-orange-600',
       icon: BarChart3,
       features: ['Own digital assets', 'Build long-term wealth', 'Protect buying power'],
-      slideWords: ['Own ICAN Coins', 'Grow Over Time', 'Future of Money'],
+      slideWords: ['Own IcanEra Coins', 'Grow Over Time', 'Future of Money'],
       images: ['/images/incaera share.png', '/images/ICAN era sacco.png', '/images/sacco.png']
     },
     {
@@ -6271,329 +6501,155 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         </div>
       )}
 
-      {/* ====== PROGRESS & ANALYTICS ROW ====== */}
-      <div className="px-4 py-4 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-        {/* PROGRESS BUTTON */}
-        <button
-          onClick={() => toggleSection('progress')}
-          className="p-3 rounded-lg border flex items-center justify-between transition-all"
-          style={{
-            background: expandedSections.progress ? modePalette.progressCard : modePalette.sectionBg,
-            borderColor: expandedSections.progress ? 'var(--color-primary)' : 'var(--color-border)',
-            boxShadow: expandedSections.progress ? '0 0 0 1px var(--color-primary), 0 8px 24px rgba(0,0,0,0.2)' : '0 6px 18px rgba(0,0,0,0.12)'
-          }}
-        >
-          <div className="flex items-center gap-2">
-            <Building className="w-4 h-4" style={{ color: 'var(--color-primary)' }} />
-            <span className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>Progress</span>
-          </div>
-          <ChevronDown className={`w-4 h-4 transition-transform ${expandedSections.progress ? 'rotate-180' : ''}`} style={{ color: 'var(--color-primary)' }} />
-        </button>
+      {/* ====== FINANCIAL TRENDS PANEL ======
+          Inline, always-visible replacement for the old Progress/Analytics
+          tap-to-open tabs — a single scoped line-graph view with smart,
+          real-data indicators instead of two separate modals. */}
+      {(() => {
+        const stage = determineCurrentStage(dashboardNetWorth);
+        const stageInfo = journeyStages[stage];
+        const style = STAGE_STYLES[stage];
+        const StageIcon = stageInfo.icon;
+        const netProfitMonthly = typeof metricPeriodData.netProfit.monthly === 'number' ? metricPeriodData.netProfit.monthly : 0;
+        const savingsRateMonthly = metricPeriodData.savingsRate.monthly;
+        const roiMonthly = metricPeriodData.roi.monthly;
 
-        {/* ANALYTICS BUTTON */}
-        <button
-          onClick={() => toggleSection('analytics')}
-          className="p-3 rounded-lg border flex items-center justify-between transition-all"
-          style={{
-            background: expandedSections.analytics ? modePalette.analyticsCard : modePalette.sectionBg,
-            borderColor: expandedSections.analytics ? 'var(--color-secondary)' : 'var(--color-border)',
-            boxShadow: expandedSections.analytics ? '0 0 0 1px var(--color-secondary), 0 8px 24px rgba(0,0,0,0.2)' : '0 6px 18px rgba(0,0,0,0.12)'
-          }}
-        >
-          <div className="flex items-center gap-2">
-            <BarChart3 className="w-4 h-4" style={{ color: 'var(--color-secondary)' }} />
-            <span className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>Analytics</span>
-          </div>
-          <ChevronDown className={`w-4 h-4 transition-transform ${expandedSections.analytics ? 'rotate-180' : ''}`} style={{ color: 'var(--color-secondary)' }} />
-        </button>
-      </div>
-
-      {/* ====== PROGRESS MODAL ====== */}
-      {expandedSections.progress && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-end">
-          <div className="w-full bg-gradient-to-br from-slate-900 to-slate-950 rounded-t-4xl p-5 max-h-[85vh] overflow-y-auto">
-            {/* Header with Stage Title */}
-            <div className="flex items-center justify-between mb-5">
-              <h1 className="text-xl font-bold text-white">Our Inkal Stage</h1>
-              <button
-                onClick={() => toggleSection('progress')}
-                className="w-9 h-9 flex items-center justify-center bg-red-500/20 hover:bg-red-500/30 rounded-full transition"
-              >
-                <X className="w-5 h-5 text-red-400" />
-              </button>
-            </div>
-
-            {/* Main Stage Card - Compact */}
-            <div className="bg-gradient-to-br from-red-900/60 to-red-900/40 border border-red-500/60 rounded-3xl p-5 mb-5 overflow-hidden relative">
-              {/* Completion Badge */}
-              <div className="absolute top-4 right-4 bg-red-500/30 backdrop-blur-sm px-3 py-1 rounded-full border border-red-500/50">
-                <span className="text-xs font-bold text-red-300">Complete</span>
-              </div>
-
-              <div className="pr-16">
-                {/* Stage Title */}
-                <h2 className="text-2xl font-bold text-white mb-1">Stage 1</h2>
-                <p className="text-red-100/80 text-sm font-medium mb-3">Establishing Velocity</p>
-                
-                {/* Progress Bar */}
-                <div className="w-full bg-gray-700/50 rounded-full h-2.5 mb-4">
-                  <div className="h-2.5 rounded-full bg-gradient-to-r from-red-500 to-red-400 transition-all" style={{ width: '0%' }}></div>
-                </div>
-                
-                {/* Description */}
-                <p className="text-gray-300 text-xs leading-relaxed">
-                  Cash flow is minute, volatile, and impossible to track reliably. No savings, only daily survival.
-                </p>
-              </div>
-            </div>
-
-            {/* All Stages - Compact Buttons */}
-            <div className="flex gap-2.5 mb-6 justify-between">
-              {/* Stage 1 */}
-              <button className="flex-1 py-3 px-2 rounded-2xl border bg-gradient-to-br from-red-600/50 to-red-700/40 border-red-500/60 text-center hover:from-red-600/70 hover:to-red-700/60 transition active:scale-95">
-                <Zap className="w-5 h-5 mx-auto mb-1.5 text-red-400" />
-                <div className="text-xs font-bold text-red-300">Stage 1</div>
-              </button>
-
-              {/* Stage 2 */}
-              <button className="flex-1 py-3 px-2 rounded-2xl border bg-gradient-to-br from-yellow-600/40 to-yellow-700/30 border-yellow-500/40 text-center hover:from-yellow-600/60 hover:to-yellow-700/50 transition active:scale-95">
-                <Building className="w-5 h-5 mx-auto mb-1.5 text-yellow-400" />
-                <div className="text-xs font-bold text-yellow-300">Stage 2</div>
-              </button>
-
-              {/* Stage 3 */}
-              <button className="flex-1 py-3 px-2 rounded-2xl border bg-gradient-to-br from-blue-600/40 to-blue-700/30 border-blue-500/40 text-center hover:from-blue-600/60 hover:to-blue-700/50 transition active:scale-95">
-                <Crown className="w-5 h-5 mx-auto mb-1.5 text-blue-400" />
-                <div className="text-xs font-bold text-blue-300">Stage 3</div>
-              </button>
-
-              {/* Stage 4 */}
-              <button className="flex-1 py-3 px-2 rounded-2xl border bg-gradient-to-br from-green-600/40 to-green-700/30 border-green-500/40 text-center hover:from-green-600/60 hover:to-green-700/50 transition active:scale-95">
-                <Rocket className="w-5 h-5 mx-auto mb-1.5 text-green-400" />
-                <div className="text-xs font-bold text-green-300">Stage 4</div>
-              </button>
-            </div>
-
-            {/* Next Milestone - Compact */}
-            <div className="bg-gradient-to-br from-blue-900/50 to-blue-800/40 border border-blue-500/50 rounded-2xl p-4 space-y-3">
-              <h3 className="text-xs font-bold text-blue-300 uppercase tracking-wide">Next Milestone</h3>
-              
-              <div>
-                <p className="text-white font-semibold text-sm leading-snug mb-2">
-                  Stabilize into steady income stream (UGX 20,000+)
-                </p>
-                <p className="text-gray-400 text-xs leading-relaxed">
-                  Estimated time: Focus on positive cash flow first
-                </p>
-              </div>
-
-              {/* Stage Focus Guidance */}
-              <div className="pt-3 border-t border-blue-500/30">
-                <p className="text-xs text-blue-100/70 leading-relaxed">
-                  <span className="font-semibold text-blue-300">Stage 1 Focus:</span> Build consistent daily income and establish basic financial tracking.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ====== ANALYTICS MODAL ====== */}
-      {expandedSections.analytics && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-end">
-          <div className="w-full bg-gradient-to-br from-slate-900 to-slate-950 rounded-t-3xl p-6 max-h-[90vh] overflow-y-auto">
+        return (
+        <div className="px-4 py-4">
+          <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-4">
             {/* Header */}
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <BarChart3 className="w-6 h-6 text-purple-400" />
-                <h2 className="text-2xl font-bold text-white">Analytics</h2>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-purple-400" />
+                <h2 className="text-base font-bold text-white">Financial Trends</h2>
               </div>
-              <button
-                onClick={() => toggleSection('analytics')}
-                className="w-10 h-10 flex items-center justify-center bg-red-500/20 hover:bg-red-500/30 rounded-full transition"
-              >
-                <X className="w-6 h-6 text-red-400" />
-              </button>
+              {dashboardTrend.direction !== 'stable' && (
+                <div className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full ${
+                  dashboardTrend.direction === 'improving' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'
+                }`}>
+                  {dashboardTrend.direction === 'improving' ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                  {dashboardTrend.direction === 'improving' ? 'Improving' : 'Declining'}
+                </div>
+              )}
             </div>
 
-            {/* Period Tabs */}
-            <div className="flex gap-2 mb-6 pb-4 border-b border-slate-700/50">
-              {['weekly', 'monthly', 'yearly'].map((period) => (
-                <button
-                  key={period}
-                  onClick={async () => {
-                    setExpandedPeriods({...expandedPeriods, [period]: !expandedPeriods[period]});
-                    // Pre-load data for all metrics in this period
-                    if (!expandedPeriods[period]) {
-                      ['income', 'expense', 'netProfit', 'transactions', 'savingsRate', 'netWorth', 'roi'].forEach(metric => {
-                        handleMetricClick(metric);
-                      });
-                    }
-                  }}
-                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
-                    expandedPeriods[period]
-                      ? 'bg-purple-500/30 text-purple-300 border border-purple-400/50'
-                      : 'bg-slate-700/30 text-gray-400 hover:text-gray-300'
-                  }`}
-                >
-                  {period.charAt(0).toUpperCase() + period.slice(1)}
-                </button>
-              ))}
-            </div>
-
-            {/* Pre-load Monthly Data on Modal Open */}
-            {expandedSections.analytics && Object.keys(metricPeriodData).some(key => !metricPeriodData[key].monthly) && (
-              <div className="absolute inset-0 opacity-0 pointer-events-none">
-                {['income', 'expense', 'netProfit', 'transactions', 'savingsRate', 'netWorth', 'roi'].map(metric => (
-                  <div key={`preload-${metric}`} onClick={() => handleMetricClick(metric)} className="hidden" />
+            {/* Personal / Business scope toggle */}
+            <div className="bg-white/5 border border-white/10 rounded-xl p-3 mb-4 space-y-2">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">View</p>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'personal', label: 'Personal' },
+                  { id: 'business', label: 'Business' },
+                  { id: 'all', label: 'Combined' }
+                ].map((scope) => (
+                  <button
+                    key={scope.id}
+                    onClick={() => setDashboardScope(scope.id)}
+                    className={`py-2 rounded-lg text-xs font-bold transition ${
+                      dashboardScope === scope.id ? 'bg-rose-600 text-white shadow' : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                    }`}
+                  >
+                    {scope.label}
+                  </button>
                 ))}
               </div>
-            )}
-
-            {/* Metrics Grid - 3x2 Layout */}
-            <div className="grid grid-cols-3 gap-3 mb-6">
-              {/* Income */}
-              <button
-                onClick={() => handleMetricClick('income')}
-                className="bg-gradient-to-br from-emerald-500 to-green-600 rounded-2xl p-4 text-center hover:shadow-lg transition active:scale-95"
-                title="Click to load all periods"
-              >
-                <div className="text-white font-bold text-lg">
-                  {metricPeriodData.income.monthly 
-                    ? formatCurrency(metricPeriodData.income.monthly)
-                    : formatCurrency(velocityMetrics?.income30Days || 0)}
-                </div>
-                <div className="text-white/80 text-xs font-semibold mt-1">Income</div>
-              </button>
-
-              {/* Expense */}
-              <button
-                onClick={() => handleMetricClick('expense')}
-                className="bg-gradient-to-br from-red-500 to-orange-600 rounded-2xl p-4 text-center hover:shadow-lg transition active:scale-95"
-                title="Click to load all periods"
-              >
-                <div className="text-white font-bold text-lg">
-                  {metricPeriodData.expense.monthly 
-                    ? formatCurrency(metricPeriodData.expense.monthly)
-                    : formatCurrency(velocityMetrics?.expenses30Days || 0)}
-                </div>
-                <div className="text-white/80 text-xs font-semibold mt-1">Expense</div>
-              </button>
-
-              {/* Net Profit */}
-              <button
-                onClick={() => handleMetricClick('netProfit')}
-                className="bg-gradient-to-br from-pink-500 to-red-500 rounded-2xl p-4 text-center hover:shadow-lg transition active:scale-95"
-                title="Click to load all periods"
-              >
-                <div className="text-white font-bold text-lg">
-                  {metricPeriodData.netProfit.monthly 
-                    ? formatCurrency(metricPeriodData.netProfit.monthly)
-                    : formatCurrency(velocityMetrics?.velocity30Days || 0)}
-                </div>
-                <div className="text-white/80 text-xs font-semibold mt-1">Net Profit</div>
-              </button>
-
-              {/* Transactions */}
-              <button
-                onClick={() => handleMetricClick('transactions')}
-                className="bg-gradient-to-br from-blue-500 to-cyan-600 rounded-2xl p-4 text-center hover:shadow-lg transition active:scale-95"
-                title="Click to load all periods"
-              >
-                <div className="text-white font-bold text-lg">
-                  {metricPeriodData.transactions.monthly || velocityMetrics?.transactionCount || 0}
-                </div>
-                <div className="text-white/80 text-xs font-semibold mt-1">Transactions</div>
-              </button>
-
-              {/* Savings Rate */}
-              <button
-                onClick={() => handleMetricClick('savingsRate')}
-                className="bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl p-4 text-center hover:shadow-lg transition active:scale-95"
-                title="Click to load all periods"
-              >
-                <div className="text-white font-bold text-lg">
-                  {metricPeriodData.savingsRate.monthly 
-                    ? (typeof metricPeriodData.savingsRate.monthly === 'string' 
-                      ? metricPeriodData.savingsRate.monthly 
-                      : `${(metricPeriodData.savingsRate.monthly).toFixed(1)}%`)
-                    : `${velocityMetrics?.savingsRate || 0}%`}
-                </div>
-                <div className="text-white/80 text-xs font-semibold mt-1">Savings Rate</div>
-              </button>
-
-              {/* Net Worth */}
-              <button
-                onClick={() => handleMetricClick('netWorth')}
-                className="bg-gradient-to-br from-yellow-500 to-orange-600 rounded-2xl p-4 text-center hover:shadow-lg transition active:scale-95"
-                title="Click to load all periods"
-              >
-                <div className="text-white font-bold text-lg">
-                  {metricPeriodData.netWorth.monthly 
-                    ? formatCurrency(metricPeriodData.netWorth.monthly)
-                    : formatCurrency(velocityMetrics?.netWorth || 0)}
-                </div>
-                <div className="text-white/80 text-xs font-semibold mt-1">Net Worth</div>
-              </button>
+              {dashboardScope === 'business' && (
+                dashboardBusinessProfiles.length === 0 ? (
+                  <p className="text-xs text-gray-500 italic">Loading your businesses…</p>
+                ) : (
+                  <select
+                    value={dashboardBusinessId}
+                    onChange={(e) => setDashboardBusinessId(e.target.value)}
+                    className="w-full bg-white/10 text-white text-xs rounded-lg px-2 py-2 border border-white/20 focus:outline-none focus:border-purple-400"
+                    style={{ colorScheme: 'light' }}
+                  >
+                    <option value="" className="bg-white text-gray-900">All businesses (combined)</option>
+                    {dashboardBusinessProfiles.map(p => (
+                      <option key={p.id} value={p.id} className="bg-white text-gray-900">{p.business_name}</option>
+                    ))}
+                  </select>
+                )
+              )}
             </div>
 
-            {/* ROI Circular Badge */}
-            <div className="flex justify-center mb-6">
-              <button
-                onClick={() => handleMetricClick('roi')}
-                className="w-24 h-24 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex flex-col items-center justify-center hover:shadow-2xl transition active:scale-95 text-white font-bold"
-                title="Click to load all periods"
-              >
-                <span className="text-xs font-semibold">ROI</span>
-                <span className="text-3xl font-bold">
-                  {metricPeriodData.roi.monthly 
-                    ? (typeof metricPeriodData.roi.monthly === 'string'
-                      ? metricPeriodData.roi.monthly.replace('%', '')
-                      : `${(metricPeriodData.roi.monthly).toFixed(1)}`)
-                    : velocityMetrics?.roi || 0}%
-                </span>
-              </button>
+            {/* Smart indicators */}
+            <div className="grid grid-cols-4 gap-1.5 mb-4">
+              <div className={`rounded-lg p-1.5 bg-gradient-to-br ${style.cardBg} border ${style.cardBorder}`}>
+                <div className="flex items-center gap-0.5 mb-0.5">
+                  <StageIcon className={`w-2.5 h-2.5 shrink-0 ${style.badgeText}`} />
+                  <p className={`text-[7px] font-semibold uppercase tracking-wide truncate ${style.titleText}`}>Net Worth</p>
+                </div>
+                <p className="text-white font-bold text-[11px] leading-tight truncate">{formatCurrency(dashboardNetWorth)}</p>
+                <p className={`text-[7px] truncate ${style.badgeText}`}>{stageInfo.name}</p>
+              </div>
+
+              <div className="rounded-lg p-1.5 bg-white/5 border border-white/10">
+                <div className="flex items-center gap-0.5 mb-0.5">
+                  {netProfitMonthly >= 0 ? <TrendingUp className="w-2.5 h-2.5 shrink-0 text-emerald-400" /> : <TrendingDown className="w-2.5 h-2.5 shrink-0 text-red-400" />}
+                  <p className="text-[7px] font-semibold uppercase tracking-wide truncate text-gray-400">Net Profit</p>
+                </div>
+                <p className={`font-bold text-[11px] leading-tight truncate ${netProfitMonthly >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{formatCurrency(netProfitMonthly)}</p>
+                <p className="text-[7px] text-gray-500 truncate">This month</p>
+              </div>
+
+              <div className="rounded-lg p-1.5 bg-white/5 border border-white/10">
+                <div className="flex items-center gap-0.5 mb-0.5">
+                  <Percent className="w-2.5 h-2.5 shrink-0 text-purple-400" />
+                  <p className="text-[7px] font-semibold uppercase tracking-wide truncate text-gray-400">Savings Rate</p>
+                </div>
+                <p className="font-bold text-[11px] leading-tight truncate text-purple-300">
+                  {typeof savingsRateMonthly === 'string' ? savingsRateMonthly : `${(savingsRateMonthly || 0).toFixed(1)}%`}
+                </p>
+                <p className="text-[7px] text-gray-500 truncate">This month</p>
+              </div>
+
+              <div className="rounded-lg p-1.5 bg-white/5 border border-white/10">
+                <div className="flex items-center gap-0.5 mb-0.5">
+                  <Target className="w-2.5 h-2.5 shrink-0 text-yellow-400" />
+                  <p className="text-[7px] font-semibold uppercase tracking-wide truncate text-gray-400">ROI</p>
+                </div>
+                <p className="font-bold text-[11px] leading-tight truncate text-yellow-300">
+                  {typeof roiMonthly === 'string' ? roiMonthly : `${(roiMonthly || 0).toFixed(1)}%`}
+                </p>
+                <p className="text-[7px] text-gray-500 truncate">This month</p>
+              </div>
             </div>
 
-            {/* Period Data Detail (if clicked) */}
-            {(expandedPeriods.weekly || expandedPeriods.monthly || expandedPeriods.yearly) && (
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-2xl p-4 space-y-3">
-                {expandedPeriods.weekly && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-bold text-purple-400">WEEKLY DATA</p>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div className="bg-slate-700/30 p-2 rounded">Income: {metricPeriodData.income.weekly || 0}</div>
-                      <div className="bg-slate-700/30 p-2 rounded">Expense: {metricPeriodData.expense.weekly || 0}</div>
-                    </div>
+            {/* Daily cash-flow line graph — Income / Expense / Net, real transactions */}
+            <DailyTrackingChart
+              data={dailyTrackingData}
+              loading={dashboardLoading}
+              title={dashboardScope === 'business' ? 'Business Cash Flow' : dashboardScope === 'all' ? 'Combined Cash Flow' : 'Personal Cash Flow'}
+              granularity={trendGranularity}
+              activePreset={trendZoomStack.length === 0 ? trendPreset : null}
+              onPresetChange={handleTrendPresetChange}
+              rangeLabel={trendRangeLabel}
+              canGoBack={trendZoomStack.length > 0}
+              onBack={handleTrendBack}
+              onReset={handleTrendResetZoom}
+              onDrill={handleTrendDrill}
+            />
+
+            {/* Business valuation line graph — real Pitchin share value history */}
+            {dashboardScope === 'business' && (
+              <div className="mt-4">
+                {!dashboardBusinessId ? (
+                  <div className="bg-slate-800/50 border border-slate-700/50 rounded-2xl p-4 text-center text-xs text-gray-500">
+                    Select a business above to see its share value trend.
                   </div>
-                )}
-                {expandedPeriods.monthly && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-bold text-purple-400">MONTHLY DATA</p>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div className="bg-slate-700/30 p-2 rounded">Income: {metricPeriodData.income.monthly || 0}</div>
-                      <div className="bg-slate-700/30 p-2 rounded">Expense: {metricPeriodData.expense.monthly || 0}</div>
-                      <div className="bg-slate-700/30 p-2 rounded">Profit: {metricPeriodData.netProfit.monthly || 0}</div>
-                      <div className="bg-slate-700/30 p-2 rounded">Savings: {metricPeriodData.savingsRate.monthly || 0}%</div>
-                    </div>
-                  </div>
-                )}
-                {expandedPeriods.yearly && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-bold text-purple-400">YEARLY DATA</p>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div className="bg-slate-700/30 p-2 rounded">Income: {metricPeriodData.income.yearly || 0}</div>
-                      <div className="bg-slate-700/30 p-2 rounded">Expense: {metricPeriodData.expense.yearly || 0}</div>
-                      <div className="bg-slate-700/30 p-2 rounded">Net Profit: {metricPeriodData.netProfit.yearly || 0}</div>
-                      <div className="bg-slate-700/30 p-2 rounded">Net Worth: {metricPeriodData.netWorth.yearly || 0}</div>
-                    </div>
-                  </div>
+                ) : (
+                  <BusinessTrendChart
+                    data={businessTrendData}
+                    loading={businessTrendLoading}
+                    businessName={dashboardBusinessProfiles.find(p => p.id === dashboardBusinessId)?.business_name || 'Business'}
+                  />
                 )}
               </div>
             )}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ====== TRANSACTIONS SECTION - COLLAPSIBLE ====== */}
       <div className="px-4 py-4">
@@ -6839,7 +6895,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       {account?.loading ? '...' : formatWalletBalanceByTab(tabKey, account?.balance || 0)}
                     </span>
                     <span className="text-xs ml-1" style={{ color: 'var(--color-textSecondary)' }}>
-                      {tabKey === 'ican' ? 'ICAN' : account?.currency || 'UGX'}
+                      {tabKey === 'ican' ? 'IcanEra' : account?.currency || 'UGX'}
                     </span>
                   </div>
                 </button>
@@ -7676,7 +7732,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                           {isBiz && chainHash && (
                             <span
                               className="flex items-center gap-0.5 text-[8px] font-mono font-semibold px-1 py-0.5 rounded-full bg-blue-500/15 text-blue-300"
-                              title={`ICAN Chain: ${chainHash}`}
+                              title={`IcanEra Chain: ${chainHash}`}
                             >
                               <ShieldCheck className="w-2 h-2" />
                               {chainHash.slice(0, 6)}…
@@ -8204,9 +8260,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         autoFocus
                         className="w-full bg-slate-800 border-2 border-blue-500/50 focus:border-blue-400 rounded-xl px-4 py-3 text-white font-semibold outline-none transition"
                       >
-                        <option value="">Select business…</option>
+                        <option value="" className="bg-white text-gray-900">Select business…</option>
                         {recordBusinessProfiles.map(p => (
-                          <option key={p.id} value={p.id}>{p.business_name}</option>
+                          <option key={p.id} value={p.id} className="bg-white text-gray-900">{p.business_name}</option>
                         ))}
                       </select>
                     )}
@@ -8610,7 +8666,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-t-2xl px-5 py-4 flex items-center justify-between sticky top-0 z-10">
               <div>
                 <h2 className="text-xl font-bold text-white">⚙️ Settings</h2>
-                <p className="text-indigo-100 text-xs mt-0.5">Customize your ICAN experience</p>
+                <p className="text-indigo-100 text-xs mt-0.5">Customize your IcanEra experience</p>
               </div>
               <button 
                 onClick={() => setShowSettingsPanel(false)} 
@@ -8710,29 +8766,32 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         </div>
       )}
 
-      {/* ── Reports Modal ──────────────────────────────────────────────── */}
+      {/* Reports Panel - always a real full page, same placement as Wallet/Trust/Pitchin */}
       {showReportingSystem && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-start justify-center p-3 overflow-y-auto" style={{scrollBehavior: 'smooth', paddingTop: '180px'}}>
-          <div className="bg-gradient-to-br from-slate-900 to-indigo-950 rounded-2xl w-full max-w-3xl shadow-2xl border border-purple-500/30" style={{minHeight: '400px'}}>
+        <div
+          className={`fixed inset-x-0 z-30 bg-gradient-to-b from-slate-900 to-indigo-950 overflow-y-auto ${isWebDashboard ? 'top-[132px] md:top-[146px]' : 'top-0'}`}
+          style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
+        >
+          <div className="flex flex-col min-h-full">
             {/* Header */}
-            <div className="bg-gradient-to-r from-rose-700 to-pink-600 rounded-t-2xl px-5 py-4 flex items-center justify-between sticky top-0 z-10">
+            <div className="bg-gradient-to-r from-rose-700 to-pink-600 px-5 py-4 flex items-center justify-between shrink-0">
               <div>
                 <h2 className="text-xl font-bold text-white">📊 Financial Reports</h2>
                 <p className="text-rose-100 text-xs mt-0.5">AI-powered reports — Uganda compliant</p>
               </div>
-              <button 
-                onClick={() => { 
-                  setShowReportingSystem(false); 
-                  setReportFilteredMetrics(null); 
-                  setGeneratedReportData(null); 
-                }} 
+              <button
+                onClick={() => {
+                  setShowReportingSystem(false);
+                  setReportFilteredMetrics(null);
+                  setGeneratedReportData(null);
+                }}
                 className="text-white/70 hover:text-white p-1 transition hover:bg-white/10 rounded"
               >
                 <X className="w-6 h-6" />
               </button>
             </div>
 
-            <div className="p-4 space-y-4">
+            <div className="p-4 space-y-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
               {/* Report type dropdown */}
               <div>
                 <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Report Type</label>
@@ -8776,26 +8835,29 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   ))}
                 </div>
 
-                {/* Business picker — only meaningful once scoped to Business and
-                    the owner has more than one to choose from */}
-                {reportRecordScope === 'business' && reportBusinessProfiles.length > 1 && (
+                {/* Business picker — shown as soon as Business scope is chosen */}
+                {reportRecordScope === 'business' && (
                   <div>
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">🏢 Business</p>
-                    <select
-                      value={reportBusinessId}
-                      onChange={(e) => {
-                        const businessId = e.target.value;
-                        setReportBusinessId(businessId);
-                        setReportFilteredMetrics(null);
-                        fetchReportMetrics(reportDateFilter, reportCustomStart, reportCustomEnd, reportRecordScope, businessId);
-                      }}
-                      className="w-full bg-white/10 text-white text-xs rounded-lg px-2 py-2 border border-white/20 focus:outline-none focus:border-purple-400"
-                    >
-                      <option value="" className="text-gray-900">All businesses (combined)</option>
-                      {reportBusinessProfiles.map(p => (
-                        <option key={p.id} value={p.id} className="text-gray-900">{p.business_name}</option>
-                      ))}
-                    </select>
+                    {reportBusinessProfiles.length === 0 ? (
+                      <p className="text-xs text-gray-500 italic">Loading your businesses…</p>
+                    ) : (
+                      <select
+                        value={reportBusinessId}
+                        onChange={(e) => {
+                          const businessId = e.target.value;
+                          setReportBusinessId(businessId);
+                          setReportFilteredMetrics(null);
+                          fetchReportMetrics(reportDateFilter, reportCustomStart, reportCustomEnd, reportRecordScope, businessId);
+                        }}
+                        className="w-full bg-white/10 text-white text-xs rounded-lg px-2 py-2 border border-white/20 focus:outline-none focus:border-purple-400"
+                      >
+                        <option value="" className="bg-white text-gray-900">All businesses (combined)</option>
+                        {reportBusinessProfiles.map(p => (
+                          <option key={p.id} value={p.id} className="bg-white text-gray-900">{p.business_name}</option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                 )}
 
@@ -9000,7 +9062,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                           <div className="flex justify-between text-sm"><span className="text-gray-400">Dividend Net</span><span className="text-fuchsia-300 font-semibold">UGX {divNet.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
                           <div className="flex justify-between text-sm border-t border-white/10 pt-2"><span className="text-gray-300 font-medium">Net Profit</span><span className={`font-bold ${net >= 0 ? 'text-green-400' : 'text-red-400'}`}>UGX {net.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
                           <div className="flex justify-between text-sm"><span className="text-gray-400">Margin</span><span className="text-purple-400 font-semibold">{rate.toFixed(1)}%</span></div>
-                          <div className="flex justify-between text-sm"><span className="text-gray-400">Net Worth</span><span className="text-yellow-400 font-semibold">UGX {(velocityMetrics?.netWorth || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                          {/* velocityMetrics.netWorth is a global, all-time figure across every
+                              transaction regardless of scope — showing it here made this the only
+                              line on the card that never changed with Record Scope/business. Use
+                              the already-scoped totals fetchReportMetrics computed instead. */}
+                          <div className="flex justify-between text-sm"><span className="text-gray-400">Net Position ({label})</span><span className="text-yellow-400 font-semibold">UGX {(fm ? (fm.totalIncome - fm.totalOutflows) : (inc - exp)).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
                           {fm && !isLoadingReportMetrics && <div className="text-gray-600 text-xs pt-1">{fm.count} transaction{fm.count !== 1 ? 's' : ''} in period</div>}
                         </>
                       );
@@ -9275,7 +9341,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                               doc.rect(0, 0, 210, 28, 'F');
                               doc.setTextColor(255, 255, 255);
                               doc.setFontSize(16); doc.setFont('helvetica','bold');
-                              doc.text('ICAN Financial Report', 14, 12);
+                              doc.text('IcanEra Financial Report', 14, 12);
                               doc.setFontSize(10); doc.setFont('helvetica','normal');
                               doc.text(`${title} · ${countryName}`, 14, 20);
                               doc.text(`Generated: ${rpt.generated || new Date().toLocaleDateString()}`, 150, 20);
@@ -9317,7 +9383,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                               for (let i = 1; i <= pages; i++) {
                                 doc.setPage(i);
                                 doc.setFontSize(8); doc.setTextColor(160,160,160);
-                                doc.text(`ICAN · Confidential · Page ${i} of ${pages}`, 14, 290);
+                                doc.text(`IcanEra · Confidential · Page ${i} of ${pages}`, 14, 290);
                               }
                               doc.save(`ICAN_${selectedReportType}_${Date.now()}.pdf`);
                             }}
@@ -9331,7 +9397,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                             onClick={() => {
                               const rpt = generatedReportData;
                               const countryName = countries?.find(c => c.code === selectedCountry)?.name || 'Uganda';
-                              const subject = encodeURIComponent(`ICAN Financial Report — ${rpt.reportName || selectedReportType} (${countryName})`);
+                              const subject = encodeURIComponent(`IcanEra Financial Report — ${rpt.reportName || selectedReportType} (${countryName})`);
                               const lines = [];
                               const flatten = (obj, prefix='') => {
                                 Object.entries(obj).forEach(([k,v]) => {
@@ -9342,7 +9408,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                               };
                               flatten(rpt);
                               const body = encodeURIComponent(
-                                `ICAN Financial Report\n` +
+                                `IcanEra Financial Report\n` +
                                 `Type: ${rpt.reportName || selectedReportType}\n` +
                                 `Country: ${countryName}\n` +
                                 `Generated: ${rpt.generated || new Date().toLocaleDateString()}\n\n` +

@@ -443,7 +443,7 @@ const SACCOHub = ({ onClose }) => {
                 </div>
                 <div>
                   <p className="text-xs text-gray-400">Monthly</p>
-                  <p className="text-sm font-bold text-yellow-400">₿{group.monthly_contribution} ICAN</p>
+                  <p className="text-sm font-bold text-yellow-400">₿{group.monthly_contribution} IcanEra</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-400">Joined</p>

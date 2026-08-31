@@ -149,7 +149,7 @@ const AdminLoanReviewPanel = ({ groupId, user, loans = [], onReviewComplete }) =
               <div className="bg-slate-900/50 rounded-lg p-3 mb-4 space-y-2">
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-400">💰 Amount Requested:</span>
-                  <span className="font-bold text-green-400">{loan.loan_amount} ICAN</span>
+                  <span className="font-bold text-green-400">{loan.loan_amount} IcanEra</span>
                 </div>
                 <div>
                   <span className="text-sm text-gray-400">📝 Purpose:</span>

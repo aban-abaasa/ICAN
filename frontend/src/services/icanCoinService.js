@@ -134,7 +134,7 @@ export class IcanCoinService {
       // Verify user has enough ICAN balance
       const userBalance = await this.getIcanBalance(userId);
       if (userBalance < icanAmount) {
-        throw new Error(`Insufficient ICAN balance. You have ${userBalance.toFixed(8)}, need ${icanAmount.toFixed(8)}`);
+        throw new Error(`Insufficient IcanEra balance. You have ${userBalance.toFixed(8)}, need ${icanAmount.toFixed(8)}`);
       }
 
       // CREDIT TO USER'S REAL WALLET
@@ -221,7 +221,7 @@ export class IcanCoinService {
       // Verify sender has enough balance
       const senderBalance = await this.getIcanBalance(senderUserId);
       if (senderBalance < icanAmount) {
-        throw new Error('Insufficient ICAN Coin balance');
+        throw new Error('Insufficient IcanEra Coin balance');
       }
 
       // Get market price
@@ -284,7 +284,7 @@ export class IcanCoinService {
         senderNewBalance,
         recipientNewBalance,
         transaction: data ? data[0] : null,
-        message: `✅ Sent ${icanAmount} ICAN (${CountryService.formatCurrency(icanAmount * marketPrice, senderCountry)}) across borders!`
+        message: `✅ Sent ${icanAmount} IcanEra (${CountryService.formatCurrency(icanAmount * marketPrice, senderCountry)}) across borders!`
       };
     } catch (error) {
       console.error('❌ Cross-border transfer failed:', error);

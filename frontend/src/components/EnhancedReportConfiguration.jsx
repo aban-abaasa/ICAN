@@ -31,7 +31,7 @@ export const EnhancedReportConfiguration = ({
   transactions
 }) => {
   // Configuration States
-  const [reportTitle, setReportTitle] = useState('ICAN Financial Report');
+  const [reportTitle, setReportTitle] = useState('IcanEra Financial Report');
   const [selectedReportType, setSelectedReportType] = useState('financial-summary');
   const [selectedCountry, setSelectedCountry] = useState('UG');
   const [dateRange, setDateRange] = useState('current-month');

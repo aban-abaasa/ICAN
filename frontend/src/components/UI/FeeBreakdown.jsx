@@ -95,7 +95,7 @@ export default function FeeBreakdown({
               )}
             </p>
             <p className="text-amber-200/60 text-xs mt-1">
-              {feeStructure.totalFee.toFixed(2)} ICAN ({feeStructure.totalPercent}%)
+              {feeStructure.totalFee.toFixed(2)} IcanEra ({feeStructure.totalPercent}%)
             </p>
           </div>
           <ChevronDown
@@ -125,7 +125,7 @@ export default function FeeBreakdown({
               </div>
               <div className="text-right">
                 <p className="text-white font-semibold text-sm">
-                  {feeStructure.platform.toFixed(3)} ICAN
+                  {feeStructure.platform.toFixed(3)} IcanEra
                 </p>
                 <p className="text-slate-400 text-xs">{feeStructure.platformPercent}%</p>
               </div>
@@ -142,7 +142,7 @@ export default function FeeBreakdown({
               </div>
               <div className="text-right">
                 <p className="text-white font-semibold text-sm">
-                  {feeStructure.blockchain.toFixed(3)} ICAN
+                  {feeStructure.blockchain.toFixed(3)} IcanEra
                 </p>
                 <p className="text-slate-400 text-xs">{feeStructure.blockchainPercent}%</p>
               </div>
@@ -168,7 +168,7 @@ export default function FeeBreakdown({
                 </div>
                 <div className="text-right">
                   <p className="text-white font-semibold text-sm">
-                    {feeStructure.other.toFixed(3)} ICAN
+                    {feeStructure.other.toFixed(3)} IcanEra
                   </p>
                   <p className="text-slate-400 text-xs">{feeStructure.otherPercent}%</p>
                 </div>
@@ -183,9 +183,9 @@ export default function FeeBreakdown({
           <div className="space-y-2 pt-2">
             {/* Gross Amount */}
             <div className="flex justify-between items-center">
-              <span className="text-slate-400 text-sm">Gross Amount (ICAN):</span>
+              <span className="text-slate-400 text-sm">Gross Amount (IcanEra):</span>
               <span className="text-white font-semibold">
-                {icanAmount.toFixed(2)} ICAN
+                {icanAmount.toFixed(2)} IcanEra
               </span>
             </div>
 
@@ -193,13 +193,13 @@ export default function FeeBreakdown({
             <div className="flex justify-between items-center">
               <span className="text-slate-400 text-sm">Total Fees:</span>
               <span className="text-orange-300 font-semibold">
-                -{feeStructure.totalFee.toFixed(3)} ICAN
+                -{feeStructure.totalFee.toFixed(3)} IcanEra
               </span>
             </div>
 
-            {/* Net Amount (ICAN) */}
+            {/* Net Amount (IcanEra) */}
             <div className="bg-emerald-900/20 border border-emerald-500/20 rounded-lg px-3 py-2 flex justify-between items-center">
-              <span className="text-emerald-300 font-semibold text-sm">Net Amount (ICAN):</span>
+              <span className="text-emerald-300 font-semibold text-sm">Net Amount (IcanEra):</span>
               <span className="text-emerald-300 font-bold text-lg">
                 {feeStructure.netAmount.toFixed(2)}
               </span>

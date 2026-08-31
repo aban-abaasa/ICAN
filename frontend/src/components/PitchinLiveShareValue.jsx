@@ -55,7 +55,7 @@ const ICAN_PER_SHARE = (ugx, marketPrice) => {
   const price  = Math.max(Number(marketPrice) || 5000, 5000);
   const amount = (Number(ugx) || 0) / price;
   const dec = amount >= 100 ? 2 : amount >= 1 ? 4 : amount >= 0.001 ? 6 : 8;
-  return `${amount.toFixed(dec)} icaneracoin`;
+  return `${amount.toFixed(dec)} IcanEra`;
 };
 
 // Convert UGX → local currency using CountryService built-in rates (no external API)
@@ -544,7 +544,7 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
               </span>
-              <span className="text-xs sm:text-sm font-bold text-amber-300">icaneracoin — Live Market</span>
+              <span className="text-xs sm:text-sm font-bold text-amber-300">IcanEra — Live Market</span>
             </div>
             {countryPrice && (
               <div className={`flex items-center gap-1 text-xs sm:text-sm font-bold ${countryPrice.appreciation_pct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -559,7 +559,7 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
             <>
               <p className="text-lg sm:text-xl xl:text-2xl font-extrabold text-white mt-2 tabular-nums">
                 {fmtExact(countryPrice.price_local, countryPrice.currency_code)}
-                <span className="text-xs sm:text-sm text-slate-500 font-medium ml-2">per icaneracoin</span>
+                <span className="text-xs sm:text-sm text-slate-500 font-medium ml-2">per IcanEra</span>
               </p>
               <p className="text-[11px] sm:text-xs xl:text-sm text-slate-400 mt-1.5 leading-relaxed">
                 Anchored to a self-adjusting 5,000 UGX floor that rises with currency depreciation and never falls.{' '}
@@ -713,7 +713,7 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
               {[
                 { label: 'Business Value', value: FMT(valuation.businessValueUgx) },
                 { label: 'Net Profit',     value: FMT(valuation.netProfitUgx) },
-                { label: 'ICAN Holdings',  value: FMT(valuation.icanHoldingsValue) }
+                { label: 'IcanEra Holdings',  value: FMT(valuation.icanHoldingsValue) }
               ].map(m => (
                 <div key={m.label} className="rounded-lg bg-slate-800/60 border border-slate-700/30 px-2 py-2 sm:px-3 sm:py-3 xl:px-4 xl:py-4">
                   <p className="text-[10px] sm:text-xs xl:text-sm text-slate-500 truncate">{m.label}</p>
@@ -739,9 +739,9 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
                   { label: 'AgriBone Wallet Revenue',     value: valuation.breakdown.farm_revenue,         color: 'text-green-400' },
                   { label: 'MyBodaGuy Wallet Revenue',     value: valuation.breakdown.boda_revenue,         color: 'text-orange-400' },
                   { label: 'SupermartKera Revenue',       value: valuation.breakdown.supermarket_revenue,  color: 'text-purple-400' },
-                  { label: 'ICAN Wallet Revenue',          value: valuation.breakdown.ican_wallet_revenue,  color: 'text-cyan-400' },
+                  { label: 'IcanEra Wallet Revenue',          value: valuation.breakdown.ican_wallet_revenue,  color: 'text-cyan-400' },
                   { label: 'CMMS Inventory Value',         value: valuation.breakdown.cmms_inventory_value, color: 'text-blue-400' },
-                  { label: `icaneracoin (${valuation.breakdown.ican_holdings_ican?.toFixed(4)} @ ${FMT(valuation.breakdown.ican_market_price)})`,
+                  { label: `IcanEra (${valuation.breakdown.ican_holdings_ican?.toFixed(4)} @ ${FMT(valuation.breakdown.ican_market_price)})`,
                     value: valuation.breakdown.ican_holdings_ugx, color: 'text-yellow-400' },
                   { label: 'COGS (Stock Bought)',          value: -valuation.breakdown.ican_bought_stock,   color: 'text-red-400' },
                   { label: 'Operating Expenses',           value: -valuation.breakdown.ican_operating_exp,  color: 'text-red-400' },
@@ -967,7 +967,7 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
                         </span>
                       </div>
                       <p className="text-[10px] sm:text-xs text-slate-500">
-                        icaneracoin earned into your wallet. The native ICAN wallet always counts — AgriBone, MyBodaGuy & SupermartKera only count once linked below.
+                        IcanEra earned into your wallet. The native IcanEra wallet always counts — AgriBone, MyBodaGuy & SupermartKera only count once linked below.
                       </p>
                     </div>
                   </button>
@@ -980,7 +980,7 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
                             'mybodaguy':         'MyBodaGuy',
                             'farm-agent':        'AgriBone',
                             'digital-city-era':  'SupermartKera',
-                            'ican':              'ICAN wallet'
+                            'ican':              'IcanEra wallet'
                           };
                           const rows = Object.entries(valuation.sourceStats.wallet.bySourceApp || {})
                             .filter(([, v]) => v.count > 0)
@@ -1027,7 +1027,7 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
                         <p className="text-xs sm:text-sm text-slate-200 font-medium">Team Members</p>
                         <span className="text-[10px] sm:text-xs text-blue-400 font-semibold shrink-0">Manage →</span>
                       </div>
-                      <p className="text-[10px] sm:text-xs text-slate-500">Give other ICAN accounts access to record transactions for this business.</p>
+                      <p className="text-[10px] sm:text-xs text-slate-500">Give other IcanEra accounts access to record transactions for this business.</p>
                     </div>
                   </button>
                 </div>

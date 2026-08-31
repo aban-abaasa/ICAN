@@ -838,11 +838,11 @@ export const recordTrustTransaction = async (transactionData) => {
 
       if (walletError) {
         console.error('❌ Wallet fetch error:', walletError);
-        return { success: false, error: 'Could not access ICAN wallet: ' + walletError.message };
+        return { success: false, error: 'Could not access IcanEra wallet: ' + walletError.message };
       }
 
       if (!walletData) {
-        return { success: false, error: 'ICAN wallet not found for user' };
+        return { success: false, error: 'IcanEra wallet not found for user' };
       }
 
       const currentBalance = parseFloat(walletData.ican_balance) || 0;
@@ -858,7 +858,7 @@ export const recordTrustTransaction = async (transactionData) => {
       if (currentBalance < contributionAmount) {
         return { 
           success: false, 
-          error: `❌ Insufficient ICAN balance. You have ₿${currentBalance.toFixed(8)} but need ₿${contributionAmount.toFixed(8)}` 
+          error: `❌ Insufficient IcanEra balance. You have ₿${currentBalance.toFixed(8)} but need ₿${contributionAmount.toFixed(8)}`
         };
       }
 

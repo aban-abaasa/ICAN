@@ -290,17 +290,17 @@ const RequisitionApprovalsTab = ({ userRole, canApprove = false, companyId, cmms
         const { error } = await cmmsService.updateRequisitionStatus(
           req.id,
           'completed',
-          'ICAN wallet payout completed after approval',
+          'IcanEra wallet payout completed after approval',
           'finance'
         );
 
         if (error) {
           console.error('Failed to mark approved requisition as completed after wallet payout:', error);
-          alert('Failed to complete ICAN wallet payout.');
+          alert('Failed to complete IcanEra wallet payout.');
           return;
         }
 
-        alert('ICAN wallet payout completed. Requisition marked as completed.');
+        alert('IcanEra wallet payout completed. Requisition marked as completed.');
       }
 
       hasLoaded.current = false;
@@ -400,13 +400,13 @@ const RequisitionApprovalsTab = ({ userRole, canApprove = false, companyId, cmms
                     : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
-                ICAN Wallet
+                IcanEra Wallet
               </button>
             </div>
             <p className="text-xs text-slate-700 mt-2">
               {financeCashoutMethod === 'cash'
                 ? 'Cash mode: after approval, recipient must confirm on phone to complete payout.'
-                : 'ICAN Wallet mode: after approval, finance can complete payout instantly.'}
+                : 'IcanEra Wallet mode: after approval, finance can complete payout instantly.'}
             </p>
           </div>
         )}
@@ -654,7 +654,7 @@ const RequisitionApprovalsTab = ({ userRole, canApprove = false, companyId, cmms
                         Method: {req.financePaymentMethod === 'cash'
                           ? 'By Cash'
                           : req.financePaymentMethod === 'ican_wallet'
-                            ? 'ICAN Wallet'
+                            ? 'IcanEra Wallet'
                             : 'Not captured'}
                       </p>
                       <p className="text-xs text-slate-700">

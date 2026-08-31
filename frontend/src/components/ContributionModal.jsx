@@ -145,7 +145,7 @@ const ContributionModal = ({ group, onClose, onContributionSuccess }) => {
 
   const quickAmounts = [0.5, 1, 2.5, 5]; // ICAN coins
   const paymentMethods = [
-    { id: 'ican', label: 'ICAN Account', icon: '💳', description: 'Send ICAN coins from your wallet' }
+    { id: 'ican', label: 'IcanEra Account', icon: '💳', description: 'Send IcanEra coins from your wallet' }
   ];
 
   return (
@@ -184,7 +184,7 @@ const ContributionModal = ({ group, onClose, onContributionSuccess }) => {
             <div className="bg-gradient-to-br from-amber-600/20 to-amber-500/10 border border-amber-500/30 rounded-xl p-4">
               <p className="text-xs text-amber-300 font-semibold uppercase tracking-wider mb-1">📊 Group</p>
               <h3 className="text-xl font-bold text-white mb-2">{group?.name || 'Group'}</h3>
-              <p className="text-sm text-amber-200/70">Monthly Target: <span className="font-semibold text-amber-300">₿{group?.monthly_contribution || '1'} ICAN</span></p>
+              <p className="text-sm text-amber-200/70">Monthly Target: <span className="font-semibold text-amber-300">₿{group?.monthly_contribution || '1'} IcanEra</span></p>
             </div>
 
             {/* ICAN Coin Card */}
@@ -192,10 +192,10 @@ const ContributionModal = ({ group, onClose, onContributionSuccess }) => {
               <p className="text-xs text-amber-300 font-semibold uppercase tracking-wider mb-1">� Cryptocurrency</p>
               <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
                 <span className="text-2xl">₿</span>
-                ICAN Coin
+                IcanEra Coin
               </h3>
               <p className="text-sm text-amber-200/70">
-                <span className="font-semibold text-amber-300 text-base">1 ICAN</span> = ~5,000 UGX
+                <span className="font-semibold text-amber-300 text-base">1 IcanEra</span> = ~5,000 UGX
               </p>
               <p className="text-xs text-amber-200/50 mt-2">Your country: {userCountry || userCountryCode}</p>
             </div>
@@ -223,7 +223,7 @@ const ContributionModal = ({ group, onClose, onContributionSuccess }) => {
           <div>
             <label className="text-sm font-bold text-gray-300 mb-3 block flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-amber-400" />
-              Contribution Amount (ICAN Coins)
+              Contribution Amount (IcanEra Coins)
             </label>
             <div className="relative mb-4">
               <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-amber-400 text-2xl font-bold">₿</span>
@@ -266,8 +266,8 @@ const ContributionModal = ({ group, onClose, onContributionSuccess }) => {
               <div className="flex items-start gap-4">
                 <div className="text-4xl">💳</div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-bold text-white mb-1">ICAN Account</h3>
-                  <p className="text-sm text-blue-200/80 mb-2">Send money directly from your ICAN Wallet</p>
+                  <h3 className="text-lg font-bold text-white mb-1">IcanEra Account</h3>
+                  <p className="text-sm text-blue-200/80 mb-2">Send money directly from your IcanEra Wallet</p>
                   <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-600/40 border border-blue-400/50 rounded-full">
                     <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
                     <span className="text-xs font-semibold text-blue-300">Available & Secure</span>
@@ -283,7 +283,7 @@ const ContributionModal = ({ group, onClose, onContributionSuccess }) => {
             <div className="bg-cyan-600/20 border border-cyan-500/30 rounded-lg p-3 mt-3 flex gap-2">
               <Shield className="w-5 h-5 text-cyan-400 flex-shrink-0 mt-0.5" />
               <p className="text-xs text-cyan-200/80">
-                <span className="font-semibold">Secure ICAN Transfer:</span> Your contribution will be deducted directly from your ICAN wallet balance and recorded on the blockchain.
+                <span className="font-semibold">Secure IcanEra Transfer:</span> Your contribution will be deducted directly from your IcanEra wallet balance and recorded on the blockchain.
               </p>
             </div>
           </div>
@@ -293,15 +293,15 @@ const ContributionModal = ({ group, onClose, onContributionSuccess }) => {
             <div className="bg-gradient-to-br from-slate-700/40 to-slate-800/40 border border-slate-600/30 rounded-xl p-5 space-y-3">
               <div className="flex justify-between items-center pb-3 border-b border-slate-600/30">
                 <span className="text-gray-400 flex items-center gap-2"><span className="text-lg">💰</span> Your Contribution</span>
-                <span className="font-bold text-white text-lg">₿{parseFloat(amount).toFixed(2)} ICAN</span>
+                <span className="font-bold text-white text-lg">₿{parseFloat(amount).toFixed(2)} IcanEra</span>
               </div>
               <div className="flex justify-between items-center pb-3 border-b border-slate-600/30">
                 <span className="text-gray-400 flex items-center gap-2"><span className="text-lg">📈</span> Annual Interest (10%)</span>
-                <span className="font-bold text-emerald-300">₿{(parseFloat(amount) * 0.1).toFixed(2)} ICAN</span>
+                <span className="font-bold text-emerald-300">₿{(parseFloat(amount) * 0.1).toFixed(2)} IcanEra</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-400 flex items-center gap-2"><span className="text-lg">📊</span> Daily Growth</span>
-                <span className="font-bold text-cyan-300">₿{(parseFloat(amount) * 0.1 / 365).toFixed(4)} ICAN/day</span>
+                <span className="font-bold text-cyan-300">₿{(parseFloat(amount) * 0.1 / 365).toFixed(4)} IcanEra/day</span>
               </div>
             </div>
           )}

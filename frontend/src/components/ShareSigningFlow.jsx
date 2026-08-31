@@ -1527,7 +1527,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
           .single();
         
         if (createError) {
-          setError('Could not create your ICAN Wallet: ' + createError.message);
+          setError('Could not create your IcanEra Wallet: ' + createError.message);
           return;
         }
         
@@ -1544,7 +1544,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
       
       // Check sufficient ICAN coin balance
       if (currentBalance < investmentInIcanCoins) {
-        setError(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Insufficient balance. You have ICAN ${currentBalance.toFixed(2)} but need ICAN ${investmentInIcanCoins.toFixed(2)}. Please fund your wallet first.`);
+        setError(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Insufficient balance. You have IcanEra ${currentBalance.toFixed(2)} but need IcanEra ${investmentInIcanCoins.toFixed(2)}. Please fund your wallet first.`);
         return;
       }
       
@@ -2394,7 +2394,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
     addField('Investment Type', investmentType === 'buy' ? 'Equity Purchase' : investmentType === 'partner' ? 'Partnership Agreement' : investmentType === 'guarantor' ? 'Guarantor Agreement' : 'Financial Support');
     if (sharesRequested > 0) {
       addField('Shares Purchased', `${sharesRequested.toLocaleString()} of ${liveTotalShares ? liveTotalShares.toLocaleString() : 'N/A'} live shares (${equityStakePercent.toFixed(2)}% equity)`);
-      addField('Live Share Price', pricingReady ? `${allowedCurrency} ${sharePrice.toFixed(2)} per share (${sharePriceInIcan.toFixed(4)} icaneracoin)` : 'N/A');
+      addField('Live Share Price', pricingReady ? `${allowedCurrency} ${sharePrice.toFixed(2)} per share (${sharePriceInIcan.toFixed(4)} IcanEra)` : 'N/A');
     }
     addField('Total Investment', `${allowedCurrency} ${totalInvestment.toFixed(2)}`);
     addField('Escrow ID', escrowId || pitch?.id || 'N/A');
@@ -2435,7 +2435,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(9);
     pdf.setTextColor(110);
-    pdf.text('Scan to verify this agreement in the ICAN Escrow System.', pageWidth / 2, y, { align: 'center' });
+    pdf.text('Scan to verify this agreement in the IcanEra Escrow System.', pageWidth / 2, y, { align: 'center' });
     y += 5;
     pdf.text(`Generated: ${new Date().toLocaleString()}`, pageWidth / 2, y, { align: 'center' });
 
@@ -2963,10 +2963,10 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                         ['Pitch', pitch?.title || 'N/A'],
                         ['Pitch Description', pitch?.description || 'No description provided'],
                         ['Pricing Basis', 'Shares are priced from this business’s live recorded value, recomputed at the moment you invest. The listed pitch price is not used.'],
-                        ['Live Share Price', pricingReady ? `${allowedCurrency} ${sharePrice.toFixed(2)} per share (${sharePriceInIcan.toFixed(4)} icaneracoin)` : 'Loading live value...'],
+                        ['Live Share Price', pricingReady ? `${allowedCurrency} ${sharePrice.toFixed(2)} per share (${sharePriceInIcan.toFixed(4)} IcanEra)` : 'Loading live value...'],
                         ['Live Share Register', liveTotalShares ? `${liveSharesAvailable.toLocaleString()} of ${liveTotalShares.toLocaleString()} shares still unsold` : 'Unavailable'],
-                        ['Payment Method', 'ICAN Wallet with escrow protection'],
-                        ['Escrow Protection', 'All investments are held in ICAN escrow pending multi-signature approval from existing shareholders.'],
+                        ['Payment Method', 'IcanEra Wallet with escrow protection'],
+                        ['Escrow Protection', 'All investments are held in IcanEra escrow pending multi-signature approval from existing shareholders.'],
                         ['Release Requirement', '60% of shareholders (minimum 10 members) must sign to release funds.'],
                         ['Verification', 'PIN and device location will be recorded on the sealed agreement.'],
                         ['Shareholder Addition', 'You will be automatically added as a shareholder upon seal finalization.']
@@ -3034,7 +3034,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                         ['Total Shares (live)', liveTotalShares ? liveTotalShares.toLocaleString() : 'Not configured'],
                         ['Shares Still Unsold', liveTotalShares ? `${liveSharesAvailable.toLocaleString()} of ${liveTotalShares.toLocaleString()}` : 'Unavailable'],
                         ['Live Share Price', pricingReady
-                          ? `${allowedCurrency} ${sharePrice.toFixed(2)}  (${sharePriceInIcan.toFixed(4)} icaneracoin)`
+                          ? `${allowedCurrency} ${sharePrice.toFixed(2)}  (${sharePriceInIcan.toFixed(4)} IcanEra)`
                           : 'Loading live value...']
                       ].map(([label, value]) => (
                         <li key={label} className="px-3.5 py-3">
@@ -3050,10 +3050,10 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
               {!pricingReady && (
                 <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4">
                   <p className="text-amber-200 text-sm">
-                    {offerError || (offerLoading ? 'Loading this business’s live share value...' : 'Waiting for the live ICAN market price...')}
+                    {offerError || (offerLoading ? 'Loading this business’s live share value...' : 'Waiting for the live IcanEra market price...')}
                   </p>
                   <p className="text-amber-300/70 text-xs mt-1">
-                    Shares are priced from live business data and the live icaneracoin price. Nothing can be bought until both are available.
+                    Shares are priced from live business data and the live IcanEra price. Nothing can be bought until both are available.
                   </p>
                 </div>
               )}
@@ -3109,7 +3109,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                           Equity Stake: {equityStakePercent.toFixed(2)}% &mdash; {sharesRequested.toLocaleString()} of {liveTotalShares?.toLocaleString()} live shares
                         </p>
                         <p className="text-xs text-slate-400">
-                          {investmentInIcanCoins.toFixed(2)} icaneracoin at the live price of {allowedCurrency} {icanPriceLocal?.toFixed(2)} per coin
+                          {investmentInIcanCoins.toFixed(2)} IcanEra at the live price of {allowedCurrency} {icanPriceLocal?.toFixed(2)} per coin
                         </p>
                       </>
                     )}
@@ -3140,7 +3140,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 }
                 className="w-full px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition"
               >
-                Proceed to ICAN
+                Proceed to IcanEra
               </button>
             </div>
           )}
@@ -3150,7 +3150,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
             <div className="space-y-5 pb-[calc(7rem+env(safe-area-inset-bottom))]">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
                 <Shield className="w-6 h-6" />
-                ICAN Wallet - Investment Summary
+                IcanEra Wallet - Investment Summary
               </h3>
 
               <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
@@ -3199,7 +3199,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                   onClick={() => toggleFlowPanel('walletCoins')}
                   className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
                 >
-                  <span className="font-semibold text-white">Your ICAN Wallet</span>
+                  <span className="font-semibold text-white">Your IcanEra Wallet</span>
                   {flowPanels.walletCoins ? (
                     <ChevronUp className="w-5 h-5 text-slate-400" />
                   ) : (
@@ -3211,7 +3211,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                   <div className="px-4 pb-4 space-y-3">
                     <div className="rounded-lg border border-slate-700/70 bg-slate-900/40 p-3 flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">ICAN Account</p>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">IcanEra Account</p>
                         <p className="text-sm text-slate-200 mt-1 break-words">
                           {icanAccountNumber || 'Not available'}
                           {icanAccountHolder ? ` - ${icanAccountHolder}` : ''}
@@ -3229,10 +3229,10 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                     <div className="rounded-lg border border-slate-700/70 bg-slate-900/40 p-4 text-center">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Available Balance</p>
                       <p className="text-2xl font-bold text-yellow-400 mt-2">
-                        {loadingWallet ? 'Loading wallet data...' : `${walletBalance.toFixed(8)} ICAN`}
+                        {loadingWallet ? 'Loading wallet data...' : `${walletBalance.toFixed(8)} IcanEra`}
                       </p>
                       {!loadingWallet && walletBalance <= 0 && (
-                        <p className="text-xs text-red-300 mt-2">No ICAN coins available. Fund your wallet to continue.</p>
+                        <p className="text-xs text-red-300 mt-2">No IcanEra coins available. Fund your wallet to continue.</p>
                       )}
                     </div>
                   </div>
@@ -3297,14 +3297,14 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                             <option value="">Select a business account...</option>
                             {payerBusinessProfiles.map((profile) => (
                               <option key={profile.id} value={profile.id}>
-                                {profile.business_name} — {Number(profile.ican_wallet?.ican_balance || 0).toFixed(2)} ICAN
+                                {profile.business_name} — {Number(profile.ican_wallet?.ican_balance || 0).toFixed(2)} IcanEra
                               </option>
                             ))}
                           </select>
                         )}
                         {selectedPayerBusinessProfile && (
                           <p className="text-xs text-slate-400">
-                            Available: {effectivePayableBalance.toFixed(2)} ICAN
+                            Available: {effectivePayableBalance.toFixed(2)} IcanEra
                           </p>
                         )}
                       </div>
@@ -3331,16 +3331,16 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                   <div className="px-4 pb-4">
                     <ul className="rounded-lg border border-slate-700/70 bg-slate-900/40 divide-y divide-slate-700/60 overflow-hidden">
                       {[
-                        ['Investment Amount (ICAN)', `${investmentInIcanCoins.toFixed(2)} coins`],
+                        ['Investment Amount (IcanEra)', `${investmentInIcanCoins.toFixed(2)} coins`],
                         ['Equivalent Value', `${allowedCurrency} ${totalInvestment.toFixed(2)}`],
                         ['Shares', sharesAmount === '0' || !sharesAmount ? 'Partnership/Support (no equity)' : `${sharesAmount} shares`],
-                        ['ICAN Coins Remaining', `${(walletBalance - investmentInIcanCoins).toFixed(2)} coins`],
-                        ['Payment Method', 'ICAN Coins (Escrow protected)']
+                        ['IcanEra Coins Remaining', `${(walletBalance - investmentInIcanCoins).toFixed(2)} coins`],
+                        ['Payment Method', 'IcanEra Coins (Escrow protected)']
                       ].map(([label, value]) => (
                         <li key={label} className="px-3.5 py-3">
                           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
                           <p className={`text-sm mt-1 break-words ${
-                            label === 'ICAN Coins Remaining' && (walletBalance - investmentInIcanCoins) < 0
+                            label === 'IcanEra Coins Remaining' && (walletBalance - investmentInIcanCoins) < 0
                               ? 'text-red-300'
                               : 'text-white'
                           }`}>{value}</p>
@@ -3394,7 +3394,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                   <li className="text-sm text-blue-200 flex items-start gap-2">
                     <span className="mt-1 w-1.5 h-1.5 rounded-full bg-blue-300 flex-shrink-0" />
                     <span>
-                      <strong>Escrow Protection:</strong> Your {allowedCurrency} {totalInvestment.toFixed(2)} is held in ICAN escrow until 60% shareholder approval is completed.
+                      <strong>Escrow Protection:</strong> Your {allowedCurrency} {totalInvestment.toFixed(2)} is held in IcanEra escrow until 60% shareholder approval is completed.
                     </span>
                   </li>
                   <li className="text-sm text-blue-200 flex items-start gap-2">
@@ -3409,7 +3409,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
               <button
                 onClick={() => {
                   if (walletBalance < investmentInIcanCoins) {
-                    alert(`Insufficient balance.\n\nYour wallet: ${walletBalance.toFixed(2)} ICAN\nRequired: ${investmentInIcanCoins.toFixed(2)} ICAN\nShortfall: ${(investmentInIcanCoins - walletBalance).toFixed(2)} ICAN`);
+                    alert(`Insufficient balance.\n\nYour wallet: ${walletBalance.toFixed(2)} IcanEra\nRequired: ${investmentInIcanCoins.toFixed(2)} IcanEra\nShortfall: ${(investmentInIcanCoins - walletBalance).toFixed(2)} IcanEra`);
                     return;
                   }
                   setStage(6);
@@ -3418,7 +3418,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 className="w-full px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition"
               >
                 {walletBalance < investmentInIcanCoins
-                  ? `Insufficient Balance (${(investmentInIcanCoins - walletBalance).toFixed(2)} ICAN short)`
+                  ? `Insufficient Balance (${(investmentInIcanCoins - walletBalance).toFixed(2)} IcanEra short)`
                   : 'Authorize with PIN'}
               </button>
             </div>
@@ -3428,7 +3428,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
             <div className="space-y-6">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
                 <Shield className="w-6 h-6" />
-                ICAN Wallet - Investment Summary
+                IcanEra Wallet - Investment Summary
               </h3>
 
               <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-lg p-6 space-y-4">
@@ -3485,7 +3485,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
 
                 <div className="border-t border-slate-700 pt-4 space-y-3">
                   <h4 className="text-slate-300 font-semibold text-sm flex items-center gap-2">
-                    ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½ Your ICAN Coins (For Share Purchase)
+                    ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½ Your IcanEra Coins (For Share Purchase)
                   </h4>
                   <div className="bg-gradient-to-br from-slate-700 to-slate-800 rounded-lg p-4 space-y-3 border border-slate-600">
                     {/* Tabs - Only My Wallet visible */}
@@ -3520,7 +3520,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                           <div className="text-4xl font-bold text-yellow-400 mb-2">
                             ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ {walletBalance.toFixed(8)}
                           </div>
-                          <p className="text-slate-500 text-xs">Your ICAN Coins</p>
+                          <p className="text-slate-500 text-xs">Your IcanEra Coins</p>
                         </div>
                         
                         <div className="bg-slate-800/60 rounded-lg p-3">
@@ -3551,7 +3551,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                     Trade Tab - COMMENTED OUT
                     {walletTab === 'trade' && (
                       <div className="text-center py-6">
-                        <p className="text-slate-400 text-sm">Trade ICAN coins for local currency</p>
+                        <p className="text-slate-400 text-sm">Trade IcanEra coins for local currency</p>
                         <button className="mt-4 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-sm">
                           Open Trade
                         </button>
@@ -3564,7 +3564,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                       <div className="space-y-3">
                         <div className="bg-slate-800/60 rounded-lg p-4">
                           <div className="flex items-center justify-between mb-3">
-                            <p className="text-slate-400 text-sm font-semibold">ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€šÃ‚Â° Your ICAN Coin Balance</p>
+                            <p className="text-slate-400 text-sm font-semibold">ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€šÃ‚Â° Your IcanEra Coin Balance</p>
                             <button 
                               onClick={refreshWalletBalance}
                               disabled={loadingWallet}
@@ -3590,7 +3590,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                               
                               {walletBalance <= 0 && (
                                 <div className="mt-3 bg-red-500/10 border border-red-500/30 rounded p-2">
-                                  <p className="text-red-400 text-xs">ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â No ICAN coins. Go to ICAN Wallet to purchase coins.</p>
+                                  <p className="text-red-400 text-xs">ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â No IcanEra coins. Go to IcanEra Wallet to purchase coins.</p>
                                 </div>
                               )}
                             </>
@@ -3603,10 +3603,10 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
 
 
                 <div className="border-t border-slate-700 pt-4 space-y-3">
-                  <h4 className="text-slate-300 font-semibold text-sm">ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã‚Â  Investment Breakdown (ICAN Coins)</h4>
+                  <h4 className="text-slate-300 font-semibold text-sm">ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã‚Â  Investment Breakdown (IcanEra Coins)</h4>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-400">Investment Amount (ICAN):</span>
+                      <span className="text-slate-400">Investment Amount (IcanEra):</span>
                       <span className="text-2xl font-bold text-yellow-400">ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ {investmentInIcanCoins.toFixed(2)} coins</span>
                       <span className="text-xs text-slate-400">= {allowedCurrency} {totalInvestment.toFixed(0)}</span>
                     </div>
@@ -3617,7 +3617,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                       </span>
                     </div>
                     <div className="border-t border-slate-700 pt-3 flex items-center justify-between">
-                      <span className="text-slate-400">ICAN Coins Remaining:</span>
+                      <span className="text-slate-400">IcanEra Coins Remaining:</span>
                       <span className={`text-xl font-semibold ${(effectivePayableBalance - totalInvestment) < 0 ? 'text-red-400' : 'text-green-400'}`}>
                         ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ {(effectivePayableBalance - investmentInIcanCoins).toFixed(2)} coins
                       </span>
@@ -3625,7 +3625,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                     <div className="border-t border-slate-700 pt-3 flex items-center justify-between">
                       <span className="text-slate-400">ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½ Payment Method:</span>
                       <span className="text-sm font-semibold text-yellow-300">
-                        {paymentSourceType === 'business' ? `${selectedPayerBusinessProfile?.business_name || 'Business'} Wallet` : 'Personal Wallet'} (ICAN Coins)
+                        {paymentSourceType === 'business' ? `${selectedPayerBusinessProfile?.business_name || 'Business'} Wallet` : 'Personal Wallet'} (IcanEra Coins)
                       </span>
                     </div>
                   </div>
@@ -3660,7 +3660,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
               <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 space-y-2">
                 <p className="text-blue-300 text-sm flex gap-2">
                   <span>ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€šÃ‚Â³</span>
-                  <span><strong>Escrow Protection:</strong> Your {allowedCurrency} {totalInvestment.toFixed(2)} investment will be securely held in ICAN Escrow until {signatures.length >= mockShareholders.length * 0.6 ? 'completed' : '60% of shareholders sign'}.</span>
+                  <span><strong>Escrow Protection:</strong> Your {allowedCurrency} {totalInvestment.toFixed(2)} investment will be securely held in IcanEra Escrow until {signatures.length >= mockShareholders.length * 0.6 ? 'completed' : '60% of shareholders sign'}.</span>
                 </p>
                 <p className="text-blue-300 text-sm flex gap-2">
                   <span>ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â</span>
@@ -3676,7 +3676,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                   }
                   const investmentInCoins = investmentInIcanCoins;
                   if (effectivePayableBalance < investmentInCoins) {
-                    alert(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Insufficient balance!\n\nYour wallet: ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ ${effectivePayableBalance.toFixed(2)} ICAN coins\nRequired: ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ ${investmentInCoins.toFixed(2)} ICAN coins\nShortfall: ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ ${(investmentInCoins - effectivePayableBalance).toFixed(2)}`);
+                    alert(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Insufficient balance!\n\nYour wallet: ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ ${effectivePayableBalance.toFixed(2)} IcanEra coins\nRequired: ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ ${investmentInCoins.toFixed(2)} IcanEra coins\nShortfall: ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€¦Ã‚Â½ ${(investmentInCoins - effectivePayableBalance).toFixed(2)}`);
                     return;
                   }
                   setStage(6);
@@ -3716,9 +3716,9 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                     <ul className="rounded-lg border border-slate-700/70 bg-slate-900/40 divide-y divide-slate-700/60 overflow-hidden">
                       {[
                         ['Amount to Escrow', `${allowedCurrency} ${totalInvestment.toFixed(2)}`],
-                        ['ICAN Required', `${investmentInIcanCoins.toFixed(2)} coins`],
-                        ['Wallet Balance', `${walletBalance.toFixed(2)} ICAN`],
-                        ['Payment Method', 'ICAN Wallet PIN'],
+                        ['IcanEra Required', `${investmentInIcanCoins.toFixed(2)} coins`],
+                        ['Wallet Balance', `${walletBalance.toFixed(2)} IcanEra`],
+                        ['Payment Method', 'IcanEra Wallet PIN'],
                         ['Security', 'PIN verification creates your sealed signature']
                       ].map(([label, value]) => (
                         <li key={label} className="px-3.5 py-3">
@@ -3733,7 +3733,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
 
               <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 p-4 space-y-4">
                 <p className="text-slate-300 text-sm">
-                  Enter your ICAN Wallet PIN (4-6 digits) to authorize and seal this investment.
+                  Enter your IcanEra Wallet PIN (4-6 digits) to authorize and seal this investment.
                 </p>
 
                 <div className="space-y-4">
@@ -3820,12 +3820,12 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 </p>
                 <p className="text-blue-300 text-sm flex gap-2">
                   <span>ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â</span>
-                  <span><strong>Wallet PIN Required:</strong> Your ICAN Wallet PIN will authorize the payment to escrow and be recorded as your sealed signature for this investment.</span>
+                  <span><strong>Wallet PIN Required:</strong> Your IcanEra Wallet PIN will authorize the payment to escrow and be recorded as your sealed signature for this investment.</span>
                 </p>
               </div>
 
               <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-                <p className="text-slate-300 mb-4">Enter your ICAN Wallet PIN (4-6 digits) to authorize and seal this investment:</p>
+                <p className="text-slate-300 mb-4">Enter your IcanEra Wallet PIN (4-6 digits) to authorize and seal this investment:</p>
                 
                 <div className="space-y-4">
                   <div>
@@ -4059,7 +4059,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
 
               <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
                 <p className="text-blue-300 text-sm">
-                  Your payment of {allowedCurrency} {totalInvestment.toFixed(2)} is securely held in ICAN escrow. Once 60% of shareholders sign, your investment will be finalized and added to the business profile.
+                  Your payment of {allowedCurrency} {totalInvestment.toFixed(2)} is securely held in IcanEra escrow. Once 60% of shareholders sign, your investment will be finalized and added to the business profile.
                 </p>
               </div>
 
@@ -4281,7 +4281,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
 
               <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
                 <p className="text-blue-300 text-sm">
-                  ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â³ Your payment of ${totalInvestment.toFixed(2)} is securely held in ICAN Escrow. Once 60% of shareholders sign, your investment will be automatically sealed and you'll be added to the business profile.
+                  ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â³ Your payment of ${totalInvestment.toFixed(2)} is securely held in IcanEra Escrow. Once 60% of shareholders sign, your investment will be automatically sealed and you'll be added to the business profile.
                 </p>
               </div>
 
@@ -4508,7 +4508,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                         )}
 
                         <div className="text-xs text-gray-600 text-center border-t border-gray-300 pt-3 space-y-1">
-                          <p className="font-semibold text-gray-900">This document is sealed and recorded in ICAN Escrow System.</p>
+                          <p className="font-semibold text-gray-900">This document is sealed and recorded in IcanEra Escrow System.</p>
                           <p>Approval threshold: {totalShareholderCount > 0 ? ((signedShareholderCount / totalShareholderCount) * 100).toFixed(1) : 0}% / 60% required.</p>
                           <p>Generated: {new Date().toLocaleString()}</p>
                         </div>
@@ -4887,13 +4887,13 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                       <p>ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ <span className="font-semibold">Investor</span> - Can download this document for records</p>
                       <p>ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ <span className="font-semibold">Creator/Business Owner</span> - Will receive document link after signing</p>
                       <p>ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ <span className="font-semibold">All Shareholders</span> - Will receive document link after 60% approval threshold is met</p>
-                      <p className="text-xs text-gray-600 mt-2">Documents are encrypted and stored in ICAN Escrow System for 7 years</p>
+                      <p className="text-xs text-gray-600 mt-2">Documents are encrypted and stored in IcanEra Escrow System for 7 years</p>
                     </div>
                   </div>
 
                   {/* Footer */}
                   <div className="border-t-2 border-gray-300 pt-4 text-center text-xs text-gray-600 space-y-1">
-                    <p className="font-semibold text-gray-900">ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ This document is sealed and recorded in ICAN Escrow System</p>
+                    <p className="font-semibold text-gray-900">ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ This document is sealed and recorded in IcanEra Escrow System</p>
                     <p>Escrow Status: {getActualShareholders().length > 0 && (signatures.length / getActualShareholders().length) >= 0.60 ? 'APPROVED FOR PRINTING' : 'ACTIVE'}</p>
                     <p>Threshold: {getActualShareholders().length > 0 ? ((signatures.length / getActualShareholders().length) * 100).toFixed(1) : 0}% / 60% Required</p>
                     <p>Creator Signed: {signatures.some(s => s.type === 'creator') ? 'ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ YES' : 'ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â³ AWAITING'}</p>
@@ -4999,7 +4999,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
 
               <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
                 <p className="text-green-300 text-sm">
-                  ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Investment sealed and recorded! You have been successfully added as a shareholder to <strong>{sellerBusinessProfile?.business_name || pitch?.title || 'the business'}</strong> for "<strong>{pitch?.title}</strong>". Your ${totalInvestment.toFixed(2)} investment ({sharesAmount} shares) is now active in ICAN Escrow.
+                  ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Investment sealed and recorded! You have been successfully added as a shareholder to <strong>{sellerBusinessProfile?.business_name || pitch?.title || 'the business'}</strong> for "<strong>{pitch?.title}</strong>". Your ${totalInvestment.toFixed(2)} investment ({sharesAmount} shares) is now active in IcanEra Escrow.
                 </p>
               </div>
             </div>

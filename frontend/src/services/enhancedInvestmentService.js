@@ -76,8 +76,8 @@ export class EnhancedInvestmentService {
           percentageLeft: (100 - allocationPercentage).toFixed(1)
         },
         message: allowed
-          ? `✅ Investment allowed. You can invest up to ${sixtyPercentOf} ICAN total.`
-          : `❌ Investment exceeds 60% cap. Maximum remaining: ${Math.max(0, sixtyPercentOf - existingTotal)} ICAN`
+          ? `✅ Investment allowed. You can invest up to ${sixtyPercentOf} IcanEra total.`
+          : `❌ Investment exceeds 60% cap. Maximum remaining: ${Math.max(0, sixtyPercentOf - existingTotal)} IcanEra`
       };
     } catch (error) {
       console.error('❌ Allocation check failed:', error);

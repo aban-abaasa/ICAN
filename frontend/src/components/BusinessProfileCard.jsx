@@ -199,7 +199,7 @@ const BusinessProfileCard = ({ profile, onEdit, onSelect, onNotification, onShar
               <Users className="w-5 h-5" />
               <div className="hidden group-hover/team:block absolute right-0 top-full mt-2 bg-slate-900 border border-slate-700 rounded-lg p-2 w-48 z-50 text-xs text-white shadow-lg">
                 <p className="font-semibold text-slate-300 mb-1">👥 Team Members</p>
-                <p className="text-slate-400">Give existing ICAN accounts access to record transactions here</p>
+                <p className="text-slate-400">Give existing IcanEra accounts access to record transactions here</p>
               </div>
             </button>
           )}
@@ -369,7 +369,7 @@ const BusinessProfileCard = ({ profile, onEdit, onSelect, onNotification, onShar
           <div className="space-y-3">
             <div className="flex items-center gap-2 mb-2">
               <Wallet className="w-4 h-4 text-green-400" />
-              <p className="text-slate-400 text-xs font-semibold">ICANERA BUSINESS WALLET</p>
+              <p className="text-slate-400 text-xs font-semibold">IcanEra Business Wallet</p>
               <span className="ml-auto text-xs bg-green-900/50 text-green-300 px-2 py-1 rounded">✓ Active</span>
             </div>
             
@@ -393,8 +393,8 @@ const BusinessProfileCard = ({ profile, onEdit, onSelect, onNotification, onShar
 
               {businessWallet.ican_balance !== undefined ? (
                 <div className="flex justify-between text-sm">
-                  <span className="text-slate-400 text-xs">ICAN Balance</span>
-                  <span className="text-green-400 font-semibold">{Number(businessWallet.ican_balance || 0).toLocaleString()} ICAN</span>
+                  <span className="text-slate-400 text-xs">IcanEra Balance</span>
+                  <span className="text-green-400 font-semibold">{Number(businessWallet.ican_balance || 0).toLocaleString()} IcanEra</span>
                 </div>
               ) : businessWallet.preferred_currency && (
                 <div className="flex justify-between text-sm">

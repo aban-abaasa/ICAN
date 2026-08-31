@@ -183,7 +183,7 @@ export default function AllocationChecker({
             <div className="bg-slate-900/30 rounded-lg p-3">
               <p className="text-slate-400 text-xs">Your Current</p>
               <p className="text-white font-bold text-sm mt-1">
-                {details.existingAllocation.toFixed(0)} ICAN
+                {details.existingAllocation.toFixed(0)} IcanEra
               </p>
               <p className="text-slate-300 text-xs mt-0.5">
                 {((details.existingAllocation / details.targetFunding) * 100).toFixed(1)}% of target
@@ -194,7 +194,7 @@ export default function AllocationChecker({
             <div className="bg-slate-900/30 rounded-lg p-3">
               <p className="text-slate-400 text-xs">You're Adding</p>
               <p className="text-blue-300 font-bold text-sm mt-1">
-                {proposedAmountIcan.toFixed(0)} ICAN
+                {proposedAmountIcan.toFixed(0)} IcanEra
               </p>
               <p className="text-slate-300 text-xs mt-0.5">
                 {((proposedAmountIcan / details.targetFunding) * 100).toFixed(1)}% of target
@@ -217,7 +217,7 @@ export default function AllocationChecker({
                 isNearCap ? 'text-yellow-300' :
                 'text-emerald-300'
               }`}>
-                {details.totalAllocation.toFixed(0)} ICAN
+                {details.totalAllocation.toFixed(0)} IcanEra
               </p>
               <p className={`text-sm ${
                 isAtCap ? 'text-red-300' :
@@ -237,7 +237,7 @@ export default function AllocationChecker({
             <div>
               <p className="text-emerald-300 text-xs font-semibold">Still Room to Invest</p>
               <p className="text-emerald-200/70 text-xs mt-0.5">
-                You can add up to {details.remainingAllocation.toFixed(0)} more ICAN to this business
+                You can add up to {details.remainingAllocation.toFixed(0)} more IcanEra to this business
               </p>
             </div>
           </div>
@@ -254,7 +254,7 @@ export default function AllocationChecker({
                 This ensures diverse ownership and reduces concentration risk.
               </p>
               <p className="text-red-200 text-xs font-semibold mt-2">
-                💡 Reduce your investment to {Math.max(0, details.remainingAllocation).toFixed(0)} ICAN or less
+                💡 Reduce your investment to {Math.max(0, details.remainingAllocation).toFixed(0)} IcanEra or less
               </p>
             </div>
           </div>

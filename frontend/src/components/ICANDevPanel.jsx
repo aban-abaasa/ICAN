@@ -208,7 +208,7 @@ const GlowDot = ({ color='#10b981' }) => (
 const ValueChip = ({ ican }) => (
   <div className="text-right flex-shrink-0">
     <p className="text-sm font-black text-cyan-500 leading-none">{fmtI(ican)}</p>
-    <p className="text-[9px] mt-0.5" style={{ color:'var(--dp-muted)' }}>ICAN · {fmtUGX(ican)}</p>
+    <p className="text-[9px] mt-0.5" style={{ color:'var(--dp-muted)' }}>IcanEra · {fmtUGX(ican)}</p>
   </div>
 );
 
@@ -318,7 +318,7 @@ const MessagesTab = () => {
     if (!body || !selectedId || sending) return;
     setSending(true);
     try {
-      const msg = await sendChatMessage(selectedId, { senderRole: 'dev', senderName: 'ICAN Team', body });
+      const msg = await sendChatMessage(selectedId, { senderRole: 'dev', senderName: 'IcanEra Team', body });
       setMessages(prev => [...prev, msg]);
       setReply('');
     } catch (e) {
@@ -395,7 +395,7 @@ const MessagesTab = () => {
             <div className="flex items-center gap-2 border-t px-3 py-3" style={{ borderColor:'var(--dp-sep)' }}>
               <input value={reply} onChange={e => setReply(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') handleReply(); }}
-                placeholder="Reply as ICAN Team…"
+                placeholder="Reply as IcanEra Team…"
                 className="flex-1 rounded-xl border px-3 py-2 text-sm outline-none transition"
                 style={{ background:'var(--dp-input)', borderColor:'var(--dp-input-bd)', color:'var(--dp-txt)' }} />
               <button onClick={handleReply} disabled={sending || !reply.trim()}
@@ -457,7 +457,7 @@ const PublicBoardTab = () => {
     if (!body || replying) return;
     setReplying(true);
     try {
-      await devReplyToLandingMessage(DEV_TOKEN, id, body, 'ICAN Team');
+      await devReplyToLandingMessage(DEV_TOKEN, id, body, 'IcanEra Team');
       setReplyDraft('');
       await refresh();
     } catch (e) {
@@ -500,7 +500,7 @@ const PublicBoardTab = () => {
       await refresh();
     } catch (e) {
       console.warn('[PublicBoardTab] failed to grant bonus:', e);
-      setGrantError(e?.message || 'Failed to grant ICAN.');
+      setGrantError(e?.message || 'Failed to grant IcanEra.');
     } finally {
       setGrantingId(null);
     }
@@ -563,7 +563,7 @@ const PublicBoardTab = () => {
                     <button onClick={() => handleOpenGrant(m.id)}
                       className="inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[10px] font-semibold transition"
                       style={{ borderColor:'rgba(245,158,11,0.3)', background:'rgba(245,158,11,0.1)', color:'#f59e0b' }}>
-                      <Gift size={11}/> Grant ICAN to {m.name || 'this poster'}
+                      <Gift size={11}/> Grant IcanEra to {m.name || 'this poster'}
                     </button>
                     {grantTargetId === m.id && (
                       <div className="mt-1.5 flex items-center gap-2">
@@ -588,7 +588,7 @@ const PublicBoardTab = () => {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-xs font-semibold" style={{ color:'var(--dp-txt)' }}>
-                          {r.sender_role === 'dev' ? 'ICAN Team' : (r.name || 'Website visitor')}
+                          {r.sender_role === 'dev' ? 'IcanEra Team' : (r.name || 'Website visitor')}
                         </p>
                         {r.reward_reason && <Badge label="🪙 Correct answer" cls="bg-amber-500/10 text-amber-400 border-amber-500/20"/>}
                         <span className="text-[10px]" style={{ color:'var(--dp-muted)' }}>{fmtTime(r.created_at)}</span>
@@ -599,14 +599,14 @@ const PublicBoardTab = () => {
                           <button onClick={() => handleMarkCorrect(r.id)} disabled={markingId === r.id}
                             className="inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[10px] font-semibold transition disabled:opacity-40"
                             style={{ borderColor:'rgba(34,197,94,0.3)', background:'rgba(34,197,94,0.1)', color:'#4ade80' }}>
-                            <CheckCircle size={11}/> {markingId === r.id ? 'Marking…' : 'Mark correct answer (+1 ICAN)'}
+                            <CheckCircle size={11}/> {markingId === r.id ? 'Marking…' : 'Mark correct answer (+1 IcanEra)'}
                           </button>
                         )}
                         {r.sender_role !== 'dev' && r.user_id && (
                           <button onClick={() => handleOpenGrant(r.id)}
                             className="inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[10px] font-semibold transition"
                             style={{ borderColor:'rgba(245,158,11,0.3)', background:'rgba(245,158,11,0.1)', color:'#f59e0b' }}>
-                            <Gift size={11}/> Grant ICAN
+                            <Gift size={11}/> Grant IcanEra
                           </button>
                         )}
                       </div>
@@ -641,7 +641,7 @@ const PublicBoardTab = () => {
                   <div className="flex items-center gap-2 pt-1">
                     <input value={replyDraft} onChange={e => setReplyDraft(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') handleReply(m.id); }}
-                      placeholder="Reply as ICAN Team…"
+                      placeholder="Reply as IcanEra Team…"
                       className="flex-1 rounded-xl border px-3 py-2 text-sm outline-none transition"
                       style={{ background:'var(--dp-input)', borderColor:'var(--dp-input-bd)', color:'var(--dp-txt)' }}/>
                     <button onClick={() => handleReply(m.id)} disabled={replying || !replyDraft.trim()}
@@ -986,7 +986,7 @@ const ICANDevDashboard = ({ onExit }) => {
                 style={{ background:'#10b981', borderColor: dark ? '#07091a' : '#fff', boxShadow:'0 0 6px #10b981' }} />
             </div>
             <div>
-              <p className="text-[8px] font-bold uppercase tracking-[0.25em]" style={{ color:'var(--dp-muted)' }}>ICAN Capital</p>
+              <p className="text-[8px] font-bold uppercase tracking-[0.25em]" style={{ color:'var(--dp-muted)' }}>IcanEra Capital</p>
               <p className="text-sm font-black leading-tight bg-gradient-to-r from-cyan-500 to-blue-500 bg-clip-text text-transparent">Dev Console</p>
             </div>
           </div>
@@ -1067,7 +1067,7 @@ const ICANDevDashboard = ({ onExit }) => {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatCard Icon={Users}       label="Users"        value={loading?'—':fmt(users.length)}      color="#8b5cf6" loading={loading} sub={`${wallets.length} wallets active`}/>
             <StatCard Icon={Layers}      label="Companies"    value={loading?'—':fmt(companies.length)}  color="#6366f1" loading={loading} sub={`${fmt(totalMembers)} members`}/>
-            <StatCard Icon={Building2}   label="Businesses"   value={loading?'—':fmt(businesses.length)} color="#10b981" loading={loading} sub={`${fmtI(totalR)} ICAN raised`}/>
+            <StatCard Icon={Building2}   label="Businesses"   value={loading?'—':fmt(businesses.length)} color="#10b981" loading={loading} sub={`${fmtI(totalR)} IcanEra raised`}/>
             <StatCard Icon={ShieldCheck} label="Trust Groups" value={loading?'—':fmt(groups.length)}     color="#f59e0b" loading={loading} sub={`${activeAgents} active agents`}/>
           </div>
 
@@ -1082,7 +1082,7 @@ const ICANDevDashboard = ({ onExit }) => {
                 <Zap size={13} className="text-cyan-500"/>
               </div>
               <div>
-                <p className="text-xs font-black tracking-widest uppercase text-cyan-500">icaneracoin Economy</p>
+                <p className="text-xs font-black tracking-widest uppercase text-cyan-500">IcanEra Economy</p>
                 <p className="text-[9px]" style={{ color:'var(--dp-muted)' }}>Live network snapshot · all values from Supabase</p>
               </div>
               <div className="ml-auto flex items-center gap-1.5"><GlowDot color="#10b981"/><span className="text-[10px] font-bold text-emerald-500">LIVE</span></div>
@@ -1093,7 +1093,7 @@ const ICANDevDashboard = ({ onExit }) => {
               {[
                 { label:'Floor Price',        val: `${fmt(ICAN_TO_UGX)} UGX`,       sub:'permanent peg',                              color:'#06b6d4' },
                 { label:'Live Price',         val: loading?'—':`${fmt(livePrice)} UGX`, sub:`${priceChg>=0?'+':''}${priceChg.toFixed(2)}% 24h`, color: priceChg>=0?'#10b981':'#ef4444' },
-                { label:'Circulating Supply', val: loading?'—':`${fmtI(totalI)}`,    sub:'ICAN across all wallets',                    color:'#8b5cf6' },
+                { label:'Circulating Supply', val: loading?'—':`${fmtI(totalI)}`,    sub:'IcanEra across all wallets',                    color:'#8b5cf6' },
                 { label:'Network UGX Value',  val: loading?'—':`UGX ${(totalNetworkUGX/1e6).toFixed(2)}M`, sub:'supply × live price', color:'#f59e0b' },
               ].map(r=>(
                 <div key={r.label} className="rounded-xl border p-3 text-center transition-colors"
@@ -1180,11 +1180,11 @@ const ICANDevDashboard = ({ onExit }) => {
                 </div>
                 <div className="space-y-2.5">
                   {[
-                    { label:'Wallet holdings',   val:fmtI(totalI),            unit:'ICAN', color:'#06b6d4',  bar: pct(totalI, totalE||1) },
-                    { label:'Business raised',   val:fmtI(totalR),            unit:'ICAN', color:'#10b981',  bar: businesses.length>0?pct(businesses.filter(b=>Number(b.raised_amount)>0).length,businesses.length):0 },
+                    { label:'Wallet holdings',   val:fmtI(totalI),            unit:'IcanEra', color:'#06b6d4',  bar: pct(totalI, totalE||1) },
+                    { label:'Business raised',   val:fmtI(totalR),            unit:'IcanEra', color:'#10b981',  bar: businesses.length>0?pct(businesses.filter(b=>Number(b.raised_amount)>0).length,businesses.length):0 },
                     { label:'Agent liquidity',   val:fmtI(totalFl),           unit:'UGX',  color:'#f97316',  bar: agentPct },
-                    { label:'Group savings',     val:fmtI(totalGroupSavings), unit:'ICAN', color:'#f59e0b',  bar: groupPct },
-                    { label:'Tx volume (total)', val:fmtI(totalTxVol),        unit:'ICAN', color:'#ec4899',  bar: pct(txs.length,200) },
+                    { label:'Group savings',     val:fmtI(totalGroupSavings), unit:'IcanEra', color:'#f59e0b',  bar: groupPct },
+                    { label:'Tx volume (total)', val:fmtI(totalTxVol),        unit:'IcanEra', color:'#ec4899',  bar: pct(txs.length,200) },
                   ].map(r=>(
                     <div key={r.label}>
                       <div className="flex items-center justify-between mb-0.5">
@@ -1284,7 +1284,7 @@ const ICANDevDashboard = ({ onExit }) => {
                   </div>
                   <div className="text-right flex-shrink-0">
                     <p className="text-2xl font-black text-emerald-500">{fmt(fairUgx)}</p>
-                    <p className="text-[9px] font-bold text-emerald-500">UGX / ICAN</p>
+                    <p className="text-[9px] font-bold text-emerald-500">UGX / IcanEra</p>
                     <p className="text-[9px] font-bold text-cyan-500">${fairUsd.toFixed(4)} USD</p>
                   </div>
                 </div>
@@ -1301,7 +1301,7 @@ const ICANDevDashboard = ({ onExit }) => {
                     <div className="flex-1 min-w-0">
                       <p className="text-[9px] font-bold uppercase tracking-widest" style={{ color:'var(--dp-muted)' }}>USD Anchor — fixed forever</p>
                       <p className="text-[10px]" style={{ color:'var(--dp-sub)' }}>
-                        At launch: {fmt(origFloor)} UGX ÷ {fmt(initRate)} UGX/USD = <span className="font-black text-cyan-500">${baseUsd.toFixed(6)} USD per ICAN</span>
+                        At launch: {fmt(origFloor)} UGX ÷ {fmt(initRate)} UGX/USD = <span className="font-black text-cyan-500">${baseUsd.toFixed(6)} USD per IcanEra</span>
                       </p>
                     </div>
                     <span className="text-xs font-black text-cyan-500 flex-shrink-0">${baseUsd.toFixed(4)}</span>
@@ -1388,7 +1388,7 @@ const ICANDevDashboard = ({ onExit }) => {
                       <p className="text-[9px] text-red-500 mt-1">Lost {deprPct.toFixed(2)}% vs USD</p>
                     </div>
                     <div className="rounded-xl border p-3" style={{ background:'rgba(16,185,129,0.06)', borderColor:'rgba(16,185,129,0.25)' }}>
-                      <p className="text-[9px] font-bold text-emerald-500 mb-2 uppercase tracking-wide">If you held 1 ICAN instead</p>
+                      <p className="text-[9px] font-bold text-emerald-500 mb-2 uppercase tracking-wide">If you held 1 IcanEra instead</p>
                       <p className="text-lg font-black text-emerald-500">${fairUsd.toFixed(4)}</p>
                       <p className="text-[9px]" style={{ color:'var(--dp-muted)' }}>USD value today</p>
                       <p className="text-[9px] text-emerald-500 mt-1">Protected + {appPct.toFixed(2)}% gain</p>
@@ -1409,7 +1409,7 @@ const ICANDevDashboard = ({ onExit }) => {
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-black uppercase tracking-widest text-cyan-500">Global Currency Stability</p>
                     <p className="text-[9px] mt-0.5" style={{ color:'var(--dp-muted)' }}>
-                      ICAN price in every country's local currency · green = ICAN outpaces local inflation
+                      IcanEra price in every country's local currency · green = IcanEra outpaces local inflation
                     </p>
                   </div>
                   <div className="text-right flex-shrink-0">
@@ -1479,7 +1479,7 @@ const ICANDevDashboard = ({ onExit }) => {
                               </span>
                             </div>
                             <p className="text-[9px]" style={{ color:'var(--dp-muted)' }}>
-                              1 ICAN = <span className="font-black" style={{ color:'var(--dp-sub)' }}>{fmtLocal(fairLocal)} {row.currency_code}</span>
+                              1 IcanEra = <span className="font-black" style={{ color:'var(--dp-sub)' }}>{fmtLocal(fairLocal)} {row.currency_code}</span>
                               {fxLift > 0.0001 && (
                                 <span className="text-amber-500 ml-1.5">
                                   (was {fmtLocal(origLocal)} · +{fmtLocal(fxLift)} FX shield)
@@ -1505,7 +1505,7 @@ const ICANDevDashboard = ({ onExit }) => {
                     style={{ background:'rgba(6,182,212,0.06)', borderColor:'rgba(6,182,212,0.15)' }}>
                     <GlowDot color="#06b6d4"/>
                     <p className="text-[9px]" style={{ color:'var(--dp-sub)' }}>
-                      <span className="font-black text-cyan-500">{protectedCount}/{globalFx.length} countries</span> where ICAN appreciation already outpaces local inflation.
+                      <span className="font-black text-cyan-500">{protectedCount}/{globalFx.length} countries</span> where IcanEra appreciation already outpaces local inflation.
                       As network usage grows, every country becomes protected.
                     </p>
                   </div>
@@ -1539,7 +1539,7 @@ const ICANDevDashboard = ({ onExit }) => {
             )}
             <div className="rounded-2xl border p-5 transition-colors"
               style={{ background:'var(--dp-card)', borderColor:'var(--dp-card-bd)' }}>
-              <p className="text-[10px] font-bold uppercase tracking-widest mb-4" style={{ color:'var(--dp-muted)' }}>Top ICAN Holders</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest mb-4" style={{ color:'var(--dp-muted)' }}>Top IcanEra Holders</p>
               {loading ? [1,2,3].map(i=><Skel key={i} h="h-7" cls="mb-2"/>) : (
                 <div className="space-y-3">
                   {[...wallets].sort((a,b)=>Number(b.ican_balance)-Number(a.ican_balance)).slice(0,5).map((w,i)=>{
@@ -1583,7 +1583,7 @@ const ICANDevDashboard = ({ onExit }) => {
                   </div>
                   <span className="text-[10px] font-mono flex-1 truncate" style={{ color:'var(--dp-muted)' }}>{truncHash(tx.tx_hash)||fmtTime(tx.created_at)}</span>
                   <Badge label={tx.tx_type||'tx'} cls="border text-[9px]"/>
-                  <span className="text-xs font-black text-cyan-500 flex-shrink-0">{fmtI(tx.ican_amount)} ICAN</span>
+                  <span className="text-xs font-black text-cyan-500 flex-shrink-0">{fmtI(tx.ican_amount)} IcanEra</span>
                   <span className={`text-[10px] font-semibold flex-shrink-0 ${tx.status==='confirmed'||tx.status==='completed'?'text-emerald-500':'text-amber-500'}`}>{tx.status}</span>
                 </div>
               ))}
@@ -1597,7 +1597,7 @@ const ICANDevDashboard = ({ onExit }) => {
         {tab==='users' && (<>
           <div className="flex items-center justify-between">
             <p className="text-sm font-black" style={{ color:'var(--dp-txt)' }}>Users <span style={{ color:'var(--dp-muted)' }}>({users.length})</span></p>
-            <p className="text-xs" style={{ color:'var(--dp-sub)' }}>Total: <span className="font-bold text-cyan-500">{fmtI(totalI)} ICAN</span></p>
+            <p className="text-xs" style={{ color:'var(--dp-sub)' }}>Total: <span className="font-bold text-cyan-500">{fmtI(totalI)} IcanEra</span></p>
           </div>
           {loading&&[1,2,3,4].map(i=><Skel key={i} h="h-24"/>)}
           {filt(users,['account_holder_name','email','phone_number','account_number']).map(u=>{
@@ -1632,7 +1632,7 @@ const ICANDevDashboard = ({ onExit }) => {
                       <div className="mt-2 rounded-lg border px-2.5 py-1.5" style={{ background:'rgba(16,185,129,0.06)', borderColor:'rgba(16,185,129,0.2)' }}>
                         <div className="flex items-center justify-between gap-2">
                           <div>
-                            <p className="text-[9px] font-bold text-emerald-500">1 ICAN in {fxRow.country_name}</p>
+                            <p className="text-[9px] font-bold text-emerald-500">1 IcanEra in {fxRow.country_name}</p>
                             <p className="text-[10px] font-black" style={{ color:'var(--dp-txt)' }}>
                               {localPrice >= 1000
                                 ? localPrice.toLocaleString('en',{maximumFractionDigits:0})
@@ -1811,7 +1811,7 @@ const ICANDevDashboard = ({ onExit }) => {
                     {g.description&&<p className="text-xs line-clamp-1" style={{ color:'var(--dp-sub)' }}>{g.description}</p>}
                     <div className="mt-1.5 flex flex-wrap gap-3 text-[10px]" style={{ color:'var(--dp-muted)' }}>
                       {g.member_count!=null&&<span className="flex items-center gap-1"><Users size={9} style={{ color:'#f59e0b' }}/>{fmt(g.member_count)} members</span>}
-                      {g.total_savings!=null&&<span className="flex items-center gap-1"><Wallet size={9} style={{ color:'#f59e0b' }}/>{fmtI(g.total_savings)} ICAN</span>}
+                      {g.total_savings!=null&&<span className="flex items-center gap-1"><Wallet size={9} style={{ color:'#f59e0b' }}/>{fmtI(g.total_savings)} IcanEra</span>}
                       <span className="flex items-center gap-1"><Clock size={9}/>{fmtDate(g.created_at)}</span>
                     </div>
                   </div>
@@ -1918,7 +1918,7 @@ const ICANDevDashboard = ({ onExit }) => {
                 { label:'Floor price',  val:`${fmt(market?.price_ugx??5000)} UGX`, color:'#06b6d4' },
                 { label:'24h change',   val:market?`${priceChg>=0?'+':''}${priceChg.toFixed(2)}%`:'—', color:priceChg>=0?'#10b981':'#ef4444' },
                 { label:'Market cap',   val:`UGX ${fmt(market?.market_cap)}`, color:'#8b5cf6' },
-                { label:'Supply',       val:`${fmtI(totalI)} ICAN`, color:'#f59e0b' },
+                { label:'Supply',       val:`${fmtI(totalI)} IcanEra`, color:'#f59e0b' },
               ].map(r=>(
                 <div key={r.label} className="rounded-xl border p-3 transition-colors"
                   style={{ background:'var(--dp-inner)', borderColor:'var(--dp-inner-bd)' }}>
@@ -1948,7 +1948,7 @@ const ICANDevDashboard = ({ onExit }) => {
                     <div key={type} className="rounded-xl border p-3 transition-colors" style={{ background:'var(--dp-inner)', borderColor:'var(--dp-inner-bd)' }}>
                       <p className="text-2xl font-black text-cyan-500">{d.count}</p>
                       <p className="text-xs capitalize font-medium" style={{ color:'var(--dp-sub)' }}>{type}</p>
-                      <p className="text-[10px]" style={{ color:'var(--dp-muted)' }}>{fmtI(d.total)} ICAN</p>
+                      <p className="text-[10px]" style={{ color:'var(--dp-muted)' }}>{fmtI(d.total)} IcanEra</p>
                     </div>
                   ))}
                 </div>
@@ -1969,7 +1969,7 @@ const ICANDevDashboard = ({ onExit }) => {
                   <p className="text-[10px]" style={{ color:'var(--dp-muted)' }}>Type: {tx.tx_type||'—'} · Block #{fmt(tx.block_number)} · {fmtTime(tx.created_at)}</p>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="text-sm font-black text-cyan-500">{fmtI(tx.ican_amount)} ICAN</p>
+                  <p className="text-sm font-black text-cyan-500">{fmtI(tx.ican_amount)} IcanEra</p>
                   <Badge label={tx.status||'—'} cls={tx.status==='confirmed'?'bg-emerald-500/10 text-emerald-600 border-emerald-500/20':tx.status==='pending'?'bg-amber-500/10 text-amber-600 border-amber-500/20':'border-slate-500/20'} style={{ color:tx.status?undefined:'var(--dp-muted)' }}/>
                 </div>
               </div>
@@ -2021,7 +2021,7 @@ const ICANDevDashboard = ({ onExit }) => {
                       <div className="min-w-0">
                         <p className="font-semibold truncate" style={{ color:'var(--dp-txt)' }}>{u.account_holder_name||'—'}</p>
                         <p className="text-xs truncate" style={{ color:'var(--dp-sub)' }}>{u.email}</p>
-                        <p className="text-[10px]" style={{ color:'var(--dp-muted)' }}>{fmtI(w?.ican_balance||0)} ICAN</p>
+                        <p className="text-[10px]" style={{ color:'var(--dp-muted)' }}>{fmtI(w?.ican_balance||0)} IcanEra</p>
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-1.5 items-center flex-shrink-0">
@@ -2082,7 +2082,7 @@ const LoginGate = ({ onAuth }) => {
             <span className="absolute -right-1 -top-1 h-4 w-4 rounded-full border-2 bg-emerald-400"
               style={{ borderColor:'#07091a', boxShadow:'0 0 10px #10b981' }}/>
           </div>
-          <h1 className="text-2xl font-black text-white">ICAN Dev Console</h1>
+          <h1 className="text-2xl font-black text-white">IcanEra Dev Console</h1>
           <p className="mt-1 text-xs tracking-widest" style={{ color:'#475569' }}>BLOCKCHAIN-SECURED ACCESS</p>
         </div>
         <form onSubmit={submit} className="space-y-3">
@@ -2109,7 +2109,7 @@ const LoginGate = ({ onAuth }) => {
         </form>
         <div className="mt-6 flex items-start gap-2.5 rounded-2xl border border-amber-500/15 bg-amber-500/[0.05] p-3.5">
           <AlertTriangle size={13} className="text-amber-400 flex-shrink-0 mt-0.5"/>
-          <p className="text-[10px] leading-relaxed" style={{ color:'rgba(251,191,36,0.7)' }}>Authorized personnel only. All access is logged on the ICAN blockchain.</p>
+          <p className="text-[10px] leading-relaxed" style={{ color:'rgba(251,191,36,0.7)' }}>Authorized personnel only. All access is logged on the IcanEra blockchain.</p>
         </div>
       </div>
     </div>

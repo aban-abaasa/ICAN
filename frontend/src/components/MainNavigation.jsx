@@ -210,7 +210,7 @@ export default function MainNavigation({ onTrustClick, onShareClick, onWalletCli
                 
                 {/* Branding Text */}
                 <div>
-                  <p className="text-white font-bold text-xl group-hover:drop-shadow-[0_0_8px_rgba(59,130,246,0.5)] transition-all duration-300">ICANera</p>
+                  <p className="text-white font-bold text-xl group-hover:drop-shadow-[0_0_8px_rgba(59,130,246,0.5)] transition-all duration-300">IcanEra</p>
                   <p className="text-blue-300 text-xs font-medium">Capital Engine</p>
                 </div>
               </div>
@@ -299,7 +299,7 @@ export default function MainNavigation({ onTrustClick, onShareClick, onWalletCli
                   />
                 </div>
                 <div>
-                  <p className="text-white font-bold text-lg">ICANera</p>
+                  <p className="text-white font-bold text-lg">IcanEra</p>
                   <p className="text-blue-300 text-xs font-medium">Capital Engine</p>
                 </div>
               </div>

@@ -1206,12 +1206,12 @@ Example:
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-semibold text-gray-900 flex items-center gap-2">
                       <Sparkles className="h-5 w-5 text-indigo-600" />
-                      ICAN AI Simplifier
+                      IcanEra AI Simplifier
                     </h3>
                     <span className="text-xs bg-indigo-600 text-white px-2 py-1 rounded">Owner Only</span>
                   </div>
                   <p className="text-sm text-gray-600 mb-3">
-                    Let ICAN AI simplify your agreement text to make it easier for all signers to understand.
+                    Let IcanEra AI simplify your agreement text to make it easier for all signers to understand.
                   </p>
                   <button
                     onClick={() => simplifyWithAI(mouContent || `Type: ${partnershipType}\nDescription: ${description}`)}

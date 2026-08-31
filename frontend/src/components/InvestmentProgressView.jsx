@@ -208,7 +208,7 @@ const InvestmentProgressView = ({ pitch, agreement, currentUser, onClose }) => {
           <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 text-center mb-4">
             <p className="text-red-300 text-sm">
               The 3-day shareholder approval window passed without reaching 60% approval.
-              Your {agreement.total_investment ?? ''} ICAN investment has been refunded to the account you paid from.
+              Your {agreement.total_investment ?? ''} IcanEra investment has been refunded to the account you paid from.
             </p>
           </div>
         ) : (

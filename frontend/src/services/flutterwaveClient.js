@@ -41,11 +41,11 @@ export function payWithFlutterwave(params) {
       customer: {
         email: params.customerEmail || 'customer@ican.io',
         phone_number: params.customerPhone || '',
-        name: params.customerName || 'ICAN Customer',
+        name: params.customerName || 'IcanEra Customer',
       },
       customizations: {
-        title: params.title || 'ICAN Wallet',
-        description: params.description || 'ICAN Wallet Top-Up',
+        title: params.title || 'IcanEra Wallet',
+        description: params.description || 'IcanEra Wallet Top-Up',
       },
       callback: (response) => {
         resolve({

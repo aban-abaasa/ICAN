@@ -108,17 +108,17 @@ export default function BuyIcan({ userId: propUserId, onSuccess } = {}) {
         const pricePerCoin = result.pricePerCoin || 0;
         
         const transactionDetails = `
-          💚 ICAN Coin Purchase Successful!
-          
+          💚 IcanEra Coin Purchase Successful!
+
           📋 Transaction Details:
-          • ICAN Coins Purchased: ${icanAmt.toFixed(8)}
+          • IcanEra Coins Purchased: ${icanAmt.toFixed(8)}
           • Amount Paid: ${currencySymbol}${parseFloat(localAmount).toLocaleString()}
-          • Rate: 1 ICAN = ${pricePerCoin.toLocaleString()} ${currency}
-          • Your New ICAN Balance: ${newBalance.toFixed(8)} coins
+          • Rate: 1 IcanEra = ${pricePerCoin.toLocaleString()} ${currency}
+          • Your New IcanEra Balance: ${newBalance.toFixed(8)} coins
           • Wallet Updated: ${currencySymbol}${parseFloat(newWallet).toLocaleString()} remaining
-          
+
           ✅ Real money has been deducted from your account.
-          ✅ ICAN coins are now in your wallet and ready to invest!
+          ✅ IcanEra coins are now in your wallet and ready to invest!
         `;
         
         setSuccess(transactionDetails);
@@ -172,8 +172,8 @@ export default function BuyIcan({ userId: propUserId, onSuccess } = {}) {
       <div className="trading-card">
         {/* Title */}
         <div style={{ marginBottom: '24px', textAlign: 'center' }}>
-          <h3 style={{ margin: '0 0 4px 0', color: '#333', fontSize: '20px' }}>💳 Buy ICAN Coins</h3>
-          <p style={{ margin: 0, color: '#666', fontSize: '13px' }}>Convert your local currency to ICAN at current market price</p>
+          <h3 style={{ margin: '0 0 4px 0', color: '#333', fontSize: '20px' }}>💳 Buy IcanEra Coins</h3>
+          <p style={{ margin: 0, color: '#666', fontSize: '13px' }}>Convert your local currency to IcanEra at current market price</p>
         </div>
 
         {/* Trading Form */}
@@ -251,7 +251,7 @@ export default function BuyIcan({ userId: propUserId, onSuccess } = {}) {
           <p style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#666', fontWeight: '600', textTransform: 'uppercase' }}>ℹ️ How it works</p>
           <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: '13px', color: '#666', lineHeight: '1.6' }}>
             <li style={{ marginBottom: '4px' }}>✓ Real money is deducted from your account</li>
-            <li style={{ marginBottom: '4px' }}>✓ ICAN coins arrive in your wallet instantly</li>
+            <li style={{ marginBottom: '4px' }}>✓ IcanEra coins arrive in your wallet instantly</li>
             <li>✓ Your coins are ready to invest or trade</li>
           </ul>
         </div>

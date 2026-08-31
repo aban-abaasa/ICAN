@@ -942,9 +942,9 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
                 onChange={e => setSelectedBusinessProfileId(e.target.value)}
                 className="w-full px-3 py-2.5 rounded-lg border-2 border-blue-300 bg-white text-sm font-medium text-gray-800 focus:outline-none focus:border-blue-500"
               >
-                <option value="">Select which business this belongs to…</option>
+                <option value="" className="bg-white text-gray-900">Select which business this belongs to…</option>
                 {businessProfiles.map(p => (
-                  <option key={p.id} value={p.id}>{p.business_name}</option>
+                  <option key={p.id} value={p.id} className="bg-white text-gray-900">{p.business_name}</option>
                 ))}
               </select>
             )

@@ -60,11 +60,11 @@ const WalletMockTrader = ({ onGetStarted, authId = null }) => {
         <div className="text-center mb-8 md:mb-12">
           <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full border text-xs md:text-sm font-bold mb-4 ${isDarkTheme ? 'border-cyan-300/40 bg-cyan-900/25 text-cyan-200' : 'border-cyan-400/50 bg-cyan-100 text-cyan-800'}`}>
             <Wallet className="w-4 h-4" />
-            ICAN Wallet
+            IcanEra Wallet
           </div>
           <h2 className={`text-2xl md:text-4xl font-black ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>Try a Mock Trade</h2>
           <p className={`mt-2 text-sm md:text-base ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>
-            Live ICAN price: {loading ? '…' : `${priceUgx.toLocaleString()} UGX`}
+            Live IcanEra price: {loading ? '…' : `${priceUgx.toLocaleString()} UGX`}
             {snapshot?.appreciation_pct != null && ` (+${Number(snapshot.appreciation_pct).toFixed(1)}% since floor)`}
             — this calculator doesn't touch a real wallet.
           </p>
@@ -76,18 +76,18 @@ const WalletMockTrader = ({ onGetStarted, authId = null }) => {
               onClick={() => { setMode('buy'); setResult(null); }}
               className={`flex-1 rounded-lg py-2 text-sm font-bold transition-colors ${mode === 'buy' ? 'bg-cyan-600 text-white' : isDarkTheme ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500'}`}
             >
-              Buy ICAN
+              Buy IcanEra
             </button>
             <button
               onClick={() => { setMode('sell'); setResult(null); }}
               className={`flex-1 rounded-lg py-2 text-sm font-bold transition-colors ${mode === 'sell' ? 'bg-cyan-600 text-white' : isDarkTheme ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500'}`}
             >
-              Sell ICAN
+              Sell IcanEra
             </button>
           </div>
 
           <label className={`block text-xs font-bold uppercase tracking-wide mb-1 ${isDarkTheme ? 'text-slate-400' : 'text-slate-500'}`}>
-            {mode === 'buy' ? 'Amount to spend (UGX)' : 'Amount to sell (ICAN)'}
+            {mode === 'buy' ? 'Amount to spend (UGX)' : 'Amount to sell (IcanEra)'}
           </label>
           <div className="flex items-center gap-2">
             <input
@@ -110,8 +110,8 @@ const WalletMockTrader = ({ onGetStarted, authId = null }) => {
           {result && (
             <div className={`mt-4 rounded-lg border p-3 text-sm ${isDarkTheme ? 'border-cyan-400/30 bg-cyan-400/10 text-cyan-200' : 'border-cyan-300 bg-cyan-50 text-cyan-800'}`}>
               {mode === 'buy'
-                ? <>≈ {result.icanAmount.toFixed(4)} ICAN for {Number(result.ugxAmount).toLocaleString()} UGX at today's price</>
-                : <>≈ {Number(result.ugxAmount).toLocaleString()} UGX for {result.icanAmount} ICAN at today's price</>}
+                ? <>≈ {result.icanAmount.toFixed(4)} IcanEra for {Number(result.ugxAmount).toLocaleString()} UGX at today's price</>
+                : <>≈ {Number(result.ugxAmount).toLocaleString()} UGX for {result.icanAmount} IcanEra at today's price</>}
             </div>
           )}
 

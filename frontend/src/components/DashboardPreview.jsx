@@ -55,7 +55,7 @@ const DashboardPreview = ({ isMobile = false }) => {
         <div className="bg-gradient-to-r from-purple-900/40 to-blue-900/40 border-b border-purple-500/20 px-4 py-3 flex justify-between items-center">
           <div className="flex items-center space-x-2">
             <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg"></div>
-            <span className="font-bold text-sm">ICAN</span>
+            <span className="font-bold text-sm">IcanEra</span>
           </div>
           <button className="p-2 hover:bg-purple-500/20 rounded-lg transition">
             <Menu className="w-5 h-5" />
@@ -150,7 +150,7 @@ const DashboardPreview = ({ isMobile = false }) => {
         {/* Logo */}
         <div className="flex items-center space-x-2 px-6 py-6 border-b border-purple-500/20">
           <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg"></div>
-          <span className="font-bold">ICAN</span>
+          <span className="font-bold">IcanEra</span>
         </div>
 
         {/* Navigation */}

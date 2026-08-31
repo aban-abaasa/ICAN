@@ -108,7 +108,7 @@ const TrustLoanManagement = ({ groupId, groupName, onClose }) => {
               {/* Loan Amount */}
               <div>
                 <label className="block text-sm font-semibold text-gray-300 mb-2">
-                  💵 Loan Amount (ICAN coins/USD)
+                  💵 Loan Amount (IcanEra coins/USD)
                 </label>
                 <input
                   type="number"
@@ -156,9 +156,9 @@ const TrustLoanManagement = ({ groupId, groupName, onClose }) => {
                 <div className="bg-blue-900/30 border border-blue-500/50 rounded-lg p-3">
                   <p className="text-sm text-gray-300">
                     <strong>Loan Summary:</strong><br/>
-                    Amount: <span className="text-green-400 font-bold">{formData.loanAmount} ICAN</span><br/>
+                    Amount: <span className="text-green-400 font-bold">{formData.loanAmount} IcanEra</span><br/>
                     Repayment: <span className="text-gray-300">{formData.repaymentMonths} months</span><br/>
-                    Monthly Payment: <span className="text-yellow-400">{(parseFloat(formData.loanAmount) / formData.repaymentMonths).toFixed(2)} ICAN</span>
+                    Monthly Payment: <span className="text-yellow-400">{(parseFloat(formData.loanAmount) / formData.repaymentMonths).toFixed(2)} IcanEra</span>
                   </p>
                 </div>
               )}
@@ -215,7 +215,7 @@ const TrustLoanManagement = ({ groupId, groupName, onClose }) => {
 
               <div className="bg-slate-900/50 rounded-lg p-3 mb-3">
                 <p className="text-sm text-gray-300 mb-2">
-                  <strong>💰 Loan Amount:</strong> <span className="text-green-400 font-bold">{app.loan_amount} ICAN</span>
+                  <strong>💰 Loan Amount:</strong> <span className="text-green-400 font-bold">{app.loan_amount} IcanEra</span>
                 </p>
                 <p className="text-sm text-gray-300 mb-2">
                   <strong>📝 Purpose:</strong> {app.loan_purpose}
@@ -259,7 +259,7 @@ const TrustLoanManagement = ({ groupId, groupName, onClose }) => {
 
               <div className="bg-slate-900/50 rounded-lg p-3 mb-4">
                 <p className="text-sm text-gray-300 mb-3">
-                  <strong>💰 Requesting:</strong> <span className="text-green-400 font-bold">{app.loan_amount} ICAN</span>
+                  <strong>💰 Requesting:</strong> <span className="text-green-400 font-bold">{app.loan_amount} IcanEra</span>
                 </p>
                 <p className="text-sm text-gray-300 mb-3">
                   <strong>📝 Purpose:</strong> {app.loan_purpose}
@@ -338,7 +338,7 @@ const TrustLoanManagement = ({ groupId, groupName, onClose }) => {
 
               <div className="bg-slate-900/50 rounded-lg p-3">
                 <p className="text-sm text-gray-300 mb-2">
-                  <strong>💰 Loan Amount:</strong> <span className="text-green-400 font-bold">{app.loan_amount} ICAN</span>
+                  <strong>💰 Loan Amount:</strong> <span className="text-green-400 font-bold">{app.loan_amount} IcanEra</span>
                 </p>
                 <p className="text-sm text-gray-300 mb-2">
                   <strong>Total Votes:</strong> {app.total_votes_for} ✅ vs {app.total_votes_against} ❌

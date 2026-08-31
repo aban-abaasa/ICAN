@@ -28,7 +28,7 @@ const UpdatesFeed = () => {
         <div className="text-center mb-8 md:mb-12">
           <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full border text-xs md:text-sm font-bold mb-4 ${isDarkTheme ? 'border-emerald-300/40 bg-emerald-900/25 text-emerald-200' : 'border-emerald-400/50 bg-emerald-100 text-emerald-800'}`}>
             <Megaphone className="w-4 h-4" />
-            Live from ICANera
+            Live from IcanEra
           </div>
           <h2 className={`text-2xl md:text-4xl font-black ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>Latest Updates</h2>
           <p className={`mt-2 text-sm md:text-base ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>What's new across the platform — no account needed to browse.</p>

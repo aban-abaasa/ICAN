@@ -396,11 +396,11 @@ const InvestmentAgreement = ({
   // Generate final MOU with QR code
   const generateFinalAgreement = async (allSigners, newInvestor) => {
     try {
-      const contractId = `ICAN-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
+      const contractId = `IcanEra-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
       
       const mou = `
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                     ICANERA                                                    ║
+║                     IcanEra                                                    ║
 ║                  INVESTMENT AGREEMENT (MOU)                                   ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
@@ -593,7 +593,7 @@ Contract Hash: ${btoa(contractId + JSON.stringify(allSigners)).substring(0, 32)}
     const element = document.createElement('a');
     const file = new Blob([mouContent], { type: 'text/plain' });
     element.href = URL.createObjectURL(file);
-    element.download = `ICAN_Agreement_${Date.now()}.txt`;
+    element.download = `IcanEra_Agreement_${Date.now()}.txt`;
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
@@ -613,7 +613,7 @@ Contract Hash: ${btoa(contractId + JSON.stringify(allSigners)).substring(0, 32)}
     printWindow.document.write(`
       <html>
       <head>
-        <title>ICAN Investment Agreement</title>
+        <title>IcanEra Investment Agreement</title>
         <style>
           body { 
             font-family: 'Courier New', monospace; 

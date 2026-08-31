@@ -29,8 +29,8 @@ const SearchModal = ({ isOpen, onClose, user, transactions = [], wallets = [], m
   const tools = [
     { id:'transactions', name:'Transactions',  icon:TrendingUp, color:'from-blue-600 to-blue-400',    description:'View and manage all financial transactions', keywords:['transaction','money','payment','income','expense','cash'] },
     { id:'wallets',      name:'Wallets',        icon:Wallet,     color:'from-green-600 to-green-400',   description:'Manage personal, business, agent & trust wallets', keywords:['wallet','account','balance','fund'] },
-    { id:'ican-coin',    name:'ICAN Coin',       icon:Zap,        color:'from-yellow-600 to-yellow-400', description:'Buy, sell and trade ICAN Coins across borders', keywords:['ican','coin','crypto','trading','exchange'] },
-    { id:'pitching',     name:'ICAN Pitchin',    icon:Briefcase,  color:'from-purple-600 to-purple-400', description:'Create and manage business pitches for investment', keywords:['pitch','investment','business','funding'] },
+    { id:'ican-coin',    name:'IcanEra Coin',       icon:Zap,        color:'from-yellow-600 to-yellow-400', description:'Buy, sell and trade IcanEra Coins across borders', keywords:['ican','coin','crypto','trading','exchange'] },
+    { id:'pitching',     name:'IcanEra Pitchin',    icon:Briefcase,  color:'from-purple-600 to-purple-400', description:'Create and manage business pitches for investment', keywords:['pitch','investment','business','funding'] },
     { id:'trust',        name:'Trust System',    icon:Users,      color:'from-indigo-600 to-indigo-400', description:'Build trust groups and manage collaborative finances', keywords:['trust','group','collaboration','members'] },
     { id:'cmms',         name:'CMMS Module',     icon:Activity,   color:'from-cyan-600 to-cyan-400',    description:'Manage inventory, equipment and maintenance', keywords:['cmms','inventory','equipment','maintenance','assets'] },
     { id:'reports',      name:'Reports',         icon:PieChart,   color:'from-pink-600 to-pink-400',    description:'Generate financial reports and analytics', keywords:['report','analysis','analytics','insights'] },
@@ -76,7 +76,7 @@ const SearchModal = ({ isOpen, onClose, user, transactions = [], wallets = [], m
   const initCopilot = () => {
     setMessages([{
       id: 'init', role: 'assistant',
-      content: `Hi${user?.name ? ` ${user.name.split(' ')[0]}` : ''}! I'm your ICAN Copilot. Ask me anything about your finances.`,
+      content: `Hi${user?.name ? ` ${user.name.split(' ')[0]}` : ''}! I'm your IcanEra Copilot. Ask me anything about your finances.`,
     }]);
   };
 
@@ -371,15 +371,15 @@ const SearchModal = ({ isOpen, onClose, user, transactions = [], wallets = [], m
     const businessTermResponse = getBusinessTermResponse(q);
 
     if (/(sacco|trust group|trust system|trust wallet)/.test(q)) {
-      return `SACCO/Trust in ICAN:\n• Purpose: group-based contribution, trust-led financial collaboration, and controlled access\n• Current: ${moduleSnapshot.modules.trustSacco.trustGroupCount} group(s), ${moduleSnapshot.modules.trustSacco.trustMemberCount} member signal(s)\n• Balances: ICAN ${moduleSnapshot.modules.trustSacco.trustBalanceIcan.toLocaleString()} | Local ${moduleSnapshot.modules.trustSacco.trustLocalValue.toLocaleString()}\n\nDo you want contribution analysis, group governance, or trust risk controls?`;
+      return `SACCO/Trust in IcanEra:\n• Purpose: group-based contribution, trust-led financial collaboration, and controlled access\n• Current: ${moduleSnapshot.modules.trustSacco.trustGroupCount} group(s), ${moduleSnapshot.modules.trustSacco.trustMemberCount} member signal(s)\n• Balances: IcanEra ${moduleSnapshot.modules.trustSacco.trustBalanceIcan.toLocaleString()} | Local ${moduleSnapshot.modules.trustSacco.trustLocalValue.toLocaleString()}\n\nDo you want contribution analysis, group governance, or trust risk controls?`;
     }
 
     if (/(wallet|wallets|wallet account|account balance|balance)/.test(q) && /(ican|trust|business|personal|sacco|all)/.test(q)) {
-      return `ICAN wallet structure:\n• Personal wallet: UGX ${moduleSnapshot.modules.wallet.personalBalance.toLocaleString()}\n• Business wallet: UGX ${moduleSnapshot.modules.wallet.businessBalance.toLocaleString()}\n• Trust/SACCO wallet: ICAN ${moduleSnapshot.modules.trustSacco.trustBalanceIcan.toLocaleString()}\n• ICAN coin wallet: ${moduleSnapshot.modules.icanCoin.balance.toLocaleString()} ICAN\n\nWhich wallet should I analyze next?`;
+      return `IcanEra wallet structure:\n• Personal wallet: UGX ${moduleSnapshot.modules.wallet.personalBalance.toLocaleString()}\n• Business wallet: UGX ${moduleSnapshot.modules.wallet.businessBalance.toLocaleString()}\n• Trust/SACCO wallet: IcanEra ${moduleSnapshot.modules.trustSacco.trustBalanceIcan.toLocaleString()}\n• IcanEra coin wallet: ${moduleSnapshot.modules.icanCoin.balance.toLocaleString()} IcanEra\n\nWhich wallet should I analyze next?`;
     }
 
     if (/(ican coin|ican coins|token|coin trading|coin)/.test(q)) {
-      return `ICAN Coin in this app:\n• Supports buy/sell and wallet-based holding\n• Current balance signal: ${moduleSnapshot.modules.icanCoin.balance.toLocaleString()} ICAN\n• Activity signal: ${moduleSnapshot.modules.icanCoin.transactionSignals} related transaction(s)\n\nDo you want trade performance, risk view, or entry strategy guidance?`;
+      return `IcanEra Coin in this app:\n• Supports buy/sell and wallet-based holding\n• Current balance signal: ${moduleSnapshot.modules.icanCoin.balance.toLocaleString()} IcanEra\n• Activity signal: ${moduleSnapshot.modules.icanCoin.transactionSignals} related transaction(s)\n\nDo you want trade performance, risk view, or entry strategy guidance?`;
     }
 
     if (/(share|shares|shareholder|equity allocation|ownership)/.test(q)) {
@@ -463,7 +463,7 @@ const SearchModal = ({ isOpen, onClose, user, transactions = [], wallets = [], m
     const walletEntries = getWalletEntries();
     const moduleSnapshot = getIcanModuleSnapshot();
     const walletSummary = walletEntries.map(w => `${w.wallet_type||w.name}: ${(w.currency||'UGX')} ${(w.balance||0).toLocaleString()}`).join(', ') || 'No wallet data';
-    return `You are ICAN Copilot, a financial AI assistant and finance tutor. Be SHORT and PRECISE - max 5 bullet points, no long paragraphs.
+    return `You are IcanEra Copilot, a financial AI assistant and finance tutor. Be SHORT and PRECISE - max 5 bullet points, no long paragraphs.
 
 USER DATA: income UGX ${income.toLocaleString()}, expenses UGX ${expenses.toLocaleString()}, net UGX ${netWorth.toLocaleString()}, ${txCount} transactions.
 INVESTMENTS: ${investmentTx.length} investment records, invested UGX ${totalInvested.toLocaleString()}, returns UGX ${totalReturns.toLocaleString()}, net investment position UGX ${netPosition.toLocaleString()}.
@@ -537,9 +537,9 @@ ${JSON.stringify(moduleSnapshot, null, 2)}
       return `Latest yearly transaction trend:\n${rows.map(r => `• ${r.period}: ${r.count} tx | Net UGX ${r.net.toLocaleString()} (Income ${r.income.toLocaleString()} / Expenses ${r.expenses.toLocaleString()})`).join('\n') || '• No yearly transaction data yet'}`;
     }
     if (q.includes('sacco') || q.includes('trust'))
-      return `Trust/SACCO snapshot:\n• Groups: ${moduleSnapshot.modules.trustSacco.trustGroupCount}\n• Members (signal): ${moduleSnapshot.modules.trustSacco.trustMemberCount}\n• Trust ICAN balance: ${moduleSnapshot.modules.trustSacco.trustBalanceIcan.toLocaleString()}\n• Local value: ${moduleSnapshot.modules.trustSacco.trustLocalValue.toLocaleString()}`;
+      return `Trust/SACCO snapshot:\n• Groups: ${moduleSnapshot.modules.trustSacco.trustGroupCount}\n• Members (signal): ${moduleSnapshot.modules.trustSacco.trustMemberCount}\n• Trust IcanEra balance: ${moduleSnapshot.modules.trustSacco.trustBalanceIcan.toLocaleString()}\n• Local value: ${moduleSnapshot.modules.trustSacco.trustLocalValue.toLocaleString()}`;
     if (q.includes('ican coin') || q.includes('token') || q.includes('coin'))
-      return `ICAN coin snapshot:\n• Balance: ${moduleSnapshot.modules.icanCoin.balance.toLocaleString()} ICAN\n• Coin activity signals: ${moduleSnapshot.modules.icanCoin.transactionSignals}`;
+      return `IcanEra coin snapshot:\n• Balance: ${moduleSnapshot.modules.icanCoin.balance.toLocaleString()} IcanEra\n• Coin activity signals: ${moduleSnapshot.modules.icanCoin.transactionSignals}`;
     if (q.includes('share') || q.includes('shareholder'))
       return `Share/ownership snapshot:\n• Share-related activity signals: ${moduleSnapshot.modules.shareAndPitchin.shareSignals}\n• Ask me for dilution, ownership %, or governance decisions.`;
     if (q.includes('pitching') || q.includes('pitch'))
@@ -797,7 +797,7 @@ ${JSON.stringify(moduleSnapshot, null, 2)}
               <input
                 ref={inputRef}
                 type="text"
-                placeholder="Ask ICAN Copilot anything..."
+                placeholder="Ask IcanEra Copilot anything..."
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}

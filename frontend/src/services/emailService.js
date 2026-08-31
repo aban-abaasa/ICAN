@@ -171,7 +171,7 @@ class EmailService {
               <p>Hi <strong>${userName}</strong>,</p>
               
               <div class="success">
-                <strong>Great news!</strong> Your ICAN account has been unlocked and is ready to use.
+                <strong>Great news!</strong> Your IcanEra account has been unlocked and is ready to use.
               </div>
               
               <h3>What You Can Do Now:</h3>
@@ -195,7 +195,7 @@ class EmailService {
               </p>
               
               <div class="footer">
-                <p>&copy; 2026 ICAN. All rights reserved.</p>
+                <p>&copy; 2026 IcanEra. All rights reserved.</p>
               </div>
             </div>
           </div>
@@ -205,7 +205,7 @@ class EmailService {
 
     return this.sendEmail({
       to: userEmail,
-      subject: '✅ Your ICAN Account is Now Unlocked',
+      subject: '✅ Your IcanEra Account is Now Unlocked',
       htmlContent: emailContent,
       templateId: 'account_unlocked'
     });
@@ -280,7 +280,7 @@ class EmailService {
               
               <div class="footer">
                 <p>Request ID: ${requestId}</p>
-                <p>&copy; 2026 ICAN. All rights reserved.</p>
+                <p>&copy; 2026 IcanEra. All rights reserved.</p>
               </div>
             </div>
           </div>
@@ -366,10 +366,10 @@ class EmailService {
                 </div>
               </div>
               
-              <p>Your new account balance has been updated. You can view your full transaction history in the ICAN app.</p>
+              <p>Your new account balance has been updated. You can view your full transaction history in the IcanEra app.</p>
               
               <div class="footer">
-                <p>&copy; 2026 ICAN. All rights reserved.</p>
+                <p>&copy; 2026 IcanEra. All rights reserved.</p>
               </div>
             </div>
           </div>
@@ -408,7 +408,7 @@ class EmailService {
         ],
         from: {
           email: this.fromEmail,
-          name: 'ICAN Support'
+          name: 'IcanEra Support'
         },
         content: [
           {
@@ -462,12 +462,12 @@ class EmailService {
   async sendTestEmail(testEmail) {
     return this.sendEmail({
       to: testEmail,
-      subject: '🧪 ICAN Test Email',
+      subject: '🧪 IcanEra Test Email',
       htmlContent: `
         <html>
           <body style="font-family: Arial; padding: 20px;">
             <h1>✅ Test Email Successful!</h1>
-            <p>This is a test email from ICAN.</p>
+            <p>This is a test email from IcanEra.</p>
             <p>SendGrid integration is working correctly.</p>
             <p>Sent at: ${new Date().toLocaleString()}</p>
           </body>

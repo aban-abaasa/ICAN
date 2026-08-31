@@ -382,7 +382,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
         >
           <div className={`flex items-center justify-between bg-gradient-to-r from-indigo-500 via-purple-600 to-slate-800 px-4 text-white ${channel === 'cmms' ? 'py-2' : 'py-3'}`}>
             <div>
-              <p className="text-sm font-semibold">{channel === 'community' ? 'Community' : channel === 'cmms' ? 'CMMS' : 'ICAN Support'}</p>
+              <p className="text-sm font-semibold">{channel === 'community' ? 'Community' : channel === 'cmms' ? 'CMMS' : 'IcanEra Support'}</p>
               {channel !== 'cmms' && <p className="text-[11px] text-white/80">
                 {channel === 'community' ? 'Public Q&A — everyone can read this' : 'We usually reply within a few minutes'}
               </p>}
@@ -504,7 +504,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                       }`}
                     >
                       <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide opacity-80">
-                        {r.sender_role === 'dev' ? 'ICAN Team' : (r.name || 'Website visitor')}
+                        {r.sender_role === 'dev' ? 'IcanEra Team' : (r.name || 'Website visitor')}
                         {r.reward_reason && ' · 🪙'}
                       </p>
                       <p className="whitespace-pre-wrap break-words">{r.message}</p>

@@ -94,7 +94,7 @@ export default function ExchangeRatePreview({
               </span>
             </p>
             <p className="text-emerald-200/80 text-xs mt-1">
-              1 ICAN = {parseFloat(lockedRate).toLocaleString()} UGX
+              1 IcanEra = {parseFloat(lockedRate).toLocaleString()} UGX
             </p>
           </div>
         </div>
@@ -105,7 +105,7 @@ export default function ExchangeRatePreview({
         <div className="flex justify-between items-center">
           <span className="text-slate-400 text-sm">Your Amount:</span>
           <span className="text-white font-semibold">
-            {icanAmount.toFixed(2)} ICAN
+            {icanAmount.toFixed(2)} IcanEra
           </span>
         </div>
 
@@ -132,7 +132,7 @@ export default function ExchangeRatePreview({
       <div className="bg-slate-900/40 rounded-lg p-3 border border-slate-700/20">
         <p className="text-slate-400 text-xs">
           {txType === 'trust_contribution' && 
-            '📦 Your ICAN coins convert instantly to local currency in the Trust account'}
+            '📦 Your IcanEra coins convert instantly to local currency in the Trust account'}
           {txType === 'investment' && 
             '💼 The business receives stable local currency, protected from crypto volatility'}
           {txType === 'cmms_payment' && 

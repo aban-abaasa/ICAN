@@ -231,7 +231,7 @@ export class VelocityEngine {
           'mybodaguy':     'MyBodaGuy delivery',
           'farm-agent':    'AgriBone sale',
           'digital-city-era': 'SupermartKera cashback',
-          'ican':          'ICAN wallet'
+          'ican':          'IcanEra wallet'
         };
 
         const classification = isBusinessReceipt ? 'business_income' : tx.expense_classification ||
@@ -346,8 +346,34 @@ export class VelocityEngine {
     });
   }
 
-  // Calculate financial metrics
-  calculateMetrics() {
+  // Determine whether a transaction belongs to the given personal/business
+  // scope, using the same record_category / business_profile_id fields the
+  // Transactions and Reports sections already key off of.
+  matchesScope(tx, scope, businessId) {
+    if (!scope || scope === 'all') return true;
+    const category = tx.record_category || tx.metadata?.record_category || 'personal';
+    if (scope === 'personal') return category !== 'business';
+    if (scope === 'business') {
+      if (category !== 'business') return false;
+      if (businessId) return tx.business_profile_id === businessId;
+      return true;
+    }
+    return true;
+  }
+
+  // Personal/business/all-scoped view of this.transactions. Scope is applied
+  // once here so calculateMetrics/getCategoryBreakdown/calculateTrends stay
+  // simple pass-throughs over whichever list they're given.
+  getScopedTransactions(scope = 'all', businessId = null) {
+    if (!scope || scope === 'all') return this.transactions;
+    return this.transactions.filter(t => this.matchesScope(t, scope, businessId));
+  }
+
+  // Calculate financial metrics. scope/businessId narrow the calculation to
+  // personal-only or a specific business's transactions; defaults preserve
+  // the previous "everything" behavior for existing callers.
+  calculateMetrics(scope = 'all', businessId = null) {
+    const transactions = this.getScopedTransactions(scope, businessId);
     const now = new Date();
     const oneDayAgo = new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000);
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -355,11 +381,11 @@ export class VelocityEngine {
     const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
 
     // Basic calculations
-    const totalIncome = this.transactions
+    const totalIncome = transactions
       .filter(t => t.transaction_type === 'income')
       .reduce((sum, t) => sum + (t.amount || 0), 0);
 
-    const totalExpenses = this.transactions
+    const totalExpenses = transactions
       .filter(t => t.transaction_type === 'expense')
       .reduce((sum, t) => sum + (t.amount || 0), 0);
 
@@ -375,7 +401,7 @@ export class VelocityEngine {
 
     const periodMetrics = {};
     Object.entries(periods).forEach(([periodName, config]) => {
-      const periodTransactions = this.transactions.filter(t => new Date(t.created_at) > config.cutoff);
+      const periodTransactions = transactions.filter(t => new Date(t.created_at) > config.cutoff);
       const periodIncome = periodTransactions
         .filter(t => t.transaction_type === 'income')
         .reduce((sum, t) => sum + (t.amount || 0), 0);
@@ -409,7 +435,7 @@ export class VelocityEngine {
     // 🔧 FIXED June 8: Separate personal and business income for tithe calculation
     // Personal income: salary, wages, bonuses from employment (category='salary' or metadata.record_category='personal')
     // Business income: sales, revenue from business (metadata.record_category='business' or metadata.reporting_bucket='sold_income')
-    const last30Days = this.transactions.filter(t => new Date(t.created_at) > thirtyDaysAgo);
+    const last30Days = transactions.filter(t => new Date(t.created_at) > thirtyDaysAgo);
     
     const personalIncome30Days = last30Days
       .filter(t => t.transaction_type === 'income' && 
@@ -442,10 +468,10 @@ export class VelocityEngine {
       .reduce((sum, t) => sum + (t.amount || 0), 0);
 
     // Category breakdown
-    const categoryBreakdown = this.getCategoryBreakdown();
+    const categoryBreakdown = this.getCategoryBreakdown(transactions);
 
     // Cash flow trends
-    const trends = this.calculateTrends();
+    const trends = this.calculateTrends(transactions);
 
     // Calculate overall ROI and savings rate
     const overallROI = totalExpenses > 0 ? ((totalIncome - totalExpenses) / totalExpenses) * 100 : 0;
@@ -472,16 +498,178 @@ export class VelocityEngine {
       savingsRate: Math.round(overallSavingsRate * 10) / 10,
       categoryBreakdown,
       trends,
-      transactionCount: this.transactions.length,
-      lastTransaction: this.transactions[0] || null
+      transactionCount: transactions.length,
+      lastTransaction: transactions[0] || null
     };
   }
 
+  // Get a real, zero-filled daily income/expense/net series for the last N
+  // days, scoped to personal/business/all — feeds the Daily Tracking chart.
+  getDailySeries(days = 30, scope = 'all', businessId = null) {
+    const transactions = this.getScopedTransactions(scope, businessId);
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const byDay = {};
+
+    transactions
+      .filter(t => new Date(t.created_at) > cutoff)
+      .forEach(t => {
+        const day = new Date(t.created_at).toISOString().split('T')[0];
+        if (!byDay[day]) byDay[day] = { income: 0, expense: 0 };
+        if (t.transaction_type === 'income') byDay[day].income += t.amount || 0;
+        else if (t.transaction_type === 'expense') byDay[day].expense += t.amount || 0;
+      });
+
+    // Fill every day in range, including zero-activity days, so the chart
+    // shows a continuous real timeline instead of only days with activity.
+    const series = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().split('T')[0];
+      const bucket = byDay[key] || { income: 0, expense: 0 };
+      series.push({ date: key, income: bucket.income, expense: bucket.expense, net: bucket.income - bucket.expense });
+    }
+    return series;
+  }
+
+  // --- Smart multi-granularity series: years of history, drillable ---
+  //
+  // Rather than one fixed "last 30 days" window, callers hand this a
+  // [start, end] span (or a named preset) and it auto-picks the coarsest
+  // bucket size that still keeps the chart readable — daily for a month or
+  // less, weekly out to about a year, monthly out to a few years, yearly
+  // beyond that. Drilling into one bucket just re-runs this over that
+  // bucket's own [start, end], which naturally lands on a finer granularity
+  // since the span shrank — no separate "zoom" data path needed.
+
+  // Coarsest granularity that keeps a [start, end] span readable.
+  pickGranularity(start, end) {
+    const days = Math.max(1, (end - start) / (24 * 60 * 60 * 1000));
+    if (days <= 45) return 'daily';       // up to ~6 weeks: every day
+    if (days <= 400) return 'weekly';     // up to ~1 year: every week (~52 points)
+    if (days <= 2200) return 'monthly';   // up to ~6 years: every month (~72 points)
+    return 'yearly';                      // beyond that: every year
+  }
+
+  // Normalize a date down to the start of its bucket for a granularity.
+  bucketStart(date, granularity) {
+    const d = new Date(date);
+    if (granularity === 'weekly') {
+      d.setHours(0, 0, 0, 0);
+      const dow = (d.getDay() + 6) % 7; // Monday = 0
+      d.setDate(d.getDate() - dow);
+      return d;
+    }
+    if (granularity === 'monthly') return new Date(d.getFullYear(), d.getMonth(), 1);
+    if (granularity === 'yearly') return new Date(d.getFullYear(), 0, 1);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+
+  // Step a bucket-start date forward by one bucket of the given granularity.
+  nextBucket(date, granularity) {
+    const d = new Date(date);
+    if (granularity === 'weekly') d.setDate(d.getDate() + 7);
+    else if (granularity === 'monthly') d.setMonth(d.getMonth() + 1);
+    else if (granularity === 'yearly') d.setFullYear(d.getFullYear() + 1);
+    else d.setDate(d.getDate() + 1);
+    return d;
+  }
+
+  bucketKey(date, granularity) {
+    const d = this.bucketStart(date, granularity);
+    if (granularity === 'yearly') return String(d.getFullYear());
+    if (granularity === 'monthly') return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    return d.toISOString().split('T')[0];
+  }
+
+  // Named presets → concrete [start, end] windows. 'all' reaches back to the
+  // user's first-ever transaction so multi-year history is always available.
+  getPresetRange(preset, scope = 'all', businessId = null) {
+    const end = new Date();
+    const start = new Date(end);
+    switch (preset) {
+      case '7d': start.setDate(start.getDate() - 7); break;
+      case '1m': start.setMonth(start.getMonth() - 1); break;
+      case '3m': start.setMonth(start.getMonth() - 3); break;
+      case '1y': start.setFullYear(start.getFullYear() - 1); break;
+      case '5y': start.setFullYear(start.getFullYear() - 5); break;
+      case 'all': {
+        const earliest = this.getEarliestTransactionDate(scope, businessId);
+        if (earliest) return { start: earliest, end };
+        start.setFullYear(start.getFullYear() - 1);
+        break;
+      }
+      default: start.setMonth(start.getMonth() - 1);
+    }
+    return { start, end };
+  }
+
+  getEarliestTransactionDate(scope = 'all', businessId = null) {
+    const transactions = this.getScopedTransactions(scope, businessId);
+    if (transactions.length === 0) return null;
+    return transactions.reduce(
+      (min, t) => { const d = new Date(t.created_at); return d < min ? d : min; },
+      new Date(transactions[0].created_at)
+    );
+  }
+
+  // Real, zero-filled income/expense/net series across [start, end], bucketed
+  // at whichever granularity keeps that span readable. Feeds the Financial
+  // Trends chart at every zoom level, from a week to a multi-year "All" view.
+  getRangeSeries(scope = 'all', businessId = null, { start, end, granularity } = {}) {
+    end = end || new Date();
+    start = start || (() => { const d = new Date(end); d.setMonth(d.getMonth() - 1); return d; })();
+    const gran = granularity || this.pickGranularity(start, end);
+
+    const transactions = this.getScopedTransactions(scope, businessId);
+    const rangeStart = this.bucketStart(start, gran);
+    const byBucket = {};
+    transactions.forEach((t) => {
+      const created = new Date(t.created_at);
+      if (created < rangeStart || created > end) return;
+      const key = this.bucketKey(created, gran);
+      if (!byBucket[key]) byBucket[key] = { income: 0, expense: 0 };
+      if (t.transaction_type === 'income') byBucket[key].income += t.amount || 0;
+      else if (t.transaction_type === 'expense') byBucket[key].expense += t.amount || 0;
+    });
+
+    const series = [];
+    let cursor = rangeStart;
+    const last = this.bucketStart(end, gran);
+    let guard = 0;
+    while (cursor <= last && guard < 5000) {
+      const key = this.bucketKey(cursor, gran);
+      const bucket = byBucket[key] || { income: 0, expense: 0 };
+      series.push({
+        date: key,
+        bucketStart: new Date(cursor).toISOString(),
+        income: bucket.income,
+        expense: bucket.expense,
+        net: bucket.income - bucket.expense
+      });
+      cursor = this.nextBucket(cursor, gran);
+      guard++;
+    }
+
+    return { data: series, granularity: gran, start: rangeStart, end: last };
+  }
+
+  // The [start, end] window one clicked bucket spans — used to "drill into"
+  // a point on the chart and zoom to it (a year click zooms to that year, a
+  // month click zooms to that month, and so on down to daily).
+  getBucketRange(bucketStartIso, granularity) {
+    const start = new Date(bucketStartIso);
+    const end = this.nextBucket(start, granularity);
+    end.setMilliseconds(end.getMilliseconds() - 1);
+    return { start, end };
+  }
+
   // Category breakdown analysis
-  getCategoryBreakdown() {
+  getCategoryBreakdown(transactions = this.transactions) {
     const breakdown = {};
-    
-    this.transactions.forEach(transaction => {
+
+    transactions.forEach(transaction => {
       const category = (transaction.metadata && transaction.metadata.category) || 'other';
       if (!breakdown[category]) {
         breakdown[category] = {
@@ -505,13 +693,13 @@ export class VelocityEngine {
   }
 
   // Calculate financial trends
-  calculateTrends() {
-    if (this.transactions.length < 2) return { direction: 'stable', confidence: 0 };
+  calculateTrends(transactions = this.transactions) {
+    if (transactions.length < 2) return { direction: 'stable', confidence: 0 };
 
     const now = new Date();
     const periods = [7, 14, 30].map(days => {
       const periodStart = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-      const periodTransactions = this.transactions.filter(t => new Date(t.created_at) > periodStart);
+      const periodTransactions = transactions.filter(t => new Date(t.created_at) > periodStart);
       
       const income = periodTransactions
         .filter(t => t.transaction_type === 'income')
@@ -540,9 +728,10 @@ export class VelocityEngine {
     };
   }
 
-  // Get specific period metric (helper for UI components)
-  getPeriodMetric(metricType, period) {
-    const metrics = this.calculateMetrics();
+  // Get specific period metric (helper for UI components). scope/businessId
+  // narrow the underlying calculation to personal-only or one business.
+  getPeriodMetric(metricType, period, scope = 'all', businessId = null) {
+    const metrics = this.calculateMetrics(scope, businessId);
     if (!metrics.periodMetrics || !metrics.periodMetrics[period]) {
       return metricType === 'roi' || metricType === 'savingsRate' ? '0%' : 0;
     }

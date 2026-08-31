@@ -25,7 +25,8 @@ import {
   Users,
   Phone,
   MapPin,
-  Menu
+  Menu,
+  X
 } from 'lucide-react';
 import ICANWalletInbox from './ICANWalletInbox';
 import momoService from '../services/momoService';
@@ -282,6 +283,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [walletTransactions, setWalletTransactions] = useState([]);
   const [walletTransactionsLoading, setWalletTransactionsLoading] = useState(false);
+  const [selectedWalletTx, setSelectedWalletTx] = useState(null);
   const [realBusinessProfiles, setRealBusinessProfiles] = useState([]);
   const [businessProfilesLoading, setBusinessProfilesLoading] = useState(false);
   const [businessValuations, setBusinessValuations] = useState({}); // { [businessProfileId]: valuation }
@@ -557,7 +559,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         local_currency: tx.local_currency || 'UGX',
         currency: tx.local_currency || 'UGX',
         transaction_type: tx.transaction_type || tx.type || 'transaction',
-        description: tx.merchant_name || tx.note || tx.description || tx.transaction_type || tx.type || 'ICAN transaction',
+        description: tx.merchant_name || tx.note || tx.description || tx.transaction_type || tx.type || 'IcanEra transaction',
         created_at: tx.created_at || tx.timestamp,
         metadata: { ...(tx.metadata || {}), source_app: tx.source_app || 'ican' },
       }));
@@ -1031,7 +1033,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       transactions: [
         { id: 1, type: 'receive', amount: 500, from: 'John Doe', date: '2024-01-12', status: 'completed' },
         { id: 2, type: 'send', amount: 250, to: 'Jane Smith', date: '2024-01-11', status: 'completed' },
-        { id: 3, type: 'receive', amount: 1000, from: 'ICAN Platform', date: '2024-01-10', status: 'completed' }
+        { id: 3, type: 'receive', amount: 1000, from: 'IcanEra Platform', date: '2024-01-10', status: 'completed' }
       ]
     },
     KES: {
@@ -1105,7 +1107,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     };
 
     // Initialize wallet service
-    walletService.initialize({ id: 'user-id', name: 'ICAN User' });
+    walletService.initialize({ id: 'user-id', name: 'IcanEra User' });
 
     // Check if user is an agent and has wallet account
     const initializeUser = async () => {
@@ -1290,7 +1292,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
         const parsedAmount = parseFloat(amount);
         if (!(parsedAmount > 0)) {
-          setTransactionResult({ type: 'send', success: false, message: 'Enter a valid ICAN amount' });
+          setTransactionResult({ type: 'send', success: false, message: 'Enter a valid IcanEra amount' });
           return;
         }
 
@@ -1303,7 +1305,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         setTransactionResult({
           type: 'send',
           success: true,
-          message: `✅ Sent ${parsedAmount.toFixed(4)} ICAN to ${businessWallet.business_name || recipientIdentifier}.`,
+          message: `✅ Sent ${parsedAmount.toFixed(4)} IcanEra to ${businessWallet.business_name || recipientIdentifier}.`,
           transactionId: result.out_tx_id,
         });
         return;
@@ -1447,7 +1449,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
         const parsedAmount = parseFloat(amount);
         if (!(parsedAmount > 0)) {
-          setTransactionResult({ type: 'send', success: false, message: 'Enter a valid ICAN amount' });
+          setTransactionResult({ type: 'send', success: false, message: 'Enter a valid IcanEra amount' });
           return;
         }
 
@@ -1460,7 +1462,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         setTransactionResult({
           type: 'send',
           success: true,
-          message: `✅ Sent ${parsedAmount.toFixed(4)} ICAN to ${businessWallet.business_name || recipientIdentifier}.`,
+          message: `✅ Sent ${parsedAmount.toFixed(4)} IcanEra to ${businessWallet.business_name || recipientIdentifier}.`,
           transactionId: result.out_tx_id,
         });
         return;
@@ -1505,14 +1507,14 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         setTransactionResult({
           type: 'send',
           success: false,
-          message: 'Cannot send icaneracoin to yourself'
+          message: 'Cannot send IcanEra to yourself'
         });
         return;
       }
 
       const parsedAmount = parseFloat(amount);
       if (!(parsedAmount > 0)) {
-        setTransactionResult({ type: 'send', success: false, message: 'Enter a valid ICAN amount' });
+        setTransactionResult({ type: 'send', success: false, message: 'Enter a valid IcanEra amount' });
         return;
       }
 
@@ -1526,7 +1528,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       setTransactionResult({
         type: 'send',
         success: true,
-        message: `✅ Sent ${parsedAmount.toFixed(4)} ICAN to ${recipientUser.account_holder_name || recipientIdentifier}. No fee — they receive the full amount.`,
+        message: `✅ Sent ${parsedAmount.toFixed(4)} IcanEra to ${recipientUser.account_holder_name || recipientIdentifier}. No fee — they receive the full amount.`,
         transactionId: result.tx_id,
       });
     } catch (error) {
@@ -1816,7 +1818,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           amount: topupForm.amount,
           currency: selectedCurrency,
           phoneNumber: topupForm.paymentInput,
-          description: `ICAN Wallet Top-Up via ${name}`
+          description: `IcanEra Wallet Top-Up via ${name}`
         });
       } else if (method === 'airtel') {
         // Airtel Money
@@ -1824,7 +1826,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           amount: topupForm.amount,
           currency: selectedCurrency,
           recipientPhone: topupForm.paymentInput,
-          description: `ICAN Wallet Top-Up via Airtel Money`
+          description: `IcanEra Wallet Top-Up via Airtel Money`
         });
       } else if (['visa', 'mastercard', 'verve'].includes(method)) {
         // Credit/Debit Card → Flutterwave
@@ -1837,9 +1839,9 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           amount: topupForm.amount,
           currency: selectedCurrency,
           customerEmail: 'user@ican.io', // Get from user context
-          customerName: 'ICAN Customer',
+          customerName: 'IcanEra Customer',
           customerPhone: '',
-          description: `ICAN Wallet Top-Up via ${name}`
+          description: `IcanEra Wallet Top-Up via ${name}`
         });
       } else if (method === 'ussd' || method === 'bank') {
         // USSD / Bank Transfer → Flutterwave
@@ -1847,8 +1849,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           amount: topupForm.amount,
           currency: selectedCurrency,
           customerEmail: 'user@ican.io',
-          customerName: 'ICAN Customer',
-          description: `ICAN Wallet Top-Up via ${name}`
+          customerName: 'IcanEra Customer',
+          description: `IcanEra Wallet Top-Up via ${name}`
         });
       }
 
@@ -1862,7 +1864,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
             currency: selectedCurrency,
             paymentMethod: name,
             customerEmail: 'user@ican.io',
-            customerName: 'ICAN Customer',
+            customerName: 'IcanEra Customer',
             status: 'COMPLETED',
             verificationStatus: 'VERIFIED'
           });
@@ -4053,7 +4055,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
               <Wallet className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h2 className="text-2xl md:text-3xl font-bold" style={walletUi.title}>IcanEraWallette</h2>
+              <h2 className="text-2xl md:text-3xl font-bold" style={walletUi.title}>IcanEra Wallet</h2>
               <p className="text-sm md:text-base" style={walletUi.subtitle}>Manage global currency with confidence</p>
             </div>
           </div>
@@ -4378,8 +4380,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 </h3>
                 <p className="text-gray-300 text-sm">
                   {userAccount
-                    ? 'Verify your email and set a PIN to activate your ICAN wallet'
-                    : 'Set up your ICAN wallet to start sending, receiving, and managing money'}
+                    ? 'Verify your email and set a PIN to activate your IcanEra wallet'
+                    : 'Set up your IcanEra wallet to start sending, receiving, and managing money'}
                 </p>
               </div>
               <button
@@ -4509,48 +4511,102 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
             <p className="text-gray-500 text-sm mt-1">Send, receive, or top up to see activity here</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-1">
             {walletTransactions.map((tx) => {
               const isIncoming = parseFloat(tx.amount) >= 0;
-              const channel = getTransactionChannel(tx);
-              const isDigital = channel === 'digital';
               return (
-                <div key={tx.id} className={`flex items-center justify-between p-4 bg-white/5 rounded-lg border-l-4 border border-white/10 hover:border-white/20 transition-all ${isDigital ? 'border-l-cyan-500' : 'border-l-amber-500'}`}>
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={`p-2 rounded-lg flex-shrink-0 ${isIncoming ? 'bg-green-500/20' : 'bg-blue-500/20'}`}>
-                      {isIncoming ? <ArrowDownLeft className="w-4 h-4 text-green-400" /> : <ArrowUpRight className="w-4 h-4 text-blue-400" />}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-white font-medium truncate">{tx.description || tx.transaction_type}</p>
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${
-                          isDigital
-                            ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-                            : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                        }`}>
-                          {isDigital ? '🌐 Digital' : '✋ Manual'}
-                        </span>
-                      </div>
-                        <p className="text-xs text-gray-400">{new Date(tx.created_at).toLocaleString()}</p>
-                        {(tx.merchant_name || tx.expense_classification) && (
-                          <p className="text-[11px] text-gray-500 mt-0.5">
-                            {tx.merchant_name || (tx.counterparty_type === 'business' ? 'Business payment' : 'Person transfer')}
-                            {tx.expense_classification ? ` · ${tx.expense_classification.replace(/_/g, ' ')}` : ''}
-                          </p>
-                        )}
-                    </div>
-                  </div>
-                  <p className={`font-semibold flex-shrink-0 ${isIncoming ? 'text-green-400' : 'text-blue-400'}`}>
-                     {isIncoming ? '+' : '-'}{Math.abs(Number(tx.local_amount ?? tx.amount)).toLocaleString()} {tx.currency}
-                     <span className="text-xs text-gray-500 ml-1">({Math.abs(Number(tx.amount)).toFixed(4)} ICAN)</span>
+                <button
+                  key={tx.id}
+                  type="button"
+                  onClick={() => setSelectedWalletTx(tx)}
+                  className="w-full flex items-center justify-between py-1.5 px-2 rounded hover:bg-white/5 transition-all text-left"
+                >
+                  <p className="text-xs text-gray-200 truncate pr-2">{tx.description || tx.transaction_type}</p>
+                  <p className={`text-xs font-medium flex-shrink-0 ${isIncoming ? 'text-green-400' : 'text-blue-400'}`}>
+                    {isIncoming ? '+' : '-'}{Math.abs(Number(tx.local_amount ?? tx.amount)).toLocaleString()} {tx.currency}
                   </p>
-                </div>
+                </button>
               );
             })}
           </div>
         )}
       </div>
       )}
+
+      {/* Transaction Detail Modal */}
+      {selectedWalletTx && (() => {
+        const tx = selectedWalletTx;
+        const isIncoming = parseFloat(tx.amount) >= 0;
+        const channel = getTransactionChannel(tx);
+        const isDigital = channel === 'digital';
+        return (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelectedWalletTx(null)}>
+            <div className="glass-card p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-white">Transaction Details</h3>
+                <button onClick={() => setSelectedWalletTx(null)} className="p-1 rounded-lg hover:bg-white/10">
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-3 mb-4">
+                <div className={`p-2 rounded-lg flex-shrink-0 ${isIncoming ? 'bg-green-500/20' : 'bg-blue-500/20'}`}>
+                  {isIncoming ? <ArrowDownLeft className="w-4 h-4 text-green-400" /> : <ArrowUpRight className="w-4 h-4 text-blue-400" />}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-white font-medium truncate">{tx.description || tx.transaction_type}</p>
+                  <p className="text-xs text-gray-400">{new Date(tx.created_at).toLocaleString()}</p>
+                </div>
+              </div>
+
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400">Amount</span>
+                  <span className={`font-semibold ${isIncoming ? 'text-green-400' : 'text-blue-400'}`}>
+                    {isIncoming ? '+' : '-'}{Math.abs(Number(tx.local_amount ?? tx.amount)).toLocaleString()} {tx.currency}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400">IcanEra Amount</span>
+                  <span className="text-gray-200">{Math.abs(Number(tx.amount)).toFixed(4)} IcanEra</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400">Type</span>
+                  <span className="text-gray-200">{tx.transaction_type}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400">Channel</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                    isDigital
+                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                      : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                  }`}>
+                    {isDigital ? '🌐 Digital' : '✋ Manual'}
+                  </span>
+                </div>
+                {(tx.merchant_name || tx.counterparty_type) && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400">Counterparty</span>
+                    <span className="text-gray-200">{tx.merchant_name || (tx.counterparty_type === 'business' ? 'Business payment' : 'Person transfer')}</span>
+                  </div>
+                )}
+                {tx.expense_classification && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400">Category</span>
+                    <span className="text-gray-200">{tx.expense_classification.replace(/_/g, ' ')}</span>
+                  </div>
+                )}
+                {tx.id && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400">ID</span>
+                    <span className="text-gray-500 text-xs truncate max-w-[60%]">{tx.id}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Cards Tab */}
       {activeTab === 'cards' && (
@@ -4860,7 +4916,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                         <p className="text-gray-500 text-xs mt-1">
                           Balance:
                           <span className="text-cyan-400 ml-1">
-                            {Number(profile.ican_wallet.ican_balance || 0).toLocaleString()} ICAN
+                            {Number(profile.ican_wallet.ican_balance || 0).toLocaleString()} IcanEra
                           </span>
                         </p>
                       </div>
@@ -4947,7 +5003,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                               <p className="text-xs font-bold text-white truncate">{formatUgx(valuation.netProfitUgx)}</p>
                             </div>
                             <div className="bg-slate-700/40 rounded-lg p-2">
-                              <p className="text-[10px] text-gray-400">ICAN Holdings</p>
+                              <p className="text-[10px] text-gray-400">IcanEra Holdings</p>
                               <p className="text-xs font-bold text-white truncate">{formatUgx(valuation.icanHoldingsValue)}</p>
                             </div>
                           </div>
@@ -4980,8 +5036,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 <h3 className="text-xl font-bold text-white">Trust Account</h3>
                 <p className="text-gray-400 text-sm">
                   {trustAccountSummary.scope === 'admin'
-                    ? 'Exact ICAN total for all members in groups you manage'
-                    : 'Exact ICAN contribution value with local currency equivalent'}
+                    ? 'Exact IcanEra total for all members in groups you manage'
+                    : 'Exact IcanEra contribution value with local currency equivalent'}
                 </p>
               </div>
             </div>
@@ -5003,7 +5059,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     <p className="text-xs text-gray-400 mb-1">
                       {trustAccountSummary.scope === 'admin' ? 'Total Trust Balance (All Members)' : 'Available Contribution'}
                     </p>
-                    <p className="text-2xl font-bold text-violet-200">₿ {formatIcanValue(trustAccountSummary.contributedIcan)} ICAN</p>
+                    <p className="text-2xl font-bold text-violet-200">₿ {formatIcanValue(trustAccountSummary.contributedIcan)} IcanEra</p>
                   </div>
                   <div className="bg-slate-800/60 border border-violet-500/30 rounded-lg p-4">
                     <p className="text-xs text-gray-400 mb-1">Local Equivalent</p>
@@ -5731,9 +5787,9 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 <label className="block text-sm font-medium text-gray-300 mb-2">Send To</label>
                 <div className="flex gap-2">
                   {[
-                    { key: 'ican', label: '👤 ICAN Account' },
+                    { key: 'ican', label: '👤 IcanEra Account' },
                     { key: 'mobile', label: '📱 Mobile Money' },
-                    { key: 'icaneracoin', label: '💎 Icaneracoin' },
+                    { key: 'icaneracoin', label: '💎 IcanEra' },
                   ].map((opt) => (
                     <button
                       key={opt.key}
@@ -5759,7 +5815,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                   <label className="block text-sm font-medium text-gray-300 mb-2">Recipient Type</label>
                   <div className="flex gap-2">
                     {[
-                      { key: 'ican', label: '👤 ICAN' },
+                      { key: 'ican', label: '👤 IcanEra' },
                       { key: 'biz', label: '🏢 BIZ' },
                     ].map((opt) => (
                       <button
@@ -5777,7 +5833,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     ))}
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
-                    ICAN = a personal or business wallet account number, phone, or email. BIZ = a PitchIn business wallet number (from that business's profile).
+                    IcanEra = a personal or business wallet account number, phone, or email. BIZ = a PitchIn business wallet number (from that business's profile).
                   </p>
                 </div>
               )}
@@ -5788,7 +5844,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     ? '📱 Recipient Phone Number'
                     : recipientAccountKind === 'biz'
                       ? '🏢 Recipient (PitchIn Business Wallet Number)'
-                      : '👤 Recipient (ICAN Account, Phone, or Email)'}
+                      : '👤 Recipient (IcanEra Account, Phone, or Email)'}
                 </label>
                 <input
                   type="text"
@@ -5808,13 +5864,13 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     ? 'Sent directly to this mobile money number'
                     : recipientAccountKind === 'biz'
                       ? "Enter the business's 16-digit wallet number (starts with 3)"
-                      : 'Send to ICAN account number, phone number, or email address'}
+                      : 'Send to IcanEra account number, phone number, or email address'}
                 </p>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  💰 Amount ({sendMethod === 'icaneracoin' ? 'ICAN' : selectedCurrency})
+                  💰 Amount ({sendMethod === 'icaneracoin' ? 'IcanEra' : selectedCurrency})
                 </label>
                 <input
                   type="number"
@@ -5826,7 +5882,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 />
                 <p className="text-xs text-gray-400 mt-1">
                   {sendMethod === 'icaneracoin'
-                    ? 'Amount in ICAN coins — no fee, the recipient receives the full amount'
+                    ? 'Amount in IcanEra coins — no fee, the recipient receives the full amount'
                     : `Amount in ${selectedCurrency} (${userCountry})`}
                 </p>
               </div>
@@ -6065,7 +6121,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
             <div className="glass-card p-8">
               <div className="max-w-md mx-auto">
                 <h3 className="text-2xl font-bold text-white mb-2">🏪 Create Agent Account</h3>
-                <p className="text-gray-400 mb-6">Fill in your details to become an ICAN Agent</p>
+                <p className="text-gray-400 mb-6">Fill in your details to become an IcanEra Agent</p>
 
                 {registrationMessage && (
                   <div className={`mb-4 p-4 rounded-lg ${registrationMessage.type === 'success' ? 'bg-green-500/20 border border-green-500/50' : 'bg-red-500/20 border border-red-500/50'}`}>
@@ -6439,7 +6495,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
             <h2 className="text-3xl font-bold text-white mb-2 flex items-center gap-2">
               💳 Create Your Wallet Account
             </h2>
-            <p className="text-gray-400 mb-6">Set up your ICAN wallet with a secure PIN and biometric options</p>
+            <p className="text-gray-400 mb-6">Set up your IcanEra wallet with a secure PIN and biometric options</p>
 
             {accountMessage && (
               <div className={`mb-6 p-4 rounded-lg border ${
@@ -6929,7 +6985,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                   <span className="text-lg sm:text-2xl">💰</span>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h2 className="text-base sm:text-lg md:text-2xl font-bold text-white tracking-tight break-words">ICAN Trading Center</h2>
+                  <h2 className="text-base sm:text-lg md:text-2xl font-bold text-white tracking-tight break-words">IcanEra Trading Center</h2>
                   <p className="text-xs sm:text-sm text-slate-400 hidden sm:block truncate">Professional Trading Platform • Real-time Market Data</p>
                 </div>
               </div>
@@ -6983,7 +7039,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                       : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
                   }`}
                 >
-                  💳 Buy ICAN
+                  💳 Buy IcanEra
                 </button>
 
                 <button
@@ -6994,7 +7050,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                       : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
                   }`}
                 >
-                  💰 Sell ICAN
+                  💰 Sell IcanEra
                 </button>
 
                 <button
@@ -7015,8 +7071,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 <div className="flex-1 px-3 py-2 bg-slate-700 rounded-lg text-white font-medium text-sm">
                   {activeTradeTab === 'wallet' && '💎 My Wallet'}
                   {activeTradeTab === 'chart' && '📊 Chart'}
-                  {activeTradeTab === 'buy' && '💳 Buy ICAN'}
-                  {activeTradeTab === 'sell' && '💰 Sell ICAN'}
+                  {activeTradeTab === 'buy' && '💳 Buy IcanEra'}
+                  {activeTradeTab === 'sell' && '💰 Sell IcanEra'}
                   {activeTradeTab === 'history' && '📜 History'}
                 </div>
 
@@ -7069,7 +7125,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                           : 'text-slate-300 hover:bg-slate-600 hover:text-white'
                       }`}
                     >
-                      💳 Buy ICAN
+                      💳 Buy IcanEra
                     </button>
                     <button
                       onClick={() => {
@@ -7082,7 +7138,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                           : 'text-slate-300 hover:bg-slate-600 hover:text-white'
                       }`}
                     >
-                      💰 Sell ICAN
+                      💰 Sell IcanEra
                     </button>
                     <button
                       onClick={() => {
@@ -7113,7 +7169,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     </div>
                   ) : (
                     <div className="bg-gradient-to-br from-purple-900 to-purple-800 border border-purple-500/50 rounded-xl p-12 text-center shadow-2xl">
-                      <p className="text-purple-300 text-sm font-medium mb-4">💎 Total ICAN Coins</p>
+                      <p className="text-purple-300 text-sm font-medium mb-4">💎 Total IcanEra Coins</p>
                       <h2 className="text-6xl font-bold text-white">{icanBalance.toFixed(2)}</h2>
                     </div>
                   )}
@@ -7187,7 +7243,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                         <History className="w-8 h-8 text-slate-500" />
                       </div>
                       <p className="text-slate-300 text-lg font-semibold">No Trading History Yet</p>
-                      <p className="text-slate-500 text-sm mt-2">Start buying or selling ICAN to see your transactions here</p>
+                      <p className="text-slate-500 text-sm mt-2">Start buying or selling IcanEra to see your transactions here</p>
                     </div>
                   ) : (
                     <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
@@ -7209,7 +7265,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                               )}
                               <div>
                                 <p className="font-semibold text-white">
-                                  {transaction.transaction_type === 'purchase' ? '💳 Bought ICAN' : '💰 Sold ICAN'}
+                                  {transaction.transaction_type === 'purchase' ? '💳 Bought IcanEra' : '💰 Sold IcanEra'}
                                 </p>
                                 <p className="text-xs text-slate-400">
                                   {new Date(transaction.created_at).toLocaleDateString()} • {new Date(transaction.created_at).toLocaleTimeString()}
@@ -7237,7 +7293,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                             </span>
                             {transaction.metadata?.pricePerCoin && (
                               <span className="text-xs text-slate-400 bg-slate-700 px-2 py-1 rounded">
-                                Rate: {transaction.metadata.pricePerCoin.toLocaleString()} UGX/ICAN
+                                Rate: {transaction.metadata.pricePerCoin.toLocaleString()} UGX/IcanEra
                               </span>
                             )}
                           </div>

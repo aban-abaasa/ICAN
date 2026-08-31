@@ -99,12 +99,12 @@ export default function SellIcan({ userId: propUserId, onSuccess } = {}) {
     e.preventDefault();
 
     if (!icanAmount || parseFloat(icanAmount) <= 0) {
-      setError('Please enter a valid ICAN amount');
+      setError('Please enter a valid IcanEra amount');
       return;
     }
 
     if (parseFloat(icanAmount) > balance) {
-      setError(`Insufficient balance. You have ${balance.toFixed(2)} ICAN`);
+      setError(`Insufficient balance. You have ${balance.toFixed(2)} IcanEra`);
       return;
     }
 
@@ -128,7 +128,7 @@ export default function SellIcan({ userId: propUserId, onSuccess } = {}) {
             : '➡️ No gain or loss';
 
         setSuccess(
-          `✅ Successfully sold ${result.icanAmount.toFixed(2)} ICAN for ${currencySymbol}${result.localAmount.toLocaleString()}! ${gainLossMsg}`
+          `✅ Successfully sold ${result.icanAmount.toFixed(2)} IcanEra for ${currencySymbol}${result.localAmount.toLocaleString()}! ${gainLossMsg}`
         );
 
         // Record blockchain transaction
@@ -172,15 +172,15 @@ export default function SellIcan({ userId: propUserId, onSuccess } = {}) {
       <div className="trading-card">
         {/* Title */}
         <div style={{ marginBottom: '24px', textAlign: 'center' }}>
-          <h3 style={{ margin: '0 0 4px 0', color: '#333', fontSize: '20px' }}>💰 Sell ICAN Coins</h3>
-          <p style={{ margin: 0, color: '#666', fontSize: '13px' }}>Convert ICAN back to local currency at current market price</p>
+          <h3 style={{ margin: '0 0 4px 0', color: '#333', fontSize: '20px' }}>💰 Sell IcanEra Coins</h3>
+          <p style={{ margin: 0, color: '#666', fontSize: '13px' }}>Convert IcanEra back to local currency at current market price</p>
         </div>
 
         {/* Balance Display */}
         {balance > 0 && (
           <div style={{ marginBottom: '20px', padding: '12px 16px', background: '#eef9f5', borderRadius: '8px', border: '1px solid #c7e9df' }}>
             <p style={{ margin: 0, fontSize: '13px', color: '#1b7f4f', fontWeight: '600' }}>
-              Your ICAN Balance: <span style={{ fontSize: '16px' }}>{balance.toFixed(2)}</span>
+              Your IcanEra Balance: <span style={{ fontSize: '16px' }}>{balance.toFixed(2)}</span>
             </p>
           </div>
         )}
@@ -190,7 +190,7 @@ export default function SellIcan({ userId: propUserId, onSuccess } = {}) {
           {/* ICAN Amount Input */}
           <div className="form-group">
             <label htmlFor="icanAmount" className="form-label">
-              ICAN Amount to Sell
+              IcanEra Amount to Sell
             </label>
             <div className="input-wrapper">
               <span className="currency-prefix">💎</span>
@@ -201,7 +201,7 @@ export default function SellIcan({ userId: propUserId, onSuccess } = {}) {
                 step="0.01"
                 value={icanAmount}
                 onChange={handleIcanChange}
-                placeholder="Enter ICAN amount"
+                placeholder="Enter IcanEra amount"
                 disabled={processing || balance === 0}
                 className="amount-input"
                 max={balance}
@@ -279,7 +279,7 @@ export default function SellIcan({ userId: propUserId, onSuccess } = {}) {
         <div style={{ marginTop: '20px', padding: '16px', background: '#f8f9fa', borderRadius: '8px', borderLeft: '3px solid #667eea' }}>
           <p style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#666', fontWeight: '600', textTransform: 'uppercase' }}>ℹ️ How it works</p>
           <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: '13px', color: '#666', lineHeight: '1.6' }}>
-            <li style={{ marginBottom: '4px' }}>✓ Verify you have enough ICAN coins</li>
+            <li style={{ marginBottom: '4px' }}>✓ Verify you have enough IcanEra coins</li>
             <li style={{ marginBottom: '4px' }}>✓ Money goes directly to your wallet</li>
             <li>✓ No hidden fees or charges</li>
           </ul>

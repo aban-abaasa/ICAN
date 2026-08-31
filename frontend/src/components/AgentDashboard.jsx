@@ -209,7 +209,7 @@ const AgentDashboard = () => {
     setNotification({
       type: 'error',
       title: 'PitchIn Business Wallet',
-      message: `${walletAddress} is an icaneracoin business wallet. Use the Send tab with icaneracoin to transfer to it; agent cash-in/cash-out supports customer fiat wallets.`
+      message: `${walletAddress} is an IcanEra business wallet. Use the Send tab with IcanEra to transfer to it; agent cash-in/cash-out supports customer fiat wallets.`
     });
   };
 
@@ -343,7 +343,7 @@ const AgentDashboard = () => {
           const coinPrice = Number(currentIcanPrice?.price_local);
           const icanAmount = localAmount / coinPrice;
           if (icanPriceLoading || !(coinPrice > 0)) {
-            setNotification({ type: 'error', title: '❌ ICAN Price Unavailable', message: 'The current ICAN price is still loading. Please try again.' });
+            setNotification({ type: 'error', title: '❌ IcanEra Price Unavailable', message: 'The current IcanEra price is still loading. Please try again.' });
             return;
           }
           if (!(localAmount > 0) || !(icanAmount > 0)) {
@@ -361,7 +361,7 @@ const AgentDashboard = () => {
             icanAmount,
             coinPrice,
             currency: cashOutForm.currency,
-            description: `ICAN business-wallet transfer from ${userAccountId}`
+            description: `IcanEra business-wallet transfer from ${userAccountId}`
           });
           setConfirmationAction('cashOut');
           setShowConfirmation(true);
@@ -438,8 +438,8 @@ const AgentDashboard = () => {
         if (result?.success) {
           setNotification({
             type: 'success',
-            title: '✅ icaneracoin Business Transfer Successful',
-            message: `${confirmationData.icanAmount.toFixed(4)} icaneracoin sent to ${confirmationData.customerName}. The business received ${Number(result.business_received || 0).toFixed(4)} icaneracoin after tithe.`
+            title: '✅ IcanEra Business Transfer Successful',
+            message: `${confirmationData.icanAmount.toFixed(4)} IcanEra sent to ${confirmationData.customerName}. The business received ${Number(result.business_received || 0).toFixed(4)} IcanEra after tithe.`
           });
           setCashOutForm({ userAccountId: '', amount: '', currency: localCurrency, phoneNumber: '' });
           setCashOutAccountKind('ican');
@@ -642,7 +642,7 @@ const AgentDashboard = () => {
                 {isCashIn
                   ? 'Cash-In (Transfer to User)'
                   : confirmationData.isBusinessIcan
-                    ? 'icaneracoin Transfer (PitchIn Business Wallet)'
+                    ? 'IcanEra Transfer (PitchIn Business Wallet)'
                     : 'Cash-Out (User Withdrawal)'}
               </p>
             </div>
@@ -665,9 +665,9 @@ const AgentDashboard = () => {
               </p>
               {confirmationData.isBusinessIcan && (
                 <p className="text-cyan-300 font-semibold mt-2">
-                  = {confirmationData.icanAmount.toFixed(4)} ICAN
+                  = {confirmationData.icanAmount.toFixed(4)} IcanEra
                   <span className="block text-gray-400 text-xs font-normal mt-1">
-                    Live rate: 1 ICAN = {Number(confirmationData.coinPrice).toLocaleString()} {confirmationData.currency}
+                    Live rate: 1 IcanEra = {Number(confirmationData.coinPrice).toLocaleString()} {confirmationData.currency}
                   </span>
                 </p>
               )}
@@ -1243,7 +1243,7 @@ const AgentDashboard = () => {
                   <label className="block text-gray-300 font-semibold mb-2">Account Type</label>
                   <div className="flex gap-2">
                     {[
-                      { key: 'ican', label: '👤 ICAN' },
+                      { key: 'ican', label: '👤 IcanEra' },
                       { key: 'biz', label: '🏢 BIZ' },
                     ].map((opt) => (
                       <button
@@ -1261,7 +1261,7 @@ const AgentDashboard = () => {
                     ))}
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
-                    Cash-in only supports ICAN (personal or business) wallet accounts — a PitchIn BIZ wallet is topped up from the Send tab instead.
+                    Cash-in only supports IcanEra (personal or business) wallet accounts — a PitchIn BIZ wallet is topped up from the Send tab instead.
                   </p>
                 </div>
 
@@ -1329,14 +1329,14 @@ const AgentDashboard = () => {
           {/* CASH-OUT TAB */}
           {activeTab === 'cash-out' && (
             <div className="max-w-2xl">
-              <h2 className="text-2xl font-bold text-white mb-6">💸 Send to ICAN User Wallet</h2>
+              <h2 className="text-2xl font-bold text-white mb-6">💸 Send to IcanEra User Wallet</h2>
               
               <form onSubmit={handleCashOut} className="space-y-4">
                 <div>
                   <label className="block text-gray-300 font-semibold mb-2">Account Type</label>
                   <div className="flex gap-2">
                     {[
-                      { key: 'ican', label: '👤 ICAN' },
+                      { key: 'ican', label: '👤 IcanEra' },
                       { key: 'biz', label: '🏢 BIZ' },
                     ].map((opt) => (
                       <button
@@ -1354,7 +1354,7 @@ const AgentDashboard = () => {
                     ))}
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
-                    ICAN = a personal or business wallet account number. BIZ = a PitchIn business wallet — cash is converted to icaneracoin at the current price.
+                    IcanEra = a personal or business wallet account number. BIZ = a PitchIn business wallet — cash is converted to IcanEra at the current price.
                   </p>
                 </div>
 
@@ -1402,9 +1402,9 @@ const AgentDashboard = () => {
                     <strong>💡 How it works:</strong>
                   </p>
                   <p className="text-blue-200 text-sm mt-2">
-                    1. Enter customer's Account Number (ICAN-...)<br/>
+                    1. Enter customer's Account Number (IcanEra-...)<br/>
                     2. Money deducted from your float<br/>
-                    3. Amount added to customer's ICAN wallet<br/>
+                    3. Amount added to customer's IcanEra wallet<br/>
                     4. You earn 2.5% commission<br/>
                     5. Customer receives instant notification
                   </p>

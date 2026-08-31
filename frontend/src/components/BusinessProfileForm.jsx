@@ -257,7 +257,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
     if (!isVerified) {
       const verification = await verifyICANUser(newOwner.email);
       if (!verification.exists) {
-        alert(verification.error || 'Co-owner must have an ICAN account');
+        alert(verification.error || 'Co-owner must have an IcanEra account');
         return;
       }
     }
@@ -406,7 +406,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
         if (!owner.verified) {
           const verification = await verifyICANUser(owner.email);
           if (!verification.exists) {
-            alert(`Co-owner ${owner.email} must have an ICAN account first`);
+            alert(`Co-owner ${owner.email} must have an IcanEra account first`);
             return;
           }
         }
@@ -937,11 +937,11 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
               {/* Add New Shareholder */}
               {coOwners.length < shareholderLimit && (
                 <div className="bg-slate-700/50 p-4 rounded-lg border border-slate-600">
-                  <h4 className="text-white font-semibold mb-4">Add New Shareholder (Must have ICAN Account)</h4>
+                  <h4 className="text-white font-semibold mb-4">Add New Shareholder (Must have IcanEra Account)</h4>
                   <div className="space-y-4 mb-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="text-slate-300 text-xs block mb-1">Search ICAN User (by name or email)</label>
+                        <label className="text-slate-300 text-xs block mb-1">Search IcanEra User (by name or email)</label>
                         <div className="relative">
                           <div className="flex items-center gap-2 bg-slate-600 rounded px-3 py-2 border border-slate-500 focus-within:border-blue-500">
                             <Search className="w-4 h-4 text-slate-400" />
@@ -988,8 +988,8 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                           {/* No results message */}
                           {emailSearchQuery.length >= 2 && searchResults.length === 0 && !searchingUsers && (
                             <div className="absolute top-full left-0 right-0 mt-1 bg-slate-700 border border-orange-500 rounded shadow-lg z-20 p-3">
-                              <p className="text-orange-300 text-sm">⚠️ No ICAN users found matching "{emailSearchQuery}"</p>
-                              <p className="text-slate-400 text-xs mt-1">The person must have an ICAN account first.</p>
+                              <p className="text-orange-300 text-sm">⚠️ No IcanEra users found matching "{emailSearchQuery}"</p>
+                              <p className="text-slate-400 text-xs mt-1">The person must have an IcanEra account first.</p>
                             </div>
                           )}
                         </div>
@@ -1040,7 +1040,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                         {verificationStatus[newOwner.email]?.exists ? (
                           <>
                             <CheckCircle2 className="w-4 h-4" />
-                            <span className="text-sm">✓ ICAN account verified - Ready to add!</span>
+                            <span className="text-sm">✓ IcanEra account verified - Ready to add!</span>
                           </>
                         ) : (
                           <>
@@ -1160,7 +1160,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                   <Wallet className="w-5 h-5 text-blue-400 flex-shrink-0 mt-1" />
                   <div>
                     <h4 className="text-white font-semibold mb-1">💳 Business Wallet Account</h4>
-                    <p className="text-slate-300 text-sm">Create a dedicated ICAN wallet account for your business. This is required for receiving pitch earnings, payments, and managing finances.</p>
+                    <p className="text-slate-300 text-sm">Create a dedicated IcanEra wallet account for your business. This is required for receiving pitch earnings, payments, and managing finances.</p>
                   </div>
                 </div>
               </div>
@@ -1309,7 +1309,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                   <Wallet className="w-5 h-5 text-blue-400 flex-shrink-0 mt-1" />
                   <div>
                     <h4 className="text-white font-semibold mb-1">💳 Business Wallet Account</h4>
-                    <p className="text-slate-300 text-sm">Create a dedicated ICAN wallet account for your business. This is required for receiving pitch earnings, payments, and managing finances.</p>
+                    <p className="text-slate-300 text-sm">Create a dedicated IcanEra wallet account for your business. This is required for receiving pitch earnings, payments, and managing finances.</p>
                   </div>
                 </div>
               </div>

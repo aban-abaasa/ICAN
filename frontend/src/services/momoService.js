@@ -35,7 +35,7 @@ class MOmoService {
    * Generate unique reference ID for each transaction
    */
   generateReferenceId() {
-    return `ICAN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    return `IcanEra-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   }
 
   /**
@@ -82,7 +82,7 @@ class MOmoService {
           status: 'COMPLETED',
           timestamp: new Date().toISOString(),
           mode: 'MOCK',
-          message: `✅ [MOCK MODE] Successfully added ${amount} ${currency} to your ICAN Wallet`
+          message: `✅ [MOCK MODE] Successfully added ${amount} ${currency} to your IcanEra Wallet`
         };
       }
 
@@ -96,15 +96,15 @@ class MOmoService {
         throw new Error('User not authenticated');
       }
 
-      const txRef = generateTxRef('ICAN-TOPUP');
+      const txRef = generateTxRef('IcanEra-TOPUP');
       const payment = await payWithFlutterwave({
         amount: parseFloat(amount),
         currency: finalCurrency,
         customerEmail: user.email,
         customerName: user.user_metadata?.full_name,
         customerPhone: phoneNumber,
-        title: 'ICAN Wallet Top-Up',
-        description: description || 'ICAN Wallet Top-Up',
+        title: 'IcanEra Wallet Top-Up',
+        description: description || 'IcanEra Wallet Top-Up',
         txRef,
       });
 
@@ -126,7 +126,7 @@ class MOmoService {
           amount: parseFloat(amount),
           currency: finalCurrency,
           phone_number: phoneNumber,
-          description: description || 'ICAN Wallet Top-Up via Flutterwave',
+          description: description || 'IcanEra Wallet Top-Up via Flutterwave',
         },
       });
 
@@ -141,7 +141,7 @@ class MOmoService {
         status: 'COMPLETED',
         timestamp: new Date().toISOString(),
         mode: 'LIVE',
-        message: `✅ Successfully added ${amount} ${finalCurrency} to your ICAN Wallet via Flutterwave`
+        message: `✅ Successfully added ${amount} ${finalCurrency} to your IcanEra Wallet via Flutterwave`
       };
     } catch (error) {
       console.error('❌ Flutterwave Top-Up failed:', error);
@@ -213,7 +213,7 @@ class MOmoService {
           partyIdType: 'MSISDN',
           partyId: recipientPhone
         },
-        payerMessage: description || 'Payment from ICAN',
+        payerMessage: description || 'Payment from IcanEra',
         payeeNote: 'Payment received'
       });
 
@@ -244,7 +244,7 @@ class MOmoService {
             reference_id: transactionId,
             transaction_id: momoResponse.transactionId || transactionId,
             phone_number: recipientPhone,
-            description: description || 'Payment from ICAN',
+            description: description || 'Payment from IcanEra',
             status: 'completed',
             metadata: {
               mode: 'LIVE',
@@ -415,7 +415,7 @@ class MOmoService {
             link_id: linkId,
             amount: parseFloat(amount),
             currency: currency.toUpperCase(),
-            description: description || 'ICAN Payment',
+            description: description || 'IcanEra Payment',
             payment_url: paymentUrl,
             status: 'ACTIVE',
             expires_at: new Date(Date.now() + 3600000).toISOString(),

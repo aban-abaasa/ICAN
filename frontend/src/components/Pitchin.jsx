@@ -851,7 +851,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
       const shareUrl = `https://icanera.space/pitchin/${pitchId}`;
       const shareData = {
         title: pitch?.title || 'Check out this pitch!',
-        text: pitch?.description || 'Discover this amazing investment opportunity on ICAN',
+        text: pitch?.description || 'Discover this amazing investment opportunity on IcanEra',
         url: shareUrl
       };
 

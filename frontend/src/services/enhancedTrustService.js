@@ -212,7 +212,7 @@ export class EnhancedTrustService {
             // Blockchain
             status: 'pending_blockchain_recording',
             type: 'contribution',
-            description: `Contribution of ${icanAmount} ICAN to trust group`
+            description: `Contribution of ${icanAmount} IcanEra to trust group`
           }
         ])
         .select();

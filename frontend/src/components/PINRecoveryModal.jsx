@@ -211,7 +211,7 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
                       : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
                   }`}
                 >
-                  Personal (ICAN)
+                  Personal (IcanEra)
                 </button>
                 <button
                   type="button"
@@ -312,7 +312,7 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
                   ← Back to recovery options
                 </button>
                 <span className="text-xs text-gray-500">
-                  {accountType === 'business' ? 'Business account' : 'Personal (ICAN) account'}
+                  {accountType === 'business' ? 'Business account' : 'Personal (IcanEra) account'}
                 </span>
               </div>
             )}

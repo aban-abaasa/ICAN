@@ -51,7 +51,7 @@ export async function payIcanRequest({
       receiptNumber: receipt.receipt_number, paymentCode, transactionId: receipt.cash_transaction_id,
       amount, currency: request.currency, payerUserId, recipientUserId: request.user_id,
       issuedAt: receipt.recorded_at || new Date().toISOString(), description: request.description || 'Cash payment',
-       recipientName: receipt.recipient_name || 'ICANera recipient',
+       recipientName: receipt.recipient_name || 'IcanEra recipient',
        payerName: receipt.payer_name || authData?.user?.user_metadata?.full_name || authData?.user?.email || 'You',
        recipientClassification: request.recipient_classification || 'personal',
        paymentMethod: 'cash',
@@ -74,15 +74,15 @@ export async function payIcanRequest({
     businessProfileId,
   });
   const payerReceipt = {
-    receiptNumber: 'ICAN-RCP-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7).toUpperCase(),
+    receiptNumber: 'IcanEra-RCP-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7).toUpperCase(),
     paymentCode,
     transactionId: transfer.out_tx_id || transfer.transaction_id || null,
     amount,
-    currency: request.currency || 'ICAN',
+    currency: request.currency || 'IcanEra',
     payerUserId,
     recipientUserId: request.user_id,
     issuedAt: new Date().toISOString(),
-    description: request.description || 'ICAN QR payment',
+    description: request.description || 'IcanEra QR payment',
   };
 
   const completion = {

@@ -220,7 +220,7 @@ class WalletService {
           amount,
           currency,
           phoneNumber: paymentInput,
-          description: `ICAN Wallet Top-Up via ${paymentMethod.toUpperCase()}`
+          description: `IcanEra Wallet Top-Up via ${paymentMethod.toUpperCase()}`
         });
       } else if (paymentMethod === 'airtel') {
         // Airtel Money
@@ -229,7 +229,7 @@ class WalletService {
           amount,
           currency,
           recipientPhone: paymentInput,
-          description: `ICAN Wallet Top-Up via Airtel Money`
+          description: `IcanEra Wallet Top-Up via Airtel Money`
         });
       } else if (['visa', 'mastercard', 'verve'].includes(paymentMethod)) {
         // Credit/Debit Card → Flutterwave
@@ -239,9 +239,9 @@ class WalletService {
           amount,
           currency,
           customerEmail: paymentDetails.email || 'user@ican.io',
-          customerName: paymentDetails.name || 'ICAN Customer',
+          customerName: paymentDetails.name || 'IcanEra Customer',
           customerPhone: paymentDetails.phone || '',
-          description: `ICAN Wallet Top-Up via ${paymentMethod.toUpperCase()}`
+          description: `IcanEra Wallet Top-Up via ${paymentMethod.toUpperCase()}`
         });
       } else if (paymentMethod === 'ussd' || paymentMethod === 'bank') {
         // USSD / Bank Transfer → Flutterwave
@@ -250,9 +250,9 @@ class WalletService {
           amount,
           currency,
           customerEmail: paymentDetails.email || 'user@ican.io',
-          customerName: paymentDetails.name || 'ICAN Customer',
+          customerName: paymentDetails.name || 'IcanEra Customer',
           customerPhone: paymentDetails.phone || '',
-          description: `ICAN Wallet Top-Up via ${paymentMethod === 'ussd' ? 'USSD' : 'Bank Transfer'}`
+          description: `IcanEra Wallet Top-Up via ${paymentMethod === 'ussd' ? 'USSD' : 'Bank Transfer'}`
         });
       } else {
         return {
@@ -271,7 +271,7 @@ class WalletService {
             currency,
             paymentMethod,
             customerEmail: paymentDetails.email || 'user@ican.io',
-            customerName: paymentDetails.name || 'ICAN Customer',
+            customerName: paymentDetails.name || 'IcanEra Customer',
             status: 'COMPLETED',
             verificationStatus: 'VERIFIED'
           });

@@ -48,7 +48,7 @@ class FlutterwaveService {
       const amount = parseFloat(config.amount);
       const currency = config.currency || 'UGX';
       const customerEmail = config.customerEmail || 'customer@ican.io';
-      const customerName = config.customerName || 'ICAN Customer';
+      const customerName = config.customerName || 'IcanEra Customer';
       const customerPhone = config.customerPhone || '';
 
       const paymentConfig = {
@@ -68,8 +68,8 @@ class FlutterwaveService {
           name: customerName
         },
         customizations: {
-          title: 'ICAN Wallet',
-          description: config.description || 'Payment for ICAN services',
+          title: 'IcanEra Wallet',
+          description: config.description || 'Payment for IcanEra services',
           logo: 'https://ican.io/logo.png'
         }
       };

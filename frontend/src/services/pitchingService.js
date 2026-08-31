@@ -134,7 +134,7 @@ export const verifyICANUser = async (email) => {
     console.log('User not found in any source table:', email);
     return {
       exists: false,
-      error: `No ICAN account found for ${email}. They must sign up first.`
+      error: `No IcanEra account found for ${email}. They must sign up first.`
     };
   } catch (error) {
     console.error('Error verifying user:', error);

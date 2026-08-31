@@ -4934,7 +4934,7 @@ const CMMSModule = ({
 
     const handleAddUser = async () => {
       if (!newUser.email) {
-        showToast({ type: 'error', title: 'No user selected', message: 'Search and select an ICAN user from the dropdown first.' });
+        showToast({ type: 'error', title: 'No user selected', message: 'Search and select an IcanEra user from the dropdown first.' });
         return;
       }
 
@@ -4959,8 +4959,8 @@ const CMMSModule = ({
         if (!verification.exists) {
           showToast({
             type: 'error',
-            title: 'No ICAN account found',
-            message: 'Ask them to sign up for ICAN and complete their profile — then they can be added to CMMS.',
+            title: 'No IcanEra account found',
+            message: 'Ask them to sign up for IcanEra and complete their profile — then they can be added to CMMS.',
             duration: 8000
           });
           return;
@@ -5319,7 +5319,7 @@ const CMMSModule = ({
           <div className="space-y-4">
             {/* User Search & Selection - EXACT from BusinessProfileForm */}
             <div>
-              <label className="text-slate-300 text-sm block mb-2">Search ICAN User (by name or email) *</label>
+              <label className="text-slate-300 text-sm block mb-2">Search IcanEra User (by name or email) *</label>
               <div className="relative">
                 <div className="flex items-center gap-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded px-3 py-2 focus-within:border-blue-500 focus-within:border-opacity-100">
                   <Search className="w-4 h-4 text-slate-400" />
@@ -5366,8 +5366,8 @@ const CMMSModule = ({
                 {/* No results message */}
                 {emailSearchQuery.length >= 2 && searchResults.length === 0 && !searchingUsers && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-slate-700 border border-orange-500 rounded shadow-lg z-20 p-3">
-                    <p className="text-orange-300 text-sm">⚠️ No ICAN users found matching "{emailSearchQuery}"</p>
-                    <p className="text-slate-400 text-xs mt-1">The person must have an ICAN account first.</p>
+                    <p className="text-orange-300 text-sm">⚠️ No IcanEra users found matching "{emailSearchQuery}"</p>
+                    <p className="text-slate-400 text-xs mt-1">The person must have an IcanEra account first.</p>
                   </div>
                 )}
               </div>
@@ -5418,7 +5418,7 @@ const CMMSModule = ({
                 {verificationStatus[newUser.email]?.exists ? (
                   <>
                     <CheckCircle2 className="w-4 h-4" />
-                    <span className="text-sm">✓ ICAN account verified - Ready to add!</span>
+                    <span className="text-sm">✓ IcanEra account verified - Ready to add!</span>
                   </>
                 ) : (
                   <>
@@ -5615,7 +5615,7 @@ const CMMSModule = ({
                         <div className="text-xs text-gray-400 space-y-1">
                           <div>📧 {user.email}</div>
                           {user.phone && <div>📱 {user.phone}</div>}
-                          {user.icanVerified && <div className="text-green-300">✅ ICAN Verified</div>}
+                          {user.icanVerified && <div className="text-green-300">✅ IcanEra Verified</div>}
                           {user.assignedServices && user.assignedServices.length > 0 && (
                             <div>🔧 {user.assignedServices.join(', ')}</div>
                           )}
@@ -7518,7 +7518,7 @@ const CMMSModule = ({
             </p>
             <div className="bg-blue-900 bg-opacity-50 border-l-4 border-blue-400 p-4 rounded">
               <p className="text-blue-200 text-xs">
-                🔐 <strong>Security Note:</strong> Users must have an ICAN account before they can be added to CMMS. The admin will verify their ICAN profile during user assignment.
+                🔐 <strong>Security Note:</strong> Users must have an IcanEra account before they can be added to CMMS. The admin will verify their IcanEra profile during user assignment.
               </p>
             </div>
           </div>

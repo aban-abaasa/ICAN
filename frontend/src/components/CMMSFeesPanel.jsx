@@ -214,7 +214,7 @@ export default function CMMSFeesPanel({ companyId, businessProfileId, cmmsUsers 
   const payFee = async (fee) => {
     setError('');
     setNotice('');
-    if (!window.confirm(`Pay UGX ${Number(fee.amount).toLocaleString()} for ${fee.term} using your ICAN wallet?`)) return;
+    if (!window.confirm(`Pay UGX ${Number(fee.amount).toLocaleString()} for ${fee.term} using your IcanEra wallet?`)) return;
 
     try {
       const { data, error: paymentError } = await supabase.rpc('pay_own_school_fee', {
@@ -241,7 +241,7 @@ export default function CMMSFeesPanel({ companyId, businessProfileId, cmmsUsers 
       setError('Enter a school payment amount greater than zero.');
       return;
     }
-    if (!window.confirm(`Send UGX ${amount.toLocaleString()} to the school ICAN wallet?`)) return;
+    if (!window.confirm(`Send UGX ${amount.toLocaleString()} to the school IcanEra wallet?`)) return;
 
     try {
       const { data, error: paymentError } = await supabase.rpc('pay_school_fee_to_school_wallet', {
@@ -283,7 +283,7 @@ export default function CMMSFeesPanel({ companyId, businessProfileId, cmmsUsers 
       <div className="space-y-5">
         <div>
           <h2 className="text-2xl font-bold text-white">My School Fees</h2>
-          <p className="text-sm text-slate-400">Review only the fee obligations assigned to your student account and pay with your ICAN wallet.</p>
+          <p className="text-sm text-slate-400">Review only the fee obligations assigned to your student account and pay with your IcanEra wallet.</p>
         </div>
 
         {error && <p className="rounded-lg bg-red-900/30 p-3 text-sm text-red-300">{error}</p>}
@@ -327,7 +327,7 @@ export default function CMMSFeesPanel({ companyId, businessProfileId, cmmsUsers 
                     <div className="flex items-center gap-3">
                       <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase ${payable ? 'bg-amber-400/15 text-amber-200' : 'bg-emerald-400/15 text-emerald-200'}`}>{fee.status}</span>
                       <button type="button" onClick={() => { setEditingFeeId(fee.id); setFeeDetails({ student_name: fee.student_name || '', class_name: fee.class_name || '', term: fee.term || '' }); }} className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold text-slate-200 hover:bg-white/10">Edit details</button>
-                      {payable && <button type="button" onClick={() => payFee(fee)} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500">Pay with ICAN</button>}
+                      {payable && <button type="button" onClick={() => payFee(fee)} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500">Pay with IcanEra</button>}
                     </div>
                   </div>
                   {editingFeeId === fee.id && (

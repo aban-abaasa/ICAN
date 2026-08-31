@@ -212,7 +212,7 @@ const WalletFunctions = ({ currentUser, selectedCurrency, onTransactionComplete 
         paymentMethod: topupForm.paymentMethod,
         paymentDetails: {
           email: currentUser?.email || 'user@ican.io',
-          name: currentUser?.name || 'ICAN Customer',
+          name: currentUser?.name || 'IcanEra Customer',
           phone: topupForm.paymentInput
         }
       });

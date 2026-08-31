@@ -448,7 +448,7 @@ const PayMoneyModal = ({
                 </button>
               ))}
             </div>
-            <p className="text-[11px] text-gray-500 mt-2">This choice controls ICANera Reports.</p>
+            <p className="text-[11px] text-gray-500 mt-2">This choice controls IcanEra Reports.</p>
           </div>
 
           {paymentPurpose === 'business' && scannedData.trim() && (

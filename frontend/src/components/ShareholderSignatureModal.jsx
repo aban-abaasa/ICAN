@@ -359,10 +359,10 @@ const ShareholderSignatureModal = ({
             <div className="space-y-6">
               <div className="bg-gradient-to-br from-blue-900 to-slate-900 rounded-lg p-6 border border-blue-500/30">
                 <h3 className="font-bold text-2xl text-white mb-2 flex items-center gap-2">
-                  🔐 ICAN Wallet - Shareholder Signature
+                  🔐 IcanEra Wallet - Shareholder Signature
                 </h3>
                 <p className="text-blue-200/80 text-sm">
-                  Enter your ICAN Wallet PIN to electronically sign and approve this investment agreement
+                  Enter your IcanEra Wallet PIN to electronically sign and approve this investment agreement
                 </p>
               </div>
 
@@ -392,7 +392,7 @@ const ShareholderSignatureModal = ({
               {/* PIN Entry Section */}
               <div className="bg-slate-800/50 rounded-lg p-6 border border-blue-500/20 space-y-4">
                 <p className="text-slate-300 text-sm font-semibold mb-4">
-                  🔑 Enter Your 6-Digit ICAN Wallet PIN
+                  🔑 Enter Your 6-Digit IcanEra Wallet PIN
                 </p>
 
                 {error && (

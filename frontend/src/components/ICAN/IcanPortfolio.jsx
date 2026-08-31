@@ -99,15 +99,15 @@ export default function IcanPortfolio() {
   const getTransactionLabel = (type) => {
     switch (type) {
       case 'purchase':
-        return 'Bought ICAN';
+        return 'Bought IcanEra';
       case 'sale':
-        return 'Sold ICAN';
+        return 'Sold IcanEra';
       case 'transfer_out':
-        return 'Sent ICAN';
+        return 'Sent IcanEra';
       case 'transfer_in':
-        return 'Received ICAN';
+        return 'Received IcanEra';
       case 'staking':
-        return 'Staked ICAN';
+        return 'Staked IcanEra';
       case 'rewards':
         return 'Staking Rewards';
       default:
@@ -120,7 +120,7 @@ export default function IcanPortfolio() {
       <div className="portfolio-container">
         <div className="loading-spinner">
           <div className="spinner-circle"></div>
-          Loading your ICAN portfolio...
+          Loading your IcanEra portfolio...
         </div>
       </div>
     );
@@ -130,7 +130,7 @@ export default function IcanPortfolio() {
     <div className="portfolio-container">
       {/* Header */}
       <div className="portfolio-header">
-        <h1>💎 ICAN Portfolio</h1>
+        <h1>💎 IcanEra Portfolio</h1>
         <button
           onClick={handleRefresh}
           disabled={refreshing}
@@ -152,16 +152,16 @@ export default function IcanPortfolio() {
           {/* Main Balance Card */}
           <div className="main-balance-card">
             <div className="balance-section">
-              <div className="balance-label">Total ICAN Balance</div>
+              <div className="balance-label">Total IcanEra Balance</div>
               <div className="balance-amount">{portfolio.icanBalance.toFixed(2)}</div>
-              <div className="balance-unit">ICAN Coins</div>
+              <div className="balance-unit">IcanEra Coins</div>
             </div>
 
             <div className="value-section">
               <div className="value-label">Equivalent Value in {portfolio.currency}</div>
               <div className="value-amount">{portfolio.formatted}</div>
               <div className="value-details">
-                @ {portfolio.marketPrice.toLocaleString()} UGX per ICAN
+                @ {portfolio.marketPrice.toLocaleString()} UGX per IcanEra
               </div>
             </div>
 
@@ -176,7 +176,7 @@ export default function IcanPortfolio() {
 
           {/* Currency Values */}
           <div className="currency-grid">
-            <h3>Your ICAN Value in All Currencies</h3>
+            <h3>Your IcanEra Value in All Currencies</h3>
             <div className="currency-cards">
               {portfolio.allCurrencies && Object.entries(portfolio.allCurrencies).map(([currency, value]) => (
                 <div key={currency} className="currency-card">
@@ -254,16 +254,16 @@ export default function IcanPortfolio() {
               {/* Action Buttons */}
               <div className="action-buttons">
                 <a href="/buy-ican" className="btn btn-primary">
-                  💳 Buy ICAN
+                  💳 Buy IcanEra
                 </a>
                 <a href="/sell-ican" className="btn btn-secondary">
-                  💰 Sell ICAN
+                  💰 Sell IcanEra
                 </a>
                 <a href="/transfer-ican" className="btn btn-tertiary">
-                  🌍 Transfer ICAN
+                  🌍 Transfer IcanEra
                 </a>
                 <a href="/stake-ican" className="btn btn-success">
-                  🌾 Stake ICAN
+                  🌾 Stake IcanEra
                 </a>
               </div>
             </div>
@@ -286,7 +286,7 @@ export default function IcanPortfolio() {
                       <div className="tx-amount">
                         <div className="tx-ican">
                           {tx.type.includes('out') ? '-' : '+'}
-                          {tx.ican_amount.toFixed(2)} ICAN
+                          {tx.ican_amount.toFixed(2)} IcanEra
                         </div>
                         {tx.local_amount && (
                           <div className="tx-local">
@@ -304,7 +304,7 @@ export default function IcanPortfolio() {
                 <div className="empty-state">
                   <div className="empty-icon">📭</div>
                   <p>No transactions yet</p>
-                  <p>Start by buying or transferring ICAN coins</p>
+                  <p>Start by buying or transferring IcanEra coins</p>
                 </div>
               )}
             </div>
@@ -416,7 +416,7 @@ export default function IcanPortfolio() {
 
                   <div className={`chart-container ${chartFullscreen ? 'fullscreen' : ''}`}>
                     <div className="chart-header-row">
-                      <h3 style={{ margin: 0, color: 'white' }}>ICAN/USD Live Chart</h3>
+                      <h3 style={{ margin: 0, color: 'white' }}>IcanEra/USD Live Chart</h3>
                       <button
                         className="chart-fullscreen-btn"
                         onClick={() => setChartFullscreen(!chartFullscreen)}
@@ -451,13 +451,13 @@ export default function IcanPortfolio() {
 
       {/* Info Section */}
       <div className="portfolio-info">
-        <h3>📌 About Your ICAN Portfolio:</h3>
+        <h3>📌 About Your IcanEra Portfolio:</h3>
         <ul>
-          <li>💎 Your ICAN coins represent real digital value in the ICAN ecosystem</li>
+          <li>💎 Your IcanEra coins represent real digital value in the IcanEra ecosystem</li>
           <li>📈 Market price fluctuates based on supply and demand</li>
-          <li>🌍 Your ICAN value is shown in all supported currencies automatically</li>
-          <li>💰 Sell anytime to convert ICAN back to local currency</li>
-          <li>🌾 Stake ICAN coins to earn yield rewards</li>
+          <li>🌍 Your IcanEra value is shown in all supported currencies automatically</li>
+          <li>💰 Sell anytime to convert IcanEra back to local currency</li>
+          <li>🌾 Stake IcanEra coins to earn yield rewards</li>
           <li>🔐 All transactions are recorded on the blockchain for transparency</li>
         </ul>
       </div>
