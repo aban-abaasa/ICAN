@@ -37,8 +37,9 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
   const [showCommentsPanel, setShowCommentsPanel] = useState(false);
   const messagesEndRef = useRef(null);
   const [captionExpanded, setCaptionExpanded] = useState(false);
-  // user_id -> business_profile_id, only for posters who currently have a
-  // live dropship storefront -- gates the "Order Now" tag on their statuses.
+  // user_id -> { businessProfileId, businessName }, only for posters who
+  // currently have a live dropship storefront -- gates the "Order Now" tag
+  // on their statuses and reveals whose storefront it links to.
   const [storefrontsByUser, setStorefrontsByUser] = useState(new Map());
 
   const currentStatus = statuses[currentIndex];
@@ -68,7 +69,10 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
       const { data } = await getUserStorefronts(userIds);
       if (cancelled) return;
       const map = new Map();
-      (data || []).forEach((row) => map.set(row.user_id, row.business_profile_id));
+      (data || []).forEach((row) => map.set(row.user_id, {
+        businessProfileId: row.business_profile_id,
+        businessName: row.business_name,
+      }));
       setStorefrontsByUser(map);
     })();
     return () => { cancelled = true; };
@@ -445,12 +449,12 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
 
               {storefrontsByUser.has(currentStatus.user_id) && (
                 <button
-                  onClick={() => { window.location.href = `/store/${storefrontsByUser.get(currentStatus.user_id)}`; }}
+                  onClick={() => { window.location.href = `/store/${storefrontsByUser.get(currentStatus.user_id).businessProfileId}`; }}
                   className="p-3 rounded-full backdrop-blur-sm bg-emerald-500/90 text-white hover:bg-emerald-500 transition-all flex items-center gap-1.5"
-                  title="Order Now"
+                  title={`Order Now from ${storefrontsByUser.get(currentStatus.user_id).businessName}`}
                 >
                   <ShoppingBag className="w-6 h-6" />
-                  <span className="text-sm font-medium pr-1">Order Now</span>
+                  <span className="text-sm font-medium pr-1">Order from {storefrontsByUser.get(currentStatus.user_id).businessName}</span>
                 </button>
               )}
 

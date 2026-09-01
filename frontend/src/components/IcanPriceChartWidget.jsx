@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { LineChart as LineChartIcon } from 'lucide-react';
+import { LineChart as LineChartIcon, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import CandlestickChart from './CandlestickChart';
 
@@ -30,6 +30,7 @@ const formatCandleRow = (candle) => ({
 const IcanPriceChartWidget = () => {
   const [candleData, setCandleData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(true);
 
   const loadCandlestickData = useCallback(async (showLoading = false) => {
     try {
@@ -82,14 +83,39 @@ const IcanPriceChartWidget = () => {
     };
   }, [loadCandlestickData]);
 
+  const latestClose = candleData.length ? candleData[candleData.length - 1].close : null;
+  const firstOpen = candleData.length ? candleData[0].open : null;
+  const changePct = latestClose != null && firstOpen ? ((latestClose - firstOpen) / firstOpen) * 100 : null;
+
   return (
     <div className="rounded-2xl border border-slate-700/50 bg-slate-900/40 p-3">
-      <div className="flex items-center gap-2 mb-2 px-1">
-        <LineChartIcon className="w-4 h-4 text-sky-400" />
+      <button
+        type="button"
+        onClick={() => setIsExpanded(prev => !prev)}
+        className="w-full flex items-center gap-2 px-1 hover:opacity-90 transition-opacity"
+      >
+        <LineChartIcon className="w-4 h-4 text-sky-400 shrink-0" />
         <p className="text-sm font-semibold text-white">ICANera price</p>
-        <span className="ml-auto text-[10px] text-slate-500 uppercase tracking-wide">Live</span>
-      </div>
-      <CandlestickChart candleData={candleData} loading={loading} showLivePrice orderPlacementEnabled={false} />
+        <span className="text-[10px] text-slate-500 uppercase tracking-wide">Live</span>
+        <span className="ml-auto flex items-center gap-2">
+          {latestClose != null && (
+            <span className="text-xs font-semibold text-white">
+              {latestClose.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              {changePct != null && (
+                <span className={`ml-1 ${changePct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {changePct >= 0 ? '+' : ''}{changePct.toFixed(2)}%
+                </span>
+              )}
+            </span>
+          )}
+          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+        </span>
+      </button>
+      {isExpanded && (
+        <div className="mt-2">
+          <CandlestickChart candleData={candleData} loading={loading} showLivePrice orderPlacementEnabled={false} />
+        </div>
+      )}
     </div>
   );
 };

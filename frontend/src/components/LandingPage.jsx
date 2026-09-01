@@ -3,11 +3,11 @@ import { ChevronRight, Play, Zap, Shield, TrendingUp, Users, ArrowRight, Chevron
 import DashboardPreview from './DashboardPreview';
 import ThemeSwitcher from './ThemeSwitcher';
 import { PWAInstallButton } from './PWAInstallButton';
-import UpdatesFeed from './landing/UpdatesFeed';
 import CommunityStoriesCarousel from './landing/CommunityStoriesCarousel';
 import PitchinPreview from './landing/PitchinPreview';
 import WalletMockTrader from './landing/WalletMockTrader';
 import TrustGroupsPreview from './landing/TrustGroupsPreview';
+import DropshipPreview from './landing/DropshipPreview';
 import { useTheme } from '../context/ThemeContext';
 import { getSupabaseClient } from '../lib/supabase/client';
 import {
@@ -57,7 +57,6 @@ const LandingPage = ({ onGetStarted }) => {
   const { actualTheme } = useTheme();
   const isDarkTheme = actualTheme === 'dark';
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [currentHeroSlide, setCurrentHeroSlide] = useState(0);
   const [currentBadgeInfo, setCurrentBadgeInfo] = useState(0);
   const [currentTestimonial, setCurrentTestimonial] = useState(0);
   const [scrollPosition, setScrollPosition] = useState(0);
@@ -72,6 +71,7 @@ const LandingPage = ({ onGetStarted }) => {
   const [identity, setIdentity] = useState(null);
   const [hasWallet, setHasWallet] = useState(false);
   const [threads, setThreads] = useState([]);
+  const [boardVisibleCount, setBoardVisibleCount] = useState(6);
   const [myMessages, setMyMessages] = useState([]);
   const [submitState, setSubmitState] = useState('idle'); // idle | sending | sent | error
   const [expandedThreadId, setExpandedThreadId] = useState(null);
@@ -504,6 +504,54 @@ const LandingPage = ({ onGetStarted }) => {
     }
   ];
 
+  // Right-column companions for the hero's seven feature paragraphs (same
+  // wording, reused verbatim) so the right side fills with words alongside
+  // the left column instead of sitting empty next to it.
+  const heroFeatureVisuals = [
+    {
+      image: heroSlides[15].image,
+      emoji: '🚀',
+      title: 'IcanEra - The Ultimate Business Platform',
+      blurb: 'SupermartKera, AgriBone, BodaGoEra, and all business modules unified in one powerful platform.'
+    },
+    {
+      image: heroSlides[8].image,
+      emoji: '💼',
+      title: 'Enterprise-Grade CMMS with Complete Supply Chain Integration',
+      blurb: 'Comprehensive Computerized Maintenance Management System with role-based access hierarchy from admin to staff.'
+    },
+    {
+      image: heroSlides[2].image,
+      emoji: '💳',
+      title: 'IcanEra Wallet - Universal Payment System & Money Management',
+      blurb: 'Send and receive money across borders instantly with zero delays.'
+    },
+    {
+      image: heroSlides[10].image,
+      emoji: '🏦',
+      title: 'Blockchain TRUST & SACCO with Agent Network',
+      blurb: 'Blockchain-secured TRUST groups offering 8-15% returns with complete transparency.'
+    },
+    {
+      image: heroSlides[4].image,
+      emoji: '💰',
+      title: 'PitchIn - Public Stock Market with Real-Time Share Valuation',
+      blurb: 'Revolutionary public stock market where every transaction across SupermartKera, AgriBone, and BodaGoEra flows into one unified database.'
+    },
+    {
+      image: heroSlides[12].image,
+      emoji: '🌍',
+      title: 'Multi-Country Currency & AI-Powered Tax Intelligence',
+      blurb: 'Operate seamlessly across multiple countries with automatic currency conversion and country-specific compliance.'
+    },
+    {
+      image: heroSlides[13].image,
+      emoji: '🔐',
+      title: 'Blockchain-Secured Messaging & Transaction Stability',
+      blurb: 'Every message in IcanEra is blockchain-verified and immutably recorded.'
+    }
+  ];
+
   // Badge Information - Rotating Messages
   const badgeInfo = [
     {
@@ -663,14 +711,6 @@ const LandingPage = ({ onGetStarted }) => {
     const interval = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % slides.length);
     }, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Auto-rotate hero slides
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentHeroSlide((prev) => (prev + 1) % heroSlides.length);
-    }, 4000);
     return () => clearInterval(interval);
   }, []);
 
@@ -872,14 +912,6 @@ const LandingPage = ({ onGetStarted }) => {
     setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length);
   };
 
-  const nextHeroSlide = () => {
-    setCurrentHeroSlide((prev) => (prev + 1) % heroSlides.length);
-  };
-
-  const prevHeroSlide = () => {
-    setCurrentHeroSlide((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
-  };
-
   const activeBadgeTheme = badgeCardThemes[currentBadgeInfo % badgeCardThemes.length];
   const badgeWordPalette = [
     { title: '#b91c1c', desc: '#dc2626' },
@@ -1037,7 +1069,7 @@ const LandingPage = ({ onGetStarted }) => {
         <div className="absolute top-10 left-5 w-32 h-32 bg-slate-500/10 rounded-full blur-3xl"></div>
         <div className="absolute bottom-10 right-10 w-40 h-40 bg-blue-400/10 rounded-full blur-3xl"></div>
         
-        <div className="max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] mx-auto grid md:grid-cols-2 gap-6 md:gap-8 lg:gap-12 2xl:gap-16 items-center relative">
+        <div className="max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] mx-auto grid md:grid-cols-2 gap-6 md:gap-8 lg:gap-12 2xl:gap-16 relative">
           {/* Left Content - Collapsed to Icon */}
           <div className="flex items-center justify-center md:justify-start animate-fadeInUp relative z-40 w-full md:w-auto">
             <div className="w-full md:w-auto">
@@ -1065,7 +1097,7 @@ const LandingPage = ({ onGetStarted }) => {
                       Your Complete Financial Life In One Platform
                     </h2>
                     
-                    <div className="text-sm text-gray-300 leading-relaxed space-y-4">
+                    <div className="text-sm text-gray-300 leading-relaxed space-y-4 text-justify">
                       <div className="space-y-2">
                         <p className="font-semibold text-yellow-200">🚀 One IcanEra Platform - Replace All Business Apps</p>
                         <p className="text-xs">IcanEra unifies your entire business ecosystem. Every transaction recorded across SupermartKera retail, BodaGoEra delivery, AgriBone agriculture, and enterprise operations - all powered by IcanEra blockchain security.</p>
@@ -1132,7 +1164,7 @@ const LandingPage = ({ onGetStarted }) => {
                 </h2>
                 
                 {/* Description */}
-                <div className="text-sm md:text-base 2xl:text-lg text-gray-300 leading-relaxed space-y-4">
+                <div className="text-sm md:text-base 2xl:text-lg text-gray-300 leading-relaxed space-y-4 text-justify">
                   <div className="space-y-3">
                     <p className="font-semibold text-yellow-200">🚀 IcanEra - The Ultimate Business Platform</p>
                     <p>SupermartKera, AgriBone, BodaGoEra, and all business modules unified in one powerful platform. Every transaction across retail, agriculture, delivery, and enterprise is recorded with blockchain-secured IcanEra power. One wallet, one ecosystem, infinite possibilities.</p>
@@ -1187,67 +1219,35 @@ const LandingPage = ({ onGetStarted }) => {
             </div>
           </div>
 
-          {/* Right - Feature Image Showcase Carousel */}
-          <div className="relative animate-fadeInDown hidden md:flex items-center justify-center h-full min-h-96 2xl:min-h-[500px] z-0">
-            <div className="relative w-full max-w-lg 2xl:max-w-2xl group">
-              {/* Image container with carousel */}
-              <div className="relative ican-cove-card overflow-hidden">
-                {/* Content - Animated Carousel */}
-                <div className="relative space-y-6">
-                  {/* Image with slide transition */}
-                  <div className="relative h-80 2xl:h-[450px] 3xl:h-[520px] ican-cove-panel overflow-hidden shadow-lg group/image">
-                    <img 
-                      src={heroSlides[currentHeroSlide].image}
-                      alt={heroSlides[currentHeroSlide].title}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        e.target.style.display = 'none';
-                      }}
-                    />
-                  </div>
-                  
-                  {/* Label with animation */}
-                  <div key={`hero-${currentHeroSlide}`} className="text-center space-y-2 animate-fadeIn">
-                    <p className="text-xs text-yellow-300 font-semibold uppercase tracking-wider">✨ {heroSlides[currentHeroSlide].subtitle}</p>
-                    <h3 className="text-xl 2xl:text-2xl font-bold bg-gradient-to-r from-slate-100 via-blue-100 to-slate-100 bg-clip-text text-transparent">{heroSlides[currentHeroSlide].title}</h3>
-                    <p className="text-[11px] text-gray-500 uppercase tracking-[0.14em]">
-                      Slide {currentHeroSlide + 1} of {heroSlides.length}
-                    </p>
-                  </div>
-
-                  {/* Slide Navigation Buttons - Small */}
-                  <div className="flex gap-2 justify-center mt-4">
-                    <button
-                      onClick={prevHeroSlide}
-                      className="p-2 rounded-full bg-slate-600/40 hover:bg-slate-500/70 transition transform hover:scale-110 group/btn"
-                    >
-                      <ChevronRight className="w-4 h-4 transform rotate-180 group-hover/btn:translate-x-0.5 transition" />
-                    </button>
-                    <button
-                      onClick={nextHeroSlide}
-                      className="p-2 rounded-full bg-slate-600/40 hover:bg-slate-500/70 transition transform hover:scale-110 group/btn"
-                    >
-                      <ChevronRight className="w-4 h-4 group-hover/btn:-translate-x-0.5 transition" />
-                    </button>
-                  </div>
-
-                  {/* Mini Slide Indicators - Hidden on Mobile */}
-                  <div className="hidden md:flex gap-1 justify-center mt-3 flex-wrap">
-                    {heroSlides.map((_, index) => (
-                      <button
-                        key={index}
-                        onClick={() => setCurrentHeroSlide(index)}
-                        className={`rounded-full transition transform hover:scale-125 ${
-                          index === currentHeroSlide
-                            ? 'bg-gradient-to-r from-yellow-500 to-yellow-400 w-4 h-1.5'
-                            : 'bg-slate-500/40 w-1.5 h-1.5 hover:bg-yellow-500/60'
-                        }`}
-                      />
-                    ))}
-                  </div>
+          {/* Right - Feature visuals, one per left-column paragraph */}
+          {/* Plain normal-flow stack (no sticky/centering tricks) so this
+              column's height is simply the sum of its own real content —
+              it naturally runs the same length as the long text column
+              instead of leaving empty space beside it. */}
+          <div className="hidden md:flex md:flex-col gap-5 lg:gap-6 2xl:gap-8 relative z-0 animate-fadeInDown">
+            {heroFeatureVisuals.map((item) => (
+              <div
+                key={item.title}
+                className={`flex items-center gap-4 lg:gap-5 rounded-2xl border p-4 lg:p-5 ${isDarkTheme ? 'border-slate-700/40 bg-slate-900/60' : 'border-slate-200 bg-white/80'}`}
+              >
+                <div className="w-24 h-24 lg:w-28 lg:h-28 2xl:w-32 2xl:h-32 shrink-0 rounded-xl overflow-hidden ican-cove-panel">
+                  <img
+                    src={item.image}
+                    alt={item.title}
+                    className="w-full h-full object-cover"
+                    onError={(e) => { e.target.style.display = 'none'; }}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <h4 className={`text-sm lg:text-base 2xl:text-lg font-bold ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>
+                    {item.emoji} {item.title}
+                  </h4>
+                  <p className={`mt-1.5 text-xs lg:text-sm 2xl:text-base leading-relaxed text-justify ${isDarkTheme ? 'text-gray-300' : 'text-slate-600'}`}>
+                    {item.blurb}
+                  </p>
                 </div>
               </div>
-            </div>
+            ))}
           </div>
         </div>
       </div>
@@ -1773,7 +1773,7 @@ const LandingPage = ({ onGetStarted }) => {
 
           {/* Public threads grid */}
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {threads.map((m) => {
+            {threads.slice(0, boardVisibleCount).map((m) => {
               const isExpanded = expandedThreadId === m.id;
               const canReply = !!(identity || guestIdentity?.name);
               return (
@@ -1918,6 +1918,18 @@ const LandingPage = ({ onGetStarted }) => {
             )}
           </div>
 
+          {threads.length > boardVisibleCount && (
+            <div className="mt-6 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setBoardVisibleCount((prev) => prev + 6)}
+                className={`rounded-xl border px-5 py-2.5 text-sm font-bold transition ${isDarkTheme ? 'border-slate-600/40 bg-white/5 text-slate-200 hover:bg-white/10' : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+              >
+                Load more
+              </button>
+            </div>
+          )}
+
           {contributors.length > 0 && (
             <div className="mt-8">
               <p className="text-xs uppercase tracking-[0.3em] text-cyan-400">Community members</p>
@@ -1974,9 +1986,9 @@ const LandingPage = ({ onGetStarted }) => {
         </div>
       )}
 
-      <UpdatesFeed />
       <CommunityStoriesCarousel />
       <PitchinPreview onGetStarted={onGetStarted} authId={identity?.authId ?? null} />
+      <DropshipPreview />
       <WalletMockTrader onGetStarted={onGetStarted} authId={identity?.authId ?? null} />
       <TrustGroupsPreview onGetStarted={onGetStarted} />
 

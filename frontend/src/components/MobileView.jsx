@@ -90,6 +90,7 @@ import { getSharePriceHistory, getLatestSnapshot } from '../services/pitchinShar
 import DailyTrackingChart from './DailyTrackingChart';
 import IcanPriceChartWidget from './IcanPriceChartWidget';
 import DropshipDashboardWidget from './DropshipDashboardWidget';
+import DashboardUpdatesCard from './DashboardUpdatesCard';
 import BusinessTrendChart from './BusinessTrendChart';
 import { supabase } from '../lib/supabase/client';
 import { deleteTransaction } from '../services/supabaseTransactions';
@@ -109,7 +110,6 @@ import {
 } from '../services/universalNotificationsService';
 import { getUserTrustGroups } from '../services/trustService';
 import { getAllAccessibleBusinessProfiles, getContributorNames } from '../services/pitchingService';
-import { getUserStatuses, getActiveStatuses } from '../services/statusService';
 import { CountryService } from '../services/countryService';
 import {
   getPendingSharedContent,
@@ -1091,9 +1091,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [showStatusPage, setShowStatusPage] = useState(false);
   const [showStatusUploader, setShowStatusUploader] = useState(false);
   const [sharedContent, setSharedContent] = useState(null); // Store shared content from external apps
-  const [userStatuses, setUserStatuses] = useState([]);
-  const [loadingStatuses, setLoadingStatuses] = useState(false);
-  const [brokenStatusMediaIds, setBrokenStatusMediaIds] = useState(() => new Set());
+  const [updatesRefreshToken, setUpdatesRefreshToken] = useState(0);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [showAvatarView, setShowAvatarView] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
@@ -2620,31 +2618,6 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     };
   }, [userProfile?.id, authContextUser?.id]);
 
-  // Load all available statuses/updates for Updates section
-  useEffect(() => {
-    const loadStatuses = async () => {
-      try {
-        setLoadingStatuses(true);
-        
-        // Get all active statuses from all users
-        const { statuses: allStats } = await getActiveStatuses();
-        
-        // Sort with user's own statuses first (if available), then others'
-        const userOwnStatuses = allStats?.filter(s => s.user_id === userProfile?.id) || [];
-        const otherStatuses = allStats?.filter(s => s.user_id !== userProfile?.id) || [];
-        const combinedStatuses = [...userOwnStatuses, ...otherStatuses];
-        
-        setUserStatuses(combinedStatuses || []);
-      } catch (error) {
-        console.error('Error loading statuses:', error);
-        setUserStatuses([]);
-      } finally {
-        setLoadingStatuses(false);
-      }
-    };
-
-    loadStatuses();
-  }, [userProfile?.id]);
 
   // Check for shared content from external apps (Web Share Target API)
   useEffect(() => {
@@ -6922,153 +6895,14 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
       {/* ====== UPDATES SECTION - HORIZONTAL SCROLLING ====== */}
       <div className="px-4 py-6">
-        {loadingStatuses ? (
-          <div className="relative rounded-2xl overflow-hidden border-2 p-8" style={{ borderColor: 'var(--color-border)', background: modePalette.updatesCard }}>
-            <h2 className="absolute top-3 left-4 text-lg font-bold z-10" style={{ color: 'var(--color-text)' }}>Updates</h2>
-            <div className="flex items-center justify-center py-4">
-              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2" style={{ borderColor: 'var(--color-primary)' }}></div>
-            </div>
-          </div>
-        ) : userStatuses.length > 0 ? (
-          <div className="relative">
-            {/* "Updates" overlay label */}
-            <h2 className="absolute top-3 left-4 text-lg font-bold z-10 drop-shadow-lg" style={{ color: 'var(--color-text)' }}>Updates</h2>
-
-            {/* Horizontal Scrolling Updates */}
-            <div className="overflow-x-auto pb-4 -mr-4 pr-4 scrollbar-hide pt-10">
-              <div className="flex gap-3 min-w-min">
-                {userStatuses.map(status => {
-                  // media_type should be 'image'/'video', but fall back to sniffing
-                  // media_url's extension so a mismatched/missing value still renders
-                  // the real thumbnail here instead of silently showing an empty card.
-                  // A row can also claim media_type: 'image'/'video' while media_url
-                  // itself is empty (a failed/partial save) -- without the hasMediaUrl
-                  // guard that renders <img src={undefined}>, which shows nothing and
-                  // never fires onError, so the card looks blank with no way to tell why.
-                  const normalizedType = (status.media_type || '').toLowerCase().trim();
-                  const hasMediaUrl = Boolean(status.media_url && String(status.media_url).trim());
-                  const effectiveType = hasMediaUrl
-                    ? (['image', 'video'].includes(normalizedType)
-                        ? normalizedType
-                        : (/\.(mp4|mov|webm|m4v)(\?|$)/i.test(status.media_url) ? 'video' : 'image'))
-                    : 'text';
-                  return (
-                  <div
-                    key={status.id}
-                    onClick={openStatusViewer}
-                    className="group relative rounded-2xl overflow-hidden cursor-pointer w-56 h-32 bg-black flex-shrink-0 hover:scale-105 transition-transform duration-300 border border-white/10"
-                  >
-                    {/* Update Content */}
-                    {(effectiveType === 'image' || effectiveType === 'video') && brokenStatusMediaIds.has(status.id) ? (
-                      <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 bg-slate-800">
-                        <AlertTriangle className="w-5 h-5 text-white/50" />
-                        <span className="text-[10px] text-white/50">Preview unavailable</span>
-                      </div>
-                    ) : effectiveType === 'image' ? (
-                      <img
-                        src={status.media_url}
-                        alt="Update"
-                        className="w-full h-full object-cover group-hover:brightness-75 transition-all"
-                        onError={() => {
-                          console.error('Failed to load status image preview:', status.media_url);
-                          setBrokenStatusMediaIds(prev => new Set(prev).add(status.id));
-                        }}
-                      />
-                    ) : effectiveType === 'video' ? (
-                      <>
-                        <video
-                          src={status.media_url}
-                          muted
-                          playsInline
-                          preload="metadata"
-                          className="w-full h-full object-cover group-hover:brightness-75 transition-all"
-                          onError={() => {
-                            console.error('Failed to load status video preview:', status.media_url);
-                            setBrokenStatusMediaIds(prev => new Set(prev).add(status.id));
-                          }}
-                        />
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                          <Play className="w-6 h-6 text-white/80" />
-                        </div>
-                      </>
-                    ) : (
-                      <div
-                        style={{ backgroundColor: status.background_color || '#6366f1' }}
-                        className="w-full h-full flex items-center justify-center p-4"
-                      >
-                        <p className="text-white text-center text-sm font-medium line-clamp-4">
-                          {status.caption}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Gradient Overlay on hover */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-
-                    {/* Duration Badge */}
-                    <div className="absolute top-2 right-2 bg-black/70 backdrop-blur-sm px-2 py-1 rounded-full text-xs text-white font-medium">
-                      {Math.ceil((new Date(status.expires_at) - new Date()) / (1000 * 60 * 60))}h
-                    </div>
-
-                    {/* Poster identity — real profile photo, not a placeholder */}
-                    <div className="absolute bottom-2 left-2 flex items-center gap-1.5 min-w-0 max-w-[85%]">
-                      {status.poster_avatar_url ? (
-                        <img
-                          src={status.poster_avatar_url}
-                          alt={status.poster_full_name || 'Poster'}
-                          className="w-6 h-6 rounded-full object-cover border border-white/40 flex-shrink-0"
-                          onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
-                        />
-                      ) : null}
-                      <div
-                        className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 items-center justify-center text-white text-[10px] font-bold border border-white/40 flex-shrink-0"
-                        style={{ display: status.poster_avatar_url ? 'none' : 'flex' }}
-                      >
-                        {(status.poster_full_name || 'U').charAt(0).toUpperCase()}
-                      </div>
-                      <span className="text-white text-xs font-medium truncate drop-shadow-lg">
-                        {status.user_id === (authContextUser?.id || userProfile?.id) ? 'You' : (status.poster_full_name || 'User')}
-                      </span>
-                    </div>
-                  </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* View All Updates Button */}
-            <button
-              onClick={openStatusViewer}
-              className="w-full border-2 rounded-2xl py-3 flex items-center justify-center gap-2 transition-all group mt-2 hover:scale-[1.01]"
-              style={{ borderColor: modePalette.sectionBorder, background: modePalette.updatesCard }}
-            >
-              <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>View All Updates ({userStatuses.length})</span>
-              <ChevronRight className="w-4 h-4" style={{ color: 'var(--color-primary)' }} />
-            </button>
-          </div>
-        ) : (
-          /* No Updates State - "Updates" as overlay on container */
-          <button
-            onClick={openStatusComposer}
-            className="relative w-full border-2 rounded-2xl p-6 flex flex-col items-center gap-4 transition-all group"
-            style={{ borderColor: modePalette.sectionBorder, background: modePalette.updatesCard }}
-          >
-            {/* "Updates" overlay label */}
-            <span className="absolute top-3 left-4 text-lg font-bold drop-shadow-lg" style={{ color: 'var(--color-text)' }}>Updates</span>
-
-            <div className="w-16 h-16 rounded-full flex items-center justify-center transition mt-4" style={{ backgroundColor: 'var(--color-primaryLight)' }}>
-              <Plus className="w-8 h-8 transition" style={{ color: 'var(--color-primary)' }} />
-            </div>
-            <div className="text-center">
-              <h3 className="text-lg font-bold transition" style={{ color: 'var(--color-text)' }}>Any Updates</h3>
-              <p className="text-sm transition mt-1" style={{ color: 'var(--color-textSecondary)' }}>Share a moment with your community</p>
-            </div>
-            <div className="flex items-center gap-2 transition" style={{ color: 'var(--color-primary)' }}>
-              <span className="text-sm font-medium">Start Now</span>
-              <ChevronRight className="w-4 h-4" />
-            </div>
-          </button>
-        )}
+        <DashboardUpdatesCard
+          userId={authContextUser?.id || userProfile?.id}
+          sectionBorder={modePalette.sectionBorder}
+          cardBackground={modePalette.updatesCard}
+          onOpenViewer={() => openStatusViewer()}
+          onOpenComposer={openStatusComposer}
+          refreshToken={updatesRefreshToken}
+        />
       </div>
 
       {/* ====== COMMENTED OUT - ALL SECTIONS BELOW REMOVED FOR CLEANUP ====== */}
@@ -8103,17 +7937,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 markSharedContentAsConsumed(sharedContent.id).catch(console.error);
                 setSharedContent(null);
               }
-              // Refresh statuses after creating a new one
-              (async () => {
-                try {
-                  const { statuses: allStats } = await getActiveStatuses();
-                  const userOwnStatuses = allStats?.filter(s => s.user_id === userProfile?.id) || [];
-                  const otherStatuses = allStats?.filter(s => s.user_id !== userProfile?.id) || [];
-                  setUserStatuses([...userOwnStatuses, ...otherStatuses]);
-                } catch (e) {
-                  console.error('Error refreshing statuses:', e);
-                }
-              })();
+              // Refresh the dashboard Updates card after creating a new one
+              setUpdatesRefreshToken(t => t + 1);
             }}
             sharedContent={sharedContent}
           />

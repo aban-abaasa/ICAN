@@ -13,18 +13,35 @@ const PitchinPreview = ({ onGetStarted, authId = null }) => {
   const isDarkTheme = actualTheme === 'dark';
   const [pitches, setPitches] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [amounts, setAmounts] = useState({});
   const [results, setResults] = useState({});
   const [activity, setActivity] = useState([]);
   const [videoErrors, setVideoErrors] = useState({});
   const guestKey = useMemo(() => getOrCreateGuestLikeKey(), []);
+  const PAGE_SIZE = 6;
 
   useEffect(() => {
-    getAllPitches(6, 0)
-      .then((rows) => setPitches(rows || []))
+    getAllPitches(PAGE_SIZE, 0)
+      .then((rows) => {
+        setPitches(rows || []);
+        setHasMore((rows || []).length >= PAGE_SIZE);
+      })
       .catch((err) => console.error('[PitchinPreview] failed to load pitches:', err))
       .finally(() => setLoading(false));
   }, []);
+
+  const handleLoadMore = () => {
+    setLoadingMore(true);
+    getAllPitches(PAGE_SIZE, pitches.length)
+      .then((rows) => {
+        setPitches((prev) => [...prev, ...(rows || [])]);
+        setHasMore((rows || []).length >= PAGE_SIZE);
+      })
+      .catch((err) => console.error('[PitchinPreview] failed to load more pitches:', err))
+      .finally(() => setLoadingMore(false));
+  };
 
   const loadActivity = useCallback(() => {
     fetchRecentMockTrades(6)
@@ -161,6 +178,19 @@ const PitchinPreview = ({ onGetStarted, authId = null }) => {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {!loading && hasMore && pitches.length > 0 && (
+          <div className="mt-6 flex justify-center">
+            <button
+              type="button"
+              onClick={handleLoadMore}
+              disabled={loadingMore}
+              className={`rounded-xl border px-5 py-2.5 text-sm font-bold transition disabled:opacity-50 ${isDarkTheme ? 'border-slate-600/40 bg-white/5 text-slate-200 hover:bg-white/10' : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+            >
+              {loadingMore ? 'Loading…' : 'Load more'}
+            </button>
           </div>
         )}
 

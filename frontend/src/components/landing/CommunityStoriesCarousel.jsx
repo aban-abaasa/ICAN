@@ -26,11 +26,11 @@ const CommunityStoriesCarousel = () => {
   if (!loading && stories.length === 0) return null;
 
   return (
-    <section id="community-stories" className="relative py-8 md:py-12 px-4 sm:px-6 lg:px-8 2xl:px-16">
+    <section id="live-explore" className="relative py-8 md:py-12 px-4 sm:px-6 lg:px-8 2xl:px-16">
       <div className="max-w-6xl 2xl:max-w-7xl mx-auto">
         <div className="flex items-center gap-2 mb-4">
           <Camera className={`w-4 h-4 ${isDarkTheme ? 'text-rose-300' : 'text-rose-600'}`} />
-          <h3 className={`text-sm md:text-base font-bold uppercase tracking-wide ${isDarkTheme ? 'text-rose-300' : 'text-rose-700'}`}>Community Stories</h3>
+          <h3 className={`text-sm md:text-base font-bold uppercase tracking-wide ${isDarkTheme ? 'text-rose-300' : 'text-rose-700'}`}>Live Updates</h3>
           <span className={`text-xs ${isDarkTheme ? 'text-slate-500' : 'text-slate-400'}`}>· real posts, expire after 24h</span>
         </div>
 
