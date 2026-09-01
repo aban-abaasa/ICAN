@@ -88,6 +88,8 @@ import { VelocityEngine } from '../utils/velocityEngine';
 import { journeyStages, determineCurrentStage, calculateStageProgress, getNextMilestone } from '../utils/journeyStages';
 import { getSharePriceHistory, getLatestSnapshot } from '../services/pitchinShareBlockchainService';
 import DailyTrackingChart from './DailyTrackingChart';
+import IcanPriceChartWidget from './IcanPriceChartWidget';
+import DropshipDashboardWidget from './DropshipDashboardWidget';
 import BusinessTrendChart from './BusinessTrendChart';
 import { supabase } from '../lib/supabase/client';
 import { deleteTransaction } from '../services/supabaseTransactions';
@@ -6629,6 +6631,16 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               onReset={handleTrendResetZoom}
               onDrill={handleTrendDrill}
             />
+
+            {/* Live ICANera price chart — real, not a shortcut into the wallet */}
+            <div className="mt-4">
+              <IcanPriceChartWidget />
+            </div>
+
+            {/* Dropship — resell any store's products, inline on the dashboard */}
+            <div className="mt-4">
+              <DropshipDashboardWidget userId={authContextUser?.id} userEmail={authContextUser?.email} />
+            </div>
 
             {/* Business valuation line graph — real Pitchin share value history */}
             {dashboardScope === 'business' && (

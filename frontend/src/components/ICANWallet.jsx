@@ -4665,34 +4665,6 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           </div>
         </div>
 
-        {/* 🛍️📊 Quick access: jump straight into Dropship or Chart & Analysis */}
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            onClick={() => { setActiveTab('trade'); setActiveTradeTab('dropship'); }}
-            className="solid-card p-4 flex items-center gap-3 text-left transition-all hover:translate-y-[-1px] border border-cyan-500/30 bg-gradient-to-br from-cyan-900/20 to-teal-900/10"
-          >
-            <div className="p-2.5 rounded-lg bg-cyan-500/20 shrink-0">
-              <span className="text-2xl">🛍️</span>
-            </div>
-            <div className="min-w-0">
-              <p className="text-white font-semibold text-sm">Dropship</p>
-              <p className="text-slate-400 text-xs truncate">Resell any store's products</p>
-            </div>
-          </button>
-          <button
-            onClick={() => { setActiveTab('trade'); setActiveTradeTab('chart'); }}
-            className="solid-card p-4 flex items-center gap-3 text-left transition-all hover:translate-y-[-1px] border border-amber-500/30 bg-gradient-to-br from-amber-900/20 to-orange-900/10"
-          >
-            <div className="p-2.5 rounded-lg bg-amber-500/20 shrink-0">
-              <span className="text-2xl">📊</span>
-            </div>
-            <div className="min-w-0">
-              <p className="text-white font-semibold text-sm">Chart & Analysis</p>
-              <p className="text-slate-400 text-xs truncate">Live IcanEra price chart</p>
-            </div>
-          </button>
-        </div>
-
         {/* 🎯 ACCOUNT INFO CARD - OR CREATE ACCOUNT PROMPT */}
         <div className="space-y-4">
           {!userAccount || !userAccount.pin_hash ? (

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ShoppingCart, Plus, Minus, X, Loader, AlertCircle, CheckCircle, Store, Trash2 } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, X, Loader, AlertCircle, CheckCircle, Store, Trash2, Truck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { AuthPage } from './auth';
 import { getDropshipStorefront, dropshipCheckout } from '../services/dropshipService';
@@ -24,6 +24,7 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [deliveryFee, setDeliveryFee] = useState('');
   const [placing, setPlacing] = useState(false);
   const [checkoutError, setCheckoutError] = useState(null);
   const [receipt, setReceipt] = useState(null);
@@ -56,6 +57,9 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
   );
   const cartTotal = cartItems.reduce((sum, row) => sum + row.listing.listed_price * row.qty, 0);
   const cartCount = cartItems.reduce((sum, row) => sum + row.qty, 0);
+  const allFreeDelivery = cartItems.length > 0 && cartItems.every((row) => row.listing.free_delivery);
+  const deliveryFeeAmount = allFreeDelivery ? 0 : (Number(deliveryFee) || 0);
+  const orderTotal = cartTotal + deliveryFeeAmount;
 
   const changeQty = (listingId, delta, maxStock) => {
     setCart((prev) => {
@@ -82,6 +86,7 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
         customerName: customerName.trim() || undefined,
         customerPhone: customerPhone.trim() || undefined,
         deliveryAddress: deliveryAddress.trim() || undefined,
+        deliveryFee: deliveryFeeAmount,
       });
       if (error || !data?.success) {
         throw new Error(error?.message || data?.error || 'Checkout failed');
@@ -125,6 +130,9 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 text-left space-y-2">
             <div className="flex justify-between text-sm"><span className="text-slate-400">Receipt number</span><span className="text-white font-mono">{receipt.customer_receipt_number}</span></div>
             <div className="flex justify-between text-sm"><span className="text-slate-400">Items</span><span className="text-white">{receipt.items_count}</span></div>
+            {receipt.delivery_fee > 0 && (
+              <div className="flex justify-between text-sm"><span className="text-slate-400">Delivery fee</span><span className="text-white">{formatUGX(receipt.delivery_fee)}</span></div>
+            )}
             <div className="flex justify-between text-base font-semibold border-t border-slate-800 pt-2 mt-2"><span className="text-slate-300">Total paid</span><span className="text-white">{formatUGX(receipt.customer_paid_total)}</span></div>
             {receipt.delivery_address && (
               <div className="flex justify-between text-sm"><span className="text-slate-400">Delivery to</span><span className="text-white text-right">{receipt.delivery_address}</span></div>
@@ -169,6 +177,9 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
               <div className="p-2.5 flex-1 flex flex-col">
                 <p className="text-sm text-white font-medium line-clamp-2 min-h-[2.5rem]">{listing.name}</p>
                 <p className="text-indigo-300 font-bold mt-1">{formatUGX(listing.listed_price)}</p>
+                {listing.free_delivery && (
+                  <p className="mt-0.5 flex items-center gap-1 text-[11px] text-emerald-400"><Truck className="w-3 h-3" />Free delivery</p>
+                )}
                 {!listing.in_stock ? (
                   <p className="mt-2 text-xs text-red-400">Out of stock</p>
                 ) : qty === 0 ? (
@@ -211,13 +222,32 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
               )}
               {cartItems.length > 0 && (
                 <>
-                  <div className="border-t border-slate-800 pt-3 flex justify-between text-white font-semibold">
-                    <span>Total</span><span>{formatUGX(cartTotal)}</span>
-                  </div>
                   <div className="space-y-2 pt-2">
                     <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Your name" className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500" />
                     <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Phone number" className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500" />
                     <input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="Delivery address" className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500" />
+                    {allFreeDelivery ? (
+                      <p className="flex items-center gap-1.5 text-xs text-emerald-400"><Truck className="w-3.5 h-3.5" />Free delivery on this order</p>
+                    ) : (
+                      <div>
+                        <label className="flex items-center gap-1.5 text-xs text-slate-400 mb-1"><Truck className="w-3.5 h-3.5" />Delivery fee (paid to the BodaGoera rider on pickup)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={deliveryFee}
+                          onChange={(e) => setDeliveryFee(e.target.value)}
+                          placeholder="0"
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500"
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <div className="border-t border-slate-800 pt-3 space-y-1">
+                    <div className="flex justify-between text-sm text-slate-400"><span>Items</span><span>{formatUGX(cartTotal)}</span></div>
+                    {deliveryFeeAmount > 0 && (
+                      <div className="flex justify-between text-sm text-slate-400"><span>Delivery</span><span>{formatUGX(deliveryFeeAmount)}</span></div>
+                    )}
+                    <div className="flex justify-between text-white font-semibold"><span>Total</span><span>{formatUGX(orderTotal)}</span></div>
                   </div>
                   {checkoutError && <p className="text-xs text-red-400">{checkoutError}</p>}
                   <button
@@ -226,7 +256,7 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
                     className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-semibold transition flex items-center justify-center gap-2"
                   >
                     {placing ? <Loader className="w-4 h-4 animate-spin" /> : null}
-                    {user ? `Pay ${formatUGX(cartTotal)} with ICANera` : 'Sign in to pay with ICANera'}
+                    {user ? `Pay ${formatUGX(orderTotal)} with ICANera` : 'Sign in to pay with ICANera'}
                   </button>
                 </>
               )}

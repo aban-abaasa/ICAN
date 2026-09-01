@@ -29,19 +29,22 @@ export async function getDropshipStorefront(resellerBusinessProfileId) {
 }
 
 // List, re-price, or unlist (is_active=false) a product on the reseller's storefront.
-export async function setDropshipListing(resellerBusinessProfileId, productId, listedPrice, isActive = true) {
+// freeDelivery: when true, the customer never owes a delivery fee for this item.
+export async function setDropshipListing(resellerBusinessProfileId, productId, listedPrice, isActive = true, freeDelivery = false) {
   const { data, error } = await supabase.rpc('dropship_set_listing', {
     p_reseller_business_profile_id: resellerBusinessProfileId,
     p_product_id: productId,
     p_listed_price: listedPrice,
     p_is_active: isActive,
+    p_free_delivery: freeDelivery,
   });
   return { data, error };
 }
 
 // Atomic checkout: decrements real store stock, pays the store + reseller via
 // transfer_ican(), and returns both the customer and store receipt numbers.
-export async function dropshipCheckout(resellerBusinessProfileId, cart, { customerName, customerPhone, deliveryAddress, storeLocation } = {}) {
+// deliveryFee is ignored (forced to 0) if every item in the cart is free_delivery.
+export async function dropshipCheckout(resellerBusinessProfileId, cart, { customerName, customerPhone, deliveryAddress, storeLocation, deliveryFee } = {}) {
   const { data, error } = await supabase.rpc('dropship_checkout', {
     p_reseller_business_profile_id: resellerBusinessProfileId,
     p_cart: cart,
@@ -49,6 +52,7 @@ export async function dropshipCheckout(resellerBusinessProfileId, cart, { custom
     p_customer_phone: customerPhone || null,
     p_delivery_address: deliveryAddress || null,
     p_store_location: storeLocation || null,
+    p_delivery_fee: deliveryFee || 0,
   });
   return { data, error };
 }
