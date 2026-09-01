@@ -72,3 +72,44 @@ export async function getStoreDropshipSales(supermarketId) {
   });
   return { data: data || [], error };
 }
+
+// Global cross-reseller product browse for ordinary users who don't run a
+// storefront of their own -- one row per distinct product, grouped across
+// every reseller currently listing it.
+export async function getDropshipBrowseProducts({ query = '', limit = 40, offset = 0 } = {}) {
+  const { data, error } = await supabase.rpc('get_dropship_browsable_products', {
+    p_query: query,
+    p_limit: limit,
+    p_offset: offset,
+  });
+  return { data: data || [], error };
+}
+
+// A single product's individual reseller offers (price, free delivery, stock),
+// for the expanded row on the browse page.
+export async function getDropshipProductOffers(productId) {
+  const { data, error } = await supabase.rpc('get_dropship_product_offers', {
+    p_product_id: productId,
+  });
+  return { data: data || [], error };
+}
+
+// Batched: which of these business_profile_ids currently have a live dropship
+// storefront -- used to gate a "Buy Now" tag on Pitchin pitches.
+export async function getBusinessStorefronts(businessProfileIds) {
+  if (!businessProfileIds || businessProfileIds.length === 0) return { data: [], error: null };
+  const { data, error } = await supabase.rpc('get_business_storefronts', {
+    p_business_profile_ids: businessProfileIds,
+  });
+  return { data: data || [], error };
+}
+
+// Batched: which of these users own a business with a live dropship storefront
+// -- used to gate an "Order Now" tag on Status updates, which only carry user_id.
+export async function getUserStorefronts(userIds) {
+  if (!userIds || userIds.length === 0) return { data: [], error: null };
+  const { data, error } = await supabase.rpc('get_user_storefronts', {
+    p_user_ids: userIds,
+  });
+  return { data: data || [], error };
+}

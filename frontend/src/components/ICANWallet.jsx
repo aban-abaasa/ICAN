@@ -28,7 +28,8 @@ import {
   Menu,
   X,
   Bookmark,
-  Target
+  Target,
+  ShoppingBag
 } from 'lucide-react';
 import ICANWalletInbox from './ICANWalletInbox';
 import momoService from '../services/momoService';
@@ -51,6 +52,7 @@ import { getAllAccessibleBusinessProfiles } from '../services/pitchingService';
 import { calculateLiveShareValue } from '../services/pitchinValuationService';
 import { createBusinessProfileFromCategory } from '../services/businessManagementService';
 import DropshipResellerDashboard from './DropshipResellerDashboard';
+import DropshipBrowse from './DropshipBrowse';
 import AgentDashboard from './AgentDashboard';
 import UnifiedApprovalModal from './UnifiedApprovalModal';
 import CandlestickChart from './CandlestickChart';
@@ -332,7 +334,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   const dropdownRef = useRef(null);
   const walletRootRef = useRef(null);
 
-  const VALID_WALLET_TABS = ['overview', 'trade', 'transactions', 'deposit', 'withdraw', 'agent', 'cards', 'business', 'trust', 'settings'];
+  const VALID_WALLET_TABS = ['overview', 'trade', 'transactions', 'deposit', 'withdraw', 'agent', 'cards', 'shop', 'business', 'trust', 'settings'];
   const VALID_TRADE_TABS = ['wallet', 'chart', 'buy', 'sell', 'book', 'history'];
   // Trade is now a regular header tab rather than a floating modal.
   const showTradeModal = activeTab === 'trade';
@@ -4448,6 +4450,17 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
             </button>
 
             <button
+              onClick={() => setActiveTab('shop')}
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+                activeTab === 'shop' ? 'text-white' : 'hover:opacity-90'
+              }`}
+              style={activeTab === 'shop' ? walletUi.tabOthersActive : walletUi.tabOthersInactive}
+            >
+              <ShoppingBag className="w-4 h-4" />
+              Shop
+            </button>
+
+            <button
               onClick={() => setActiveTab('business')}
               className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
                 activeTab === 'business' ? 'text-white' : 'hover:opacity-90'
@@ -4496,6 +4509,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 {activeTab === 'withdraw' && 'Withdraw'}
                 {activeTab === 'agent' && '🏪 Agent Terminal'}
                 {activeTab === 'cards' && 'Cards'}
+                {activeTab === 'shop' && 'Shop'}
                 {activeTab === 'business' && 'Business Accounts'}
                 {activeTab === 'trust' && 'Trust Account'}
                 {activeTab === 'settings' && 'Settings'}
@@ -4570,6 +4584,15 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
               >
                 <CreditCard className="w-4 h-4" />
                 Cards
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('shop'); setShowMobileNavMenu(false); }}
+                className="w-full px-4 py-3 text-left flex items-center gap-2 transition-all hover:opacity-90"
+                style={activeTab === 'shop' ? walletUi.dropdownActiveItem : walletUi.dropdownItem}
+              >
+                <ShoppingBag className="w-4 h-4" />
+                Shop
               </button>
 
               <button
@@ -5158,6 +5181,25 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Shop Tab — browse dropship-listed products across every reseller, no
+          storefront of your own required */}
+      {activeTab === 'shop' && (
+        <div className="space-y-4">
+          <div className="glass-card p-6 border border-cyan-500/30 bg-gradient-to-br from-cyan-900/20 to-slate-900/20">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 rounded-lg bg-cyan-500/30">
+                <ShoppingBag className="w-6 h-6 text-cyan-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-white">Shop</h3>
+                <p className="text-gray-400 text-sm">Browse products listed by resellers on IcanEra</p>
+              </div>
+            </div>
+            <DropshipBrowse />
           </div>
         </div>
       )}

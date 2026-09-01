@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { ThumbsUp, MessageCircle, Share2, Clock, Users, FileText, Zap, AlertCircle, Building2, Loader, Plus, Trash2, Lock, Unlock, X, Send, Copy, Check, Play, Home, BookMarked, Heart, Briefcase, Bell, Search } from 'lucide-react';
+import { ThumbsUp, MessageCircle, Share2, Clock, Users, FileText, Zap, AlertCircle, Building2, Loader, Plus, Trash2, Lock, Unlock, X, Send, Copy, Check, Play, Home, BookMarked, Heart, Briefcase, Bell, Search, ShoppingBag } from 'lucide-react';
 import PitchVideoRecorder from './PitchVideoRecorder';
 import SmartContractGenerator from './SmartContractGenerator';
 import ShareSigningFlow from './ShareSigningFlow';
@@ -46,6 +46,7 @@ import {
 import { getUserNotifications } from '../services/investmentNotificationsService';
 import { getLiveShareOffer } from '../services/pitchinValuationService';
 import { resolveMediaValue } from '../services/r2StorageService';
+import { getBusinessStorefronts } from '../services/dropshipService';
 
 // Why an Invest tap can't open the signing flow. Each case is a missing piece
 // of live data — the flow never falls back to the listed pitch price, so the
@@ -61,6 +62,9 @@ export const LIVE_OFFER_BLOCKED_MESSAGE = {
 const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusinessProfile = false, onBusinessProfileRequestConsumed = null, navRef = null, onTabChange = null }) => {
   const [pitches, setPitches] = useState([]);
   const [filteredPitches, setFilteredPitches] = useState([]);
+  // business_profile_id -> business_name, only for pitchers who currently have
+  // a live dropship storefront -- gates the "Buy Now" tag on each pitch.
+  const [storefrontsByBusiness, setStorefrontsByBusiness] = useState(new Map());
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
   const [supabaseReady, setSupabaseReady] = useState(true);
@@ -343,6 +347,26 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
 
     initialize();
   }, []);
+
+  // Which pitchers currently have a live dropship storefront -- re-resolved
+  // whenever the visible pitch list changes (new load, like/comment updates
+  // still keep the same business_profile_ids so this stays cheap).
+  useEffect(() => {
+    const businessIds = [...new Set(pitches.map((p) => p.business_profile_id).filter(Boolean))];
+    if (businessIds.length === 0) {
+      setStorefrontsByBusiness(new Map());
+      return undefined;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data } = await getBusinessStorefronts(businessIds);
+      if (cancelled) return;
+      const map = new Map();
+      (data || []).forEach((row) => map.set(row.business_profile_id, row.business_name));
+      setStorefrontsByBusiness(map);
+    })();
+    return () => { cancelled = true; };
+  }, [pitches]);
 
   // Keep desktop/mobile layout in sync with viewport width
   useEffect(() => {
@@ -1524,6 +1548,19 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
                         </div>
                         <span className="text-white text-[9px] font-bold drop-shadow-lg">{pitch.shares_count || 0}</span>
                       </button>
+
+                      {storefrontsByBusiness.has(pitch.business_profile_id) && (
+                        <button
+                          onClick={() => { window.location.href = `/store/${pitch.business_profile_id}`; }}
+                          className="icon-btn-transparent flex flex-col items-center gap-0.5"
+                          title="Buy Now"
+                        >
+                          <div className="w-9 h-9 flex items-center justify-center rounded-full bg-emerald-500/90 transition-all">
+                            <ShoppingBag className="w-4 h-4 text-white drop-shadow-lg" />
+                          </div>
+                          <span className="text-white text-[9px] font-bold drop-shadow-lg">Buy Now</span>
+                        </button>
+                      )}
 
                       <button
                         onClick={() => handleSmartContractClick(pitch)}

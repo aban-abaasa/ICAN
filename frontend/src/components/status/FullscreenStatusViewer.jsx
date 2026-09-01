@@ -4,13 +4,14 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Heart, Share2, ChevronLeft, ChevronRight, Send, MessageCircle } from 'lucide-react';
+import { X, Heart, Share2, ChevronLeft, ChevronRight, Send, MessageCircle, ShoppingBag } from 'lucide-react';
 import { incrementStatusView } from '../../services/statusService';
 import {
   sendStatusMessage,
   getStatusMessages,
   subscribeToStatusMessages
 } from '../../services/statusMessagesService';
+import { getUserStorefronts } from '../../services/dropshipService';
 import { useAuth } from '../../context/AuthContext';
 
 const timeAgo = (timestamp) => {
@@ -36,6 +37,9 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
   const [showCommentsPanel, setShowCommentsPanel] = useState(false);
   const messagesEndRef = useRef(null);
   const [captionExpanded, setCaptionExpanded] = useState(false);
+  // user_id -> business_profile_id, only for posters who currently have a
+  // live dropship storefront -- gates the "Order Now" tag on their statuses.
+  const [storefrontsByUser, setStorefrontsByUser] = useState(new Map());
 
   const currentStatus = statuses[currentIndex];
 
@@ -50,6 +54,25 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
   useEffect(() => {
     setCaptionExpanded(false);
   }, [currentIndex]);
+
+  // Which of the posters in this status set currently have a live dropship
+  // storefront -- resolved once per statuses batch (e.g. one contact's ring).
+  useEffect(() => {
+    const userIds = [...new Set(statuses.map((s) => s.user_id).filter(Boolean))];
+    if (userIds.length === 0) {
+      setStorefrontsByUser(new Map());
+      return undefined;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data } = await getUserStorefronts(userIds);
+      if (cancelled) return;
+      const map = new Map();
+      (data || []).forEach((row) => map.set(row.user_id, row.business_profile_id));
+      setStorefrontsByUser(map);
+    })();
+    return () => { cancelled = true; };
+  }, [statuses]);
 
   // Progress bar animation
   useEffect(() => {
@@ -419,6 +442,17 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
               >
                 <Share2 className="w-6 h-6" />
               </button>
+
+              {storefrontsByUser.has(currentStatus.user_id) && (
+                <button
+                  onClick={() => { window.location.href = `/store/${storefrontsByUser.get(currentStatus.user_id)}`; }}
+                  className="p-3 rounded-full backdrop-blur-sm bg-emerald-500/90 text-white hover:bg-emerald-500 transition-all flex items-center gap-1.5"
+                  title="Order Now"
+                >
+                  <ShoppingBag className="w-6 h-6" />
+                  <span className="text-sm font-medium pr-1">Order Now</span>
+                </button>
+              )}
 
               <button
                 onClick={() => setShowCommentsPanel(!showCommentsPanel)}

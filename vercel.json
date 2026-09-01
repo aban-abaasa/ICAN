@@ -6,6 +6,7 @@
   "rewrites": [
     { "source": "/status/:id", "destination": "/api/share-preview?type=status&id=:id" },
     { "source": "/pitchin/:id", "destination": "/api/share-preview?type=pitch&id=:id" },
+    { "source": "/store/:id", "destination": "/api/share-preview?type=store&id=:id" },
     { "source": "/(.*)", "destination": "/" }
   ],
   "crons": [

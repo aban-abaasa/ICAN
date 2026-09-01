@@ -1,0 +1,8 @@
+6b6c79fc Major update: business profiles, ICAN wallet, investment agreements, CMMS, trust system, pitchin, and services
+c2ca396c Add AI analysis, tax rules, CMMS tracking, business profile country, advanced reports, and UI updates
+c45c3f52 Update CMSSModule, cmmsMessagingService, and add CMMS task progress tracking SQL
+--- 
+ M backend/.env.example
+?? _check.bat
+?? _push.bat
+?? _result.txt

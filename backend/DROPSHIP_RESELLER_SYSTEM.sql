@@ -296,13 +296,15 @@ DECLARE
   v_store_snapshot    JSONB := '[]'::JSONB;
   v_store_owner_id    UUID;
   v_store_name        TEXT;
+  v_store_address     TEXT;
+  v_store_business_id UUID;
   v_reseller_owner_id UUID;
   v_reseller_name     TEXT;
   v_cust_name         TEXT;
   v_cust_phone        TEXT;
-  v_pay_store  JSONB;
-  v_pay_reseller JSONB;
   v_dropship_order_id UUID;
+  v_debit_balance  NUMERIC;
+  v_leg_ican_amount NUMERIC;
 BEGIN
   IF v_auth_id IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'Sign in with your ICANera wallet to check out');
@@ -400,50 +402,100 @@ BEGIN
     );
   END LOOP;
 
-  SELECT owner_user_id, COALESCE(NULLIF(name, ''), NULLIF(location, ''), 'Store')
-    INTO v_store_owner_id, v_store_name
+  SELECT owner_user_id, COALESCE(NULLIF(name, ''), NULLIF(location, ''), 'Store'),
+         COALESCE(NULLIF(address, ''), NULLIF(location, '')), pichin_business_profile_id
+    INTO v_store_owner_id, v_store_name, v_store_address, v_store_business_id
     FROM public.supermarkets WHERE id = v_supermarket_id;
   IF v_store_owner_id IS NULL THEN
     RAISE EXCEPTION 'The source store has no payment wallet configured';
   END IF;
+  IF v_store_business_id IS NULL THEN
+    RAISE EXCEPTION 'The source store has no business wallet configured for dropship settlement';
+  END IF;
+
+  -- ── Every leg below: lock + debit the customer's personal ICAN wallet
+  -- directly (the proven balance-check path), record their own
+  -- 'transfer_out' ledger row so it still shows in their history, then
+  -- credit the payee's BUSINESS wallet straight away via the trusted
+  -- 'pos_sale' settlement entrypoint — full value, no person-to-business
+  -- tithe, no personal-wallet detour on the receiving side.
 
   -- ── Pay the store its real wholesale amount + tax ──────────────────────────
-  SELECT public.transfer_ican(
-    v_auth_id, v_store_owner_id,
-    GREATEST(ROUND((v_wholesale_subtotal + v_tax_total) / 5000, 8), 0.00000001),
-    format('Dropship sale via %s | receipt %s', COALESCE(v_reseller_name, 'reseller'), v_store_receipt_no),
-    'digital-city-era', v_tx_record_id || '_STORE',
-    v_wholesale_subtotal + v_tax_total, 'UGX', v_store_name, 'business', 'business_expense',
-    NULL
-  ) INTO v_pay_store;
-  IF NOT COALESCE((v_pay_store ->> 'success')::BOOLEAN, FALSE) THEN
-    RAISE EXCEPTION 'Payment to store failed: %', COALESCE(v_pay_store ->> 'error', 'unknown error');
+  v_leg_ican_amount := GREATEST(ROUND((v_wholesale_subtotal + v_tax_total) / 5000, 8), 0.00000001);
+
+  SELECT ican_balance INTO v_debit_balance
+    FROM public.ican_user_wallets WHERE user_id = v_auth_id FOR UPDATE;
+  IF v_debit_balance IS NULL THEN
+    RAISE EXCEPTION 'Your ICAN wallet was not found';
   END IF;
+  IF v_debit_balance < v_leg_ican_amount THEN
+    RAISE EXCEPTION 'Insufficient ICAN balance for this purchase';
+  END IF;
+
+  UPDATE public.ican_user_wallets
+     SET ican_balance = ican_balance - v_leg_ican_amount, total_spent = total_spent + v_leg_ican_amount
+   WHERE user_id = v_auth_id;
+
+  INSERT INTO public.ican_coin_transactions
+    (sender_user_id, ican_amount, type, transaction_type, status, local_amount, local_currency,
+     merchant_name, counterparty_type, expense_classification, source_app, reference_id, note, business_profile_id)
+  VALUES
+    (v_auth_id, v_leg_ican_amount, 'transfer_out', 'transfer_out', 'completed',
+     v_wholesale_subtotal + v_tax_total, 'UGX', v_store_name, 'business', 'business_expense',
+     'digital-city-era', v_tx_record_id || '_STORE',
+     format('Dropship sale via %s | receipt %s', COALESCE(v_reseller_name, 'reseller'), v_store_receipt_no),
+     v_store_business_id);
+
+  PERFORM public.ican_settle_business_wallet_income(
+    v_store_business_id, v_leg_ican_amount, 'digital-city-era', v_tx_record_id || '_STORE', 'pos_sale',
+    format('Dropship sale via %s | receipt %s', COALESCE(v_reseller_name, 'reseller'), v_store_receipt_no),
+    jsonb_build_object('dropship_order_transaction_id', v_tx_record_id, 'reseller', v_reseller_name)
+  );
 
   -- ── Pay the reseller their markup, tax-free ─────────────────────────────────
   IF v_margin_total > 0 THEN
-    SELECT public.transfer_ican(
-      v_auth_id, v_reseller_owner_id,
-      GREATEST(ROUND(v_margin_total / 5000, 8), 0.00000001),
-      format('Dropship commission | %s | receipt %s', COALESCE(v_store_name, 'store'), v_customer_receipt_no),
-      'digital-city-era', v_tx_record_id || '_RESELLER',
-      v_margin_total, 'UGX', v_reseller_name, 'business', 'income',
-      p_reseller_business_profile_id
-    ) INTO v_pay_reseller;
-    IF NOT COALESCE((v_pay_reseller ->> 'success')::BOOLEAN, FALSE) THEN
-      RAISE EXCEPTION 'Payment of reseller commission failed: %', COALESCE(v_pay_reseller ->> 'error', 'unknown error');
+    v_leg_ican_amount := GREATEST(ROUND(v_margin_total / 5000, 8), 0.00000001);
+
+    SELECT ican_balance INTO v_debit_balance
+      FROM public.ican_user_wallets WHERE user_id = v_auth_id FOR UPDATE;
+    IF v_debit_balance < v_leg_ican_amount THEN
+      RAISE EXCEPTION 'Insufficient ICAN balance for this purchase';
     END IF;
+
+    UPDATE public.ican_user_wallets
+       SET ican_balance = ican_balance - v_leg_ican_amount, total_spent = total_spent + v_leg_ican_amount
+     WHERE user_id = v_auth_id;
+
+    INSERT INTO public.ican_coin_transactions
+      (sender_user_id, ican_amount, type, transaction_type, status, local_amount, local_currency,
+       merchant_name, counterparty_type, expense_classification, source_app, reference_id, note, business_profile_id)
+    VALUES
+      (v_auth_id, v_leg_ican_amount, 'transfer_out', 'transfer_out', 'completed',
+       v_margin_total, 'UGX', v_reseller_name, 'business', 'business_expense',
+       'digital-city-era', v_tx_record_id || '_RESELLER',
+       format('Dropship commission | %s | receipt %s', COALESCE(v_store_name, 'store'), v_customer_receipt_no),
+       p_reseller_business_profile_id);
+
+    PERFORM public.ican_settle_business_wallet_income(
+      p_reseller_business_profile_id,
+      v_leg_ican_amount,
+      'digital-city-era',
+      v_tx_record_id || '_RESELLER_BIZ',
+      'pos_sale',
+      format('Dropship commission | %s | receipt %s', COALESCE(v_store_name, 'store'), v_customer_receipt_no),
+      jsonb_build_object('dropship_order_transaction_id', v_tx_record_id, 'store', v_store_name)
+    );
   END IF;
 
   -- ── One transaction record for the sale ─────────────────────────────────────
   INSERT INTO public.transactions (
     transaction_id, receipt_number, cashier_id, cashier_name,
-    register_number, store_location, subtotal, tax_amount, tax_rate,
+    register_number, store_location, supermarket_id, subtotal, tax_amount, tax_rate,
     total_amount, payment_method, customer_name, customer_phone,
     customer_user_id, items_count, items, status, created_at
   ) VALUES (
     v_tx_record_id, v_customer_receipt_no, v_auth_id, COALESCE(v_cust_name, 'Dropship Customer'),
-    'DROPSHIP', COALESCE(p_store_location, v_reseller_name, 'Dropship'),
+    'DROPSHIP', COALESCE(p_store_location, v_reseller_name, 'Dropship'), v_supermarket_id,
     v_customer_total - v_tax_total, v_tax_total,
     CASE WHEN v_customer_total > v_tax_total THEN ROUND((v_tax_total / (v_customer_total - v_tax_total)) * 100, 2) ELSE NULL END,
     v_customer_total, 'ican', COALESCE(p_customer_name, v_cust_name, 'Dropship Customer'),
@@ -493,7 +545,7 @@ BEGIN
     v_tx_record_id, p_reseller_business_profile_id, v_supermarket_id,
     v_wholesale_subtotal + v_tax_total, v_margin_total, v_customer_total,
     v_customer_receipt_no, v_store_receipt_no,
-    v_store_name, p_delivery_address, 'completed'
+    COALESCE(v_store_address, v_store_name), p_delivery_address, 'completed'
   ) RETURNING id INTO v_dropship_order_id;
 
   RETURN jsonb_build_object(
@@ -514,6 +566,166 @@ $$;
 
 REVOKE ALL ON FUNCTION public.dropship_checkout(UUID, JSONB, TEXT, TEXT, TEXT, TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.dropship_checkout(UUID, JSONB, TEXT, TEXT, TEXT, TEXT) TO authenticated;
+
+-- -----------------------------------------------------------------------------
+-- SECTION 6B — STOP THE SHARED INVENTORY TRIGGER FROM RE-PROCESSING SELF-
+-- MANAGED CHECKOUTS
+--
+-- public.deduct_inventory_on_transaction() (see
+-- digital-city-era/backend/database/migrations/ADD_PHARMACY_FLEXIBLE_INVENTORY.sql)
+-- fires AFTER INSERT/UPDATE on every public.transactions row and re-validates
+-- + re-deducts stock by matching products.supermarket_id = NEW.supermarket_id.
+-- dropship_checkout() (and customer_self_checkout() before it) already lock
+-- and deduct public.inventory themselves BEFORE moving any money, and never
+-- set transactions.supermarket_id, so this trigger used to blow up with
+-- "Product % does not belong to supermarket <NULL>" the instant a dropship
+-- sale completed — and would double-deduct stock even if supermarket_id were
+-- filled in. Skip the trigger entirely for these self-managed register
+-- numbers; every other flow (regular POS, pharmacy, etc.) is unaffected.
+-- -----------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.deduct_inventory_on_transaction()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_item JSONB;
+  v_product_id UUID;
+  v_batch_id UUID;
+  v_qty NUMERIC;
+  v_mode TEXT;
+  v_product_status TEXT;
+  v_requires_prescription BOOLEAN;
+  v_controlled BOOLEAN;
+  v_expiry DATE;
+  v_stock NUMERIC;
+  v_supermarket_type TEXT;
+BEGIN
+  IF NEW.status <> 'completed'
+     OR (TG_OP = 'UPDATE' AND OLD.status = 'completed') THEN
+    RETURN NEW;
+  END IF;
+
+  IF NEW.register_number IN ('DROPSHIP', 'SELF-CHECKOUT') THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT business_type INTO v_supermarket_type
+  FROM public.supermarkets
+  WHERE id = NEW.supermarket_id;
+
+  FOR v_item IN SELECT * FROM jsonb_array_elements(COALESCE(NEW.items, '[]'::jsonb))
+  LOOP
+    v_product_id := NULLIF(v_item->>'product_id', '')::UUID;
+    v_batch_id := NULLIF(v_item->>'batch_id', '')::UUID;
+    v_qty := GREATEST(COALESCE(NULLIF(v_item->>'quantity', '')::NUMERIC, 1), 0);
+
+    IF v_product_id IS NULL OR v_qty = 0 THEN
+      CONTINUE;
+    END IF;
+
+    SELECT inventory_mode, product_status, prescription_required,
+           controlled_medicine, expiry_date
+    INTO v_mode, v_product_status, v_requires_prescription,
+         v_controlled, v_expiry
+    FROM public.products
+    WHERE id = v_product_id
+      AND supermarket_id = NEW.supermarket_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Product % does not belong to supermarket %', v_product_id, NEW.supermarket_id;
+    END IF;
+
+    IF COALESCE(v_product_status, 'active') IN ('expired', 'recalled', 'discontinued')
+       OR (v_expiry IS NOT NULL AND v_expiry < CURRENT_DATE) THEN
+      RAISE EXCEPTION 'Product % is expired, recalled, or discontinued', v_product_id;
+    END IF;
+
+    IF v_supermarket_type = 'pharmacy'
+       AND (v_requires_prescription OR v_controlled)
+       AND COALESCE((v_item->>'prescription_verified')::BOOLEAN, FALSE) = FALSE THEN
+      RAISE EXCEPTION 'Prescription verification is required for product %', v_product_id;
+    END IF;
+
+    IF v_mode IN ('listing_only', 'service_item') THEN
+      CONTINUE;
+    END IF;
+
+    IF v_mode = 'batch_controlled' THEN
+      IF v_batch_id IS NOT NULL THEN
+        SELECT current_stock, expiry_date, status
+        INTO v_stock, v_expiry, v_product_status
+        FROM public.product_inventory_batches
+        WHERE id = v_batch_id
+          AND product_id = v_product_id
+          AND supermarket_id = NEW.supermarket_id
+        FOR UPDATE;
+
+        IF NOT FOUND OR v_product_status <> 'active' OR v_expiry < CURRENT_DATE THEN
+          RAISE EXCEPTION 'Selected pharmacy batch is unavailable or expired';
+        END IF;
+
+        IF v_stock < v_qty THEN
+          RAISE EXCEPTION 'Insufficient stock in selected pharmacy batch for product %', v_product_id;
+        END IF;
+
+        UPDATE public.product_inventory_batches
+        SET current_stock = current_stock - v_qty,
+            status = CASE WHEN current_stock - v_qty = 0 THEN 'depleted' ELSE status END,
+            updated_at = now()
+        WHERE id = v_batch_id;
+      ELSE
+        SELECT id, current_stock, expiry_date
+        INTO v_batch_id, v_stock, v_expiry
+        FROM public.product_inventory_batches
+        WHERE product_id = v_product_id
+          AND supermarket_id = NEW.supermarket_id
+          AND status = 'active'
+          AND expiry_date >= CURRENT_DATE
+          AND current_stock >= v_qty
+        ORDER BY expiry_date ASC
+        LIMIT 1
+        FOR UPDATE;
+
+        IF NOT FOUND THEN
+          RAISE EXCEPTION 'No eligible pharmacy batch has enough stock for product %', v_product_id;
+        END IF;
+
+        UPDATE public.product_inventory_batches
+        SET current_stock = current_stock - v_qty,
+            status = CASE WHEN current_stock - v_qty = 0 THEN 'depleted' ELSE status END,
+            updated_at = now()
+        WHERE id = v_batch_id;
+      END IF;
+    ELSE
+      SELECT current_stock INTO v_stock
+      FROM public.inventory
+      WHERE product_id = v_product_id
+        AND supermarket_id = NEW.supermarket_id
+      FOR UPDATE;
+
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'Inventory record is missing for product %', v_product_id;
+      END IF;
+
+      IF v_stock < v_qty THEN
+        RAISE EXCEPTION 'Insufficient stock for product %', v_product_id;
+      END IF;
+
+      UPDATE public.inventory
+      SET current_stock = current_stock - v_qty,
+          updated_at = now()
+      WHERE product_id = v_product_id
+        AND supermarket_id = NEW.supermarket_id;
+    END IF;
+  END LOOP;
+
+  RETURN NEW;
+END;
+$$;
 
 -- -----------------------------------------------------------------------------
 -- SECTION 7 — SETTLEMENT REPORTS (store side + reseller side)

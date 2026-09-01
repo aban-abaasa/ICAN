@@ -22,11 +22,15 @@
  * PublicPitchViewer (path-matched from window.location.pathname) for a human,
  * while a crawler that never runs the JS still gets the correct preview tags.
  *
- * Route: GET /api/share-preview?type=status|pitch&id=<uuid>
+ * Route: GET /api/share-preview?type=status|pitch|store&id=<uuid>
  * Env vars: SUPABASE_URL, SUPABASE_ANON_KEY (or VITE_SUPABASE_ANON_KEY) --
  * reads are anon-key only, relying on the same public RLS the app itself
  * depends on (ican_statuses: visibility public/followers; pitches: USING (true)
- * -- see statusService.getStatusById / pitchingService.getPitchById).
+ * -- see statusService.getStatusById / pitchingService.getPitchById). The
+ * store branch reads business_profiles + dropship_listings/products, which
+ * are readable by anon the same way get_dropship_storefront is (that RPC is
+ * itself granted to anon for the storefront page -- see
+ * DROPSHIP_BUSINESS_WALLET_AND_DELIVERY.sql).
  */
 import { getDownloadUrl } from './_lib/r2Client.js';
 
@@ -166,6 +170,41 @@ const buildPitchMeta = async ({ url, anonKey, id }) => {
   return meta;
 };
 
+const buildStoreMeta = async ({ url, anonKey, id }) => {
+  // Goes through the get_dropship_storefront RPC rather than selecting
+  // business_profiles/dropship_listings directly -- business_profiles' RLS
+  // only lets anon read verified businesses, but this RPC (SECURITY DEFINER,
+  // granted to anon) is exactly what PublicDropshipStorefront itself already
+  // relies on to be browsable by anyone, verified or not.
+  let listings;
+  try {
+    const res = await fetch(`${url}/rest/v1/rpc/get_dropship_storefront`, {
+      method: 'POST',
+      headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_reseller_business_profile_id: id })
+    });
+    listings = res.ok ? await res.json() : null;
+  } catch {
+    listings = null;
+  }
+  if (!Array.isArray(listings) || listings.length === 0) return null;
+
+  const resellerName = listings[0]?.reseller_name || 'this store';
+  const withImage = listings.find((l) => l.images?.[0]);
+
+  return {
+    title: `${resellerName} — Shop on IcanEra`,
+    description: withImage
+      ? `Buy ${withImage.name} and more from ${resellerName} on IcanEra.`
+      : `Shop ${resellerName} on IcanEra.`,
+    // products.images are already plain public URLs (no signing needed --
+    // see PublicDropshipStorefront.jsx rendering them directly).
+    image: withImage?.images?.[0] || DEFAULT_IMAGE,
+    path: `/store/${id}`,
+    video: null
+  };
+};
+
 const patchHead = (html, meta, canonicalUrl) => {
   const tags = [
     `<title>${escapeHtml(meta.title)}</title>`,
@@ -197,17 +236,21 @@ export default async function handler(req, res) {
   const url = process.env.SUPABASE_URL;
   const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
-  // Falls back to the real /status/:id or /pitchin/:id route (never the
-  // rewritten /api/share-preview?... URL) so a resolution failure below
-  // still redirects/canonicalizes somewhere a visitor can actually land on.
-  const fallbackPath = type === 'status' ? `/status/${id || ''}` : type === 'pitch' ? `/pitchin/${id || ''}` : '/';
+  // Falls back to the real /status/:id, /pitchin/:id or /store/:id route
+  // (never the rewritten /api/share-preview?... URL) so a resolution failure
+  // below still redirects/canonicalizes somewhere a visitor can actually
+  // land on.
+  const fallbackPath = type === 'status' ? `/status/${id || ''}`
+    : type === 'pitch' ? `/pitchin/${id || ''}`
+    : type === 'store' ? `/store/${id || ''}`
+    : '/';
   let meta = { title: DEFAULT_TITLE, description: DEFAULT_DESCRIPTION, image: DEFAULT_IMAGE, path: fallbackPath, video: null };
 
-  if (url && anonKey && id && (type === 'status' || type === 'pitch')) {
+  if (url && anonKey && id && (type === 'status' || type === 'pitch' || type === 'store')) {
     try {
-      const resolved = type === 'status'
-        ? await buildStatusMeta({ url, anonKey, id })
-        : await buildPitchMeta({ url, anonKey, id });
+      const resolved = type === 'status' ? await buildStatusMeta({ url, anonKey, id })
+        : type === 'pitch' ? await buildPitchMeta({ url, anonKey, id })
+        : await buildStoreMeta({ url, anonKey, id });
       if (resolved) meta = resolved;
     } catch (err) {
       console.error(`share-preview: failed to resolve ${type} ${id}:`, err);
