@@ -23,13 +23,44 @@ export class IcanCoinBlockchainService {
 
   /**
    * 📊 Get current ICAN Coin market price (UGX)
-   * Can vary based on supply/demand
+   * Live — computed on read by the same USD-anchored fair-price engine
+   * (ican_get_market_snapshot → ican_compute_fair_price) that powers
+   * PitchinLiveShareValue's "IcanEra — Live Market" ticker, so buy/sell/
+   * portfolio/transfer all move the moment usage or FX rates change instead
+   * of waiting on a dev to click "Apply Price". Falls back to the last
+   * cached snapshot if the live engine RPC isn't reachable.
    */
   async getCurrentPrice() {
     try {
       const supabase = this.initSupabase();
-      
-      // Fetch latest market price from blockchain_market_prices table
+
+      const { data: liveData, error: liveError } = await supabase.rpc('ican_get_market_snapshot');
+
+      if (!liveError && liveData?.[0]) {
+        //🔧 SANITY CHECK: Ensure price_ugx is reasonable (minimum 1000 UGX)
+        let priceUGX = liveData[0].price_ugx;
+        if (priceUGX < 1000) {
+          console.warn(`⚠️ PRICE CORRECTION: Live engine returned price_ugx=${priceUGX} (too low!), using safe default 5000`);
+          priceUGX = 5000;
+        }
+
+        this.marketPrice = priceUGX;
+        this.lastUpdate = new Date();
+
+        return {
+          priceUGX,
+          percentageChange24h: liveData[0].appreciation_pct || 0,
+          marketCap: null,
+          source: 'live_engine'
+        };
+      }
+
+      if (liveError) {
+        console.warn('Live price engine unavailable, falling back to cached snapshot:', liveError.message);
+      }
+
+      // Fallback: last snapshot written to ican_coin_market_prices
+      // (e.g. by ican_apply_computed_price via the Dev Panel)
       const { data, error } = await supabase
         .from('ican_coin_market_prices')
         .select('price_ugx, percentage_change_24h, market_cap')

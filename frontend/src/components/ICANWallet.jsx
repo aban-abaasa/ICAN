@@ -26,7 +26,9 @@ import {
   Phone,
   MapPin,
   Menu,
-  X
+  X,
+  Bookmark,
+  Target
 } from 'lucide-react';
 import ICANWalletInbox from './ICANWalletInbox';
 import momoService from '../services/momoService';
@@ -52,6 +54,9 @@ import UnifiedApprovalModal from './UnifiedApprovalModal';
 import CandlestickChart from './CandlestickChart';
 import BuyIcan from './ICAN/BuyIcan';
 import SellIcan from './ICAN/SellIcan';
+import icanOrderService from '../services/icanOrderService';
+import icanCoinService from '../services/icanCoinService';
+import icanCoinBlockchainService from '../services/icanCoinBlockchainService';
 import ReceiveMoneyModal from './ReceiveMoneyModal';
 import PayMoneyModal from './PayMoneyModal';
 import IcanPaymentReceiptModal from './IcanPaymentReceiptModal';
@@ -274,10 +279,32 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     selectedTimeframe: '7s'
   });
   // 📑 Trade Modal Tabs
-  const [activeTradeTab, setActiveTradeTab] = useState('wallet'); // 'wallet', 'chart', 'buy', 'sell', 'history'
+  const [activeTradeTab, setActiveTradeTab] = useState('wallet'); // 'wallet', 'chart', 'buy', 'sell', 'book', 'history'
   const [showMobileTradeMenu, setShowMobileTradeMenu] = useState(false);
   const [showMobileNavMenu, setShowMobileNavMenu] = useState(false);
   const [tradeHistory, setTradeHistory] = useState([]);
+  // 📌 Booking (limit order) state — see icanOrderService.js
+  const [openOrders, setOpenOrders] = useState([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [bookOrderType, setBookOrderType] = useState('buy');
+  const [bookIcanAmount, setBookIcanAmount] = useState('');
+  const [bookTargetPrice, setBookTargetPrice] = useState('');
+  const [bookProcessing, setBookProcessing] = useState(false);
+  const [bookError, setBookError] = useState('');
+  const [bookSuccess, setBookSuccess] = useState('');
+  const [chartBuyMarkers, setChartBuyMarkers] = useState([]);
+  const [chartSellMarkers, setChartSellMarkers] = useState([]);
+  const [chartOrderDraftOpen, setChartOrderDraftOpen] = useState(false);
+  // Instant (market) buy/sell triggered by tapping the chart's LIVE line
+  const [instantDraftOpen, setInstantDraftOpen] = useState(false);
+  const [instantSide, setInstantSide] = useState('buy');
+  const [instantAmount, setInstantAmount] = useState('');
+  const [instantProcessing, setInstantProcessing] = useState(false);
+  const [instantError, setInstantError] = useState('');
+  // Fill-now / cancel panel triggered by tapping a booked order's line
+  const [manageOrderTarget, setManageOrderTarget] = useState(null);
+  const [manageOrderProcessing, setManageOrderProcessing] = useState(false);
+  const [manageOrderError, setManageOrderError] = useState('');
   const [historyLoading, setHistoryLoading] = useState(false);
   const [icanBalance, setIcanBalance] = useState(0);
   const [balanceLoading, setBalanceLoading] = useState(false);
@@ -297,7 +324,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   const walletRootRef = useRef(null);
 
   const VALID_WALLET_TABS = ['overview', 'trade', 'transactions', 'deposit', 'withdraw', 'agent', 'cards', 'business', 'trust', 'settings'];
-  const VALID_TRADE_TABS = ['wallet', 'chart', 'buy', 'sell', 'history'];
+  const VALID_TRADE_TABS = ['wallet', 'chart', 'buy', 'sell', 'book', 'history'];
   // Trade is now a regular header tab rather than a floating modal.
   const showTradeModal = activeTab === 'trade';
 
@@ -473,6 +500,15 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       }
       const supabase = getSupabaseClient();
 
+      // Self-healing: paint the current live price onto today's candle even
+      // if no transaction has fired one recently (or ever, for activity
+      // that predates the trigger install) — see ican_ensure_current_candle
+      // in ICAN_REAL_CANDLESTICK_ENGINE.sql. Best-effort: a chart read
+      // shouldn't fail just because this RPC hiccups.
+      try {
+        await supabase.rpc('ican_ensure_current_candle');
+      } catch {}
+
       // Fetch latest 100 candlesticks
       const { data, error } = await supabase
         .from('ican_price_ohlc')
@@ -507,6 +543,264 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       setCandleLoading(false);
     }
   };
+
+  // Recent executed buys/sells for the chart's colored trade lines — pulled
+  // from ican_coin_transactions (what actually feeds the price engine),
+  // capped to the last few of each so the chart doesn't get cluttered.
+  const loadChartTradeMarkers = async () => {
+    if (!currentUserId) return;
+    try {
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase
+        .from('ican_coin_transactions')
+        .select('type, price_per_coin, timestamp')
+        .eq('user_id', currentUserId)
+        .in('status', ['completed', 'confirmed', 'success'])
+        .in('type', ['purchase', 'sale'])
+        .order('timestamp', { ascending: false })
+        .limit(20);
+
+      if (error) {
+        console.error('Failed to load chart trade markers:', error);
+        return;
+      }
+
+      const rows = data || [];
+      const buys = rows.filter(r => r.type === 'purchase').slice(0, 5).map(r => ({ price: parseFloat(r.price_per_coin) }));
+      const sells = rows.filter(r => r.type === 'sale').slice(0, 5).map(r => ({ price: parseFloat(r.price_per_coin) }));
+      setChartBuyMarkers(buys.filter(m => Number.isFinite(m.price)));
+      setChartSellMarkers(sells.filter(m => Number.isFinite(m.price)));
+    } catch (err) {
+      console.error('Failed to load chart trade markers:', err);
+    }
+  };
+
+  // Fired the instant a manual (non-booked) buy/sell completes in the Buy/Sell
+  // tabs — drops a marker onto the chart's buy/sell lines immediately using
+  // the price the trade actually executed at, instead of waiting for the
+  // next chart-tab load to notice the new ican_coin_transactions row.
+  const handleInstantBuySuccess = (result) => {
+    if (result?.pricePerCoin) {
+      setChartBuyMarkers(prev => [{ price: result.pricePerCoin }, ...prev].slice(0, 5));
+    }
+    loadIcanBalance();
+    loadChartTradeMarkers();
+  };
+
+  const handleInstantSellSuccess = (result) => {
+    if (result?.pricePerCoin) {
+      setChartSellMarkers(prev => [{ price: result.pricePerCoin }, ...prev].slice(0, 5));
+    }
+    loadIcanBalance();
+    loadChartTradeMarkers();
+  };
+
+  // 📌 Booked (limit) orders — load the user's open orders for the chart's
+  // amber lines and the Book tab's list.
+  const loadOpenOrders = async (showLoading = false) => {
+    if (!currentUserId) return;
+    try {
+      if (showLoading) setOrdersLoading(true);
+      const orders = await icanOrderService.getOpenOrders(currentUserId);
+      setOpenOrders(orders);
+    } finally {
+      setOrdersLoading(false);
+    }
+  };
+
+  const submitBookOrder = async () => {
+    setBookError('');
+    setBookSuccess('');
+
+    const icanAmt = parseFloat(bookIcanAmount);
+    const targetPrice = parseFloat(bookTargetPrice);
+
+    if (!icanAmt || icanAmt <= 0) {
+      setBookError('Enter a valid IcanEra amount');
+      return;
+    }
+    if (!targetPrice || targetPrice <= 0) {
+      setBookError('Enter a valid target price');
+      return;
+    }
+
+    try {
+      setBookProcessing(true);
+      await icanOrderService.createOrder({
+        userId: currentUserId,
+        orderType: bookOrderType,
+        icanAmount: icanAmt,
+        targetPriceUgx: targetPrice,
+        countryCode: userCountry || 'UG',
+      });
+      setBookSuccess(`📌 Booked: ${bookOrderType === 'buy' ? 'Buy' : 'Sell'} ${icanAmt} IcanEra at UGX ${targetPrice.toLocaleString()}`);
+      setBookIcanAmount('');
+      setBookTargetPrice('');
+      setChartOrderDraftOpen(false);
+      await loadOpenOrders(false);
+    } catch (err) {
+      setBookError(err.message || 'Failed to book order');
+    } finally {
+      setBookProcessing(false);
+    }
+  };
+
+  const handleCreateBookOrder = async (e) => {
+    e.preventDefault();
+    await submitBookOrder();
+  };
+
+  const handleCancelBookOrder = async (orderId) => {
+    try {
+      await icanOrderService.cancelOrder(orderId, currentUserId);
+      await loadOpenOrders(false);
+    } catch (err) {
+      console.error('Failed to cancel booked order:', err);
+    }
+  };
+
+  // Close whichever chart-attached action panel is currently open, so
+  // selecting a new line always starts from a clean slate.
+  const closeChartActionPanels = () => {
+    setChartOrderDraftOpen(false);
+    setInstantDraftOpen(false);
+    setManageOrderTarget(null);
+    setManageOrderError('');
+  };
+
+  // 🎯 "Tap chart to book" — clicking empty space on the candlestick chart
+  // (while placement mode is on) pre-fills the same booking form/state used
+  // by the Book tab, guessing buy (price at/below the latest close) vs sell
+  // (above it) as a starting point the user can still change before
+  // confirming.
+  const handleChartPlaceOrder = (price) => {
+    closeChartActionPanels();
+    const rounded = Math.round(price * 100) / 100;
+    const latestClose = candleData.length > 0 ? candleData[candleData.length - 1].close : null;
+    setBookOrderType(latestClose != null && rounded > latestClose ? 'sell' : 'buy');
+    setBookTargetPrice(String(rounded));
+    setBookError('');
+    setBookSuccess('');
+    setChartOrderDraftOpen(true);
+  };
+
+  // 👆 Selecting an existing line on the chart — Live, a past Buy/Sell trade,
+  // or an open booked order — opens the matching quick-action panel:
+  //   - Live      → instant (market) buy/sell right now
+  //   - Buy/Sell  → re-book a new limit order at that same price level
+  //   - Booking   → fill this specific order now, or cancel it
+  const handleChartLineSelect = (line) => {
+    closeChartActionPanels();
+
+    if (line.type === 'live') {
+      setInstantSide('buy');
+      setInstantAmount('');
+      setInstantError('');
+      setInstantDraftOpen(true);
+    } else if (line.type === 'buy' || line.type === 'sell') {
+      const rounded = Math.round(line.price * 100) / 100;
+      setBookOrderType(line.type);
+      setBookTargetPrice(String(rounded));
+      setBookError('');
+      setBookSuccess('');
+      setChartOrderDraftOpen(true);
+    } else if (line.type === 'booking') {
+      setManageOrderTarget(line.order);
+    }
+  };
+
+  const submitInstantTrade = async () => {
+    setInstantError('');
+    const amt = parseFloat(instantAmount);
+    if (!amt || amt <= 0) {
+      setInstantError('Enter a valid IcanEra amount');
+      return;
+    }
+
+    try {
+      setInstantProcessing(true);
+      let result;
+      if (instantSide === 'buy') {
+        const priceData = await icanCoinBlockchainService.getCurrentPrice();
+        const localAmount = CountryService.icanToLocal(amt, userCountry || 'UG', priceData.priceUGX);
+        result = await icanCoinService.buyIcanCoins(currentUserId, localAmount, userCountry || 'UG', 'instant_chart');
+      } else {
+        result = await icanCoinService.sellIcanCoins(currentUserId, amt, userCountry || 'UG');
+      }
+
+      if (result?.success) {
+        if (instantSide === 'buy') handleInstantBuySuccess(result);
+        else handleInstantSellSuccess(result);
+        setInstantDraftOpen(false);
+        setInstantAmount('');
+      } else {
+        setInstantError(result?.error || 'Trade failed');
+      }
+    } catch (err) {
+      setInstantError(err.message || 'Trade failed');
+    } finally {
+      setInstantProcessing(false);
+    }
+  };
+
+  const handleFillOrderNow = async () => {
+    if (!manageOrderTarget) return;
+    setManageOrderError('');
+    try {
+      setManageOrderProcessing(true);
+      const result = await icanOrderService.fillOrderNow(manageOrderTarget, currentUserId);
+      if (result?.success) {
+        setManageOrderTarget(null);
+        await loadOpenOrders(false);
+        await loadChartTradeMarkers();
+        await loadIcanBalance();
+      } else {
+        setManageOrderError(result?.error || 'Failed to execute order');
+      }
+    } catch (err) {
+      setManageOrderError(err.message || 'Failed to execute order');
+    } finally {
+      setManageOrderProcessing(false);
+    }
+  };
+
+  const handleCancelFromChart = async () => {
+    if (!manageOrderTarget) return;
+    try {
+      setManageOrderProcessing(true);
+      await icanOrderService.cancelOrder(manageOrderTarget.id, currentUserId);
+      setManageOrderTarget(null);
+      await loadOpenOrders(false);
+    } catch (err) {
+      setManageOrderError(err.message || 'Failed to cancel order');
+    } finally {
+      setManageOrderProcessing(false);
+    }
+  };
+
+  // Check booked orders against the live price and auto-fill any that have
+  // crossed their target (real buy/sell execution — see icanOrderService).
+  // Only runs while this session has the trade view open, same as the live
+  // candle feed above.
+  useEffect(() => {
+    if (!showTradeModal || !currentUserId) return;
+
+    loadOpenOrders(true);
+    loadChartTradeMarkers();
+
+    const checkOrders = async () => {
+      const filled = await icanOrderService.tryFillOpenOrders(currentUserId);
+      if (filled.length > 0) {
+        await loadOpenOrders(false);
+        await loadChartTradeMarkers();
+        await loadIcanBalance();
+      }
+    };
+
+    checkOrders();
+    const interval = setInterval(checkOrders, 30000);
+    return () => clearInterval(interval);
+  }, [showTradeModal, currentUserId]);
 
   // Business valuation figures (calculateLiveShareValue) are always in UGX.
   const formatUgx = (value) => `UGX ${Math.round(Number(value) || 0).toLocaleString()}`;
@@ -740,7 +1034,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
   // Load ICAN balance when trade modal opens
   useEffect(() => {
-    if (showTradeModal && (activeTradeTab === 'wallet' || activeTradeTab === 'buy' || activeTradeTab === 'sell') && currentUserId) {
+    if (showTradeModal && (activeTradeTab === 'wallet' || activeTradeTab === 'buy' || activeTradeTab === 'sell' || activeTradeTab === 'book') && currentUserId) {
       loadIcanBalance();
     }
   }, [showTradeModal, activeTradeTab, currentUserId]);
@@ -7054,6 +7348,17 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 </button>
 
                 <button
+                  onClick={() => setActiveTradeTab('book')}
+                  className={`px-4 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
+                    activeTradeTab === 'book'
+                      ? 'bg-gradient-to-r from-yellow-600 to-amber-600 text-white shadow-lg shadow-amber-600/30'
+                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
+                  }`}
+                >
+                  📌 Book Order
+                </button>
+
+                <button
                   onClick={() => setActiveTradeTab('history')}
                   className={`px-4 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
                     activeTradeTab === 'history'
@@ -7073,6 +7378,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                   {activeTradeTab === 'chart' && '📊 Chart'}
                   {activeTradeTab === 'buy' && '💳 Buy IcanEra'}
                   {activeTradeTab === 'sell' && '💰 Sell IcanEra'}
+                  {activeTradeTab === 'book' && '📌 Book Order'}
                   {activeTradeTab === 'history' && '📜 History'}
                 </div>
 
@@ -7142,6 +7448,19 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     </button>
                     <button
                       onClick={() => {
+                        setActiveTradeTab('book');
+                        setShowMobileTradeMenu(false);
+                      }}
+                      className={`w-full px-4 py-3 text-left font-medium transition-colors flex items-center gap-2 border-b border-slate-600 ${
+                        activeTradeTab === 'book'
+                          ? 'bg-amber-600/30 text-amber-300'
+                          : 'text-slate-300 hover:bg-slate-600 hover:text-white'
+                      }`}
+                    >
+                      📌 Book Order
+                    </button>
+                    <button
+                      onClick={() => {
                         setActiveTradeTab('history');
                         setShowMobileTradeMenu(false);
                       }}
@@ -7178,7 +7497,151 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
               {/* 📊 CHART TAB - Just the chart */}
               {activeTradeTab === 'chart' && (
-                <div>
+                <div className="space-y-3">
+                  {chartOrderDraftOpen && (
+                    <div className="bg-slate-800 border border-amber-500/50 rounded-xl p-3 flex flex-wrap items-center gap-2">
+                      <div className="flex gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setBookOrderType('buy')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                            bookOrderType === 'buy' ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                          }`}
+                        >
+                          BUY
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBookOrderType('sell')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                            bookOrderType === 'sell' ? 'bg-rose-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                          }`}
+                        >
+                          SELL
+                        </button>
+                      </div>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.00000001"
+                        value={bookIcanAmount}
+                        onChange={(e) => { setBookIcanAmount(e.target.value); setBookError(''); }}
+                        placeholder="Amount (ICAN)"
+                        disabled={bookProcessing}
+                        className="w-32 px-2.5 py-1.5 bg-slate-900 border border-slate-600 rounded-md text-white text-xs placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                      />
+                      <span className="text-xs text-slate-400">@ UGX</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={bookTargetPrice}
+                        onChange={(e) => { setBookTargetPrice(e.target.value); setBookError(''); }}
+                        className="w-28 px-2.5 py-1.5 bg-slate-900 border border-slate-600 rounded-md text-white text-xs focus:outline-none focus:border-amber-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={submitBookOrder}
+                        disabled={bookProcessing || !bookIcanAmount || !bookTargetPrice}
+                        className="px-3 py-1.5 rounded-md text-xs font-bold bg-gradient-to-r from-amber-600 to-yellow-600 text-white hover:from-amber-500 hover:to-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {bookProcessing ? 'Booking…' : '📌 Confirm'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setChartOrderDraftOpen(false); setBookError(''); }}
+                        className="px-2 py-1.5 rounded-md text-xs text-slate-400 hover:text-white hover:bg-slate-700"
+                      >
+                        Cancel
+                      </button>
+                      {bookError && <p className="w-full text-xs text-red-400">{bookError}</p>}
+                    </div>
+                  )}
+
+                  {instantDraftOpen && (
+                    <div className="bg-slate-800 border border-sky-500/50 rounded-xl p-3 flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-semibold text-sky-400">⚡ Instant trade @ LIVE price</span>
+                      <div className="flex gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setInstantSide('buy')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                            instantSide === 'buy' ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                          }`}
+                        >
+                          BUY
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setInstantSide('sell')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                            instantSide === 'sell' ? 'bg-rose-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                          }`}
+                        >
+                          SELL
+                        </button>
+                      </div>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.00000001"
+                        value={instantAmount}
+                        onChange={(e) => { setInstantAmount(e.target.value); setInstantError(''); }}
+                        placeholder="Amount (ICAN)"
+                        disabled={instantProcessing}
+                        className="w-32 px-2.5 py-1.5 bg-slate-900 border border-slate-600 rounded-md text-white text-xs placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={submitInstantTrade}
+                        disabled={instantProcessing || !instantAmount}
+                        className="px-3 py-1.5 rounded-md text-xs font-bold bg-gradient-to-r from-sky-600 to-blue-600 text-white hover:from-sky-500 hover:to-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {instantProcessing ? 'Executing…' : `⚡ ${instantSide === 'buy' ? 'Buy' : 'Sell'} Now`}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setInstantDraftOpen(false); setInstantError(''); }}
+                        className="px-2 py-1.5 rounded-md text-xs text-slate-400 hover:text-white hover:bg-slate-700"
+                      >
+                        Cancel
+                      </button>
+                      {instantError && <p className="w-full text-xs text-red-400">{instantError}</p>}
+                    </div>
+                  )}
+
+                  {manageOrderTarget && (
+                    <div className="bg-slate-800 border border-amber-500/50 rounded-xl p-3 flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-semibold text-amber-400">
+                        📌 Booked {manageOrderTarget.order_type === 'buy' ? 'Buy' : 'Sell'}: {parseFloat(manageOrderTarget.ican_amount).toLocaleString()} ICAN @ UGX {parseFloat(manageOrderTarget.target_price_ugx).toLocaleString()}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleFillOrderNow}
+                        disabled={manageOrderProcessing}
+                        className="px-3 py-1.5 rounded-md text-xs font-bold bg-gradient-to-r from-amber-600 to-yellow-600 text-white hover:from-amber-500 hover:to-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {manageOrderProcessing ? 'Working…' : '✅ Fill Now'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCancelFromChart}
+                        disabled={manageOrderProcessing}
+                        className="px-3 py-1.5 rounded-md text-xs font-bold bg-slate-700 text-slate-200 hover:bg-red-600 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        ❌ Cancel Order
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setManageOrderTarget(null); setManageOrderError(''); }}
+                        className="px-2 py-1.5 rounded-md text-xs text-slate-400 hover:text-white hover:bg-slate-700"
+                      >
+                        Close
+                      </button>
+                      {manageOrderError && <p className="w-full text-xs text-red-400">{manageOrderError}</p>}
+                    </div>
+                  )}
+
                   <div className="h-[360px] sm:h-[480px] bg-slate-900 rounded-xl border border-slate-700 overflow-hidden">
                     {candleData && candleData.length > 0 ? (
                       <div className="h-full w-full">
@@ -7186,9 +7649,15 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                           candleData={candleData}
                           loading={candleLoading}
                           settings={candleSettings}
+                          buyMarkers={chartBuyMarkers}
+                          sellMarkers={chartSellMarkers}
+                          bookingOrders={openOrders}
+                          orderPlacementEnabled={true}
+                          onPlaceOrderClick={handleChartPlaceOrder}
+                          onLineSelect={handleChartLineSelect}
                         />
                       </div>
-                    ) : (
+                    ) : candleLoading ? (
                       <div className="h-full flex flex-col items-center justify-center text-slate-500 p-8">
                         <div className="w-20 h-20 rounded-2xl bg-slate-800 flex items-center justify-center mb-4">
                           <span className="text-4xl">📊</span>
@@ -7201,6 +7670,17 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                           <div className="w-2 h-2 bg-amber-500 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
                         </div>
                       </div>
+                    ) : (
+                      <div className="h-full flex flex-col items-center justify-center text-slate-500 p-8 text-center">
+                        <div className="w-20 h-20 rounded-2xl bg-slate-800 flex items-center justify-center mb-4">
+                          <span className="text-4xl">📊</span>
+                        </div>
+                        <p className="text-lg font-semibold text-slate-400 mb-2">No Trading Activity Yet</p>
+                        <p className="text-sm text-slate-500 max-w-xs">
+                          The chart fills in with real candles the moment someone buys, sells,
+                          or transfers icaneracoin — no data is faked here.
+                        </p>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -7209,14 +7689,143 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
               {/* Buy Tab */}
               {activeTradeTab === 'buy' && (
                 <div className="trade-tab-content bg-slate-800/50 rounded-xl p-4 border border-slate-700">
-                  <BuyIcan />
+                  <BuyIcan onSuccess={handleInstantBuySuccess} />
                 </div>
               )}
 
               {/* Sell Tab */}
               {activeTradeTab === 'sell' && (
                 <div className="trade-tab-content bg-slate-800/50 rounded-xl p-4 border border-slate-700">
-                  <SellIcan />
+                  <SellIcan onSuccess={handleInstantSellSuccess} />
+                </div>
+              )}
+
+              {/* 📌 Book Tab — queue a buy/sell at a target price instead of trading now */}
+              {activeTradeTab === 'book' && (
+                <div className="space-y-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 to-yellow-600 flex items-center justify-center">
+                      <Bookmark className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-white">Book an Order</h3>
+                      <p className="text-sm text-slate-400">Queue a buy or sell at a target price — it fills automatically once the live price crosses it, while you have the app open.</p>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleCreateBookOrder} className="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-4">
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setBookOrderType('buy')}
+                        className={`flex-1 py-2.5 rounded-lg font-semibold transition-all ${
+                          bookOrderType === 'buy'
+                            ? 'bg-gradient-to-r from-emerald-600 to-green-600 text-white shadow-lg shadow-emerald-600/30'
+                            : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                        }`}
+                      >
+                        💳 Book Buy
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBookOrderType('sell')}
+                        className={`flex-1 py-2.5 rounded-lg font-semibold transition-all ${
+                          bookOrderType === 'sell'
+                            ? 'bg-gradient-to-r from-rose-600 to-red-600 text-white shadow-lg shadow-rose-600/30'
+                            : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                        }`}
+                      >
+                        💰 Book Sell
+                      </button>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm text-slate-400 mb-1">IcanEra Amount</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.00000001"
+                        value={bookIcanAmount}
+                        onChange={(e) => { setBookIcanAmount(e.target.value); setBookError(''); setBookSuccess(''); }}
+                        placeholder="Amount of IcanEra to trade"
+                        disabled={bookProcessing}
+                        className="w-full px-3 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm text-slate-400 mb-1">
+                        Target Price (UGX per IcanEra) — {bookOrderType === 'buy' ? 'fills when the price drops to or below this' : 'fills when the price rises to or above this'}
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={bookTargetPrice}
+                        onChange={(e) => { setBookTargetPrice(e.target.value); setBookError(''); setBookSuccess(''); }}
+                        placeholder="Target price in UGX"
+                        disabled={bookProcessing}
+                        className="w-full px-3 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+
+                    {bookError && (
+                      <div className="px-3 py-2.5 bg-red-500/10 border border-red-500/40 rounded-lg text-sm text-red-300">
+                        {bookError}
+                      </div>
+                    )}
+                    {bookSuccess && (
+                      <div className="px-3 py-2.5 bg-emerald-500/10 border border-emerald-500/40 rounded-lg text-sm text-emerald-300">
+                        {bookSuccess}
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={bookProcessing || !bookIcanAmount || !bookTargetPrice}
+                      className="w-full py-3 rounded-lg font-bold bg-gradient-to-r from-amber-600 to-yellow-600 text-white hover:from-amber-500 hover:to-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    >
+                      {bookProcessing ? 'Booking…' : '📌 Book Order'}
+                    </button>
+                  </form>
+
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+                      <Target className="w-4 h-4 text-amber-400" /> Open Booked Orders
+                    </h4>
+                    {ordersLoading ? (
+                      <div className="flex items-center justify-center py-8 bg-slate-800 rounded-xl border border-slate-700">
+                        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-amber-500"></div>
+                      </div>
+                    ) : openOrders.length === 0 ? (
+                      <div className="text-center py-8 bg-slate-800 rounded-xl border border-slate-700 text-slate-500 text-sm">
+                        No open booked orders. Anything you book here appears as an amber line on the chart.
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {openOrders.map((order) => (
+                          <div key={order.id} className="flex items-center justify-between bg-slate-800 border border-slate-700 rounded-lg p-3">
+                            <div className="flex items-center gap-3">
+                              <span className={`text-xs font-bold px-2 py-1 rounded ${order.order_type === 'buy' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
+                                {order.order_type === 'buy' ? 'BUY' : 'SELL'}
+                              </span>
+                              <div>
+                                <p className="text-sm text-white font-medium">{parseFloat(order.ican_amount).toLocaleString()} ICAN @ UGX {parseFloat(order.target_price_ugx).toLocaleString()}</p>
+                                <p className="text-xs text-slate-500">Booked {new Date(order.created_at).toLocaleString()}</p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleCancelBookOrder(order.id)}
+                              className="w-8 h-8 flex items-center justify-center bg-slate-700 hover:bg-red-600 text-slate-300 hover:text-white rounded-lg transition-all"
+                              title="Cancel order"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 

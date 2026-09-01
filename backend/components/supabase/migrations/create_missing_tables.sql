@@ -147,38 +147,28 @@ COMMENT ON COLUMN ican_price_ohlc.close_price IS 'Closing price for the candle p
 COMMENT ON COLUMN ican_price_ohlc.timeframe IS 'Candlestick timeframe (7s for real-time trading)';
 
 -- ===================================
--- Insert sample market price data
+-- Seed a starting market price (once only — no unique constraint here,
+-- so a plain INSERT ... ON CONFLICT DO NOTHING would append a duplicate
+-- default row on every re-run of this migration; guard it explicitly)
 -- ===================================
 INSERT INTO ican_coin_market_prices (
   price_usd, price_ugx, price_eur, price_gbp, price_jpy,
   market_cap, volume, trading_volume_24h, percentage_change_24h, percentage_change_7d,
   all_time_high, all_time_low, data_source
-) VALUES (
+)
+SELECT
   0.00036, 1.35, 0.00034, 0.00029, 0.054,
   1000000, 50000, 50000, 2.5, 5.2,
   0.00050, 0.00010, 'blockchain'
-)
-ON CONFLICT DO NOTHING;
+WHERE NOT EXISTS (SELECT 1 FROM ican_coin_market_prices);
 
 -- ===================================
--- Insert sample OHLC candlestick data
+-- OHLC candlestick data is NOT seeded here anymore. It used to be a
+-- hardcoded 10-row fake sample (same repeating sawtooth every time this
+-- migration ran, since there was no unique constraint to stop it
+-- re-inserting). Real candles are now written by triggers on real
+-- transactions — see ICAN_REAL_CANDLESTICK_ENGINE.sql.
 -- ===================================
-INSERT INTO ican_price_ohlc (
-  open_price, high_price, low_price, close_price,
-  trading_volume, transaction_count, timeframe,
-  open_time, close_time
-) VALUES 
-  (0.00036, 0.00037, 0.00035, 0.00036, 1250.50, 45, '7s', NOW() - INTERVAL '70 seconds', NOW() - INTERVAL '63 seconds'),
-  (0.00036, 0.00038, 0.00035, 0.00037, 1500.75, 52, '7s', NOW() - INTERVAL '63 seconds', NOW() - INTERVAL '56 seconds'),
-  (0.00037, 0.00039, 0.00036, 0.00038, 1800.25, 61, '7s', NOW() - INTERVAL '56 seconds', NOW() - INTERVAL '49 seconds'),
-  (0.00038, 0.00040, 0.00037, 0.00039, 2100.50, 68, '7s', NOW() - INTERVAL '49 seconds', NOW() - INTERVAL '42 seconds'),
-  (0.00039, 0.00041, 0.00038, 0.00040, 2400.75, 75, '7s', NOW() - INTERVAL '42 seconds', NOW() - INTERVAL '35 seconds'),
-  (0.00040, 0.00042, 0.00039, 0.00041, 2700.25, 82, '7s', NOW() - INTERVAL '35 seconds', NOW() - INTERVAL '28 seconds'),
-  (0.00041, 0.00043, 0.00040, 0.00042, 3000.50, 89, '7s', NOW() - INTERVAL '28 seconds', NOW() - INTERVAL '21 seconds'),
-  (0.00042, 0.00044, 0.00041, 0.00043, 3300.75, 96, '7s', NOW() - INTERVAL '21 seconds', NOW() - INTERVAL '14 seconds'),
-  (0.00043, 0.00045, 0.00042, 0.00044, 3600.25, 103, '7s', NOW() - INTERVAL '14 seconds', NOW() - INTERVAL '7 seconds'),
-  (0.00044, 0.00046, 0.00043, 0.00045, 3900.50, 110, '7s', NOW() - INTERVAL '7 seconds', NOW())
-ON CONFLICT DO NOTHING;
 -- ===================================
 -- Create ican_user_wallets table
 -- ===================================

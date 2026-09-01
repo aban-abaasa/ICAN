@@ -8,8 +8,25 @@ import { useAuth } from '../../context/AuthContext';
 import icanCoinService from '../../services/icanCoinService';
 import icanCoinBlockchainService from '../../services/icanCoinBlockchainService';
 import { CountryService } from '../../services/countryService';
+import { getSupabaseClient } from '../../lib/supabase/client';
 import CandlestickChart from '../CandlestickChart';
 import './IcanPortfolio.css';
+
+// Format a raw ican_price_ohlc row into the shape CandlestickChart expects
+// (matches ICANWallet.jsx's trade-modal chart so both surfaces render identically)
+const formatCandleRow = (candle) => ({
+  id: candle.id,
+  time: new Date(candle.open_time).toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  }),
+  open: parseFloat(candle.open_price || 0),
+  high: parseFloat(candle.high_price || 0),
+  low: parseFloat(candle.low_price || 0),
+  close: parseFloat(candle.close_price || 0),
+  volume: parseFloat(candle.trading_volume || 0),
+});
 
 export default function IcanPortfolio() {
   const { user } = useAuth();
@@ -25,6 +42,7 @@ export default function IcanPortfolio() {
   const [chartMenuOpen, setChartMenuOpen] = useState(false);
   const [chartFullscreen, setChartFullscreen] = useState(false);
   const [candleData, setCandleData] = useState([]);
+  const [candleLoading, setCandleLoading] = useState(false);
 
   // Load portfolio data
   useEffect(() => {
@@ -60,6 +78,106 @@ export default function IcanPortfolio() {
       loadPortfolio();
     }
   }, [user, period]);
+
+  // Keep the market price and portfolio value live while this screen is
+  // open — same 60s cadence as PitchinLiveShareValue's ticker.
+  useEffect(() => {
+    if (!user?.id) return;
+    const id = setInterval(async () => {
+      try {
+        const [portfolioData, market] = await Promise.all([
+          icanCoinService.getPortfolioSummary(user.id),
+          icanCoinBlockchainService.getCurrentPrice(),
+        ]);
+        setPortfolio(portfolioData);
+        setMarketData(market);
+      } catch {}
+    }, 60_000);
+    return () => clearInterval(id);
+  }, [user]);
+
+  // Load candlestick data when the Market Chart tab is open, then stay live
+  // via Supabase Realtime — same feed and pattern as ICANWallet's trade chart.
+  useEffect(() => {
+    if (selectedTab !== 'market') return;
+
+    const loadCandles = async (showLoading = false) => {
+      try {
+        if (showLoading && candleData.length === 0) setCandleLoading(true);
+        const supabase = getSupabaseClient();
+
+        // Self-healing: paint the current live price onto today's candle
+        // even if no transaction has fired one recently (or ever, for
+        // activity that predates the trigger install) — see
+        // ican_ensure_current_candle in ICAN_REAL_CANDLESTICK_ENGINE.sql.
+        try {
+          await supabase.rpc('ican_ensure_current_candle');
+        } catch {}
+
+        const { data, error } = await supabase
+          .from('ican_price_ohlc')
+          .select('*')
+          .order('open_time', { ascending: false })
+          .limit(100);
+
+        if (error) {
+          console.error('Error loading candlesticks:', error);
+          return;
+        }
+
+        if (data && data.length > 0) {
+          const formatted = data.reverse().map(formatCandleRow);
+          setCandleData(prev => {
+            if (prev.length > 0 && prev[prev.length - 1].close === formatted[formatted.length - 1].close) {
+              return prev;
+            }
+            return formatted;
+          });
+        }
+      } catch (err) {
+        console.error('Failed to load candlestick data:', err);
+      } finally {
+        setCandleLoading(false);
+      }
+    };
+
+    loadCandles(true);
+
+    // Low-frequency safety net in case Realtime isn't reachable
+    const fallbackPoll = setInterval(() => loadCandles(false), 30000);
+
+    const supabase = getSupabaseClient();
+    const channel = supabase
+      .channel('ican_price_ohlc:portfolio')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'ican_price_ohlc' },
+        (payload) => {
+          const incoming = formatCandleRow(payload.new);
+          setCandleData(prev => [...prev, incoming].slice(-100));
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'ican_price_ohlc' },
+        (payload) => {
+          const incoming = formatCandleRow(payload.new);
+          setCandleData(prev => {
+            const idx = prev.findIndex(c => c.id === incoming.id);
+            if (idx === -1) return prev;
+            const next = [...prev];
+            next[idx] = incoming;
+            return next;
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      clearInterval(fallbackPoll);
+      supabase.removeChannel(channel);
+    };
+  }, [selectedTab]);
 
   const handleRefresh = async () => {
     try {
@@ -241,12 +359,23 @@ export default function IcanPortfolio() {
                   <div className="stat-subtext">{portfolio.currencySymbol}</div>
                 </div>
 
-                {marketData && (
+                {marketData?.marketCap != null && (
                   <div className="stat-card">
                     <div className="stat-icon">📊</div>
                     <div className="stat-label">Market Cap</div>
-                    <div className="stat-value">{(marketData.market_cap / 1000000).toFixed(1)}M</div>
+                    <div className="stat-value">{(marketData.marketCap / 1000000).toFixed(1)}M</div>
                     <div className="stat-subtext">UGX</div>
+                  </div>
+                )}
+
+                {marketData && (
+                  <div className="stat-card">
+                    <div className="stat-icon">📈</div>
+                    <div className="stat-label">1 IcanEra</div>
+                    <div className="stat-value">{marketData.priceUGX?.toLocaleString()}</div>
+                    <div className="stat-subtext" style={{ color: marketData.percentageChange24h >= 0 ? '#16a34a' : '#dc2626' }}>
+                      {marketData.percentageChange24h >= 0 ? '+' : ''}{marketData.percentageChange24h?.toFixed(2)}% UGX
+                    </div>
                   </div>
                 )}
               </div>
@@ -425,10 +554,10 @@ export default function IcanPortfolio() {
                         {chartFullscreen ? '⛶' : '⛶'}
                       </button>
                     </div>
-                    <CandlestickChart 
-                      candleData={candleData} 
-                      priceUSD={portfolio?.marketPrice || 0} 
-                      loading={loading}
+                    <CandlestickChart
+                      candleData={candleData}
+                      priceUSD={portfolio?.marketPrice || 0}
+                      loading={candleLoading}
                       settings={{
                         upColor: '#10b981',
                         downColor: '#ef4444',

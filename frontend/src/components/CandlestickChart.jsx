@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import {
   XAxis,
   YAxis,
@@ -10,17 +10,39 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, loading = false, settings = {} }) => {
+const BUY_COLOR = "#34d399";     // emerald-400 — executed buys
+const SELL_COLOR = "#fb7185";    // rose-400 — executed sells
+const BOOKING_COLOR = "#f59e0b"; // amber-500 — open/pending booked orders
+const LIVE_COLOR = "#38bdf8";    // sky-400 — current live price (where an instant buy/sell executes)
+
+const CandlestickChart = React.memo(({
+  candleData = [],
+  priceUSD = 0.00036,
+  loading = false,
+  settings = {},
+  buyMarkers = [],
+  sellMarkers = [],
+  bookingOrders = [],
+  orderPlacementEnabled = false,
+  onPlaceOrderClick,
+  showLivePrice = true,
+  onLineSelect,
+}) => {
   const [displayData, setDisplayData] = useState([]);
   const [analysis, setAnalysis] = useState(null);
   const [prevDataLength, setPrevDataLength] = useState(0);
   const [zoomLevel, setZoomLevel] = useState(1); // higher = more zoomed in (fewer, bigger candles)
   const [panOffset, setPanOffset] = useState(0); // candles back from the live edge
   const [containerWidth, setContainerWidth] = useState(0);
+  const [placementMode, setPlacementMode] = useState(false); // "tap chart to book" toggle
+  const [hover, setHover] = useState(null); // { y, price } while hovering in placement mode
+  const [hoverLine, setHoverLine] = useState(null); // the Live/Buy/Sell/Booking line nearest the cursor, if any
   const chartContainerRef = useRef(null);
+  const plotRef = useRef(null); // wraps just the SVG canvas, no padding — used for click/hover → price math
   const gestureRef = useRef({
     dragging: false,
     startX: 0,
+    startY: 0,
     startPanOffset: 0,
     pinching: false,
     startDistance: 0,
@@ -118,6 +140,22 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
 
   const isCompact = containerWidth > 0 && containerWidth < 480;
 
+  // Must mirror the <ComposedChart margin={...}> prop below exactly — it's
+  // how pixelYToPrice maps a click back to a price without needing to reach
+  // into Recharts' internal scale.
+  const chartMargin = useMemo(() => (
+    isCompact
+      ? { top: 12, bottom: 28 }
+      : { top: 20, bottom: 50 }
+  ), [isCompact]);
+
+  useEffect(() => {
+    if (!orderPlacementEnabled) {
+      setPlacementMode(false);
+      setHover(null);
+    }
+  }, [orderPlacementEnabled]);
+
   // How many candles fit at 1x zoom - target a legible pixel width per candle
   // instead of a fixed desktop count, so phones show fewer, bigger candles.
   const baseCandleCount = useMemo(() => {
@@ -140,6 +178,98 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
     const startIndex = Math.max(0, endIndex - visibleCandleCount);
     return displayData.slice(startIndex, endIndex);
   }, [displayData, visibleCandleCount, panOffset]);
+
+  // Price axis domain: driven only by real price data (candle highs/lows) plus
+  // any buy/sell/booking lines, so an unrelated series (volume, which is
+  // counted in coins/UGX-equivalent units, not price) can never blow out the
+  // scale and flatten every candle into a hairline — that was the bug behind
+  // the chart previously rendering as a single flat dash.
+  const priceDomain = useMemo(() => {
+    if (zoomedDisplayData.length === 0) return ['auto', 'auto'];
+    const prices = zoomedDisplayData.flatMap(c => [c.high, c.low]);
+    [...buyMarkers, ...sellMarkers, ...bookingOrders].forEach(m => {
+      const p = parseFloat(m.price ?? m.target_price_ugx);
+      if (Number.isFinite(p)) prices.push(p);
+    });
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+    const pad = Math.max((max - min) * 0.08, Math.max(Math.abs(max), 1) * 0.002, 1);
+    return [min - pad, max + pad];
+  }, [zoomedDisplayData, buyMarkers, sellMarkers, bookingOrders]);
+
+  // Convert a click/hover's viewport Y into a price, using the same domain
+  // and margins the chart itself is rendered with — so "tap to book" always
+  // reads the price actually under the cursor. Declared before the gesture
+  // handlers below since several of them depend on it.
+  const pixelYToPrice = useCallback((clientY) => {
+    if (!plotRef.current) return null;
+    const [domainMin, domainMax] = priceDomain;
+    if (typeof domainMin !== 'number' || typeof domainMax !== 'number') return null;
+
+    const rect = plotRef.current.getBoundingClientRect();
+    const plotTop = chartMargin.top;
+    const plotBottom = rect.height - chartMargin.bottom;
+    const plotHeight = Math.max(1, plotBottom - plotTop);
+    const relY = Math.min(Math.max(clientY - rect.top, plotTop), plotBottom);
+    const frac = (relY - plotTop) / plotHeight;
+    return domainMax - frac * (domainMax - domainMin);
+  }, [priceDomain, chartMargin]);
+
+  // Where an instant Buy/Sell would execute right now — always the latest
+  // close, regardless of how far the chart is currently panned/zoomed.
+  const livePrice = displayData.length > 0 ? displayData[displayData.length - 1].close : null;
+
+  // Inverse of pixelYToPrice — a price's Y position relative to plotRef's
+  // own top (not the viewport), so it's directly comparable to a click's
+  // local Y for line hit-testing.
+  const priceToPixelY = useCallback((price) => {
+    if (!plotRef.current) return null;
+    const [domainMin, domainMax] = priceDomain;
+    if (typeof domainMin !== 'number' || typeof domainMax !== 'number') return null;
+    const rect = plotRef.current.getBoundingClientRect();
+    const plotTop = chartMargin.top;
+    const plotBottom = rect.height - chartMargin.bottom;
+    const plotHeight = Math.max(1, plotBottom - plotTop);
+    const frac = (domainMax - price) / (domainMax - domainMin || 1);
+    return plotTop + frac * plotHeight;
+  }, [priceDomain, chartMargin]);
+
+  // Every selectable line currently drawn on the chart, so a click can be
+  // matched to the specific Live/Buy/Sell/Booking line nearest the cursor.
+  const candidateLines = useMemo(() => {
+    const lines = [];
+    if (showLivePrice && livePrice != null) lines.push({ type: 'live', price: livePrice });
+    buyMarkers.forEach((m, i) => {
+      const p = parseFloat(m.price);
+      if (Number.isFinite(p)) lines.push({ type: 'buy', price: p, index: i, marker: m });
+    });
+    sellMarkers.forEach((m, i) => {
+      const p = parseFloat(m.price);
+      if (Number.isFinite(p)) lines.push({ type: 'sell', price: p, index: i, marker: m });
+    });
+    bookingOrders.forEach((o) => {
+      const p = parseFloat(o.target_price_ugx);
+      if (Number.isFinite(p)) lines.push({ type: 'booking', price: p, order: o });
+    });
+    return lines;
+  }, [showLivePrice, livePrice, buyMarkers, sellMarkers, bookingOrders]);
+
+  const LINE_HIT_TOLERANCE_PX = 10;
+
+  const findLineAt = useCallback((localY) => {
+    let best = null;
+    let bestDist = Infinity;
+    for (const line of candidateLines) {
+      const y = priceToPixelY(line.price);
+      if (y == null) continue;
+      const dist = Math.abs(y - localY);
+      if (dist <= LINE_HIT_TOLERANCE_PX && dist < bestDist) {
+        best = line;
+        bestDist = dist;
+      }
+    }
+    return best;
+  }, [candidateLines, priceToPixelY]);
 
   // Keep refs in sync so gesture handlers (bound once) always see fresh values
   useEffect(() => {
@@ -172,12 +302,15 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
     const processed = candleData.map((candle, index) => {
       const open = parseFloat(candle.open_price || candle.open);
       const close = parseFloat(candle.close_price || candle.close);
+      const high = parseFloat(candle.high_price || candle.high);
+      const low = parseFloat(candle.low_price || candle.low);
       return {
         time: candle.time || `Candle ${index}`,
         open,
-        high: parseFloat(candle.high_price || candle.high),
-        low: parseFloat(candle.low_price || candle.low),
+        high,
+        low,
         close,
+        range: [low, high],
         volume: parseFloat(candle.trading_volume || candle.volume || 0),
         isUp: close >= open,
       };
@@ -197,13 +330,13 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
           <p className="text-amber-400 font-semibold border-b border-slate-700 pb-1.5 mb-1.5">{d.time}</p>
           <div className="grid grid-cols-2 gap-x-4 gap-y-1">
             <p className="text-slate-400">Open:</p>
-            <p className="text-emerald-400 font-mono">${d.open.toFixed(8)}</p>
+            <p className="text-emerald-400 font-mono">UGX {d.open.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
             <p className="text-slate-400">High:</p>
-            <p className="text-blue-400 font-mono">${d.high.toFixed(8)}</p>
+            <p className="text-blue-400 font-mono">UGX {d.high.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
             <p className="text-slate-400">Low:</p>
-            <p className="text-rose-400 font-mono">${d.low.toFixed(8)}</p>
+            <p className="text-rose-400 font-mono">UGX {d.low.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
             <p className="text-slate-400">Close:</p>
-            <p className="text-amber-400 font-mono">${d.close.toFixed(8)}</p>
+            <p className="text-amber-400 font-mono">UGX {d.close.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
             <p className="text-slate-400">Volume:</p>
             <p className="text-purple-400 font-mono">{d.volume.toFixed(2)}</p>
           </div>
@@ -237,6 +370,7 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
   const handleMouseDown = useCallback((e) => {
     gestureRef.current.dragging = true;
     gestureRef.current.startX = e.clientX;
+    gestureRef.current.startY = e.clientY;
     gestureRef.current.startPanOffset = panOffsetRef.current;
   }, []);
 
@@ -249,8 +383,54 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
     setPanOffset(clampPan(gestureRef.current.startPanOffset + candleDelta));
   }, [clampPan]);
 
-  const handleMouseUp = useCallback(() => {
+  // A "click" (near-zero movement) either selects the Live/Buy/Sell/Booking
+  // line nearest the cursor (always available), or — only in placement mode,
+  // and only when no existing line was hit — books a brand new order at that
+  // price. Anything past the threshold was a pan/drag, not a tap.
+  const CLICK_MOVE_THRESHOLD_PX = 6;
+
+  const handleMouseUp = useCallback((e) => {
+    const wasDragging = gestureRef.current.dragging;
     gestureRef.current.dragging = false;
+    if (!wasDragging || !e || !plotRef.current) return;
+
+    const moved = Math.abs(e.clientX - gestureRef.current.startX) + Math.abs(e.clientY - gestureRef.current.startY);
+    if (moved > CLICK_MOVE_THRESHOLD_PX) return;
+
+    const rect = plotRef.current.getBoundingClientRect();
+    const hitLine = findLineAt(e.clientY - rect.top);
+    if (hitLine) {
+      if (onLineSelect) onLineSelect(hitLine);
+      return;
+    }
+
+    if (placementMode && onPlaceOrderClick) {
+      const price = pixelYToPrice(e.clientY);
+      if (price != null) onPlaceOrderClick(price);
+    }
+  }, [placementMode, onPlaceOrderClick, pixelYToPrice, findLineAt, onLineSelect]);
+
+  // Always track which line (if any) is under the cursor, so it can be
+  // highlighted and the cursor can hint it's clickable — independent of
+  // placement mode, which only gates the crosshair for booking a NEW order.
+  const handleHoverMove = useCallback((e) => {
+    if (!plotRef.current) return;
+    const rect = plotRef.current.getBoundingClientRect();
+    const localY = e.clientY - rect.top;
+    setHoverLine(findLineAt(localY));
+
+    if (!placementMode) {
+      setHover(null);
+      return;
+    }
+    const y = Math.min(Math.max(localY, chartMargin.top), rect.height - chartMargin.bottom);
+    const price = pixelYToPrice(e.clientY);
+    if (price != null) setHover({ y, price });
+  }, [placementMode, pixelYToPrice, chartMargin, findLineAt]);
+
+  const handleHoverLeave = useCallback(() => {
+    setHover(null);
+    setHoverLine(null);
   }, []);
 
   // Touch: one finger pans, two fingers pinch-zoom - all directly on-screen
@@ -270,6 +450,7 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
       gestureRef.current.dragging = true;
       gestureRef.current.pinching = false;
       gestureRef.current.startX = e.touches[0].clientX;
+      gestureRef.current.startY = e.touches[0].clientY;
       gestureRef.current.startPanOffset = panOffsetRef.current;
     }
   }, [zoomLevel]);
@@ -294,8 +475,24 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
 
   const handleTouchEnd = useCallback((e) => {
     if (e.touches.length === 0) {
+      const wasTap = gestureRef.current.dragging && !gestureRef.current.pinching;
       gestureRef.current.dragging = false;
       gestureRef.current.pinching = false;
+
+      if (wasTap && e.changedTouches?.[0] && plotRef.current) {
+        const t = e.changedTouches[0];
+        const moved = Math.abs(t.clientX - gestureRef.current.startX) + Math.abs(t.clientY - gestureRef.current.startY);
+        if (moved <= CLICK_MOVE_THRESHOLD_PX) {
+          const rect = plotRef.current.getBoundingClientRect();
+          const hitLine = findLineAt(t.clientY - rect.top);
+          if (hitLine) {
+            if (onLineSelect) onLineSelect(hitLine);
+          } else if (placementMode && onPlaceOrderClick) {
+            const price = pixelYToPrice(t.clientY);
+            if (price != null) onPlaceOrderClick(price);
+          }
+        }
+      }
     } else if (e.touches.length === 1) {
       // Dropped from pinch to a single finger - restart as a pan
       gestureRef.current.pinching = false;
@@ -303,7 +500,7 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
       gestureRef.current.startX = e.touches[0].clientX;
       gestureRef.current.startPanOffset = panOffsetRef.current;
     }
-  }, []);
+  }, [placementMode, onPlaceOrderClick, pixelYToPrice, findLineAt, onLineSelect]);
 
   // Wire up all gesture listeners directly on the chart container - no icons/buttons involved
   useEffect(() => {
@@ -316,6 +513,8 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
     container.addEventListener('touchstart', handleTouchStart, { passive: true });
     container.addEventListener('touchmove', handleTouchMove, { passive: false });
     container.addEventListener('touchend', handleTouchEnd, { passive: true });
+    container.addEventListener('mousemove', handleHoverMove);
+    container.addEventListener('mouseleave', handleHoverLeave);
     return () => {
       container.removeEventListener('wheel', handleMouseWheel);
       container.removeEventListener('mousedown', handleMouseDown);
@@ -324,107 +523,57 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
       container.removeEventListener('touchstart', handleTouchStart);
       container.removeEventListener('touchmove', handleTouchMove);
       container.removeEventListener('touchend', handleTouchEnd);
+      container.removeEventListener('mousemove', handleHoverMove);
+      container.removeEventListener('mouseleave', handleHoverLeave);
     };
-  }, [handleMouseWheel, handleMouseDown, handleMouseMove, handleMouseUp, handleTouchStart, handleTouchMove, handleTouchEnd]);
+  }, [handleMouseWheel, handleMouseDown, handleMouseMove, handleMouseUp, handleTouchStart, handleTouchMove, handleTouchEnd, handleHoverMove, handleHoverLeave]);
 
-  // Creative Candlestick Component - Transforms from Trend Line to Full Candlesticks
-  const CandlestickRender = ({ x, y, width, height, payload, displayData, upColor, downColor, wickColor }) => {
-    if (!displayData || displayData.length === 0) return null;
+  // One candle per shape invocation, positioned using the SAME y-scale Recharts
+  // computed for the "range" ([low, high]) bar — so wicks/bodies always line up
+  // exactly with the shared price axis instead of a hand-rolled scale that can
+  // drift out of sync with it (e.g. get squashed flat by an unrelated series).
+  const CandlestickShape = useCallback((props) => {
+    const { x, y, width, height, payload } = props;
+    if (!payload) return null;
 
-    // Memoize min/max calculation
-    const prices = displayData.flatMap(c => [c.high, c.low]);
-    const minPrice = Math.min(...prices);
-    const maxPrice = Math.max(...prices);
-    const priceRange = maxPrice - minPrice || 1;
+    const { open, close, high, low } = payload;
+    const isUp = close >= open;
+    const bodyColor = isUp ? chartSettings.upColor : chartSettings.downColor;
+    const priceRange = high - low;
 
-    // Color scheme: Green for winning (bullish), Red for losing (bearish)
-    const upColor_candlestick = '#10b981'; // Green for bullish
-    const downColor_candlestick = '#ef4444'; // Red for bearish
+    const priceToY = (price) => (priceRange > 0 ? y + height * (high - price) / priceRange : y + height / 2);
+    const openY = priceToY(open);
+    const closeY = priceToY(close);
 
-    // Always render real OHLC candlesticks - width scales with zoom/candle density
+    const candleBodyWidth = Math.max(2, Math.min(width * 0.82, 24));
+    const candleX = x + width / 2;
+    const bodyTop = Math.min(openY, closeY);
+    const bodyHeight = Math.max(Math.abs(closeY - openY), 1.5);
+
     return (
       <g>
-        {displayData.map((candle, index) => {
-          if (!candle) return null;
-
-          const isUp = candle.close >= candle.open;
-
-          // Dynamic sizing - scales with available per-candle width
-          const candleBodyWidth = Math.max(2, Math.min(width * 0.7, 20));
-          const candleX = x + (index * width) + width / 2;
-
-          // Normalize prices to chart coordinates
-          const highY = y + height * (1 - (candle.high - minPrice) / priceRange);
-          const lowY = y + height * (1 - (candle.low - minPrice) / priceRange);
-          const openY = y + height * (1 - (candle.open - minPrice) / priceRange);
-          const closeY = y + height * (1 - (candle.close - minPrice) / priceRange);
-
-          const bodyTop = Math.min(openY, closeY);
-          const bodyHeight = Math.max(Math.abs(closeY - openY), 1.5);
-
-          // Color selection: green for up, red for down
-          const bodyFill = isUp ? upColor_candlestick : downColor_candlestick;
-
-          // Wick color with transparency
-          const wickStroke = isUp ? `rgba(16, 185, 129, 0.8)` : `rgba(239, 68, 68, 0.8)`;
-
-          return (
-            <g key={`candlestick-${index}`}>
-              {/* Wick - extended line from high to low showing price range */}
-              <line
-                x1={candleX}
-                y1={highY}
-                y2={lowY}
-                x2={candleX}
-                stroke={wickStroke}
-                strokeWidth={Math.max(1, width * 0.12)}
-                strokeLinecap="round"
-                opacity={0.9}
-              />
-
-              {/* Body - main candlestick rectangle showing open/close */}
-              <rect
-                x={candleX - candleBodyWidth / 2}
-                y={bodyTop}
-                width={candleBodyWidth}
-                height={bodyHeight}
-                fill={bodyFill}
-                stroke={bodyFill}
-                strokeWidth={Math.max(0.5, width * 0.06)}
-                opacity={0.92}
-              />
-
-              {/* Inner highlight for 3D effect */}
-              {bodyHeight > 3 && candleBodyWidth > 5 && (
-                <rect
-                  x={candleX - candleBodyWidth / 2 + 0.5}
-                  y={bodyTop + 0.5}
-                  width={Math.max(1, candleBodyWidth / 2 - 1)}
-                  height={Math.max(1, bodyHeight - 1)}
-                  fill="white"
-                  opacity={0.25}
-                  pointerEvents="none"
-                />
-              )}
-
-              {/* Outer shadow for depth and dimension */}
-              {bodyHeight > 3 && candleBodyWidth > 5 && (
-                <rect
-                  x={candleX}
-                  y={bodyTop + 0.5}
-                  width={Math.max(1, candleBodyWidth / 2 - 0.5)}
-                  height={Math.max(1, bodyHeight - 1)}
-                  fill="black"
-                  opacity={0.15}
-                  pointerEvents="none"
-                />
-              )}
-            </g>
-          );
-        })}
+        <line x1={candleX} x2={candleX} y1={y} y2={y + height} stroke={bodyColor} strokeWidth={1} />
+        <rect
+          x={candleX - candleBodyWidth / 2}
+          y={bodyTop}
+          width={candleBodyWidth}
+          height={bodyHeight}
+          fill={bodyColor}
+        />
       </g>
     );
-  };
+  }, [chartSettings.upColor, chartSettings.downColor]);
+
+  const volumeDomain = useMemo(() => {
+    if (zoomedDisplayData.length === 0) return [0, 'auto'];
+    const maxVol = Math.max(...zoomedDisplayData.map(c => c.volume || 0), 0);
+    // 4x headroom keeps the volume bars confined to roughly the bottom
+    // quarter of the plot instead of sharing the price scale.
+    return [0, maxVol > 0 ? maxVol * 4 : 1];
+  }, [zoomedDisplayData]);
+
+  const showVolume = chartSettings.showVolume && !isCompact;
+  const showLegend = buyMarkers.length > 0 || sellMarkers.length > 0 || bookingOrders.length > 0 || (showLivePrice && livePrice != null);
 
   if (loading) {
     return (
@@ -452,21 +601,100 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
 
   return (
     <div className={`bg-slate-900 rounded-xl h-full w-full flex flex-col ${isCompact ? 'p-1' : 'p-2'}`}>
+      {showLegend && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-2 pb-1.5 text-[11px] text-slate-400">
+          {showLivePrice && livePrice != null && (
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-3 h-0.5 rounded" style={{ backgroundColor: LIVE_COLOR }} />
+              Live price
+            </span>
+          )}
+          {buyMarkers.length > 0 && (
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-3 h-0.5 rounded" style={{ backgroundColor: BUY_COLOR }} />
+              Buy
+            </span>
+          )}
+          {sellMarkers.length > 0 && (
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-3 h-0.5 rounded" style={{ backgroundColor: SELL_COLOR }} />
+              Sell
+            </span>
+          )}
+          {bookingOrders.length > 0 && (
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-3 h-0.5 rounded border-t border-dashed" style={{ borderColor: BOOKING_COLOR }} />
+              Booked (pending)
+            </span>
+          )}
+        </div>
+      )}
       <div
         ref={chartContainerRef}
-        className={`bg-slate-950 rounded-lg border border-slate-800 cursor-grab active:cursor-grabbing overflow-hidden flex-1 flex flex-col min-h-0 select-none ${isCompact ? 'p-1' : 'p-3'}`}
+        className={`relative bg-slate-950 rounded-lg border border-slate-800 ${hoverLine ? 'cursor-pointer' : placementMode ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'} overflow-hidden flex-1 flex flex-col min-h-0 select-none ${isCompact ? 'p-1' : 'p-3'}`}
         style={{ touchAction: 'none' }}
       >
+        {orderPlacementEnabled && (
+          <button
+            type="button"
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); setPlacementMode(p => !p); }}
+            className={`absolute top-1.5 right-1.5 z-10 px-2 py-1 rounded-md text-[10px] font-semibold border transition-colors ${
+              placementMode
+                ? 'bg-amber-500 text-slate-900 border-amber-400'
+                : 'bg-slate-800/90 text-slate-300 border-slate-700 hover:text-white'
+            }`}
+          >
+            {isCompact
+              ? (placementMode ? '🎯 Booking…' : '🎯 Book')
+              : (placementMode ? '🎯 Tap chart to book — tap again to cancel' : '🎯 Tap chart to book')}
+          </button>
+        )}
+        <div ref={plotRef} className="relative flex-1 min-h-0">
+          {placementMode && hover && (
+            <div
+              className="absolute left-0 right-0 border-t border-dashed pointer-events-none z-10"
+              style={{ top: hover.y, borderColor: BOOKING_COLOR }}
+            >
+              <span
+                className="absolute right-1 -translate-y-1/2 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold text-slate-900"
+                style={{ backgroundColor: BOOKING_COLOR }}
+              >
+                UGX {hover.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              </span>
+            </div>
+          )}
+          {hoverLine && (() => {
+            const y = priceToPixelY(hoverLine.price);
+            if (y == null) return null;
+            const color = hoverLine.type === 'live' ? LIVE_COLOR
+              : hoverLine.type === 'buy' ? BUY_COLOR
+              : hoverLine.type === 'sell' ? SELL_COLOR
+              : BOOKING_COLOR;
+            const label = hoverLine.type === 'live' ? '👆 Tap to trade at LIVE price'
+              : hoverLine.type === 'buy' ? '👆 Tap to re-book this Buy price'
+              : hoverLine.type === 'sell' ? '👆 Tap to re-book this Sell price'
+              : '👆 Tap to manage this booked order';
+            return (
+              <div
+                className="absolute left-1 -translate-y-1/2 px-1.5 py-0.5 rounded text-[10px] font-semibold text-slate-900 pointer-events-none z-20 whitespace-nowrap"
+                style={{ top: y, backgroundColor: color }}
+              >
+                {label}
+              </div>
+            );
+          })()}
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={zoomedDisplayData}
             margin={
               isCompact
-                ? { top: 12, right: 4, left: 2, bottom: 28 }
-                : { top: 20, right: 30, left: 50, bottom: 50 }
+                ? { ...chartMargin, right: 4, left: 2 }
+                : { ...chartMargin, right: 55, left: 10 }
             }
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.1)" />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" />
             <XAxis
               dataKey="time"
               tick={{ fill: "#64748b", fontSize: isCompact ? 9 : 10 }}
@@ -485,21 +713,77 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
               tickLine={{ stroke: '#334155' }}
             />
             <YAxis
+              yAxisId="price"
               tick={{ fill: "#64748b", fontSize: isCompact ? 9 : 10 }}
               width={isCompact ? 34 : 55}
-              orientation={isCompact ? 'right' : 'left'}
-              mirror={isCompact}
-              domain={["dataMin - 0.000001", "dataMax + 0.000001"]}
+              orientation="right"
+              domain={priceDomain}
               axisLine={{ stroke: '#334155' }}
               tickLine={{ stroke: '#334155' }}
             />
 
+            {showVolume && (
+              <YAxis yAxisId="volume" domain={volumeDomain} hide />
+            )}
+
             {analysis && (
               <>
-                <ReferenceLine y={parseFloat(analysis.resistance)} stroke="#ef4444" strokeDasharray="5 5" />
-                <ReferenceLine y={parseFloat(analysis.support)} stroke="#10b981" strokeDasharray="5 5" />
+                <ReferenceLine yAxisId="price" y={parseFloat(analysis.resistance)} stroke="#ef4444" strokeOpacity={0.5} strokeDasharray="5 5" />
+                <ReferenceLine yAxisId="price" y={parseFloat(analysis.support)} stroke="#10b981" strokeOpacity={0.5} strokeDasharray="5 5" />
               </>
             )}
+
+            {showLivePrice && livePrice != null && (
+              <ReferenceLine
+                yAxisId="price"
+                y={livePrice}
+                stroke={LIVE_COLOR}
+                strokeWidth={hoverLine?.type === 'live' ? 3 : 1.5}
+                label={{
+                  value: `● LIVE ${livePrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
+                  position: 'insideTopRight',
+                  fill: LIVE_COLOR,
+                  fontSize: 10,
+                }}
+              />
+            )}
+
+            {buyMarkers.map((m, i) => (
+              <ReferenceLine
+                key={`buy-${i}`}
+                yAxisId="price"
+                y={parseFloat(m.price)}
+                stroke={BUY_COLOR}
+                strokeDasharray="4 3"
+                strokeWidth={hoverLine?.type === 'buy' && hoverLine.index === i ? 2.5 : 1.25}
+              />
+            ))}
+            {sellMarkers.map((m, i) => (
+              <ReferenceLine
+                key={`sell-${i}`}
+                yAxisId="price"
+                y={parseFloat(m.price)}
+                stroke={SELL_COLOR}
+                strokeDasharray="4 3"
+                strokeWidth={hoverLine?.type === 'sell' && hoverLine.index === i ? 2.5 : 1.25}
+              />
+            ))}
+            {bookingOrders.map((o) => (
+              <ReferenceLine
+                key={`book-${o.id}`}
+                yAxisId="price"
+                y={parseFloat(o.target_price_ugx)}
+                stroke={BOOKING_COLOR}
+                strokeDasharray="2 4"
+                strokeWidth={hoverLine?.type === 'booking' && hoverLine.order?.id === o.id ? 2.75 : 1.5}
+                label={{
+                  value: `📌 ${o.order_type === 'buy' ? 'Buy' : 'Sell'} @ ${parseFloat(o.target_price_ugx).toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+                  position: 'insideBottomLeft',
+                  fill: BOOKING_COLOR,
+                  fontSize: 10,
+                }}
+              />
+            ))}
 
             <Tooltip
               content={renderTooltip}
@@ -507,19 +791,21 @@ const CandlestickChart = React.memo(({ candleData = [], priceUSD = 0.00036, load
               isAnimationActive={false}
             />
 
-            {chartSettings.showVolume && !isCompact && (
-              <Bar dataKey="volume" fill="rgba(168,85,247,0.15)" isAnimationActive={false} />
+            {showVolume && (
+              <Bar yAxisId="volume" dataKey="volume" fill="rgba(168,85,247,0.15)" isAnimationActive={false} />
             )}
 
-            {/* Beautiful Candlesticks */}
+            {/* Real OHLC candlesticks, scaled by the shared price axis */}
             <Bar
-              dataKey="close"
+              yAxisId="price"
+              dataKey="range"
               fill="transparent"
               isAnimationActive={false}
-              shape={<CandlestickRender displayData={zoomedDisplayData} upColor={chartSettings.upColor} downColor={chartSettings.downColor} wickColor={chartSettings.wickColor} />}
+              shape={CandlestickShape}
             />
           </ComposedChart>
         </ResponsiveContainer>
+        </div>
       </div>
     </div>
   );

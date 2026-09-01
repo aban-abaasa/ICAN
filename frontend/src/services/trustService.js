@@ -892,7 +892,10 @@ export const recordTrustTransaction = async (transactionData) => {
         from_user_id: transactionData.fromUserId,
         to_user_id: transactionData.toUserId,
         amount: transactionData.amount,
-        currency: transactionData.currency || 'USD',
+        // This function deducts real icaneracoin balance for contributions
+        // (see STEP 1 above), so an unset currency is coin-native — never
+        // assume USD for a global app's users.
+        currency: transactionData.currency || 'ICAN',
         transaction_type: transactionData.type,
         description: transactionData.description,
         blockchain_hash: blockchainHash,

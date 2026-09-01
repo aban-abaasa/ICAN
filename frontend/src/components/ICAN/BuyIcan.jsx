@@ -60,6 +60,21 @@ export default function BuyIcan({ userId: propUserId, onSuccess } = {}) {
     }
   }, [resolvedUserId]);
 
+  // Keep the rate live while this screen is open — same 60s cadence as
+  // PitchinLiveShareValue's ticker, so the price a user is about to buy at
+  // never goes stale mid-session.
+  useEffect(() => {
+    if (!resolvedUserId) return;
+    const id = setInterval(async () => {
+      try {
+        const marketData = await icanCoinBlockchainService.getCurrentPrice();
+        setMarketPrice(marketData.priceUGX);
+        setPercentageChange(marketData.percentageChange24h);
+      } catch {}
+    }, 60_000);
+    return () => clearInterval(id);
+  }, [resolvedUserId]);
+
   // Calculate ICAN amount when local amount changes
   useEffect(() => {
     if (localAmount && country) {
@@ -174,6 +189,15 @@ export default function BuyIcan({ userId: propUserId, onSuccess } = {}) {
         <div style={{ marginBottom: '24px', textAlign: 'center' }}>
           <h3 style={{ margin: '0 0 4px 0', color: '#333', fontSize: '20px' }}>💳 Buy IcanEra Coins</h3>
           <p style={{ margin: 0, color: '#666', fontSize: '13px' }}>Convert your local currency to IcanEra at current market price</p>
+        </div>
+
+        {/* Live rate */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '20px', fontSize: '13px', color: '#444' }}>
+          <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e' }} />
+          <span>1 IcanEra = {currencySymbol}{marketPrice.toLocaleString()}</span>
+          <span style={{ color: percentageChange >= 0 ? '#16a34a' : '#dc2626', fontWeight: 600 }}>
+            {percentageChange >= 0 ? '+' : ''}{percentageChange.toFixed(2)}%
+          </span>
         </div>
 
         {/* Trading Form */}

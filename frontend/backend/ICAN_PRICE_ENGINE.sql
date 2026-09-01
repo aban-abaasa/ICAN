@@ -71,6 +71,12 @@ DECLARE
   v_fx_protect   NUMERIC;
   v_tx_count     BIGINT  := 0;
   v_tx_vol       NUMERIC := 0;
+  v_biz_count    BIGINT  := 0;
+  v_biz_vol      NUMERIC := 0;
+  v_trust_count  BIGINT  := 0;
+  v_trust_vol    NUMERIC := 0;
+  v_sacco_count  BIGINT  := 0;
+  v_sacco_vol    NUMERIC := 0;
   v_holders      BIGINT  := 0;
   v_tx_c         NUMERIC;
   v_vol_c        NUMERIC;
@@ -109,7 +115,15 @@ BEGIN
   -- 4. UGX depreciation %
   v_depr_pct   := ROUND(((v_curr_rate - v_init_rate) / v_init_rate * 100)::NUMERIC, 4);
 
-  -- 5. Usage premiums (in UGX, scales with current rate)
+  -- 5. Usage premiums (in UGX, scales with current rate) — real economic
+  --    activity across every real-money surface on the platform, not just
+  --    coin trades: personal ICAN transfers/buys/sells, PitchIn
+  --    business-wallet transfers, trust-group contributions/payouts, and
+  --    SACCO contributions/loan repayments. Business-wallet transfers also
+  --    mirror into ican_coin_transactions once executed (see
+  --    pitchin_execute_business_wallet_transfer), so counting both
+  --    reinforces genuine business usage rather than double-booking a
+  --    ledger — this is a usage signal, not an accounting total.
   BEGIN
     SELECT COUNT(*), COALESCE(SUM(ican_amount), 0)
     INTO v_tx_count, v_tx_vol
@@ -118,13 +132,54 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN NULL; END;
 
   BEGIN
+    SELECT COUNT(*), COALESCE(SUM(amount_ican), 0)
+    INTO v_biz_count, v_biz_vol
+    FROM public.ican_business_wallet_transactions
+    WHERE status = 'completed';
+  EXCEPTION WHEN OTHERS THEN NULL; END;
+
+  -- trust_transactions.amount is in the contributor's REAL local currency
+  -- (trust_transactions.currency — resolved from ican_currency_rates,
+  -- which carries 100+ real country currencies seeded in
+  -- ICAN_LIVE_PRICING.sql, keyed off each user's actual sign-up country).
+  -- Convert to coin-equivalent units via UGX so it's comparable to the
+  -- native-coin volumes above instead of skewing the premium with raw
+  -- currency magnitudes. A currency code that genuinely isn't found falls
+  -- back to 1:1 UGX (the system's actual internal base currency), never to
+  -- the USD rate — this app is global, not USD-only.
+  BEGIN
+    SELECT COUNT(*), COALESCE(SUM(
+      CASE WHEN UPPER(COALESCE(currency, 'ICAN')) = 'ICAN' THEN amount
+           ELSE (amount * COALESCE(
+                   (SELECT rate_to_ugx FROM public.ican_currency_rates
+                     WHERE currency_code = UPPER(currency)),
+                   1
+                 )) / NULLIF(v_fx_floor, 0)
+      END), 0)
+    INTO v_trust_count, v_trust_vol
+    FROM public.trust_transactions
+    WHERE transaction_type IN ('contribution', 'payout');
+  EXCEPTION WHEN OTHERS THEN NULL; END;
+
+  -- SACCO contributions/repayments carry no currency column and are
+  -- platform-native ICAN amounts.
+  BEGIN
+    SELECT
+      (SELECT COUNT(*) FROM public.ican_sacco_contributions) +
+      (SELECT COUNT(*) FROM public.ican_sacco_repayments),
+      (SELECT COALESCE(SUM(amount), 0) FROM public.ican_sacco_contributions) +
+      (SELECT COALESCE(SUM(amount), 0) FROM public.ican_sacco_repayments)
+    INTO v_sacco_count, v_sacco_vol;
+  EXCEPTION WHEN OTHERS THEN NULL; END;
+
+  BEGIN
     SELECT COUNT(*) INTO v_holders
     FROM public.user_accounts
     WHERE COALESCE(ican_coin_balance, 0) > 0;
   EXCEPTION WHEN OTHERS THEN NULL; END;
 
-  v_tx_c    := COALESCE(v_tx_count, 0)  * 0.50;
-  v_vol_c   := COALESCE(v_tx_vol, 0)   * 0.002;
+  v_tx_c    := (COALESCE(v_tx_count, 0) + COALESCE(v_biz_count, 0) + COALESCE(v_trust_count, 0) + COALESCE(v_sacco_count, 0)) * 0.50;
+  v_vol_c   := (COALESCE(v_tx_vol, 0)   + COALESCE(v_biz_vol, 0)   + COALESCE(v_trust_vol, 0)   + COALESCE(v_sacco_vol, 0))   * 0.002;
   v_hold_c  := COALESCE(v_holders, 0)  * 15;
   v_premium := v_tx_c + v_vol_c + v_hold_c;
 
@@ -150,9 +205,9 @@ BEGIN
     ROUND(v_fair_usd, 6),
     v_app_pct,
     v_usd_gain,
-    COALESCE(v_tx_count, 0),
+    COALESCE(v_tx_count, 0) + COALESCE(v_biz_count, 0) + COALESCE(v_trust_count, 0) + COALESCE(v_sacco_count, 0),
     COALESCE(v_holders,  0),
-    COALESCE(v_tx_vol,   0),
+    COALESCE(v_tx_vol,   0) + COALESCE(v_biz_vol,   0) + COALESCE(v_trust_vol,   0) + COALESCE(v_sacco_vol,   0),
     NOW()::TIMESTAMPTZ;
 END; $$;
 

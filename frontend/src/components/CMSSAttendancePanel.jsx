@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, Download, Users, QrCode, MapPin, CheckCircle, XCircle, Copy, Eye, Search, Filter, Trash2 } from 'lucide-react';
+import { Calendar, Clock, Download, Users, QrCode, MapPin, CheckCircle, XCircle, Copy, Eye, Search, Filter, Trash2, LogIn, LogOut, RefreshCw } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from '../lib/supabase/client';
 import { getPublicAppUrl } from '../utils/publicAppUrl';
@@ -8,15 +8,27 @@ import { downloadCmmsRecordsExcel, downloadCmmsRecordsPdf } from '../utils/cmmsR
 
 const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole, isCreator }) => {
   const [attendanceRecords, setAttendanceRecords] = useState([]);
+  const [attendanceSummary, setAttendanceSummary] = useState([]);
+  const [activeCheckIns, setActiveCheckIns] = useState([]);
   const [qrCodes, setQrCodes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('records');
+  const [activeTab, setActiveTab] = useState('summary');
   const today = new Date().toISOString().split('T')[0];
-  const [startDate, setStartDate] = useState(today);
+  const defaultSummaryStart = new Date();
+  defaultSummaryStart.setDate(defaultSummaryStart.getDate() - 29);
+  // Default to a 30-day window, not just today: a check-in COUNT is only
+  // meaningful across multiple days — "today only" would show 1 for everyone.
+  const [startDate, setStartDate] = useState(defaultSummaryStart.toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(today);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [manualStaffId, setManualStaffId] = useState('');
+  const [manualLocation, setManualLocation] = useState('');
+  const [manualLoading, setManualLoading] = useState(false);
+  const [manualError, setManualError] = useState('');
+  const [manualSuccess, setManualSuccess] = useState('');
+  const [summaryLoadError, setSummaryLoadError] = useState('');
 
   const canManage = userRole === 'admin' || isCreator;
 
@@ -24,19 +36,36 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
     loadData();
   }, [companyProfile, startDate, endDate, selectedStaffId]);
 
+  useEffect(() => {
+    if (!manualLocation.trim() && companyProfile?.location?.trim()) {
+      setManualLocation(companyProfile.location.trim());
+    }
+  }, [companyProfile?.id, companyProfile?.location]);
+
   const loadData = async () => {
     if (!companyProfile?.id) return;
     setLoading(true);
 
     try {
-      const [recordsRes, qrRes] = await Promise.all([
+      const [recordsRes, summaryRes, activeRes, qrRes] = await Promise.all([
         supabase.rpc('get_attendance_records', {
           p_cmms_company_id: companyProfile.id,
           p_start_date: startDate || null,
           p_end_date: endDate || null,
           p_user_id: canManage && selectedStaffId ? selectedStaffId : null
         }),
-        
+
+        supabase.rpc('get_attendance_summary', {
+          p_cmms_company_id: companyProfile.id,
+          p_start_date: startDate || null,
+          p_end_date: endDate || null,
+          p_user_id: canManage && selectedStaffId ? selectedStaffId : null
+        }),
+
+        canManage ? supabase.rpc('get_active_staff_check_ins', {
+          p_cmms_company_id: companyProfile.id
+        }) : { data: [], error: null },
+
         canManage ? supabase
           .from('cmms_attendance_qr_locations')
           .select('*')
@@ -47,6 +76,20 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
       // Log errors for debugging
       if (recordsRes.error) {
         console.error('Attendance records error:', recordsRes.error);
+      }
+      if (summaryRes.error) {
+        console.error('Attendance summary error:', summaryRes.error);
+        const message = summaryRes.error?.message || '';
+        setSummaryLoadError(
+          summaryRes.error?.code === 'PGRST202' || /could not find the function|schema cache/i.test(message)
+            ? 'The check-in summary service has not been deployed to Supabase yet. Run backend/CMMS_ATTENDANCE_SUMMARY_AND_MANUAL_CHECKIN.sql in the Supabase SQL Editor, then refresh.'
+            : (message || 'Failed to load the check-in summary')
+        );
+      } else {
+        setSummaryLoadError('');
+      }
+      if (activeRes.error) {
+        console.error('Active check-ins error:', activeRes.error);
       }
       if (qrRes.error) {
         console.error('QR codes error:', qrRes.error);
@@ -62,13 +105,71 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
 
       // Set data even if there are errors (empty arrays)
       setAttendanceRecords(recordsRes.data || []);
+      setAttendanceSummary(summaryRes.data || []);
+      setActiveCheckIns(activeRes.data || []);
       setQrCodes(qrRes.data || []);
     } catch (error) {
       console.error('Load data error:', error);
       setAttendanceRecords([]);
+      setAttendanceSummary([]);
+      setActiveCheckIns([]);
       setQrCodes([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleManualCheckIn = async () => {
+    if (!manualStaffId) {
+      setManualError('Select a staff member to check in');
+      return;
+    }
+    if (!manualLocation.trim()) {
+      setManualError('Location is required');
+      return;
+    }
+
+    setManualLoading(true);
+    setManualError('');
+    setManualSuccess('');
+
+    try {
+      const { error } = await supabase.rpc('staff_check_in', {
+        p_cmms_user_id: manualStaffId,
+        p_cmms_company_id: companyProfile.id,
+        p_location: manualLocation.trim()
+      });
+      if (error) throw error;
+
+      const staff = staffOptions.find((option) => option.id === manualStaffId);
+      setManualSuccess(`✅ ${staff?.label || 'Staff member'} checked in`);
+      setManualStaffId('');
+      await loadData();
+    } catch (error) {
+      setManualError(error.message || 'Manual check-in failed');
+    } finally {
+      setManualLoading(false);
+    }
+  };
+
+  const handleManualCheckOut = async (attendanceId) => {
+    setManualLoading(true);
+    setManualError('');
+    setManualSuccess('');
+
+    try {
+      const { error } = await supabase.rpc('staff_check_out', {
+        p_attendance_id: attendanceId,
+        p_location: manualLocation.trim() || null
+      });
+      if (error) throw error;
+
+      setManualSuccess('✅ Staff member checked out');
+      await loadData();
+    } catch (error) {
+      setManualError(error.message || 'Manual check-out failed');
+    } finally {
+      setManualLoading(false);
     }
   };
 
@@ -206,6 +307,39 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
     return matchesSearch && (statusFilter === 'all' || statusFilter === recordStatus);
   });
 
+  const visibleAttendanceSummary = attendanceSummary.filter((entry) => {
+    const query = searchTerm.trim().toLowerCase();
+    return !query || [entry.user_name, entry.user_email].some((value) => value?.toLowerCase().includes(query));
+  });
+
+  const summaryColumns = [
+    { label: 'Staff Name', value: (entry) => entry.user_name || 'Unknown' },
+    { label: 'Email', value: (entry) => entry.user_email || '' },
+    { label: 'Check-Ins', value: (entry) => entry.check_in_count },
+    { label: 'Days Present', value: (entry) => entry.days_present },
+    { label: 'First Check In', value: (entry) => entry.first_check_in_time ? new Date(entry.first_check_in_time).toLocaleDateString() : '' },
+    { label: 'Last Check In', value: (entry) => entry.last_check_in_time ? new Date(entry.last_check_in_time).toLocaleString() : '' },
+    { label: 'Currently Checked In', value: (entry) => entry.currently_checked_in ? 'Yes' : 'No' }
+  ];
+
+  const ensureAttendanceSummary = () => {
+    if (visibleAttendanceSummary.length === 0) {
+      alert('No attendance summary to export');
+      return false;
+    }
+    return true;
+  };
+
+  const exportSummaryExcel = async () => {
+    if (!ensureAttendanceSummary()) return;
+    await downloadCmmsRecordsExcel({ filename: `attendance-summary-${startDate}-to-${endDate}`, sheetName: 'Attendance Summary', columns: summaryColumns, rows: visibleAttendanceSummary });
+  };
+
+  const exportSummaryPdf = async () => {
+    if (!ensureAttendanceSummary()) return;
+    await downloadCmmsRecordsPdf({ filename: `attendance-summary-${startDate}-to-${endDate}`, title: 'Staff Attendance Summary', subtitle: `${companyProfile?.company_name || 'CMMS'} check-in counts: ${startDate} to ${endDate}`, columns: summaryColumns, rows: visibleAttendanceSummary });
+  };
+
   const staffOptions = cmmsUsers?.filter((user) => user?.is_active !== false)
     .map((user) => ({ id: user.id, label: user.full_name || user.user_name || user.email || 'Unnamed staff' })) || [];
   const payrollReadyCount = visibleAttendanceRecords.filter((record) => Boolean(record.check_out_time)).length;
@@ -217,6 +351,11 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
     start.setDate(start.getDate() - (days - 1));
     setStartDate(start.toISOString().split('T')[0]);
     setEndDate(end.toISOString().split('T')[0]);
+  };
+
+  const setAllTimeRange = () => {
+    setStartDate('2000-01-01');
+    setEndDate(today);
   };
 
   const ensureAttendanceRecords = () => {
@@ -272,7 +411,17 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-slate-700">
+      <div className="flex gap-2 border-b border-slate-700 flex-wrap">
+        <button
+          onClick={() => setActiveTab('summary')}
+          className={`px-4 py-2 font-semibold ${
+            activeTab === 'summary'
+              ? 'border-b-2 border-indigo-500 text-indigo-400'
+              : 'text-slate-400 hover:text-slate-300'
+          }`}
+        >
+          Check-In Summary
+        </button>
         <button
           onClick={() => setActiveTab('records')}
           className={`px-4 py-2 font-semibold ${
@@ -281,8 +430,20 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
               : 'text-slate-400 hover:text-slate-300'
           }`}
         >
-          Attendance Records
+          Detailed Log
         </button>
+        {canManage && (
+          <button
+            onClick={() => setActiveTab('manual')}
+            className={`px-4 py-2 font-semibold ${
+              activeTab === 'manual'
+                ? 'border-b-2 border-indigo-500 text-indigo-400'
+                : 'text-slate-400 hover:text-slate-300'
+            }`}
+          >
+            Manual Check-In/Out
+          </button>
+        )}
         {canManage && (
           <button
             onClick={() => setActiveTab('qr-codes')}
@@ -296,6 +457,150 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
           </button>
         )}
       </div>
+
+      {/* Check-In Summary Tab: one row per staff member (count), not one row per day */}
+      {activeTab === 'summary' && (
+        <div className="space-y-4">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex flex-wrap items-center gap-3">
+              <Calendar className="h-5 w-5 text-slate-400" />
+              <input
+                type="date"
+                value={startDate}
+                max={endDate || undefined}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg"
+                aria-label="Summary start date"
+              />
+              <span className="text-sm text-slate-400">to</span>
+              <input type="date" value={endDate} min={startDate || undefined} max={today} onChange={(e) => setEndDate(e.target.value)} className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg" aria-label="Summary end date" />
+              <button onClick={() => setDatePreset(1)} className="px-3 py-2 text-xs bg-slate-700 hover:bg-slate-600 rounded-lg">Today</button>
+              <button onClick={() => setDatePreset(7)} className="px-3 py-2 text-xs bg-slate-700 hover:bg-slate-600 rounded-lg">7 days</button>
+              <button onClick={() => setDatePreset(30)} className="px-3 py-2 text-xs bg-slate-700 hover:bg-slate-600 rounded-lg">30 days</button>
+              <button onClick={setAllTimeRange} className="px-3 py-2 text-xs bg-slate-700 hover:bg-slate-600 rounded-lg">All time</button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={exportSummaryExcel} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg flex items-center gap-2">
+                <Download className="h-4 w-4" /> Excel
+              </button>
+              <button onClick={exportSummaryPdf} className="px-4 py-2 bg-rose-700 hover:bg-rose-600 rounded-lg flex items-center gap-2">
+                <Download className="h-4 w-4" /> PDF
+              </button>
+            </div>
+          </div>
+
+          <label className="relative block max-w-md">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+            <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search staff or email" className="w-full rounded-lg border border-slate-700 bg-slate-800 py-2 pl-9 pr-3 text-sm" />
+          </label>
+
+          {visibleAttendanceSummary.length === 0 ? (
+            <div className="text-center py-12 text-slate-400">
+              <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
+              <p>No check-ins in this date range</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-slate-700">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-800">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-slate-300">Staff</th>
+                    <th className="px-4 py-2 text-left text-slate-300">Email</th>
+                    <th className="px-4 py-2 text-center text-slate-300">Check-Ins</th>
+                    <th className="px-4 py-2 text-center text-slate-300">Days Present</th>
+                    <th className="px-4 py-2 text-left text-slate-300">Last Check In</th>
+                    <th className="px-4 py-2 text-center text-slate-300">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {visibleAttendanceSummary.map((entry) => (
+                    <tr key={entry.cmms_user_id} className="hover:bg-slate-800/60">
+                      <td className="px-4 py-2 font-semibold">{entry.user_name || 'Unknown'}</td>
+                      <td className="px-4 py-2 text-slate-400">{entry.user_email}</td>
+                      <td className="px-4 py-2 text-center">
+                        <span className="rounded-full bg-indigo-500/15 px-3 py-1 text-indigo-300 font-semibold">{entry.check_in_count}</span>
+                      </td>
+                      <td className="px-4 py-2 text-center text-slate-300">{entry.days_present}</td>
+                      <td className="px-4 py-2 text-slate-400">{entry.last_check_in_time ? new Date(entry.last_check_in_time).toLocaleString() : '—'}</td>
+                      <td className="px-4 py-2 text-center">
+                        {entry.currently_checked_in ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs text-amber-300"><Clock className="h-3 w-3" />Checked in</span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300"><CheckCircle className="h-3 w-3" />Checked out</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Manual Check-In/Out Tab (admin/manager only) — same manual pattern used for visitors */}
+      {activeTab === 'manual' && canManage && (
+        <div className="space-y-6">
+          {manualError && (
+            <div className="bg-red-500/20 border border-red-500/50 text-red-200 p-4 rounded-lg">{manualError}</div>
+          )}
+          {manualSuccess && (
+            <div className="bg-emerald-500/20 border border-emerald-500/50 text-emerald-200 p-4 rounded-lg">{manualSuccess}</div>
+          )}
+
+          <div className="p-4 bg-slate-800 border border-slate-700 rounded-lg space-y-3">
+            <h3 className="text-lg font-bold flex items-center gap-2"><LogIn className="h-5 w-5 text-indigo-400" />Manually check in a staff member</h3>
+            <div className="grid gap-3 md:grid-cols-3">
+              <select value={manualStaffId} onChange={(e) => setManualStaffId(e.target.value)} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm">
+                <option value="">Select staff member</option>
+                {staffOptions.map((staff) => <option key={staff.id} value={staff.id}>{staff.label}</option>)}
+              </select>
+              <input
+                type="text"
+                value={manualLocation}
+                onChange={(e) => setManualLocation(e.target.value)}
+                placeholder="Location"
+                className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm"
+              />
+              <button
+                onClick={handleManualCheckIn}
+                disabled={manualLoading || !manualStaffId || !manualLocation.trim()}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-lg flex items-center justify-center gap-2"
+              >
+                {manualLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
+                Check In
+              </button>
+            </div>
+          </div>
+
+          <div className="p-4 bg-slate-800 border border-slate-700 rounded-lg space-y-3">
+            <h3 className="text-lg font-bold flex items-center gap-2"><LogOut className="h-5 w-5 text-amber-400" />Currently checked in</h3>
+            {activeCheckIns.length === 0 ? (
+              <p className="text-sm text-slate-400">No staff are currently checked in.</p>
+            ) : (
+              <div className="space-y-2">
+                {activeCheckIns.map((entry) => (
+                  <div key={entry.id} className="flex items-center justify-between gap-3 p-3 bg-slate-900 border border-slate-700 rounded-lg">
+                    <div>
+                      <p className="font-semibold">{entry.user_name}</p>
+                      <p className="text-xs text-slate-400">{entry.user_email} • In since {new Date(entry.check_in_time).toLocaleString()}</p>
+                      {entry.check_in_location && <p className="text-xs text-slate-500 flex items-center gap-1"><MapPin className="h-3 w-3" />{entry.check_in_location}</p>}
+                    </div>
+                    <button
+                      onClick={() => handleManualCheckOut(entry.id)}
+                      disabled={manualLoading}
+                      className="px-3 py-2 text-sm bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-lg flex items-center gap-2"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Check Out
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Attendance Records Tab */}
       {activeTab === 'records' && (
