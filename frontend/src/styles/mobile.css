@@ -28,6 +28,21 @@
 
 /* Mobile optimizations */
 @media (max-width: 768px) {
+  /* Hide the visible vertical scrollbar track everywhere on mobile
+     (index.css draws one globally for desktop) so scrollable panels
+     use the full width without a sliding bar eating into the layout. */
+  ::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
+  html,
+  body {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
   /* Larger touch targets */
   button {
     min-height: 44px; /* iOS recommended minimum */

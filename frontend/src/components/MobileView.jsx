@@ -4821,14 +4821,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       )}
 
       {/* ====== RECORD EVERY TRANSACTION SECTION ====== */}
-      <div
-        className="mx-4 mt-4 mb-2 p-4 rounded-2xl border backdrop-blur-sm"
-        style={{
-          background: modePalette.sectionBg,
-          borderColor: modePalette.sectionBorder,
-          boxShadow: '0 10px 30px rgba(0,0,0,0.18)'
-        }}
-      >
+      <div className="mx-4 mt-4 mb-2">
         <h2
           className="text-lg font-extrabold mb-3 tracking-tight"
           style={{
@@ -6491,7 +6484,6 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
         return (
         <div className="px-4 py-4">
-          <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-4">
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
@@ -6631,7 +6623,6 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 )}
               </div>
             )}
-          </div>
         </div>
         );
       })()}
