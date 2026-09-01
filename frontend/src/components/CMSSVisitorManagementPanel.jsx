@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { QrCode, Users, MapPin, AlertTriangle, CheckCircle, LogOut, RefreshCw, AlertCircle, Mail, Download } from 'lucide-react';
+import { QrCode, Users, MapPin, AlertTriangle, CheckCircle, LogOut, RefreshCw, AlertCircle, Mail, Download, Car, ChevronDown, ChevronUp } from 'lucide-react';
 import jsQR from 'jsqr';
 import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from '../lib/supabase/client';
@@ -18,6 +18,7 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
   const [checkInLocation, setCheckInLocation] = useState('');
   const [hostEmail, setHostEmail] = useState('');
   const [purpose, setPurpose] = useState('');
+  const [vehicleNumber, setVehicleNumber] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -32,6 +33,14 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
   const [editingVisitor, setEditingVisitor] = useState(null);
   const [adminNotes, setAdminNotes] = useState('');
   const [flagReason, setFlagReason] = useState('');
+  const [expandedVisitorIds, setExpandedVisitorIds] = useState(() => new Set());
+  const toggleVisitorExpanded = (id) => {
+    setExpandedVisitorIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
   const streamRef = useRef(null);
   // Visitor identity/contact records are manager-only in the database. Keep
   // the UI in step with that policy: users with this tool can register a
@@ -127,14 +136,15 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
         p_latitude: userLocation?.latitude || null,
         p_longitude: userLocation?.longitude || null,
         p_host_email: hostEmail || null,
-        p_purpose: purpose || null
+        p_purpose: purpose || null,
+        p_vehicle_number: vehicleNumber || null
       });
 
       if (checkInError) throw checkInError;
 
       setSuccess(`✅ Visitor ${visitorName} registered successfully`);
       setScannedVisitor(result);
-      
+
       // Reset form
       setVisitorName('');
       setVisitorEmail('');
@@ -142,6 +152,7 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
       setCheckInLocation('');
       setHostEmail('');
       setPurpose('');
+      setVehicleNumber('');
 
       // Reload records
       await loadVisitorRecords();
@@ -292,6 +303,7 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
     { label: 'Phone', value: (record) => record.visitor_phone },
     { label: 'Host', value: (record) => record.host_name || record.host_email },
     { label: 'Purpose', value: (record) => record.purpose },
+    { label: 'Vehicle No.', value: (record) => record.vehicle_number },
     { label: 'Check In', value: (record) => new Date(record.check_in_time).toLocaleTimeString() },
     { label: 'Check Out', value: (record) => record.check_out_time ? new Date(record.check_out_time).toLocaleTimeString() : 'Not checked out' },
     { label: 'Location', value: (record) => record.check_in_location },
@@ -520,6 +532,22 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
                 className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:border-blue-400 transition-all"
               />
             </div>
+
+            <div>
+              <label className="block text-sm text-gray-300 mb-2">Vehicle Number</label>
+              <div className="flex gap-2">
+                <span className="flex items-center px-3 bg-white/10 border border-white/20 rounded-lg text-gray-400">
+                  <Car className="w-4 h-4" />
+                </span>
+                <input
+                  type="text"
+                  value={vehicleNumber}
+                  onChange={(e) => setVehicleNumber(e.target.value.toUpperCase())}
+                  placeholder="e.g. UBA 123X"
+                  className="flex-1 px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:border-blue-400 transition-all"
+                />
+              </div>
+            </div>
           </div>
 
           {/* QR Scanner Modal */}
@@ -632,53 +660,88 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-white/10 border-b border-white/20">
-                <tr>
-                  <th className="px-4 py-2 text-left text-gray-300">Visitor Name</th>
-                  <th className="px-4 py-2 text-left text-gray-300">Email</th>
-                  <th className="px-4 py-2 text-left text-gray-300">Check-In</th>
-                  <th className="px-4 py-2 text-left text-gray-300">Status</th>
-                  <th className="px-4 py-2 text-left text-gray-300">Location</th>
-                  <th className="px-4 py-2 text-center text-gray-300">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10">
-                {visitorRecords.map(record => (
-                  <tr key={record.id} className="hover:bg-white/5">
-                    <td className="px-4 py-2 text-gray-300">{record.visitor_name}</td>
-                    <td className="px-4 py-2 text-gray-300">{record.visitor_email || '-'}</td>
-                    <td className="px-4 py-2 text-gray-300">
-                      {new Date(record.check_in_time).toLocaleTimeString()}
-                    </td>
-                    <td className="px-4 py-2">
-                      <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                        record.status === 'flagged_for_review'
-                          ? 'bg-red-500/30 text-red-200'
-                          : record.status === 'checked_out'
-                          ? 'bg-gray-500/30 text-gray-200'
-                          : 'bg-emerald-500/30 text-emerald-200'
-                      }`}>
-                        {record.status === 'flagged_for_review' ? '🚩 Flagged' : record.status === 'checked_out' ? '✓ Out' : '✓ In'}
+          <div className="space-y-2">
+            {visitorRecords.map(record => {
+              const isExpanded = expandedVisitorIds.has(record.id);
+              return (
+                <div key={record.id} className="rounded-lg border border-white/10 bg-white/5 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleVisitorExpanded(record.id)}
+                    className="w-full flex flex-wrap items-center gap-3 px-4 py-3 text-left hover:bg-white/5 transition-all"
+                  >
+                    {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400 flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />}
+                    <span className="font-semibold text-white">{record.visitor_name}</span>
+                    <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                      record.status === 'flagged_for_review'
+                        ? 'bg-red-500/30 text-red-200'
+                        : record.status === 'checked_out'
+                        ? 'bg-gray-500/30 text-gray-200'
+                        : 'bg-emerald-500/30 text-emerald-200'
+                    }`}>
+                      {record.status === 'flagged_for_review' ? '🚩 Flagged' : record.status === 'checked_out' ? '✓ Out' : '✓ In'}
+                    </span>
+                    <span className="text-xs text-gray-400">{new Date(record.check_in_time).toLocaleTimeString()}</span>
+                    {record.vehicle_number && (
+                      <span className="flex items-center gap-1 text-xs text-gray-400">
+                        <Car className="w-3 h-3" /> {record.vehicle_number}
                       </span>
-                    </td>
-                    <td className="px-4 py-2 text-gray-300">{record.check_in_location}</td>
-                    <td className="px-4 py-2 text-center">
+                    )}
+                    <span className="ml-auto flex items-center gap-2">
                       {record.status === 'checked_in' && (
-                        <button
-                          onClick={() => handleVisitorCheckOut(record.id)}
-                          className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded"
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => { e.stopPropagation(); handleVisitorCheckOut(record.id); }}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); handleVisitorCheckOut(record.id); } }}
+                          className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded inline-flex items-center"
                         >
                           <LogOut className="inline w-3 h-3 mr-1" />
                           Check Out
-                        </button>
+                        </span>
                       )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </span>
+                  </button>
+
+                  {isExpanded && (
+                    <div className="px-4 pb-4 pt-1 grid sm:grid-cols-2 lg:grid-cols-3 gap-3 border-t border-white/10 bg-black/10">
+                      <div>
+                        <p className="text-gray-400 text-xs mt-3">Email</p>
+                        <p className="text-gray-200 text-sm">{record.visitor_email || '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400 text-xs mt-3">Phone</p>
+                        <p className="text-gray-200 text-sm">{record.visitor_phone || '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400 text-xs mt-3">Vehicle Number</p>
+                        <p className="text-gray-200 text-sm">{record.vehicle_number || '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400 text-xs mt-3">Host</p>
+                        <p className="text-gray-200 text-sm">{record.host_name || record.host_email || '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400 text-xs mt-3">Purpose</p>
+                        <p className="text-gray-200 text-sm">{record.purpose || '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400 text-xs mt-3">Location</p>
+                        <p className="text-gray-200 text-sm">{record.check_in_location || '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400 text-xs mt-3">Check-In</p>
+                        <p className="text-gray-200 text-sm">{new Date(record.check_in_time).toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400 text-xs mt-3">Check-Out</p>
+                        <p className="text-gray-200 text-sm">{record.check_out_time ? new Date(record.check_out_time).toLocaleString() : 'Not checked out'}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
             {visitorRecords.length === 0 && (
               <div className="text-center py-6 text-gray-400">No visitor records found</div>
             )}
