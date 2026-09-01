@@ -260,10 +260,18 @@ export const StatusFeed = () => {
 
                     {/* User badge */}
                     <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-sm px-3 py-1 rounded-full flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-xs font-bold text-white">
-                        {status.user_id.slice(0, 1).toUpperCase()}
-                      </div>
-                      <span className="text-xs text-white font-medium">@User</span>
+                      {status.poster_avatar_url ? (
+                        <img
+                          src={status.poster_avatar_url}
+                          alt={status.poster_full_name || 'User'}
+                          className="w-6 h-6 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-xs font-bold text-white">
+                          {(status.poster_full_name || 'User').charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <span className="text-xs text-white font-medium">{status.poster_full_name || 'User'}</span>
                     </div>
                   </div>
 
