@@ -2,11 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { getAllAccessibleBusinessProfiles } from '../services/pitchingService';
 import { createBusinessProfileFromCategory } from '../services/businessManagementService';
 import DropshipResellerDashboard from './DropshipResellerDashboard';
+import DropshipBrowse from './DropshipBrowse';
 
-// Standalone "Dropship" section for the main dashboard (not the wallet):
-// finds the user's Dropshipping business profile (creating one on the spot
-// if they don't have one yet) and renders the reseller dashboard inline.
-// Self-contained: just needs the signed-in user's id/email.
+// Standalone "Dropship" section for the main dashboard (not the wallet).
+// A user with no Dropshipping business profile is just a shopper here --
+// they get the cross-reseller product browse (DropshipBrowse) plus a small
+// "become a reseller" CTA underneath, not a hard gate behind creating a
+// business first. A user who already has one gets their own reseller
+// dashboard, same as before.
 const DropshipDashboardWidget = ({ userId, userEmail }) => {
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -14,6 +17,7 @@ const DropshipDashboardWidget = ({ userId, userEmail }) => {
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState(null);
+  const [showStartForm, setShowStartForm] = useState(false);
 
   const loadProfiles = async () => {
     if (!userId) { setLoading(false); return; }
@@ -63,24 +67,39 @@ const DropshipDashboardWidget = ({ userId, userEmail }) => {
       </div>
 
       {profiles.length === 0 ? (
-        <div className="space-y-2">
-          <p className="text-xs text-slate-400 px-1">Resell any store's products at your own price. Free to start.</p>
-          <div className="flex gap-2">
-            <input
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="Your dropshipping business name"
-              className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500"
-            />
-            <button
-              onClick={handleCreate}
-              disabled={!newName.trim() || creating}
-              className="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-teal-600 text-white text-sm font-semibold disabled:opacity-40 whitespace-nowrap"
-            >
-              {creating ? 'Creating…' : 'Start'}
-            </button>
+        <div className="space-y-3">
+          <DropshipBrowse />
+
+          <div className="border-t border-slate-800 pt-3">
+            {showStartForm ? (
+              <div className="space-y-2">
+                <p className="text-xs text-slate-400 px-1">Resell any store's products at your own price. Free to start.</p>
+                <div className="flex gap-2">
+                  <input
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="Your dropshipping business name"
+                    className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500"
+                  />
+                  <button
+                    onClick={handleCreate}
+                    disabled={!newName.trim() || creating}
+                    className="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-teal-600 text-white text-sm font-semibold disabled:opacity-40 whitespace-nowrap"
+                  >
+                    {creating ? 'Creating…' : 'Start'}
+                  </button>
+                </div>
+                {createError && <p className="text-xs text-red-400 px-1">{createError}</p>}
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowStartForm(true)}
+                className="w-full text-xs text-cyan-400 hover:text-cyan-300 font-medium px-1 py-1 text-left"
+              >
+                Want to resell these products yourself? Start a free dropshipping business →
+              </button>
+            )}
           </div>
-          {createError && <p className="text-xs text-red-400 px-1">{createError}</p>}
         </div>
       ) : (
         <>
