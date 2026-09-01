@@ -19,11 +19,17 @@ const isVisitorQrPath = window.location.pathname === '/visitor-check-in';
 // same component just becomes fully interactive once they do.
 const pitchShareMatch = window.location.pathname.match(/^\/pitchin\/([^/]+)/);
 const statusShareMatch = window.location.pathname.match(/^\/status\/([^/]+)/);
+// A dropship storefront link (e.g. https://icanera.space/store/<businessProfileId>)
+// must be browsable by anyone, signed in or not -- same reasoning as the
+// Pitchin/status share links above. Only checkout (a real ICANera payment)
+// prompts sign-in, in place, without losing the cart.
+const dropshipStoreMatch = window.location.pathname.match(/^\/store\/([^/]+)/);
 const App = React.lazy(() => import('./App'));
 const PublicStaffAttendanceCheckIn = React.lazy(() => import('./components/PublicStaffAttendanceCheckIn'));
 const PublicVisitorCheckIn = React.lazy(() => import('./components/PublicVisitorCheckIn'));
 const PublicPitchViewer = React.lazy(() => import('./components/PublicPitchViewer'));
 const PublicStatusViewer = React.lazy(() => import('./components/PublicStatusViewer'));
+const PublicDropshipStorefront = React.lazy(() => import('./components/PublicDropshipStorefront'));
 const Loading = () => <div className="min-h-screen bg-slate-950" />;
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -34,6 +40,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <AuthProvider>
             {pitchShareMatch ? <PublicPitchViewer pitchId={pitchShareMatch[1]} />
               : statusShareMatch ? <PublicStatusViewer statusId={statusShareMatch[1]} />
+              : dropshipStoreMatch ? <PublicDropshipStorefront businessProfileId={dropshipStoreMatch[1]} />
               : <App />}
           </AuthProvider>
         )}

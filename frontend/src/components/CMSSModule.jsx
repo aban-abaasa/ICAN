@@ -7841,7 +7841,7 @@ const CMMSModule = ({
         {activeTab === 'users' && getTabs().includes('users') && <UserRoleManager />}
         {activeTab === 'role-config' && getTabs().includes('role-config') && <CMMSRoleConfiguration companyId={companyIdToUse} isAdmin={userRole === 'admin' || isCreator} onRolesChanged={setCmmsRoleDefinitions} />}
         {activeTab === 'inventory' && getTabs().includes('inventory') && <InventoryManager />}
-        {activeTab === 'attendance' && getTabs().includes('attendance') && <CMSSAttendancePanel companyProfile={cmmsData.companyProfile} currentUser={user} cmmsUsers={cmmsData.users} userRole={userRole} isCreator={isCreator} />}
+        {activeTab === 'attendance' && getTabs().includes('attendance') && <CMSSAttendancePanel companyProfile={cmmsData.companyProfile} currentUser={user} cmmsUsers={cmmsData.users} userRole={userRole} isCreator={isCreator} hasToolAction={hasToolAction} />}
         {activeTab === 'visitor-mgmt' && getTabs().includes('visitor-mgmt') && <CMSSVisitorManagementPanel companyProfile={cmmsData.companyProfile} currentUser={user} cmmsUsers={cmmsData.users} userRole={userRole} isCreator={isCreator} />}
         {activeTab === 'fees' && getTabs().includes('fees') && <CMMSFeesPanel companyId={companyIdToUse} businessProfileId={cmmsData.companyProfile?.pichin_business_profile_id} cmmsUsers={cmmsData.users} studentView={isActiveStudent} />}
         {['production', 'quality', 'clinical', 'pharmacy'].includes(activeTab) && getTabs().includes(activeTab) && <CMMSOperationsPanel companyId={companyIdToUse} businessProfileId={cmmsData.companyProfile?.pichin_business_profile_id} mode={activeTab} />}

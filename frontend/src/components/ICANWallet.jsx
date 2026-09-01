@@ -49,6 +49,8 @@ import { getUserTrustGroups } from '../services/trustService';
 import { CountryService } from '../services/countryService';
 import { getAllAccessibleBusinessProfiles } from '../services/pitchingService';
 import { calculateLiveShareValue } from '../services/pitchinValuationService';
+import { createBusinessProfileFromCategory } from '../services/businessManagementService';
+import DropshipResellerDashboard from './DropshipResellerDashboard';
 import AgentDashboard from './AgentDashboard';
 import UnifiedApprovalModal from './UnifiedApprovalModal';
 import CandlestickChart from './CandlestickChart';
@@ -279,8 +281,13 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     selectedTimeframe: '7s'
   });
   // 📑 Trade Modal Tabs
-  const [activeTradeTab, setActiveTradeTab] = useState('wallet'); // 'wallet', 'chart', 'buy', 'sell', 'book', 'history'
+  const [activeTradeTab, setActiveTradeTab] = useState('wallet'); // 'wallet', 'chart', 'buy', 'sell', 'book', 'history', 'dropship'
   const [showMobileTradeMenu, setShowMobileTradeMenu] = useState(false);
+  // 🛍️ Dropship — resell any store's inventory at your own price, paid via ICANera wallet
+  const [selectedDropshipId, setSelectedDropshipId] = useState(null);
+  const [newDropshipName, setNewDropshipName] = useState('');
+  const [creatingDropship, setCreatingDropship] = useState(false);
+  const [dropshipCreateError, setDropshipCreateError] = useState(null);
   const [showMobileNavMenu, setShowMobileNavMenu] = useState(false);
   const [tradeHistory, setTradeHistory] = useState([]);
   // 📌 Booking (limit order) state — see icanOrderService.js
@@ -317,6 +324,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   // Prefer a caller-supplied businessProfiles prop if one was actually passed;
   // otherwise fall back to what this component fetches for itself from Pitchin.
   const effectiveBusinessProfiles = (businessProfiles && businessProfiles.length > 0) ? businessProfiles : realBusinessProfiles;
+  const dropshipBusinessProfiles = effectiveBusinessProfiles.filter((p) => String(p.business_type || '').toLowerCase().includes('dropship'));
+  const activeDropshipId = selectedDropshipId || dropshipBusinessProfiles[0]?.id || null;
   const isRestoringWalletHistoryRef = useRef(false);
   const hasHydratedWalletHistoryRef = useRef(false);
 
@@ -4656,6 +4665,34 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           </div>
         </div>
 
+        {/* 🛍️📊 Quick access: jump straight into Dropship or Chart & Analysis */}
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => { setActiveTab('trade'); setActiveTradeTab('dropship'); }}
+            className="solid-card p-4 flex items-center gap-3 text-left transition-all hover:translate-y-[-1px] border border-cyan-500/30 bg-gradient-to-br from-cyan-900/20 to-teal-900/10"
+          >
+            <div className="p-2.5 rounded-lg bg-cyan-500/20 shrink-0">
+              <span className="text-2xl">🛍️</span>
+            </div>
+            <div className="min-w-0">
+              <p className="text-white font-semibold text-sm">Dropship</p>
+              <p className="text-slate-400 text-xs truncate">Resell any store's products</p>
+            </div>
+          </button>
+          <button
+            onClick={() => { setActiveTab('trade'); setActiveTradeTab('chart'); }}
+            className="solid-card p-4 flex items-center gap-3 text-left transition-all hover:translate-y-[-1px] border border-amber-500/30 bg-gradient-to-br from-amber-900/20 to-orange-900/10"
+          >
+            <div className="p-2.5 rounded-lg bg-amber-500/20 shrink-0">
+              <span className="text-2xl">📊</span>
+            </div>
+            <div className="min-w-0">
+              <p className="text-white font-semibold text-sm">Chart & Analysis</p>
+              <p className="text-slate-400 text-xs truncate">Live IcanEra price chart</p>
+            </div>
+          </button>
+        </div>
+
         {/* 🎯 ACCOUNT INFO CARD - OR CREATE ACCOUNT PROMPT */}
         <div className="space-y-4">
           {!userAccount || !userAccount.pin_hash ? (
@@ -7368,6 +7405,17 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 >
                   📜 History
                 </button>
+
+                <button
+                  onClick={() => setActiveTradeTab('dropship')}
+                  className={`px-4 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
+                    activeTradeTab === 'dropship'
+                      ? 'bg-gradient-to-r from-cyan-600 to-teal-600 text-white shadow-lg shadow-cyan-600/30'
+                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
+                  }`}
+                >
+                  🛍️ Dropship
+                </button>
               </div>
 
               {/* Mobile View - Current Tab + Menu Button */}
@@ -7380,6 +7428,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                   {activeTradeTab === 'sell' && '💰 Sell IcanEra'}
                   {activeTradeTab === 'book' && '📌 Book Order'}
                   {activeTradeTab === 'history' && '📜 History'}
+                  {activeTradeTab === 'dropship' && '🛍️ Dropship'}
                 </div>
 
                 {/* Three Dots Menu Button */}
@@ -7464,13 +7513,26 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                         setActiveTradeTab('history');
                         setShowMobileTradeMenu(false);
                       }}
-                      className={`w-full px-4 py-3 text-left font-medium transition-colors flex items-center gap-2 ${
+                      className={`w-full px-4 py-3 text-left font-medium transition-colors flex items-center gap-2 border-b border-slate-600 ${
                         activeTradeTab === 'history'
                           ? 'bg-blue-600/30 text-blue-300'
                           : 'text-slate-300 hover:bg-slate-600 hover:text-white'
                       }`}
                     >
                       📜 History
+                    </button>
+                    <button
+                      onClick={() => {
+                        setActiveTradeTab('dropship');
+                        setShowMobileTradeMenu(false);
+                      }}
+                      className={`w-full px-4 py-3 text-left font-medium transition-colors flex items-center gap-2 ${
+                        activeTradeTab === 'dropship'
+                          ? 'bg-cyan-600/30 text-cyan-300'
+                          : 'text-slate-300 hover:bg-slate-600 hover:text-white'
+                      }`}
+                    >
+                      🛍️ Dropship
                     </button>
                   </div>
                 )}
@@ -7909,6 +7971,74 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                         </div>
                       ))}
                     </div>
+                  )}
+                </div>
+              )}
+
+              {/* Dropship Tab — resell any store's products at your own price */}
+              {activeTradeTab === 'dropship' && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center">
+                      <span className="text-xl">🛍️</span>
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-white">Dropship</h3>
+                      <p className="text-sm text-slate-400">List any store's products at your own price. Paid via your ICANera wallet.</p>
+                    </div>
+                  </div>
+
+                  {dropshipBusinessProfiles.length === 0 ? (
+                    <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 space-y-3">
+                      <p className="text-slate-300 text-sm">You need a Dropshipping business account to start reselling. It's free and only takes a second.</p>
+                      <input
+                        value={newDropshipName}
+                        onChange={(e) => setNewDropshipName(e.target.value)}
+                        placeholder="Your dropshipping business name"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500"
+                      />
+                      {dropshipCreateError && <p className="text-xs text-red-400">{dropshipCreateError}</p>}
+                      <button
+                        disabled={!newDropshipName.trim() || creatingDropship}
+                        onClick={async () => {
+                          setCreatingDropship(true);
+                          setDropshipCreateError(null);
+                          const result = await createBusinessProfileFromCategory({
+                            businessName: newDropshipName.trim(),
+                            categoryKey: 'dropshipping',
+                            businessType: 'Dropshipping / Reseller',
+                            sourceApp: 'ican',
+                          });
+                          setCreatingDropship(false);
+                          if (!result.success) {
+                            setDropshipCreateError(result.error || 'Could not create your dropshipping business.');
+                            return;
+                          }
+                          setSelectedDropshipId(result.data);
+                          setNewDropshipName('');
+                          if (onRefreshProfiles) onRefreshProfiles();
+                          else loadBusinessAccountProfiles();
+                        }}
+                        className="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-teal-600 text-white text-sm font-semibold disabled:opacity-40"
+                      >
+                        {creatingDropship ? 'Creating…' : 'Become a dropshipper'}
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {dropshipBusinessProfiles.length > 1 && (
+                        <select
+                          value={activeDropshipId || ''}
+                          onChange={(e) => setSelectedDropshipId(e.target.value)}
+                          className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
+                        >
+                          {dropshipBusinessProfiles.map((p) => (
+                            <option key={p.id} value={p.id}>{p.business_name}</option>
+                          ))}
+                        </select>
+                      )}
+                      <DropshipResellerDashboard businessProfileId={activeDropshipId} />
+                    </>
                   )}
                 </div>
               )}

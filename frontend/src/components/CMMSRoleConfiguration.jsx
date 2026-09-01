@@ -7,7 +7,14 @@ export const CMMS_TOOL_OPTIONS = [
   { id: 'departments', label: 'Departments', permission: 'canManageDepartments', actions: ['view', 'create', 'edit', 'delete'] },
   { id: 'users', label: 'Users and role assignments', permission: 'canManageUsers', actions: ['view', 'create', 'edit', 'assign'] },
   { id: 'inventory', label: 'Inventory', permission: 'canViewInventory', actions: ['view', 'create', 'edit', 'approve'] },
-  { id: 'attendance', label: 'Staff attendance & QR check-in', permission: 'canManageAttendance', actions: ['view', 'create', 'edit', 'approve'] },
+  // Action keys are read directly by backend attendance RPCs via
+  // cmms_attendance_has_action() — keep them in sync with
+  // backend/CMMS_ATTENDANCE_ROLE_BASED_PERMISSIONS.sql if you rename them.
+  // view: see every staff member's records, not just your own.
+  // manual: manually check another staff member in or out.
+  // days: credit (never reduce) a staff member's attendance day count.
+  // print: export attendance records/summary to Excel or PDF.
+  { id: 'attendance', label: 'Staff attendance & QR check-in', permission: 'canManageAttendance', actions: ['view', 'manual', 'days', 'print'] },
   { id: 'visitor-mgmt', label: 'Visitor management', permission: 'canManageVisitors', actions: ['view', 'create', 'edit', 'flag', 'approve'] },
   { id: 'payroll', label: 'Payroll', permission: 'canViewFinancials', actions: ['view', 'create', 'edit', 'approve'], scopes: true },
   { id: 'fees', label: 'School fees', permission: 'canManageFees', actions: ['view', 'create', 'edit', 'approve'], scopes: true },

@@ -231,6 +231,10 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public
 AS $$
+-- RETURNS TABLE output columns (user_name, days_present, ...) share names
+-- with real table columns of the same names below; without this, PL/pgSQL
+-- can raise "column reference is ambiguous" on an unqualified ORDER BY.
+#variable_conflict use_column
 DECLARE
   v_current_user_id UUID;
   v_is_admin BOOLEAN;
@@ -247,8 +251,8 @@ BEGIN
 
   RETURN QUERY
   SELECT a.cmms_user_id,
-         COALESCE(u.full_name, u.user_name)::TEXT,
-         u.email::TEXT,
+         COALESCE(u.full_name, u.user_name)::TEXT AS user_name,
+         u.email::TEXT AS user_email,
          COUNT(*)::BIGINT AS check_in_count,
          COUNT(DISTINCT DATE(a.check_in_time))::BIGINT AS days_present,
          MIN(a.check_in_time) AS first_check_in_time,

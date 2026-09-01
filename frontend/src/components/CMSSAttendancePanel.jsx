@@ -6,7 +6,7 @@ import { getPublicAppUrl } from '../utils/publicAppUrl';
 import { downloadCmmsQrPdf } from '../utils/downloadCmmsQrPdf';
 import { downloadCmmsRecordsExcel, downloadCmmsRecordsPdf } from '../utils/cmmsRecordExports';
 
-const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole, isCreator }) => {
+const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole, isCreator, hasToolAction }) => {
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [attendanceSummary, setAttendanceSummary] = useState([]);
   const [activeCheckIns, setActiveCheckIns] = useState([]);
@@ -29,8 +29,25 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
   const [manualError, setManualError] = useState('');
   const [manualSuccess, setManualSuccess] = useState('');
   const [summaryLoadError, setSummaryLoadError] = useState('');
+  const [dayAdjustments, setDayAdjustments] = useState([]);
+  const [addDaysStaffId, setAddDaysStaffId] = useState('');
+  const [addDaysCount, setAddDaysCount] = useState('');
+  const [addDaysReason, setAddDaysReason] = useState('');
+  const [addDaysLoading, setAddDaysLoading] = useState(false);
 
-  const canManage = userRole === 'admin' || isCreator;
+  // Company admins/creators always retain every attendance power. Beyond
+  // that, access is per-action and role-configurable (Role and tool
+  // configuration → Staff attendance & QR check-in) via hasToolAction —
+  // mirrors backend/CMMS_ATTENDANCE_ROLE_BASED_PERMISSIONS.sql exactly, so
+  // a role can be granted just manual check-in/out, just adding days, or
+  // just exporting, without full admin rights.
+  const isFullAdmin = userRole === 'admin' || isCreator;
+  const canViewAll = isFullAdmin || Boolean(hasToolAction?.('attendance', 'view'));
+  const canManualCheckInOut = isFullAdmin || Boolean(hasToolAction?.('attendance', 'manual'));
+  const canAddDays = isFullAdmin || Boolean(hasToolAction?.('attendance', 'days'));
+  const canExport = isFullAdmin || Boolean(hasToolAction?.('attendance', 'print'));
+  // QR code generation/administration is unchanged — still admin/creator-only.
+  const canManage = isFullAdmin;
 
   useEffect(() => {
     loadData();
@@ -47,22 +64,22 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
     setLoading(true);
 
     try {
-      const [recordsRes, summaryRes, activeRes, qrRes] = await Promise.all([
+      const [recordsRes, summaryRes, activeRes, qrRes, adjustmentsRes] = await Promise.all([
         supabase.rpc('get_attendance_records', {
           p_cmms_company_id: companyProfile.id,
           p_start_date: startDate || null,
           p_end_date: endDate || null,
-          p_user_id: canManage && selectedStaffId ? selectedStaffId : null
+          p_user_id: canViewAll && selectedStaffId ? selectedStaffId : null
         }),
 
         supabase.rpc('get_attendance_summary', {
           p_cmms_company_id: companyProfile.id,
           p_start_date: startDate || null,
           p_end_date: endDate || null,
-          p_user_id: canManage && selectedStaffId ? selectedStaffId : null
+          p_user_id: canViewAll && selectedStaffId ? selectedStaffId : null
         }),
 
-        canManage ? supabase.rpc('get_active_staff_check_ins', {
+        canManualCheckInOut ? supabase.rpc('get_active_staff_check_ins', {
           p_cmms_company_id: companyProfile.id
         }) : { data: [], error: null },
 
@@ -70,7 +87,11 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
           .from('cmms_attendance_qr_locations')
           .select('*')
           .eq('cmms_company_id', companyProfile.id)
-          .order('created_at', { ascending: false }) : { data: [], error: null }
+          .order('created_at', { ascending: false }) : { data: [], error: null },
+
+        canAddDays ? supabase.rpc('get_attendance_day_adjustments', {
+          p_cmms_company_id: companyProfile.id
+        }) : { data: [], error: null }
       ]);
 
       // Log errors for debugging
@@ -94,6 +115,9 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
       if (qrRes.error) {
         console.error('QR codes error:', qrRes.error);
       }
+      if (adjustmentsRes.error) {
+        console.error('Attendance day adjustments error:', adjustmentsRes.error);
+      }
 
       // The records RPC includes staff details and works with the attendance RLS policy.
       if (recordsRes.data && recordsRes.data.length > 0) {
@@ -108,12 +132,14 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
       setAttendanceSummary(summaryRes.data || []);
       setActiveCheckIns(activeRes.data || []);
       setQrCodes(qrRes.data || []);
+      setDayAdjustments(adjustmentsRes.data || []);
     } catch (error) {
       console.error('Load data error:', error);
       setAttendanceRecords([]);
       setAttendanceSummary([]);
       setActiveCheckIns([]);
       setQrCodes([]);
+      setDayAdjustments([]);
     } finally {
       setLoading(false);
     }
@@ -170,6 +196,44 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
       setManualError(error.message || 'Manual check-out failed');
     } finally {
       setManualLoading(false);
+    }
+  };
+
+  const handleAddDays = async () => {
+    const days = parseInt(addDaysCount, 10);
+
+    if (!addDaysStaffId) {
+      setManualError('Select a staff member to credit days to');
+      return;
+    }
+    if (!Number.isInteger(days) || days <= 0) {
+      setManualError('Days to add must be a positive whole number. Days present cannot be reduced.');
+      return;
+    }
+
+    setAddDaysLoading(true);
+    setManualError('');
+    setManualSuccess('');
+
+    try {
+      const { error } = await supabase.rpc('admin_add_attendance_days', {
+        p_cmms_company_id: companyProfile.id,
+        p_cmms_user_id: addDaysStaffId,
+        p_days: days,
+        p_reason: addDaysReason.trim() || null
+      });
+      if (error) throw error;
+
+      const staff = staffOptions.find((option) => option.id === addDaysStaffId);
+      setManualSuccess(`✅ Added ${days} day${days === 1 ? '' : 's'} to ${staff?.label || 'staff member'}`);
+      setAddDaysStaffId('');
+      setAddDaysCount('');
+      setAddDaysReason('');
+      await loadData();
+    } catch (error) {
+      setManualError(error.message || 'Adding attendance days failed');
+    } finally {
+      setAddDaysLoading(false);
     }
   };
 
@@ -317,6 +381,7 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
     { label: 'Email', value: (entry) => entry.user_email || '' },
     { label: 'Check-Ins', value: (entry) => entry.check_in_count },
     { label: 'Days Present', value: (entry) => entry.days_present },
+    { label: 'Manual Days Added', value: (entry) => entry.manual_days_added || 0 },
     { label: 'First Check In', value: (entry) => entry.first_check_in_time ? new Date(entry.first_check_in_time).toLocaleDateString() : '' },
     { label: 'Last Check In', value: (entry) => entry.last_check_in_time ? new Date(entry.last_check_in_time).toLocaleString() : '' },
     { label: 'Currently Checked In', value: (entry) => entry.currently_checked_in ? 'Yes' : 'No' }
@@ -432,7 +497,7 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
         >
           Detailed Log
         </button>
-        {canManage && (
+        {(canManualCheckInOut || canAddDays) && (
           <button
             onClick={() => setActiveTab('manual')}
             className={`px-4 py-2 font-semibold ${
@@ -461,6 +526,9 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
       {/* Check-In Summary Tab: one row per staff member (count), not one row per day */}
       {activeTab === 'summary' && (
         <div className="space-y-4">
+          {summaryLoadError && (
+            <div className="bg-red-500/20 border border-red-500/50 text-red-200 p-4 rounded-lg">{summaryLoadError}</div>
+          )}
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex flex-wrap items-center gap-3">
               <Calendar className="h-5 w-5 text-slate-400" />
@@ -479,14 +547,16 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
               <button onClick={() => setDatePreset(30)} className="px-3 py-2 text-xs bg-slate-700 hover:bg-slate-600 rounded-lg">30 days</button>
               <button onClick={setAllTimeRange} className="px-3 py-2 text-xs bg-slate-700 hover:bg-slate-600 rounded-lg">All time</button>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button onClick={exportSummaryExcel} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg flex items-center gap-2">
-                <Download className="h-4 w-4" /> Excel
-              </button>
-              <button onClick={exportSummaryPdf} className="px-4 py-2 bg-rose-700 hover:bg-rose-600 rounded-lg flex items-center gap-2">
-                <Download className="h-4 w-4" /> PDF
-              </button>
-            </div>
+            {canExport && (
+              <div className="flex flex-wrap gap-2">
+                <button onClick={exportSummaryExcel} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg flex items-center gap-2">
+                  <Download className="h-4 w-4" /> Excel
+                </button>
+                <button onClick={exportSummaryPdf} className="px-4 py-2 bg-rose-700 hover:bg-rose-600 rounded-lg flex items-center gap-2">
+                  <Download className="h-4 w-4" /> PDF
+                </button>
+              </div>
+            )}
           </div>
 
           <label className="relative block max-w-md">
@@ -520,7 +590,12 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
                       <td className="px-4 py-2 text-center">
                         <span className="rounded-full bg-indigo-500/15 px-3 py-1 text-indigo-300 font-semibold">{entry.check_in_count}</span>
                       </td>
-                      <td className="px-4 py-2 text-center text-slate-300">{entry.days_present}</td>
+                      <td className="px-4 py-2 text-center text-slate-300">
+                        {entry.days_present}
+                        {entry.manual_days_added > 0 && (
+                          <span className="ml-1 text-xs text-emerald-400" title="Includes admin-added days">(+{entry.manual_days_added})</span>
+                        )}
+                      </td>
                       <td className="px-4 py-2 text-slate-400">{entry.last_check_in_time ? new Date(entry.last_check_in_time).toLocaleString() : '—'}</td>
                       <td className="px-4 py-2 text-center">
                         {entry.currently_checked_in ? (
@@ -538,8 +613,8 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
         </div>
       )}
 
-      {/* Manual Check-In/Out Tab (admin/manager only) — same manual pattern used for visitors */}
-      {activeTab === 'manual' && canManage && (
+      {/* Manual Check-In/Out Tab — each section is gated by its own role-configurable power */}
+      {activeTab === 'manual' && (canManualCheckInOut || canAddDays) && (
         <div className="space-y-6">
           {manualError && (
             <div className="bg-red-500/20 border border-red-500/50 text-red-200 p-4 rounded-lg">{manualError}</div>
@@ -548,6 +623,7 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
             <div className="bg-emerald-500/20 border border-emerald-500/50 text-emerald-200 p-4 rounded-lg">{manualSuccess}</div>
           )}
 
+          {canManualCheckInOut && (
           <div className="p-4 bg-slate-800 border border-slate-700 rounded-lg space-y-3">
             <h3 className="text-lg font-bold flex items-center gap-2"><LogIn className="h-5 w-5 text-indigo-400" />Manually check in a staff member</h3>
             <div className="grid gap-3 md:grid-cols-3">
@@ -572,7 +648,9 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
               </button>
             </div>
           </div>
+          )}
 
+          {canManualCheckInOut && (
           <div className="p-4 bg-slate-800 border border-slate-700 rounded-lg space-y-3">
             <h3 className="text-lg font-bold flex items-center gap-2"><LogOut className="h-5 w-5 text-amber-400" />Currently checked in</h3>
             {activeCheckIns.length === 0 ? (
@@ -599,6 +677,64 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
               </div>
             )}
           </div>
+          )}
+
+          {canAddDays && (
+          <div className="p-4 bg-slate-800 border border-slate-700 rounded-lg space-y-3">
+            <div>
+              <h3 className="text-lg font-bold flex items-center gap-2"><Calendar className="h-5 w-5 text-emerald-400" />Add attendance days</h3>
+              <p className="text-xs text-slate-400 mt-1">Credit extra days present (e.g. approved field work, an outage that stopped QR check-in). This can only add days — it can never reduce a staff member's recorded attendance.</p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-4">
+              <select value={addDaysStaffId} onChange={(e) => setAddDaysStaffId(e.target.value)} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm">
+                <option value="">Select staff member</option>
+                {staffOptions.map((staff) => <option key={staff.id} value={staff.id}>{staff.label}</option>)}
+              </select>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={addDaysCount}
+                onChange={(e) => setAddDaysCount(e.target.value)}
+                placeholder="Days to add"
+                className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm"
+              />
+              <input
+                type="text"
+                value={addDaysReason}
+                onChange={(e) => setAddDaysReason(e.target.value)}
+                placeholder="Reason (optional)"
+                className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm"
+              />
+              <button
+                onClick={handleAddDays}
+                disabled={addDaysLoading || !addDaysStaffId || !addDaysCount}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-lg flex items-center justify-center gap-2"
+              >
+                {addDaysLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                Add Days
+              </button>
+            </div>
+
+            {dayAdjustments.length > 0 && (
+              <div className="pt-2">
+                <p className="text-xs font-semibold text-slate-400 mb-2">Adjustment history</p>
+                <div className="space-y-1 max-h-56 overflow-y-auto">
+                  {dayAdjustments.map((entry) => (
+                    <div key={entry.id} className="flex items-center justify-between gap-3 text-xs text-slate-400 px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg">
+                      <span>
+                        <span className="text-slate-200 font-semibold">{entry.user_name}</span>
+                        {' '}+{entry.days_added} day{entry.days_added === 1 ? '' : 's'}
+                        {entry.reason && <> — {entry.reason}</>}
+                      </span>
+                      <span className="whitespace-nowrap">{new Date(entry.created_at).toLocaleDateString()} by {entry.added_by_name || 'admin'}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          )}
         </div>
       )}
 
@@ -622,6 +758,7 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
               <button onClick={() => setDatePreset(7)} className="px-3 py-2 text-xs bg-slate-700 hover:bg-slate-600 rounded-lg">7 days</button>
               <button onClick={() => setDatePreset(30)} className="px-3 py-2 text-xs bg-slate-700 hover:bg-slate-600 rounded-lg">30 days</button>
             </div>
+            {canExport && (
             <div className="flex flex-wrap gap-2">
             <button
               onClick={exportAttendanceExcel}
@@ -634,11 +771,12 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
               <Download className="h-4 w-4" /> PDF
             </button>
             </div>
+            )}
           </div>
 
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <label className="relative block"><Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" /><input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search staff, email or location" className="w-full rounded-lg border border-slate-700 bg-slate-800 py-2 pl-9 pr-3 text-sm" /></label>
-            {canManage && <select value={selectedStaffId} onChange={(e) => setSelectedStaffId(e.target.value)} className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm"><option value="">All staff</option>{staffOptions.map((staff) => <option key={staff.id} value={staff.id}>{staff.label}</option>)}</select>}
+            {canViewAll && <select value={selectedStaffId} onChange={(e) => setSelectedStaffId(e.target.value)} className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm"><option value="">All staff</option>{staffOptions.map((staff) => <option key={staff.id} value={staff.id}>{staff.label}</option>)}</select>}
             <label className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm"><Filter className="h-4 w-4 text-slate-400" /><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full bg-transparent outline-none"><option value="all">All statuses</option><option value="active">Checked in</option><option value="complete">Checked out</option></select></label>
             <div className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-300">{visibleAttendanceRecords.length} record{visibleAttendanceRecords.length === 1 ? '' : 's'} shown</div>
           </div>
