@@ -472,6 +472,18 @@ export const getDepartmentVisitorRatings = async (cmmsCompanyId) => {
   return { data: data || [], error };
 };
 
+// ── Transport plan (self-service) ─────────────────────────────────────────
+// See backend/CMMS_EMPLOYEE_TRANSPORT_PLAN_SELF_SERVICE.sql. Self-restricted
+// server-side to the caller's own active CMMS membership; returns only an
+// aggregate summary of the company's shared BodaGoEra contract, never other
+// employees' individual ride requests.
+export const getMyTransportPlan = async (cmmsCompanyId) => {
+  const sb = db();
+  if (!sb || !cmmsCompanyId) return { data: { has_plan: false }, error: null };
+  const { data, error } = await sb.rpc('cmms_get_my_transport_plan', { p_cmms_company_id: cmmsCompanyId });
+  return { data: data || { has_plan: false }, error };
+};
+
 export const getAccessibleBusinesses = async ({ userId, email } = {}) => {
   const sb = db();
   if (!sb) return { data: [], error: null };

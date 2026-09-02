@@ -13,6 +13,19 @@ ALTER TABLE IF EXISTS public.cmms_company_profiles
 CREATE INDEX IF NOT EXISTS idx_cmms_company_pichin_business
   ON public.cmms_company_profiles(pichin_business_profile_id);
 
+-- cmms_has_permission below reads these columns off cmms_roles. Normally
+-- added by CMMS_ROLE_PERMISSIONS_AND_PAYROLL_ACCESS.sql, but this file must
+-- stand on its own regardless of run order — without this, CREATE OR REPLACE
+-- FUNCTION succeeds (plpgsql bodies aren't validated at creation time) and
+-- then every call fails at runtime with "column r.can_manage_assets does not
+-- exist" if that file hasn't been run yet.
+ALTER TABLE IF EXISTS public.cmms_roles
+  ADD COLUMN IF NOT EXISTS can_manage_assets BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS can_manage_consumables BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS can_approve_asset_disposal BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS can_manage_payroll BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS can_approve_payroll BOOLEAN NOT NULL DEFAULT FALSE;
+
 CREATE OR REPLACE FUNCTION public.cmms_is_company_admin(p_company_id UUID)
 RETURNS BOOLEAN
 LANGUAGE sql

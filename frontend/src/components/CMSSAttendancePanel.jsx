@@ -71,8 +71,12 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
   }, [companyProfile, startDate, endDate, selectedStaffId]);
 
   useEffect(() => {
-    if (activeTab === 'rewards') loadRewards();
-  }, [activeTab, companyProfile]);
+    // A regular staff member only ever gets their own single row back from
+    // get_employee_reward_points (it self-restricts server-side), so it's
+    // safe to also warm this up on the Records tab and show it alongside
+    // their own attendance — no other employee's data is ever exposed here.
+    if (activeTab === 'rewards' || (activeTab === 'records' && !canViewAll)) loadRewards();
+  }, [activeTab, companyProfile, canViewAll]);
 
   useEffect(() => {
     if (!manualLocation.trim() && companyProfile?.location?.trim()) {
@@ -944,6 +948,13 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
       {/* Attendance Records Tab */}
       {activeTab === 'records' && (
         <div className="space-y-4">
+          {!canViewAll && rewardBalances[0] && (
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-indigo-800/40 bg-indigo-950/20 p-3 text-sm">
+              <span className="text-indigo-300">My reward points:</span>
+              <span className="rounded-full bg-indigo-500/15 px-3 py-1 font-semibold text-indigo-200">{rewardBalances[0].balance_points} balance</span>
+              <span className="text-slate-400">{rewardBalances[0].lifetime_earned_points} earned all-time{rewardBalances[0].pending_redemption_points > 0 ? ` · ${rewardBalances[0].pending_redemption_points} pending payout` : ''}</span>
+            </div>
+          )}
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex flex-wrap items-center gap-3">
               <Calendar className="h-5 w-5 text-slate-400" />

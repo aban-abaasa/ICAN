@@ -74,10 +74,19 @@ END;
 $$;
 
 -- Replace the broad asset membership policy with permission-aware access.
-DROP POLICY IF EXISTS cmms_assets_company_access ON public.cmms_assets;
-CREATE POLICY cmms_assets_member_access ON public.cmms_assets
-  FOR SELECT
-  USING (public.cmms_has_permission(cmms_company_id, 'manage_assets'));
+-- Guarded: cmms_assets only exists once CMMS_ASSET_INVENTORY_FOUNDATION.sql
+-- has been run, and this file must not fail outright just because that one
+-- hasn't been applied yet (its own header says "run after", not "requires").
+DO $$
+BEGIN
+  IF to_regclass('public.cmms_assets') IS NOT NULL THEN
+    DROP POLICY IF EXISTS cmms_assets_company_access ON public.cmms_assets;
+    DROP POLICY IF EXISTS cmms_assets_member_access ON public.cmms_assets;
+    CREATE POLICY cmms_assets_member_access ON public.cmms_assets
+      FOR SELECT
+      USING (public.cmms_has_permission(cmms_company_id, 'manage_assets'));
+  END IF;
+END $$;
 
 -- Payroll remains visible to finance/admin users, while the shared Pichin owner
 -- path continues to work through ican_business_admin().
