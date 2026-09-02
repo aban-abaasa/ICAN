@@ -231,9 +231,13 @@ export const createBusinessPayrollPeriod = async ({ businessProfileId, periodSta
   if (periodError) return { success: false, error: periodError.message };
   // Saved salary profiles are the payroll source of truth. A staff member
   // must not be skipped merely because the CMMS user list is stale or filtered.
+  // Daily-paid staff are excluded here: cmms_settle_attendance_pay already
+  // settles them one day at a time at check-out, writing its own paid entry
+  // for that single day. Including them again here would add a second,
+  // whole-period lump-sum entry on top of what they already got paid daily.
   const activeComp = new Map();
   (compensation || [])
-    .filter(item => item.employee_user_id && item.payroll_status === 'on_pay')
+    .filter(item => item.employee_user_id && item.payroll_status === 'on_pay' && item.pay_frequency !== 'daily')
     .filter(item => item.effective_from <= periodEnd && (!item.effective_to || item.effective_to >= periodStart))
     .sort((a, b) => String(b.effective_from).localeCompare(String(a.effective_from)))
     .forEach(item => { if (!activeComp.has(item.employee_user_id)) activeComp.set(item.employee_user_id, item); });
@@ -256,9 +260,11 @@ export const createBusinessPayrollPeriod = async ({ businessProfileId, periodSta
 export const syncBusinessPayrollDraftStaff = async ({ payrollPeriod, compensation }) => {
   const sb = db();
   if (!sb || !payrollPeriod || payrollPeriod.status !== 'draft') return { success: true, data: [] };
+  // Daily-paid staff are excluded for the same reason as createBusinessPayrollPeriod
+  // above: they are already settled one day at a time at check-out.
   const activeComp = new Map();
   (compensation || [])
-    .filter(item => item.employee_user_id && item.payroll_status === 'on_pay')
+    .filter(item => item.employee_user_id && item.payroll_status === 'on_pay' && item.pay_frequency !== 'daily')
     .filter(item => item.effective_from <= payrollPeriod.period_end && (!item.effective_to || item.effective_to >= payrollPeriod.period_start))
     .sort((a, b) => String(b.effective_from).localeCompare(String(a.effective_from)))
     .forEach(item => { if (!activeComp.has(item.employee_user_id)) activeComp.set(item.employee_user_id, item); });
@@ -329,6 +335,26 @@ export const getCheckoutPayStatusByQr = async (token) => {
   if (!sb || !token) return { data: { required: false }, error: null };
   const { data, error } = await sb.rpc('cmms_checkout_pay_status_by_qr', { p_token: token });
   return error ? { data: { required: false }, error } : { data: data || { required: false }, error: null };
+};
+
+// Daily-paid staff never get a business_payroll_entries row through the
+// Payroll panel's own draft builders (see createBusinessPayrollPeriod /
+// syncBusinessPayrollDraftStaff above) — they are settled one day at a time
+// by cmms_settle_attendance_pay at check-out instead. This reads those
+// check-out settlements back so the Payroll panel can show, per employee,
+// that the days were actually confirmed paid, rather than looking like an
+// unpaid gap. cmms_attendance_pay_confirmations already grants SELECT to
+// anyone who can manage attendance payroll for the company.
+export const getAttendanceCheckoutPayConfirmations = async ({ cmmsCompanyId, periodStart, periodEnd }) => {
+  const sb = db();
+  if (!sb || !cmmsCompanyId || !periodStart || !periodEnd) return { data: [], error: null };
+  const { data, error } = await sb.from('cmms_attendance_pay_confirmations')
+    .select('*')
+    .eq('cmms_company_id', cmmsCompanyId)
+    .gte('period_start', periodStart)
+    .lte('period_end', periodEnd)
+    .order('period_start', { ascending: false });
+  return { data: data || [], error };
 };
 
 export const getAccessibleBusinesses = async ({ userId, email } = {}) => {
