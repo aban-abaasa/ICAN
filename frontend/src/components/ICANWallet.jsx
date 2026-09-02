@@ -868,7 +868,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         local_currency: tx.local_currency || 'UGX',
         currency: tx.local_currency || 'UGX',
         transaction_type: tx.transaction_type || tx.type || 'transaction',
-        description: tx.merchant_name || tx.note || tx.description || tx.transaction_type || tx.type || 'IcanEra transaction',
+        description: tx.note || tx.merchant_name || tx.description || tx.transaction_type || tx.type || 'IcanEra transaction',
         created_at: tx.created_at || tx.timestamp,
         metadata: { ...(tx.metadata || {}), source_app: tx.source_app || 'ican' },
       }));

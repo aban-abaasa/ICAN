@@ -217,9 +217,16 @@ export class VelocityEngine {
         // trading wallet. Keep those rows in the business financial record.
         const isBusinessReceipt = tx.transaction_type === 'transfer_in' &&
           Boolean(tx.business_profile_id) && !tx.recipient_user_id;
-        // transfer_in and transfer_out are mirror rows for one payment. Keep
-        // only the row representing this user's side in the report.
-        if ((tx.transaction_type === 'transfer_out' && isIncoming) ||
+        // A row where I'm the recipient and there was no real sender (a
+        // business paid me directly, e.g. a CMMS salary settled at
+        // check-out) is a single standalone row, not one half of a
+        // transfer_out/transfer_in pair — it must never be treated as "my
+        // own mirror to skip" below, or it disappears from my history entirely.
+        const isDirectBusinessPayment = isIncoming && !tx.sender_user_id && Boolean(tx.business_profile_id);
+        // transfer_in and transfer_out are mirror rows for one payment ONLY
+        // when a real sender moved their own balance (sender_user_id set).
+        // Keep only the row representing this user's side of that pair.
+        if ((tx.transaction_type === 'transfer_out' && isIncoming && tx.sender_user_id) ||
             (tx.transaction_type === 'transfer_in' && !isIncoming && !isBusinessReceipt)) return null;
         // The shared wallet schema stores the local-currency value as
         // local_amount. Older rows may expose ugx_equivalent, so keep both
@@ -237,11 +244,16 @@ export class VelocityEngine {
         const classification = isBusinessReceipt ? 'business_income' : tx.expense_classification ||
           (tx.source_app === 'digital-city-era' || /store|supermarket|purchase/i.test(tx.note || '')
             ? 'business_expense' : 'person_transfer');
-        const isPersonTransfer = classification === 'person_transfer';
-        const isIncome = ['earn', 'cashback', 'sale', 'refund'].includes(tx.transaction_type) ||
+        const isPersonTransfer = classification === 'person_transfer' && !isDirectBusinessPayment;
+        // expense_classification ('business_expense') describes the PAYER's
+        // side of the row. A direct business-to-me payment reads as MY
+        // income regardless of that classification — otherwise a salary
+        // received shows up as an expense of the recipient's own.
+        const isIncome = isDirectBusinessPayment ||
+          ['earn', 'cashback', 'sale', 'refund'].includes(tx.transaction_type) ||
           (tx.transaction_type === 'transfer_in' && !isPersonTransfer);
-        const isExpense = tx.transaction_type === 'tithe' || tx.transaction_type === 'purchase' ||
-          (tx.transaction_type === 'transfer_out' && classification === 'business_expense');
+        const isExpense = !isDirectBusinessPayment && (tx.transaction_type === 'tithe' || tx.transaction_type === 'purchase' ||
+          (tx.transaction_type === 'transfer_out' && classification === 'business_expense'));
         const reportingBucket = tx.transaction_type === 'tithe' ? 'tithe_payment' :
           tx.transaction_type === 'purchase' ? 'bought_stock' :
           isExpense ? 'operating_expense' : isIncome ? 'sold_income' : null;
@@ -251,7 +263,7 @@ export class VelocityEngine {
           user_id:          this.userId,
           amount:           ugxAmount,
           transaction_type: isPersonTransfer ? 'transfer' : isIncome ? 'income' : isExpense ? 'expense' : 'transfer',
-          description:      tx.merchant_name || tx.note || `${sourceLabels[tx.source_app] || tx.source_app} — ${tx.transaction_type}`,
+          description:      tx.note || tx.merchant_name || `${sourceLabels[tx.source_app] || tx.source_app} — ${tx.transaction_type}`,
           currency:         tx.local_currency || 'UGX',
           status:           'completed',
           created_at:       tx.created_at,

@@ -352,22 +352,36 @@ BEGIN
       status = 'paid', responded_at = now(), paid_at = now(),
       payment_method = EXCLUDED.payment_method, wallet_transaction_id = EXCLUDED.wallet_transaction_id, net_amount = EXCLUDED.net_amount;
 
-    -- A wallet payment already has real ledger rows (written by
+    -- A wallet payment already has a real ledger row (written by
     -- pitchin_execute_business_wallet_transfer when the transfer we just
     -- verified was approved) — it shows up for both sides automatically.
     -- Cash never touches a wallet, so nothing else records it: without this,
     -- a cash-paid check-out is invisible on both the business's transaction
     -- history and the employee's own personal transactions.
     --
-    -- Two rows are written (no balance is touched by either — they are a
-    -- record, not a transfer), mirroring the same transfer_out/transfer_in
-    -- pairing transfer_ican() uses in ICAN_TRANSACTION_CONTEXT_MIGRATION.sql:
-    -- get_ican_record_every_transaction_feed's consumers key their "which
-    -- copy is mine" and income-vs-expense logic off transaction_type plus
-    -- whether the viewer is the recipient, so a single 'transfer_out' row
-    -- reads correctly for the business (an expense) but is filtered out of
-    -- the employee's own report as "the other party's copy" — the employee
-    -- needs their own 'transfer_in' copy to see it as income at all.
+    -- Exactly ONE row is written (no balance is touched — it is a record,
+    -- not a transfer), matching the single-row pattern
+    -- pitchin_execute_business_wallet_transfer itself uses in
+    -- ICAN_BUSINESS_WALLET_TRANSFERS.sql for "business wallet pays a real
+    -- user" (recipient_user_id IS NOT NULL branch) — as opposed to the
+    -- transfer_out/transfer_in PAIR transfer_ican() writes for a genuine
+    -- person-to-person transfer, where each side's balance actually moves.
+    -- get_ican_record_every_transaction_feed unions on sender_user_id,
+    -- recipient_user_id AND business_profile_id independently, so a single
+    -- row carrying both recipient_user_id (the employee) and
+    -- business_profile_id (the business) already surfaces on both the
+    -- employee's personal feed and the business's feed — no second row
+    -- needed. ICANWallet.jsx's per-viewer sign is
+    -- `sender_user_id === me && type === 'transfer_out' ? -1 : +1`; with
+    -- sender_user_id NULL here, the employee (not the sender) reads it as
+    -- +income automatically. An earlier version of this function wrote a
+    -- second "business's copy" row that also carried recipient_user_id =
+    -- the employee (only type/expense_classification differed) — that put
+    -- both a transfer_out and a transfer_in under the *same* recipient, so
+    -- they net to zero in any per-user sum: nothing appeared to have been
+    -- recorded for either party, and the row meant to represent the
+    -- business's side was wrongly keyed to the person instead of relying on
+    -- business_profile_id alone to carry the business side.
     --
     -- counterparty_type/expense_classification are also set explicitly:
     -- ican_coin_transactions defaults them to 'person'/'person_transfer',
@@ -375,6 +389,27 @@ BEGIN
     -- instead of a business salary payment. merchant_name carries the real
     -- business name so the UI shows who actually paid instead of a generic
     -- app-level label.
+    --
+    -- sender_user_id is deliberately left NULL (not auth.uid()): the
+    -- business paid this, not whoever happened to click confirm, and no
+    -- balance moved out of that person's own wallet. business_profile_id
+    -- alone carries the payer.
+    --
+    -- ican_coin_transactions still carries the legacy NOT NULL "type"
+    -- column alongside "transaction_type" (see transfer_ican_to_business
+    -- and pitchin_execute_business_wallet_transfer in
+    -- ICAN_BUSINESS_WALLET_TRANSFERS.sql, which set both) — omitting it
+    -- fails the insert with a not-null violation.
+    --
+    -- reference_id ties this row back to the same business_payroll_entries
+    -- row the CMMS Payroll panel pays and reads from, so the salary record
+    -- of truth stays the payroll entry — this is only the ledger echo of it.
+    --
+    -- source_app is 'ican' (this payment didn't originate in any of the
+    -- other three sibling apps sharing the wallet), never 'digital-city-era'
+    -- — the report/category UI (MobileView.jsx) hardcodes that value to mean
+    -- the SupermartKera app specifically and labels the row accordingly, so
+    -- using it here would show a salary payment as a supermarket purchase.
     IF lower(p_payment_method) = 'cash' AND NOT EXISTS (
       SELECT 1 FROM public.ican_coin_transactions
        WHERE reference_id = v_entry.id::TEXT AND note LIKE 'Salary (%'
@@ -384,39 +419,15 @@ BEGIN
        LIMIT 1;
       v_cash_ican_amount := GREATEST(ROUND(v_base_amount / COALESCE(NULLIF(v_coin_price, 0), 5000), 8), 0.00000001);
 
-      -- ican_coin_transactions still carries the legacy NOT NULL "type"
-      -- column alongside "transaction_type" (see transfer_ican_to_business
-      -- and pitchin_execute_business_wallet_transfer in
-      -- ICAN_BUSINESS_WALLET_TRANSFERS.sql, which set both) — omitting it
-      -- fails the insert with a not-null violation.
-      --
-      -- sender_user_id is deliberately left NULL (not auth.uid()): the
-      -- business paid this, not whoever happened to click confirm, and no
-      -- balance moved out of that person's own wallet. business_profile_id
-      -- alone carries the payer.
-
-      -- Business's copy: reads as their expense.
       INSERT INTO public.ican_coin_transactions
         (recipient_user_id, ican_amount, type, transaction_type, source_app, status,
          local_amount, local_currency, reference_id, note, business_profile_id,
          merchant_name, counterparty_type, expense_classification)
       VALUES (
-        v_employee_user_id, v_cash_ican_amount, 'transfer_out', 'transfer_out', 'digital-city-era', 'completed',
+        v_employee_user_id, v_cash_ican_amount, 'transfer_out', 'transfer_out', 'ican', 'completed',
         v_base_amount, v_currency, v_entry.id::TEXT,
         'Salary (' || COALESCE(v_employee_name, 'Employee') || ')',
         v_business_profile_id, v_business_name, 'business', 'business_expense'
-      );
-
-      -- Employee's own copy: reads as their income.
-      INSERT INTO public.ican_coin_transactions
-        (recipient_user_id, ican_amount, type, transaction_type, source_app, status,
-         local_amount, local_currency, reference_id, note, business_profile_id,
-         merchant_name, counterparty_type, expense_classification)
-      VALUES (
-        v_employee_user_id, v_cash_ican_amount, 'transfer_in', 'transfer_in', 'digital-city-era', 'completed',
-        v_base_amount, v_currency, v_entry.id::TEXT,
-        'Salary (' || COALESCE(v_employee_name, 'Employee') || ')',
-        v_business_profile_id, v_business_name, 'business', 'income'
       );
     END IF;
   END IF;

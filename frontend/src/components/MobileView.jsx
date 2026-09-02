@@ -1476,9 +1476,13 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
         })
         .map((tx) => {
         const isIncoming = tx.recipient_user_id === user.id;
-        // The payer's transfer_out and recipient's transfer_in are mirror rows.
-        // Only report the row belonging to this user's side of the payment.
-        if ((tx.transaction_type === 'transfer_out' && isIncoming) ||
+        // The payer's transfer_out and recipient's transfer_in are mirror rows
+        // ONLY when a real sender moved their own balance (sender_user_id
+        // set) — skip this user's non-side of that pair. A single-row
+        // business-pays-person record (e.g. CMMS salary) has sender_user_id
+        // NULL and no mirror row at all, so it must never be dropped here —
+        // doing so left the recipient with zero transactions for a real payment.
+        if ((tx.transaction_type === 'transfer_out' && isIncoming && tx.sender_user_id) ||
             (tx.transaction_type === 'transfer_in' && !isIncoming)) return null;
         const amount = parseFloat(
           tx.local_amount ?? tx.ugx_equivalent ?? tx.ugx_floor_value ?? ((tx.ican_amount || 0) * 5000)
@@ -1492,14 +1496,19 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
         const classification = tx.expense_classification ||
           (hasBusinessTag || tx.source_app === 'digital-city-era' || /store|supermarket|purchase/i.test(tx.note || '')
             ? 'business_expense' : 'person_transfer');
-        const isPersonTransfer = classification === 'person_transfer';
+        // A direct business-to-me payment (no real sender, e.g. a CMMS
+        // salary) is my income no matter how the row classifies the payer's
+        // side of it.
+        const isDirectBusinessPayment = isIncoming && !tx.sender_user_id && hasBusinessTag;
+        const isPersonTransfer = classification === 'person_transfer' && !isDirectBusinessPayment;
         const isBusinessExpense = classification === 'business_expense' && !isIncoming;
-        const isIncome = ['earn', 'cashback', 'sale', 'refund'].includes(tx.transaction_type) ||
+        const isIncome = isDirectBusinessPayment ||
+          ['earn', 'cashback', 'sale', 'refund'].includes(tx.transaction_type) ||
           (tx.transaction_type === 'transfer_in' && !isPersonTransfer);
         return {
           amount,
           transaction_type: isPersonTransfer ? 'transfer' : isIncome ? 'income' : isBusinessExpense || tx.transaction_type === 'tithe' ? 'expense' : 'transfer',
-          description: tx.merchant_name || tx.note || `${tx.source_app || 'IcanEra wallet'} — ${tx.transaction_type || 'transfer'}`,
+          description: tx.note || tx.merchant_name || `${tx.source_app || 'IcanEra wallet'} — ${tx.transaction_type || 'transfer'}`,
           currency: tx.local_currency || 'UGX',
           created_at: tx.created_at,
           business_profile_id: tx.business_profile_id || null,
