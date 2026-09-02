@@ -391,6 +391,8 @@ export const saveRewardsSettings = async (cmmsCompanyId, values) => {
     points_per_task_completed: Number(values.points_per_task_completed || 0),
     points_per_message: Number(values.points_per_message || 0),
     message_daily_cap: Number(values.message_daily_cap || 0),
+    points_per_positive_visitor_rating: Number(values.points_per_positive_visitor_rating || 0),
+    visitor_rating_positive_threshold: Number(values.visitor_rating_positive_threshold || 4),
     ican_coins_per_point: Number(values.ican_coins_per_point || 0),
     auto_redeem_enabled: Boolean(values.auto_redeem_enabled),
     auto_redeem_threshold_points: Number(values.auto_redeem_threshold_points || 1),

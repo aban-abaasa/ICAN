@@ -199,6 +199,7 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
       setRewardsForm(settingsRes.data || {
         enabled: false, points_per_checkin: 1, points_per_early_checkin: 2, early_checkin_minutes: 10,
         points_per_report: 3, points_per_task_completed: 5, points_per_message: 0, message_daily_cap: 5,
+        points_per_positive_visitor_rating: 5, visitor_rating_positive_threshold: 4,
         ican_coins_per_point: 0, auto_redeem_enabled: false, auto_redeem_threshold_points: 100
       });
       setRewardBalances(balancesRes.data || []);
@@ -1222,6 +1223,12 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
               </label>
               <label className="text-sm text-slate-300">Max messages counted per day
                 <input type="number" min="0" value={rewardsForm.message_daily_cap} onChange={(e) => setRewardsForm((v) => ({ ...v, message_daily_cap: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" />
+              </label>
+              <label className="text-sm text-slate-300">Points per positive visitor rating
+                <input type="number" min="0" value={rewardsForm.points_per_positive_visitor_rating} onChange={(e) => setRewardsForm((v) => ({ ...v, points_per_positive_visitor_rating: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" />
+              </label>
+              <label className="text-sm text-slate-300">Minimum star rating counted as "positive" (1-5)
+                <input type="number" min="1" max="5" value={rewardsForm.visitor_rating_positive_threshold} onChange={(e) => setRewardsForm((v) => ({ ...v, visitor_rating_positive_threshold: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" />
               </label>
               <label className="text-sm text-slate-300">IcanEra coins per point
                 <input type="number" min="0" step="0.00000001" value={rewardsForm.ican_coins_per_point} onChange={(e) => setRewardsForm((v) => ({ ...v, ican_coins_per_point: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" />
