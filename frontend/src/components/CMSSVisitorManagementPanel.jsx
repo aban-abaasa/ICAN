@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { QrCode, Users, MapPin, AlertTriangle, CheckCircle, LogOut, RefreshCw, AlertCircle, Mail, Download, Car, ChevronDown, ChevronUp } from 'lucide-react';
+import { QrCode, Users, MapPin, AlertTriangle, CheckCircle, LogOut, RefreshCw, AlertCircle, Mail, Download, Car, ChevronDown, ChevronUp, Star } from 'lucide-react';
 import jsQR from 'jsqr';
 import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from '../lib/supabase/client';
 import { publicAppUrl } from '../utils/publicAppUrl';
 import { downloadCmmsQrPdf } from '../utils/downloadCmmsQrPdf';
 import { downloadCmmsRecordsExcel, downloadCmmsRecordsPdf } from '../utils/cmmsRecordExports';
+import { getDepartmentVisitorRatings, getStaffVisitorRatings } from '../services/businessManagementService';
 
 const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, userRole, isCreator }) => {
   const videoRef = useRef(null);
@@ -34,6 +35,10 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
   const [adminNotes, setAdminNotes] = useState('');
   const [flagReason, setFlagReason] = useState('');
   const [expandedVisitorIds, setExpandedVisitorIds] = useState(() => new Set());
+  const [staffRatings, setStaffRatings] = useState([]);
+  const [departmentRatings, setDepartmentRatings] = useState([]);
+  const [ratingsLoading, setRatingsLoading] = useState(false);
+  const [ratingsError, setRatingsError] = useState('');
   const toggleVisitorExpanded = (id) => {
     setExpandedVisitorIds((current) => {
       const next = new Set(current);
@@ -86,6 +91,30 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
   useEffect(() => {
     if (canViewVisitorRecords) loadVisitorRecords();
   }, [selectedDate, filterStatus, canViewVisitorRecords]);
+
+  // Ratings a visitor optionally left at check-out (backend/
+  // CMMS_VISITOR_RATINGS_AND_STAFF_POINTS.sql) — a positive staff rating
+  // already feeds CMMS reward points on its own; this is just the read-only
+  // summary so admins can actually see what came in.
+  const loadVisitorRatings = async () => {
+    if (!companyProfile?.id) return;
+    setRatingsLoading(true);
+    setRatingsError('');
+    const [staffRes, deptRes] = await Promise.all([
+      getStaffVisitorRatings(companyProfile.id),
+      getDepartmentVisitorRatings(companyProfile.id)
+    ]);
+    if (staffRes.error || deptRes.error) {
+      setRatingsError(getRpcErrorMessage(staffRes.error || deptRes.error, 'visitor ratings').replace('CMMS_STAFF_ATTENDANCE_VISITOR_MANAGEMENT.sql', 'CMMS_VISITOR_RATINGS_AND_STAFF_POINTS.sql'));
+    }
+    setStaffRatings(staffRes.data || []);
+    setDepartmentRatings(deptRes.data || []);
+    setRatingsLoading(false);
+  };
+
+  useEffect(() => {
+    if (canViewVisitorRecords && activeSubTab === 'visitor-ratings') loadVisitorRatings();
+  }, [canViewVisitorRecords, activeSubTab, companyProfile?.id]);
 
   useEffect(() => {
     if (!canViewVisitorRecords && activeSubTab !== 'visitor-checkin') {
@@ -418,6 +447,19 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
           >
             <AlertTriangle className="inline w-4 h-4 mr-2" />
             Review Suspicious
+          </button>
+        )}
+        {canViewVisitorRecords && (
+          <button
+            onClick={() => setActiveSubTab('visitor-ratings')}
+            className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+              activeSubTab === 'visitor-ratings'
+                ? 'bg-emerald-600 text-white'
+                : 'bg-white/10 text-gray-300 hover:bg-white/20'
+            }`}
+          >
+            <Star className="inline w-4 h-4 mr-2" />
+            Ratings
           </button>
         )}
       </div>
@@ -814,6 +856,65 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
                   </div>
                 </div>
               ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Admin: Visitor ratings — optional feedback visitors leave at
+          check-out (backend/CMMS_VISITOR_RATINGS_AND_STAFF_POINTS.sql). A
+          genuinely positive staff rating already feeds CMMS reward points
+          on its own; this is just the read-only summary. */}
+      {activeSubTab === 'visitor-ratings' && canViewVisitorRecords && (
+        <div className="space-y-6">
+          {ratingsError && <div className="rounded-lg border border-red-500/50 bg-red-500/20 p-4 text-red-200">{ratingsError}</div>}
+          {ratingsLoading && <p className="text-sm text-gray-400">Loading ratings…</p>}
+
+          <div className="glass-card p-6">
+            <h3 className="mb-3 text-lg font-bold text-white">Staff ratings</h3>
+            {staffRatings.filter((r) => r.rating_count > 0).length === 0 ? (
+              <p className="text-sm text-gray-400">No visitor ratings for staff yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="border-b border-white/10 text-xs uppercase text-gray-500">
+                    <tr><th className="p-2">Staff</th><th className="p-2 text-center">Average</th><th className="p-2 text-center">Ratings</th></tr>
+                  </thead>
+                  <tbody>
+                    {staffRatings.filter((r) => r.rating_count > 0).map((row) => (
+                      <tr key={row.cmms_user_id} className="border-b border-white/5">
+                        <td className="p-2 text-gray-200">{row.user_name}</td>
+                        <td className="p-2 text-center"><span className="inline-flex items-center gap-1 font-semibold text-amber-300">{row.average_rating} <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" /></span></td>
+                        <td className="p-2 text-center text-gray-400">{row.rating_count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div className="glass-card p-6">
+            <h3 className="mb-3 text-lg font-bold text-white">Department ratings</h3>
+            {departmentRatings.filter((r) => r.rating_count > 0).length === 0 ? (
+              <p className="text-sm text-gray-400">No visitor ratings for departments yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="border-b border-white/10 text-xs uppercase text-gray-500">
+                    <tr><th className="p-2">Department</th><th className="p-2 text-center">Average</th><th className="p-2 text-center">Ratings</th></tr>
+                  </thead>
+                  <tbody>
+                    {departmentRatings.filter((r) => r.rating_count > 0).map((row) => (
+                      <tr key={row.department_id} className="border-b border-white/5">
+                        <td className="p-2 text-gray-200">{row.department_name}</td>
+                        <td className="p-2 text-center"><span className="inline-flex items-center gap-1 font-semibold text-amber-300">{row.average_rating} <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" /></span></td>
+                        <td className="p-2 text-center text-gray-400">{row.rating_count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </div>

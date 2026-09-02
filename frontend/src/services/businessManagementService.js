@@ -366,6 +366,110 @@ export const getAttendanceCheckoutPayConfirmations = async ({ cmmsCompanyId, per
   return { data: data || [], error };
 };
 
+// ── Employee rewards (points for attendance/reports/messages/tasks) ──────
+// See backend/CMMS_EMPLOYEE_REWARDS_POINTS.sql. Points are earned
+// automatically via database triggers; these calls only read balances/
+// history and drive the admin-only redemption actions.
+export const getRewardsSettings = async (cmmsCompanyId) => {
+  const sb = db();
+  if (!sb || !cmmsCompanyId) return { data: null, error: null };
+  const { data, error } = await sb.from('cmms_rewards_settings').select('*').eq('cmms_company_id', cmmsCompanyId).maybeSingle();
+  return { data: data || null, error };
+};
+
+export const saveRewardsSettings = async (cmmsCompanyId, values) => {
+  const sb = db();
+  if (!sb || !cmmsCompanyId) return { success: false, error: 'Supabase is not configured' };
+  const { data: authData } = await sb.auth.getUser();
+  const settings = {
+    cmms_company_id: cmmsCompanyId,
+    enabled: Boolean(values.enabled),
+    points_per_checkin: Number(values.points_per_checkin || 0),
+    points_per_early_checkin: Number(values.points_per_early_checkin || 0),
+    early_checkin_minutes: Number(values.early_checkin_minutes || 0),
+    points_per_report: Number(values.points_per_report || 0),
+    points_per_task_completed: Number(values.points_per_task_completed || 0),
+    points_per_message: Number(values.points_per_message || 0),
+    message_daily_cap: Number(values.message_daily_cap || 0),
+    ican_coins_per_point: Number(values.ican_coins_per_point || 0),
+    auto_redeem_enabled: Boolean(values.auto_redeem_enabled),
+    auto_redeem_threshold_points: Number(values.auto_redeem_threshold_points || 1),
+    updated_by: authData?.user?.id || null,
+    updated_at: new Date().toISOString()
+  };
+  const { data, error } = await sb.from('cmms_rewards_settings').upsert(settings, { onConflict: 'cmms_company_id' }).select().single();
+  return error ? { success: false, error: error.message } : { success: true, data };
+};
+
+export const getEmployeeRewardPoints = async (cmmsCompanyId, cmmsUserId = null) => {
+  const sb = db();
+  if (!sb || !cmmsCompanyId) return { data: [], error: null };
+  const { data, error } = await sb.rpc('get_employee_reward_points', { p_cmms_company_id: cmmsCompanyId, p_cmms_user_id: cmmsUserId });
+  return { data: data || [], error };
+};
+
+export const getRewardPointsHistory = async (cmmsCompanyId, cmmsUserId = null, limit = 50) => {
+  const sb = db();
+  if (!sb || !cmmsCompanyId) return { data: [], error: null };
+  const { data, error } = await sb.rpc('get_reward_points_history', { p_cmms_company_id: cmmsCompanyId, p_cmms_user_id: cmmsUserId, p_limit: limit });
+  return { data: data || [], error };
+};
+
+export const getPendingRewardRedemptions = async (cmmsCompanyId) => {
+  const sb = db();
+  if (!sb || !cmmsCompanyId) return { data: [], error: null };
+  const { data, error } = await sb.rpc('get_pending_reward_redemptions', { p_cmms_company_id: cmmsCompanyId });
+  return { data: data || [], error };
+};
+
+export const requestRewardRedemption = async (cmmsCompanyId, cmmsUserId, points = null) => {
+  const sb = db();
+  if (!sb) return { success: false, error: 'Supabase is not configured' };
+  const { data, error } = await sb.rpc('cmms_request_reward_redemption', { p_cmms_company_id: cmmsCompanyId, p_cmms_user_id: cmmsUserId, p_points: points });
+  return error ? { success: false, error: error.message } : { success: true, data };
+};
+
+export const cancelRewardRedemption = async (redemptionId) => {
+  const sb = db();
+  if (!sb) return { success: false, error: 'Supabase is not configured' };
+  const { error } = await sb.rpc('cmms_cancel_reward_redemption', { p_redemption_id: redemptionId });
+  return error ? { success: false, error: error.message } : { success: true };
+};
+
+export const payRewardRedemption = async ({ redemptionId, paymentMethod, walletTransactionId = null }) => {
+  const sb = db();
+  if (!sb) return { success: false, error: 'Supabase is not configured' };
+  const { data, error } = await sb.rpc('cmms_pay_reward_redemption', { p_redemption_id: redemptionId, p_payment_method: paymentMethod, p_wallet_transaction_id: walletTransactionId });
+  return error ? { success: false, error: error.message } : { success: true, data };
+};
+
+// ── Visitor ratings (optional, at check-out; feeds staff reward points) ──
+// See backend/CMMS_VISITOR_RATINGS_AND_STAFF_POINTS.sql. submit is callable
+// by an anonymous visitor (no sign-in) — it identifies the visit by the
+// visitor_id returned from check-out, not by auth.
+export const submitVisitorRating = async ({ visitorId, staffRating = null, departmentRating = null, comment = null }) => {
+  const sb = db();
+  if (!sb || !visitorId) return { success: false, error: 'Missing visitor record' };
+  const { data, error } = await sb.rpc('submit_visitor_rating', {
+    p_visitor_id: visitorId, p_staff_rating: staffRating, p_department_rating: departmentRating, p_comment: comment
+  });
+  return error ? { success: false, error: error.message } : { success: true, data };
+};
+
+export const getStaffVisitorRatings = async (cmmsCompanyId, cmmsUserId = null) => {
+  const sb = db();
+  if (!sb || !cmmsCompanyId) return { data: [], error: null };
+  const { data, error } = await sb.rpc('get_staff_visitor_ratings', { p_cmms_company_id: cmmsCompanyId, p_cmms_user_id: cmmsUserId });
+  return { data: data || [], error };
+};
+
+export const getDepartmentVisitorRatings = async (cmmsCompanyId) => {
+  const sb = db();
+  if (!sb || !cmmsCompanyId) return { data: [], error: null };
+  const { data, error } = await sb.rpc('get_department_visitor_ratings', { p_cmms_company_id: cmmsCompanyId });
+  return { data: data || [], error };
+};
+
 export const getAccessibleBusinesses = async ({ userId, email } = {}) => {
   const sb = db();
   if (!sb) return { data: [], error: null };

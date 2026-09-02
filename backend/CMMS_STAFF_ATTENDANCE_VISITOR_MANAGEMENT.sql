@@ -761,6 +761,12 @@ GRANT EXECUTE ON FUNCTION public.admin_edit_attendance(UUID, TIMESTAMPTZ, TIMEST
 -- ============================================================
 -- 10. GET ATTENDANCE RECORDS (RLS-aware)
 -- ============================================================
+-- CREATE OR REPLACE cannot change a function's OUT-parameter row type, and
+-- an older deployment of this file may have left a get_attendance_records
+-- with a different column list live in the database — drop it first so this
+-- always succeeds regardless of what's currently deployed (this function is
+-- redefined again, with the same signature, in section 15 below).
+DROP FUNCTION IF EXISTS public.get_attendance_records(UUID, DATE, DATE, UUID);
 CREATE OR REPLACE FUNCTION public.get_attendance_records(
   p_cmms_company_id UUID,
   p_start_date DATE DEFAULT NULL,
@@ -814,6 +820,11 @@ GRANT EXECUTE ON FUNCTION public.get_attendance_records(UUID, DATE, DATE, UUID) 
 -- ============================================================
 -- 11. GET VISITOR RECORDS (RLS-aware)
 -- ============================================================
+-- Same reasoning as get_attendance_records above: an older deployment may
+-- have left a different column list live (this is exactly what raises
+-- "42P13: cannot change return type of existing function" on a fresh run),
+-- so drop it first. Redefined again, with the same signature, in section 15.
+DROP FUNCTION IF EXISTS public.get_visitor_records(UUID, DATE, DATE, TEXT);
 CREATE OR REPLACE FUNCTION public.get_visitor_records(
   p_cmms_company_id UUID,
   p_start_date DATE DEFAULT NULL,

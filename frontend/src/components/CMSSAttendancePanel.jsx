@@ -5,7 +5,11 @@ import { supabase } from '../lib/supabase/client';
 import { getPublicAppUrl } from '../utils/publicAppUrl';
 import { downloadCmmsQrPdf } from '../utils/downloadCmmsQrPdf';
 import { downloadCmmsRecordsExcel, downloadCmmsRecordsPdf } from '../utils/cmmsRecordExports';
-import { getCheckoutPayStatus } from '../services/businessManagementService';
+import {
+  getCheckoutPayStatus, getRewardsSettings, saveRewardsSettings, getEmployeeRewardPoints,
+  getRewardPointsHistory, getPendingRewardRedemptions, requestRewardRedemption,
+  cancelRewardRedemption, payRewardRedemption
+} from '../services/businessManagementService';
 import { ICAN_TO_UGX, transferFromBusinessWallet } from '../services/icanWalletService';
 
 const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole, isCreator, hasToolAction }) => {
@@ -37,6 +41,16 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
   const [addDaysReason, setAddDaysReason] = useState('');
   const [addDaysLoading, setAddDaysLoading] = useState(false);
   const [payPrompt, setPayPrompt] = useState(null); // { attendanceId, staffName, status, paid, method, pin, busy, error }
+  const [rewardsSettings, setRewardsSettings] = useState(null);
+  const [rewardsForm, setRewardsForm] = useState(null);
+  const [rewardBalances, setRewardBalances] = useState([]);
+  const [rewardHistory, setRewardHistory] = useState([]);
+  const [pendingRedemptions, setPendingRedemptions] = useState([]);
+  const [rewardsLoading, setRewardsLoading] = useState(false);
+  const [rewardsNotice, setRewardsNotice] = useState('');
+  const [rewardsError, setRewardsError] = useState('');
+  const [rewardsSaving, setRewardsSaving] = useState(false);
+  const [redeemPrompt, setRedeemPrompt] = useState(null); // { redemptionId, staffName, icanAmount, method, pin, busy, error }
 
   // Company admins/creators always retain every attendance power. Beyond
   // that, access is per-action and role-configurable (Role and tool
@@ -55,6 +69,10 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
   useEffect(() => {
     loadData();
   }, [companyProfile, startDate, endDate, selectedStaffId]);
+
+  useEffect(() => {
+    if (activeTab === 'rewards') loadRewards();
+  }, [activeTab, companyProfile]);
 
   useEffect(() => {
     if (!manualLocation.trim() && companyProfile?.location?.trim()) {
@@ -145,6 +163,121 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
       setDayAdjustments([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Points are earned automatically by database triggers on check-in, a
+  // filed report, a sent message, and a completed task — this only reads
+  // balances/history back. An employee's own RPC calls are self-restricted
+  // server-side (get_employee_reward_points / get_reward_points_history),
+  // so a non-admin viewing this tab simply gets back their own single row.
+  const loadRewards = async () => {
+    if (!companyProfile?.id) return;
+    setRewardsLoading(true);
+    setRewardsError('');
+    try {
+      const [settingsRes, balancesRes, historyRes, pendingRes] = await Promise.all([
+        isFullAdmin ? getRewardsSettings(companyProfile.id) : { data: null, error: null },
+        getEmployeeRewardPoints(companyProfile.id),
+        isFullAdmin ? { data: [], error: null } : getRewardPointsHistory(companyProfile.id),
+        isFullAdmin ? getPendingRewardRedemptions(companyProfile.id) : { data: [], error: null }
+      ]);
+      if (settingsRes.error) console.error('Rewards settings error:', settingsRes.error);
+      if (balancesRes.error) console.error('Reward balances error:', balancesRes.error);
+      if (historyRes.error) console.error('Reward history error:', historyRes.error);
+      if (pendingRes.error) console.error('Pending redemptions error:', pendingRes.error);
+      const anyError = settingsRes.error || balancesRes.error || historyRes.error || pendingRes.error;
+      if (anyError) {
+        const message = anyError.message || '';
+        setRewardsError(
+          anyError.code === 'PGRST202' || /could not find the function|schema cache/i.test(message)
+            ? 'The rewards service has not been deployed to Supabase yet. Run backend/CMMS_EMPLOYEE_REWARDS_POINTS.sql in the Supabase SQL Editor, then refresh.'
+            : (message || 'Failed to load rewards')
+        );
+      }
+      setRewardsSettings(settingsRes.data);
+      setRewardsForm(settingsRes.data || {
+        enabled: false, points_per_checkin: 1, points_per_early_checkin: 2, early_checkin_minutes: 10,
+        points_per_report: 3, points_per_task_completed: 5, points_per_message: 0, message_daily_cap: 5,
+        ican_coins_per_point: 0, auto_redeem_enabled: false, auto_redeem_threshold_points: 100
+      });
+      setRewardBalances(balancesRes.data || []);
+      setRewardHistory(historyRes.data || []);
+      setPendingRedemptions(pendingRes.data || []);
+    } catch (error) {
+      console.error('Load rewards error:', error);
+    } finally {
+      setRewardsLoading(false);
+    }
+  };
+
+  const saveRewards = async (e) => {
+    e.preventDefault();
+    if (!isFullAdmin || !rewardsForm) return;
+    setRewardsSaving(true);
+    setRewardsError('');
+    setRewardsNotice('');
+    const result = await saveRewardsSettings(companyProfile.id, rewardsForm);
+    if (result.success) {
+      setRewardsNotice('Rewards settings saved.');
+      await loadRewards();
+    } else {
+      setRewardsError(result.error || 'Could not save rewards settings.');
+    }
+    setRewardsSaving(false);
+  };
+
+  const handleRedeemNow = async (cmmsUserId) => {
+    setRewardsError('');
+    setRewardsNotice('');
+    const result = await requestRewardRedemption(companyProfile.id, cmmsUserId);
+    if (result.success) {
+      setRewardsNotice('Redemption queued — pay it from Pending redemptions below.');
+      await loadRewards();
+    } else {
+      setRewardsError(result.error || 'Could not queue this redemption.');
+    }
+  };
+
+  const handleCancelRedemption = async (redemptionId) => {
+    setRewardsError('');
+    setRewardsNotice('');
+    const result = await cancelRewardRedemption(redemptionId);
+    if (result.success) {
+      setRewardsNotice('Redemption cancelled — points returned to the employee.');
+      await loadRewards();
+    } else {
+      setRewardsError(result.error || 'Could not cancel this redemption.');
+    }
+  };
+
+  const submitRedeemPrompt = async () => {
+    if (!redeemPrompt) return;
+    if (redeemPrompt.method === 'ican' && !redeemPrompt.pin) {
+      setRedeemPrompt((prev) => ({ ...prev, error: 'Enter the business-wallet PIN.' }));
+      return;
+    }
+    setRedeemPrompt((prev) => ({ ...prev, busy: true, error: '' }));
+    try {
+      let walletTransactionId = null;
+      if (redeemPrompt.method === 'ican') {
+        const transfer = await transferFromBusinessWallet({
+          businessProfileId: companyProfile.pichin_business_profile_id,
+          recipientUserId: redeemPrompt.employeeUserId,
+          amount: Number(redeemPrompt.icanAmount),
+          note: `Reward points redeemed (${redeemPrompt.staffName})`,
+          referenceId: redeemPrompt.redemptionId,
+          pin: redeemPrompt.pin
+        });
+        walletTransactionId = transfer.transaction_id || transfer.id || null;
+      }
+      const result = await payRewardRedemption({ redemptionId: redeemPrompt.redemptionId, paymentMethod: redeemPrompt.method, walletTransactionId });
+      if (!result.success) throw new Error(result.error);
+      setRewardsNotice(redeemPrompt.method === 'ican' ? 'Reward points paid through the IcanEra business wallet.' : 'Reward points recorded as paid in cash.');
+      setRedeemPrompt(null);
+      await loadRewards();
+    } catch (error) {
+      setRedeemPrompt((prev) => ({ ...prev, busy: false, error: error.message || 'Could not record this payment.' }));
     }
   };
 
@@ -580,6 +713,16 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
             QR Codes
           </button>
         )}
+        <button
+          onClick={() => setActiveTab('rewards')}
+          className={`px-4 py-2 font-semibold ${
+            activeTab === 'rewards'
+              ? 'border-b-2 border-indigo-500 text-indigo-400'
+              : 'text-slate-400 hover:text-slate-300'
+          }`}
+        >
+          Rewards
+        </button>
       </div>
 
       {/* Check-In Summary Tab: one row per staff member (count), not one row per day */}
@@ -1041,6 +1184,190 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
         </div>
       )}
 
+      {/* Rewards Tab — points for check-ins/early arrival, filed reports,
+          messages, and completed tasks. Admins configure the point values
+          and the ICAN-coins-per-point rate and settle redemptions here; a
+          regular employee just sees their own balance and history (the
+          backing RPCs already self-restrict a non-admin to their own row). */}
+      {activeTab === 'rewards' && (
+        <div className="space-y-6">
+          {rewardsError && <div className="bg-red-500/20 border border-red-500/50 text-red-200 p-4 rounded-lg">{rewardsError}</div>}
+          {rewardsNotice && <div className="bg-emerald-500/20 border border-emerald-500/50 text-emerald-200 p-4 rounded-lg">{rewardsNotice}</div>}
+          {rewardsLoading && <p className="text-sm text-slate-400">Loading rewards…</p>}
+
+          {isFullAdmin && rewardsForm && (
+            <form onSubmit={saveRewards} className="grid gap-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4 md:grid-cols-3">
+              <h3 className="font-semibold text-white md:col-span-3">Rewards settings</h3>
+              <label className="flex items-center gap-2 text-sm text-slate-200 md:col-span-3">
+                <input type="checkbox" checked={Boolean(rewardsForm.enabled)} onChange={(e) => setRewardsForm((v) => ({ ...v, enabled: e.target.checked }))} />
+                Enable staff reward points
+              </label>
+              <label className="text-sm text-slate-300">Points per check-in
+                <input type="number" min="0" value={rewardsForm.points_per_checkin} onChange={(e) => setRewardsForm((v) => ({ ...v, points_per_checkin: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" />
+              </label>
+              <label className="text-sm text-slate-300">Bonus points for early arrival
+                <input type="number" min="0" value={rewardsForm.points_per_early_checkin} onChange={(e) => setRewardsForm((v) => ({ ...v, points_per_early_checkin: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" />
+              </label>
+              <label className="text-sm text-slate-300">Minutes early to count as "early"
+                <input type="number" min="0" value={rewardsForm.early_checkin_minutes} onChange={(e) => setRewardsForm((v) => ({ ...v, early_checkin_minutes: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" />
+              </label>
+              <label className="text-sm text-slate-300">Points per report filed
+                <input type="number" min="0" value={rewardsForm.points_per_report} onChange={(e) => setRewardsForm((v) => ({ ...v, points_per_report: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" />
+              </label>
+              <label className="text-sm text-slate-300">Points per task completed
+                <input type="number" min="0" value={rewardsForm.points_per_task_completed} onChange={(e) => setRewardsForm((v) => ({ ...v, points_per_task_completed: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" />
+              </label>
+              <label className="text-sm text-slate-300">Points per message sent
+                <input type="number" min="0" value={rewardsForm.points_per_message} onChange={(e) => setRewardsForm((v) => ({ ...v, points_per_message: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" />
+              </label>
+              <label className="text-sm text-slate-300">Max messages counted per day
+                <input type="number" min="0" value={rewardsForm.message_daily_cap} onChange={(e) => setRewardsForm((v) => ({ ...v, message_daily_cap: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" />
+              </label>
+              <label className="text-sm text-slate-300">IcanEra coins per point
+                <input type="number" min="0" step="0.00000001" value={rewardsForm.ican_coins_per_point} onChange={(e) => setRewardsForm((v) => ({ ...v, ican_coins_per_point: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" />
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-200">
+                <input type="checkbox" checked={Boolean(rewardsForm.auto_redeem_enabled)} onChange={(e) => setRewardsForm((v) => ({ ...v, auto_redeem_enabled: e.target.checked }))} />
+                Auto-queue redemption once threshold is reached
+              </label>
+              <label className="text-sm text-slate-300">Auto-redeem threshold (points)
+                <input type="number" min="1" value={rewardsForm.auto_redeem_threshold_points} onChange={(e) => setRewardsForm((v) => ({ ...v, auto_redeem_threshold_points: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" />
+              </label>
+              <p className="text-xs text-slate-500 md:col-span-3">
+                Crossing the threshold only queues a redemption for you to pay — moving real IcanEra coins always needs the business-wallet PIN, the same as every other payroll payment.
+              </p>
+              <button disabled={rewardsSaving} className="rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white disabled:opacity-50 md:col-span-3">
+                {rewardsSaving ? 'Saving…' : 'Save rewards settings'}
+              </button>
+            </form>
+          )}
+
+          {isFullAdmin && (
+            <section className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+              <h3 className="mb-3 font-semibold text-white">Pending redemptions</h3>
+              {pendingRedemptions.length === 0 ? (
+                <p className="text-sm text-slate-400">Nothing queued for payout right now.</p>
+              ) : (
+                <div className="overflow-x-auto rounded-lg border border-slate-700">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-800">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-slate-300">Staff</th>
+                        <th className="px-4 py-2 text-center text-slate-300">Points</th>
+                        <th className="px-4 py-2 text-center text-slate-300">Amount</th>
+                        <th className="px-4 py-2 text-center text-slate-300">Queued</th>
+                        <th className="px-4 py-2 text-right text-slate-300"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {pendingRedemptions.map((row) => (
+                        <tr key={row.id} className="hover:bg-slate-800/60">
+                          <td className="px-4 py-2 font-semibold">{row.user_name}</td>
+                          <td className="px-4 py-2 text-center">{row.points_redeemed}</td>
+                          <td className="px-4 py-2 text-center text-emerald-300 font-semibold">{Number(row.ican_amount).toLocaleString(undefined, { maximumFractionDigits: 4 })} ICAN</td>
+                          <td className="px-4 py-2 text-center text-xs text-slate-400 capitalize">{row.triggered_by}</td>
+                          <td className="px-4 py-2 text-right">
+                            <div className="flex justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setRedeemPrompt({ redemptionId: row.id, staffName: row.user_name, employeeUserId: row.employee_user_id, icanAmount: row.ican_amount, method: 'cash', pin: '', busy: false, error: '' })}
+                                className="rounded-lg bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-700"
+                              >
+                                Pay now
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleCancelRedemption(row.id)}
+                                className="rounded-lg border border-slate-600 px-3 py-1 text-xs font-medium text-slate-200 hover:bg-slate-800"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          )}
+
+          <section className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+            <h3 className="mb-3 font-semibold text-white">{isFullAdmin ? 'Staff point balances' : 'Your points'}</h3>
+            {rewardBalances.length === 0 ? (
+              <p className="text-sm text-slate-400">No reward points earned yet.</p>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-slate-700">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-800">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-slate-300">Staff</th>
+                      <th className="px-4 py-2 text-center text-slate-300">Balance</th>
+                      <th className="px-4 py-2 text-center text-slate-300">Pending redemption</th>
+                      <th className="px-4 py-2 text-center text-slate-300">Lifetime earned</th>
+                      {isFullAdmin && <th className="px-4 py-2 text-right text-slate-300"></th>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {rewardBalances.map((row) => (
+                      <tr key={row.cmms_user_id} className="hover:bg-slate-800/60">
+                        <td className="px-4 py-2 font-semibold">{row.user_name}</td>
+                        <td className="px-4 py-2 text-center"><span className="rounded-full bg-indigo-500/15 px-3 py-1 text-indigo-300 font-semibold">{row.balance_points}</span></td>
+                        <td className="px-4 py-2 text-center text-slate-400">{row.pending_redemption_points}</td>
+                        <td className="px-4 py-2 text-center text-slate-400">{row.lifetime_earned_points}</td>
+                        {isFullAdmin && (
+                          <td className="px-4 py-2 text-right">
+                            <button
+                              type="button"
+                              disabled={row.balance_points <= 0}
+                              onClick={() => handleRedeemNow(row.cmms_user_id)}
+                              className="rounded-lg border border-slate-600 px-3 py-1 text-xs font-medium text-slate-200 hover:bg-slate-800 disabled:opacity-40"
+                            >
+                              Redeem now
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          {!isFullAdmin && (
+            <section className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+              <h3 className="mb-3 font-semibold text-white">History</h3>
+              {rewardHistory.length === 0 ? (
+                <p className="text-sm text-slate-400">No points earned yet.</p>
+              ) : (
+                <div className="overflow-x-auto rounded-lg border border-slate-700">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-800">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-slate-300">When</th>
+                        <th className="px-4 py-2 text-left text-slate-300">Reason</th>
+                        <th className="px-4 py-2 text-center text-slate-300">Points</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {rewardHistory.map((row) => (
+                        <tr key={row.id} className="hover:bg-slate-800/60">
+                          <td className="px-4 py-2 text-slate-400">{new Date(row.created_at).toLocaleString()}</td>
+                          <td className="px-4 py-2">{row.reason || row.source_type}</td>
+                          <td className={`px-4 py-2 text-center font-semibold ${row.points > 0 ? 'text-emerald-300' : 'text-amber-300'}`}>{row.points > 0 ? `+${row.points}` : row.points}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          )}
+        </div>
+      )}
+
       {payPrompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl">
@@ -1110,6 +1437,58 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
               </button>
               <button type="button" disabled={payPrompt.busy} onClick={submitPayPrompt} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
                 {payPrompt.busy ? 'Saving…' : 'Confirm and check out'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {redeemPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl">
+            <h3 className="text-lg font-semibold text-white">Pay reward redemption</h3>
+            <p className="mt-1 text-sm text-slate-400">
+              {redeemPrompt.staffName} — <span className="font-semibold text-emerald-300">{Number(redeemPrompt.icanAmount).toLocaleString(undefined, { maximumFractionDigits: 4 })} ICAN</span>
+            </p>
+
+            {redeemPrompt.error && <p className="mt-3 rounded-lg border border-red-800/50 bg-red-900/20 p-2 text-sm text-red-300">{redeemPrompt.error}</p>}
+
+            <div className="mt-4 space-y-3">
+              <p className="text-sm font-medium text-slate-200">Payment method</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRedeemPrompt((prev) => ({ ...prev, method: 'cash', error: '' }))}
+                  className={`rounded-lg border px-3 py-2 text-sm font-medium ${redeemPrompt.method === 'cash' ? 'border-sky-500 bg-sky-600/20 text-sky-200' : 'border-slate-700 text-slate-300 hover:bg-slate-800'}`}
+                >
+                  Cash
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRedeemPrompt((prev) => ({ ...prev, method: 'ican', error: '' }))}
+                  className={`rounded-lg border px-3 py-2 text-sm font-medium ${redeemPrompt.method === 'ican' ? 'border-sky-500 bg-sky-600/20 text-sky-200' : 'border-slate-700 text-slate-300 hover:bg-slate-800'}`}
+                >
+                  IcanEra wallet
+                </button>
+              </div>
+              {redeemPrompt.method === 'ican' && (
+                <input
+                  type="password"
+                  required
+                  value={redeemPrompt.pin}
+                  onChange={(e) => setRedeemPrompt((prev) => ({ ...prev, pin: e.target.value }))}
+                  placeholder="Business-wallet PIN"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                />
+              )}
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" disabled={redeemPrompt.busy} onClick={() => setRedeemPrompt(null)} className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50">
+                Cancel
+              </button>
+              <button type="button" disabled={redeemPrompt.busy} onClick={submitRedeemPrompt} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+                {redeemPrompt.busy ? 'Saving…' : 'Confirm payment'}
               </button>
             </div>
           </div>
