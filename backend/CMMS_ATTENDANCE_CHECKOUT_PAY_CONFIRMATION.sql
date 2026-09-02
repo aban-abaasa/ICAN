@@ -246,6 +246,8 @@ DECLARE
   v_wallet_tx public.ican_business_wallet_transactions;
   v_wallet_tx_id UUID;
   v_expected_ican NUMERIC(18,8);
+  v_coin_price NUMERIC;
+  v_cash_ican_amount NUMERIC(18,8);
 BEGIN
   SELECT * INTO v_attendance FROM public.cmms_staff_attendance WHERE id = p_attendance_id;
   IF v_attendance.id IS NULL THEN
@@ -341,6 +343,35 @@ BEGIN
     ON CONFLICT (payroll_entry_id) DO UPDATE SET
       status = 'paid', responded_at = now(), paid_at = now(),
       payment_method = EXCLUDED.payment_method, wallet_transaction_id = EXCLUDED.wallet_transaction_id, net_amount = EXCLUDED.net_amount;
+
+    -- A wallet payment already has a real ledger row (written by
+    -- pitchin_execute_business_wallet_transfer when the transfer we just
+    -- verified was approved) — it shows up for both sides automatically.
+    -- Cash never touches a wallet, so nothing else records it: without this,
+    -- a cash-paid check-out is invisible on both the business's transaction
+    -- history and the employee's own personal transactions. Write one ledger
+    -- row here (no balance is touched — it is a record, not a transfer) so
+    -- get_ican_record_every_transaction_feed surfaces it on both sides, the
+    -- same way a real wallet salary payment does.
+    IF lower(p_payment_method) = 'cash' AND NOT EXISTS (
+      SELECT 1 FROM public.ican_coin_transactions
+       WHERE reference_id = v_entry.id::TEXT AND note LIKE 'Cash salary payment%'
+    ) THEN
+      SELECT price_local INTO v_coin_price
+        FROM public.ican_get_price_in_currency(upper(COALESCE(v_currency, 'UGX')))
+       LIMIT 1;
+      v_cash_ican_amount := GREATEST(ROUND(v_base_amount / COALESCE(NULLIF(v_coin_price, 0), 5000), 8), 0.00000001);
+
+      INSERT INTO public.ican_coin_transactions
+        (sender_user_id, recipient_user_id, ican_amount, transaction_type, source_app, status,
+         local_amount, local_currency, reference_id, note, business_profile_id)
+      VALUES (
+        auth.uid(), v_employee_user_id, v_cash_ican_amount, 'transfer_out', 'digital-city-era', 'completed',
+        v_base_amount, v_currency, v_entry.id::TEXT,
+        'Cash salary payment (attendance check-out, ' || v_period_start || ' to ' || v_period_end || ')',
+        v_business_profile_id
+      );
+    END IF;
   END IF;
 
   INSERT INTO public.cmms_attendance_pay_confirmations
