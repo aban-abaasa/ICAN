@@ -150,11 +150,13 @@ export async function getBalance(userId) {
 
 // ─── Transactions ───────────────────────────────────────────────────────────
 
-export async function getTransactions(userId, limit = 50) {
+export async function getTransactions(userId, limit = 50, scope = 'all') {
   // The database checks auth.uid() and business ownership/delegated access.
   // This also returns receipts in a managed business wallet, which deliberately
   // have no recipient_user_id and were missing from the old personal-only feed.
-  const { data, error } = await supabase.rpc('get_ican_record_every_transaction_feed');
+  // scope: 'all' | 'personal' (only the caller's own wallet activity) |
+  // 'business' (only rows tied to a business wallet the caller manages).
+  const { data, error } = await supabase.rpc('get_ican_record_every_transaction_feed', { p_scope: scope });
   if (error) throw error;
   return (data ?? []).slice(0, limit).map((tx) => ({
     ...tx,

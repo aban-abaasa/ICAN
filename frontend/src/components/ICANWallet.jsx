@@ -319,6 +319,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [walletTransactions, setWalletTransactions] = useState([]);
   const [walletTransactionsLoading, setWalletTransactionsLoading] = useState(false);
+  const [walletTxScope, setWalletTxScope] = useState('all'); // 'all' | 'personal' | 'business'
   const [selectedWalletTx, setSelectedWalletTx] = useState(null);
   const [realBusinessProfiles, setRealBusinessProfiles] = useState([]);
   const [businessProfilesLoading, setBusinessProfilesLoading] = useState(false);
@@ -835,17 +836,20 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       setWalletTransactionsLoading(true);
       const supabase = getSupabaseClient();
 
+      // walletTxScope lets the viewer choose Personal (their own wallet
+      // activity, salary payments received included) vs Business (rows tied
+      // to a business wallet they manage, including receipts with no
+      // personal recipient_user_id) vs All (both, unfiltered).
       const [sharedResult, legacyResult] = await Promise.all([
-        // Includes business-wallet rows the signed-in user is entitled to
-        // manage.  A supplier receipt has no personal recipient_user_id, so
-        // querying only personal wallet ids hides a payment that was delivered.
-        supabase.rpc('get_ican_record_every_transaction_feed'),
-        supabase
-          .from('ican_transactions')
-          .select('*')
-          .eq('user_id', currentUserId)
-          .order('created_at', { ascending: false })
-          .limit(100),
+        supabase.rpc('get_ican_record_every_transaction_feed', { p_scope: walletTxScope }),
+        walletTxScope === 'business'
+          ? Promise.resolve({ data: [], error: null })
+          : supabase
+              .from('ican_transactions')
+              .select('*')
+              .eq('user_id', currentUserId)
+              .order('created_at', { ascending: false })
+              .limit(100),
       ]);
 
       if (sharedResult.error && legacyResult.error) {
@@ -1022,12 +1026,13 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     }
   };
 
-  // Load recent wallet transactions when the Transactions tab is opened
+  // Load recent wallet transactions when the Transactions tab is opened, and
+  // again whenever the Personal/Business/All scope toggle changes.
   useEffect(() => {
     if (activeTab === 'transactions' && currentUserId) {
       loadWalletTransactions();
     }
-  }, [activeTab, currentUserId]);
+  }, [activeTab, currentUserId, walletTxScope]);
 
   // Load real business profiles (from Pitchin) when the Business Accounts tab is opened
   useEffect(() => {
@@ -4821,10 +4826,30 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       {/* Transactions Tab */}
       {activeTab === 'transactions' && (
       <div className="glass-card p-6">
-        <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-          <History className="w-5 h-5" />
-          Recent Transactions
-        </h3>
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+            <History className="w-5 h-5" />
+            Recent Transactions
+          </h3>
+          <div className="flex items-center gap-1 rounded-lg bg-white/5 p-1">
+            {[
+              { key: 'all', label: 'All' },
+              { key: 'personal', label: 'Personal' },
+              { key: 'business', label: 'Business' },
+            ].map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => setWalletTxScope(opt.key)}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
+                  walletTxScope === opt.key ? 'bg-cyan-600 text-white' : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {walletTransactionsLoading ? (
           <div className="flex items-center justify-center py-12">

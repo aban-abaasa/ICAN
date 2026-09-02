@@ -22,7 +22,21 @@ CREATE INDEX IF NOT EXISTS idx_ican_coin_transactions_business_profile
 -- ledger entries belonging to business wallets the signed-in user may manage.
 -- Business receipt rows deliberately have no recipient_user_id, so a direct
 -- table query by personal wallet ids would otherwise omit them.
-CREATE OR REPLACE FUNCTION public.get_ican_record_every_transaction_feed()
+--
+-- p_scope lets the caller choose which side of that to see:
+--   'personal' - only rows that moved the signed-in user's OWN wallet
+--                 (sender or recipient), even when the row also carries a
+--                 business_profile_id for provenance (e.g. a salary payment
+--                 received from a business still shows on the employee's
+--                 personal transactions).
+--   'business' - only rows tied to a business wallet the signed-in user is
+--                 a shareholder/admin/finance-authorized manager of,
+--                 regardless of whether they personally are the sender or
+--                 recipient (e.g. a business-to-business receipt, which has
+--                 no personal recipient_user_id at all).
+--   'all' (default) - the original unfiltered union of both, unchanged.
+DROP FUNCTION IF EXISTS public.get_ican_record_every_transaction_feed();
+CREATE OR REPLACE FUNCTION public.get_ican_record_every_transaction_feed(p_scope TEXT DEFAULT 'all')
 RETURNS SETOF public.ican_coin_transactions
 LANGUAGE sql
 STABLE
@@ -31,17 +45,25 @@ SET search_path = public
 AS $$
   SELECT tx.*
     FROM public.ican_coin_transactions tx
-   WHERE tx.sender_user_id = auth.uid()
-      OR tx.recipient_user_id = auth.uid()
-      OR (
-        tx.business_profile_id IS NOT NULL
-        AND public.pitchin_business_shareholder_access(tx.business_profile_id)
-      )
+   WHERE CASE lower(COALESCE(p_scope, 'all'))
+     WHEN 'personal' THEN
+       tx.sender_user_id = auth.uid() OR tx.recipient_user_id = auth.uid()
+     WHEN 'business' THEN
+       tx.business_profile_id IS NOT NULL
+       AND public.pitchin_business_shareholder_access(tx.business_profile_id)
+     ELSE
+       tx.sender_user_id = auth.uid()
+        OR tx.recipient_user_id = auth.uid()
+        OR (
+          tx.business_profile_id IS NOT NULL
+          AND public.pitchin_business_shareholder_access(tx.business_profile_id)
+        )
+     END
    ORDER BY tx.created_at DESC;
 $$;
 
-REVOKE ALL ON FUNCTION public.get_ican_record_every_transaction_feed() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.get_ican_record_every_transaction_feed() TO authenticated;
+REVOKE ALL ON FUNCTION public.get_ican_record_every_transaction_feed(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.get_ican_record_every_transaction_feed(TEXT) TO authenticated;
 
 CREATE OR REPLACE FUNCTION public.resolve_ican_business_wallet(p_wallet_address TEXT)
 RETURNS TABLE (
