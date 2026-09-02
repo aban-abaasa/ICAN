@@ -242,3 +242,13 @@ CREATE POLICY payroll_entry_business_access ON public.business_payroll_entries
 
 COMMENT ON TABLE public.business_payroll_entries IS
   'Shared payroll records; payment execution remains a separate approved integration';
+
+-- Without this, PostgREST's cached schema can keep rejecting pay_frequency /
+-- payroll_status / contract_* on business_compensation_profiles as "column
+-- does not exist in schema cache" after the ADD COLUMN IF NOT EXISTS above —
+-- businessManagementService.saveBusinessCompensation silently retries such
+-- an error by dropping exactly those fields from the upsert, so a payroll
+-- frequency change (e.g. monthly -> daily) can appear to save successfully
+-- in the UI while pay_frequency in the database never actually changes, and
+-- cmms_checkout_pay_status keeps reading the old frequency at check-out.
+NOTIFY pgrst, 'reload schema';

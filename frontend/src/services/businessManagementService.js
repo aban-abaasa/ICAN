@@ -170,8 +170,17 @@ export const saveBusinessCompensation = async (businessProfileId, employeeUserId
   const compensation = { business_profile_id: businessProfileId, employee_user_id: employeeUserId, pay_type: values.pay_type || (payFrequency === 'hourly' ? 'hourly' : 'monthly'), base_salary: amount, currency: String(values.currency || 'UGX').trim().toUpperCase(), pay_frequency: payFrequency, contract_start: values.contract_start || null, contract_end: values.contract_end || null, contract_total: values.contract_total ? Number(values.contract_total) : null, effective_from: values.effective_from || new Date().toISOString().slice(0, 10), overtime_rate: Number(values.overtime_rate || 0), payroll_status: values.payroll_status || 'on_pay', notes: values.notes || null, created_by: authData?.user?.id || null };
   let { data, error } = await sb.from('business_compensation_profiles').upsert(compensation, { onConflict: 'business_profile_id,employee_user_id,effective_from' }).select().single();
   if (error && /(payroll_status|pay_frequency|contract_start|contract_end|contract_total).*schema cache|column .*(payroll_status|pay_frequency|contract_start|contract_end|contract_total).*does not exist/i.test(error.message || '')) {
+    // These columns exist in SHARED_BUSINESS_AUTHORITY_AND_PAYROLL.sql, so
+    // this only fires when PostgREST's schema cache is stale. Retrying
+    // without them keeps legacy environments from hard-failing, but doing
+    // so silently would drop the very field (pay_frequency) the admin is
+    // often here to change — e.g. switching someone to daily pay would
+    // "succeed" while quietly leaving them on the old frequency, and
+    // cmms_checkout_pay_status would never notice the change. Surface it
+    // instead of pretending the save was complete.
     const { payroll_status: _status, pay_frequency: _frequency, contract_start: _start, contract_end: _end, contract_total: _total, ...legacyCompensation } = compensation;
     ({ data, error } = await sb.from('business_compensation_profiles').upsert(legacyCompensation, { onConflict: 'business_profile_id,employee_user_id,effective_from' }).select().single());
+    if (!error) return { success: false, error: 'Base pay was saved, but pay frequency/status/contract details could not be — the database schema needs to be refreshed (ask an admin to re-run the payroll schema migration). Try again after that.', data };
   }
   return error ? { success: false, error: error.message } : { success: true, data };
 };
