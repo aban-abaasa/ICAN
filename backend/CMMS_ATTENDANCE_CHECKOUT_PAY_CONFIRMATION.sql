@@ -362,11 +362,16 @@ BEGIN
        LIMIT 1;
       v_cash_ican_amount := GREATEST(ROUND(v_base_amount / COALESCE(NULLIF(v_coin_price, 0), 5000), 8), 0.00000001);
 
+      -- ican_coin_transactions still carries the legacy NOT NULL "type"
+      -- column alongside "transaction_type" (see transfer_ican_to_business
+      -- and pitchin_execute_business_wallet_transfer in
+      -- ICAN_BUSINESS_WALLET_TRANSFERS.sql, which set both) — omitting it
+      -- fails the insert with a not-null violation.
       INSERT INTO public.ican_coin_transactions
-        (sender_user_id, recipient_user_id, ican_amount, transaction_type, source_app, status,
+        (sender_user_id, recipient_user_id, ican_amount, type, transaction_type, source_app, status,
          local_amount, local_currency, reference_id, note, business_profile_id)
       VALUES (
-        auth.uid(), v_employee_user_id, v_cash_ican_amount, 'transfer_out', 'digital-city-era', 'completed',
+        auth.uid(), v_employee_user_id, v_cash_ican_amount, 'transfer_out', 'transfer_out', 'digital-city-era', 'completed',
         v_base_amount, v_currency, v_entry.id::TEXT,
         'Cash salary payment (attendance check-out, ' || v_period_start || ' to ' || v_period_end || ')',
         v_business_profile_id

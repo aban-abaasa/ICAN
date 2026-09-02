@@ -24,28 +24,90 @@ const statusShareMatch = window.location.pathname.match(/^\/status\/([^/]+)/);
 // Pitchin/status share links above. Only checkout (a real ICANera payment)
 // prompts sign-in, in place, without losing the cart.
 const dropshipStoreMatch = window.location.pathname.match(/^\/store\/([^/]+)/);
-const App = React.lazy(() => import('./App'));
-const PublicStaffAttendanceCheckIn = React.lazy(() => import('./components/PublicStaffAttendanceCheckIn'));
-const PublicVisitorCheckIn = React.lazy(() => import('./components/PublicVisitorCheckIn'));
-const PublicPitchViewer = React.lazy(() => import('./components/PublicPitchViewer'));
-const PublicStatusViewer = React.lazy(() => import('./components/PublicStatusViewer'));
-const PublicDropshipStorefront = React.lazy(() => import('./components/PublicDropshipStorefront'));
+// A stale service-worker/browser cache can leave a phone holding an
+// index.html that points at a JS chunk hash the last deploy removed from the
+// server — the chunk 404s, the dynamic import() rejects, and with no retry
+// the Suspense fallback (a bare dark div) is the last thing that ever
+// renders: a silent blank screen with no error visible to the user or to us.
+// Reload once (bypassing every cache we control) before giving up, so the
+// fresh index.html/chunks a normal browser visit would get are fetched
+// instead of leaving the app permanently stuck.
+const lazyWithReloadOnChunkFailure = (importer) => React.lazy(() =>
+  importer().catch(async (error) => {
+    const reloadedKey = 'ican-chunk-reload-attempted';
+    if (sessionStorage.getItem(reloadedKey)) {
+      throw error; // Already retried once this session — a real error, not a stale cache.
+    }
+    sessionStorage.setItem(reloadedKey, '1');
+    console.warn('[App] Chunk load failed, clearing caches and reloading once:', error);
+    try {
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((registration) => registration.unregister()));
+      }
+      if ('caches' in window) {
+        const names = await caches.keys();
+        await Promise.all(names.map((name) => caches.delete(name)));
+      }
+    } catch (cleanupError) {
+      console.warn('[App] Cache cleanup before reload failed:', cleanupError);
+    }
+    window.location.reload();
+    return new Promise(() => {}); // Hang here; the reload is already in flight.
+  })
+);
+
+const App = lazyWithReloadOnChunkFailure(() => import('./App'));
+const PublicStaffAttendanceCheckIn = lazyWithReloadOnChunkFailure(() => import('./components/PublicStaffAttendanceCheckIn'));
+const PublicVisitorCheckIn = lazyWithReloadOnChunkFailure(() => import('./components/PublicVisitorCheckIn'));
+const PublicPitchViewer = lazyWithReloadOnChunkFailure(() => import('./components/PublicPitchViewer'));
+const PublicStatusViewer = lazyWithReloadOnChunkFailure(() => import('./components/PublicStatusViewer'));
+const PublicDropshipStorefront = lazyWithReloadOnChunkFailure(() => import('./components/PublicDropshipStorefront'));
 const Loading = () => <div className="min-h-screen bg-slate-950" />;
+
+// Without this, ANY uncaught error during first render (a chunk failure that
+// survived the retry above, or an unrelated bug) unmounts everything and
+// leaves the exact same silent blank screen — invisible to the user and to
+// us. This turns that into a visible, actionable message.
+class AppErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) { console.error('[App] Uncaught render error:', error, info); }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 text-center">
+        <div>
+          <p className="text-slate-200 font-medium mb-3">Something went wrong loading IcanEra.</p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white"
+          >
+            Reload
+          </button>
+        </div>
+      </div>
+    );
+  }
+}
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <ThemeProvider>
-      <Suspense fallback={<Loading />}>
-        {isAttendanceQrPath ? <PublicStaffAttendanceCheckIn /> : isVisitorQrPath ? <PublicVisitorCheckIn /> : (
-          <AuthProvider>
-            {pitchShareMatch ? <PublicPitchViewer pitchId={pitchShareMatch[1]} />
-              : statusShareMatch ? <PublicStatusViewer statusId={statusShareMatch[1]} />
-              : dropshipStoreMatch ? <PublicDropshipStorefront businessProfileId={dropshipStoreMatch[1]} />
-              : <App />}
-          </AuthProvider>
-        )}
-      </Suspense>
-    </ThemeProvider>
+    <AppErrorBoundary>
+      <ThemeProvider>
+        <Suspense fallback={<Loading />}>
+          {isAttendanceQrPath ? <PublicStaffAttendanceCheckIn /> : isVisitorQrPath ? <PublicVisitorCheckIn /> : (
+            <AuthProvider>
+              {pitchShareMatch ? <PublicPitchViewer pitchId={pitchShareMatch[1]} />
+                : statusShareMatch ? <PublicStatusViewer statusId={statusShareMatch[1]} />
+                : dropshipStoreMatch ? <PublicDropshipStorefront businessProfileId={dropshipStoreMatch[1]} />
+                : <App />}
+            </AuthProvider>
+          )}
+        </Suspense>
+      </ThemeProvider>
+    </AppErrorBoundary>
   </React.StrictMode>,
 );
 

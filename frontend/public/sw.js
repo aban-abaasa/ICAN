@@ -1,7 +1,13 @@
 // IcanEra Service Worker - Local-First Architecture
 // Handles offline support, transaction queuing, and background sync
 
-const CACHE_NAME = 'ican-era-v1';
+// Bump this on every deploy that changes cached behavior. The activate
+// handler below only purges caches whose name differs from CACHE_NAME, so a
+// name that never changes means old entries (a stale index.html pointing at
+// JS chunk hashes the server no longer has) can outlive the deploy that
+// replaced them — the classic "works on a fresh browser, blank screen on a
+// phone that visited before the last deploy" PWA bug.
+const CACHE_NAME = 'ican-era-v2';
 const CACHE_URLS = [
   '/',
   '/index.html',
