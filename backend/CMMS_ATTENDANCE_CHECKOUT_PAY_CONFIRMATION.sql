@@ -248,6 +248,7 @@ DECLARE
   v_expected_ican NUMERIC(18,8);
   v_coin_price NUMERIC;
   v_cash_ican_amount NUMERIC(18,8);
+  v_employee_name TEXT;
 BEGIN
   SELECT * INTO v_attendance FROM public.cmms_staff_attendance WHERE id = p_attendance_id;
   IF v_attendance.id IS NULL THEN
@@ -271,6 +272,9 @@ BEGIN
 
   SELECT pichin_business_profile_id INTO v_business_profile_id
     FROM public.cmms_company_profiles WHERE id = v_attendance.cmms_company_id;
+
+  SELECT COALESCE(full_name, user_name) INTO v_employee_name
+    FROM public.cmms_users WHERE id = v_attendance.cmms_user_id;
 
   IF p_paid THEN
     IF lower(COALESCE(p_payment_method, '')) NOT IN ('cash', 'ican') THEN
@@ -355,7 +359,7 @@ BEGIN
     -- same way a real wallet salary payment does.
     IF lower(p_payment_method) = 'cash' AND NOT EXISTS (
       SELECT 1 FROM public.ican_coin_transactions
-       WHERE reference_id = v_entry.id::TEXT AND note LIKE 'Cash salary payment%'
+       WHERE reference_id = v_entry.id::TEXT AND note LIKE 'Salary (%'
     ) THEN
       SELECT price_local INTO v_coin_price
         FROM public.ican_get_price_in_currency(upper(COALESCE(v_currency, 'UGX')))
@@ -367,13 +371,26 @@ BEGIN
       -- and pitchin_execute_business_wallet_transfer in
       -- ICAN_BUSINESS_WALLET_TRANSFERS.sql, which set both) — omitting it
       -- fails the insert with a not-null violation.
+      --
+      -- sender_user_id is deliberately left NULL (not auth.uid()): the
+      -- business paid this, not whoever happened to click confirm, and no
+      -- balance moved out of that person's own wallet. The same pattern is
+      -- used for the business-wallet receipt leg in
+      -- pitchin_execute_business_wallet_transfer ("do not set
+      -- recipient_user_id ... credited to the business wallet, never to the
+      -- owner's personal account") — business_profile_id alone carries the
+      -- payer. With sender NULL, get_ican_record_every_transaction_feed's
+      -- 'personal' scope no longer misattributes the payment as the
+      -- approver's own outgoing transfer, while 'business' scope (which
+      -- keys off business_profile_id) and the employee's own recipient-side
+      -- 'personal' view are unaffected.
       INSERT INTO public.ican_coin_transactions
-        (sender_user_id, recipient_user_id, ican_amount, type, transaction_type, source_app, status,
+        (recipient_user_id, ican_amount, type, transaction_type, source_app, status,
          local_amount, local_currency, reference_id, note, business_profile_id)
       VALUES (
-        auth.uid(), v_employee_user_id, v_cash_ican_amount, 'transfer_out', 'transfer_out', 'digital-city-era', 'completed',
+        v_employee_user_id, v_cash_ican_amount, 'transfer_out', 'transfer_out', 'digital-city-era', 'completed',
         v_base_amount, v_currency, v_entry.id::TEXT,
-        'Cash salary payment (attendance check-out, ' || v_period_start || ' to ' || v_period_end || ')',
+        'Salary (' || COALESCE(v_employee_name, 'Employee') || ')',
         v_business_profile_id
       );
     END IF;
