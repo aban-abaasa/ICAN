@@ -39,6 +39,13 @@ const PublicStaffAttendanceCheckIn = () => {
   useEffect(() => {
     if (!session || !token) return;
     let mounted = true;
+    // This is only a preview shown while the staff member is deciding what to
+    // do (e.g. so the "confirm your pay" panel doesn't pop in unannounced).
+    // It is NOT re-fetched again after this, so a payroll change made later
+    // in the same signed-in session (e.g. an admin switching this employee
+    // from monthly to daily pay) would go unnoticed here — recordAttendance
+    // below re-checks fresh, right before check-out, and is what actually
+    // gates the request.
     getCheckoutPayStatusByQr(token).then(({ data }) => { if (mounted) setPayStatus(data || { required: false }); });
     return () => { mounted = false; };
   }, [session, token]);
@@ -52,6 +59,16 @@ const PublicStaffAttendanceCheckIn = () => {
 
   const recordAttendance = async (action) => {
     setStatus('working'); setMessage(`Recording your check-${action}...`);
+    if (action === 'out') {
+      // Re-check pay status right now rather than trusting whatever was
+      // fetched at sign-in — a payroll change (e.g. monthly -> daily) made
+      // since then must not be missed just because this tab stayed open.
+      const { data: freshStatus } = await getCheckoutPayStatusByQr(token);
+      const status = freshStatus || { required: false };
+      setPayStatus(status);
+      const decided = !status.required || payAnswer.paid === false || (payAnswer.paid === true && payAnswer.method);
+      if (!decided) { setStatus('ready'); setMessage('Confirm your pay below before checking out.'); return; }
+    }
     const params = { p_token: token, p_latitude: position?.latitude ?? null, p_longitude: position?.longitude ?? null };
     if (action === 'out') { params.p_paid = payAnswer.paid; params.p_payment_method = payAnswer.paid ? payAnswer.method : null; }
     const { data, error } = await supabase.rpc(action === 'in' ? 'staff_check_in_with_qr' : 'staff_check_out_with_qr', params);
