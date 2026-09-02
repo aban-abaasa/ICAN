@@ -37,6 +37,19 @@ CREATE TABLE IF NOT EXISTS public.cmms_attendance_pay_confirmations (
 CREATE INDEX IF NOT EXISTS idx_cmms_attendance_pay_confirmations_user
   ON public.cmms_attendance_pay_confirmations(cmms_user_id, period_start DESC);
 
+-- Ties a wallet ('ican') payment to the real business-wallet transfer that
+-- moved the money, so cmms_settle_attendance_pay below can verify it (not
+-- just trust a client-supplied id) and so the confirmation is queryable
+-- alongside the rest of the employee's wallet activity. NULL for cash and
+-- for "not yet paid" rows. The unique index stops one real transfer from
+-- being reused to falsely settle a second attendance record.
+ALTER TABLE public.cmms_attendance_pay_confirmations
+  ADD COLUMN IF NOT EXISTS wallet_transaction_id UUID REFERENCES public.ican_business_wallet_transactions(id) ON DELETE SET NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cmms_attendance_pay_confirmations_wallet_tx
+  ON public.cmms_attendance_pay_confirmations(wallet_transaction_id)
+  WHERE wallet_transaction_id IS NOT NULL;
+
 ALTER TABLE public.cmms_attendance_pay_confirmations ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS cmms_attendance_pay_confirmations_read ON public.cmms_attendance_pay_confirmations;
@@ -53,9 +66,11 @@ CREATE POLICY cmms_attendance_pay_confirmations_read ON public.cmms_attendance_p
 
 -- Read-only: tells the attendance UI, before check-out is attempted, whether
 -- a pay decision is due today so it can show (or skip) the pay question.
+DROP FUNCTION IF EXISTS public.cmms_checkout_pay_status(UUID, UUID);
 CREATE OR REPLACE FUNCTION public.cmms_checkout_pay_status(
   p_cmms_user_id UUID,
-  p_cmms_company_id UUID
+  p_cmms_company_id UUID,
+  p_attendance_id UUID DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -68,6 +83,7 @@ DECLARE
   v_business_profile_id UUID;
   v_comp public.business_compensation_profiles;
   v_settings public.cmms_attendance_payroll_settings;
+  v_attendance public.cmms_staff_attendance;
   v_tz TEXT;
   v_today DATE;
   v_period_start DATE;
@@ -89,7 +105,23 @@ BEGIN
 
   SELECT * INTO v_settings FROM public.cmms_attendance_payroll_settings WHERE cmms_company_id = p_cmms_company_id;
   v_tz := COALESCE(v_settings.timezone, 'UTC');
-  v_today := (now() AT TIME ZONE v_tz)::date;
+
+  -- The pay period must track the day actually worked, not the moment this
+  -- function happens to be called (e.g. a late-night check-out crossing
+  -- midnight, or an admin settling a backfilled attendance row later). Prefer
+  -- the specific attendance record being checked out; fall back to the
+  -- staff member's currently open check-in; only use "now" when neither
+  -- attendance record is known (a pre-check with no check-in yet).
+  IF p_attendance_id IS NOT NULL THEN
+    SELECT * INTO v_attendance FROM public.cmms_staff_attendance
+     WHERE id = p_attendance_id AND cmms_user_id = p_cmms_user_id AND cmms_company_id = p_cmms_company_id;
+  END IF;
+  IF v_attendance.id IS NULL THEN
+    SELECT * INTO v_attendance FROM public.cmms_staff_attendance
+     WHERE cmms_user_id = p_cmms_user_id AND cmms_company_id = p_cmms_company_id AND status = 'checked_in'
+     ORDER BY check_in_time DESC LIMIT 1;
+  END IF;
+  v_today := (COALESCE(v_attendance.check_in_time, now()) AT TIME ZONE v_tz)::date;
 
   SELECT * INTO v_comp
     FROM public.business_compensation_profiles
@@ -145,8 +177,8 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.cmms_checkout_pay_status(UUID, UUID) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.cmms_checkout_pay_status(UUID, UUID) TO authenticated;
+REVOKE ALL ON FUNCTION public.cmms_checkout_pay_status(UUID, UUID, UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.cmms_checkout_pay_status(UUID, UUID, UUID) TO authenticated;
 
 -- Same lookup, but for the public self check-out page, which only knows the
 -- QR token and the signed-in staff session (mirrors staff_check_out_with_qr's
@@ -211,13 +243,16 @@ DECLARE
   v_entry public.business_payroll_entries;
   v_base_amount NUMERIC(15,2);
   v_currency TEXT;
+  v_wallet_tx public.ican_business_wallet_transactions;
+  v_wallet_tx_id UUID;
+  v_expected_ican NUMERIC(18,8);
 BEGIN
   SELECT * INTO v_attendance FROM public.cmms_staff_attendance WHERE id = p_attendance_id;
   IF v_attendance.id IS NULL THEN
     RAISE EXCEPTION 'Attendance record not found';
   END IF;
 
-  v_status := public.cmms_checkout_pay_status(v_attendance.cmms_user_id, v_attendance.cmms_company_id);
+  v_status := public.cmms_checkout_pay_status(v_attendance.cmms_user_id, v_attendance.cmms_company_id, v_attendance.id);
   IF NOT (v_status->>'required')::BOOLEAN THEN
     RETURN jsonb_build_object('settled', false, 'required', false);
   END IF;
@@ -238,6 +273,52 @@ BEGIN
   IF p_paid THEN
     IF lower(COALESCE(p_payment_method, '')) NOT IN ('cash', 'ican') THEN
       RAISE EXCEPTION 'Choose cash or wallet to record this payment';
+    END IF;
+
+    -- Cash cannot be verified in-system and is trusted as reported. A wallet
+    -- ('ican') payment is money that actually moved through the business
+    -- wallet, so it must be backed by a real, completed transfer to this
+    -- employee for the right amount — never just a client-supplied id.
+    IF lower(p_payment_method) = 'ican' THEN
+      BEGIN
+        v_wallet_tx_id := NULLIF(trim(p_wallet_transaction_id), '')::UUID;
+      EXCEPTION WHEN invalid_text_representation THEN
+        v_wallet_tx_id := NULL;
+      END;
+      IF v_wallet_tx_id IS NULL THEN
+        RAISE EXCEPTION 'A completed IcanEra wallet transfer is required to record this payment';
+      END IF;
+
+      SELECT * INTO v_wallet_tx FROM public.ican_business_wallet_transactions
+       WHERE id = v_wallet_tx_id FOR UPDATE;
+      IF v_wallet_tx.id IS NULL THEN
+        RAISE EXCEPTION 'Wallet transaction not found';
+      END IF;
+      IF v_wallet_tx.business_profile_id <> v_business_profile_id THEN
+        RAISE EXCEPTION 'That wallet transaction does not belong to this business';
+      END IF;
+      IF v_wallet_tx.recipient_user_id IS DISTINCT FROM v_employee_user_id THEN
+        RAISE EXCEPTION 'That wallet transaction was not paid to this employee';
+      END IF;
+      IF v_wallet_tx.status <> 'completed' THEN
+        RAISE EXCEPTION 'This wallet payment is still awaiting business-wallet approval; approve it in Business Wallet, or pay cash to finish check-out';
+      END IF;
+      IF upper(COALESCE(v_currency, 'UGX')) <> 'UGX' THEN
+        RAISE EXCEPTION 'The IcanEra wallet currently supports UGX pay only; choose cash for another currency';
+      END IF;
+      -- Same shared ICAN/UGX floor rate used everywhere else money is
+      -- converted to ICAN coin (see CMMS_SUPPLIER_PURCHASE_ORDERS.sql,
+      -- CMMS_SCHOOL_FEES.sql, ICAN_CROSS_APP_WALLET_MIGRATION.sql, etc.).
+      v_expected_ican := ROUND(v_base_amount / 5000, 8);
+      IF ABS(v_wallet_tx.amount_ican - v_expected_ican) > 0.0001 THEN
+        RAISE EXCEPTION 'The wallet payment amount (% ICAN) does not match the % due (% ICAN)', v_wallet_tx.amount_ican, v_currency, v_expected_ican;
+      END IF;
+      IF EXISTS (
+        SELECT 1 FROM public.cmms_attendance_pay_confirmations
+         WHERE wallet_transaction_id = v_wallet_tx_id AND attendance_id <> p_attendance_id
+      ) THEN
+        RAISE EXCEPTION 'That wallet transaction has already been used to settle a different check-out';
+      END IF;
     END IF;
 
     INSERT INTO public.business_payroll_periods (business_profile_id, period_start, period_end, created_by)
@@ -263,11 +344,12 @@ BEGIN
   END IF;
 
   INSERT INTO public.cmms_attendance_pay_confirmations
-    (attendance_id, cmms_company_id, cmms_user_id, pay_frequency, period_start, period_end, paid, payment_method, payroll_entry_id, confirmed_by)
+    (attendance_id, cmms_company_id, cmms_user_id, pay_frequency, period_start, period_end, paid, payment_method, payroll_entry_id, wallet_transaction_id, confirmed_by)
   VALUES (p_attendance_id, v_attendance.cmms_company_id, v_attendance.cmms_user_id, v_status->>'pay_frequency', v_period_start, v_period_end,
-    p_paid, CASE WHEN p_paid THEN lower(p_payment_method) ELSE NULL END, v_entry.id, auth.uid())
+    p_paid, CASE WHEN p_paid THEN lower(p_payment_method) ELSE NULL END, v_entry.id, v_wallet_tx_id, auth.uid())
   ON CONFLICT (attendance_id) DO UPDATE SET
-    paid = EXCLUDED.paid, payment_method = EXCLUDED.payment_method, payroll_entry_id = EXCLUDED.payroll_entry_id, confirmed_at = now();
+    paid = EXCLUDED.paid, payment_method = EXCLUDED.payment_method, payroll_entry_id = EXCLUDED.payroll_entry_id,
+    wallet_transaction_id = EXCLUDED.wallet_transaction_id, confirmed_at = now();
 
   RETURN jsonb_build_object('settled', true, 'paid', p_paid, 'entry_id', v_entry.id, 'amount', v_base_amount, 'currency', v_currency);
 END;

@@ -191,7 +191,7 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
     // blocked until this is answered — so ask first, before touching
     // staff_check_out at all.
     const entry = activeCheckIns.find((item) => item.id === attendanceId);
-    const { data: status } = await getCheckoutPayStatus({ cmmsUserId: entry?.cmms_user_id, cmmsCompanyId: companyProfile.id });
+    const { data: status } = await getCheckoutPayStatus({ cmmsUserId: entry?.cmms_user_id, cmmsCompanyId: companyProfile.id, attendanceId });
     if (status?.required) {
       setPayPrompt({ attendanceId, staffName: entry?.user_name || 'this staff member', status, paid: null, method: 'cash', pin: '', busy: false, error: '' });
       return;

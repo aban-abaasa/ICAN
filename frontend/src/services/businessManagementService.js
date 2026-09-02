@@ -316,10 +316,10 @@ export const respondToPayrollApproval = async (approvalId, approved, note = '') 
 // weekly/hourly/contract staff: once check-outs this month reach the
 // company's agreed monthly_work_days). A no-op-safe read used purely to
 // decide whether to show the "have you been paid?" prompt.
-export const getCheckoutPayStatus = async ({ cmmsUserId, cmmsCompanyId }) => {
+export const getCheckoutPayStatus = async ({ cmmsUserId, cmmsCompanyId, attendanceId = null }) => {
   const sb = db();
   if (!sb || !cmmsUserId || !cmmsCompanyId) return { data: { required: false }, error: null };
-  const { data, error } = await sb.rpc('cmms_checkout_pay_status', { p_cmms_user_id: cmmsUserId, p_cmms_company_id: cmmsCompanyId });
+  const { data, error } = await sb.rpc('cmms_checkout_pay_status', { p_cmms_user_id: cmmsUserId, p_cmms_company_id: cmmsCompanyId, p_attendance_id: attendanceId });
   return error ? { data: { required: false }, error } : { data: data || { required: false }, error: null };
 };
 
