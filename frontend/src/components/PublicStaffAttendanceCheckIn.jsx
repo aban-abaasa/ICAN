@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { CheckCircle2, Loader2, MapPin, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
+import { getCheckoutPayStatusByQr } from '../services/businessManagementService';
 
 const PublicStaffAttendanceCheckIn = () => {
   const token = new URLSearchParams(window.location.search).get('token') || '';
@@ -11,6 +12,12 @@ const PublicStaffAttendanceCheckIn = () => {
   const [position, setPosition] = useState(null);
   const [status, setStatus] = useState('loading');
   const [message, setMessage] = useState('Verifying attendance QR code...');
+  // Daily-paid staff answer this every check-out; monthly/weekly/hourly/
+  // contract staff only once their check-outs this month reach the agreed
+  // number of days — cmms_checkout_pay_status_by_qr decides which, and
+  // staff_check_out_with_qr refuses to check out until it is answered.
+  const [payStatus, setPayStatus] = useState(null);
+  const [payAnswer, setPayAnswer] = useState({ paid: null, method: 'cash' });
 
   useEffect(() => {
     let mounted = true;
@@ -29,6 +36,13 @@ const PublicStaffAttendanceCheckIn = () => {
     return () => { mounted = false; };
   }, [token]);
 
+  useEffect(() => {
+    if (!session || !token) return;
+    let mounted = true;
+    getCheckoutPayStatusByQr(token).then(({ data }) => { if (mounted) setPayStatus(data || { required: false }); });
+    return () => { mounted = false; };
+  }, [session, token]);
+
   const signIn = async (event) => {
     event.preventDefault(); setStatus('working');
     const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
@@ -38,14 +52,129 @@ const PublicStaffAttendanceCheckIn = () => {
 
   const recordAttendance = async (action) => {
     setStatus('working'); setMessage(`Recording your check-${action}...`);
-    const { data, error } = await supabase.rpc(action === 'in' ? 'staff_check_in_with_qr' : 'staff_check_out_with_qr', {
-      p_token: token, p_latitude: position?.latitude ?? null, p_longitude: position?.longitude ?? null
-    });
+    const params = { p_token: token, p_latitude: position?.latitude ?? null, p_longitude: position?.longitude ?? null };
+    if (action === 'out') { params.p_paid = payAnswer.paid; params.p_payment_method = payAnswer.paid ? payAnswer.method : null; }
+    const { data, error } = await supabase.rpc(action === 'in' ? 'staff_check_in_with_qr' : 'staff_check_out_with_qr', params);
     if (error) { setStatus('ready'); setMessage(error.message); return; }
     setStatus('complete'); setMessage(data?.message || `Check-${action} recorded.`);
   };
 
-  return <main className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-950 px-4 py-10 text-white"><section className="mx-auto w-full max-w-md rounded-3xl border border-white/10 bg-slate-900/80 p-7 shadow-2xl backdrop-blur"><div className="mb-6 flex items-center gap-3"><div className="rounded-2xl bg-indigo-500/20 p-3"><ShieldCheck className="h-7 w-7 text-indigo-300" /></div><div><p className="text-xs font-semibold uppercase tracking-widest text-indigo-300">IcanEra</p><h1 className="text-xl font-bold">{qr?.company_name || 'Staff attendance'}</h1><p className="text-sm text-slate-400">Staff attendance</p></div></div>{qr && <div className="mb-6 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4"><p className="text-xs font-semibold uppercase tracking-widest text-emerald-200">Attendance location</p><p className="mt-1 flex items-center gap-1 text-sm text-emerald-100"><MapPin className="h-4 w-4" /> {qr.location_name}</p></div>}{['loading', 'working'].includes(status) && <div className="flex items-center gap-3 text-slate-300"><Loader2 className="h-5 w-5 animate-spin" /> {message}</div>}{status === 'error' && <p className="rounded-xl bg-red-500/15 p-4 text-sm text-red-100">{message}</p>}{status === 'complete' && <div className="rounded-2xl bg-emerald-500/15 p-5 text-center"><CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-emerald-300" /><p className="font-semibold">{message}</p></div>}{status === 'ready' && qr && !session && <form onSubmit={signIn} className="space-y-4"><p className="text-sm text-slate-300">{message}</p><input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Staff email" className="w-full rounded-xl border border-white/15 bg-white/5 p-3" /><input required type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" className="w-full rounded-xl border border-white/15 bg-white/5 p-3" /><button className="w-full rounded-xl bg-indigo-600 px-4 py-3 font-semibold">Verify staff account</button></form>}{status === 'ready' && qr && session && <div className="space-y-4"><p className="text-sm text-slate-300">{message}</p><div className="grid grid-cols-2 gap-3"><button onClick={() => recordAttendance('in')} className="rounded-xl bg-emerald-600 px-4 py-3 font-semibold">Check in</button><button onClick={() => recordAttendance('out')} className="rounded-xl bg-rose-600 px-4 py-3 font-semibold">Check out</button></div></div>}</section></main>;
+  const payDecided = !payStatus?.required || payAnswer.paid === false || (payAnswer.paid === true && payAnswer.method);
+
+  return (
+    <main className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-950 px-4 py-10 text-white">
+      <section className="mx-auto w-full max-w-md rounded-3xl border border-white/10 bg-slate-900/80 p-7 shadow-2xl backdrop-blur">
+        <div className="mb-6 flex items-center gap-3">
+          <div className="rounded-2xl bg-indigo-500/20 p-3"><ShieldCheck className="h-7 w-7 text-indigo-300" /></div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-indigo-300">IcanEra</p>
+            <h1 className="text-xl font-bold">{qr?.company_name || 'Staff attendance'}</h1>
+            <p className="text-sm text-slate-400">Staff attendance</p>
+          </div>
+        </div>
+
+        {qr && (
+          <div className="mb-6 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4">
+            <p className="text-xs font-semibold uppercase tracking-widest text-emerald-200">Attendance location</p>
+            <p className="mt-1 flex items-center gap-1 text-sm text-emerald-100"><MapPin className="h-4 w-4" /> {qr.location_name}</p>
+          </div>
+        )}
+
+        {['loading', 'working'].includes(status) && (
+          <div className="flex items-center gap-3 text-slate-300"><Loader2 className="h-5 w-5 animate-spin" /> {message}</div>
+        )}
+
+        {status === 'error' && <p className="rounded-xl bg-red-500/15 p-4 text-sm text-red-100">{message}</p>}
+
+        {status === 'complete' && (
+          <div className="rounded-2xl bg-emerald-500/15 p-5 text-center">
+            <CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-emerald-300" />
+            <p className="font-semibold">{message}</p>
+          </div>
+        )}
+
+        {status === 'ready' && qr && !session && (
+          <form onSubmit={signIn} className="space-y-4">
+            <p className="text-sm text-slate-300">{message}</p>
+            <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Staff email" className="w-full rounded-xl border border-white/15 bg-white/5 p-3" />
+            <input required type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" className="w-full rounded-xl border border-white/15 bg-white/5 p-3" />
+            <button className="w-full rounded-xl bg-indigo-600 px-4 py-3 font-semibold">Verify staff account</button>
+          </form>
+        )}
+
+        {status === 'ready' && qr && session && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-300">{message}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => recordAttendance('in')} className="rounded-xl bg-emerald-600 px-4 py-3 font-semibold">Check in</button>
+              {!payStatus?.required && (
+                <button onClick={() => recordAttendance('out')} className="rounded-xl bg-rose-600 px-4 py-3 font-semibold">Check out</button>
+              )}
+            </div>
+
+            {payStatus === null && <p className="text-xs text-slate-500">Checking today's pay status…</p>}
+
+            {payStatus?.required && (
+              <div className="space-y-3 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4">
+                <p className="text-sm font-semibold text-amber-100">
+                  Before you check out — {payStatus.pay_frequency === 'daily' ? "confirm today's pay" : 'confirm your pay for this period'}: {' '}
+                  {payStatus.currency} {Number(payStatus.amount || 0).toLocaleString()}
+                </p>
+                <p className="text-xs text-amber-200/80">Have you received this?</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPayAnswer({ paid: true, method: payAnswer.method || 'cash' })}
+                    className={`rounded-lg border px-3 py-2 text-sm font-medium ${payAnswer.paid === true ? 'border-emerald-400 bg-emerald-500/20 text-emerald-100' : 'border-white/15 text-slate-200 hover:bg-white/5'}`}
+                  >
+                    Yes, received
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPayAnswer({ paid: false, method: null })}
+                    className={`rounded-lg border px-3 py-2 text-sm font-medium ${payAnswer.paid === false ? 'border-rose-400 bg-rose-500/20 text-rose-100' : 'border-white/15 text-slate-200 hover:bg-white/5'}`}
+                  >
+                    Not yet
+                  </button>
+                </div>
+
+                {payAnswer.paid === true && (
+                  <>
+                    <p className="text-xs text-amber-200/80">How was it paid?</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPayAnswer((prev) => ({ ...prev, method: 'cash' }))}
+                        className={`rounded-lg border px-3 py-2 text-sm font-medium ${payAnswer.method === 'cash' ? 'border-sky-400 bg-sky-500/20 text-sky-100' : 'border-white/15 text-slate-200 hover:bg-white/5'}`}
+                      >
+                        Cash
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPayAnswer((prev) => ({ ...prev, method: 'ican' }))}
+                        className={`rounded-lg border px-3 py-2 text-sm font-medium ${payAnswer.method === 'ican' ? 'border-sky-400 bg-sky-500/20 text-sky-100' : 'border-white/15 text-slate-200 hover:bg-white/5'}`}
+                      >
+                        IcanEra wallet
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                <button
+                  type="button"
+                  disabled={!payDecided}
+                  onClick={() => recordAttendance('out')}
+                  className="w-full rounded-xl bg-rose-600 px-4 py-3 font-semibold disabled:opacity-40"
+                >
+                  Confirm and check out
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+    </main>
+  );
 };
 
 export default PublicStaffAttendanceCheckIn;

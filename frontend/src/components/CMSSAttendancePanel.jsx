@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabase/client';
 import { getPublicAppUrl } from '../utils/publicAppUrl';
 import { downloadCmmsQrPdf } from '../utils/downloadCmmsQrPdf';
 import { downloadCmmsRecordsExcel, downloadCmmsRecordsPdf } from '../utils/cmmsRecordExports';
+import { getCheckoutPayStatus } from '../services/businessManagementService';
+import { ICAN_TO_UGX, transferFromBusinessWallet } from '../services/icanWalletService';
 
 const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole, isCreator, hasToolAction }) => {
   const [attendanceRecords, setAttendanceRecords] = useState([]);
@@ -34,6 +36,7 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
   const [addDaysCount, setAddDaysCount] = useState('');
   const [addDaysReason, setAddDaysReason] = useState('');
   const [addDaysLoading, setAddDaysLoading] = useState(false);
+  const [payPrompt, setPayPrompt] = useState(null); // { attendanceId, staffName, status, paid, method, pin, busy, error }
 
   // Company admins/creators always retain every attendance power. Beyond
   // that, access is per-action and role-configurable (Role and tool
@@ -179,23 +182,79 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
   };
 
   const handleManualCheckOut = async (attendanceId) => {
-    setManualLoading(true);
     setManualError('');
     setManualSuccess('');
 
-    try {
-      const { error } = await supabase.rpc('staff_check_out', {
-        p_attendance_id: attendanceId,
-        p_location: manualLocation.trim() || null
-      });
-      if (error) throw error;
+    // A daily-paid staff member settles every day at check-out; a monthly/
+    // weekly/hourly/contract staff member only once their check-outs this
+    // month reach the agreed monthly_work_days. Either way, check-out is
+    // blocked until this is answered — so ask first, before touching
+    // staff_check_out at all.
+    const entry = activeCheckIns.find((item) => item.id === attendanceId);
+    const { data: status } = await getCheckoutPayStatus({ cmmsUserId: entry?.cmms_user_id, cmmsCompanyId: companyProfile.id });
+    if (status?.required) {
+      setPayPrompt({ attendanceId, staffName: entry?.user_name || 'this staff member', status, paid: null, method: 'cash', pin: '', busy: false, error: '' });
+      return;
+    }
 
+    setManualLoading(true);
+    try {
+      await finalizeCheckOut(attendanceId);
       setManualSuccess('✅ Staff member checked out');
-      await loadData();
     } catch (error) {
       setManualError(error.message || 'Manual check-out failed');
     } finally {
       setManualLoading(false);
+    }
+  };
+
+  // Completes the actual check-out RPC. paid/method/walletTransactionId are
+  // only meaningful when a pay decision was due; staff_check_out settles the
+  // payroll entry (cash or wallet) in the same call, before marking the
+  // attendance record checked out.
+  const finalizeCheckOut = async (attendanceId, paid = null, method = null, walletTransactionId = null) => {
+    const { error } = await supabase.rpc('staff_check_out', {
+      p_attendance_id: attendanceId,
+      p_location: manualLocation.trim() || null,
+      p_paid: paid,
+      p_payment_method: method,
+      p_wallet_transaction_id: walletTransactionId
+    });
+    if (error) throw error;
+    await loadData();
+  };
+
+  const submitPayPrompt = async () => {
+    if (!payPrompt) return;
+    if (payPrompt.paid === null) {
+      setPayPrompt((prev) => ({ ...prev, error: 'Choose whether pay has been received.' }));
+      return;
+    }
+    if (payPrompt.paid && !payPrompt.method) {
+      setPayPrompt((prev) => ({ ...prev, error: 'Choose cash or wallet.' }));
+      return;
+    }
+    setPayPrompt((prev) => ({ ...prev, busy: true, error: '' }));
+    try {
+      let walletTransactionId = null;
+      if (payPrompt.paid && payPrompt.method === 'ican') {
+        if ((payPrompt.status.currency || 'UGX') !== 'UGX') throw new Error('The IcanEra wallet currently supports UGX pay only. Choose cash for another currency.');
+        if (!payPrompt.pin) throw new Error('Enter the business-wallet PIN.');
+        const transfer = await transferFromBusinessWallet({
+          businessProfileId: companyProfile.pichin_business_profile_id,
+          recipientUserId: payPrompt.status.employee_user_id,
+          amount: Number(payPrompt.status.amount) / ICAN_TO_UGX,
+          note: `Attendance pay ${payPrompt.status.period_start} - ${payPrompt.status.period_end}`,
+          referenceId: payPrompt.attendanceId,
+          pin: payPrompt.pin
+        });
+        walletTransactionId = transfer.transaction_id || transfer.id || null;
+      }
+      await finalizeCheckOut(payPrompt.attendanceId, payPrompt.paid, payPrompt.paid ? payPrompt.method : null, walletTransactionId);
+      setManualSuccess(payPrompt.paid ? `✅ Checked out and pay recorded (${payPrompt.method === 'ican' ? 'IcanEra wallet' : 'cash'}).` : '✅ Checked out. Pay marked not yet received — follow up in Payroll.');
+      setPayPrompt(null);
+    } catch (error) {
+      setPayPrompt((prev) => ({ ...prev, busy: false, error: error.message || 'Could not record this payment.' }));
     }
   };
 
@@ -979,6 +1038,81 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {payPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl">
+            <h3 className="text-lg font-semibold text-white">Confirm pay before check-out</h3>
+            <p className="mt-1 text-sm text-slate-400">
+              {payPrompt.staffName} — {payPrompt.status.pay_frequency === 'daily' ? "today's pay" : `pay for ${payPrompt.status.period_start} to ${payPrompt.status.period_end}`}: {' '}
+              <span className="font-semibold text-emerald-300">{payPrompt.status.currency} {Number(payPrompt.status.amount || 0).toLocaleString()}</span>
+            </p>
+
+            {payPrompt.error && <p className="mt-3 rounded-lg border border-red-800/50 bg-red-900/20 p-2 text-sm text-red-300">{payPrompt.error}</p>}
+
+            <div className="mt-4 space-y-3">
+              <p className="text-sm font-medium text-slate-200">Has this been paid?</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPayPrompt((prev) => ({ ...prev, paid: true, error: '' }))}
+                  className={`rounded-lg border px-3 py-2 text-sm font-medium ${payPrompt.paid === true ? 'border-emerald-500 bg-emerald-600/20 text-emerald-200' : 'border-slate-700 text-slate-300 hover:bg-slate-800'}`}
+                >
+                  Yes, paid
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPayPrompt((prev) => ({ ...prev, paid: false, error: '' }))}
+                  className={`rounded-lg border px-3 py-2 text-sm font-medium ${payPrompt.paid === false ? 'border-amber-500 bg-amber-600/20 text-amber-200' : 'border-slate-700 text-slate-300 hover:bg-slate-800'}`}
+                >
+                  Not yet
+                </button>
+              </div>
+
+              {payPrompt.paid === true && (
+                <>
+                  <p className="text-sm font-medium text-slate-200">Approve payment method</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPayPrompt((prev) => ({ ...prev, method: 'cash' }))}
+                      className={`rounded-lg border px-3 py-2 text-sm font-medium ${payPrompt.method === 'cash' ? 'border-sky-500 bg-sky-600/20 text-sky-200' : 'border-slate-700 text-slate-300 hover:bg-slate-800'}`}
+                    >
+                      Cash
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPayPrompt((prev) => ({ ...prev, method: 'ican' }))}
+                      className={`rounded-lg border px-3 py-2 text-sm font-medium ${payPrompt.method === 'ican' ? 'border-sky-500 bg-sky-600/20 text-sky-200' : 'border-slate-700 text-slate-300 hover:bg-slate-800'}`}
+                    >
+                      IcanEra wallet
+                    </button>
+                  </div>
+                  {payPrompt.method === 'ican' && (
+                    <input
+                      type="password"
+                      required
+                      value={payPrompt.pin}
+                      onChange={(e) => setPayPrompt((prev) => ({ ...prev, pin: e.target.value }))}
+                      placeholder="Business-wallet PIN"
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                    />
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" disabled={payPrompt.busy} onClick={() => setPayPrompt(null)} className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50">
+                Cancel
+              </button>
+              <button type="button" disabled={payPrompt.busy} onClick={submitPayPrompt} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+                {payPrompt.busy ? 'Saving…' : 'Confirm and check out'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

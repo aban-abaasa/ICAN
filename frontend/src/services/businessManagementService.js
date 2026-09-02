@@ -311,6 +311,26 @@ export const respondToPayrollApproval = async (approvalId, approved, note = '') 
   return error ? { success: false, error: error.message } : { success: true, data };
 };
 
+// Tells the attendance check-out screen, before check-out is attempted,
+// whether a pay decision is due today (daily staff: every day; monthly/
+// weekly/hourly/contract staff: once check-outs this month reach the
+// company's agreed monthly_work_days). A no-op-safe read used purely to
+// decide whether to show the "have you been paid?" prompt.
+export const getCheckoutPayStatus = async ({ cmmsUserId, cmmsCompanyId }) => {
+  const sb = db();
+  if (!sb || !cmmsUserId || !cmmsCompanyId) return { data: { required: false }, error: null };
+  const { data, error } = await sb.rpc('cmms_checkout_pay_status', { p_cmms_user_id: cmmsUserId, p_cmms_company_id: cmmsCompanyId });
+  return error ? { data: { required: false }, error } : { data: data || { required: false }, error: null };
+};
+
+// Same lookup for the public QR self check-out page, which only has the token.
+export const getCheckoutPayStatusByQr = async (token) => {
+  const sb = db();
+  if (!sb || !token) return { data: { required: false }, error: null };
+  const { data, error } = await sb.rpc('cmms_checkout_pay_status_by_qr', { p_token: token });
+  return error ? { data: { required: false }, error } : { data: data || { required: false }, error: null };
+};
+
 export const getAccessibleBusinesses = async ({ userId, email } = {}) => {
   const sb = db();
   if (!sb) return { data: [], error: null };
