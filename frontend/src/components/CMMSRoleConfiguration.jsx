@@ -26,7 +26,12 @@ export const CMMS_TOOL_OPTIONS = [
   { id: 'requisitions', label: 'Requisitions and supplier orders', permission: 'canViewRequisitions', actions: ['view', 'create', 'edit', 'purchase', 'approve', 'assign'], scopes: true },
   { id: 'approvals', label: 'Approvals', permission: 'canApproveRequisitions', actions: ['view', 'approve', 'reject'], scopes: true },
   { id: 'reports', label: 'Reports', permission: 'canViewReports', actions: ['view', 'create', 'export'], scopes: true },
-  { id: 'tasks', label: 'Tasks and work orders', permission: 'canCreateWorkOrders', actions: ['view', 'create', 'edit', 'assign', 'approve', 'complete'] }
+  { id: 'tasks', label: 'Tasks and work orders', permission: 'canCreateWorkOrders', actions: ['view', 'create', 'edit', 'assign', 'approve', 'complete'] },
+  // Public posts (visibility: 'public') are readable with no login at
+  // /notices/<companyId> once published -- see CMMS_ANNOUNCEMENTS_AND_JOBS.sql.
+  // manage_applications is separate from edit/delete so a role can be
+  // trusted to draft postings without also seeing applicant PII, or vice versa.
+  { id: 'announcements', label: 'Announcements & job postings', permission: 'canManageAnnouncements', actions: ['view', 'create', 'edit', 'delete', 'manage_applications'] }
 ];
 
 const emptyRole = { display_name: '', description: '', permission_level: 1, tool_access: {} };

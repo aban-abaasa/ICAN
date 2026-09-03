@@ -8,6 +8,7 @@ import PitchinPreview from './landing/PitchinPreview';
 import WalletMockTrader from './landing/WalletMockTrader';
 import TrustGroupsPreview from './landing/TrustGroupsPreview';
 import DropshipPreview from './landing/DropshipPreview';
+import CMMSNoticeBoardPreview from './landing/CMMSNoticeBoardPreview';
 import { useTheme } from '../context/ThemeContext';
 import { getSupabaseClient } from '../lib/supabase/client';
 import {
@@ -1991,6 +1992,7 @@ const LandingPage = ({ onGetStarted }) => {
       <DropshipPreview />
       <WalletMockTrader onGetStarted={onGetStarted} authId={identity?.authId ?? null} />
       <TrustGroupsPreview onGetStarted={onGetStarted} />
+      <CMMSNoticeBoardPreview />
 
       {/* Footer */}
       <footer className="relative border-t border-purple-500/10 py-6 md:py-10 lg:py-12 2xl:py-16 px-4 sm:px-6 lg:px-8 2xl:px-16">

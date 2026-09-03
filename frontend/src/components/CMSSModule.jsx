@@ -33,7 +33,8 @@ import {
   Save,
   Briefcase,
   DollarSign,
-  Car
+  Car,
+  Megaphone
 } from 'lucide-react';
 
 // Import Supabase CMMS service
@@ -59,6 +60,7 @@ import CMMSOperationsPanel from './CMMSOperationsPanel.jsx';
 import CMSSAttendancePanel from './CMSSAttendancePanel.jsx';
 import CMSSVisitorManagementPanel from './CMSSVisitorManagementPanel.jsx';
 import CMMSEmployeeSelfService from './CMMSEmployeeSelfService.jsx';
+import CMMSAnnouncementsPanel from './CMMSAnnouncementsPanel.jsx';
 
 const CMMSModule = ({
   onDataUpdate,
@@ -1114,7 +1116,7 @@ const CMMSModule = ({
       pharmacy: ['pharmacy'], transport: ['bodagoera_transport', 'transport', 'fleet'],
       requisitions: ['requisitions', 'supplier_marketplace'], tasks: ['tasks', 'work_orders', 'maintenance'],
       approvals: ['approvals'], reports: ['reports', 'report_cards'], attendance: ['attendance'],
-      'visitor-mgmt': ['visitor-mgmt', 'visitor_management']
+      'visitor-mgmt': ['visitor-mgmt', 'visitor_management'], announcements: ['announcements']
     };
     const categoryAllows = (toolId) => {
       // Modules are opt-in. A company starts with no operational tabs until a
@@ -6981,6 +6983,7 @@ const CMMSModule = ({
       { id: 'pharmacy', label: 'Pharmacy & Supplies', icon: Package },
       { id: 'attendance', label: '✅ Staff Attendance', icon: CheckCircle },
       { id: 'visitor-mgmt', label: '🔍 Visitor Management', icon: Users },
+      { id: 'announcements', label: '📢 Announcements & Jobs', icon: Megaphone },
       { id: 'role-config', label: '🔐 Role Configuration', icon: Users },
       { id: 'company', label: '🏢 Company', icon: Building },
       { id: 'departments', label: '🏭 Departments', icon: Building },
@@ -7898,6 +7901,16 @@ const CMMSModule = ({
         {activeTab === 'inventory' && getTabs().includes('inventory') && <InventoryManager />}
         {activeTab === 'attendance' && getTabs().includes('attendance') && <CMSSAttendancePanel companyProfile={cmmsData.companyProfile} currentUser={user} cmmsUsers={cmmsData.users} userRole={userRole} isCreator={isCreator} hasToolAction={hasToolAction} />}
         {activeTab === 'visitor-mgmt' && getTabs().includes('visitor-mgmt') && <CMSSVisitorManagementPanel companyProfile={cmmsData.companyProfile} currentUser={user} cmmsUsers={cmmsData.users} userRole={userRole} isCreator={isCreator} />}
+        {activeTab === 'announcements' && getTabs().includes('announcements') && (
+          <CMMSAnnouncementsPanel
+            companyId={companyIdToUse}
+            currentUser={user}
+            canCreate={hasToolAction('announcements', 'create')}
+            canEdit={hasToolAction('announcements', 'edit')}
+            canDelete={hasToolAction('announcements', 'delete')}
+            canManageApplications={hasToolAction('announcements', 'manage_applications')}
+          />
+        )}
         {activeTab === 'fees' && getTabs().includes('fees') && <CMMSFeesPanel companyId={companyIdToUse} businessProfileId={cmmsData.companyProfile?.pichin_business_profile_id} cmmsUsers={cmmsData.users} studentView={isActiveStudent} />}
         {['production', 'quality', 'clinical', 'pharmacy'].includes(activeTab) && getTabs().includes(activeTab) && <CMMSOperationsPanel companyId={companyIdToUse} businessProfileId={cmmsData.companyProfile?.pichin_business_profile_id} mode={activeTab} />}
         {activeTab === 'payroll' && getTabs().includes('payroll') && (

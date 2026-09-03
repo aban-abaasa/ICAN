@@ -20,7 +20,7 @@ export const fromR2Value = (value) => value.slice(R2_PREFIX.length);
  * Upload a file to R2 via a presigned URL.
  * @param {Object} params
  * @param {File|Blob} params.file
- * @param {'pitches'|'statuses'|'avatars'|'cmms-reports'} params.folder
+ * @param {'pitches'|'statuses'|'avatars'|'cmms-reports'|'cmms-announcements'} params.folder
  * @param {string} params.accessToken - current Supabase session access token
  * @returns {Promise<{success: boolean, url?: string, key?: string, error?: string}>}
  */

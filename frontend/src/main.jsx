@@ -24,6 +24,12 @@ const statusShareMatch = window.location.pathname.match(/^\/status\/([^/]+)/);
 // Pitchin/status share links above. Only checkout (a real ICANera payment)
 // prompts sign-in, in place, without losing the cart.
 const dropshipStoreMatch = window.location.pathname.match(/^\/store\/([^/]+)/);
+// A CMMS company's public notice board (announcements + job postings) at
+// /notices/<companyId> -- same no-login share-link reasoning as the links
+// above. Job applicants submit their application right on this page with
+// no account at all (not even a "sign in to interact" prompt), since the
+// whole point of the feature is that applying never requires an account.
+const cmmsNoticeBoardMatch = window.location.pathname.match(/^\/notices\/([^/]+)/);
 // A stale service-worker/browser cache can leave a phone holding an
 // index.html that points at a JS chunk hash the last deploy removed from the
 // server — the chunk 404s, the dynamic import() rejects, and with no retry
@@ -63,6 +69,7 @@ const PublicVisitorCheckIn = lazyWithReloadOnChunkFailure(() => import('./compon
 const PublicPitchViewer = lazyWithReloadOnChunkFailure(() => import('./components/PublicPitchViewer'));
 const PublicStatusViewer = lazyWithReloadOnChunkFailure(() => import('./components/PublicStatusViewer'));
 const PublicDropshipStorefront = lazyWithReloadOnChunkFailure(() => import('./components/PublicDropshipStorefront'));
+const PublicCompanyNoticeBoard = lazyWithReloadOnChunkFailure(() => import('./components/PublicCompanyNoticeBoard'));
 const Loading = () => <div className="min-h-screen bg-slate-950" />;
 
 // Without this, ANY uncaught error during first render (a chunk failure that
@@ -102,6 +109,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
               {pitchShareMatch ? <PublicPitchViewer pitchId={pitchShareMatch[1]} />
                 : statusShareMatch ? <PublicStatusViewer statusId={statusShareMatch[1]} />
                 : dropshipStoreMatch ? <PublicDropshipStorefront businessProfileId={dropshipStoreMatch[1]} />
+                : cmmsNoticeBoardMatch ? <PublicCompanyNoticeBoard companyId={cmmsNoticeBoardMatch[1]} />
                 : <App />}
             </AuthProvider>
           )}
