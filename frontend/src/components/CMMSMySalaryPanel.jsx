@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Calendar, Clock3, Loader, UserPlus } from 'lucide-react';
-import { getBusinessAccessMembers, resolveEmployeeAuthIds, saveBusinessCompensation } from '../services/businessManagementService';
+import { Calendar, Clock3, Coins, Loader, UserPlus, WalletCards } from 'lucide-react';
+import { decideSalaryAdvance, getBusinessAccessMembers, getCompanySalaryAdvances, paySalaryAdvance, resolveEmployeeAuthIds, saveBusinessCompensation } from '../services/businessManagementService';
+import { ICAN_TO_UGX, transferFromBusinessWallet } from '../services/icanWalletService';
 import { supabase } from '../lib/supabase/client';
 import CMMSEmployeeSelfService from './CMMSEmployeeSelfService.jsx';
 
 const today = new Date().toISOString().slice(0, 10);
+const amount = (value, currency = 'UGX') => `${currency} ${Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
 // The "My Salary" tab is what a role sees when its Payroll access is scoped
 // to "own" records. View-only shows just the self-service screen below. The
@@ -24,6 +26,8 @@ export default function CMMSMySalaryPanel({ companyProfile, users = [], currentU
   const [schedule, setSchedule] = useState({ enabled: false, timezone: 'UTC', scheduled_start: '09:00', scheduled_end: '17:00', grace_minutes: 0, monthly_work_days: 22, deduct_late_arrivals: true, deduct_early_departures: true });
   const [addDays, setAddDays] = useState({ employee: '', count: '', reason: '' });
   const [dayAdjustments, setDayAdjustments] = useState([]);
+  const [advances, setAdvances] = useState([]);
+  const [advancePayment, setAdvancePayment] = useState({ advance: '', method: 'cash', pin: '' });
 
   const needsStaffList = canCreate || canApprove;
   const say = (text, bad = false) => { setNotice(bad ? '' : text); setError(bad ? text : ''); };
@@ -40,17 +44,19 @@ export default function CMMSMySalaryPanel({ companyProfile, users = [], currentU
     let cancelled = false;
     setLoadingStaff(true);
     (async () => {
-      const [resolvedUsers, memberResult, settingsResult, adjustmentsResult] = await Promise.all([
+      const [resolvedUsers, memberResult, settingsResult, adjustmentsResult, advancesResult] = await Promise.all([
         resolveEmployeeAuthIds(users),
         businessProfileId ? getBusinessAccessMembers(businessProfileId) : Promise.resolve({ data: [] }),
         supabase.from('cmms_attendance_payroll_settings').select('*').eq('cmms_company_id', companyProfile.id).maybeSingle(),
-        canApprove ? supabase.rpc('get_attendance_day_adjustments', { p_cmms_company_id: companyProfile.id }) : Promise.resolve({ data: [] })
+        canApprove ? supabase.rpc('get_attendance_day_adjustments', { p_cmms_company_id: companyProfile.id }) : Promise.resolve({ data: [] }),
+        canApprove ? getCompanySalaryAdvances(companyProfile.id) : Promise.resolve({ data: [] })
       ]);
       if (cancelled) return;
       setExtraUsers(resolvedUsers || []);
       setMembers(memberResult.data || []);
       if (settingsResult.data) setSchedule((current) => ({ ...current, ...settingsResult.data }));
       setDayAdjustments(adjustmentsResult.data || []);
+      setAdvances(advancesResult.data || []);
       setLoadingStaff(false);
     })();
     return () => { cancelled = true; };
@@ -108,6 +114,38 @@ export default function CMMSMySalaryPanel({ companyProfile, users = [], currentU
     setBusy(false);
   };
 
+  const reloadAdvances = async () => { const refreshed = await getCompanySalaryAdvances(companyProfile.id); setAdvances(refreshed.data || []); };
+  const decideAdvance = async (advanceId, decision) => {
+    if (!canApprove) return say('Your role cannot approve salary advances.', true);
+    setBusy(true);
+    const result = await decideSalaryAdvance(advanceId, decision);
+    if (result.success) { say(decision === 'approved' ? 'Advance approved. Pay it from the list below.' : 'Advance rejected.'); await reloadAdvances(); }
+    else say(result.error, true);
+    setBusy(false);
+  };
+  const payAdvance = async (event) => {
+    event.preventDefault();
+    if (!canApprove) return say('Your role cannot pay salary advances.', true);
+    const advance = advances.find((x) => x.id === advancePayment.advance);
+    if (!advance) return say('Choose an approved advance to pay.', true);
+    setBusy(true);
+    try {
+      let transactionId = null;
+      if (advancePayment.method === 'ican') {
+        if (advance.currency !== 'UGX') throw new Error('IcanEra wallet payroll currently supports UGX only. Record another currency as cash.');
+        if (!advancePayment.pin) throw new Error('Enter the business-wallet PIN.');
+        const transfer = await transferFromBusinessWallet({ businessProfileId, recipientUserId: advance.employee_user_id, amount: Number(advance.amount) / ICAN_TO_UGX, note: 'Salary advance', referenceId: advance.id, pin: advancePayment.pin });
+        transactionId = transfer.transaction_id || transfer.id || null;
+      }
+      const result = await paySalaryAdvance({ advanceId: advance.id, paymentMethod: advancePayment.method, walletTransactionId: transactionId });
+      if (!result.success) throw new Error(result.error);
+      say(advancePayment.method === 'ican' ? 'Advance sent through the IcanEra business wallet. The employee still needs to confirm receipt.' : 'Cash advance recorded as paid. The employee still needs to confirm receipt.');
+      setAdvancePayment({ advance: '', method: 'cash', pin: '' });
+      await reloadAdvances();
+    } catch (err) { say(err.message || 'Payment failed.', true); }
+    setBusy(false);
+  };
+
   return <div className="space-y-5">
     <CMMSEmployeeSelfService companyProfile={companyProfile} mode="payroll" />
     {(error || notice) && <p className={`rounded-lg border p-2 text-sm ${error ? 'border-red-800/50 bg-red-900/20 text-red-300' : 'border-emerald-800/50 bg-emerald-900/20 text-emerald-300'}`}>{error || notice}</p>}
@@ -145,6 +183,17 @@ export default function CMMSMySalaryPanel({ companyProfile, users = [], currentU
         </div>
         {dayAdjustments.length > 0 && <div className="pt-2"><p className="text-xs font-semibold text-slate-400 mb-2">Adjustment history</p><div className="space-y-1 max-h-56 overflow-y-auto">{dayAdjustments.map((entry) => <div key={entry.id} className="flex items-center justify-between gap-3 text-xs text-slate-400 px-3 py-2 bg-slate-950/60 border border-slate-800 rounded-lg"><span><span className="text-slate-200 font-semibold">{entry.user_name}</span> +{entry.days_added} day{entry.days_added === 1 ? '' : 's'}{entry.reason && <> — {entry.reason}</>}</span><span className="whitespace-nowrap">{new Date(entry.created_at).toLocaleDateString()}</span></div>)}</div></div>}
       </form>
+
+      <div className="space-y-3 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4 md:p-6">
+        <h3 className="flex items-center gap-2 font-semibold text-white"><Coins className="h-5 w-5 text-emerald-400" />Salary advance requests</h3>
+        {advances.filter((a) => ['pending', 'approved', 'paid', 'confirmed'].includes(a.status)).length === 0 ? <p className="rounded-lg border border-dashed border-slate-700 p-4 text-sm text-slate-400">No open salary advance requests.</p> : <div className="space-y-2">{advances.filter((a) => ['pending', 'approved', 'paid', 'confirmed'].includes(a.status)).map((a) => { const employee = employees.find((x) => x.authUserId === a.employee_user_id); return <div key={a.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950/60 p-3 text-sm"><div><p className="font-medium text-slate-100">{employee?.name || a.employee_user_id}</p><p className="text-xs text-slate-400">{amount(a.amount, a.currency)}{a.reason ? ` — ${a.reason}` : ''}{a.status === 'confirmed' ? ` · ${amount(a.recovered_amount, a.currency)} recovered so far` : ''}</p></div><div className="flex items-center gap-2"><span className="rounded-full bg-slate-800 px-2 py-1 text-xs capitalize text-slate-300">{a.status}</span>{a.status === 'pending' && <><button type="button" disabled={busy} onClick={() => decideAdvance(a.id, 'approved')} className="rounded-lg bg-emerald-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50">Approve</button><button type="button" disabled={busy} onClick={() => decideAdvance(a.id, 'rejected')} className="rounded-lg border border-red-600/60 px-2 py-1 text-xs font-semibold text-red-200 disabled:opacity-50">Reject</button></>}</div></div>; })}</div>}
+        {advances.some((a) => a.status === 'approved') && <form onSubmit={payAdvance} className="grid gap-3 border-t border-slate-800 pt-4 md:grid-cols-4">
+          <label className="text-sm text-slate-300 md:col-span-2">Advance to pay<select required value={advancePayment.advance} onChange={(e) => setAdvancePayment((v) => ({ ...v, advance: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white"><option value="">Select an approved advance</option>{advances.filter((a) => a.status === 'approved').map((a) => <option key={a.id} value={a.id}>{employees.find((x) => x.authUserId === a.employee_user_id)?.name || a.employee_user_id} — {amount(a.amount, a.currency)}</option>)}</select></label>
+          <label className="text-sm text-slate-300">Method<select value={advancePayment.method} onChange={(e) => setAdvancePayment((v) => ({ ...v, method: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white"><option value="cash">Cash</option><option value="ican">IcanEra wallet</option></select></label>
+          {advancePayment.method === 'ican' && <label className="text-sm text-slate-300">Wallet PIN<input required type="password" value={advancePayment.pin} onChange={(e) => setAdvancePayment((v) => ({ ...v, pin: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label>}
+          <button disabled={busy || !advancePayment.advance} className="flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white disabled:opacity-50"><WalletCards size={16} />{advancePayment.method === 'ican' ? 'Pay with IcanEra wallet' : 'Record cash payment'}</button>
+        </form>}
+      </div>
     </>}
   </div>;
 }

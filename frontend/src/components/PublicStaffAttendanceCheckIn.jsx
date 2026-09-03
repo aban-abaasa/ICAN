@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { CheckCircle2, Loader2, MapPin, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
-import { getCheckoutPayStatusByQr } from '../services/businessManagementService';
+import { getCheckoutPayStatusByQr, findWalletPaymentForCheckoutByQr } from '../services/businessManagementService';
 
 const PublicStaffAttendanceCheckIn = () => {
   const token = new URLSearchParams(window.location.search).get('token') || '';
@@ -18,6 +18,10 @@ const PublicStaffAttendanceCheckIn = () => {
   // staff_check_out_with_qr refuses to check out until it is answered.
   const [payStatus, setPayStatus] = useState(null);
   const [payAnswer, setPayAnswer] = useState({ paid: null, method: 'cash' });
+  // There is no wallet PIN on this self check-out page — an "IcanEra wallet"
+  // pay answer can only be confirmed if the business already sent a matching
+  // completed wallet payment. 'idle' | 'checking' | 'found' | 'missing'.
+  const [walletLookup, setWalletLookup] = useState({ state: 'idle', transactionId: null });
 
   useEffect(() => {
     let mounted = true;
@@ -50,6 +54,20 @@ const PublicStaffAttendanceCheckIn = () => {
     return () => { mounted = false; };
   }, [session, token]);
 
+  useEffect(() => {
+    if (payAnswer.paid !== true || payAnswer.method !== 'ican') {
+      setWalletLookup({ state: 'idle', transactionId: null });
+      return;
+    }
+    let mounted = true;
+    setWalletLookup({ state: 'checking', transactionId: null });
+    findWalletPaymentForCheckoutByQr(token).then(({ data }) => {
+      if (!mounted) return;
+      setWalletLookup(data ? { state: 'found', transactionId: data } : { state: 'missing', transactionId: null });
+    });
+    return () => { mounted = false; };
+  }, [payAnswer.paid, payAnswer.method, token]);
+
   const signIn = async (event) => {
     event.preventDefault(); setStatus('working');
     const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
@@ -59,6 +77,7 @@ const PublicStaffAttendanceCheckIn = () => {
 
   const recordAttendance = async (action) => {
     setStatus('working'); setMessage(`Recording your check-${action}...`);
+    let walletTransactionId = null;
     if (action === 'out') {
       // Re-check pay status right now rather than trusting whatever was
       // fetched at sign-in — a payroll change (e.g. monthly -> daily) made
@@ -68,15 +87,30 @@ const PublicStaffAttendanceCheckIn = () => {
       setPayStatus(status);
       const decided = !status.required || payAnswer.paid === false || (payAnswer.paid === true && payAnswer.method);
       if (!decided) { setStatus('ready'); setMessage('Confirm your pay below before checking out.'); return; }
+      if (status.required && payAnswer.paid === true && payAnswer.method === 'ican') {
+        // Re-check right now too — there is no wallet PIN on this page, so
+        // "paid via wallet" can only be confirmed against a real, already-
+        // completed business-wallet payment, never just trusted from state.
+        const { data: freshWalletTx } = await findWalletPaymentForCheckoutByQr(token);
+        walletTransactionId = freshWalletTx || null;
+        setWalletLookup(walletTransactionId ? { state: 'found', transactionId: walletTransactionId } : { state: 'missing', transactionId: null });
+        if (!walletTransactionId) { setStatus('ready'); setMessage('No completed IcanEra wallet payment found yet for this period — ask to be paid via wallet first, or choose cash.'); return; }
+      }
     }
     const params = { p_token: token, p_latitude: position?.latitude ?? null, p_longitude: position?.longitude ?? null };
-    if (action === 'out') { params.p_paid = payAnswer.paid; params.p_payment_method = payAnswer.paid ? payAnswer.method : null; }
+    if (action === 'out') {
+      params.p_paid = payAnswer.paid;
+      params.p_payment_method = payAnswer.paid ? payAnswer.method : null;
+      params.p_wallet_transaction_id = payAnswer.paid && payAnswer.method === 'ican' ? walletTransactionId : null;
+    }
     const { data, error } = await supabase.rpc(action === 'in' ? 'staff_check_in_with_qr' : 'staff_check_out_with_qr', params);
     if (error) { setStatus('ready'); setMessage(error.message); return; }
     setStatus('complete'); setMessage(data?.message || `Check-${action} recorded.`);
   };
 
-  const payDecided = !payStatus?.required || payAnswer.paid === false || (payAnswer.paid === true && payAnswer.method);
+  const payDecided = !payStatus?.required || payAnswer.paid === false
+    || (payAnswer.paid === true && payAnswer.method === 'cash')
+    || (payAnswer.paid === true && payAnswer.method === 'ican' && walletLookup.state === 'found');
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-950 px-4 py-10 text-white">
@@ -174,6 +208,13 @@ const PublicStaffAttendanceCheckIn = () => {
                         IcanEra wallet
                       </button>
                     </div>
+                    {payAnswer.method === 'ican' && (
+                      <p className={`text-xs ${walletLookup.state === 'found' ? 'text-emerald-300' : walletLookup.state === 'missing' ? 'text-rose-300' : 'text-slate-400'}`}>
+                        {walletLookup.state === 'checking' && 'Checking for a completed wallet payment…'}
+                        {walletLookup.state === 'found' && 'Matching wallet payment found — ready to check out.'}
+                        {walletLookup.state === 'missing' && "No completed IcanEra wallet payment found yet for this period. Ask your employer to pay via wallet, or choose cash."}
+                      </p>
+                    )}
                   </>
                 )}
 

@@ -319,6 +319,80 @@ export const getMyPayrollApprovals = async () => {
   return { data: data || [], error };
 };
 
+// ── Salary advances ───────────────────────────────────────────────────────
+// See backend/CMMS_SALARY_ADVANCE_REQUESTS.sql. An employee requests an
+// advance, a Payroll-approve role approves/rejects and pays it (cash or the
+// IcanEra business wallet — on-chain ICAN coin, same as any other payroll
+// payment), the employee separately confirms they received it, and only
+// then does it become recoverable from a draft payroll run.
+export const requestSalaryAdvance = async (cmmsCompanyId, amount, currency = null, reason = null) => {
+  const sb = db();
+  if (!sb) return { success: false, error: 'Supabase is not configured.' };
+  const { data, error } = await sb.rpc('request_salary_advance', { p_cmms_company_id: cmmsCompanyId, p_amount: amount, p_currency: currency, p_reason: reason });
+  return error ? { success: false, error: error.message } : { success: true, data };
+};
+
+export const getMySalaryAdvances = async () => {
+  const sb = db();
+  if (!sb) return { data: [], error: null };
+  const { data, error } = await sb.from('business_salary_advances').select('*').order('requested_at', { ascending: false });
+  return { data: data || [], error };
+};
+
+export const getCompanySalaryAdvances = async (cmmsCompanyId) => {
+  const sb = db();
+  if (!sb || !cmmsCompanyId) return { data: [], error: null };
+  const { data, error } = await sb.from('business_salary_advances').select('*').eq('cmms_company_id', cmmsCompanyId).order('requested_at', { ascending: false });
+  return { data: data || [], error };
+};
+
+export const decideSalaryAdvance = async (advanceId, decision, note = null) => {
+  const sb = db();
+  if (!sb) return { success: false, error: 'Supabase is not configured.' };
+  const { error } = await sb.rpc('decide_salary_advance', { p_advance_id: advanceId, p_decision: decision, p_note: note });
+  return error ? { success: false, error: error.message } : { success: true };
+};
+
+export const paySalaryAdvance = async ({ advanceId, paymentMethod, walletTransactionId = null }) => {
+  const sb = db();
+  if (!sb) return { success: false, error: 'Supabase is not configured.' };
+  const { error } = await sb.rpc('pay_salary_advance', { p_advance_id: advanceId, p_payment_method: paymentMethod, p_wallet_transaction_id: walletTransactionId });
+  return error ? { success: false, error: error.message } : { success: true };
+};
+
+export const confirmSalaryAdvanceReceived = async (advanceId) => {
+  const sb = db();
+  if (!sb) return { success: false, error: 'Supabase is not configured.' };
+  const { error } = await sb.rpc('confirm_salary_advance_received', { p_advance_id: advanceId });
+  return error ? { success: false, error: error.message } : { success: true };
+};
+
+export const cancelSalaryAdvance = async (advanceId) => {
+  const sb = db();
+  if (!sb) return { success: false, error: 'Supabase is not configured.' };
+  const { error } = await sb.rpc('cancel_salary_advance', { p_advance_id: advanceId });
+  return error ? { success: false, error: error.message } : { success: true };
+};
+
+// The IcanEra wallet legs (business wallet -> the employee's personal wallet)
+// that actually settled a salary/advance payment from this company — see
+// backend/CMMS_MY_SALARY_ATTENDANCE_WALLET_LEDGER.sql. Self-scoped: only
+// ever returns transactions where the signed-in employee is the sender or
+// recipient, so it's safe to call from the employee self-service screen.
+export const getMyCompanySalaryWalletTransactions = async (cmmsCompanyId, limit = 30) => {
+  const sb = db();
+  if (!sb || !cmmsCompanyId) return { data: [], error: null };
+  const { data, error } = await sb.rpc('get_my_cmms_salary_wallet_transactions', { p_cmms_company_id: cmmsCompanyId, p_limit: limit });
+  return { data: data || [], error };
+};
+
+export const applySalaryAdvanceRecovery = async (payrollPeriodId) => {
+  const sb = db();
+  if (!sb) return { success: false, error: 'Supabase is not configured.' };
+  const { data, error } = await sb.rpc('apply_salary_advance_recovery', { p_payroll_period_id: payrollPeriodId });
+  return error ? { success: false, error: error.message } : { success: true, data: data || [] };
+};
+
 export const respondToPayrollApproval = async (approvalId, approved, note = '') => {
   const sb = db();
   if (!sb) return { success: false, error: 'Supabase is not configured.' };
@@ -344,6 +418,19 @@ export const getCheckoutPayStatusByQr = async (token) => {
   if (!sb || !token) return { data: { required: false }, error: null };
   const { data, error } = await sb.rpc('cmms_checkout_pay_status_by_qr', { p_token: token });
   return error ? { data: { required: false }, error } : { data: data || { required: false }, error: null };
+};
+
+// The self check-out page has no wallet PIN and cannot initiate a transfer
+// itself — this finds an already-completed business-wallet payment to the
+// signed-in employee, for the amount actually due, so "I was paid via
+// IcanEra wallet" can be confirmed without one. Returns null when no such
+// payment exists yet (still cash-payable, or the employer hasn't paid via
+// wallet yet). See backend/CMMS_ATTENDANCE_CHECKOUT_WALLET_AUTODETECT.sql.
+export const findWalletPaymentForCheckoutByQr = async (token) => {
+  const sb = db();
+  if (!sb || !token) return { data: null, error: null };
+  const { data, error } = await sb.rpc('cmms_find_wallet_payment_for_checkout_by_qr', { p_token: token });
+  return { data: data || null, error };
 };
 
 // Daily-paid staff never get a business_payroll_entries row through the
