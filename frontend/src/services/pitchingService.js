@@ -1006,6 +1006,9 @@ export const getUserBusinessProfiles = async (userId) => {
         status,
         verification_status,
         created_at,
+        business_structure,
+        avatar_url,
+        metadata,
         business_co_owners(
           id,
           owner_name,
@@ -1013,7 +1016,8 @@ export const getUserBusinessProfiles = async (userId) => {
           owner_phone,
           ownership_share,
           role,
-          user_id
+          user_id,
+          metadata
         )
       `)
       .eq('user_id', userId)
@@ -1142,11 +1146,17 @@ export const saveBusinessCoOwners = async (businessProfileId, coOwners) => {
       owner_name: owner.name,
       owner_email: owner.email,
       owner_phone: owner.phone || null,
-      ownership_share: owner.ownershipShare,
+      // Companies limited by guarantee have no share capital -- ownership_share
+      // stays 0 and the actual pledge lives in metadata.guarantee_contribution
+      // instead (an amount, not a %, with no 100-sum requirement).
+      ownership_share: owner.contributionAmount ? 0 : (owner.ownershipShare || 0),
       role: owner.role,
       status: 'active',
       verification_status: owner.verified ? 'verified' : 'pending',
-      user_id: emailToUserId[owner.email] || null  // Link to user account
+      user_id: emailToUserId[owner.email] || null,  // Link to user account
+      metadata: owner.contributionAmount
+        ? { guarantee_contribution: owner.contributionAmount, currency: owner.contributionCurrency || 'UGX' }
+        : {}
     }));
 
     // Insert new co-owners
@@ -1246,6 +1256,9 @@ export const getCoOwnedBusinessProfiles = async (userEmail, userId) => {
         status,
         verification_status,
         created_at,
+        business_structure,
+        avatar_url,
+        metadata,
         business_co_owners(
           id,
           owner_name,
@@ -1253,7 +1266,8 @@ export const getCoOwnedBusinessProfiles = async (userEmail, userId) => {
           owner_phone,
           ownership_share,
           role,
-          user_id
+          user_id,
+          metadata
         )
       `)
       .in('id', profileIds)

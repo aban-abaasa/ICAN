@@ -161,7 +161,7 @@ const NotificationsPanel = ({
       await markAsRead(notification.id);
     }
     if (notification.action_tab) {
-      onActionClick(notification.action_tab);
+      onActionClick(notification.action_tab, notification.related_task_id || null);
       setShowDropdown(false);
     }
   };

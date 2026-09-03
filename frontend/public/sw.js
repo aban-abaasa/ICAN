@@ -73,13 +73,29 @@ self.addEventListener('push', (event) => {
   event.waitUntil(self.registration.showNotification(payload.title || 'ICANera Wallet', {
     body: payload.body || 'You have a new wallet notification.',
     icon: '/icons/icon-192x192.png', badge: '/icons/icon-192x192.png',
-    tag: payload.tag || 'ican-wallet', data: { url: payload.url || '/wallet' },
+    tag: payload.tag || 'ican-wallet', renotify: true, vibrate: [120, 60, 120],
+    data: { url: payload.url || '/wallet' },
   }));
 });
 
+// Tapping the notification should bring the user straight into the app --
+// focus and re-point an already-open tab instead of always stacking a new
+// one, which is what made this feel broken on both desktop web and an
+// installed mobile PWA.
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  event.waitUntil(clients.openWindow(event.notification.data?.url || '/wallet'));
+  const targetUrl = event.notification.data?.url || '/wallet';
+  event.waitUntil((async () => {
+    const windowClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of windowClients) {
+      const clientUrl = new URL(client.url);
+      if (clientUrl.origin === self.location.origin) {
+        client.postMessage({ type: 'NOTIFICATION_CLICK', url: targetUrl });
+        return client.focus();
+      }
+    }
+    return clients.openWindow(targetUrl);
+  })());
 });
 
 // ============================================

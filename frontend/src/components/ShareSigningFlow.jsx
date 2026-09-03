@@ -207,6 +207,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
   const [stage, setStage] = useState(0); // 0: Intent, 1: Documents, 2: Agreement, 3: Shares, 4: Shares Info, 5: Wallet Summary, 6: PIN Verification, 7: Pending, 8: Finalized
   const [investmentType, setInvestmentType] = useState(null); // 'buy', 'partner', 'support'
   const [sharesAmount, setSharesAmount] = useState('');
+  // Companies limited by guarantee have no shares to price -- a guarantor
+  // pledges a flat amount instead, floored by the business's declared
+  // minimum (see BusinessProfileForm.jsx's guaranteeMinimumContribution)
+  // but never capped.
+  const [guaranteeAmount, setGuaranteeAmount] = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   // LIVE SHARE OFFER - the only share price/count this flow transacts on.
@@ -557,8 +562,19 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
   const sharePriceUgx = liveOffer?.sharePriceUgx ?? null;
   const sharePrice = (sharePriceUgx != null && ugxPerLocal != null) ? sharePriceUgx / ugxPerLocal : 0;
   const sharesRequested = parseFloat(sharesAmount) || 0;
-  const totalInvestmentUgx = sharePriceUgx != null ? sharesRequested * sharePriceUgx : 0;
-  const totalInvestment = sharesRequested * sharePrice;
+  // A guarantor pledges a flat amount in allowedCurrency -- there is no
+  // per-share price to multiply, so totalInvestment/-Ugx short-circuit to the
+  // pledge itself instead of the equity-purchase shares*price formula. Every
+  // downstream consumer (escrow creation, blockchain record, notifications,
+  // receipts) reads totalInvestment, so this one branch is enough to carry
+  // the guarantee amount through the whole flow.
+  const guaranteeAmountValue = parseFloat(guaranteeAmount) || 0;
+  const guaranteeMinimum = Number(sellerBusinessProfile?.metadata?.guarantee_minimum_contribution) || 0;
+  const guaranteeCurrency = sellerBusinessProfile?.metadata?.guarantee_currency || allowedCurrency;
+  const totalInvestmentUgx = investmentType === 'guarantor'
+    ? (ugxPerLocal != null ? guaranteeAmountValue * ugxPerLocal : 0)
+    : (sharePriceUgx != null ? sharesRequested * sharePriceUgx : 0);
+  const totalInvestment = investmentType === 'guarantor' ? guaranteeAmountValue : sharesRequested * sharePrice;
 
   // Whichever account is currently selected as the payment source -- personal
   // wallet, or one of the investor's own business wallets.
@@ -1137,7 +1153,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
         // Use limit(1) instead of single() to handle RLS edge cases
         const { data, error } = await supabase
           .from('business_profiles')
-          .select('id, user_id, business_name, description, business_type, business_structure, founded_year, total_capital')
+          .select('id, user_id, business_name, description, business_type, business_structure, founded_year, total_capital, metadata')
           .eq('id', pitch.business_profile_id)
           .limit(1);
 
@@ -1251,7 +1267,53 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
       if (isThresholdMet && stage === 7) {
         try {
           const supabase = getSupabase();
-          if (!supabase || !sharesAmount || sharesAmount <= 0) return;
+          if (!supabase) return;
+
+          // Companies limited by guarantee have no shares to record -- the
+          // guarantor becomes a non-equity member instead (ownership_share
+          // stays 0; the pledge lives in metadata.guarantee_contribution,
+          // same shape BusinessProfileForm.jsx writes at profile creation).
+          if (investmentType === 'guarantor') {
+            if (guaranteeAmountValue <= 0) return;
+            const businessProfileId = sellerBusinessProfile?.id || pitch?.business_profile_id;
+            const { data: existingGuarantorRow } = await supabase
+              .from('business_co_owners')
+              .select('id')
+              .eq('business_profile_id', businessProfileId)
+              .eq('user_id', currentUser?.id)
+              .maybeSingle();
+
+            const { error: guarantorError } = existingGuarantorRow?.id
+              ? await supabase
+                  .from('business_co_owners')
+                  .update({
+                    metadata: { guarantee_contribution: guaranteeAmountValue, currency: allowedCurrency },
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('id', existingGuarantorRow.id)
+              : await supabase
+                  .from('business_co_owners')
+                  .insert([{
+                    business_profile_id: businessProfileId,
+                    owner_name: currentUser?.user_metadata?.full_name || 'New Guarantor',
+                    owner_email: currentUser?.email,
+                    user_id: currentUser?.id,
+                    ownership_share: 0,
+                    role: 'Guarantor',
+                    status: 'active',
+                    metadata: { guarantee_contribution: guaranteeAmountValue, currency: allowedCurrency },
+                    created_at: new Date().toISOString()
+                  }]);
+
+            if (guarantorError) {
+              console.warn('Could not record guarantor:', guarantorError.message);
+            } else {
+              console.log(`Guarantor recorded with a ${allowedCurrency} ${guaranteeAmountValue} contribution`);
+            }
+            return;
+          }
+
+          if (!sharesAmount || sharesAmount <= 0) return;
 
           console.log('ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€¦Ã‚Â½Ãƒâ€šÃ‚Â¯ 60% APPROVAL THRESHOLD MET - Recording investor as shareholder...');
 
@@ -1821,7 +1883,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                                     investmentType === 'guarantor' ? 'Guarantor Agreement' : 'Support/Grant';
         
         const investorName = currentUser?.user_metadata?.full_name || currentUser?.email;
-        const baseMessage = `${investorName} has signed and transferred ${allowedCurrency} ${totalInvestment.toFixed(2)} for your pitch "${pitch.title}". ${sharesAmount ? `Shares: ${sharesAmount}` : 'Partnership agreement'}.`;
+        const baseMessage = `${investorName} has signed and transferred ${allowedCurrency} ${totalInvestment.toFixed(2)} for your pitch "${pitch.title}". ${sharesAmount ? `Shares: ${sharesAmount}` : investmentType === 'guarantor' ? 'Guarantor agreement' : 'Partnership agreement'}.`;
         
         let notifiedCount = 0;
         let failedCount = 0;
@@ -1837,7 +1899,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
               recipient_id: sellerBusinessProfile.user_id,
               sender_id: currentUser?.id,
               notification_type: 'new_investment',
-              title: `ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€šÃ‚Â° New ${investmentTypeLabel} Received`,
+              title: `💰 New ${investmentTypeLabel} Received`,
               message: baseMessage,
               pitch_id: pitch.id,
               business_profile_id: sellerBusinessProfile?.id || pitch?.business_profile_id,
@@ -1900,13 +1962,13 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
             }
 
             try {
-              const memberMessage = `${investorName} has signed and transferred ${allowedCurrency} ${totalInvestment.toFixed(2)} for "${pitch.title}". ${sharesAmount ? `Shares: ${sharesAmount}` : 'Partnership'}.${member.can_sign ? ' You will need to approve this investment when prompted.' : ''}`;
+              const memberMessage = `${investorName} has signed and transferred ${allowedCurrency} ${totalInvestment.toFixed(2)} for "${pitch.title}". ${sharesAmount ? `Shares: ${sharesAmount}` : investmentType === 'guarantor' ? 'Guarantor agreement' : 'Partnership'}.${member.can_sign ? ' You will need to approve this investment when prompted.' : ''}`;
               
               const memberNotification = await createInvestmentNotification({
                 recipient_id: member.user_id,
                 sender_id: currentUser?.id,
                 notification_type: 'new_investment',
-                title: `ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢Ãƒâ€šÃ‚Â° New ${investmentTypeLabel}: ${pitch.title}`,
+                title: `💰 New ${investmentTypeLabel}: ${pitch.title}`,
                 message: memberMessage,
                 pitch_id: pitch.id,
                 business_profile_id: profileId,
@@ -1981,13 +2043,13 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
           // Notify each linked shareholder
           for (const coOwner of linkedCoOwners) {
             try {
-              const shareholderMessage = `${investorName} has signed and transferred ${allowedCurrency} ${totalInvestment.toFixed(2)} for "${pitch.title}". ${sharesAmount ? `Shares: ${sharesAmount}` : 'Partnership'}.`;
+              const shareholderMessage = `${investorName} has signed and transferred ${allowedCurrency} ${totalInvestment.toFixed(2)} for "${pitch.title}". ${sharesAmount ? `Shares: ${sharesAmount}` : investmentType === 'guarantor' ? 'Guarantor agreement' : 'Partnership'}.`;
               
               const coOwnerNotification = await createInvestmentNotification({
                 recipient_id: coOwner.user_id,
                 sender_id: currentUser?.id,
                 notification_type: 'shareholder_approval_needed',
-                title: `ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¹ Investment Approval Needed: ${pitch.title}`,
+                title: `📋 Investment Approval Needed: ${pitch.title}`,
                 message: shareholderMessage + ` Your approval is needed to finalize this investment.`,
                 pitch_id: pitch.id,
                 business_profile_id: profileId,
@@ -2718,8 +2780,6 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                   { id: 'support', label: 'Support', desc: 'Provide financial support' },
                   { id: 'guarantor', label: 'Become a Guarantor', desc: "Guarantee this business's obligations" }
                 ]
-                  // Companies limited by guarantee have no share capital to sell, but can take on guarantors.
-                  .filter(type => type.id !== 'guarantor' || sellerBusinessProfile?.business_structure === 'limited_by_guarantee')
                   // Sole proprietorships have a single owner and cannot sell equity/shares.
                   .filter(type => type.id !== 'buy' || sellerBusinessProfile?.business_structure !== 'sole_proprietorship')
                   .map((type) => (
@@ -2914,15 +2974,22 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                       {[
                         ['Pitch Title', pitch?.title || 'N/A'],
                         ['Creator', businessProfile?.owner_name || businessProfile?.business_co_owners?.[0]?.owner_name || pitch?.creator_name || 'Unknown'],
-                        ['Pitch Type', pitch?.pitch_type || 'Equity'],
-                        ['Category', pitch?.category || 'Technology'],
+                        ['Pitch Type', pitch?.pitch_type || 'Not specified'],
+                        ['Category', pitch?.category || 'Not specified'],
                         ['Pitch Description', pitch?.description || 'No description provided'],
                         ['Already Raised', pitch?.raised_amount || pitch?.raised || '0'],
                         // The seller's advertised figures. Shown for context only -
                         // what an investor actually pays and receives comes from the
                         // live share register below, never from these.
                         ['Funding Goal (as listed)', pitch?.target_funding || pitch?.goal || 'Not stated'],
-                        ['Equity Offering (as listed)', pitch?.equity_offering || pitch?.equity || 'Not stated']
+                        // Equity Offering only means something for an actual equity
+                        // purchase -- a Partner/Support/Guarantor investor isn't buying
+                        // any % of the business, so showing it would misstate their deal.
+                        ...(investmentType === 'buy'
+                          ? [['Equity Offering (as listed)', pitch?.equity_offering || pitch?.equity || 'Not stated']]
+                          : investmentType === 'guarantor'
+                            ? [['Minimum Guarantee Contribution', guaranteeMinimum > 0 ? `${guaranteeMinimum.toLocaleString()} ${guaranteeCurrency}` : 'None set by this business']]
+                            : [])
                       ].map(([label, value]) => (
                         <li key={label} className="px-3.5 py-3">
                           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
@@ -2962,14 +3029,30 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                         ['Business', sellerBusinessProfile?.business_name || pitch?.title || 'the business'],
                         ['Pitch', pitch?.title || 'N/A'],
                         ['Pitch Description', pitch?.description || 'No description provided'],
-                        ['Pricing Basis', 'Shares are priced from this business’s live recorded value, recomputed at the moment you invest. The listed pitch price is not used.'],
-                        ['Live Share Price', pricingReady ? `${allowedCurrency} ${sharePrice.toFixed(2)} per share (${sharePriceInIcan.toFixed(4)} IcanEra)` : 'Loading live value...'],
-                        ['Live Share Register', liveTotalShares ? `${liveSharesAvailable.toLocaleString()} of ${liveTotalShares.toLocaleString()} shares still unsold` : 'Unavailable'],
+                        // Only an equity purchase is actually priced against
+                        // the live share register -- the other three types
+                        // are a fixed amount the investor chooses (Stage 3),
+                        // so showing share-price/register rows for them would
+                        // describe pricing that never applies to their money.
+                        ...(investmentType === 'buy' ? [
+                          ['Pricing Basis', 'Shares are priced from this business’s live recorded value, recomputed at the moment you invest. The listed pitch price is not used.'],
+                          ['Live Share Price', pricingReady ? `${allowedCurrency} ${sharePrice.toFixed(2)} per share (${sharePriceInIcan.toFixed(4)} IcanEra)` : 'Loading live value...'],
+                          ['Live Share Register', liveTotalShares ? `${liveSharesAvailable.toLocaleString()} of ${liveTotalShares.toLocaleString()} shares still unsold` : 'Unavailable']
+                        ] : investmentType === 'guarantor' ? [
+                          ['Pricing Basis', 'This is a fixed guarantee pledge you set yourself in Stage 3 -- it is not priced against shares and grants no equity.'],
+                          ['Minimum Guarantee', guaranteeMinimum > 0 ? `${guaranteeMinimum.toLocaleString()} ${guaranteeCurrency} (set by this business)` : 'This business has not set a minimum -- any amount greater than 0 is accepted.']
+                        ] : [
+                          ['Pricing Basis', 'This is a fixed financial contribution you set yourself in Stage 3 -- it is not priced against shares and grants no equity.']
+                        ]),
                         ['Payment Method', 'IcanEra Wallet with escrow protection'],
                         ['Escrow Protection', 'All investments are held in IcanEra escrow pending multi-signature approval from existing shareholders.'],
                         ['Release Requirement', '60% of shareholders (minimum 10 members) must sign to release funds.'],
                         ['Verification', 'PIN and device location will be recorded on the sealed agreement.'],
-                        ['Shareholder Addition', 'You will be automatically added as a shareholder upon seal finalization.']
+                        ['Membership on Approval', investmentType === 'buy'
+                          ? 'You will be automatically added as a shareholder upon seal finalization.'
+                          : investmentType === 'guarantor'
+                            ? 'You will be added as a guarantor (a non-equity member) upon seal finalization.'
+                            : 'This is a financial contribution only -- you will not receive equity or a membership seat.']
                       ].map(([label, value]) => (
                         <li key={label} className="px-3.5 py-3 flex items-start gap-3">
                           <span className="mt-1 w-1.5 h-1.5 rounded-full bg-pink-400 flex-shrink-0" />
@@ -3058,70 +3141,108 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 </div>
               )}
 
-              <div className="space-y-3 rounded-xl border border-slate-700/80 bg-slate-900/40 p-4">
-                <label className="block text-slate-300 font-semibold text-sm">
-                  Number of Shares to Purchase
-                  <span className="text-slate-400 font-normal"> (0 shares for partner/support only)</span>
-                </label>
-                <input
-                  type="number"
-                  value={sharesAmount}
-                  onChange={(e) => setSharesAmount(e.target.value)}
-                  placeholder="Enter number of shares (0 for non-equity investment)"
-                  min="0"
-                  max={liveSharesAvailable || undefined}
-                  disabled={!pricingReady}
-                  className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 disabled:opacity-50"
-                />
-                <p className="text-xs text-slate-400">
-                  {sharesAmount === '0' || sharesAmount === ''
-                    ? 'Partner/Support investment (no equity)'
-                    : `${sharesAmount} share${sharesAmount !== '1' ? 's' : ''} selected`}
-                </p>
-
-                {(totalInvestment > 0 || sharesAmount === '0') && (
-                  <div className={`rounded-lg p-4 space-y-2 ${
-                    sharesAmount === '0' || !sharesAmount
-                      ? 'bg-blue-500/20 border border-blue-500/50'
-                      : 'bg-gradient-to-r from-pink-500/20 to-purple-500/20 border border-pink-500/50'
-                  }`}>
-                    {sharesAmount === '0' || !sharesAmount ? (
-                      <>
-                        <p className="text-blue-300 font-semibold">Partner/Supporter Investment</p>
-                        <p className="text-blue-200 text-sm">
-                          You will support this pitch without equity stake. Investment type: {investmentType === 'partner' ? 'Partnership' : investmentType === 'guarantor' ? 'Guarantor' : 'Support'}
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-slate-300">
-                          <span className="font-semibold text-white">{sharesAmount} Share{sharesAmount !== '1' ? 's' : ''}</span>
-                          <span className="text-slate-400"> x </span>
-                          <span className="font-semibold text-white">{sharePrice.toFixed(2)} {allowedCurrency}</span>
-                        </p>
-                        <div className="border-t border-pink-500/30 pt-2">
-                          <p className="text-slate-300">
-                            <span className="font-semibold text-white">Total Investment: </span>
-                            <span className="text-2xl font-bold text-pink-400">{allowedCurrency} {totalInvestment.toFixed(2)}</span>
-                          </p>
-                        </div>
-                        <p className="text-xs text-slate-400">
-                          Equity Stake: {equityStakePercent.toFixed(2)}% &mdash; {sharesRequested.toLocaleString()} of {liveTotalShares?.toLocaleString()} live shares
-                        </p>
-                        <p className="text-xs text-slate-400">
-                          {investmentInIcanCoins.toFixed(2)} IcanEra at the live price of {allowedCurrency} {icanPriceLocal?.toFixed(2)} per coin
-                        </p>
-                      </>
-                    )}
-                  </div>
-                )}
-
-                {exceedsAvailableShares && (
-                  <p className="text-xs text-red-300">
-                    Only {liveSharesAvailable.toLocaleString()} share{liveSharesAvailable === 1 ? ' is' : 's are'} still unsold.
+              {investmentType === 'guarantor' ? (
+                <div className="space-y-3 rounded-xl border border-slate-700/80 bg-slate-900/40 p-4">
+                  <label className="block text-slate-300 font-semibold text-sm">
+                    Guarantee Contribution ({guaranteeCurrency})
+                    <span className="text-slate-400 font-normal"> -- no shares issued, this business is limited by guarantee</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={guaranteeMinimum || 0}
+                    value={guaranteeAmount}
+                    onChange={(e) => setGuaranteeAmount(e.target.value)}
+                    placeholder={guaranteeMinimum > 0 ? `Minimum ${guaranteeMinimum.toLocaleString()} ${guaranteeCurrency}` : 'Enter your guarantee contribution'}
+                    className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500"
+                  />
+                  {guaranteeMinimum > 0 && (
+                    <p className="text-xs text-slate-400">
+                      The business requires a minimum guarantee of {guaranteeMinimum.toLocaleString()} {guaranteeCurrency}. You may pledge more, never less.
+                    </p>
+                  )}
+                  {guaranteeAmountValue > 0 && (
+                    <div className="rounded-lg p-4 space-y-2 bg-blue-500/20 border border-blue-500/50">
+                      <p className="text-blue-300 font-semibold">Guarantor Agreement</p>
+                      <p className="text-blue-200 text-sm">
+                        You are guaranteeing <span className="font-semibold text-white">{allowedCurrency} {totalInvestment.toFixed(2)}</span> for this business's obligations -- no equity stake is granted.
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        {investmentInIcanCoins.toFixed(2)} IcanEra at the live price of {allowedCurrency} {icanPriceLocal?.toFixed(2)} per coin
+                      </p>
+                    </div>
+                  )}
+                  {guaranteeMinimum > 0 && guaranteeAmountValue > 0 && guaranteeAmountValue < guaranteeMinimum && (
+                    <p className="text-xs text-red-300">
+                      Below the business's minimum guarantee of {guaranteeMinimum.toLocaleString()} {guaranteeCurrency}.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3 rounded-xl border border-slate-700/80 bg-slate-900/40 p-4">
+                  <label className="block text-slate-300 font-semibold text-sm">
+                    Number of Shares to Purchase
+                    <span className="text-slate-400 font-normal"> (0 shares for partner/support only)</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={sharesAmount}
+                    onChange={(e) => setSharesAmount(e.target.value)}
+                    placeholder="Enter number of shares (0 for non-equity investment)"
+                    min="0"
+                    max={liveSharesAvailable || undefined}
+                    disabled={!pricingReady}
+                    className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 disabled:opacity-50"
+                  />
+                  <p className="text-xs text-slate-400">
+                    {sharesAmount === '0' || sharesAmount === ''
+                      ? 'Partner/Support investment (no equity)'
+                      : `${sharesAmount} share${sharesAmount !== '1' ? 's' : ''} selected`}
                   </p>
-                )}
-              </div>
+
+                  {(totalInvestment > 0 || sharesAmount === '0') && (
+                    <div className={`rounded-lg p-4 space-y-2 ${
+                      sharesAmount === '0' || !sharesAmount
+                        ? 'bg-blue-500/20 border border-blue-500/50'
+                        : 'bg-gradient-to-r from-pink-500/20 to-purple-500/20 border border-pink-500/50'
+                    }`}>
+                      {sharesAmount === '0' || !sharesAmount ? (
+                        <>
+                          <p className="text-blue-300 font-semibold">Partner/Supporter Investment</p>
+                          <p className="text-blue-200 text-sm">
+                            You will support this pitch without equity stake. Investment type: {investmentType === 'partner' ? 'Partnership' : 'Support'}
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-slate-300">
+                            <span className="font-semibold text-white">{sharesAmount} Share{sharesAmount !== '1' ? 's' : ''}</span>
+                            <span className="text-slate-400"> x </span>
+                            <span className="font-semibold text-white">{sharePrice.toFixed(2)} {allowedCurrency}</span>
+                          </p>
+                          <div className="border-t border-pink-500/30 pt-2">
+                            <p className="text-slate-300">
+                              <span className="font-semibold text-white">Total Investment: </span>
+                              <span className="text-2xl font-bold text-pink-400">{allowedCurrency} {totalInvestment.toFixed(2)}</span>
+                            </p>
+                          </div>
+                          <p className="text-xs text-slate-400">
+                            Equity Stake: {equityStakePercent.toFixed(2)}% &mdash; {sharesRequested.toLocaleString()} of {liveTotalShares?.toLocaleString()} live shares
+                          </p>
+                          <p className="text-xs text-slate-400">
+                            {investmentInIcanCoins.toFixed(2)} IcanEra at the live price of {allowedCurrency} {icanPriceLocal?.toFixed(2)} per coin
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {exceedsAvailableShares && (
+                    <p className="text-xs text-red-300">
+                      Only {liveSharesAvailable.toLocaleString()} share{liveSharesAvailable === 1 ? ' is' : 's are'} still unsold.
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
                 <p className="text-blue-300 font-semibold text-sm mb-1">Account Registered In</p>
@@ -3134,9 +3255,13 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
               <button
                 onClick={() => setStage(5)}
                 disabled={
-                  !sharesAmount ||
-                  exceedsAvailableShares ||
-                  (investmentType === 'buy' && (!pricingReady || totalInvestment === 0))
+                  investmentType === 'guarantor'
+                    ? (guaranteeAmountValue <= 0 || guaranteeAmountValue < guaranteeMinimum)
+                    : (
+                      !sharesAmount ||
+                      exceedsAvailableShares ||
+                      (investmentType === 'buy' && (!pricingReady || totalInvestment === 0))
+                    )
                 }
                 className="w-full px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition"
               >
@@ -3333,7 +3458,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                       {[
                         ['Investment Amount (IcanEra)', `${investmentInIcanCoins.toFixed(2)} coins`],
                         ['Equivalent Value', `${allowedCurrency} ${totalInvestment.toFixed(2)}`],
-                        ['Shares', sharesAmount === '0' || !sharesAmount ? 'Partnership/Support (no equity)' : `${sharesAmount} shares`],
+                        ['Shares', investmentType === 'guarantor' ? 'Guarantee pledge (no equity)' : (sharesAmount === '0' || !sharesAmount ? 'Partnership/Support (no equity)' : `${sharesAmount} shares`)],
                         ['IcanEra Coins Remaining', `${(walletBalance - investmentInIcanCoins).toFixed(2)} coins`],
                         ['Payment Method', 'IcanEra Coins (Escrow protected)']
                       ].map(([label, value]) => (
@@ -3613,7 +3738,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                     <div className="flex items-center justify-between">
                       <span className="text-slate-400">Shares Purchasing:</span>
                       <span className="text-xl font-semibold text-blue-400">
-                        {sharesAmount === '0' || !sharesAmount ? 'Partnership/Support (no equity)' : `${sharesAmount} shares @ ${totalInvestment.toFixed(0)} coins total`}
+                        {investmentType === 'guarantor' ? 'Guarantee pledge (no equity)' : (sharesAmount === '0' || !sharesAmount ? 'Partnership/Support (no equity)' : `${sharesAmount} shares @ ${totalInvestment.toFixed(0)} coins total`)}
                       </span>
                     </div>
                     <div className="border-t border-slate-700 pt-3 flex items-center justify-between">

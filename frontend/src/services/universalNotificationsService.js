@@ -260,6 +260,27 @@ export const markAllNotificationsAsRead = async (userId, notifications = []) => 
   return { success: true, count: unread.length };
 };
 
+export const deleteNotification = async (notification) => {
+  const sb = getSupabase();
+  if (!sb || !notification?.source || !notification?.source_id) {
+    return { success: false };
+  }
+  const { data, error } = await sb.rpc('ican_delete_notification', {
+    p_source: notification.source,
+    p_source_id: notification.source_id
+  });
+  if (error) return { success: false, error };
+  return { success: Boolean(data) };
+};
+
+export const clearAllNotifications = async (userId, { readOnly = false } = {}) => {
+  const sb = getSupabase();
+  if (!sb || !userId) return { success: false, count: 0 };
+  const { data, error } = await sb.rpc('ican_clear_notifications', { p_read_only: readOnly });
+  if (error) return { success: false, count: 0, error };
+  return { success: true, count: data || 0 };
+};
+
 export const subscribeToUserNotifications = (userId, callback) => {
   const sb = getSupabase();
   if (!sb || !userId) {
@@ -374,6 +395,8 @@ export default {
   getUnreadNotificationCount,
   markNotificationAsRead,
   markAllNotificationsAsRead,
+  deleteNotification,
+  clearAllNotifications,
   subscribeToUserNotifications,
   getNotificationIcon,
   getNotificationColor,

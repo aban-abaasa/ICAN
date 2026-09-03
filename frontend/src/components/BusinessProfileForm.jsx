@@ -4,7 +4,7 @@ import { createBusinessProfile, updateBusinessProfile, getSupabase, verifyICANUs
 import { uploadToR2, resolveMediaValue } from '../services/r2StorageService';
 import { registerBusinessWallet, setBusinessWalletPin } from '../services/icanWalletService';
 import { memberApprovalService } from '../services/memberApprovalService';
-import { createBusinessProfileFromCategory, publishBusinessAsSupplier } from '../services/businessManagementService';
+import { createBusinessProfileFromCategory, publishBusinessAsSupplier, getMySupplierHint } from '../services/businessManagementService';
 import BusinessProfileDocuments from './BusinessProfileDocuments';
 import { COUNTRIES } from '../constants/countries';
 
@@ -12,8 +12,25 @@ const STRUCTURE_LIMITS = {
   sole_proprietorship: 1,
   organisation: 5,
   enterprise: 20,
-  limited_by_guarantee: 5
+  // No share capital, so no cap on membership like the other structures --
+  // any number of guarantors can join, each only bound by the admin-set
+  // minimum contribution (they choose how much more than that to pledge).
+  limited_by_guarantee: Infinity
 };
+
+// Which goods/services a supplier business offers. Order matters: the first
+// checked option becomes supplier_directory.supplier_type (the single
+// category the rest of the platform -- CMMS supplier catalogue, marketplace
+// search -- already understands), while the full set is kept in
+// business_profiles.metadata.supplier_services for reference.
+const SUPPLIER_SERVICE_OPTIONS = [
+  { key: 'wholesale', label: 'Wholesale goods', supplierType: 'wholesaler' },
+  { key: 'raw_materials', label: 'Raw materials', supplierType: 'raw_material' },
+  { key: 'hardware', label: 'Hardware', supplierType: 'hardware' },
+  { key: 'manufacturing', label: 'Manufacturing / factory', supplierType: 'factory' },
+  { key: 'logistics', label: 'Logistics / transport', supplierType: 'supplier' },
+  { key: 'other', label: 'Other', supplierType: 'supplier' }
+];
 
 const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfile, initialBusinessCategory = null }) => {
   const [step, setStep] = useState('business'); // business, owners, documents, wallet, approvals, notifications, review
@@ -35,10 +52,19 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
     description: '',
     businessAddress: '',
     foundedYear: new Date().getFullYear(),
-    avatarUrl: '' // r2:// key or legacy https URL -- the business's own logo, separate from the owner's personal photo
+    avatarUrl: '', // r2:// key or legacy https URL -- the business's own logo, separate from the owner's personal photo
+    supplierEnabled: false, // does this business supply goods/services to other businesses (publishes to the shared supplier marketplace)
+    supplierType: 'supplier',
+    supplierServices: [], // keys from SUPPLIER_SERVICE_OPTIONS; first one drives supplierType
+    // Companies limited by guarantee have no share capital: members/investors
+    // guarantee a fixed minimum contribution instead of owning a % of equity.
+    // This is the floor -- a guarantor can always pledge more, never less.
+    guaranteeMinimumContribution: '',
+    guaranteeCurrency: 'UGX'
   });
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState(''); // resolved, renderable URL for the <img> preview
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [supplierAutoDetected, setSupplierAutoDetected] = useState(false); // true once cmms_get_my_supplier_hint() found an existing Supermarketa/business-profile supplier match
 
   const [coOwners, setCoOwners] = useState([]);
 
@@ -70,6 +96,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
     email: '',
     phone: '',
     ownershipShare: 0,
+    contributionAmount: 0,
     role: 'Shareholder',
     verified: false
   });
@@ -77,6 +104,8 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
   const totalShare = coOwners.reduce((sum, owner) => sum + Number(owner.ownershipShare || owner.ownership_share || 0), 0);
   const shareholderLimit = STRUCTURE_LIMITS[businessData.businessStructure] || STRUCTURE_LIMITS.organisation;
   const isSoleProprietorship = businessData.businessStructure === 'sole_proprietorship';
+  const isLimitedByGuarantee = businessData.businessStructure === 'limited_by_guarantee';
+  const guaranteeMinimum = Number(businessData.guaranteeMinimumContribution) || 0;
 
   // Load profile data if editing
   useEffect(() => {
@@ -92,7 +121,12 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
         description: editingProfile.description || '',
         businessAddress: editingProfile.business_address || '',
         foundedYear: editingProfile.founded_year || new Date().getFullYear(),
-        avatarUrl: editingProfile.avatar_url || ''
+        avatarUrl: editingProfile.avatar_url || '',
+        supplierEnabled: Boolean(editingProfile.metadata?.supplier_enabled),
+        supplierType: editingProfile.metadata?.supplier_type_hint || 'supplier',
+        supplierServices: editingProfile.metadata?.supplier_services || [],
+        guaranteeMinimumContribution: editingProfile.metadata?.guarantee_minimum_contribution || '',
+        guaranteeCurrency: editingProfile.metadata?.guarantee_currency || 'UGX'
       });
       if (editingProfile.avatar_url) {
         resolveMediaValue(editingProfile.avatar_url).then(setAvatarPreviewUrl);
@@ -106,6 +140,8 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
           email: owner.owner_email || owner.email || '',
           phone: owner.owner_phone || owner.phone || '',
           ownershipShare: owner.ownership_share || owner.ownershipShare || 0,
+          contributionAmount: owner.metadata?.guarantee_contribution || owner.contributionAmount || 0,
+          contributionCurrency: owner.metadata?.currency || 'UGX',
           role: owner.role || 'Co-Founder',
           verified: true // Already saved means verified
         }));
@@ -132,9 +168,32 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
         businessType: current.businessType || 'Sole Proprietorship',
         businessStructure: category.operating_mode === 'enterprise' ? 'enterprise' : current.businessStructure,
         description: current.description || categoryDefaults[category.category_key] || category.description || '',
+        supplierEnabled: current.supplierEnabled || category.category_key === 'wholesale',
+        supplierType: category.category_key === 'wholesale' ? 'wholesaler' : current.supplierType
       }));
     }
   }, [editingProfile, initialBusinessCategory]);
+
+  // Auto-fill the supplier toggle for a brand-new profile when the signed-in
+  // user already proves they're a supplier elsewhere (an existing
+  // Supermarketa supplier account, or another business profile of theirs
+  // already published to the shared supplier marketplace). Still a normal,
+  // editable checkbox either way -- this only pre-checks it.
+  useEffect(() => {
+    if (editingProfile) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await getMySupplierHint();
+      if (cancelled || !data?.has_existing_supplier) return;
+      setSupplierAutoDetected(true);
+      setBusinessData((current) => ({
+        ...current,
+        supplierEnabled: true,
+        supplierType: data.supplier_type || current.supplierType
+      }));
+    })();
+    return () => { cancelled = true; };
+  }, [editingProfile]);
 
   // Load pending approvals when viewing approvals step
   useEffect(() => {
@@ -242,14 +301,28 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
       return;
     }
 
-    if (newOwner.ownershipShare <= 0) {
-      alert('Ownership share must be greater than 0');
-      return;
-    }
+    if (isLimitedByGuarantee) {
+      // No share capital: each guarantor pledges a contribution, floored by
+      // the business's minimum but never capped -- unlike ownership %,
+      // guarantors' contributions don't need to sum to anything.
+      if (newOwner.contributionAmount <= 0) {
+        alert('Contribution amount must be greater than 0');
+        return;
+      }
+      if (guaranteeMinimum > 0 && newOwner.contributionAmount < guaranteeMinimum) {
+        alert(`Contribution must be at least ${guaranteeMinimum.toLocaleString()} ${businessData.guaranteeCurrency} (the business's minimum guarantee contribution)`);
+        return;
+      }
+    } else {
+      if (newOwner.ownershipShare <= 0) {
+        alert('Ownership share must be greater than 0');
+        return;
+      }
 
-    if (totalShare + newOwner.ownershipShare > 100) {
-      alert(`Total ownership would be ${totalShare + newOwner.ownershipShare}%. Cannot exceed 100%`);
-      return;
+      if (totalShare + newOwner.ownershipShare > 100) {
+        alert(`Total ownership would be ${totalShare + newOwner.ownershipShare}%. Cannot exceed 100%`);
+        return;
+      }
     }
 
     // Check if user is verified
@@ -278,6 +351,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
       email: '',
       phone: '',
       ownershipShare: 0,
+      contributionAmount: 0,
       role: 'Co-Founder',
       verified: false
     });
@@ -303,6 +377,16 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
     setBusinessData({
       ...businessData,
       [field]: value
+    });
+  };
+
+  const toggleSupplierService = (serviceKey) => {
+    setBusinessData((current) => {
+      const services = current.supplierServices.includes(serviceKey)
+        ? current.supplierServices.filter((key) => key !== serviceKey)
+        : [...current.supplierServices, serviceKey];
+      const primary = SUPPLIER_SERVICE_OPTIONS.find((option) => option.key === services[0]);
+      return { ...current, supplierServices: services, supplierType: primary?.supplierType || 'supplier' };
     });
   };
 
@@ -374,8 +458,13 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
       }
     }
 
-    if (!isSoleProprietorship && totalShare !== 100) {
+    if (!isSoleProprietorship && !isLimitedByGuarantee && totalShare !== 100) {
       alert(`Ownership shares must total exactly 100%. Currently: ${totalShare}%`);
+      return;
+    }
+
+    if (isLimitedByGuarantee && coOwners.some(owner => Number(owner.contributionAmount || 0) < guaranteeMinimum)) {
+      alert(`Every guarantor's contribution must be at least ${guaranteeMinimum.toLocaleString()} ${businessData.guaranteeCurrency}`);
       return;
     }
 
@@ -451,6 +540,18 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
           required_documents: initialBusinessCategory.required_documents || []
         };
       }
+      // Keeps cmms_get_my_supplier_hint()/publish_supplier_business_profile_trigger
+      // aware of the supplier toggle even without a wholesale/factory category.
+      profile.metadata = {
+        ...(profile.metadata || editingProfile?.metadata || {}),
+        supplier_enabled: businessData.supplierEnabled,
+        supplier_type_hint: businessData.supplierType,
+        supplier_services: businessData.supplierServices,
+        ...(isLimitedByGuarantee ? {
+          guarantee_minimum_contribution: guaranteeMinimum,
+          guarantee_currency: businessData.guaranteeCurrency
+        } : {})
+      };
 
       let result;
       
@@ -460,7 +561,14 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
         // Update existing profile (without co-owners - they're a separate table)
         console.log('📝 Updating profile:', editingProfile.id);
         result = await updateBusinessProfile(editingProfile.id, profile);
-        
+
+        if (result.success && result.data && businessData.supplierEnabled) {
+          const supplierResult = await publishBusinessAsSupplier(result.data.id, businessData.supplierType);
+          if (!supplierResult.success) {
+            console.warn('Profile updated but supplier publishing failed:', supplierResult.error);
+          }
+        }
+
         if (result.success && result.data) {
           // Now save co-owners
           console.log('👥 Saving co-owners...');
@@ -506,10 +614,10 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
           result = await createBusinessProfile(userId, { user_id: userId, ...profile });
         }
 
-        if (result.success && result.data?.id && initialBusinessCategory?.category_key === 'wholesale') {
-          const supplierResult = await publishBusinessAsSupplier(result.data.id, 'wholesale');
+        if (result.success && result.data?.id && businessData.supplierEnabled) {
+          const supplierResult = await publishBusinessAsSupplier(result.data.id, businessData.supplierType);
           if (!supplierResult.success) {
-            console.warn('Wholesale profile created but supplier publishing failed:', supplierResult.error);
+            console.warn('Profile created but supplier publishing failed:', supplierResult.error);
           }
         }
         
@@ -712,7 +820,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                     <option value="sole_proprietorship">Sole Proprietorship — 1 shareholder</option>
                     <option value="organisation">Organisation — up to 5 shareholders</option>
                     <option value="enterprise">Enterprise — up to 20 shareholders</option>
-                    <option value="limited_by_guarantee">Limited by Guarantee — up to 5 guarantors</option>
+                    <option value="limited_by_guarantee">Limited by Guarantee — unlimited guarantors</option>
                   </select>
                   <p className="text-slate-400 text-xs mt-1">Choose the ownership and management level for this business.</p>
                 </div>
@@ -798,6 +906,50 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                     className="w-full bg-slate-700 text-white rounded-lg px-4 py-2 border border-slate-600 focus:border-blue-500 focus:outline-none resize-none"
                   />
                 </div>
+
+                <div className="col-span-2 rounded-lg border border-slate-600 bg-slate-700/30 p-3">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={businessData.supplierEnabled}
+                      onChange={(e) => {
+                        setSupplierAutoDetected(false);
+                        handleBusinessChange('supplierEnabled', e.target.checked);
+                      }}
+                      className="mt-1 w-4 h-4 rounded border-slate-500 bg-slate-700 text-blue-500 focus:ring-blue-500"
+                    />
+                    <span>
+                      <span className="text-slate-200 text-sm font-medium">This business supplies goods or services to other businesses</span>
+                      <span className="block text-slate-400 text-xs mt-1">Publishes this profile to the shared supplier marketplace, so it can be found and ordered from (e.g. CMMS "Order from supplier").</span>
+                      {supplierAutoDetected && (
+                        <span className="mt-1 inline-flex items-center gap-1 text-emerald-400 text-xs">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Auto-filled from your existing supplier account
+                        </span>
+                      )}
+                    </span>
+                  </label>
+                  {businessData.supplierEnabled && (
+                    <div className="mt-3 ml-7">
+                      <label className="text-slate-300 text-xs block mb-2">Which services does this business supply? *</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {SUPPLIER_SERVICE_OPTIONS.map((option) => (
+                          <label key={option.key} className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={businessData.supplierServices.includes(option.key)}
+                              onChange={() => toggleSupplierService(option.key)}
+                              className="w-4 h-4 rounded border-slate-500 bg-slate-700 text-blue-500 focus:ring-blue-500"
+                            />
+                            {option.label}
+                          </label>
+                        ))}
+                      </div>
+                      {businessData.supplierServices.length === 0 && (
+                        <p className="text-amber-400 text-xs mt-2">⚠️ Select at least one service so buyers can find this business.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Mobile-Optimized Navigation */}
@@ -823,27 +975,56 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
             <div className="space-y-6">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
                 <Users className="w-6 h-6" />
-                Shareholders & Equity Distribution
+                {isLimitedByGuarantee ? 'Guarantors & Contributions' : 'Shareholders & Equity Distribution'}
               </h3>
+
+              {isLimitedByGuarantee && (
+                <div className="bg-slate-700/50 p-4 rounded-lg border border-slate-600">
+                  <label className="text-slate-300 text-sm block mb-2">Minimum guarantee contribution *</label>
+                  <p className="text-slate-400 text-xs mb-2">The floor every guarantor must pledge -- they can always commit more, never less. No shares are issued; this is a company limited by guarantee.</p>
+                  <div className="flex items-center gap-2 max-w-sm">
+                    <input
+                      type="number"
+                      min="0"
+                      value={businessData.guaranteeMinimumContribution}
+                      onChange={(e) => handleBusinessChange('guaranteeMinimumContribution', e.target.value)}
+                      placeholder="e.g., 100000"
+                      className="flex-1 bg-slate-600 text-white rounded-lg px-4 py-2 border border-slate-500 focus:border-blue-500 focus:outline-none"
+                    />
+                    <select
+                      value={businessData.guaranteeCurrency}
+                      onChange={(e) => handleBusinessChange('guaranteeCurrency', e.target.value)}
+                      className="bg-slate-600 text-white rounded-lg px-3 py-2 border border-slate-500 focus:border-blue-500 focus:outline-none"
+                    >
+                      <option value="UGX">UGX</option>
+                      <option value="KES">KES</option>
+                      <option value="USD">USD</option>
+                      <option value="EUR">EUR</option>
+                    </select>
+                  </div>
+                </div>
+              )}
 
               <div className="bg-blue-900/20 border border-blue-500/30 p-4 rounded-lg">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-blue-300 font-semibold">Total Ownership</p>
-                    <p className={`text-sm mt-1 ${totalShare === 100 ? 'text-green-400' : 'text-blue-400'}`}>
-                      Current: {totalShare}% {totalShare === 100 && '✓'}
+                    <p className="text-blue-300 font-semibold">{isLimitedByGuarantee ? 'Total Guaranteed' : 'Total Ownership'}</p>
+                    <p className={`text-sm mt-1 ${isLimitedByGuarantee ? 'text-green-400' : (totalShare === 100 ? 'text-green-400' : 'text-blue-400')}`}>
+                      {isLimitedByGuarantee
+                        ? `${coOwners.reduce((sum, owner) => sum + Number(owner.contributionAmount || 0), 0).toLocaleString()} ${businessData.guaranteeCurrency}`
+                        : <>Current: {totalShare}% {totalShare === 100 && '✓'}</>}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-blue-300 font-semibold">Shareholders</p>
-                    <p className="text-blue-400 text-sm mt-1">{coOwners.length} / 5</p>
+                    <p className="text-blue-300 font-semibold">{isLimitedByGuarantee ? 'Guarantors' : 'Shareholders'}</p>
+                    <p className="text-blue-400 text-sm mt-1">{isLimitedByGuarantee ? `${coOwners.length} (no limit)` : `${coOwners.length} / ${shareholderLimit}`}</p>
                   </div>
                 </div>
               </div>
 
               {/* Current Shareholders */}
               <div className="space-y-3">
-                <h4 className="text-white font-semibold">Current Shareholders</h4>
+                <h4 className="text-white font-semibold">{isLimitedByGuarantee ? 'Current Guarantors' : 'Current Shareholders'}</h4>
                 {coOwners.length === 0 ? (
                   <div className="bg-slate-700/50 p-4 rounded-lg border border-slate-600 text-slate-400 text-center">
                     No shareholders added yet. Use the form below to add them.
@@ -904,21 +1085,42 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
 
                     <div className="flex items-center gap-3">
                       <div className="flex-1">
-                        <label className="text-slate-300 text-xs block mb-1">Ownership Share (%)</label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            value={owner.ownershipShare}
-                            onChange={(e) => updateCoOwner(owner.id, 'ownershipShare', parseInt(e.target.value) || 0)}
-                            placeholder="0"
-                            className="flex-1 bg-slate-600 text-white rounded px-3 py-2 border border-slate-500 focus:border-blue-500 focus:outline-none"
-                          />
-                          <span className="text-slate-400 text-sm font-semibold min-w-fit">
-                            {owner.ownershipShare}%
-                          </span>
-                        </div>
+                        {isLimitedByGuarantee ? (
+                          <>
+                            <label className="text-slate-300 text-xs block mb-1">Guarantee Contribution ({businessData.guaranteeCurrency})</label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                min={guaranteeMinimum}
+                                value={owner.contributionAmount}
+                                onChange={(e) => updateCoOwner(owner.id, 'contributionAmount', Number(e.target.value) || 0)}
+                                placeholder={String(guaranteeMinimum || 0)}
+                                className="flex-1 bg-slate-600 text-white rounded px-3 py-2 border border-slate-500 focus:border-blue-500 focus:outline-none"
+                              />
+                              {guaranteeMinimum > 0 && Number(owner.contributionAmount) < guaranteeMinimum && (
+                                <span className="text-amber-400 text-xs">Below minimum</span>
+                              )}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <label className="text-slate-300 text-xs block mb-1">Ownership Share (%)</label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={owner.ownershipShare}
+                                onChange={(e) => updateCoOwner(owner.id, 'ownershipShare', parseInt(e.target.value) || 0)}
+                                placeholder="0"
+                                className="flex-1 bg-slate-600 text-white rounded px-3 py-2 border border-slate-500 focus:border-blue-500 focus:outline-none"
+                              />
+                              <span className="text-slate-400 text-sm font-semibold min-w-fit">
+                                {owner.ownershipShare}%
+                              </span>
+                            </div>
+                          </>
+                        )}
                       </div>
                       {coOwners.length > 1 && (
                         <button
@@ -1064,6 +1266,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                       <option value="CFO">CFO</option>
                       <option value="CEO">CEO</option>
                       <option value="Partner">Partner</option>
+                      {isLimitedByGuarantee && <option value="Guarantor">Guarantor</option>}
                     </select>
 
                     <input
@@ -1074,38 +1277,62 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                       className="bg-slate-600 text-white rounded px-3 py-2 border border-slate-500 focus:border-blue-500 focus:outline-none text-sm"
                     />
 
-                    <input
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={newOwner.ownershipShare}
-                      onChange={(e) => setNewOwner({...newOwner, ownershipShare: parseInt(e.target.value) || 0})}
-                      placeholder="Ownership %"
-                      className="bg-slate-600 text-white rounded px-3 py-2 border border-slate-500 focus:border-blue-500 focus:outline-none text-sm"
-                    />
+                    {isLimitedByGuarantee ? (
+                      <input
+                        type="number"
+                        min={guaranteeMinimum}
+                        value={newOwner.contributionAmount}
+                        onChange={(e) => setNewOwner({...newOwner, contributionAmount: Number(e.target.value) || 0})}
+                        placeholder={`Contribution (min ${guaranteeMinimum || 0})`}
+                        className="bg-slate-600 text-white rounded px-3 py-2 border border-slate-500 focus:border-blue-500 focus:outline-none text-sm"
+                      />
+                    ) : (
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={newOwner.ownershipShare}
+                        onChange={(e) => setNewOwner({...newOwner, ownershipShare: parseInt(e.target.value) || 0})}
+                        placeholder="Ownership %"
+                        className="bg-slate-600 text-white rounded px-3 py-2 border border-slate-500 focus:border-blue-500 focus:outline-none text-sm"
+                      />
+                    )}
 
                     <button
                       onClick={addCoOwner}
-                      disabled={!newOwner.name || !newOwner.email || !newOwner.ownershipShare}
+                      disabled={!newOwner.name || !newOwner.email || (isLimitedByGuarantee ? !newOwner.contributionAmount : !newOwner.ownershipShare)}
                       title={
-                        !newOwner.name ? 'Enter shareholder name' :
+                        !newOwner.name ? 'Enter guarantor/shareholder name' :
                         !newOwner.email ? 'Select or enter email' :
-                        !newOwner.ownershipShare ? 'Enter ownership percentage' :
-                        ''
+                        isLimitedByGuarantee
+                          ? (!newOwner.contributionAmount ? 'Enter contribution amount' : '')
+                          : (!newOwner.ownershipShare ? 'Enter ownership percentage' : '')
                       }
                       className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white rounded px-4 py-2 font-semibold transition flex items-center justify-center gap-2 col-span-3"
                     >
                       <Plus className="w-4 h-4" />
-                      Add Shareholder
+                      {isLimitedByGuarantee ? 'Add Guarantor' : 'Add Shareholder'}
                     </button>
                   </div>
 
-                  {!newOwner.ownershipShare && newOwner.name && newOwner.email && (
-                    <p className="text-yellow-400 text-sm">⚠️ Please enter ownership percentage to enable Add button</p>
-                  )}
-
-                  {totalShare + newOwner.ownershipShare > 100 && (
-                    <p className="text-red-400 text-sm">⚠️ Total ownership would exceed 100%</p>
+                  {isLimitedByGuarantee ? (
+                    <>
+                      {!newOwner.contributionAmount && newOwner.name && newOwner.email && (
+                        <p className="text-yellow-400 text-sm">⚠️ Please enter a contribution amount to enable Add button</p>
+                      )}
+                      {guaranteeMinimum > 0 && newOwner.contributionAmount > 0 && newOwner.contributionAmount < guaranteeMinimum && (
+                        <p className="text-red-400 text-sm">⚠️ Contribution is below the {guaranteeMinimum.toLocaleString()} {businessData.guaranteeCurrency} minimum</p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {!newOwner.ownershipShare && newOwner.name && newOwner.email && (
+                        <p className="text-yellow-400 text-sm">⚠️ Please enter ownership percentage to enable Add button</p>
+                      )}
+                      {totalShare + newOwner.ownershipShare > 100 && (
+                        <p className="text-red-400 text-sm">⚠️ Total ownership would exceed 100%</p>
+                      )}
+                    </>
                   )}
                 </div>
               )}
@@ -1779,7 +2006,9 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
               <div className="space-y-3">
                 <h4 className="text-white font-bold flex items-center gap-2">
                   <PieChart className="w-5 h-5 text-blue-400" />
-                  Equity Distribution ({totalShare}%)
+                  {isLimitedByGuarantee
+                    ? `Guarantee Contributions (${coOwners.reduce((sum, owner) => sum + Number(owner.contributionAmount || 0), 0).toLocaleString()} ${businessData.guaranteeCurrency})`
+                    : `Equity Distribution (${totalShare}%)`}
                 </h4>
                 {isSoleProprietorship ? (
                   <div className="bg-blue-900/30 p-4 rounded-lg border border-blue-600/50 text-blue-200 text-center">
@@ -1787,7 +2016,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                   </div>
                 ) : coOwners.length === 0 ? (
                   <div className="bg-slate-700/50 p-4 rounded-lg border border-slate-600 text-slate-400 text-center">
-                    No shareholders added. You cannot save without at least one shareholder.
+                    {isLimitedByGuarantee ? 'No guarantors added. You cannot save without at least one guarantor.' : 'No shareholders added. You cannot save without at least one shareholder.'}
                   </div>
                 ) : (
                   coOwners.map((owner) => (
@@ -1798,24 +2027,36 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                           <p className="text-slate-400 text-sm">{owner.role} • {owner.email}</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-blue-400 font-bold text-lg">{owner.ownershipShare}%</p>
+                          <p className="text-blue-400 font-bold text-lg">
+                            {isLimitedByGuarantee ? `${Number(owner.contributionAmount || 0).toLocaleString()} ${businessData.guaranteeCurrency}` : `${owner.ownershipShare}%`}
+                          </p>
                         </div>
                       </div>
-                      <div className="w-full bg-slate-600 rounded-full h-2">
-                        <div
-                          className="bg-gradient-to-r from-blue-500 to-cyan-500 h-2 rounded-full"
-                          style={{ width: `${owner.ownershipShare}%` }}
-                        ></div>
-                      </div>
+                      {!isLimitedByGuarantee && (
+                        <div className="w-full bg-slate-600 rounded-full h-2">
+                          <div
+                            className="bg-gradient-to-r from-blue-500 to-cyan-500 h-2 rounded-full"
+                            style={{ width: `${owner.ownershipShare}%` }}
+                          ></div>
+                        </div>
+                      )}
                     </div>
                   ))
                 )}
               </div>
 
-              {!isSoleProprietorship && totalShare !== 100 && (
+              {!isSoleProprietorship && !isLimitedByGuarantee && totalShare !== 100 && (
                 <div className="bg-red-900/30 border border-red-500/50 p-4 rounded-lg">
                   <p className="text-red-300">
                     ⚠️ Ownership shares must total 100%. Currently: {totalShare}%
+                  </p>
+                </div>
+              )}
+
+              {isLimitedByGuarantee && coOwners.some(owner => Number(owner.contributionAmount || 0) < guaranteeMinimum) && (
+                <div className="bg-red-900/30 border border-red-500/50 p-4 rounded-lg">
+                  <p className="text-red-300">
+                    ⚠️ Every guarantor's contribution must be at least {guaranteeMinimum.toLocaleString()} {businessData.guaranteeCurrency}
                   </p>
                 </div>
               )}
@@ -1839,7 +2080,11 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                 </button>
                 <button
                   onClick={handleCreateProfile}
-                  disabled={(!isSoleProprietorship && (totalShare !== 100 || coOwners.length === 0)) || loading}
+                  disabled={(!isSoleProprietorship && (
+                    isLimitedByGuarantee
+                      ? (coOwners.length === 0 || coOwners.some(owner => Number(owner.contributionAmount || 0) < guaranteeMinimum))
+                      : (totalShare !== 100 || coOwners.length === 0)
+                  )) || loading}
                   className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-slate-600 disabled:to-slate-600 text-white py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 text-sm md:text-base"
                 >
                   {loading && <Loader className="w-4 h-4 animate-spin" />}

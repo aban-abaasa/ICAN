@@ -992,6 +992,13 @@ const CMMSModule = ({
   const [activeTab, _setActiveTab] = useState('company');
   const [, setSyncingPichin] = useState(false);
   const setActiveTab = (newTab) => { if (newTab !== activeTab) { onTabChange?.(activeTab); } _setActiveTab(newTab); };
+  // Set by a notification's "View Task" click so TasksManager can jump straight to that task.
+  const [pendingTaskId, setPendingTaskId] = useState(null);
+  const handleNotificationAction = (tab, relatedTaskId) => {
+    console.log(`🔔 Notification action triggered, navigating to: ${tab}`);
+    setActiveTab(tab);
+    if (relatedTaskId) setPendingTaskId(relatedTaskId);
+  };
   useEffect(() => { if (navRef) navRef.current = _setActiveTab; return () => { if (navRef) navRef.current = null; }; }, [navRef]);
   const [editingUser, setEditingUser] = useState(null);
   const [newlyAddedUserId, setNewlyAddedUserId] = useState(null);  // Track newly added user for UI highlight
@@ -2017,6 +2024,8 @@ const CMMSModule = ({
     const [isLoadingTasks, setIsLoadingTasks] = useState(false);
     const [expandedTaskId, setExpandedTaskId] = useState(null);
     const [taskFilter, setTaskFilter] = useState('all');
+    const [highlightedTaskId, setHighlightedTaskId] = useState(null);
+    const taskItemRefs = useRef({});
     const [progressDraft, setProgressDraft] = useState({}); // { [taskId]: { percentage, notes } }
 
     // State for tasks this user has assigned to others (progress tracking)
@@ -2057,6 +2066,34 @@ const CMMSModule = ({
         }
       }
     }, [companyIdToUse, canAssignJobs]);
+
+    // Jump to the task a "View Task" notification pointed at, once it's loaded.
+    useEffect(() => {
+      if (!pendingTaskId) return;
+      const inMyTasks = userTasks.some(t => t.id === pendingTaskId);
+      const inAssignedByMe = assignedByMeTasks.some(t => t.id === pendingTaskId);
+      if (!inMyTasks && !inAssignedByMe) return;
+
+      if (inMyTasks) {
+        setTaskFilter('all');
+        setTasksTab('tasks');
+        setExpandedTaskId(pendingTaskId);
+      } else {
+        setTasksTab('progress');
+      }
+      setHighlightedTaskId(pendingTaskId);
+      setPendingTaskId(null);
+
+      requestAnimationFrame(() => {
+        taskItemRefs.current[pendingTaskId]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }, [pendingTaskId, userTasks, assignedByMeTasks]);
+
+    useEffect(() => {
+      if (!highlightedTaskId) return;
+      const timer = setTimeout(() => setHighlightedTaskId(null), 4000);
+      return () => clearTimeout(timer);
+    }, [highlightedTaskId]);
 
     const loadUserMessages = useCallback(async () => {
       if (!selectedUserToMessage?.id) return;
@@ -2522,10 +2559,15 @@ const CMMSModule = ({
                   const isExpanded = expandedTaskId === task.id;
                   const isOverdue = task.due_date && task.days_until_due < 0;
 
+                  const isHighlighted = highlightedTaskId === task.id;
+
                   return (
                     <div
                       key={task.id}
-                      className={`glass-card border transition-all ${isOverdue ? 'border-red-500/50 bg-red-500/5' : 'border-slate-700'}`}
+                      ref={el => { taskItemRefs.current[task.id] = el; }}
+                      className={`glass-card border transition-all ${
+                        isHighlighted ? 'border-purple-400 ring-2 ring-purple-400/60' : isOverdue ? 'border-red-500/50 bg-red-500/5' : 'border-slate-700'
+                      }`}
                     >
                       <button
                         onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}
@@ -2913,7 +2955,13 @@ const CMMSModule = ({
                 </div>
               ) : (
                 assignedByMeTasks.map(task => (
-                  <div key={task.id} className="glass-card border border-slate-700 p-4">
+                  <div
+                    key={task.id}
+                    ref={el => { taskItemRefs.current[task.id] = el; }}
+                    className={`glass-card border p-4 transition-all ${
+                      highlightedTaskId === task.id ? 'border-purple-400 ring-2 ring-purple-400/60' : 'border-slate-700'
+                    }`}
+                  >
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <div className="flex-1 min-w-0">
                         <h4 className="text-white font-semibold text-sm truncate">{task.job_title}</h4>
@@ -7266,13 +7314,10 @@ const CMMSModule = ({
             <div className="flex items-center gap-3">
               {/* Notifications Bell */}
               {user?.id && notificationCompanyId && (
-                <NotificationsPanel 
-                  userId={user?.id} 
+                <NotificationsPanel
+                  userId={user?.id}
                   companyId={notificationCompanyId}
-                  onActionClick={(tab) => {
-                    console.log(`🔔 Notification action triggered, navigating to: ${tab}`);
-                    setActiveTab(tab);
-                  }}
+                  onActionClick={handleNotificationAction}
                 />
               )}
               {/* Commented out Show Details button */}
@@ -7712,12 +7757,9 @@ const CMMSModule = ({
           {/* Notifications Bell */}
           {userCompanyId && (
             <div className="hidden md:block"><NotificationsPanel
-              userId={user?.id} 
+              userId={user?.id}
               companyId={userCompanyId}
-              onActionClick={(tab) => {
-                console.log(`🔔 Notification action triggered, navigating to: ${tab}`);
-                setActiveTab(tab);
-              }}
+              onActionClick={handleNotificationAction}
             /></div>
           )}
 

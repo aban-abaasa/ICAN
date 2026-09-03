@@ -103,11 +103,18 @@ import {
   getUnreadNotificationCount,
   markNotificationAsRead,
   markAllNotificationsAsRead,
+  deleteNotification,
+  clearAllNotifications,
   subscribeToUserNotifications,
   getNotificationIcon,
   getNotificationColor,
   formatTimeAgo
 } from '../services/universalNotificationsService';
+import {
+  enableWalletPhoneAlerts,
+  disableWalletPhoneAlerts,
+  getWalletPhoneAlertsStatus
+} from '../services/walletPushService';
 import { getUserTrustGroups } from '../services/trustService';
 import { getAllAccessibleBusinessProfiles, getContributorNames } from '../services/pitchingService';
 import { CountryService } from '../services/countryService';
@@ -850,6 +857,8 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
   const [trustBoardroomOpenRequest, setTrustBoardroomOpenRequest] = useState(null);
+  const [phoneAlertsEnabled, setPhoneAlertsEnabled] = useState(false);
+  const [phoneAlertsBusy, setPhoneAlertsBusy] = useState(false);
   
   // Account Edit State
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -2353,6 +2362,30 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       setAiMessages([welcomeMessage]);
     }
   }, [showAIChat]);
+
+  // Reflect the real push-subscription state in the settings checkbox.
+  useEffect(() => {
+    getWalletPhoneAlertsStatus()
+      .then((status) => setPhoneAlertsEnabled(status.enabled))
+      .catch(() => {});
+  }, []);
+
+  // Tapping an OS-level wallet push notification focuses this tab (see
+  // sw.js's notificationclick handler) and posts this message so the app
+  // actually opens the wallet panel instead of just sitting on whatever
+  // screen happened to be showing.
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const handleMessage = (event) => {
+      if (event.data?.type === 'NOTIFICATION_CLICK') {
+        const url = event.data.url || '/wallet';
+        setSelectedDetail(null);
+        if (url.includes('wallet')) openFeaturePanel('wallet');
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', handleMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', handleMessage);
+  }, []);
 
   // Load universal notifications when notifications detail opens
   useEffect(() => {
@@ -5506,27 +5539,44 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-bold text-white">Notifications</h3>
-                  {unreadCount > 0 && (
-                    <button
-                      onClick={async () => {
-                        const result = await markAllNotificationsAsRead(userProfile?.id, notifications);
-                        if (result.success) {
-                          setUnreadCount(0);
-                          setNotifications(prev =>
-                            prev.map(n => ({
-                              ...n,
-                              is_read: true,
-                              read_at: new Date().toISOString()
-                            }))
-                          );
-                        }
-                      }}
-                      className="text-purple-400 hover:text-purple-300 text-xs flex items-center gap-1 transition-colors"
-                    >
-                      <CheckCheck className="w-3.5 h-3.5" />
-                      <span>Mark all read</span>
-                    </button>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={async () => {
+                          const result = await markAllNotificationsAsRead(userProfile?.id, notifications);
+                          if (result.success) {
+                            setUnreadCount(0);
+                            setNotifications(prev =>
+                              prev.map(n => ({
+                                ...n,
+                                is_read: true,
+                                read_at: new Date().toISOString()
+                              }))
+                            );
+                          }
+                        }}
+                        className="text-purple-400 hover:text-purple-300 text-xs flex items-center gap-1 transition-colors"
+                      >
+                        <CheckCheck className="w-3.5 h-3.5" />
+                        <span>Mark all read</span>
+                      </button>
+                    )}
+                    {notifications.length > 0 && (
+                      <button
+                        onClick={async () => {
+                          const result = await clearAllNotifications(userProfile?.id);
+                          if (result.success) {
+                            setNotifications([]);
+                            setUnreadCount(0);
+                          }
+                        }}
+                        className="text-white/40 hover:text-red-300 text-xs flex items-center gap-1 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Clear all</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Notifications List */}
@@ -5562,7 +5612,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                               )
                             );
                           }
-                          // Handle notification action.
+                          // Handle notification action -- take the user to the
+                          // relevant page. 'trust' also opens the right
+                          // boardroom group; 'wallet'/'cmms'/'pitchin' are
+                          // real feature panels in this app's tab system.
                           if (notification.action_tab === 'trust') {
                             const targetGroupId = getTrustBoardroomGroupIdFromNotification(notification);
 
@@ -5579,18 +5632,40 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                             return;
                           }
 
+                          if (['wallet', 'cmms', 'pitchin'].includes(notification.action_tab)) {
+                            setSelectedDetail(null);
+                            openFeaturePanel(notification.action_tab);
+                            return;
+                          }
+
                           if (notification.action_url) {
-                            console.log('Navigate to:', notification.action_url);
+                            window.location.assign(notification.action_url);
                           }
                         }}
                         className={`
-                          bg-slate-900/50 border rounded-lg p-4 cursor-pointer transition-all duration-200
+                          group relative bg-slate-900/50 border rounded-lg p-4 pr-10 cursor-pointer transition-all duration-200
                           hover:bg-slate-800/50 hover:border-purple-500/50
-                          ${!notification.is_read 
-                            ? 'border-purple-500/30 bg-purple-500/5' 
+                          ${!notification.is_read
+                            ? 'border-purple-500/30 bg-purple-500/5'
                             : 'border-slate-700/50'}
                         `}
                       >
+                        <button
+                          onClick={async (event) => {
+                            event.stopPropagation();
+                            const result = await deleteNotification(notification);
+                            if (result.success) {
+                              setNotifications(prev => prev.filter(n => n.id !== notification.id));
+                              if (!notification.is_read) {
+                                setUnreadCount(prev => Math.max(0, prev - 1));
+                              }
+                            }
+                          }}
+                          title="Delete"
+                          className="absolute right-2 top-2 rounded p-1 text-white/30 opacity-0 hover:bg-white/10 hover:text-red-300 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                         <div className="flex items-start gap-3">
                           {/* Icon */}
                           <div
@@ -8546,8 +8621,30 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     <span className="text-slate-300 text-sm flex-1">SMS alerts</span>
                   </label>
                   <label className="flex items-center gap-3 px-4 py-3 bg-slate-700/20 hover:bg-slate-700/30 border border-slate-600 rounded-lg cursor-pointer transition">
-                    <input type="checkbox" defaultChecked className="w-4 h-4 rounded text-indigo-500" />
-                    <span className="text-slate-300 text-sm flex-1">Push notifications</span>
+                    <input
+                      type="checkbox"
+                      checked={phoneAlertsEnabled}
+                      disabled={phoneAlertsBusy}
+                      onChange={async (event) => {
+                        const wantsEnabled = event.target.checked;
+                        setPhoneAlertsBusy(true);
+                        try {
+                          if (wantsEnabled) {
+                            await enableWalletPhoneAlerts();
+                            setPhoneAlertsEnabled(true);
+                          } else {
+                            await disableWalletPhoneAlerts();
+                            setPhoneAlertsEnabled(false);
+                          }
+                        } catch (error) {
+                          console.error('Push notification toggle failed:', error);
+                        } finally {
+                          setPhoneAlertsBusy(false);
+                        }
+                      }}
+                      className="w-4 h-4 rounded text-indigo-500"
+                    />
+                    <span className="text-slate-300 text-sm flex-1">Push notifications (phone alerts)</span>
                   </label>
                 </div>
               </div>

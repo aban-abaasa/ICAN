@@ -102,6 +102,18 @@ export const publishBusinessAsSupplier = async (businessProfileId, supplierType 
   return error ? { success: false, error: error.message } : { success: true, data };
 };
 
+// Lets Business Profile creation auto-fill the "supplier" toggle when the
+// signed-in user already proves it elsewhere (an existing Supermarketa
+// supplier account, or a business profile already published to the shared
+// supplier_directory) -- see backend/CMMS_SUPPLIER_MARKETPLACE_SMART_MATCH.sql.
+// Manual fill still works for anyone this returns has_existing_supplier: false for.
+export const getMySupplierHint = async () => {
+  const sb = db();
+  if (!sb) return { data: { has_existing_supplier: false }, error: null };
+  const { data, error } = await sb.rpc('cmms_get_my_supplier_hint');
+  return error ? { data: { has_existing_supplier: false }, error } : { data: data || { has_existing_supplier: false }, error: null };
+};
+
 // Existing administration and payroll consumers share this service. Keep
 // their legacy access helpers alongside the new business-management APIs.
 export const getBusinessAccessMembers = async (businessProfileId) => {
