@@ -24,6 +24,7 @@ const taxRulesRoutes = require('./routes/taxRulesRoutes');
 const storageRoutes = require('./routes/storageRoutes');
 const cron = require('node-cron');
 const { refreshGlobalInflation } = require('./services/inflationRefreshService');
+const { processPendingPaydayAdvisories } = require('./services/cmmsPaydayAdvisoryService');
 
 // ES6 module imports for email routes
 // pinResetRoutes.js is intentionally NOT mounted — the dev-panel-reviewed
@@ -205,6 +206,19 @@ loadRoutesAndStartServer();
 refreshGlobalInflation().catch(err => console.error('[inflation] Initial refresh failed:', err.message));
 cron.schedule('0 3 * * *', () => {
   refreshGlobalInflation().catch(err => console.error('[inflation] Scheduled refresh failed:', err.message));
+});
+
+// ==========================================
+// CMMS Payday AI Advisory Worker
+// Every payroll payment queues a fact-only "today is payday" notification
+// inline (see CMMS_PAYDAY_ADVISORY_NOTIFICATIONS.sql); this enriches it with
+// a one-line AI recommendation a few seconds later, off the payment's own
+// transaction. Runs every 2 minutes — frequent enough that employees see
+// the advice land almost immediately after their fact notification.
+// ==========================================
+processPendingPaydayAdvisories().catch(err => console.error('[payday-advisory] Initial run failed:', err.message));
+cron.schedule('*/2 * * * *', () => {
+  processPendingPaydayAdvisories().catch(err => console.error('[payday-advisory] Scheduled run failed:', err.message));
 });
 
 module.exports = app;
