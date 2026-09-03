@@ -66,7 +66,9 @@ const CMMSModule = ({
   currentJourneyStage,
   user = null,
   navRef = null,
-  onTabChange = null
+  onTabChange = null,
+  openRequest = null,
+  onOpenRequestConsumed = null
 }) => {
   // ============================================
   // ACCESS CONTROL & AUTHORIZATION
@@ -999,6 +1001,16 @@ const CMMSModule = ({
     setActiveTab(tab);
     if (relatedTaskId) setPendingTaskId(relatedTaskId);
   };
+  // Deep-link request from a parent (e.g. MobileView's universal notifications
+  // list, where the CMMS notification bell shown here isn't the one the user
+  // clicked) asking to open a specific tab / task once this module is mounted.
+  useEffect(() => {
+    if (!openRequest) return;
+    if (openRequest.tab) setActiveTab(openRequest.tab);
+    if (openRequest.taskId) setPendingTaskId(openRequest.taskId);
+    onOpenRequestConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openRequest]);
   useEffect(() => { if (navRef) navRef.current = _setActiveTab; return () => { if (navRef) navRef.current = null; }; }, [navRef]);
   const [editingUser, setEditingUser] = useState(null);
   const [newlyAddedUserId, setNewlyAddedUserId] = useState(null);  // Track newly added user for UI highlight

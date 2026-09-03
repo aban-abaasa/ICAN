@@ -857,6 +857,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
   const [trustBoardroomOpenRequest, setTrustBoardroomOpenRequest] = useState(null);
+  const [cmmsOpenRequest, setCmmsOpenRequest] = useState(null);
   const [phoneAlertsEnabled, setPhoneAlertsEnabled] = useState(false);
   const [phoneAlertsBusy, setPhoneAlertsBusy] = useState(false);
   
@@ -5632,6 +5633,29 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                             return;
                           }
 
+                          // CMMS notifications carry the CMSSModule's own internal
+                          // tab id in action_tab (e.g. 'tasks'), not the 'cmms'
+                          // panel id, so they never matched the whitelist below.
+                          // Open the CMMS panel and forward the internal tab
+                          // (and, for a task notification, the specific task id
+                          // it points at) so "View Task" actually lands there.
+                          if (notification.source === 'cmms_notifications') {
+                            setSelectedDetail(null);
+                            openFeaturePanel('cmms');
+                            const innerTab = notification.action_tab && notification.action_tab !== 'cmms'
+                              ? notification.action_tab
+                              : null;
+                            const relatedTaskId = notification.raw?.related_task_id || null;
+                            if (innerTab || relatedTaskId) {
+                              setCmmsOpenRequest({
+                                tab: innerTab || 'tasks',
+                                taskId: relatedTaskId,
+                                requestId: `${notification.id}:${Date.now()}`
+                              });
+                            }
+                            return;
+                          }
+
                           if (['wallet', 'cmms', 'pitchin'].includes(notification.action_tab)) {
                             setSelectedDetail(null);
                             openFeaturePanel(notification.action_tab);
@@ -7978,6 +8002,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               user={userProfile}
               navRef={cmssNavRef}
               onTabChange={(prev) => handlePanelTabChange('cmms', prev)}
+              openRequest={cmmsOpenRequest}
+              onOpenRequestConsumed={() => setCmmsOpenRequest(null)}
             />
           </div>
         </div>
