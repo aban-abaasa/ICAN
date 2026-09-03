@@ -29,6 +29,12 @@ const dropshipStoreMatch = window.location.pathname.match(/^\/store\/([^/]+)/);
 // above. Job applicants submit their application right on this page with
 // no account at all (not even a "sign in to interact" prompt), since the
 // whole point of the feature is that applying never requires an account.
+// Rendered outside <ThemeProvider> (below) rather than inside it like the
+// other share links: ThemeProvider doesn't just hand down theme colors via
+// context, it reaches out and sets an inline background-color directly on
+// <html>/<body> and injects a page-wide stylesheet that repaints every
+// stock Tailwind color class -- a hardcoded background this standalone,
+// bring-your-own-palette page must never inherit.
 const cmmsNoticeBoardMatch = window.location.pathname.match(/^\/notices\/([^/]+)/);
 // A stale service-worker/browser cache can leave a phone holding an
 // index.html that points at a JS chunk hash the last deploy removed from the
@@ -102,19 +108,24 @@ class AppErrorBoundary extends React.Component {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <AppErrorBoundary>
-      <ThemeProvider>
-        <Suspense fallback={<Loading />}>
-          {isAttendanceQrPath ? <PublicStaffAttendanceCheckIn /> : isVisitorQrPath ? <PublicVisitorCheckIn /> : (
+      <Suspense fallback={<Loading />}>
+        {isAttendanceQrPath ? <PublicStaffAttendanceCheckIn />
+          : isVisitorQrPath ? <PublicVisitorCheckIn />
+          : cmmsNoticeBoardMatch ? (
             <AuthProvider>
-              {pitchShareMatch ? <PublicPitchViewer pitchId={pitchShareMatch[1]} />
-                : statusShareMatch ? <PublicStatusViewer statusId={statusShareMatch[1]} />
-                : dropshipStoreMatch ? <PublicDropshipStorefront businessProfileId={dropshipStoreMatch[1]} />
-                : cmmsNoticeBoardMatch ? <PublicCompanyNoticeBoard companyId={cmmsNoticeBoardMatch[1]} />
-                : <App />}
+              <PublicCompanyNoticeBoard companyId={cmmsNoticeBoardMatch[1]} />
             </AuthProvider>
+          ) : (
+            <ThemeProvider>
+              <AuthProvider>
+                {pitchShareMatch ? <PublicPitchViewer pitchId={pitchShareMatch[1]} />
+                  : statusShareMatch ? <PublicStatusViewer statusId={statusShareMatch[1]} />
+                  : dropshipStoreMatch ? <PublicDropshipStorefront businessProfileId={dropshipStoreMatch[1]} />
+                  : <App />}
+              </AuthProvider>
+            </ThemeProvider>
           )}
-        </Suspense>
-      </ThemeProvider>
+      </Suspense>
     </AppErrorBoundary>
   </React.StrictMode>,
 );
