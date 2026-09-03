@@ -1,6 +1,12 @@
-// Supabase Edge Function: deliver a shared ICANera Wallet notification.
-// Configure this as a Database Webhook for INSERT on
-// public.ican_wallet_inbox_notifications. The webhook body is the inserted row.
+// Supabase Edge Function: deliver an ICAN push notification.
+// Configured as the HTTP target for two Postgres triggers (pg_net):
+//   - ican_dispatch_wallet_push_webhook on public.ican_wallet_inbox_notifications
+//     (see ICAN_SHARED_WALLET_PUSH_SETUP.sql)
+//   - ican_dispatch_cmms_push_webhook on public.cmms_notifications
+//     (see ICAN_CMMS_PUSH_NOTIFICATIONS.sql)
+// Both share this one relay and the one ican_wallet_push_subscriptions
+// table of registered devices - a signed-in user who has enabled phone
+// alerts gets push for either source without a separate opt-in.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import webpush from 'npm:web-push@3.6.7';
 
@@ -14,6 +20,11 @@ const vapidSubject = Deno.env.get('VAPID_SUBJECT') || 'mailto:security@icanera.c
 webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
 const admin = createClient(supabaseUrl, serviceRoleKey);
 
+const SOURCE_DEFAULTS: Record<string, { title: string; url: string }> = {
+  wallet: { title: 'ICANera Wallet', url: '/wallet' },
+  cmms: { title: 'ICAN CMMS', url: '/cmms' },
+};
+
 Deno.serve(async (request) => {
   if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 });
   if (webhookSecret && request.headers.get('x-ican-wallet-webhook-secret') !== webhookSecret) {
@@ -21,12 +32,16 @@ Deno.serve(async (request) => {
   }
 
   const event = await request.json();
-  // Supabase Database Webhooks send the row in "record". Accept a direct
-  // record too so the endpoint can be exercised safely in development.
+  // Supabase Database Webhooks send the row in "record". The pg_net
+  // triggers in this project post the record (or a hand-built object)
+  // directly - accept both shapes.
   const notification = event.record || event;
   if (!notification?.recipient_user_id || !notification?.id) {
-    return new Response('Missing wallet notification record', { status: 400 });
+    return new Response('Missing notification record', { status: 400 });
   }
+
+  const source = notification.source || 'wallet';
+  const defaults = SOURCE_DEFAULTS[source] || SOURCE_DEFAULTS.wallet;
 
   const { data: subscriptions, error } = await admin
     .from('ican_wallet_push_subscriptions')
@@ -36,10 +51,15 @@ Deno.serve(async (request) => {
   if (error) return Response.json({ error: error.message }, { status: 500 });
 
   const payload = JSON.stringify({
-    title: notification.title || 'ICANera Wallet',
-    body: notification.message || 'You have a new wallet notification.',
-    tag: `ican-wallet-${notification.id}`,
-    url: '/wallet',
+    title: notification.title || defaults.title,
+    body: notification.message || 'You have a new notification.',
+    tag: `ican-${source}-${notification.id}`,
+    url: defaults.url,
+    data: {
+      source,
+      actionTab: notification.action_tab || null,
+      relatedTaskId: notification.related_task_id || null,
+    },
   });
 
   const deliveries = await Promise.all((subscriptions || []).map(async (device) => {
@@ -55,5 +75,5 @@ Deno.serve(async (request) => {
     }
   }));
 
-  return Response.json({ notificationId: notification.id, deliveries });
+  return Response.json({ notificationId: notification.id, source, deliveries });
 });

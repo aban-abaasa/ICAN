@@ -66,15 +66,16 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Background wallet alerts for an installed PWA. The server sends only a
-// minimal title/body/reference; wallet balances are never included in push.
+// Background alerts for an installed PWA (wallet + CMMS). The server sends
+// only a minimal title/body/reference; wallet balances are never included
+// in push.
 self.addEventListener('push', (event) => {
   const payload = event.data ? event.data.json() : {};
-  event.waitUntil(self.registration.showNotification(payload.title || 'ICANera Wallet', {
-    body: payload.body || 'You have a new wallet notification.',
+  event.waitUntil(self.registration.showNotification(payload.title || 'ICANera', {
+    body: payload.body || 'You have a new notification.',
     icon: '/icons/icon-192x192.png', badge: '/icons/icon-192x192.png',
-    tag: payload.tag || 'ican-wallet', renotify: true, vibrate: [120, 60, 120],
-    data: { url: payload.url || '/wallet' },
+    tag: payload.tag || 'ican-notification', renotify: true, vibrate: [120, 60, 120],
+    data: { url: payload.url || '/wallet', ...(payload.data || {}) },
   }));
 });
 
@@ -84,13 +85,14 @@ self.addEventListener('push', (event) => {
 // installed mobile PWA.
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = event.notification.data?.url || '/wallet';
+  const data = event.notification.data || {};
+  const targetUrl = data.url || '/wallet';
   event.waitUntil((async () => {
     const windowClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const client of windowClients) {
       const clientUrl = new URL(client.url);
       if (clientUrl.origin === self.location.origin) {
-        client.postMessage({ type: 'NOTIFICATION_CLICK', url: targetUrl });
+        client.postMessage({ type: 'NOTIFICATION_CLICK', ...data, url: targetUrl });
         return client.focus();
       }
     }

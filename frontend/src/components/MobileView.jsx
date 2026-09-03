@@ -2379,8 +2379,19 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     if (!('serviceWorker' in navigator)) return;
     const handleMessage = (event) => {
       if (event.data?.type === 'NOTIFICATION_CLICK') {
-        const url = event.data.url || '/wallet';
+        const { url = '/wallet', source, actionTab, relatedTaskId } = event.data;
         setSelectedDetail(null);
+        if (source === 'cmms' || url.includes('cmms')) {
+          openFeaturePanel('cmms');
+          if (actionTab || relatedTaskId) {
+            setCmmsOpenRequest({
+              tab: actionTab || 'tasks',
+              taskId: relatedTaskId || null,
+              requestId: `push:${Date.now()}`
+            });
+          }
+          return;
+        }
         if (url.includes('wallet')) openFeaturePanel('wallet');
       }
     };
