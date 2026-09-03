@@ -332,10 +332,16 @@ export const requestSalaryAdvance = async (cmmsCompanyId, amount, currency = nul
   return error ? { success: false, error: error.message } : { success: true, data };
 };
 
+// Self-scoped by employee_user_id = auth.uid() inside the function itself
+// (see backend/CMMS_MY_SALARY_ADVANCES_SELF_SCOPE.sql) rather than a plain
+// table read: business_salary_advances_read's RLS also lets a Payroll
+// -> Approve holder through for the admin panel, which would leak every
+// co-worker's requests into this "my own advances" list for anyone who
+// both requests advances and manages them somewhere.
 export const getMySalaryAdvances = async () => {
   const sb = db();
   if (!sb) return { data: [], error: null };
-  const { data, error } = await sb.from('business_salary_advances').select('*').order('requested_at', { ascending: false });
+  const { data, error } = await sb.rpc('get_my_salary_advances');
   return { data: data || [], error };
 };
 
