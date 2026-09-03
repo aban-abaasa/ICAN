@@ -34,30 +34,53 @@ export const uploadToR2 = async ({ file, folder, accessToken }) => {
     const contentType = file.type || 'application/octet-stream';
     const backendUrl = getBackendUrl();
 
-    const presignRes = await fetch(`${backendUrl}/api/storage/presign-upload`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({ folder, filename, contentType }),
-    });
+    let presignRes;
+    try {
+      presignRes = await fetch(`${backendUrl}/api/storage/presign-upload`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ folder, filename, contentType }),
+      });
+    } catch (networkError) {
+      // A bare "Failed to fetch" here gives no clue whether this call or
+      // the R2 PUT below is the one that actually failed -- prefix it so
+      // the two are distinguishable when this shows up in an alert().
+      console.error('R2 upload — presign request network error:', networkError);
+      return { success: false, error: `Could not reach the upload server: ${networkError.message}` };
+    }
 
-    const presignData = await presignRes.json();
+    let presignData;
+    try {
+      presignData = await presignRes.json();
+    } catch (parseError) {
+      // Non-JSON/empty body still has a real HTTP status -- surface that
+      // instead of the opaque "Unexpected end of JSON input" message.
+      console.error('R2 upload — presign response was not JSON:', parseError);
+      return { success: false, error: `Upload server returned an unexpected response (HTTP ${presignRes.status}). Please try again in a moment.` };
+    }
     if (!presignRes.ok || !presignData?.success) {
-      return { success: false, error: presignData?.error || 'Failed to get upload URL' };
+      return { success: false, error: presignData?.error || `Failed to get upload URL (HTTP ${presignRes.status})` };
     }
 
     const { key, uploadUrl } = presignData;
 
-    const putRes = await fetch(uploadUrl, {
-      method: 'PUT',
-      headers: { 'Content-Type': contentType },
-      body: file,
-    });
+    let putRes;
+    try {
+      putRes = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': contentType },
+        body: file,
+      });
+    } catch (networkError) {
+      console.error('R2 upload — storage PUT network error:', networkError);
+      return { success: false, error: `Could not upload to storage: ${networkError.message}` };
+    }
 
     if (!putRes.ok) {
-      return { success: false, error: `Upload failed (${putRes.status})` };
+      return { success: false, error: `Upload to storage failed (HTTP ${putRes.status})` };
     }
 
     return { success: true, key, url: toR2Value(key) };

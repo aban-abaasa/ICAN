@@ -148,17 +148,27 @@ export const submitPublicJobApplication = async ({
   resumeUrl,
   resumePath,
 }) => {
-  const { data, error } = await supabase.rpc('fn_submit_public_job_application', {
-    p_job_posting_id: jobPostingId,
-    p_applicant_name: applicantName,
-    p_applicant_email: applicantEmail,
-    p_applicant_phone: applicantPhone || null,
-    p_cover_note: coverNote || null,
-    p_resume_url: resumeUrl || null,
-    p_resume_path: resumePath || null,
-  });
-  if (error) return { success: false, error: error.message };
-  return { success: true, referenceCode: data?.[0]?.reference_code };
+  try {
+    const { data, error } = await supabase.rpc('fn_submit_public_job_application', {
+      p_job_posting_id: jobPostingId,
+      p_applicant_name: applicantName,
+      p_applicant_email: applicantEmail,
+      p_applicant_phone: applicantPhone || null,
+      p_cover_note: coverNote || null,
+      p_resume_url: resumeUrl || null,
+      p_resume_path: resumePath || null,
+    });
+    if (error) return { success: false, error: error.message };
+    return { success: true, referenceCode: data?.[0]?.reference_code };
+  } catch (error) {
+    // supabase-js can throw a raw fetch/JSON-parse error here instead of
+    // returning it as { error } -- e.g. "Unexpected end of JSON input" if
+    // Supabase's REST endpoint is unreachable or returns an empty body.
+    // Prefixing makes that distinguishable from a resume-upload failure,
+    // which fails earlier in the same submit flow with an unprefixed message.
+    console.error('submitPublicJobApplication RPC error:', error);
+    return { success: false, error: `Could not reach the application server (${error.message || 'network error'}). Please check your connection and try again.` };
+  }
 };
 
 export const trackPublicJobApplication = async (referenceCode, contact) => {
@@ -188,23 +198,46 @@ export const uploadPublicResume = async (file) => {
     }
 
     const backendUrl = getBackendUrl();
-    const presignRes = await fetch(`${backendUrl}/api/storage/presign-upload-public`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename: file.name, contentType: file.type }),
-    });
-    const presignData = await presignRes.json();
-    if (!presignRes.ok || !presignData?.success) {
-      return { success: false, error: presignData?.error || 'Failed to get upload URL' };
+    let presignRes;
+    try {
+      presignRes = await fetch(`${backendUrl}/api/storage/presign-upload-public`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, contentType: file.type }),
+      });
+    } catch (networkError) {
+      console.error('Public resume upload — presign request network error:', networkError);
+      return { success: false, error: `Could not reach the upload server: ${networkError.message}` };
     }
 
-    const putRes = await fetch(presignData.uploadUrl, {
-      method: 'PUT',
-      headers: { 'Content-Type': file.type },
-      body: file,
-    });
+    let presignData;
+    try {
+      presignData = await presignRes.json();
+    } catch (parseError) {
+      // A non-JSON/empty body (e.g. a platform-level error page) still has
+      // a real HTTP status -- surface that instead of the opaque
+      // "Unexpected end of JSON input" browser message, which gives no clue
+      // which request failed or why.
+      console.error('Public resume upload — presign response was not JSON:', parseError);
+      return { success: false, error: `Upload server returned an unexpected response (HTTP ${presignRes.status}). Please try again in a moment.` };
+    }
+    if (!presignRes.ok || !presignData?.success) {
+      return { success: false, error: presignData?.error || `Failed to get upload URL (HTTP ${presignRes.status})` };
+    }
+
+    let putRes;
+    try {
+      putRes = await fetch(presignData.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+    } catch (networkError) {
+      console.error('Public resume upload — storage PUT network error:', networkError);
+      return { success: false, error: `Could not upload to storage: ${networkError.message}` };
+    }
     if (!putRes.ok) {
-      return { success: false, error: `Upload failed (${putRes.status})` };
+      return { success: false, error: `Upload to storage failed (HTTP ${putRes.status})` };
     }
 
     return { success: true, key: presignData.key, url: `r2://${presignData.key}` };
