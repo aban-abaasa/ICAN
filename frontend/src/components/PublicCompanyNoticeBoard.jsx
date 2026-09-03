@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import {
   Megaphone, Briefcase, MapPin, Calendar, Users, FileText, X, Loader,
-  AlertCircle, CheckCircle2, Search, Building2, ArrowLeft, Upload, Share2, Check
+  AlertCircle, CheckCircle2, Search, Building2, ArrowLeft, Upload, Share2,
+  Check, ChevronRight, Clock
 } from 'lucide-react';
 import cmmsAnnouncementsService from '../services/cmmsAnnouncementsService';
 
@@ -14,12 +15,25 @@ const EMPLOYMENT_LABELS = {
   volunteer: 'Volunteer',
 };
 
+const STATUS_STYLES = {
+  submitted: 'bg-slate-100 text-slate-700',
+  under_review: 'bg-amber-100 text-amber-800',
+  shortlisted: 'bg-blue-100 text-blue-800',
+  interview: 'bg-violet-100 text-violet-800',
+  hired: 'bg-emerald-100 text-emerald-800',
+  rejected: 'bg-red-100 text-red-700',
+  withdrawn: 'bg-slate-100 text-slate-500',
+};
+
 /**
  * The company's public notice board -- no ICAN account required. Rendered
  * from main.jsx for /notices/:companyId, same "share link needs no login"
- * pattern as PublicPitchViewer/PublicDropshipStorefront. Job applications
- * are submitted here directly (not gated behind a sign-in prompt) since
- * the whole point is that applicants never need an account.
+ * pattern as PublicPitchViewer/PublicDropshipStorefront. Unlike the rest of
+ * ICAN's dark, app-like public pages, this one is deliberately a clean,
+ * light "classic" corporate look -- a company's careers/notice board reads
+ * as a trustworthy business page, not a social feed. Job applications are
+ * submitted here directly (not gated behind a sign-in prompt) since the
+ * whole point is that applicants never need an account.
  */
 const PublicCompanyNoticeBoard = ({ companyId }) => {
   const [company, setCompany] = useState(null);
@@ -120,42 +134,49 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <Loader className="w-8 h-8 text-purple-400 animate-spin" />
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Loader className="w-8 h-8 text-indigo-500 animate-spin" />
       </div>
     );
   }
 
   if (notFound) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-4 p-6 text-center">
-        <AlertCircle className="w-14 h-14 text-slate-500" />
-        <p className="text-white text-lg font-semibold">This notice board isn't available</p>
-        <button onClick={goToApp} className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-semibold transition">Open ICANEra</button>
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4 p-6 text-center animate-fadeIn">
+        <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center">
+          <AlertCircle className="w-8 h-8 text-slate-400" />
+        </div>
+        <p className="text-slate-900 text-lg font-semibold">This notice board isn't available</p>
+        <button
+          onClick={goToApp}
+          className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold transition-all hover:scale-[1.02] active:scale-[0.98] shadow-sm"
+        >
+          Open ICANEra
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
-      <header className="border-b border-white/10 bg-slate-900/60 backdrop-blur sticky top-0 z-20">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-4">
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      <header className="border-b border-slate-200 bg-white/90 backdrop-blur sticky top-0 z-20 animate-fadeInDown">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-4 pb-2 flex items-center gap-3.5">
           {company.logo_url ? (
-            <img src={company.logo_url} alt={company.company_name} className="w-12 h-12 rounded-xl object-cover border border-white/10" />
+            <img src={company.logo_url} alt={company.company_name} className="w-12 h-12 rounded-xl object-cover border border-slate-200 shadow-sm flex-shrink-0" />
           ) : (
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center font-bold text-lg">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center font-bold text-lg text-white shadow-sm flex-shrink-0">
               {company.company_name?.charAt(0)?.toUpperCase() || <Building2 className="w-6 h-6" />}
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <h1 className="text-lg font-bold truncate">{company.company_name}</h1>
-            <p className="text-xs text-gray-400 truncate">
+            <h1 className="text-lg font-extrabold tracking-tight text-slate-900 truncate">{company.company_name}</h1>
+            <p className="text-xs text-slate-500 truncate">
               {[company.industry, company.location].filter(Boolean).join(' · ') || 'Notice board'}
             </p>
           </div>
-          <span className="text-[10px] uppercase tracking-wide text-gray-500 hidden sm:block">via ICANEra</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 bg-slate-100 px-2 py-1 rounded-full hidden sm:block flex-shrink-0">via ICANEra</span>
         </div>
-        <div className="max-w-4xl mx-auto px-4 flex gap-1 border-t border-white/5">
+        <nav className="max-w-5xl mx-auto px-4 sm:px-6 flex gap-1 overflow-x-auto">
           {[
             { id: 'notices', label: 'Notices', icon: Megaphone },
             { id: 'careers', label: 'Careers', icon: Briefcase },
@@ -164,23 +185,29 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
             <button
               key={tab.id}
               onClick={() => setSection(tab.id)}
-              className={`px-4 py-2.5 text-sm font-semibold flex items-center gap-1.5 border-b-2 transition ${section === tab.id ? 'border-purple-400 text-white' : 'border-transparent text-gray-400 hover:text-white'}`}
+              className={`px-3.5 sm:px-4 py-2.5 text-sm font-semibold flex items-center gap-1.5 border-b-2 whitespace-nowrap transition-colors ${section === tab.id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
             >
               <tab.icon className="w-4 h-4" /> {tab.label}
             </button>
           ))}
-        </div>
+        </nav>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 py-6">
-        {section === 'notices' && (
-          <NoticeList notices={notices} onSelect={(notice) => openDetail(notice, setSelectedNotice)} />
-        )}
-        {section === 'careers' && (
-          <JobList jobs={jobs} onSelect={(job) => openDetail(job, setSelectedJob)} />
-        )}
-        {section === 'track' && <TrackApplication />}
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-7">
+        <div key={section} className="animate-fadeInUp" style={{ animationDuration: '0.35s' }}>
+          {section === 'notices' && (
+            <NoticeList notices={notices} onSelect={(notice) => openDetail(notice, setSelectedNotice)} />
+          )}
+          {section === 'careers' && (
+            <JobList jobs={jobs} onSelect={(job) => openDetail(job, setSelectedJob)} />
+          )}
+          {section === 'track' && <TrackApplication />}
+        </div>
       </main>
+
+      <footer className="text-center text-xs text-slate-400 pb-8 pt-2">
+        Powered by <button onClick={goToApp} className="font-semibold text-slate-500 hover:text-indigo-600 transition-colors">ICANEra</button>
+      </footer>
 
       {selectedNotice && <NoticeDetailModal notice={selectedNotice} onClose={() => setSelectedNotice(null)} onShare={handleShare} />}
       {selectedJob && <JobDetailModal job={selectedJob} onClose={() => setSelectedJob(null)} onShare={handleShare} />}
@@ -188,23 +215,92 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   );
 };
 
+const EmptyState = ({ icon: Icon, text }) => (
+  <div className="text-center py-20 animate-fadeIn">
+    <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
+      <Icon className="w-7 h-7 text-slate-400" />
+    </div>
+    <p className="text-slate-500 text-sm">{text}</p>
+  </div>
+);
+
 const NoticeList = ({ notices, onSelect }) => {
   if (notices.length === 0) {
-    return (
-      <div className="text-center py-16 text-gray-500">
-        <Megaphone className="w-10 h-10 mx-auto mb-3 text-gray-700" />
-        No public notices right now. Check back later.
-      </div>
-    );
+    return <EmptyState icon={Megaphone} text="No public notices right now. Check back later." />;
   }
   return (
-    <div className="grid sm:grid-cols-2 gap-4">
-      {notices.map((notice) => (
-        <button key={notice.id} onClick={() => onSelect(notice)} className="text-left glass-card p-4 border border-white/10 hover:border-purple-400/50 transition">
-          {notice.poster_url && <img src={notice.poster_url} alt="" className="w-full h-36 object-cover rounded-lg mb-3" />}
-          <h3 className="font-semibold text-white">{notice.title}</h3>
-          {notice.summary && <p className="text-sm text-gray-400 mt-1 line-clamp-2">{notice.summary}</p>}
-          <p className="text-xs text-gray-500 mt-2">{notice.published_at ? new Date(notice.published_at).toLocaleDateString() : ''}</p>
+    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+      {notices.map((notice, i) => (
+        <button
+          key={notice.id}
+          onClick={() => onSelect(notice)}
+          style={{ animationDelay: `${Math.min(i, 8) * 60}ms`, animationFillMode: 'backwards' }}
+          className="group text-left bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 hover:border-indigo-200 animate-fadeInUp"
+        >
+          <div className="aspect-video w-full overflow-hidden bg-slate-100">
+            {notice.poster_url ? (
+              <img src={notice.poster_url} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <Megaphone className="w-8 h-8 text-slate-300" />
+              </div>
+            )}
+          </div>
+          <div className="p-4">
+            <h3 className="font-bold text-slate-900 line-clamp-2">{notice.title}</h3>
+            {notice.summary && <p className="text-sm text-slate-500 mt-1 line-clamp-2">{notice.summary}</p>}
+            <p className="text-xs text-slate-400 mt-3 flex items-center gap-1">
+              <Clock className="w-3 h-3" /> {notice.published_at ? new Date(notice.published_at).toLocaleDateString() : ''}
+            </p>
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+};
+
+const JobList = ({ jobs, onSelect }) => {
+  if (jobs.length === 0) {
+    return <EmptyState icon={Briefcase} text="No open positions right now. Check back later." />;
+  }
+  return (
+    <div className="space-y-3">
+      {jobs.map((job, i) => (
+        <button
+          key={job.id}
+          onClick={() => onSelect(job)}
+          style={{ animationDelay: `${Math.min(i, 8) * 60}ms`, animationFillMode: 'backwards' }}
+          className="group w-full text-left bg-white rounded-2xl border border-slate-200 shadow-sm transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 hover:border-indigo-200 flex items-center gap-4 p-4 animate-fadeInUp"
+        >
+          {job.poster_url ? (
+            <img src={job.poster_url} alt="" className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-xl flex-shrink-0" />
+          ) : (
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl bg-indigo-50 flex items-center justify-center flex-shrink-0">
+              <Briefcase className="w-7 h-7 text-indigo-400" />
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <h3 className="font-bold text-slate-900 line-clamp-1">{job.title}</h3>
+            {job.summary && <p className="text-sm text-slate-500 line-clamp-1">{job.summary}</p>}
+            <div className="flex flex-wrap gap-2 mt-2">
+              {job.employment_type && (
+                <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
+                  {EMPLOYMENT_LABELS[job.employment_type] || job.employment_type}
+                </span>
+              )}
+              {job.location && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                  <MapPin className="w-3 h-3" /> {job.location}
+                </span>
+              )}
+              {job.application_deadline && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">
+                  <Calendar className="w-3 h-3" /> Apply by {job.application_deadline}
+                </span>
+              )}
+            </div>
+          </div>
+          <ChevronRight className="w-5 h-5 text-slate-300 flex-shrink-0 transition-transform duration-300 group-hover:translate-x-1 group-hover:text-indigo-400" />
         </button>
       ))}
     </div>
@@ -215,15 +311,15 @@ const NoticeDetailModal = ({ notice, onClose, onShare }) => {
   const [copied, setCopied] = useState(false);
   return (
     <Modal onClose={onClose}>
-      {notice.poster_url && <img src={notice.poster_url} alt="" className="w-full max-h-72 object-cover rounded-lg mb-4" />}
+      {notice.poster_url && <img src={notice.poster_url} alt="" className="w-full max-h-72 object-cover rounded-xl mb-4" />}
       <div className="flex items-start justify-between gap-3 mb-2">
-        <h2 className="text-xl font-bold text-white">{notice.title}</h2>
+        <h2 className="text-xl font-bold text-slate-900">{notice.title}</h2>
         <ShareButton copied={copied} onClick={() => onShare(notice, () => { setCopied(true); setTimeout(() => setCopied(false), 2000); })} />
       </div>
-      <p className="text-xs text-gray-500 mb-4">{notice.published_at ? new Date(notice.published_at).toLocaleString() : ''}</p>
-      <p className="text-gray-200 whitespace-pre-wrap">{notice.body}</p>
+      <p className="text-xs text-slate-400 mb-4 flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {notice.published_at ? new Date(notice.published_at).toLocaleString() : ''}</p>
+      <p className="text-slate-700 whitespace-pre-wrap leading-relaxed">{notice.body}</p>
       {notice.document_url && (
-        <a href={notice.document_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 mt-4 text-blue-300 hover:text-blue-200 text-sm">
+        <a href={notice.document_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 mt-5 text-indigo-600 hover:text-indigo-700 text-sm font-semibold">
           <FileText className="w-4 h-4" /> View attached document (PDF)
         </a>
       )}
@@ -234,41 +330,12 @@ const NoticeDetailModal = ({ notice, onClose, onShare }) => {
 const ShareButton = ({ copied, onClick }) => (
   <button
     onClick={onClick}
-    className="flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-gray-200 transition"
+    className={`flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full transition-all ${copied ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'}`}
     title="Share"
   >
-    {copied ? <><Check className="w-3.5 h-3.5 text-emerald-400" /> Copied</> : <><Share2 className="w-3.5 h-3.5" /> Share</>}
+    {copied ? <><Check className="w-3.5 h-3.5" /> Copied</> : <><Share2 className="w-3.5 h-3.5" /> Share</>}
   </button>
 );
-
-const JobList = ({ jobs, onSelect }) => {
-  if (jobs.length === 0) {
-    return (
-      <div className="text-center py-16 text-gray-500">
-        <Briefcase className="w-10 h-10 mx-auto mb-3 text-gray-700" />
-        No open positions right now. Check back later.
-      </div>
-    );
-  }
-  return (
-    <div className="space-y-3">
-      {jobs.map((job) => (
-        <button key={job.id} onClick={() => onSelect(job)} className="w-full text-left glass-card p-4 border border-white/10 hover:border-emerald-400/50 transition flex gap-4">
-          {job.poster_url && <img src={job.poster_url} alt="" className="w-20 h-20 object-cover rounded-lg flex-shrink-0" />}
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-white">{job.title}</h3>
-            {job.summary && <p className="text-sm text-gray-400 line-clamp-1">{job.summary}</p>}
-            <div className="flex flex-wrap gap-3 mt-2 text-xs text-gray-400">
-              {job.location && <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {job.location}</span>}
-              {job.employment_type && <span>{EMPLOYMENT_LABELS[job.employment_type] || job.employment_type}</span>}
-              {job.application_deadline && <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> Apply by {job.application_deadline}</span>}
-            </div>
-          </div>
-        </button>
-      ))}
-    </div>
-  );
-};
 
 const JobDetailModal = ({ job, onClose, onShare }) => {
   const [showApply, setShowApply] = useState(false);
@@ -277,34 +344,57 @@ const JobDetailModal = ({ job, onClose, onShare }) => {
     <Modal onClose={onClose}>
       {!showApply ? (
         <>
-          {job.poster_url && <img src={job.poster_url} alt="" className="w-full max-h-64 object-cover rounded-lg mb-4" />}
+          {job.poster_url && <img src={job.poster_url} alt="" className="w-full max-h-64 object-cover rounded-xl mb-4" />}
           <div className="flex items-start justify-between gap-3 mb-1">
-            <h2 className="text-xl font-bold text-white">{job.title}</h2>
+            <h2 className="text-xl font-bold text-slate-900">{job.title}</h2>
             <ShareButton copied={copied} onClick={() => onShare(job, () => { setCopied(true); setTimeout(() => setCopied(false), 2000); })} />
           </div>
-          <div className="flex flex-wrap gap-3 mb-4 text-xs text-gray-400">
-            {job.location && <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {job.location}</span>}
-            {job.employment_type && <span>{EMPLOYMENT_LABELS[job.employment_type] || job.employment_type}</span>}
-            {job.positions_available && <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" /> {job.positions_available} position{job.positions_available === 1 ? '' : 's'}</span>}
-            {job.salary_range && <span>{job.salary_range}</span>}
-            {job.application_deadline && <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> Apply by {job.application_deadline}</span>}
+          <div className="flex flex-wrap gap-2 mb-4 mt-2">
+            {job.location && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                <MapPin className="w-3 h-3" /> {job.location}
+              </span>
+            )}
+            {job.employment_type && (
+              <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
+                {EMPLOYMENT_LABELS[job.employment_type] || job.employment_type}
+              </span>
+            )}
+            {job.positions_available && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                <Users className="w-3 h-3" /> {job.positions_available} position{job.positions_available === 1 ? '' : 's'}
+              </span>
+            )}
+            {job.salary_range && (
+              <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
+                {job.salary_range}
+              </span>
+            )}
+            {job.application_deadline && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">
+                <Calendar className="w-3 h-3" /> Apply by {job.application_deadline}
+              </span>
+            )}
           </div>
-          <p className="text-gray-200 whitespace-pre-wrap">{job.body}</p>
+          <p className="text-slate-700 whitespace-pre-wrap leading-relaxed">{job.body}</p>
           {job.application_instructions && (
-            <div className="mt-4 p-3 rounded-lg bg-white/5 border border-white/10 text-sm text-gray-300">
-              <p className="font-semibold text-white mb-1">How to apply</p>
+            <div className="mt-4 p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-600">
+              <p className="font-semibold text-slate-800 mb-1">How to apply</p>
               {job.application_instructions}
             </div>
           )}
           {job.document_url && (
-            <a href={job.document_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 mt-4 text-blue-300 hover:text-blue-200 text-sm">
+            <a href={job.document_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 mt-4 text-indigo-600 hover:text-indigo-700 text-sm font-semibold">
               <FileText className="w-4 h-4" /> Full job description (PDF)
             </a>
           )}
           {job.is_open === false ? (
-            <p className="mt-5 text-amber-300 text-sm font-semibold">Applications are closed for this posting.</p>
+            <p className="mt-6 text-amber-700 bg-amber-50 rounded-lg px-4 py-2.5 text-sm font-semibold text-center">Applications are closed for this posting.</p>
           ) : (
-            <button onClick={() => setShowApply(true)} className="mt-5 w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold">
+            <button
+              onClick={() => setShowApply(true)}
+              className="mt-6 w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition-all hover:scale-[1.01] active:scale-[0.99] shadow-sm"
+            >
               Apply now — no account needed
             </button>
           )}
@@ -325,6 +415,8 @@ const ApplyForm = ({ job, onBack, onClose }) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [referenceCode, setReferenceCode] = useState('');
+
+  const inputClass = 'w-full px-3.5 py-2.5 rounded-xl bg-white text-slate-900 border border-slate-300 placeholder-slate-400 transition focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100';
 
   const handleResumeSelect = (e) => {
     const file = e.target.files?.[0];
@@ -375,36 +467,41 @@ const ApplyForm = ({ job, onBack, onClose }) => {
 
   if (referenceCode) {
     return (
-      <div className="text-center py-4">
-        <CheckCircle2 className="w-14 h-14 text-emerald-400 mx-auto mb-4" />
-        <h3 className="text-lg font-bold text-white mb-2">Application submitted!</h3>
-        <p className="text-gray-300 text-sm mb-4">Save this reference code to check your status later using the "Track my application" tab.</p>
-        <p className="text-2xl font-mono font-bold text-purple-300 tracking-wider bg-white/5 rounded-lg py-3 px-4 inline-block">{referenceCode}</p>
-        <button onClick={onClose} className="block mx-auto mt-6 px-5 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white">Close</button>
+      <div className="text-center py-4 animate-fadeIn">
+        <div className="w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-4">
+          <CheckCircle2 className="w-9 h-9 text-emerald-500" />
+        </div>
+        <h3 className="text-lg font-bold text-slate-900 mb-2">Application submitted!</h3>
+        <p className="text-slate-500 text-sm mb-4">Save this reference code to check your status later using the "Track my application" tab.</p>
+        <p className="text-2xl font-mono font-bold text-indigo-600 tracking-wider bg-indigo-50 rounded-xl py-3 px-4 inline-block">{referenceCode}</p>
+        <button onClick={onClose} className="block mx-auto mt-6 px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition">Close</button>
       </div>
     );
   }
 
   return (
     <div>
-      <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-400 hover:text-white mb-4"><ArrowLeft className="w-4 h-4" /> Back</button>
-      <h3 className="text-lg font-bold text-white mb-1">Apply for {job.title}</h3>
-      <p className="text-sm text-gray-400 mb-4">No account required. You'll receive a reference code to track your application.</p>
+      <button onClick={onBack} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 mb-4 transition-colors"><ArrowLeft className="w-4 h-4" /> Back</button>
+      <h3 className="text-lg font-bold text-slate-900 mb-1">Apply for {job.title}</h3>
+      <p className="text-sm text-slate-500 mb-4">No account required. You'll receive a reference code to track your application.</p>
       <div className="space-y-3">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" className="w-full px-3 py-2 rounded bg-white/10 text-white border border-white/20" />
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" className={inputClass} />
         <div className="grid sm:grid-cols-2 gap-3">
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email address" className="w-full px-3 py-2 rounded bg-white/10 text-white border border-white/20" />
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone number (optional)" className="w-full px-3 py-2 rounded bg-white/10 text-white border border-white/20" />
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email address" className={inputClass} />
+          <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone number (optional)" className={inputClass} />
         </div>
-        <textarea value={coverNote} onChange={(e) => setCoverNote(e.target.value)} placeholder="Short cover note (optional)" rows={3} className="w-full px-3 py-2 rounded bg-white/10 text-white border border-white/20" />
-        <label className="block cursor-pointer">
-          <span className="inline-flex items-center gap-2 px-3 py-2 rounded bg-white/10 hover:bg-white/20 text-white text-sm">
-            <Upload className="w-4 h-4" /> {resumeFile ? resumeFile.name : 'Attach resume/CV (PDF)'}
-          </span>
+        <textarea value={coverNote} onChange={(e) => setCoverNote(e.target.value)} placeholder="Short cover note (optional)" rows={3} className={inputClass} />
+        <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-300 rounded-xl p-4 text-center cursor-pointer transition hover:border-indigo-400 hover:bg-indigo-50/50">
+          <Upload className="w-4 h-4 text-slate-500" />
+          <span className="text-sm text-slate-600">{resumeFile ? resumeFile.name : 'Attach resume/CV (PDF)'}</span>
           <input type="file" accept="application/pdf" onChange={handleResumeSelect} className="hidden" />
         </label>
-        {error && <p className="text-red-300 text-sm">{error}</p>}
-        <button disabled={submitting} onClick={submit} className="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold">
+        {error && <p className="text-red-600 text-sm">{error}</p>}
+        <button
+          disabled={submitting}
+          onClick={submit}
+          className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold transition-all hover:scale-[1.01] active:scale-[0.99] shadow-sm"
+        >
           {submitting ? 'Submitting…' : 'Submit application'}
         </button>
       </div>
@@ -419,6 +516,8 @@ const TrackApplication = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+
+  const inputClass = 'w-full px-3.5 py-2.5 rounded-xl bg-white text-slate-900 border border-slate-300 placeholder-slate-400 transition focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100';
 
   const search = async () => {
     if (!referenceCode.trim() || !contact.trim()) {
@@ -436,42 +535,66 @@ const TrackApplication = () => {
 
   return (
     <div className="max-w-md mx-auto">
-      <h2 className="text-lg font-bold text-white mb-1">Track my application</h2>
-      <p className="text-sm text-gray-400 mb-4">Enter the reference code you received, plus the email or phone you applied with.</p>
+      <h2 className="text-xl font-bold text-slate-900 mb-1">Track my application</h2>
+      <p className="text-sm text-slate-500 mb-5">Enter the reference code you received, plus the email or phone you applied with.</p>
       <div className="space-y-3">
-        <input value={referenceCode} onChange={(e) => setReferenceCode(e.target.value)} placeholder="Reference code (e.g. JOB-A1B2C3D4)" className="w-full px-3 py-2 rounded bg-white/10 text-white border border-white/20 font-mono" />
-        <input value={contact} onChange={(e) => setContact(e.target.value)} placeholder="Email or phone used to apply" className="w-full px-3 py-2 rounded bg-white/10 text-white border border-white/20" />
-        {error && <p className="text-red-300 text-sm">{error}</p>}
-        <button disabled={loading} onClick={search} className="w-full py-2.5 rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-semibold flex items-center justify-center gap-2">
+        <input value={referenceCode} onChange={(e) => setReferenceCode(e.target.value)} placeholder="Reference code (e.g. JOB-A1B2C3D4)" className={`${inputClass} font-mono`} />
+        <input value={contact} onChange={(e) => setContact(e.target.value)} placeholder="Email or phone used to apply" className={inputClass} />
+        {error && <p className="text-red-600 text-sm">{error}</p>}
+        <button
+          disabled={loading}
+          onClick={search}
+          className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold transition-all hover:scale-[1.01] active:scale-[0.99] shadow-sm flex items-center justify-center gap-2"
+        >
           {loading ? <Loader className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />} {loading ? 'Searching…' : 'Check status'}
         </button>
       </div>
 
       {searched && !loading && (
         result ? (
-          <div className="mt-5 glass-card p-4 border border-white/10">
-            <p className="text-white font-semibold">{result.job_title}</p>
-            <p className="text-xs text-gray-400 mb-3">{result.company_name} · Applied {new Date(result.submitted_at).toLocaleDateString()}</p>
-            <span className="inline-block px-3 py-1 rounded-full text-sm font-bold bg-purple-500/20 text-purple-200 capitalize">{result.status.replace('_', ' ')}</span>
-            {result.status_note && <p className="text-sm text-gray-300 mt-3">{result.status_note}</p>}
+          <div className="mt-5 bg-white rounded-2xl border border-slate-200 shadow-sm p-4 animate-fadeInUp">
+            <p className="text-slate-900 font-semibold">{result.job_title}</p>
+            <p className="text-xs text-slate-400 mb-3">{result.company_name} · Applied {new Date(result.submitted_at).toLocaleDateString()}</p>
+            <span className={`inline-block px-3 py-1 rounded-full text-sm font-bold capitalize ${STATUS_STYLES[result.status] || STATUS_STYLES.submitted}`}>
+              {result.status.replace('_', ' ')}
+            </span>
+            {result.status_note && <p className="text-sm text-slate-600 mt-3">{result.status_note}</p>}
           </div>
         ) : (
-          <p className="mt-5 text-center text-gray-500 text-sm">No application found for that reference code and contact. Double-check for typos.</p>
+          <p className="mt-5 text-center text-slate-400 text-sm animate-fadeIn">No application found for that reference code and contact. Double-check for typos.</p>
         )
       )}
     </div>
   );
 };
 
-const Modal = ({ onClose, children }) => (
-  <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 overflow-y-auto">
-    <div className="min-h-screen flex items-start justify-center p-4">
-      <div className="glass-card w-full max-w-lg p-6 mt-8 border border-white/10 relative">
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white"><X className="w-5 h-5" /></button>
-        {children}
+// Fades the backdrop in immediately but scales+fades the panel itself in a
+// beat later via a mount-triggered class flip -- purely CSS transitions, no
+// animation library, matching the rest of this component.
+const Modal = ({ onClose, children }) => {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setVisible(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  return (
+    <div className={`fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 overflow-y-auto transition-opacity duration-200 ${visible ? 'opacity-100' : 'opacity-0'}`}>
+      <div
+        className="min-h-screen flex items-start justify-center p-4"
+        style={{ paddingBottom: 'max(4rem, calc(env(safe-area-inset-bottom) + 2rem))' }}
+      >
+        <div
+          className={`bg-white w-full max-w-lg p-6 my-8 rounded-2xl shadow-2xl border border-slate-100 relative transition-all duration-200 ${visible ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-2'}`}
+        >
+          <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 transition-colors p-1 rounded-full hover:bg-slate-100">
+            <X className="w-5 h-5" />
+          </button>
+          {children}
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default PublicCompanyNoticeBoard;
