@@ -15,25 +15,133 @@ const EMPLOYMENT_LABELS = {
   volunteer: 'Volunteer',
 };
 
+// Status chips read off the "how far along" scale rather than fixed colors
+// per status, so the palette stays inside the green/maroon/neutral brand
+// instead of the old ad-hoc slate/amber/blue/violet/red mix.
 const STATUS_STYLES = {
-  submitted: 'bg-slate-100 text-slate-700',
-  under_review: 'bg-amber-100 text-amber-800',
-  shortlisted: 'bg-blue-100 text-blue-800',
-  interview: 'bg-violet-100 text-violet-800',
-  hired: 'bg-emerald-100 text-emerald-800',
-  rejected: 'bg-red-100 text-red-700',
-  withdrawn: 'bg-slate-100 text-slate-500',
+  submitted: 'nb-chip-neutral',
+  under_review: 'nb-chip-amber',
+  shortlisted: 'nb-chip-teal',
+  interview: 'nb-chip-green',
+  hired: 'nb-chip-green-solid',
+  rejected: 'nb-chip-maroon',
+  withdrawn: 'nb-chip-neutral nb-chip-faded',
 };
+
+// Scoped CSS variables (light by default, swapped under prefers-color-scheme)
+// so this page renders identically whether an applicant's device is in light
+// or dark mode -- and, crucially, so it never gets caught by the app-wide
+// dynamic theme override in ThemeContext.jsx, which repaints any element
+// using stock Tailwind slate/indigo/violet classes. None of the classnames
+// below are stock Tailwind color utilities, so that override can't touch
+// them; this file owns its own light/dark palette instead.
+const NB_STYLES = `
+.icanera-nb {
+  --nb-bg: #f6f9f7;
+  --nb-surface: #ffffff;
+  --nb-surface-alt: #eef3f0;
+  --nb-surface-alt-hover: #e2ebe4;
+  --nb-text: #16211b;
+  --nb-text-muted: #56675d;
+  --nb-text-faint: #8a9a90;
+  --nb-border: #dbe6de;
+  --nb-border-strong: #c3d3c8;
+  --nb-green: #166534;
+  --nb-green-hover: #114f28;
+  --nb-green-soft-bg: #e3f3e8;
+  --nb-green-soft-text: #166534;
+  --nb-green-solid-text: #ffffff;
+  --nb-teal-soft-bg: #e1f2ef;
+  --nb-teal-soft-text: #0f5c52;
+  --nb-maroon: #7a1f2b;
+  --nb-maroon-hover: #5f1721;
+  --nb-maroon-soft-bg: #f5e6e7;
+  --nb-maroon-soft-text: #7a1f2b;
+  --nb-amber-soft-bg: #faf1da;
+  --nb-amber-soft-text: #8a5a12;
+  --nb-backdrop: rgba(15, 23, 18, 0.55);
+}
+@media (prefers-color-scheme: dark) {
+  .icanera-nb {
+    --nb-bg: #0f1613;
+    --nb-surface: #17211c;
+    --nb-surface-alt: #202b24;
+    --nb-surface-alt-hover: #2a362e;
+    --nb-text: #eef4f0;
+    --nb-text-muted: #a9baaf;
+    --nb-text-faint: #7c8d82;
+    --nb-border: #2b3830;
+    --nb-border-strong: #3a4a40;
+    --nb-green: #4ade80;
+    --nb-green-hover: #22c55e;
+    --nb-green-soft-bg: #163524;
+    --nb-green-soft-text: #86efac;
+    --nb-green-solid-text: #0f1613;
+    --nb-teal-soft-bg: #123330;
+    --nb-teal-soft-text: #7dd3c0;
+    --nb-maroon: #e5828d;
+    --nb-maroon-hover: #f0a1a9;
+    --nb-maroon-soft-bg: #3a1a1e;
+    --nb-maroon-soft-text: #f3a9b0;
+    --nb-amber-soft-bg: #3a2f13;
+    --nb-amber-soft-text: #f4c86a;
+    --nb-backdrop: rgba(0, 0, 0, 0.65);
+  }
+}
+.icanera-nb { background: var(--nb-bg); color: var(--nb-text); }
+.nb-surface { background: var(--nb-surface); }
+.nb-surface-alt { background: var(--nb-surface-alt); }
+.nb-text { color: var(--nb-text); }
+.nb-text-muted { color: var(--nb-text-muted); }
+.nb-text-faint { color: var(--nb-text-faint); }
+.nb-border { border-color: var(--nb-border); }
+.nb-border-strong { border-color: var(--nb-border-strong); }
+.nb-header { background: color-mix(in srgb, var(--nb-surface) 92%, transparent); border-color: var(--nb-border); }
+.nb-card { background: var(--nb-surface); border: 1px solid var(--nb-border); }
+.nb-card:hover { border-color: var(--nb-green); }
+.nb-tab { color: var(--nb-text-muted); border-color: transparent; }
+.nb-tab:hover { color: var(--nb-text); }
+.nb-tab-active { color: var(--nb-green); border-color: var(--nb-green); }
+.nb-icon-box { background: var(--nb-surface-alt); }
+.nb-icon-muted { color: var(--nb-text-faint); }
+.nb-btn-primary { background: var(--nb-green); color: #ffffff; }
+.nb-btn-primary:hover { background: var(--nb-green-hover); }
+.nb-btn-secondary { background: var(--nb-surface-alt); color: var(--nb-text); }
+.nb-btn-secondary:hover { background: var(--nb-surface-alt-hover); }
+.nb-link { color: var(--nb-green); }
+.nb-link:hover { color: var(--nb-green-hover); }
+.nb-input { background: var(--nb-surface); color: var(--nb-text); border: 1px solid var(--nb-border-strong); }
+.nb-input::placeholder { color: var(--nb-text-faint); }
+.nb-input:focus { outline: none; border-color: var(--nb-green); box-shadow: 0 0 0 4px var(--nb-green-soft-bg); }
+.nb-modal-backdrop { background: var(--nb-backdrop); }
+.nb-chip-neutral { background: var(--nb-surface-alt); color: var(--nb-text-muted); }
+.nb-chip-faded { opacity: 0.75; }
+.nb-chip-green { background: var(--nb-green-soft-bg); color: var(--nb-green-soft-text); }
+.nb-chip-green-solid { background: var(--nb-green); color: var(--nb-green-solid-text); }
+.nb-chip-teal { background: var(--nb-teal-soft-bg); color: var(--nb-teal-soft-text); }
+.nb-chip-maroon { background: var(--nb-maroon-soft-bg); color: var(--nb-maroon-soft-text); }
+.nb-chip-amber { background: var(--nb-amber-soft-bg); color: var(--nb-amber-soft-text); }
+.nb-accent-top { background: linear-gradient(90deg, var(--nb-green), var(--nb-maroon)); }
+.nb-wordmark-a { color: var(--nb-text-muted); }
+.nb-wordmark-b { color: var(--nb-green); }
+.nb-copied { background: var(--nb-green-soft-bg); color: var(--nb-green-soft-text); }
+.nb-share-btn { background: var(--nb-surface-alt); color: var(--nb-text-muted); }
+.nb-share-btn:hover { background: var(--nb-surface-alt-hover); }
+.nb-closed-banner { background: var(--nb-amber-soft-bg); color: var(--nb-amber-soft-text); }
+.nb-error-text { color: var(--nb-maroon); }
+.nb-empty-icon { background: var(--nb-surface-alt); color: var(--nb-text-faint); }
+`;
 
 /**
  * The company's public notice board -- no ICAN account required. Rendered
  * from main.jsx for /notices/:companyId, same "share link needs no login"
- * pattern as PublicPitchViewer/PublicDropshipStorefront. Unlike the rest of
- * ICAN's dark, app-like public pages, this one is deliberately a clean,
- * light "classic" corporate look -- a company's careers/notice board reads
- * as a trustworthy business page, not a social feed. Job applications are
- * submitted here directly (not gated behind a sign-in prompt) since the
- * whole point is that applicants never need an account.
+ * pattern as PublicPitchViewer/PublicDropshipStorefront. It uses its own
+ * scoped light/dark palette (see NB_STYLES above, keyed to the visitor's OS
+ * color scheme) rather than the app's ThemeContext -- a careers/notice board
+ * needs to read as a trustworthy business page in whatever mode the visitor
+ * already has set, not swap between ICAN's in-app theme choices. Job
+ * applications are submitted here directly (not gated behind a sign-in
+ * prompt) since the whole point is that applicants never need an account.
  */
 const PublicCompanyNoticeBoard = ({ companyId }) => {
   const [company, setCompany] = useState(null);
@@ -134,22 +242,24 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <Loader className="w-8 h-8 text-indigo-500 animate-spin" />
+      <div className="icanera-nb min-h-screen flex items-center justify-center">
+        <style>{NB_STYLES}</style>
+        <Loader className="w-8 h-8 nb-link animate-spin" />
       </div>
     );
   }
 
   if (notFound) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4 p-6 text-center animate-fadeIn">
-        <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center">
-          <AlertCircle className="w-8 h-8 text-slate-400" />
+      <div className="icanera-nb min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center animate-fadeIn">
+        <style>{NB_STYLES}</style>
+        <div className="w-16 h-16 rounded-2xl nb-icon-box flex items-center justify-center">
+          <AlertCircle className="w-8 h-8 nb-icon-muted" />
         </div>
-        <p className="text-slate-900 text-lg font-semibold">This notice board isn't available</p>
+        <p className="nb-text text-lg font-semibold">This notice board isn't available</p>
         <button
           onClick={goToApp}
-          className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold transition-all hover:scale-[1.02] active:scale-[0.98] shadow-sm"
+          className="px-5 py-2.5 nb-btn-primary rounded-xl font-semibold transition-all hover:scale-[1.02] active:scale-[0.98] shadow-sm"
         >
           Open IcanEra
         </button>
@@ -158,23 +268,25 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b border-slate-200 bg-white/90 backdrop-blur sticky top-0 z-20 animate-fadeInDown">
+    <div className="icanera-nb min-h-screen">
+      <style>{NB_STYLES}</style>
+      <header className="border-b nb-header backdrop-blur sticky top-0 z-20 animate-fadeInDown">
+        <div className="h-1 nb-accent-top" />
         <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-4 pb-2 flex items-center gap-3.5">
           {company.logo_url ? (
-            <img src={company.logo_url} alt={company.company_name} className="w-12 h-12 rounded-xl object-cover border border-slate-200 shadow-sm flex-shrink-0" />
+            <img src={company.logo_url} alt={company.company_name} className="w-12 h-12 rounded-xl object-cover border nb-border shadow-sm flex-shrink-0" />
           ) : (
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center font-bold text-lg text-white shadow-sm flex-shrink-0">
+            <div className="w-12 h-12 rounded-xl nb-btn-primary flex items-center justify-center font-bold text-lg shadow-sm flex-shrink-0">
               {company.company_name?.charAt(0)?.toUpperCase() || <Building2 className="w-6 h-6" />}
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <h1 className="text-lg font-extrabold tracking-tight text-slate-900 truncate">{company.company_name}</h1>
-            <p className="text-xs text-slate-500 truncate">
+            <h1 className="text-lg font-extrabold tracking-tight nb-text truncate">{company.company_name}</h1>
+            <p className="text-xs nb-text-faint truncate">
               {[company.industry, company.location].filter(Boolean).join(' · ') || 'Notice board'}
             </p>
           </div>
-          <span className="text-[11px] text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full hidden sm:block flex-shrink-0">
+          <span className="text-[11px] nb-text-faint nb-surface-alt px-2.5 py-1 rounded-full hidden sm:block flex-shrink-0">
             via <IcanEraWordmark />
           </span>
         </div>
@@ -187,7 +299,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
             <button
               key={tab.id}
               onClick={() => setSection(tab.id)}
-              className={`px-3.5 sm:px-4 py-2.5 text-sm font-semibold flex items-center gap-1.5 border-b-2 whitespace-nowrap transition-colors ${section === tab.id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+              className={`px-3.5 sm:px-4 py-2.5 text-sm font-semibold flex items-center gap-1.5 border-b-2 whitespace-nowrap transition-colors ${section === tab.id ? 'nb-tab-active' : 'nb-tab'}`}
             >
               <tab.icon className="w-4 h-4" /> {tab.label}
             </button>
@@ -207,7 +319,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
         </div>
       </main>
 
-      <footer className="text-center text-xs text-slate-400 pb-8 pt-2">
+      <footer className="text-center text-xs nb-text-faint pb-8 pt-2">
         Powered by{' '}
         <button onClick={goToApp} className="align-middle hover:opacity-80 transition-opacity">
           <IcanEraWordmark />
@@ -226,16 +338,16 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
 // wordmark instead of an afterthought footer credit.
 const IcanEraWordmark = () => (
   <span className="font-bold tracking-tight">
-    <span className="text-slate-700">Ican</span><span className="text-indigo-600">Era</span>
+    <span className="nb-wordmark-a">Ican</span><span className="nb-wordmark-b">Era</span>
   </span>
 );
 
 const EmptyState = ({ icon: Icon, text }) => (
   <div className="text-center py-20 animate-fadeIn">
-    <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
-      <Icon className="w-7 h-7 text-slate-400" />
+    <div className="w-14 h-14 rounded-2xl nb-empty-icon flex items-center justify-center mx-auto mb-4">
+      <Icon className="w-7 h-7" />
     </div>
-    <p className="text-slate-500 text-sm">{text}</p>
+    <p className="nb-text-muted text-sm">{text}</p>
   </div>
 );
 
@@ -250,21 +362,21 @@ const NoticeList = ({ notices, onSelect }) => {
           key={notice.id}
           onClick={() => onSelect(notice)}
           style={{ animationDelay: `${Math.min(i, 8) * 60}ms`, animationFillMode: 'backwards' }}
-          className="group text-left bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 hover:border-indigo-200 animate-fadeInUp"
+          className="group text-left nb-card rounded-2xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 animate-fadeInUp"
         >
-          <div className="aspect-video w-full overflow-hidden bg-slate-100">
+          <div className="aspect-video w-full overflow-hidden nb-surface-alt">
             {notice.poster_url ? (
               <img src={notice.poster_url} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
-                <Megaphone className="w-8 h-8 text-slate-300" />
+                <Megaphone className="w-8 h-8 nb-icon-muted" />
               </div>
             )}
           </div>
           <div className="p-4">
-            <h3 className="font-bold text-slate-900 line-clamp-2">{notice.title}</h3>
-            {notice.summary && <p className="text-sm text-slate-500 mt-1 line-clamp-2">{notice.summary}</p>}
-            <p className="text-xs text-slate-400 mt-3 flex items-center gap-1">
+            <h3 className="font-bold nb-text line-clamp-2">{notice.title}</h3>
+            {notice.summary && <p className="text-sm nb-text-muted mt-1 line-clamp-2">{notice.summary}</p>}
+            <p className="text-xs nb-text-faint mt-3 flex items-center gap-1">
               <Clock className="w-3 h-3" /> {notice.published_at ? new Date(notice.published_at).toLocaleDateString() : ''}
             </p>
           </div>
@@ -285,37 +397,37 @@ const JobList = ({ jobs, onSelect }) => {
           key={job.id}
           onClick={() => onSelect(job)}
           style={{ animationDelay: `${Math.min(i, 8) * 60}ms`, animationFillMode: 'backwards' }}
-          className="group w-full text-left bg-white rounded-2xl border border-slate-200 shadow-sm transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 hover:border-indigo-200 flex items-center gap-4 p-4 animate-fadeInUp"
+          className="group w-full text-left nb-card rounded-2xl shadow-sm transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 flex items-center gap-4 p-4 animate-fadeInUp"
         >
           {job.poster_url ? (
             <img src={job.poster_url} alt="" className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-xl flex-shrink-0" />
           ) : (
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl bg-indigo-50 flex items-center justify-center flex-shrink-0">
-              <Briefcase className="w-7 h-7 text-indigo-400" />
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl nb-chip-green flex items-center justify-center flex-shrink-0">
+              <Briefcase className="w-7 h-7" />
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <h3 className="font-bold text-slate-900 line-clamp-1">{job.title}</h3>
-            {job.summary && <p className="text-sm text-slate-500 line-clamp-1">{job.summary}</p>}
+            <h3 className="font-bold nb-text line-clamp-1">{job.title}</h3>
+            {job.summary && <p className="text-sm nb-text-muted line-clamp-1">{job.summary}</p>}
             <div className="flex flex-wrap gap-2 mt-2">
               {job.employment_type && (
-                <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
+                <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full nb-chip-green">
                   {EMPLOYMENT_LABELS[job.employment_type] || job.employment_type}
                 </span>
               )}
               {job.location && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full nb-chip-neutral">
                   <MapPin className="w-3 h-3" /> {job.location}
                 </span>
               )}
               {job.application_deadline && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full nb-chip-amber">
                   <Calendar className="w-3 h-3" /> Apply by {job.application_deadline}
                 </span>
               )}
             </div>
           </div>
-          <ChevronRight className="w-5 h-5 text-slate-300 flex-shrink-0 transition-transform duration-300 group-hover:translate-x-1 group-hover:text-indigo-400" />
+          <ChevronRight className="w-5 h-5 nb-icon-muted flex-shrink-0 transition-transform duration-300 group-hover:translate-x-1" />
         </button>
       ))}
     </div>
@@ -328,13 +440,13 @@ const NoticeDetailModal = ({ notice, onClose, onShare }) => {
     <Modal onClose={onClose}>
       {notice.poster_url && <img src={notice.poster_url} alt="" className="w-full max-h-72 object-cover rounded-xl mb-4" />}
       <div className="flex items-start justify-between gap-3 mb-2">
-        <h2 className="text-xl font-bold text-slate-900">{notice.title}</h2>
+        <h2 className="text-xl font-bold nb-text">{notice.title}</h2>
         <ShareButton copied={copied} onClick={() => onShare(notice, () => { setCopied(true); setTimeout(() => setCopied(false), 2000); })} />
       </div>
-      <p className="text-xs text-slate-400 mb-4 flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {notice.published_at ? new Date(notice.published_at).toLocaleString() : ''}</p>
-      <p className="text-slate-700 whitespace-pre-wrap leading-relaxed">{notice.body}</p>
+      <p className="text-xs nb-text-faint mb-4 flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {notice.published_at ? new Date(notice.published_at).toLocaleString() : ''}</p>
+      <p className="nb-text-muted whitespace-pre-wrap leading-relaxed">{notice.body}</p>
       {notice.document_url && (
-        <a href={notice.document_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 mt-5 text-indigo-600 hover:text-indigo-700 text-sm font-semibold">
+        <a href={notice.document_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 mt-5 nb-link text-sm font-semibold">
           <FileText className="w-4 h-4" /> View attached document (PDF)
         </a>
       )}
@@ -345,7 +457,7 @@ const NoticeDetailModal = ({ notice, onClose, onShare }) => {
 const ShareButton = ({ copied, onClick }) => (
   <button
     onClick={onClick}
-    className={`flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full transition-all ${copied ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'}`}
+    className={`flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full transition-all ${copied ? 'nb-copied' : 'nb-share-btn'}`}
     title="Share"
   >
     {copied ? <><Check className="w-3.5 h-3.5" /> Copied</> : <><Share2 className="w-3.5 h-3.5" /> Share</>}
@@ -361,54 +473,54 @@ const JobDetailModal = ({ job, onClose, onShare }) => {
         <>
           {job.poster_url && <img src={job.poster_url} alt="" className="w-full max-h-64 object-cover rounded-xl mb-4" />}
           <div className="flex items-start justify-between gap-3 mb-1">
-            <h2 className="text-xl font-bold text-slate-900">{job.title}</h2>
+            <h2 className="text-xl font-bold nb-text">{job.title}</h2>
             <ShareButton copied={copied} onClick={() => onShare(job, () => { setCopied(true); setTimeout(() => setCopied(false), 2000); })} />
           </div>
           <div className="flex flex-wrap gap-2 mb-4 mt-2">
             {job.location && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full nb-chip-neutral">
                 <MapPin className="w-3 h-3" /> {job.location}
               </span>
             )}
             {job.employment_type && (
-              <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
+              <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full nb-chip-green">
                 {EMPLOYMENT_LABELS[job.employment_type] || job.employment_type}
               </span>
             )}
             {job.positions_available && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full nb-chip-neutral">
                 <Users className="w-3 h-3" /> {job.positions_available} position{job.positions_available === 1 ? '' : 's'}
               </span>
             )}
             {job.salary_range && (
-              <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
+              <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full nb-chip-green">
                 {job.salary_range}
               </span>
             )}
             {job.application_deadline && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full nb-chip-amber">
                 <Calendar className="w-3 h-3" /> Apply by {job.application_deadline}
               </span>
             )}
           </div>
-          <p className="text-slate-700 whitespace-pre-wrap leading-relaxed">{job.body}</p>
+          <p className="nb-text-muted whitespace-pre-wrap leading-relaxed">{job.body}</p>
           {job.application_instructions && (
-            <div className="mt-4 p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-600">
-              <p className="font-semibold text-slate-800 mb-1">How to apply</p>
+            <div className="mt-4 p-3.5 rounded-xl nb-surface-alt border nb-border text-sm nb-text-muted">
+              <p className="font-semibold nb-text mb-1">How to apply</p>
               {job.application_instructions}
             </div>
           )}
           {job.document_url && (
-            <a href={job.document_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 mt-4 text-indigo-600 hover:text-indigo-700 text-sm font-semibold">
+            <a href={job.document_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 mt-4 nb-link text-sm font-semibold">
               <FileText className="w-4 h-4" /> Full job description (PDF)
             </a>
           )}
           {job.is_open === false ? (
-            <p className="mt-6 text-amber-700 bg-amber-50 rounded-lg px-4 py-2.5 text-sm font-semibold text-center">Applications are closed for this posting.</p>
+            <p className="mt-6 nb-closed-banner rounded-lg px-4 py-2.5 text-sm font-semibold text-center">Applications are closed for this posting.</p>
           ) : (
             <button
               onClick={() => setShowApply(true)}
-              className="mt-6 w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition-all hover:scale-[1.01] active:scale-[0.99] shadow-sm"
+              className="mt-6 w-full py-3 rounded-xl nb-btn-primary font-semibold transition-all hover:scale-[1.01] active:scale-[0.99] shadow-sm"
             >
               Apply now — no account needed
             </button>
@@ -431,7 +543,7 @@ const ApplyForm = ({ job, onBack, onClose }) => {
   const [error, setError] = useState('');
   const [referenceCode, setReferenceCode] = useState('');
 
-  const inputClass = 'w-full px-3.5 py-2.5 rounded-xl bg-white text-slate-900 border border-slate-300 placeholder-slate-400 transition focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100';
+  const inputClass = 'w-full px-3.5 py-2.5 rounded-xl nb-input transition';
 
   const handleResumeSelect = (e) => {
     const file = e.target.files?.[0];
@@ -483,22 +595,22 @@ const ApplyForm = ({ job, onBack, onClose }) => {
   if (referenceCode) {
     return (
       <div className="text-center py-4 animate-fadeIn">
-        <div className="w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-4">
-          <CheckCircle2 className="w-9 h-9 text-emerald-500" />
+        <div className="w-16 h-16 rounded-full nb-chip-green flex items-center justify-center mx-auto mb-4">
+          <CheckCircle2 className="w-9 h-9" />
         </div>
-        <h3 className="text-lg font-bold text-slate-900 mb-2">Application submitted!</h3>
-        <p className="text-slate-500 text-sm mb-4">Save this reference code to check your status later using the "Track my application" tab.</p>
-        <p className="text-2xl font-mono font-bold text-indigo-600 tracking-wider bg-indigo-50 rounded-xl py-3 px-4 inline-block">{referenceCode}</p>
-        <button onClick={onClose} className="block mx-auto mt-6 px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition">Close</button>
+        <h3 className="text-lg font-bold nb-text mb-2">Application submitted!</h3>
+        <p className="nb-text-muted text-sm mb-4">Save this reference code to check your status later using the "Track my application" tab.</p>
+        <p className="text-2xl font-mono font-bold nb-link tracking-wider nb-chip-green rounded-xl py-3 px-4 inline-block">{referenceCode}</p>
+        <button onClick={onClose} className="block mx-auto mt-6 px-5 py-2.5 rounded-xl nb-btn-secondary font-semibold transition">Close</button>
       </div>
     );
   }
 
   return (
     <div>
-      <button onClick={onBack} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 mb-4 transition-colors"><ArrowLeft className="w-4 h-4" /> Back</button>
-      <h3 className="text-lg font-bold text-slate-900 mb-1">Apply for {job.title}</h3>
-      <p className="text-sm text-slate-500 mb-4">No account required. You'll receive a reference code to track your application.</p>
+      <button onClick={onBack} className="flex items-center gap-1 text-sm nb-text-muted hover:opacity-80 mb-4 transition-colors"><ArrowLeft className="w-4 h-4" /> Back</button>
+      <h3 className="text-lg font-bold nb-text mb-1">Apply for {job.title}</h3>
+      <p className="text-sm nb-text-muted mb-4">No account required. You'll receive a reference code to track your application.</p>
       <div className="space-y-3">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" className={inputClass} />
         <div className="grid sm:grid-cols-2 gap-3">
@@ -506,16 +618,16 @@ const ApplyForm = ({ job, onBack, onClose }) => {
           <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone number (optional)" className={inputClass} />
         </div>
         <textarea value={coverNote} onChange={(e) => setCoverNote(e.target.value)} placeholder="Short cover note (optional)" rows={3} className={inputClass} />
-        <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-300 rounded-xl p-4 text-center cursor-pointer transition hover:border-indigo-400 hover:bg-indigo-50/50">
-          <Upload className="w-4 h-4 text-slate-500" />
-          <span className="text-sm text-slate-600">{resumeFile ? resumeFile.name : 'Attach resume/CV (PDF)'}</span>
+        <label className="flex items-center justify-center gap-2 border-2 border-dashed nb-border-strong rounded-xl p-4 text-center cursor-pointer transition hover:border-current">
+          <Upload className="w-4 h-4 nb-text-muted" />
+          <span className="text-sm nb-text-muted">{resumeFile ? resumeFile.name : 'Attach resume/CV (PDF)'}</span>
           <input type="file" accept="application/pdf" onChange={handleResumeSelect} className="hidden" />
         </label>
-        {error && <p className="text-red-600 text-sm">{error}</p>}
+        {error && <p className="nb-error-text text-sm">{error}</p>}
         <button
           disabled={submitting}
           onClick={submit}
-          className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold transition-all hover:scale-[1.01] active:scale-[0.99] shadow-sm"
+          className="w-full py-3 rounded-xl nb-btn-primary disabled:opacity-50 font-semibold transition-all hover:scale-[1.01] active:scale-[0.99] shadow-sm"
         >
           {submitting ? 'Submitting…' : 'Submit application'}
         </button>
@@ -532,7 +644,7 @@ const TrackApplication = () => {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
 
-  const inputClass = 'w-full px-3.5 py-2.5 rounded-xl bg-white text-slate-900 border border-slate-300 placeholder-slate-400 transition focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100';
+  const inputClass = 'w-full px-3.5 py-2.5 rounded-xl nb-input transition';
 
   const search = async () => {
     if (!referenceCode.trim() || !contact.trim()) {
@@ -550,16 +662,16 @@ const TrackApplication = () => {
 
   return (
     <div className="max-w-md mx-auto">
-      <h2 className="text-xl font-bold text-slate-900 mb-1">Track my application</h2>
-      <p className="text-sm text-slate-500 mb-5">Enter the reference code you received, plus the email or phone you applied with.</p>
+      <h2 className="text-xl font-bold nb-text mb-1">Track my application</h2>
+      <p className="text-sm nb-text-muted mb-5">Enter the reference code you received, plus the email or phone you applied with.</p>
       <div className="space-y-3">
         <input value={referenceCode} onChange={(e) => setReferenceCode(e.target.value)} placeholder="Reference code (e.g. JOB-A1B2C3D4)" className={`${inputClass} font-mono`} />
         <input value={contact} onChange={(e) => setContact(e.target.value)} placeholder="Email or phone used to apply" className={inputClass} />
-        {error && <p className="text-red-600 text-sm">{error}</p>}
+        {error && <p className="nb-error-text text-sm">{error}</p>}
         <button
           disabled={loading}
           onClick={search}
-          className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold transition-all hover:scale-[1.01] active:scale-[0.99] shadow-sm flex items-center justify-center gap-2"
+          className="w-full py-3 rounded-xl nb-btn-primary disabled:opacity-50 font-semibold transition-all hover:scale-[1.01] active:scale-[0.99] shadow-sm flex items-center justify-center gap-2"
         >
           {loading ? <Loader className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />} {loading ? 'Searching…' : 'Check status'}
         </button>
@@ -567,16 +679,16 @@ const TrackApplication = () => {
 
       {searched && !loading && (
         result ? (
-          <div className="mt-5 bg-white rounded-2xl border border-slate-200 shadow-sm p-4 animate-fadeInUp">
-            <p className="text-slate-900 font-semibold">{result.job_title}</p>
-            <p className="text-xs text-slate-400 mb-3">{result.company_name} · Applied {new Date(result.submitted_at).toLocaleDateString()}</p>
+          <div className="mt-5 nb-card rounded-2xl shadow-sm p-4 animate-fadeInUp">
+            <p className="nb-text font-semibold">{result.job_title}</p>
+            <p className="text-xs nb-text-faint mb-3">{result.company_name} · Applied {new Date(result.submitted_at).toLocaleDateString()}</p>
             <span className={`inline-block px-3 py-1 rounded-full text-sm font-bold capitalize ${STATUS_STYLES[result.status] || STATUS_STYLES.submitted}`}>
               {result.status.replace('_', ' ')}
             </span>
-            {result.status_note && <p className="text-sm text-slate-600 mt-3">{result.status_note}</p>}
+            {result.status_note && <p className="text-sm nb-text-muted mt-3">{result.status_note}</p>}
           </div>
         ) : (
-          <p className="mt-5 text-center text-slate-400 text-sm animate-fadeIn">No application found for that reference code and contact. Double-check for typos.</p>
+          <p className="mt-5 text-center nb-text-faint text-sm animate-fadeIn">No application found for that reference code and contact. Double-check for typos.</p>
         )
       )}
     </div>
@@ -594,15 +706,15 @@ const Modal = ({ onClose, children }) => {
   }, []);
 
   return (
-    <div className={`fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 overflow-y-auto transition-opacity duration-200 ${visible ? 'opacity-100' : 'opacity-0'}`}>
+    <div className={`icanera-nb fixed inset-0 nb-modal-backdrop backdrop-blur-sm z-50 overflow-y-auto transition-opacity duration-200 ${visible ? 'opacity-100' : 'opacity-0'}`}>
       <div
         className="min-h-screen flex items-start justify-center p-4"
         style={{ paddingBottom: 'max(4rem, calc(env(safe-area-inset-bottom) + 2rem))' }}
       >
         <div
-          className={`bg-white w-full max-w-lg p-6 my-8 rounded-2xl shadow-2xl border border-slate-100 relative transition-all duration-200 ${visible ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-2'}`}
+          className={`nb-surface w-full max-w-lg p-6 my-8 rounded-2xl shadow-2xl border nb-border relative transition-all duration-200 ${visible ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-2'}`}
         >
-          <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 transition-colors p-1 rounded-full hover:bg-slate-100">
+          <button onClick={onClose} className="absolute top-4 right-4 nb-text-faint hover:opacity-80 transition-colors p-1 rounded-full nb-share-btn">
             <X className="w-5 h-5" />
           </button>
           {children}
