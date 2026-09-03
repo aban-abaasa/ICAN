@@ -151,7 +151,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
           onClick={goToApp}
           className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold transition-all hover:scale-[1.02] active:scale-[0.98] shadow-sm"
         >
-          Open ICANEra
+          Open IcanEra
         </button>
       </div>
     );
@@ -174,7 +174,9 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
               {[company.industry, company.location].filter(Boolean).join(' · ') || 'Notice board'}
             </p>
           </div>
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 bg-slate-100 px-2 py-1 rounded-full hidden sm:block flex-shrink-0">via ICANEra</span>
+          <span className="text-[11px] text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full hidden sm:block flex-shrink-0">
+            via <IcanEraWordmark />
+          </span>
         </div>
         <nav className="max-w-5xl mx-auto px-4 sm:px-6 flex gap-1 overflow-x-auto">
           {[
@@ -206,7 +208,10 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
       </main>
 
       <footer className="text-center text-xs text-slate-400 pb-8 pt-2">
-        Powered by <button onClick={goToApp} className="font-semibold text-slate-500 hover:text-indigo-600 transition-colors">ICANEra</button>
+        Powered by{' '}
+        <button onClick={goToApp} className="align-middle hover:opacity-80 transition-opacity">
+          <IcanEraWordmark />
+        </button>
       </footer>
 
       {selectedNotice && <NoticeDetailModal notice={selectedNotice} onClose={() => setSelectedNotice(null)} onShare={handleShare} />}
@@ -214,6 +219,16 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
     </div>
   );
 };
+
+// The brand name is "IcanEra" (capital I/E, lowercase elsewhere) everywhere
+// else in the app -- LandingPage.jsx, MainNavigation's logo alt text, etc.
+// A two-tone treatment (rather than plain gray text) reads as a proper
+// wordmark instead of an afterthought footer credit.
+const IcanEraWordmark = () => (
+  <span className="font-bold tracking-tight">
+    <span className="text-slate-700">Ican</span><span className="text-indigo-600">Era</span>
+  </span>
+);
 
 const EmptyState = ({ icon: Icon, text }) => (
   <div className="text-center py-20 animate-fadeIn">
