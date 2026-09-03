@@ -47,6 +47,7 @@ import NotificationsPanel from './NotificationsPanel';
 import RequisitionWorkspace from './CMMS/RequisitionWorkspace.jsx';
 import RequisitionApprovalsTab from './CMMS/RequisitionApprovalsTab.jsx';
 import CMMSPayrollPanel from './CMMSPayrollPanel.jsx';
+import CMMSMySalaryPanel from './CMMSMySalaryPanel.jsx';
 import CMMSBookTransportPanel from './CMMSBookTransportPanelV2.jsx';
 import CMSSupplierPurchasePanel from './CMSSupplierPurchasePanel.jsx';
 import SupplierOrderPaymentApprovals from './CMMS/SupplierOrderPaymentApprovals.jsx';
@@ -6925,7 +6926,7 @@ const CMMSModule = ({
       { id: 'departments', label: '🏭 Departments', icon: Building },
       { id: 'users', label: '👥 Users & Roles', icon: Users },
       { id: 'inventory', label: '📦 Inventory', icon: Package },
-      { id: 'payroll', label: '💰 Payroll', icon: DollarSign },
+      { id: 'payroll', label: getToolScope('payroll') === 'own' ? '💰 My Salary' : '💰 Payroll', icon: DollarSign },
       { id: 'transport', label: '🚐 Transport', icon: Car },
       { id: 'requisitions', label: '📋 Requisitions', icon: Package },
       { id: 'reports', label: '📊 Reports', icon: Package },
@@ -7846,7 +7847,15 @@ const CMMSModule = ({
         {activeTab === 'fees' && getTabs().includes('fees') && <CMMSFeesPanel companyId={companyIdToUse} businessProfileId={cmmsData.companyProfile?.pichin_business_profile_id} cmmsUsers={cmmsData.users} studentView={isActiveStudent} />}
         {['production', 'quality', 'clinical', 'pharmacy'].includes(activeTab) && getTabs().includes(activeTab) && <CMMSOperationsPanel companyId={companyIdToUse} businessProfileId={cmmsData.companyProfile?.pichin_business_profile_id} mode={activeTab} />}
         {activeTab === 'payroll' && getTabs().includes('payroll') && (
-          getToolScope('payroll') === 'own' ? <CMMSEmployeeSelfService companyProfile={cmmsData.companyProfile} mode="payroll" /> : getToolScope('payroll') !== 'company' && !hasToolAction('attendance') ? (
+          getToolScope('payroll') === 'own' ? (
+            <CMMSMySalaryPanel
+              companyProfile={cmmsData.companyProfile}
+              users={cmmsData.users}
+              currentUser={user}
+              canCreate={hasToolAction('payroll', 'create')}
+              canApprove={hasToolAction('payroll', 'approve')}
+            />
+          ) : getToolScope('payroll') !== 'company' && !hasToolAction('attendance') ? (
             <div className="rounded-2xl border border-amber-700/40 bg-amber-900/15 p-6 text-sm text-amber-100">
               Payroll compensation, payment, and staff-wide records require a company-wide Payroll assignment. Your role has a more limited data scope, so this sensitive information is not loaded.
             </div>
