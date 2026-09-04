@@ -4,7 +4,7 @@
  * to avoid pulling @supabase/supabase-js into the api/ functions bundle).
  */
 export const verifySupabaseUser = async (accessToken) => {
-  const url = process.env.SUPABASE_URL;
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
   if (!url || !anonKey || !accessToken) return null;
 
