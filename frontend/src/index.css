@@ -95,11 +95,45 @@
   --color-primaryLight: #082f49;
   --color-secondary: #0ea5e9;
   --color-accent: #fbbf24;
-  
+
   /* Tailwind gradient variables */
   --tw-gradient-from: #164e63;
   --tw-gradient-via: #38bdf8;
   --tw-gradient-to: #0c2d44;
+}
+
+:root[data-theme="sienna"] {
+  --color-bg: #241511;
+  --color-bgSecondary: #3a2418;
+  --color-text: #f5ece3;
+  --color-textSecondary: #d9c3ae;
+  --color-border: #6b4636;
+  --color-primary: #b57a56;
+  --color-primaryLight: #4a2e22;
+  --color-secondary: #a672d1;
+  --color-accent: #e0a458;
+
+  /* Tailwind gradient variables */
+  --tw-gradient-from: #3a2418;
+  --tw-gradient-via: #a672d1;
+  --tw-gradient-to: #241511;
+}
+
+:root[data-theme="siennaLight"] {
+  --color-bg: #faf3ea;
+  --color-bgSecondary: #f0e2d1;
+  --color-text: #3a2418;
+  --color-textSecondary: #6b4636;
+  --color-border: #d8bfa3;
+  --color-primary: #8a5a3b;
+  --color-primaryLight: #f0e2d1;
+  --color-secondary: #7c4fa0;
+  --color-accent: #b5762e;
+
+  /* Tailwind gradient variables */
+  --tw-gradient-from: #f0e2d1;
+  --tw-gradient-via: #8a5a3b;
+  --tw-gradient-to: #faf3ea;
 }
 
 :root[data-theme="dark"] {

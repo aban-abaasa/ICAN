@@ -515,6 +515,25 @@ const ChatWidget = ({ hasBottomNav = false }) => {
   });
   const showCommunityLiveStage = communityLive.role === 'broadcasting' || communityLive.role === 'watching';
 
+  // CommunityLiveStage renders `fixed inset-0` meaning to cover the whole
+  // screen, but the non-fullscreen widget panel below has a CSS `transform`
+  // (`-translate-x-1/2 -translate-y-1/2`, for centering) — and a transformed
+  // ancestor becomes the containing block for any `position: fixed`
+  // descendant. Left alone, that traps the "full-screen" live stage inside
+  // the small ~22rem widget box instead of the real viewport, leaving the
+  // app's own header/bottom-nav visible around it. Forcing the widget itself
+  // into fullscreen (which drops that transform) sidesteps the trap.
+  const wasFullScreenBeforeLiveRef = useRef(false);
+  useEffect(() => {
+    if (showCommunityLiveStage) {
+      wasFullScreenBeforeLiveRef.current = fullScreen;
+      if (!fullScreen) setFullScreen(true);
+    } else if (!wasFullScreenBeforeLiveRef.current) {
+      setFullScreen(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showCommunityLiveStage]);
+
   // Tapping a "X is live" push notification (or its NOTIFICATION_CLICK
   // message from sw.js when a tab is already open — see MobileView.jsx)
   // should drop the visitor straight into the stream, not just onto

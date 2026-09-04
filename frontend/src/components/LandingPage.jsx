@@ -9,6 +9,7 @@ import WalletMockTrader from './landing/WalletMockTrader';
 import TrustGroupsPreview from './landing/TrustGroupsPreview';
 import DropshipPreview from './landing/DropshipPreview';
 import CMMSNoticeBoardPreview from './landing/CMMSNoticeBoardPreview';
+import ProfessionalsCarousel from './landing/ProfessionalsCarousel';
 import { useTheme } from '../context/ThemeContext';
 import { getSupabaseClient } from '../lib/supabase/client';
 import {
@@ -1988,6 +1989,7 @@ const LandingPage = ({ onGetStarted }) => {
       )}
 
       <CommunityStoriesCarousel />
+      <ProfessionalsCarousel />
       <PitchinPreview onGetStarted={onGetStarted} authId={identity?.authId ?? null} />
       <DropshipPreview />
       <WalletMockTrader onGetStarted={onGetStarted} authId={identity?.authId ?? null} />

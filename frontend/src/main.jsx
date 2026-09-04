@@ -19,6 +19,11 @@ const isVisitorQrPath = window.location.pathname === '/visitor-check-in';
 // same component just becomes fully interactive once they do.
 const pitchShareMatch = window.location.pathname.match(/^\/pitchin\/([^/]+)/);
 const statusShareMatch = window.location.pathname.match(/^\/status\/([^/]+)/);
+// A resume/portfolio share link (e.g. https://icanera.space/portfolio/<handle>)
+// must be viewable by anyone, signed in or not -- same reasoning as the
+// Pitchin/status share links above. Visitors can still sign in in place to
+// rate/recommend the professional, without losing the page.
+const portfolioShareMatch = window.location.pathname.match(/^\/portfolio\/([^/]+)/);
 // A dropship storefront link (e.g. https://icanera.space/store/<businessProfileId>)
 // must be browsable by anyone, signed in or not -- same reasoning as the
 // Pitchin/status share links above. Only checkout (a real ICANera payment)
@@ -74,6 +79,7 @@ const PublicStaffAttendanceCheckIn = lazyWithReloadOnChunkFailure(() => import('
 const PublicVisitorCheckIn = lazyWithReloadOnChunkFailure(() => import('./components/PublicVisitorCheckIn'));
 const PublicPitchViewer = lazyWithReloadOnChunkFailure(() => import('./components/PublicPitchViewer'));
 const PublicStatusViewer = lazyWithReloadOnChunkFailure(() => import('./components/PublicStatusViewer'));
+const PublicPortfolioPage = lazyWithReloadOnChunkFailure(() => import('./components/profile/PublicPortfolioPage'));
 const PublicDropshipStorefront = lazyWithReloadOnChunkFailure(() => import('./components/PublicDropshipStorefront'));
 const PublicCompanyNoticeBoard = lazyWithReloadOnChunkFailure(() => import('./components/PublicCompanyNoticeBoard'));
 const Loading = () => <div className="min-h-screen bg-slate-950" />;
@@ -121,6 +127,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 {pitchShareMatch ? <PublicPitchViewer pitchId={pitchShareMatch[1]} />
                   : statusShareMatch ? <PublicStatusViewer statusId={statusShareMatch[1]} />
                   : dropshipStoreMatch ? <PublicDropshipStorefront businessProfileId={dropshipStoreMatch[1]} />
+                  : portfolioShareMatch ? <PublicPortfolioPage handle={portfolioShareMatch[1]} />
                   : <App />}
               </AuthProvider>
             </ThemeProvider>

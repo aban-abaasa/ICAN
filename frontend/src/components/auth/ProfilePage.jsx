@@ -9,12 +9,15 @@ import { useAuth } from '../../context/AuthContext';
 import { User, Mail, Phone, Edit2, Save, X, Upload, Shield, Wallet, Key, LogOut, Plus, Camera, Trash2, Clock, Bell } from 'lucide-react';
 import { StatusUploader } from '../status/StatusUploader';
 import ShareholderApprovalsCenter from '../ShareholderApprovalsCenter';
+import ReadinessPanel from '../profile/ReadinessPanel';
+import GrowthPanel from '../profile/GrowthPanel';
+import PortfolioTab from '../profile/PortfolioTab';
 
-export const ProfilePage = ({ onClose = null, onLogout = null }) => {
-  const { 
-    user, 
-    profile, 
-    getDisplayName, 
+export const ProfilePage = ({ onClose = null, onLogout = null, initialTab = 'overview', readinessProps = {}, growthProps = {} }) => {
+  const {
+    user,
+    profile,
+    getDisplayName,
     getAvatarUrl,
     updateProfile,
     uploadAvatar,
@@ -22,6 +25,7 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
     signOut
   } = useAuth();
 
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -207,14 +211,21 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
       ? 'bg-yellow-100 text-yellow-700 border-yellow-200'
       : 'bg-emerald-100 text-emerald-700 border-emerald-200';
 
+  const TABS = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'readiness', label: 'Readiness' },
+    { id: 'growth', label: 'Growth' },
+    { id: 'resume', label: 'My Resume' },
+  ];
+
   return (
-    <div className="min-h-[100dvh] bg-gradient-to-b from-blue-50 via-indigo-50 to-purple-50">
+    <div className="min-h-[100dvh] bg-gradient-to-b from-slate-950 via-purple-950 to-slate-950">
       <div className="p-3 sm:p-3 md:p-8 pb-[calc(7.5rem+env(safe-area-inset-bottom))] sm:pb-3 md:pb-8 pt-[calc(0.75rem+env(safe-area-inset-top))]">
         <div className="max-w-5xl mx-auto w-full">
           {/* Header - Mobile Optimized */}
-          <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-8">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
             <div className="min-w-0 flex-1">
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-800 truncate">My Profile</h1>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white truncate">My Profile</h1>
               <p className="text-xs sm:text-sm text-slate-600 mt-0.5 sm:mt-1 truncate">Manage your account, settings, and financial profile.</p>
             </div>
             {onClose && (
@@ -227,6 +238,29 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
             )}
           </div>
 
+          {/* Tab Bar */}
+          <div className="flex gap-1.5 mb-3 sm:mb-4 md:mb-8 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex-shrink-0 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  activeTab === tab.id
+                    ? 'bg-gradient-to-r from-amber-700 to-purple-600 text-white shadow-md'
+                    : 'bg-slate-800/60 text-gray-300 hover:bg-slate-800'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+        {activeTab === 'readiness' && <ReadinessPanel {...readinessProps} />}
+        {activeTab === 'growth' && <GrowthPanel {...growthProps} />}
+        {activeTab === 'resume' && <PortfolioTab />}
+
+        {activeTab === 'overview' && (
+        <>
         {/* Alerts - Compact on Mobile */}
         {error && (
           <div className="mb-3 sm:mb-4 md:mb-6 p-2.5 sm:p-3 md:p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs sm:text-sm md:text-base">
@@ -240,9 +274,9 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
         )}
 
         {/* Main Profile Card - Mobile Optimized */}
-        <div className="bg-white border border-slate-200 rounded-xl sm:rounded-2xl overflow-hidden mb-3 sm:mb-4 md:mb-6 shadow-lg">
+        <div className="bg-white border border-slate-700 rounded-xl sm:rounded-2xl overflow-hidden mb-3 sm:mb-4 md:mb-6 shadow-lg">
           {/* Profile Header Background - Responsive Height */}
-          <div className="h-20 sm:h-24 md:h-32 bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400"></div>
+          <div className="h-20 sm:h-24 md:h-32 bg-gradient-to-r from-amber-700 via-orange-700 to-purple-700"></div>
 
           {/* Profile Content - Better Mobile Padding */}
           <div className="relative px-3 sm:px-4 md:px-6 pb-4 sm:pb-5 md:pb-6 pt-0">
@@ -296,11 +330,11 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                       placeholder="Full name"
                       value={formData.full_name}
                       onChange={handleInputChange}
-                      className="w-full px-2 sm:px-3 py-1 sm:py-1.5 bg-white border border-slate-300 rounded-lg text-slate-800 placeholder-slate-400 text-sm sm:text-base"
+                      className="w-full px-2 sm:px-3 py-1 sm:py-1.5 bg-white border border-slate-300 rounded-lg text-white placeholder-slate-400 text-sm sm:text-base"
                     />
                   ) : (
                     <div>
-                      <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800 break-words">{getDisplayName()}</h2>
+                      <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-white break-words">{getDisplayName()}</h2>
                       <p className="text-slate-500 text-xs sm:text-sm break-all">{user?.email}</p>
                     </div>
                   )}
@@ -327,16 +361,16 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
             {/* Profile Details Grid - Mobile Optimized */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               {/* Email */}
-              <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-2.5 md:p-3 bg-slate-100 rounded-lg border border-slate-200">
+              <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-2.5 md:p-3 bg-slate-800 rounded-lg border border-slate-700">
                 <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-[10px] sm:text-xs text-slate-600">Email</p>
-                  <p className="text-slate-800 text-xs sm:text-sm md:text-base break-all">{user?.email}</p>
+                  <p className="text-white text-xs sm:text-sm md:text-base break-all">{user?.email}</p>
                 </div>
               </div>
 
               {/* Phone */}
-              <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-2.5 md:p-3 bg-slate-100 rounded-lg border border-slate-200">
+              <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-2.5 md:p-3 bg-slate-800 rounded-lg border border-slate-700">
                 <Phone className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-[10px] sm:text-xs text-slate-600">Phone</p>
@@ -347,16 +381,16 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                       placeholder="Add phone number"
                       value={formData.phone}
                       onChange={handleInputChange}
-                      className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-slate-800 placeholder-slate-400 text-xs sm:text-sm"
+                      className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-white placeholder-slate-400 text-xs sm:text-sm"
                     />
                   ) : (
-                    <p className="text-slate-800 text-xs sm:text-sm md:text-base">{formData.phone || 'Not provided'}</p>
+                    <p className="text-white text-xs sm:text-sm md:text-base">{formData.phone || 'Not provided'}</p>
                   )}
                 </div>
               </div>
 
               {/* Income Level */}
-              <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-2.5 md:p-3 bg-slate-100 rounded-lg border border-slate-200">
+              <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-2.5 md:p-3 bg-slate-800 rounded-lg border border-slate-700">
                 <Wallet className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-[10px] sm:text-xs text-slate-600">Income Level</p>
@@ -365,7 +399,7 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                       name="income_level"
                       value={formData.income_level}
                       onChange={handleInputChange}
-                      className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-slate-800 text-xs sm:text-sm"
+                      className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-white text-xs sm:text-sm"
                     >
                       <option value="">Select income level</option>
                       <option value="low">Low (&lt; 500k UGX/month)</option>
@@ -374,13 +408,13 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                       <option value="very_high">Very High (&gt; 5M UGX/month)</option>
                     </select>
                   ) : (
-                    <p className="text-slate-800 text-xs sm:text-sm md:text-base">{formData.income_level ? toTitleCase(formData.income_level) : 'Not provided'}</p>
+                    <p className="text-white text-xs sm:text-sm md:text-base">{formData.income_level ? toTitleCase(formData.income_level) : 'Not provided'}</p>
                   )}
                 </div>
               </div>
 
               {/* Financial Goal */}
-              <div className="flex items-start gap-2 sm:gap-3 p-2 sm:p-2.5 md:p-3 bg-slate-100 rounded-lg border border-slate-200">
+              <div className="flex items-start gap-2 sm:gap-3 p-2 sm:p-2.5 md:p-3 bg-slate-800 rounded-lg border border-slate-700">
                 <Key className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600 mt-0.5 sm:mt-1 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-[10px] sm:text-xs text-slate-600">Primary Financial Goal</p>
@@ -389,7 +423,7 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                       name="financial_goal"
                       value={formData.financial_goal}
                       onChange={handleInputChange}
-                      className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-slate-800 text-xs sm:text-sm"
+                      className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-white text-xs sm:text-sm"
                     >
                       <option value="">Select a goal</option>
                       <option value="save_emergency_fund">Save Emergency Fund</option>
@@ -401,13 +435,13 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                       <option value="build_wealth">Build Long-term Wealth</option>
                     </select>
                   ) : (
-                    <p className="text-slate-800 text-xs sm:text-sm md:text-base">{formData.financial_goal ? toTitleCase(formData.financial_goal) : 'Not provided'}</p>
+                    <p className="text-white text-xs sm:text-sm md:text-base">{formData.financial_goal ? toTitleCase(formData.financial_goal) : 'Not provided'}</p>
                   )}
                 </div>
               </div>
 
               {/* Risk Tolerance */}
-              <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-2.5 md:p-3 bg-slate-100 rounded-lg border border-slate-200 sm:col-span-2">
+              <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-2.5 md:p-3 bg-slate-800 rounded-lg border border-slate-700 sm:col-span-2">
                 <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-[10px] sm:text-xs text-slate-600">Risk Tolerance</p>
@@ -416,7 +450,7 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                       name="risk_tolerance"
                       value={formData.risk_tolerance}
                       onChange={handleInputChange}
-                      className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-slate-800 text-xs sm:text-sm"
+                      className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-white text-xs sm:text-sm"
                     >
                       <option value="low">Conservative (Low Risk)</option>
                       <option value="medium">Moderate (Medium Risk)</option>
@@ -444,7 +478,7 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
 
         {/* Account Info + Actions - Mobile Optimized */}
         <div className="mt-4 sm:mt-5 md:mt-6 grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 sm:gap-3 items-stretch">
-          <div className="p-2.5 sm:p-3 md:p-4 bg-white border border-slate-200 rounded-lg text-left">
+          <div className="p-2.5 sm:p-3 md:p-4 bg-white border border-slate-700 rounded-lg text-left">
             <p className="text-[10px] sm:text-xs md:text-sm text-slate-600">
               Account ID: <span className="font-mono text-slate-700 break-all text-[10px] sm:text-xs">{user?.id}</span>
             </p>
@@ -501,10 +535,10 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
             <div className="w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl p-4 sm:p-6 max-h-[85vh] overflow-y-auto animate-in slide-in-from-bottom sm:slide-in-from-bottom-0">
               {/* Header */}
               <div className="flex items-center justify-between mb-4 sm:mb-6">
-                <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800">Change Profile Picture</h2>
+                <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-white">Change Profile Picture</h2>
                 <button
                   onClick={() => setShowAvatarModal(false)}
-                  className="p-1.5 sm:p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                  className="p-1.5 sm:p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-800 rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5 sm:w-6 sm:h-6" />
                 </button>
@@ -560,7 +594,7 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
 
                 {/* Take Photo Button (Placeholder) */}
                 <button
-                  className="w-full flex items-center justify-center gap-2 sm:gap-3 px-4 py-2.5 sm:py-3 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 rounded-lg font-medium transition-all text-sm sm:text-base"
+                  className="w-full flex items-center justify-center gap-2 sm:gap-3 px-4 py-2.5 sm:py-3 bg-slate-800 hover:bg-slate-200 border border-slate-300 text-slate-700 rounded-lg font-medium transition-all text-sm sm:text-base"
                 >
                   <Camera className="w-4 h-4 sm:w-5 sm:h-5" />
                   <span>Take Photo</span>
@@ -657,12 +691,14 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
 
         {/* Pending Approvals - Investment & Member */}
         {showApprovalsModal && (
-          <ShareholderApprovalsCenter 
+          <ShareholderApprovalsCenter
             businessProfileId={user?.id}
             currentUserId={user?.id}
             currentUserEmail={user?.email}
             onClose={() => setShowApprovalsModal(false)}
           />
+        )}
+        </>
         )}
         </div>
       </div>

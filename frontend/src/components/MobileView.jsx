@@ -3,6 +3,7 @@ import {
   Mic,
   MicOff,
   MoreVertical,
+  Users,
   Building,
   BarChart3,
   Zap,
@@ -62,6 +63,9 @@ import {
 } from 'lucide-react';
 import SmartTransactionEntry from './SmartTransactionEntry';
 import { ProfilePage } from './auth/ProfilePage';
+import ReadinessPanel from './profile/ReadinessPanel';
+import GrowthPanel from './profile/GrowthPanel';
+import ProfessionalsDirectory from './profile/ProfessionalsDirectory';
 import Pitchin from './Pitchin';
 import ICANWallet from './ICANWallet';
 import TrustSystem from './TrustSystem';
@@ -644,7 +648,7 @@ const STAGE_STYLES = {
 
 const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const { actualTheme } = useTheme();
-  const { isOfflineMode, queueAction, user: authContextUser } = useAuth();
+  const { isOfflineMode, queueAction, user: authContextUser, getAvatarUrl, getDisplayName } = useAuth();
   const { country: userSignupCountry } = useCountry();
   const [authUser, setAuthUser] = useState(null);
   
@@ -746,6 +750,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   }
   const [showTrustPanel, setShowTrustPanel] = useState(false);
   const [showCmmsPanel, setShowCmmsPanel] = useState(false);
+  const [showProfessionalsPanel, setShowProfessionalsPanel] = useState(false);
   const [showRecordPanel, setShowRecordPanel] = useState(false);
   const [showExpenseIncomePanel, setShowExpenseIncomePanel] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
@@ -4266,7 +4271,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     showPitchinPanel ||
     showWalletPanel ||
     showTrustPanel ||
-    showCmmsPanel;
+    showCmmsPanel ||
+    showProfessionalsPanel;
 
   const showDashboardHeader = isWebDashboard ? true : !isOverlayPanelOpen;
   const headerNavTabs = [
@@ -4275,6 +4281,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     { id: 'wallet', label: 'Wallet', icon: Wallet },
     { id: 'trust', label: 'Trust', icon: Lock },
     { id: 'cmms', label: 'CMMS', icon: Building },
+    { id: 'professionals', label: 'Professionals', icon: Users },
     { id: 'reports', label: 'Reports', icon: PieChart },
     { id: 'tithe', label: 'Tithe', icon: Heart },
     { id: 'security', label: 'Security', icon: Shield },
@@ -4287,6 +4294,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     showWalletPanel ? 'wallet' :
     showTrustPanel ? 'trust' :
     showCmmsPanel ? 'cmms' :
+    showProfessionalsPanel ? 'professionals' :
     showReportingSystem ? 'reports' :
     showTithingCalculator ? 'tithe' :
     showSecurityPanel ? 'security' :
@@ -4301,6 +4309,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     setShowWalletPanel(false);
     setShowTrustPanel(false);
     setShowCmmsPanel(false);
+    setShowProfessionalsPanel(false);
   };
 
   const closeAuxiliaryOverlays = () => {
@@ -4318,6 +4327,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     if (panelId === 'wallet') return showWalletPanel;
     if (panelId === 'trust') return showTrustPanel;
     if (panelId === 'cmms') return showCmmsPanel;
+    if (panelId === 'professionals') return showProfessionalsPanel;
     return false;
   };
 
@@ -4329,13 +4339,14 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     setShowWalletPanel(panelId === 'wallet');
     setShowTrustPanel(panelId === 'trust');
     setShowCmmsPanel(panelId === 'cmms');
+    setShowProfessionalsPanel(panelId === 'professionals');
     setActiveBottomTab(panelId);
   };
 
-  const openDetailView = (tab, item) => {
+  const openDetailView = (tab, item, initialTab) => {
     closeHeaderPanels();
     closeAuxiliaryOverlays();
-    setSelectedDetail({ tab, item });
+    setSelectedDetail({ tab, item, initialTab });
   };
 
   const openSearchOverlay = () => {
@@ -4442,6 +4453,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     else if (tabId === 'wallet')   { setShowWalletPanel(true);            setActiveBottomTab('wallet'); }
     else if (tabId === 'trust')    { setShowTrustPanel(true);             setActiveBottomTab('trust'); }
     else if (tabId === 'cmms')     { setShowCmmsPanel(true);              setActiveBottomTab('cmms'); }
+    else if (tabId === 'professionals') { setShowProfessionalsPanel(true); setActiveBottomTab('professionals'); }
     else if (tabId === 'reports')  { setShowReportingSystem(true); }
     else if (tabId === 'tithe')    { setShowTithingCalculator(true); }
     else if (tabId === 'security') { setShowSecurityPanel(true); }
@@ -4645,26 +4657,35 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               </div>
             )}
 
-            {/* Header Menu Actions - RIGHT */}
-            {isWebDashboard ? (
-              <div className="flex items-center gap-2 md:gap-3">
-                <div className="rounded-full border border-slate-600/70 bg-transparent px-2 py-1">
-                  <ThemeSwitcher />
-                </div>
-                <button
-                  onClick={() => openDetailView('profile', 'My Profile')}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 rounded-full border border-cyan-400/35 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-200 text-xs md:text-sm font-semibold transition"
-                  title="Open my profile"
-                >
-                  <User className="w-4 h-4" />
-                  Profile
-                </button>
-              </div>
-            ) : (
+            {/* Header Menu Actions - RIGHT (avatar + kebab, shared by mobile and web dashboard) */}
+            {(() => {
+              const avatarUrl = getAvatarUrl?.();
+              const displayName = getDisplayName?.() || '';
+              return (
               <div className="flex items-center gap-2 sm:gap-3">
-              <div className="scale-90">
+              <div className={isWebDashboard ? 'rounded-full border border-slate-600/70 bg-transparent px-2 py-1' : 'scale-90'}>
                 <ThemeSwitcher />
               </div>
+
+              {/* Avatar */}
+              <button
+                onClick={() => openDetailView('profile', 'My Profile')}
+                className="flex-shrink-0 rounded-full ring-2 ring-purple-500/40 hover:ring-purple-400/70 transition"
+                title="Open my profile"
+              >
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt={displayName}
+                    className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-br from-amber-700 to-purple-600 flex items-center justify-center text-white text-xs font-bold">
+                    {displayName.charAt(0) || 'U'}
+                  </div>
+                )}
+              </button>
+
               <div className="relative">
               <button 
                 onClick={() => setShowMenuDropdown(!showMenuDropdown)}
@@ -4727,7 +4748,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     {/* Readiness */}
                     <button
                       onClick={() => {
-                        openDetailView('readiness', 'Readiness');
+                        openDetailView('profile', 'My Profile', 'readiness');
                         setShowMenuDropdown(false);
                       }}
                       className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-purple-500/20 hover:text-purple-300 rounded transition"
@@ -4738,12 +4759,34 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     {/* Growth */}
                     <button
                       onClick={() => {
-                        openDetailView('growth', 'Growth');
+                        openDetailView('profile', 'My Profile', 'growth');
                         setShowMenuDropdown(false);
                       }}
                       className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-purple-500/20 hover:text-purple-300 rounded transition"
                     >
                        Growth
+                    </button>
+
+                    {/* My Resume / Portfolio */}
+                    <button
+                      onClick={() => {
+                        openDetailView('profile', 'My Profile', 'resume');
+                        setShowMenuDropdown(false);
+                      }}
+                      className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-amber-500/20 hover:text-amber-300 rounded transition"
+                    >
+                       My Resume
+                    </button>
+
+                    {/* Professionals directory */}
+                    <button
+                      onClick={() => {
+                        navigateTo('professionals');
+                        setShowMenuDropdown(false);
+                      }}
+                      className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-amber-500/20 hover:text-amber-300 rounded transition"
+                    >
+                       Professionals
                     </button>
 
                     {/* Reports */}
@@ -4820,7 +4863,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               )}
               </div>
             </div>
-            )}
+              );
+            })()}
           </div>
 
           {isWebDashboard && (
@@ -5113,6 +5157,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     onLogout={() => {
                       setSelectedDetail(null);
                     }}
+                    initialTab={selectedDetail.initialTab || 'overview'}
+                    readinessProps={{ mode, setMode, operatingCountry, setOperatingCountry, performComplianceCheck, isLoading, complianceData }}
+                    growthProps={{ optimizeSchedule, isLoading, scheduleData }}
                   />
                 </div>
               )}
@@ -5211,147 +5258,20 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
               {/* READINESS - GLOBAL NAVIGATOR */}
               {selectedDetail.tab === 'readiness' && selectedDetail.item === 'Readiness' && (
-                <div className="space-y-4">
-                  <div className="bg-slate-900/50 border border-green-500/30 rounded-lg p-4">
-                    <div className="flex items-center gap-3 mb-4">
-                      <Globe className="w-6 h-6 text-green-400" />
-                      <h2 className="text-lg font-semibold text-white">Global Navigator</h2>
-                    </div>
-
-                    <div className="mb-4">
-                      <div className="flex flex-col gap-4 mb-4">
-                        <div>
-                          <label className="block text-white font-medium mb-2">Operating Mode</label>
-                          <select
-                            value={mode}
-                            onChange={(e) => setMode(e.target.value)}
-                            className="w-full px-4 py-2 bg-slate-800/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-400"
-                          >
-                            <option value="SE">SE - Salaried Employee</option>
-                            <option value="BO">BO - Business Owner</option>
-                          </select>
-                        </div>
-                        
-                        <div>
-                          <label className="block text-white font-medium mb-2">Country</label>
-                          <select
-                            value={operatingCountry}
-                            onChange={(e) => setOperatingCountry(e.target.value)}
-                            className="w-full px-4 py-2 bg-slate-800/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-400"
-                          >
-                            <option value="Uganda">Uganda</option>
-                            <option value="Kenya">Kenya</option>
-                            <option value="Tanzania">Tanzania</option>
-                            <option value="Rwanda">Rwanda</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      <button
-                        onClick={performComplianceCheck}
-                        disabled={isLoading}
-                        className="w-full py-3 bg-green-500 hover:bg-green-600 disabled:bg-gray-600 text-white rounded-lg transition-colors font-medium"
-                      >
-                        {isLoading ? 'Checking Compliance...' : 'Perform Regulatory Gap Analysis'}
-                      </button>
-                    </div>
-
-                    {complianceData && (
-                      <div className="space-y-4">
-                        <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-4">
-                          <h3 className="text-green-400 font-semibold mb-2">Compliance Status</h3>
-                          <div className="text-2xl font-bold text-white">
-                            {Math.round(complianceData.compliancePercentage)}% Complete
-                          </div>
-                        </div>
-
-                        <div className="space-y-3">
-                          <h3 className="text-white font-semibold text-sm">Compliance Checklist</h3>
-                          {complianceData.checklist.map((item, index) => (
-                            <div key={index} className={`flex items-center gap-3 p-3 rounded-lg text-sm ${
-                              item.status === 'completed' ? 'bg-green-500/20 border border-green-500/30' :
-                              item.status === 'pending' ? 'bg-yellow-500/20 border border-yellow-500/30' :
-                              'bg-red-500/20 border border-red-500/30'
-                            }`}>
-                              {item.status === 'completed' ? 
-                                <CheckCircle className="w-5 h-5 text-green-400" /> :
-                                <AlertTriangle className="w-5 h-5 text-yellow-400" />
-                              }
-                              <div className="flex-1">
-                                <span className="text-white font-medium">{item.item}</span>
-                                {item.required && <span className="text-red-400 ml-2">*Required</span>}
-                              </div>
-                              <span className={`text-xs px-2 py-1 rounded ${
-                                item.status === 'completed' ? 'bg-green-600 text-white' :
-                                item.status === 'pending' ? 'bg-yellow-600 text-white' :
-                                'bg-red-600 text-white'
-                              }`}>
-                                {item.status.replace(/-/g, ' ')}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <ReadinessPanel
+                  mode={mode}
+                  setMode={setMode}
+                  operatingCountry={operatingCountry}
+                  setOperatingCountry={setOperatingCountry}
+                  performComplianceCheck={performComplianceCheck}
+                  isLoading={isLoading}
+                  complianceData={complianceData}
+                />
               )}
 
               {/* GROWTH - PROSPERITY ARCHITECT */}
               {selectedDetail.tab === 'growth' && selectedDetail.item === 'Growth' && (
-                <div className="space-y-4">
-                  <div className="bg-slate-900/50 border border-purple-500/30 rounded-lg p-4">
-                    <div className="flex items-center gap-3 mb-4">
-                      <Rocket className="w-6 h-6 text-purple-400" />
-                      <h2 className="text-lg font-semibold text-white">Prosperity Architect</h2>
-                    </div>
-
-                    <div className="mb-4">
-                      <p className="text-gray-300 mb-4 text-sm">
-                        Optimize your schedule for maximum value creation while maintaining spiritual and physical alignment.
-                      </p>
-                      
-                      <button
-                        onClick={optimizeSchedule}
-                        disabled={isLoading}
-                        className="w-full py-3 bg-purple-500 hover:bg-purple-600 disabled:bg-gray-600 text-white rounded-lg transition-colors font-medium"
-                      >
-                        {isLoading ? 'Optimizing Schedule...' : 'Optimize Daily Schedule'}
-                      </button>
-                    </div>
-
-                    {scheduleData && (
-                      <div className="space-y-4">
-                        <div className="bg-purple-500/20 border border-purple-500/30 rounded-lg p-4">
-                          <h3 className="text-purple-400 font-semibold mb-2">Optimization Score</h3>
-                          <div className="text-2xl font-bold text-white">
-                            {Math.round(scheduleData.optimizationScore)}%
-                          </div>
-                        </div>
-
-                        <div className="space-y-3">
-                          <h3 className="text-white font-semibold text-sm">Schedule Recommendations</h3>
-                          {scheduleData.recommendations.map((rec, index) => (
-                            <div key={index} className="flex items-start gap-3 p-3 bg-white/5 rounded-lg">
-                              <Clock className="w-5 h-5 text-purple-400 mt-0.5 flex-shrink-0" />
-                              <span className="text-white text-sm">{rec}</span>
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="space-y-3">
-                          <h3 className="text-white font-semibold text-sm">Next Actions</h3>
-                          {scheduleData.nextActions.map((action, index) => (
-                            <div key={index} className="flex items-center gap-3 p-3 bg-blue-500/20 border border-blue-500/30 rounded-lg">
-                              <Target className="w-5 h-5 text-blue-400" />
-                              <span className="text-white text-sm">{action}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <GrowthPanel optimizeSchedule={optimizeSchedule} isLoading={isLoading} scheduleData={scheduleData} />
               )}
 
               {/* DANGER ZONE - DELETE ACCOUNT */}
@@ -8024,6 +7944,16 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         </div>
       )}
 
+
+      {/* Professionals Directory Panel */}
+      {showProfessionalsPanel && (
+        <div
+          className={`fixed inset-x-0 z-30 bg-gradient-to-b from-[#241511] to-slate-950 overflow-y-auto ${isWebDashboard ? 'top-[132px] md:top-[146px]' : 'top-0'}`}
+          style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
+        >
+          <ProfessionalsDirectory />
+        </div>
+      )}
 
       {/* Status Feed Page */}
       {showStatusPage && (

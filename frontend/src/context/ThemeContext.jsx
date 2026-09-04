@@ -39,6 +39,18 @@ export const THEMES = {
     name: 'Ocean Blue',
     icon: '🔵',
     description: 'Blue & serene'
+  },
+  sienna: {
+    id: 'sienna',
+    name: 'Sienna',
+    icon: '🟤',
+    description: 'Brown & purple, after dark'
+  },
+  siennaLight: {
+    id: 'siennaLight',
+    name: 'Sienna Light',
+    icon: '🤎',
+    description: 'Warm brown & purple, daylight'
   }
 };
 
@@ -98,6 +110,28 @@ const THEME_COLORS = {
     primaryLight: '#082f49',
     secondary: '#0ea5e9',
     accent: '#fbbf24'
+  },
+  sienna: {
+    bg: '#241511',
+    bgSecondary: '#3a2418',
+    text: '#f5ece3',
+    textSecondary: '#d9c3ae',
+    border: '#6b4636',
+    primary: '#b57a56',
+    primaryLight: '#4a2e22',
+    secondary: '#a672d1',
+    accent: '#e0a458'
+  },
+  siennaLight: {
+    bg: '#faf3ea',
+    bgSecondary: '#f0e2d1',
+    text: '#3a2418',
+    textSecondary: '#6b4636',
+    border: '#d8bfa3',
+    primary: '#8a5a3b',
+    primaryLight: '#f0e2d1',
+    secondary: '#7c4fa0',
+    accent: '#b5762e'
   }
 };
 
@@ -134,12 +168,13 @@ const applyThemeImmediate = (themeId) => {
   
   // Generate comprehensive CSS with ALL color utility overrides
   const generateComprehensiveThemeCSS = (colors, themeId) => {
-    const isDarkTheme = themeId === 'dark';
+    const isDarkTheme = themeId === 'dark' || themeId === 'sienna';
+    const isFlatLightTheme = themeId === 'light' || themeId === 'siennaLight';
     const mappedPrimarySurface = isDarkTheme ? colors.primaryLight : colors.primary;
     const mappedGradientFrom = isDarkTheme ? colors.bg : colors.bgSecondary;
     const mappedGradientVia = isDarkTheme ? colors.bgSecondary : colors.primary;
     const mappedGradientTo = isDarkTheme ? colors.bg : colors.bgSecondary;
-    const backgroundImageCSS = themeId === 'light'
+    const backgroundImageCSS = isFlatLightTheme
       ? 'background-image: none !important;'
       : isDarkTheme
         ? `background-image: linear-gradient(160deg, ${colors.bg} 0%, ${colors.bgSecondary} 55%, ${colors.bg} 100%) !important;`
