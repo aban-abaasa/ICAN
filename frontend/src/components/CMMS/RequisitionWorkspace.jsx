@@ -84,7 +84,7 @@ const emptyForm = {
 
 const formatUgx = (value) => `UGX ${Number(value || 0).toLocaleString()}`;
 
-const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData, userDepartmentId }) => {
+const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData, userDepartmentId, canView = true, canCreate = false }) => {
   const [form, setForm] = useState(emptyForm);
   const [selectedItem, setSelectedItem] = useState('');
   const [itemQuantity, setItemQuantity] = useState(1);
@@ -98,9 +98,13 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
   const hasLoaded = useRef(false);
   const pendingRequiredAmount = (Number(itemQuantity) || 0) * (Number(itemCost) || 0);
 
-  const canCreateRequisition = ['technician', 'service-provider', 'supervisor', 'coordinator', 'admin'].includes(userRole);
-  // Technicians and service-providers can submit only; they cannot browse the register
-  const canViewRequisitionList = !['technician', 'service-provider'].includes(userRole);
+  // Driven by the company's actual role/tool configuration (CMMSRoleConfiguration
+  // -> hasToolAction('requisitions', ...)), not a hardcoded legacy role-name
+  // list -- a custom role admins create today would never match old names
+  // like 'technician'/'supervisor' and would otherwise always be denied
+  // create even after being explicitly granted it.
+  const canCreateRequisition = canCreate;
+  const canViewRequisitionList = canView;
 
   const inventoryOptions = useMemo(() => {
     const names = (cmmsData.inventory || [])

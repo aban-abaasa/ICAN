@@ -15,7 +15,7 @@ const adminSupabase =
       })
     : null;
 
-const ALLOWED_FOLDERS = ['pitches', 'statuses', 'avatars', 'cmms-reports', 'cmms-announcements'];
+const ALLOWED_FOLDERS = ['pitches', 'statuses', 'avatars', 'cmms-reports', 'cmms-announcements', 'voice-notes'];
 
 // Job applicants never have an ICAN account, so their resume upload can't
 // carry a Bearer token like every other upload here -- this is the one
@@ -59,7 +59,7 @@ const getAuthenticatedUser = async (req) => {
 
 /**
  * POST /api/storage/presign-upload
- * Body: { folder: 'pitches'|'statuses'|'avatars'|'cmms-reports', filename, contentType }
+ * Body: { folder: 'pitches'|'statuses'|'avatars'|'cmms-reports'|'cmms-announcements'|'voice-notes', filename, contentType }
  */
 router.post('/presign-upload', async (req, res) => {
   try {

@@ -1624,7 +1624,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       // Find recipient by account number, email, or phone
       let recipientUser = null;
       let lookupError = null;
-      
+
       if (/^\d{16}$/.test(recipientIdentifier.trim())) {
         // Search by account number — 16 raw digits, no phone number in this
         // app is that long, so length alone disambiguates it from a phone.
@@ -1706,7 +1706,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         totalDeduction,
         senderWalletId: null  // Will be set when processing
       });
-      
+
       setShowApprovalModal(true);
       setActiveModal(null);  // Close send modal
       setSendForm({ recipient: '', amount: '', description: '' });  // Clear form

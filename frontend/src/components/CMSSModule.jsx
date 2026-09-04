@@ -7905,6 +7905,7 @@ const CMMSModule = ({
           <CMMSAnnouncementsPanel
             companyId={companyIdToUse}
             currentUser={user}
+            canView={hasToolAction('announcements', 'view')}
             canCreate={hasToolAction('announcements', 'create')}
             canEdit={hasToolAction('announcements', 'edit')}
             canDelete={hasToolAction('announcements', 'delete')}
@@ -7939,16 +7940,28 @@ const CMMSModule = ({
             />
         )}
         {activeTab === 'transport' && getTabs().includes('transport') && (
-          getToolScope('transport') === 'own' ? <CMMSEmployeeSelfService companyProfile={cmmsData.companyProfile} mode="transport" /> : getToolScope('transport') !== 'company' ? (
-            <div className="rounded-2xl border border-amber-700/40 bg-amber-900/15 p-6 text-sm text-amber-100">
-              Company transport contracts, employee allocations, fares, and ride history require a company-wide Transport assignment. Your role has a more limited data scope, so these records are not loaded.
-            </div>
-          ) : <CMMSBookTransportPanel
+          getToolScope('transport') === 'company' ? (
+            <CMMSBookTransportPanel
               companyProfile={cmmsData.companyProfile}
               canCreate={hasToolAction('transport', 'create')}
               canEdit={hasToolAction('transport', 'edit')}
               canAssign={hasToolAction('transport', 'assign')}
             />
+          ) : (hasToolAction('transport', 'create') || hasToolAction('transport', 'edit') || hasToolAction('transport', 'assign')) ? (
+            // Fleet-management actions (booking for others, editing contracts,
+            // assigning drivers) only exist in the company-wide panel above --
+            // a narrower scope can't fulfil them, so keep this blocked rather
+            // than silently degrade to the read-only self-service view below.
+            <div className="rounded-2xl border border-amber-700/40 bg-amber-900/15 p-6 text-sm text-amber-100">
+              Company transport contracts, employee allocations, fares, and ride history require a company-wide Transport assignment. Your role has a more limited data scope, so these records are not loaded.
+            </div>
+          ) : (
+            // View-only roles (any non-company scope, including the default
+            // "department" a role gets when an admin only ticks "view") always
+            // get the safe self-service screen -- it shows only the caller's
+            // own plan usage and ride history, never other employees' records.
+            <CMMSEmployeeSelfService companyProfile={cmmsData.companyProfile} mode="transport" />
+          )
         )}
         {activeTab === 'requisitions' && getTabs().includes('requisitions') && (
           <>
@@ -7963,6 +7976,8 @@ const CMMSModule = ({
               cmmsData={cmmsData}
               setCmmsData={setCmmsData}
               userDepartmentId={currentUserDeptId}
+              canView={hasToolAction('requisitions', 'view')}
+              canCreate={hasToolAction('requisitions', 'create')}
             />
           </>
         )}

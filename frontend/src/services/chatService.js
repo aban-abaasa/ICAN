@@ -79,6 +79,11 @@ export const sendMessage = async (conversationId, { senderRole, senderName, body
   return data;
 };
 
+export const deleteMessage = async (messageId) => {
+  const { error } = await supabase.from('chat_messages').delete().eq('id', messageId);
+  if (error) throw error;
+};
+
 export const markConversationRead = async (conversationId, side) => {
   const field = side === 'dev' ? 'unread_by_dev' : 'unread_by_user';
   await supabase.from('chat_conversations').update({ [field]: false }).eq('id', conversationId);

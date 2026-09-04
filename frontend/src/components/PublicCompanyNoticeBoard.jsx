@@ -1,10 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Megaphone, Briefcase, MapPin, Calendar, Users, FileText, X, Loader,
   AlertCircle, CheckCircle2, Search, Building2, ArrowLeft, Upload, Share2,
-  Check, ChevronRight, Clock
+  Check, ChevronRight, Clock, ShoppingBag, ShoppingCart, Plus, Minus,
+  Trash2, Truck, Store
 } from 'lucide-react';
 import cmmsAnnouncementsService from '../services/cmmsAnnouncementsService';
+import { getDropshipStorefront, dropshipCheckout } from '../services/dropshipService';
+import { useAuth } from '../context/AuthContext';
+import { AuthPage } from './auth';
+
+const formatUGX = (amount) => `UGX ${Number(amount || 0).toLocaleString('en-UG', { maximumFractionDigits: 0 })}`;
 
 const EMPLOYMENT_LABELS = {
   full_time: 'Full-time',
@@ -130,6 +136,10 @@ const NB_STYLES = `
 .nb-closed-banner { background: var(--nb-amber-soft-bg); color: var(--nb-amber-soft-text); }
 .nb-error-text { color: var(--nb-maroon); }
 .nb-empty-icon { background: var(--nb-surface-alt); color: var(--nb-text-faint); }
+.nb-badge-count { background: var(--nb-maroon); color: #ffffff; }
+.nb-qty-pill { background: var(--nb-surface-alt); }
+.nb-price { color: var(--nb-green); }
+.nb-out-of-stock { color: var(--nb-maroon); }
 `;
 
 /**
@@ -144,6 +154,8 @@ const NB_STYLES = `
  * prompt) since the whole point is that applicants never need an account.
  */
 const PublicCompanyNoticeBoard = ({ companyId }) => {
+  const { user, loading: authLoading } = useAuth();
+
   const [company, setCompany] = useState(null);
   const [notFound, setNotFound] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -152,6 +164,14 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   const [jobs, setJobs] = useState([]);
   const [selectedJob, setSelectedJob] = useState(null);
   const [selectedNotice, setSelectedNotice] = useState(null);
+
+  // The company's Dropship storefront, when it has linked one (see "Board
+  // profile" in CMMSAnnouncementsPanel.jsx / fn_set_cmms_company_business_
+  // profile). Loaded separately from notices/jobs since it depends on
+  // company.business_profile_id, only known once the header result lands.
+  const [products, setProducts] = useState([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [cart, setCart] = useState({}); // { [listing_id]: quantity }
 
   useEffect(() => {
     let cancelled = false;
@@ -175,6 +195,18 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
     if (companyId) load();
     return () => { cancelled = true; };
   }, [companyId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!company?.business_profile_id) { setProducts([]); return; }
+    setProductsLoading(true);
+    getDropshipStorefront(company.business_profile_id).then(({ data }) => {
+      if (cancelled) return;
+      setProducts(data || []);
+      setProductsLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [company?.business_profile_id]);
 
   // A shared post link (?post=<id>) should open straight to that specific
   // announcement/job, not just the board's front page -- the whole point
@@ -293,6 +325,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
         <nav className="max-w-5xl mx-auto px-4 sm:px-6 flex gap-1 overflow-x-auto">
           {[
             { id: 'notices', label: 'Notices', icon: Megaphone },
+            ...(products.length > 0 ? [{ id: 'shop', label: 'Products & Services', icon: ShoppingBag }] : []),
             { id: 'careers', label: 'Careers', icon: Briefcase },
             { id: 'track', label: 'Track my application', icon: Search },
           ].map((tab) => (
@@ -310,7 +343,21 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-7">
         <div key={section} className="animate-fadeInUp" style={{ animationDuration: '0.35s' }}>
           {section === 'notices' && (
-            <NoticeList notices={notices} onSelect={(notice) => openDetail(notice, setSelectedNotice)} />
+            <>
+              {company.about && <AboutCard company={company} />}
+              <NoticeList notices={notices} onSelect={(notice) => openDetail(notice, setSelectedNotice)} />
+            </>
+          )}
+          {section === 'shop' && (
+            <ShopSection
+              products={products}
+              loading={productsLoading}
+              cart={cart}
+              setCart={setCart}
+              businessProfileId={company.business_profile_id}
+              user={user}
+              authLoading={authLoading}
+            />
           )}
           {section === 'careers' && (
             <JobList jobs={jobs} onSelect={(job) => openDetail(job, setSelectedJob)} />
@@ -348,6 +395,23 @@ const EmptyState = ({ icon: Icon, text }) => (
       <Icon className="w-7 h-7" />
     </div>
     <p className="nb-text-muted text-sm">{text}</p>
+  </div>
+);
+
+// A real "what this business does" section, in the owner's own words (set
+// from CMMSAnnouncementsPanel's "Board profile" tab) -- this is what makes
+// the board read as the business's own site rather than just a job/notice
+// feed bolted onto ICANEra.
+const AboutCard = ({ company }) => (
+  <div className="nb-card rounded-2xl shadow-sm p-5 mb-5 animate-fadeInUp">
+    <h2 className="text-sm font-bold nb-text uppercase tracking-wide mb-2">About {company.company_name}</h2>
+    <p className="nb-text-muted whitespace-pre-wrap leading-relaxed text-sm">{company.about}</p>
+    {(company.website || company.phone) && (
+      <div className="flex flex-wrap gap-3 mt-3 text-xs nb-text-faint">
+        {company.website && <span>🌐 {company.website}</span>}
+        {company.phone && <span>📞 {company.phone}</span>}
+      </div>
+    )}
   </div>
 );
 
@@ -430,6 +494,216 @@ const JobList = ({ jobs, onSelect }) => {
           <ChevronRight className="w-5 h-5 nb-icon-muted flex-shrink-0 transition-transform duration-300 group-hover:translate-x-1" />
         </button>
       ))}
+    </div>
+  );
+};
+
+// Browsing is free for anyone; paying is a real ICANEra wallet transfer, so
+// it needs an account. An anonymous visitor who hits "Pay" gets the signup
+// form right here (no navigating away, cart stays intact) -- once they have
+// an account, the exact same button pays instantly, same as anywhere else
+// in ICANEra. This is the whole "click a product -> get an ICANEra wallet,
+// or transact seamlessly if you already have one" flow.
+const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user, authLoading }) => {
+  const [showCart, setShowCart] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [deliveryFee, setDeliveryFee] = useState('');
+  const [placing, setPlacing] = useState(false);
+  const [checkoutError, setCheckoutError] = useState(null);
+  const [receipt, setReceipt] = useState(null);
+
+  const cartItems = useMemo(
+    () => Object.entries(cart)
+      .map(([listingId, qty]) => ({ listing: products.find((p) => p.listing_id === listingId), qty }))
+      .filter((row) => row.listing && row.qty > 0),
+    [cart, products]
+  );
+  const cartTotal = cartItems.reduce((sum, row) => sum + row.listing.listed_price * row.qty, 0);
+  const cartCount = cartItems.reduce((sum, row) => sum + row.qty, 0);
+  const allFreeDelivery = cartItems.length > 0 && cartItems.every((row) => row.listing.free_delivery);
+  const deliveryFeeAmount = allFreeDelivery ? 0 : (Number(deliveryFee) || 0);
+  const orderTotal = cartTotal + deliveryFeeAmount;
+
+  const changeQty = (listingId, delta, maxStock) => {
+    setCart((prev) => {
+      const next = Math.max(0, Math.min(maxStock ?? Infinity, (prev[listingId] || 0) + delta));
+      return { ...prev, [listingId]: next };
+    });
+  };
+
+  const handleCheckout = async () => {
+    if (authLoading) return;
+    if (!user) { setShowAuthModal(true); return; }
+    if (cartItems.length === 0) return;
+
+    setPlacing(true);
+    setCheckoutError(null);
+    try {
+      const cartPayload = cartItems.map((row) => ({ product_id: row.listing.product_id, quantity: row.qty }));
+      const { data, error } = await dropshipCheckout(businessProfileId, cartPayload, {
+        customerName: customerName.trim() || undefined,
+        customerPhone: customerPhone.trim() || undefined,
+        deliveryAddress: deliveryAddress.trim() || undefined,
+        deliveryFee: deliveryFeeAmount,
+      });
+      if (error || !data?.success) {
+        throw new Error(error?.message || data?.error || 'Checkout failed');
+      }
+      setReceipt(data);
+      setCart({});
+    } catch (err) {
+      setCheckoutError(err.message || 'Checkout failed. Please try again.');
+    } finally {
+      setPlacing(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader className="w-7 h-7 nb-link animate-spin" />
+      </div>
+    );
+  }
+
+  if (receipt) {
+    return (
+      <div className="max-w-md mx-auto text-center py-4 animate-fadeIn">
+        <div className="w-16 h-16 rounded-full nb-chip-green flex items-center justify-center mx-auto mb-4">
+          <CheckCircle2 className="w-9 h-9" />
+        </div>
+        <h3 className="text-lg font-bold nb-text mb-1">Order placed!</h3>
+        <p className="nb-text-muted text-sm mb-4">Paid with your ICANEra wallet.</p>
+        <div className="nb-card rounded-2xl p-4 text-left space-y-2">
+          <div className="flex justify-between text-sm"><span className="nb-text-faint">Receipt number</span><span className="nb-text font-mono">{receipt.customer_receipt_number}</span></div>
+          <div className="flex justify-between text-sm"><span className="nb-text-faint">Items</span><span className="nb-text">{receipt.items_count}</span></div>
+          {receipt.delivery_fee > 0 && (
+            <div className="flex justify-between text-sm"><span className="nb-text-faint">Delivery fee</span><span className="nb-text">{formatUGX(receipt.delivery_fee)}</span></div>
+          )}
+          <div className="flex justify-between text-base font-semibold border-t nb-border pt-2 mt-2"><span className="nb-text">Total paid</span><span className="nb-text">{formatUGX(receipt.customer_paid_total)}</span></div>
+          {receipt.delivery_address && (
+            <div className="flex justify-between text-sm"><span className="nb-text-faint">Delivery to</span><span className="nb-text text-right">{receipt.delivery_address}</span></div>
+          )}
+        </div>
+        <button onClick={() => setReceipt(null)} className="mt-6 px-5 py-2.5 rounded-xl nb-btn-secondary font-semibold transition">Keep browsing</button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm nb-text-muted">Browse for free. Pay with your ICANEra wallet when you're ready to order.</p>
+        <button onClick={() => setShowCart(true)} className="relative p-2.5 rounded-full nb-share-btn flex-shrink-0">
+          <ShoppingCart className="w-4 h-4" />
+          {cartCount > 0 && (
+            <span className="absolute -top-1 -right-1 nb-badge-count text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">{cartCount}</span>
+          )}
+        </button>
+      </div>
+
+      {products.length === 0 ? (
+        <EmptyState icon={ShoppingBag} text="Nothing listed right now. Check back later." />
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+          {products.map((listing) => {
+            const qty = cart[listing.listing_id] || 0;
+            return (
+              <div key={listing.listing_id} className="nb-card rounded-2xl overflow-hidden flex flex-col">
+                <div className="aspect-square nb-surface-alt flex items-center justify-center overflow-hidden">
+                  {listing.images?.[0] ? (
+                    <img src={listing.images[0]} alt={listing.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <Store className="w-8 h-8 nb-icon-muted" />
+                  )}
+                </div>
+                <div className="p-2.5 flex-1 flex flex-col">
+                  <p className="text-sm nb-text font-medium line-clamp-2 min-h-[2.5rem]">{listing.name}</p>
+                  <p className="nb-price font-bold mt-1">{formatUGX(listing.listed_price)}</p>
+                  {listing.free_delivery && (
+                    <p className="mt-0.5 flex items-center gap-1 text-[11px] nb-text-muted"><Truck className="w-3 h-3" />Free delivery</p>
+                  )}
+                  {!listing.in_stock ? (
+                    <p className="mt-2 text-xs nb-out-of-stock font-semibold">Out of stock</p>
+                  ) : qty === 0 ? (
+                    <button onClick={() => changeQty(listing.listing_id, 1, listing.available_stock)} className="mt-2 w-full py-1.5 rounded-lg nb-btn-primary text-xs font-semibold transition">
+                      Add to cart
+                    </button>
+                  ) : (
+                    <div className="mt-2 flex items-center justify-between rounded-lg nb-qty-pill">
+                      <button onClick={() => changeQty(listing.listing_id, -1, listing.available_stock)} className="p-1.5 nb-text"><Minus className="w-3.5 h-3.5" /></button>
+                      <span className="nb-text text-sm font-semibold">{qty}</span>
+                      <button onClick={() => changeQty(listing.listing_id, 1, listing.available_stock)} className="p-1.5 nb-text"><Plus className="w-3.5 h-3.5" /></button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {showCart && (
+        <Modal onClose={() => setShowCart(false)}>
+          <h2 className="text-lg font-bold nb-text mb-4">Your cart</h2>
+          {cartItems.length === 0 ? (
+            <p className="text-sm nb-text-faint text-center py-8">Your cart is empty</p>
+          ) : (
+            <div className="space-y-3">
+              {cartItems.map((row) => (
+                <div key={row.listing.listing_id} className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm nb-text truncate">{row.listing.name}</p>
+                    <p className="text-xs nb-text-faint">{formatUGX(row.listing.listed_price)} × {row.qty}</p>
+                  </div>
+                  <button onClick={() => setCart((prev) => ({ ...prev, [row.listing.listing_id]: 0 }))} className="p-1.5 nb-text-faint hover:opacity-70"><Trash2 className="w-4 h-4" /></button>
+                </div>
+              ))}
+              <div className="space-y-2 pt-2 border-t nb-border">
+                <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Your name" className="w-full px-3 py-2 rounded-xl nb-input text-sm" />
+                <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Phone number" className="w-full px-3 py-2 rounded-xl nb-input text-sm" />
+                <input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="Delivery address" className="w-full px-3 py-2 rounded-xl nb-input text-sm" />
+                {allFreeDelivery ? (
+                  <p className="flex items-center gap-1.5 text-xs nb-text-muted"><Truck className="w-3.5 h-3.5" />Free delivery on this order</p>
+                ) : (
+                  <div>
+                    <label className="flex items-center gap-1.5 text-xs nb-text-faint mb-1"><Truck className="w-3.5 h-3.5" />Delivery fee</label>
+                    <input type="number" min="0" value={deliveryFee} onChange={(e) => setDeliveryFee(e.target.value)} placeholder="0" className="w-full px-3 py-2 rounded-xl nb-input text-sm" />
+                  </div>
+                )}
+              </div>
+              <div className="border-t nb-border pt-3 space-y-1">
+                <div className="flex justify-between text-sm nb-text-faint"><span>Items</span><span>{formatUGX(cartTotal)}</span></div>
+                {deliveryFeeAmount > 0 && (
+                  <div className="flex justify-between text-sm nb-text-faint"><span>Delivery</span><span>{formatUGX(deliveryFeeAmount)}</span></div>
+                )}
+                <div className="flex justify-between nb-text font-semibold"><span>Total</span><span>{formatUGX(orderTotal)}</span></div>
+              </div>
+              {checkoutError && <p className="nb-error-text text-xs">{checkoutError}</p>}
+              <button
+                onClick={handleCheckout}
+                disabled={placing}
+                className="w-full py-2.5 rounded-xl nb-btn-primary disabled:opacity-50 text-sm font-semibold transition flex items-center justify-center gap-2"
+              >
+                {placing ? <Loader className="w-4 h-4 animate-spin" /> : null}
+                {user ? `Pay ${formatUGX(orderTotal)} with ICANEra` : 'Sign up free to pay with ICANEra'}
+              </button>
+            </div>
+          )}
+        </Modal>
+      )}
+
+      {showAuthModal && (
+        <div className="icanera-nb fixed inset-0 z-[60] overflow-y-auto nb-surface">
+          <button onClick={() => setShowAuthModal(false)} className="fixed top-4 right-4 nb-share-btn p-2 rounded-full z-10">
+            <X className="w-5 h-5" />
+          </button>
+          <AuthPage initialView="signup" onAuthSuccess={() => setShowAuthModal(false)} />
+        </div>
+      )}
     </div>
   );
 };

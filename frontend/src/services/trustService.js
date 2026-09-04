@@ -2217,3 +2217,20 @@ export const sendGroupMessage = async (messageData) => {
     return { success: false, error: error.message };
   }
 };
+
+/**
+ * Delete a group chat message.
+ */
+export const deleteGroupMessage = async (messageId) => {
+  try {
+    const sb = getSupabase();
+    if (!sb) return { success: false };
+
+    const { error } = await sb.from('group_messages').delete().eq('id', messageId);
+    if (error) throw error;
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting group message:', error);
+    return { success: false, error: error.message };
+  }
+};

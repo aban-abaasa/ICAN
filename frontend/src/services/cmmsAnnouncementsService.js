@@ -80,6 +80,33 @@ export const deleteAnnouncement = async (id) => {
   return { success: true };
 };
 
+export const updateCompanyAbout = async (companyId, about) => {
+  if (!companyId) return { success: false, error: 'companyId is required' };
+  const { data, error } = await supabase
+    .from('cmms_company_profiles')
+    .update({ about: about?.trim() || null, updated_at: new Date().toISOString() })
+    .eq('id', companyId)
+    .select('about')
+    .single();
+  if (error) return { success: false, error: error.message };
+  return { success: true, data };
+};
+
+// The only sanctioned way to link/unlink this company's public board to one
+// of the caller's own ICANera business_profiles -- see
+// fn_set_cmms_company_business_profile in CMMS_NOTICE_BOARD_PRODUCTS.sql for
+// why this can't be a plain table update (it must also verify the caller
+// owns/manages the target business profile, not just this CMMS company).
+export const setCompanyBusinessProfileLink = async (companyId, businessProfileId) => {
+  if (!companyId) return { success: false, error: 'companyId is required' };
+  const { error } = await supabase.rpc('fn_set_cmms_company_business_profile', {
+    p_company_id: companyId,
+    p_business_profile_id: businessProfileId || null,
+  });
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+};
+
 export const getJobApplications = async (companyId) => {
   if (!companyId) return { success: false, error: 'companyId is required', data: [] };
   const { data, error } = await supabase
@@ -320,6 +347,8 @@ export default {
   createAnnouncement,
   updateAnnouncement,
   deleteAnnouncement,
+  updateCompanyAbout,
+  setCompanyBusinessProfileLink,
   getJobApplications,
   updateApplicationStatus,
   getPublicCompanyHeader,

@@ -146,7 +146,83 @@ export default function CMMSEmployeeSelfService({ companyProfile, mode }) {
   const currency = compensation?.currency || entries[0]?.metadata?.currency;
   const liveAdvance = advances.find(a => ['pending', 'approved', 'paid', 'confirmed'].includes(a.status));
 
-  if (mode === 'transport') return <div className="space-y-4 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4 md:p-6"><div className="flex items-center gap-3"><Bus className="h-6 w-6 text-orange-400" /><div><h2 className="text-xl font-bold text-white">My transport records</h2><p className="text-sm text-slate-400">Only transport requests made by your account are shown.</p></div></div>{transportPlan?.has_plan && <div className="rounded-xl border border-orange-800/40 bg-orange-950/10 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold text-white">{transportPlan.contract_name}</p><span className="rounded-full bg-orange-500/15 px-3 py-1 text-xs capitalize text-orange-300">{transportPlan.billing_cycle} plan</span></div><p className="mt-1 text-xs text-slate-400">Allowed vehicles: {(transportPlan.allowed_vehicle_types || []).join(', ') || 'any'}</p>{transportPlan.monthly_limit > 0 && <div className="mt-3"><div className="flex justify-between text-xs text-slate-400"><span>{money(transportPlan.spend_this_month, transportPlan.currency)} used this month</span><span>of {money(transportPlan.monthly_limit, transportPlan.currency)}</span></div><div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-slate-800"><div className="h-full rounded-full bg-orange-500" style={{ width: `${Math.min(transportPlan.percent_used || 0, 100)}%` }} /></div></div>}<p className="mt-2 text-xs text-slate-500">{transportPlan.rides_this_month} ride(s) across {transportPlan.days_covered_this_month} day(s) this month</p></div>}{rides.length === 0 ? <p className="text-sm text-slate-400">No personal transport records yet.</p> : <div className="space-y-2">{rides.map(ride => <div key={ride.id} className="rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-sm"><div className="flex justify-between gap-3"><span className="font-semibold text-white capitalize">{ride.status}</span><span className="text-slate-400">{new Date(ride.created_at).toLocaleDateString()}</span></div><p className="mt-1 text-slate-300">{ride.pickup_location} → {ride.dropoff_location}</p><p className="mt-1 text-xs text-slate-500">{ride.ride_count} ride(s) · {ride.requested_vehicle_type || 'Any vehicle'}{ride.estimated_total ? ` · ${money(ride.estimated_total)}` : ''}</p></div>)}</div>}</div>;
+  if (mode === 'transport') {
+    const limit = Number(transportPlan?.monthly_limit || 0);
+    const spend = Number(transportPlan?.spend_this_month || 0);
+    const remaining = limit > 0 ? Math.max(limit - spend, 0) : null;
+    // "completed"/"dispatched" rides carry an actual or estimated cost that's
+    // already counted in spend_this_month above -- everything else (pending,
+    // approved, cancelled, rejected) hasn't been charged against the plan yet.
+    const chargedStatuses = ['completed', 'dispatched'];
+    return (
+      <div className="space-y-4 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4 md:p-6">
+        <div className="flex items-center gap-3">
+          <Bus className="h-6 w-6 text-orange-400" />
+          <div>
+            <h2 className="text-xl font-bold text-white">My transport plan</h2>
+            <p className="text-sm text-slate-400">Only transport requests made by your account are shown.</p>
+          </div>
+        </div>
+        {transportPlan?.has_plan ? (
+          <div className="rounded-xl border border-orange-800/40 bg-orange-950/10 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-white">{transportPlan.contract_name}</p>
+              <span className="rounded-full bg-orange-500/15 px-3 py-1 text-xs capitalize text-orange-300">{transportPlan.billing_cycle} plan</span>
+            </div>
+            <p className="mt-1 text-xs text-slate-400">Allowed vehicles: {(transportPlan.allowed_vehicle_types || []).join(', ') || 'any'}</p>
+            {limit > 0 && (
+              <>
+                <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
+                    <p className="text-xs uppercase text-slate-400">Used this month</p>
+                    <p className="mt-1 text-lg font-bold text-white">{money(spend, transportPlan.currency)}</p>
+                  </div>
+                  <div className="rounded-lg border border-emerald-800/40 bg-emerald-950/10 p-3">
+                    <p className="text-xs uppercase text-emerald-300">Remaining</p>
+                    <p className="mt-1 text-lg font-bold text-white">{money(remaining, transportPlan.currency)}</p>
+                  </div>
+                  <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
+                    <p className="text-xs uppercase text-slate-400">Plan limit</p>
+                    <p className="mt-1 text-lg font-bold text-white">{money(limit, transportPlan.currency)}</p>
+                  </div>
+                </div>
+                <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-800">
+                  <div className="h-full rounded-full bg-orange-500" style={{ width: `${Math.min(transportPlan.percent_used || 0, 100)}%` }} />
+                </div>
+              </>
+            )}
+            <p className="mt-2 text-xs text-slate-500">{transportPlan.rides_this_month} ride(s) across {transportPlan.days_covered_this_month} day(s) this month</p>
+          </div>
+        ) : (
+          <p className="text-sm text-slate-400">Your company has no active transport plan yet.</p>
+        )}
+        <section>
+          <h3 className="mb-2 font-semibold text-white">My journeys</h3>
+          {rides.length === 0 ? <p className="text-sm text-slate-400">No personal transport records yet.</p> : (
+            <div className="space-y-2">
+              {rides.map(ride => {
+                const cost = ride.estimated_total || 0;
+                const charged = chargedStatuses.includes(ride.status);
+                return (
+                  <div key={ride.id} className="rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-sm">
+                    <div className="flex justify-between gap-3">
+                      <span className="font-semibold text-white capitalize">{ride.status}</span>
+                      <span className="text-slate-400">{new Date(ride.created_at).toLocaleDateString()}</span>
+                    </div>
+                    <p className="mt-1 text-slate-300">{ride.pickup_location} → {ride.dropoff_location}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {ride.ride_count} ride(s) · {ride.requested_vehicle_type || 'Any vehicle'}
+                      {cost > 0 ? ` · ${money(cost, transportPlan?.currency)} ${charged ? '(paid from plan)' : '(pending)'}` : ''}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </div>
+    );
+  }
 
   return <div className="space-y-4 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4 md:p-6"><div className="flex items-center gap-3"><DollarSign className="h-6 w-6 text-emerald-400" /><div><h2 className="text-xl font-bold text-white">My salary and attendance</h2><p className="text-sm text-slate-400">Only your salary, payroll entries, and attendance are shown.</p></div></div>{compensation && <div className="rounded-xl border border-emerald-800/40 bg-emerald-950/20 p-4"><p className="text-xs uppercase text-emerald-300">Current salary</p><p className="mt-1 text-2xl font-bold text-white">{money(compensation.base_salary, compensation.currency)}</p><p className="text-xs text-slate-400 capitalize">{compensation.pay_frequency || 'monthly'} · {compensation.payroll_status || 'on pay'}</p></div>}{(entries.length > 0 || unpaidDayCount > 0) && <div className="grid gap-3 sm:grid-cols-2"><div className="rounded-lg border border-emerald-800/40 bg-emerald-950/10 p-3"><p className="text-xs uppercase text-emerald-300">Paid so far</p><p className="mt-1 text-xl font-bold text-white">{money(paidTotal, currency)}</p></div><div className="rounded-lg border border-amber-800/40 bg-amber-950/10 p-3"><p className="text-xs uppercase text-amber-300">Waiting to be paid</p><p className="mt-1 text-xl font-bold text-white">{money(waitingTotal, currency)}</p>{unpaidDayCount > 0 && <p className="mt-1 text-xs text-slate-500">+ {unpaidDayCount} day(s) checked out, pay not yet confirmed</p>}</div></div>}<section><h3 className="mb-2 flex items-center gap-2 font-semibold text-white"><CalendarDays className="h-4 w-4" /> My attendance</h3>
       {monthlyAttendance ? <div className="grid gap-3 sm:grid-cols-2"><div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3"><p className="text-xs uppercase text-slate-400">Days present this month</p><p className="mt-1 text-xl font-bold text-white">{monthlyAttendance.days_present}</p></div><div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3"><p className="text-xs uppercase text-slate-400">Check-ins this month</p><p className="mt-1 text-xl font-bold text-white">{monthlyAttendance.check_in_count}</p>{monthlyAttendance.currently_checked_in && <p className="mt-1 text-xs text-emerald-400">Currently checked in</p>}</div></div> : <p className="text-sm text-slate-400">No attendance recorded this month yet.</p>}

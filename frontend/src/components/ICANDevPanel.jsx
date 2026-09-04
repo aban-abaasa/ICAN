@@ -5,9 +5,11 @@ import {
   Lock, Database, Hash, CreditCard, ToggleLeft, ToggleRight,
   CheckCircle, Copy, Activity, Layers, Clock, AlertTriangle,
   Network, Wallet, ArrowUp, ArrowDown, Eye, EyeOff, ShieldCheck,
-  MessageCircle, Globe, Trash2, Send, Mail,
+  MessageCircle, Globe, Trash2, Send, Mail, Phone, Video,
 } from 'lucide-react';
 import { getSupabaseClient } from '../lib/supabase/client';
+import CallDock from './calls/CallDock';
+import { useDirectCall } from '../hooks/useDirectCall';
 import {
   devListAllLandingMessages,
   devDeleteLandingMessage,
@@ -27,6 +29,19 @@ import {
 export const SESSION_KEY = 'ican_dev_panel_auth';
 const DEV_TOKEN   = 'dev_ICAN_Pr0_KV25';
 const ICAN_TO_UGX = 5000;
+
+// The dev-panel login is a hidden token intercept, not a real Supabase auth
+// user (see SignIn.jsx) — there's no auth.uid() to identify a call with, so
+// mint a random one and stick with it for the tab's session.
+const DEV_CALL_ID_KEY = 'ican_dev_call_id';
+const getDevCallId = () => {
+  let id = sessionStorage.getItem(DEV_CALL_ID_KEY);
+  if (!id) {
+    id = crypto.randomUUID();
+    sessionStorage.setItem(DEV_CALL_ID_KEY, id);
+  }
+  return id;
+};
 
 // Must match agentService.js / walletAccountService.js's hashPIN() exactly —
 // PIN verification (process_cashout_with_pin etc.) compares against this
@@ -313,6 +328,14 @@ const MessagesTab = () => {
 
   const selected = conversations.find(c => c.id === selectedId);
 
+  const call = useDirectCall({
+    roomId: selectedId ? `support:${selectedId}` : null,
+    selfId: getDevCallId(),
+    selfName: 'IcanEra Team',
+  });
+  const peerNameHintRef = useRef('');
+  peerNameHintRef.current = selected?.guest_name || 'Visitor';
+
   const handleReply = async () => {
     const body = reply.trim();
     if (!body || !selectedId || sending) return;
@@ -368,10 +391,23 @@ const MessagesTab = () => {
           </div>
         ) : (
           <>
-            <div className="border-b px-4 py-3" style={{ borderColor:'var(--dp-sep)' }}>
-              <p className="text-sm font-semibold" style={{ color:'var(--dp-txt)' }}>{selected.guest_name || 'Guest'}</p>
-              <p className="text-xs" style={{ color:'var(--dp-muted)' }}>{selected.guest_email} · {selected.portal}</p>
+            <div className="flex items-center justify-between gap-2 border-b px-4 py-3" style={{ borderColor:'var(--dp-sep)' }}>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold truncate" style={{ color:'var(--dp-txt)' }}>{selected.guest_name || 'Guest'}</p>
+                <p className="text-xs truncate" style={{ color:'var(--dp-muted)' }}>{selected.guest_email} · {selected.portal}</p>
+              </div>
+              {call.canCall && (
+                <div className="flex flex-shrink-0 items-center gap-1">
+                  <button onClick={() => call.startCall(false, peerNameHintRef.current)} className="rounded-full p-1.5 transition hover:opacity-70" style={{ color:'var(--dp-sub)' }} title="Audio call">
+                    <Phone className="h-4 w-4" />
+                  </button>
+                  <button onClick={() => call.startCall(true, peerNameHintRef.current)} className="rounded-full p-1.5 transition hover:opacity-70" style={{ color:'var(--dp-sub)' }} title="Video call">
+                    <Video className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
             </div>
+            <CallDock call={call} />
             <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto px-4 py-3" style={{ maxHeight: '48vh' }}>
               {messages.map(m => {
                 const fromDev = m.sender_role === 'dev';

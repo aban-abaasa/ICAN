@@ -42,6 +42,11 @@ export const replyToLandingMessage = async ({ parentId, name, email, authId, mes
   return data;
 };
 
+export const deleteLandingMessage = async (messageId) => {
+  const { error } = await supabase.from('landing_messages').delete().eq('id', messageId);
+  if (error) throw error;
+};
+
 export const listMyLandingMessages = async (authId) => {
   if (!authId) return [];
   const { data, error } = await supabase

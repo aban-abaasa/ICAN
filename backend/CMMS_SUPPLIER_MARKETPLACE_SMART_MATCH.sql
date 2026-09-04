@@ -63,7 +63,22 @@ BEGIN
   FROM public.cmms_company_profiles
   WHERE id = p_cmms_company_id AND is_active = TRUE;
 
-  IF v_buyer_business_id IS NULL OR NOT public.unified_business_member(v_buyer_business_id) THEN
+  -- Browsing the catalog is a read: any active CMMS staff member with a
+  -- "requisitions: view" grant needs it to work, and most employees never
+  -- hold Pichin-level business membership (shareholder/business_member_roles)
+  -- -- that's a separate, stronger authority CMMS role assignment doesn't
+  -- imply. Accept either: the Pichin-level check (kept for admins managing
+  -- the linked business directly) or plain active cmms_users membership.
+  IF v_buyer_business_id IS NULL THEN
+    RAISE EXCEPTION 'You are not an active member of this CMMS business';
+  END IF;
+  IF NOT public.unified_business_member(v_buyer_business_id)
+     AND NOT EXISTS (
+       SELECT 1 FROM public.cmms_users u
+       WHERE u.cmms_company_id = p_cmms_company_id
+         AND u.is_active
+         AND lower(u.email) = lower(auth.jwt() ->> 'email')
+     ) THEN
     RAISE EXCEPTION 'You are not an active member of this CMMS business';
   END IF;
 

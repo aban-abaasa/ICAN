@@ -6,6 +6,7 @@ import {
 import { supabase } from '../lib/supabase/client';
 import { uploadToR2 } from '../services/r2StorageService';
 import cmmsAnnouncementsService from '../services/cmmsAnnouncementsService';
+import { getAccessibleBusinesses } from '../services/businessManagementService';
 
 const MAX_POSTER_BYTES = 6 * 1024 * 1024;
 const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
@@ -62,6 +63,7 @@ const applicationStatusOptions = [
 const CMMSAnnouncementsPanel = ({
   companyId,
   currentUser,
+  canView = false,
   canCreate = false,
   canEdit = false,
   canDelete = false,
@@ -88,6 +90,51 @@ const CMMSAnnouncementsPanel = ({
   const [applicationsLoading, setApplicationsLoading] = useState(false);
   const [jobFilter, setJobFilter] = useState('all');
   const [savingApplicationId, setSavingApplicationId] = useState(null);
+
+  // The public board's "About" text and its optional link to one of this
+  // admin's own Dropship storefronts (see CMMS_NOTICE_BOARD_PRODUCTS.sql) --
+  // both live on cmms_company_profiles, not cmms_announcements, so they're
+  // loaded/saved separately from the posts list above.
+  const [aboutDraft, setAboutDraft] = useState('');
+  const [savedAbout, setSavedAbout] = useState('');
+  const [savingAbout, setSavingAbout] = useState(false);
+  const [businessProfileId, setBusinessProfileId] = useState('');
+  const [savedBusinessProfileId, setSavedBusinessProfileId] = useState('');
+  const [myBusinessProfiles, setMyBusinessProfiles] = useState([]);
+  const [savingStorefront, setSavingStorefront] = useState(false);
+
+  useEffect(() => {
+    if (!companyId) return;
+    supabase.from('cmms_company_profiles').select('about, business_profile_id').eq('id', companyId).maybeSingle()
+      .then(({ data }) => {
+        setAboutDraft(data?.about || '');
+        setSavedAbout(data?.about || '');
+        setBusinessProfileId(data?.business_profile_id || '');
+        setSavedBusinessProfileId(data?.business_profile_id || '');
+      });
+  }, [companyId]);
+
+  useEffect(() => {
+    if (!canEdit || !currentUser?.id) return;
+    getAccessibleBusinesses({ userId: currentUser.id, email: currentUser.email })
+      .then(({ data }) => setMyBusinessProfiles((data || []).filter((b) => b.canManage)));
+  }, [canEdit, currentUser?.id, currentUser?.email]);
+
+  const saveAbout = async () => {
+    setSavingAbout(true);
+    const result = await cmmsAnnouncementsService.updateCompanyAbout(companyId, aboutDraft);
+    setSavingAbout(false);
+    if (!result.success) { alert(`❌ ${result.error}`); return; }
+    setSavedAbout(aboutDraft);
+  };
+
+  const saveStorefront = async () => {
+    setSavingStorefront(true);
+    const result = await cmmsAnnouncementsService.setCompanyBusinessProfileLink(companyId, businessProfileId || null);
+    setSavingStorefront(false);
+    if (!result.success) { alert(`❌ ${result.error}`); return; }
+    setSavedBusinessProfileId(businessProfileId);
+  };
 
   const loadPosts = async () => {
     setLoading(true);
@@ -358,7 +405,10 @@ const CMMSAnnouncementsPanel = ({
     setSavingApplicationId(null);
   };
 
-  if (!canCreate && !canEdit && !canManageApplications) {
+  // "view" alone is a legitimate grant -- a role trusted only to read posts
+  // (not draft, edit, or see applicant PII) still needs the panel to render,
+  // just without any of the write controls below.
+  if (!canView && !canCreate && !canEdit && !canManageApplications) {
     return (
       <div className="glass-card p-6 text-orange-200">
         Your role does not have access to Announcements &amp; job postings. Ask your company administrator to grant this tool under Role configuration.
@@ -398,8 +448,71 @@ const CMMSAnnouncementsPanel = ({
               Applications {applications.length > 0 && <span className="ml-1 text-xs text-gray-500">({applications.length})</span>}
             </button>
           )}
+          {canEdit && (
+            <button onClick={() => setSubTab('profile')} className={`px-4 py-2 text-sm font-semibold border-b-2 transition ${subTab === 'profile' ? 'border-purple-400 text-white' : 'border-transparent text-gray-400 hover:text-white'}`}>
+              Board profile
+            </button>
+          )}
         </div>
       </div>
+
+      {subTab === 'profile' && canEdit && (
+        <div className="space-y-4">
+          <div className="glass-card p-5 border border-white/10">
+            <h3 className="text-white font-semibold mb-1">About this business</h3>
+            <p className="text-sm text-gray-400 mb-3">Shown at the top of your public board — in your visitors' own words, what does this business actually do?</p>
+            <textarea
+              value={aboutDraft}
+              onChange={(e) => setAboutDraft(e.target.value)}
+              placeholder="e.g. DAb Construction builds and renovates commercial properties across Kampala, from foundation work to finishing..."
+              rows={4}
+              maxLength={2000}
+              className="w-full px-3 py-2 rounded bg-white/10 text-white border border-white/20"
+            />
+            <div className="flex items-center justify-end gap-2 mt-2">
+              <button
+                disabled={savingAbout || aboutDraft === savedAbout}
+                onClick={saveAbout}
+                className="px-4 py-2 rounded bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white text-sm font-semibold"
+              >
+                {savingAbout ? 'Saving…' : 'Save about'}
+              </button>
+            </div>
+          </div>
+
+          <div className="glass-card p-5 border border-white/10">
+            <h3 className="text-white font-semibold mb-1">Products &amp; services</h3>
+            <p className="text-sm text-gray-400 mb-3">
+              Link one of your own ICANera Dropship storefronts to show its products on your public board. Visitors can browse for free; paying uses their own ICANera wallet, same as your storefront's normal checkout.
+            </p>
+            {myBusinessProfiles.length === 0 ? (
+              <p className="text-sm text-gray-500">You don't have a Dropship storefront yet under this ICANera account. Set one up from Business &rarr; Dropship, then come back here to link it.</p>
+            ) : (
+              <>
+                <select
+                  value={businessProfileId}
+                  onChange={(e) => setBusinessProfileId(e.target.value)}
+                  className="w-full px-3 py-2 rounded bg-slate-900 text-white border border-white/20"
+                >
+                  <option value="">Don't show products/services on the board</option>
+                  {myBusinessProfiles.map((b) => (
+                    <option key={b.id} value={b.id}>{b.business_name}</option>
+                  ))}
+                </select>
+                <div className="flex items-center justify-end gap-2 mt-2">
+                  <button
+                    disabled={savingStorefront || businessProfileId === savedBusinessProfileId}
+                    onClick={saveStorefront}
+                    className="px-4 py-2 rounded bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-sm font-semibold"
+                  >
+                    {savingStorefront ? 'Saving…' : 'Save storefront link'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {subTab === 'posts' && (
         <div className="space-y-4">
