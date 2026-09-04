@@ -238,6 +238,12 @@ export const useCommunityLive = ({ selfId, selfName, canBroadcast }) => {
         });
         setRole('broadcasting');
         elapsedTimerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
+        // Best-effort: push a "X is live" alert to everyone's phone. Never
+        // block/fail the broadcast itself on this - notification delivery
+        // is a nice-to-have, going live is the point.
+        try {
+          await supabase.rpc('ican_notify_community_live', { p_broadcaster_name: selfNameRef.current || 'Someone' });
+        } catch (err) { console.warn('[useCommunityLive] failed to notify:', err); }
       });
   }, [canBroadcast, liveInfo, createBroadcasterPeer, send, flushPendingIce]);
 

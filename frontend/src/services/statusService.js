@@ -270,6 +270,11 @@ const refreshStatusMediaUrls = async (statuses) => {
         // Detect bucket and extract path from media_url
         const { bucketName, filePath } = extractBucketAndPath(status.media_url);
 
+        // Not a recognized Supabase Storage path (e.g. a raw R2/external URL
+        // stored before the r2:// marker convention existed) -- nothing to
+        // sign, it's already directly usable as-is.
+        if (!bucketName) return status;
+
         // Generate fresh signed URL from correct bucket
         const { data: signedData, error: signError } = await supabase.storage
           .from(bucketName)
@@ -296,24 +301,23 @@ const refreshStatusMediaUrls = async (statuses) => {
  * Helper: Extract bucket name and file path from media_url
  */
 const extractBucketAndPath = (mediaUrl) => {
-  let bucketName = 'user-content'; // default for existing statuses
-  let filePath = mediaUrl;
-  
   if (mediaUrl?.includes('/user-content/')) {
-    bucketName = 'user-content';
     const match = mediaUrl.match(/user-content\/([^?]*)/);
-    if (match) filePath = match[1];
+    if (match) return { bucketName: 'user-content', filePath: match[1] };
   } else if (mediaUrl?.includes('/pitches/')) {
-    bucketName = 'pitches';
     const match = mediaUrl.match(/pitches\/([^?]*)/);
-    if (match) filePath = match[1];
+    if (match) return { bucketName: 'pitches', filePath: match[1] };
   } else if (mediaUrl?.includes('statuses/')) {
     // Fallback: if just path with statuses/ prefix, use user-content
     const match = mediaUrl.match(/statuses\/[^?]*/);
-    if (match) filePath = match[0];
+    if (match) return { bucketName: 'user-content', filePath: match[0] };
   }
-  
-  return { bucketName, filePath };
+
+  // Doesn't match any known internal Supabase Storage path shape -- e.g. a
+  // raw external (R2) URL stored before the r2:// marker convention
+  // existed. Signal "nothing to sign" rather than defaulting to a bucket
+  // guess that turns the whole external URL into a bogus object path.
+  return { bucketName: null, filePath: null };
 };
 
 /**

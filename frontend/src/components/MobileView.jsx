@@ -2392,6 +2392,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           }
           return;
         }
+        if (source === 'community_live') {
+          window.dispatchEvent(new CustomEvent('ican-open-community-live'));
+          return;
+        }
         if (url.includes('wallet')) openFeaturePanel('wallet');
       }
     };

@@ -68,3 +68,9 @@ backup_env/
 
 # Package lock (auto-generated)
 package-lock.json
+.vercel
+.env*
+
+# Supabase CLI local link/cache state (per-machine, not project config)
+.temp/
+supabase/.temp/

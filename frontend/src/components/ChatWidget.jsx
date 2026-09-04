@@ -435,6 +435,37 @@ const ChatWidget = ({ hasBottomNav = false }) => {
   });
   const showCommunityLiveStage = communityLive.role === 'broadcasting' || communityLive.role === 'watching';
 
+  // Tapping a "X is live" push notification (or its NOTIFICATION_CLICK
+  // message from sw.js when a tab is already open — see MobileView.jsx)
+  // should drop the visitor straight into the stream, not just onto
+  // whatever screen happened to be showing.
+  const [pendingCommunityJoin, setPendingCommunityJoin] = useState(false);
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('join') === 'community-live') {
+        setPendingCommunityJoin(true);
+        params.delete('join');
+        const rest = params.toString();
+        window.history.replaceState({}, '', window.location.pathname + (rest ? `?${rest}` : '') + window.location.hash);
+      }
+    } catch (_) { /* URL not available */ }
+
+    const onOpenCommunityLive = () => setPendingCommunityJoin(true);
+    window.addEventListener('ican-open-community-live', onOpenCommunityLive);
+    return () => window.removeEventListener('ican-open-community-live', onOpenCommunityLive);
+  }, []);
+  useEffect(() => {
+    if (!pendingCommunityJoin) return;
+    setOpen(true);
+    setChannel('community');
+    setSelectedThreadId(null);
+    if (communityLive.canWatch) {
+      communityLive.watch();
+      setPendingCommunityJoin(false);
+    }
+  }, [pendingCommunityJoin, communityLive.canWatch]);
+
   useEffect(() => {
     if (open && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
