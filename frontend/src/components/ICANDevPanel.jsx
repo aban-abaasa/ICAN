@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { getSupabaseClient } from '../lib/supabase/client';
 import CallDock from './calls/CallDock';
+import CallStage from './calls/CallStage';
 import { useDirectCall } from '../hooks/useDirectCall';
 import {
   devListAllLandingMessages,
@@ -335,6 +336,7 @@ const MessagesTab = () => {
   });
   const peerNameHintRef = useRef('');
   peerNameHintRef.current = selected?.guest_name || 'Visitor';
+  const showCallStage = call.isVideo && (call.callState === 'ringing-out' || call.callState === 'active');
 
   const handleReply = async () => {
     const body = reply.trim();
@@ -381,7 +383,7 @@ const MessagesTab = () => {
         </div>
       </div>
 
-      <div className="flex flex-col overflow-hidden rounded-2xl border" style={{ background:'var(--dp-card)', borderColor:'var(--dp-card-bd)' }}>
+      <div className="relative flex flex-col overflow-hidden rounded-2xl border" style={{ background:'var(--dp-card)', borderColor:'var(--dp-card-bd)' }}>
         {!selected ? (
           <div className="flex flex-1 items-center justify-center text-sm" style={{ color:'var(--dp-muted)' }}>
             <div className="text-center">
@@ -407,7 +409,8 @@ const MessagesTab = () => {
                 </div>
               )}
             </div>
-            <CallDock call={call} />
+            {showCallStage && <CallStage call={call} />}
+            {!showCallStage && <CallDock call={call} />}
             <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto px-4 py-3" style={{ maxHeight: '48vh' }}>
               {messages.map(m => {
                 const fromDev = m.sender_role === 'dev';

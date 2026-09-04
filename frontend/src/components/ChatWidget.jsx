@@ -4,6 +4,7 @@ import { useTheme } from '../context/ThemeContext';
 import VoiceNotePlayer from './voice/VoiceNotePlayer';
 import VoiceNoteRetentionPrompt from './voice/VoiceNoteRetentionPrompt';
 import CallDock from './calls/CallDock';
+import CallStage from './calls/CallStage';
 import { useDirectCall } from '../hooks/useDirectCall';
 import { uploadVoiceNote, linkVoiceNoteMessages } from '../services/voiceNoteService';
 import {
@@ -416,6 +417,10 @@ const ChatWidget = ({ hasBottomNav = false }) => {
   peerNameHintRef.current = callContext?.peerNameHint || '';
   const startAudioCall = () => call.startCall(false, peerNameHintRef.current);
   const startVideoCall = () => call.startCall(true, peerNameHintRef.current);
+  // A video call takes over the whole widget (real room to see the other
+  // person) instead of the slim dock — audio calls and an incoming ring
+  // (no camera yet, media isn't requested until Accept) stay on the dock.
+  const showCallStage = call.isVideo && (call.callState === 'ringing-out' || call.callState === 'active');
 
   useEffect(() => {
     if (open && scrollRef.current) {
@@ -717,7 +722,8 @@ const ChatWidget = ({ hasBottomNav = false }) => {
             </div>
           </div>
 
-          <CallDock call={call} dark={dark} tint={channel === 'trust' ? 'amber' : 'indigo'} />
+          {showCallStage && <CallStage call={call} />}
+          {!showCallStage && <CallDock call={call} dark={dark} tint={channel === 'trust' ? 'amber' : 'indigo'} />}
 
           <div className={`flex gap-1 border-b px-3 py-2 ${dark ? 'border-slate-700/50 bg-slate-950' : 'border-slate-200 bg-slate-50'}`}>
             <button
