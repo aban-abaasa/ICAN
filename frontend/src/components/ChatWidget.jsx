@@ -5,11 +5,14 @@ import VoiceNotePlayer from './voice/VoiceNotePlayer';
 import VoiceNoteRetentionPrompt from './voice/VoiceNoteRetentionPrompt';
 import CallDock from './calls/CallDock';
 import CallStage from './calls/CallStage';
+import IncomingCallOverlay from './calls/IncomingCallOverlay';
 import CommunityLiveStage from './community/CommunityLiveStage';
 import CommunityLiveBanner from './community/CommunityLiveBanner';
 import { useDirectCall } from '../hooks/useDirectCall';
 import { useCommunityLive } from '../hooks/useCommunityLive';
 import { uploadVoiceNote, linkVoiceNoteMessages } from '../services/voiceNoteService';
+import { getAudioNotificationService } from '../services/audioNotificationService';
+import { getCustomRingtone, setCustomRingtone } from '../services/ringtoneService';
 import {
   resolveChatIdentity,
   isDeveloperSession,
@@ -134,6 +137,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
   const [cmmsLoading, setCmmsLoading] = useState(false);
   const [cmmsMembershipVerified, setCmmsMembershipVerified] = useState(false);
   const [cmmsRecipients, setCmmsRecipients] = useState([]);
+  const [cmmsSelfId, setCmmsSelfId] = useState('');
   const [cmmsActiveContactId, setCmmsActiveContactId] = useState('');
   const [cmmsConversation, setCmmsConversation] = useState([]);
   const [cmmsConversationLoading, setCmmsConversationLoading] = useState(false);
@@ -151,6 +155,33 @@ const ChatWidget = ({ hasBottomNav = false }) => {
   const [voicePhase, setVoicePhase] = useState('idle'); // 'idle' | 'recording' | 'uploading'
   const [voiceElapsed, setVoiceElapsed] = useState(0);
   const [voiceError, setVoiceError] = useState('');
+
+  const [ringtoneName, setRingtoneName] = useState('');
+
+  // Load whatever ringtone the user picked on a past visit (see
+  // IncomingCallOverlay) and hand it to the shared audio service so the very
+  // next incoming call already rings with it.
+  useEffect(() => {
+    let cancelled = false;
+    getCustomRingtone().then((ringtone) => {
+      if (cancelled || !ringtone) return;
+      getAudioNotificationService().setCustomRingtoneUrl(ringtone.url);
+      setRingtoneName(ringtone.name);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const handlePickRingtone = async (file) => {
+    try {
+      const ringtone = await setCustomRingtone(file);
+      if (ringtone) {
+        getAudioNotificationService().setCustomRingtoneUrl(ringtone.url);
+        setRingtoneName(ringtone.name);
+      }
+    } catch (err) {
+      console.error('[ChatWidget] failed to save custom ringtone:', err);
+    }
+  };
 
   const scrollRef = useRef(null);
   const openRef = useRef(open);
@@ -210,6 +241,8 @@ const ChatWidget = ({ hasBottomNav = false }) => {
       setCmmsMessages([]);
       setCmmsTasks([]);
       setCmmsMembershipVerified(false);
+      setCmmsRecipients([]);
+      setCmmsSelfId('');
       if (channel === 'cmms') setChannel('support');
       return undefined;
     }
@@ -227,11 +260,15 @@ const ChatWidget = ({ hasBottomNav = false }) => {
         setCmmsMembershipVerified(verified);
         setCmmsMessages(messagesResult.success ? oldestFirst(messagesResult.data) : []);
         setCmmsTasks(tasksResult.success ? tasksResult.data || [] : []);
-        setCmmsRecipients(usersResult.success ? (usersResult.data || []).filter((user) => (
-          user.id !== identity?.userId
-          && user.id !== identity?.authId
-          && user.email?.toLowerCase() !== identity?.email?.toLowerCase()
-        )) : []);
+        // fn_get_company_users returns every active member of the company,
+        // self included — cmms_users.id is its own uuid (resolved server-side
+        // by email, not auth.uid()/profiles.id), so this is the only place
+        // that tells us the current user's id in that space. Pull it out
+        // before filtering self out of the pick-a-contact list.
+        const cmmsUsers = usersResult.success ? (usersResult.data || []) : [];
+        const selfCmmsUser = cmmsUsers.find((user) => user.email?.toLowerCase() === identity?.email?.toLowerCase());
+        setCmmsSelfId(selfCmmsUser?.id || '');
+        setCmmsRecipients(cmmsUsers.filter((user) => user.id !== selfCmmsUser?.id));
         if (!verified && channelRef.current === 'cmms') setChannel('support');
       } finally {
         if (!cancelled) setCmmsLoading(false);
@@ -398,8 +435,13 @@ const ChatWidget = ({ hasBottomNav = false }) => {
       return { roomId: `community:${sortedPair(identity.authId, authorId)}`, selfId: identity.authId, selfName, peerNameHint: selectedThread.name || 'Member' };
     }
     if (channel === 'cmms') {
-      if (!cmmsActiveContactId || cmmsActiveContactId === ALL_CMMS_RECIPIENTS || !identity) return null;
-      const selfId = identity.userId || identity.authId;
+      // Both sides of the room name must live in the same id space —
+      // cmmsActiveContactId is a cmms_users.id (see cmmsRecipients), not an
+      // auth.uid()/profiles.id, so `self` here has to be the current user's
+      // own cmms_users.id (cmmsSelfId) too, or the two parties compute
+      // different room names and the call never reaches the other side.
+      if (!cmmsActiveContactId || cmmsActiveContactId === ALL_CMMS_RECIPIENTS || !identity || !cmmsSelfId) return null;
+      const selfId = cmmsSelfId;
       const peerNameHint = cmmsRecipients.find((m) => m.id === cmmsActiveContactId)?.name || 'Teammate';
       return { roomId: `cmms:${cmmsCompanyId}:${sortedPair(selfId, cmmsActiveContactId)}`, selfId, selfName, peerNameHint };
     }
@@ -409,7 +451,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
       return { roomId: `trust:${trustGroupId}:${sortedPair(identity.authId, trustActiveContactId)}`, selfId: identity.authId, selfName, peerNameHint };
     }
     return null;
-  }, [channel, supportConvId, identity, guestLikeKey, selectedThread, cmmsActiveContactId, cmmsCompanyId, cmmsRecipients, trustActiveContactId, trustGroupId, trustMembers]);
+  }, [channel, supportConvId, identity, guestLikeKey, selectedThread, cmmsActiveContactId, cmmsCompanyId, cmmsRecipients, cmmsSelfId, trustActiveContactId, trustGroupId, trustMembers]);
 
   const call = useDirectCall({
     roomId: callContext?.roomId || null,
@@ -544,6 +586,40 @@ const ChatWidget = ({ hasBottomNav = false }) => {
     }
   };
 
+  // Posts to the same public Community board (landing_messages) whether it's
+  // typed in the normal Community tab or in the live-stream chat drawer
+  // (CommunityLiveStage) — one board, reused everywhere instead of the live
+  // stage growing its own separate chat storage.
+  const postCommunityMessage = async (body, who, parentId) => {
+    const senderAuthId = who.isGuest ? null : who.authId;
+    const created = parentId
+      ? await replyToLandingMessage({ parentId, name: who.name, email: who.email, authId: senderAuthId, message: body })
+      : await createLandingMessage({ name: who.name, email: who.email, authId: senderAuthId, message: body, isPublic: true });
+    setCommunityThreads(await fetchPublicThreads(50, { authId: senderAuthId, guestKey: guestLikeKey }));
+    return created;
+  };
+
+  const [liveChatDraft, setLiveChatDraft] = useState('');
+  const [liveChatSending, setLiveChatSending] = useState(false);
+  const [liveChatError, setLiveChatError] = useState('');
+  const handleSendLiveChat = async () => {
+    const body = liveChatDraft.trim();
+    if (!body || liveChatSending) return;
+    const who = ensureIdentity();
+    if (!who) { setLiveChatError(guestFormError || 'Enter your name and email in the Community tab to chat.'); return; }
+    setLiveChatSending(true);
+    setLiveChatError('');
+    try {
+      await postCommunityMessage(body, who, null);
+      setLiveChatDraft('');
+    } catch (err) {
+      console.error('[ChatWidget] live chat send failed:', err);
+      setLiveChatError('Could not send — try again.');
+    } finally {
+      setLiveChatSending(false);
+    }
+  };
+
   // Shared per-channel routing for both a typed message and a recorded voice
   // note (sent as VOICE_NOTE_PREFIX + url) — the two compose paths differ
   // only in how `body` is produced.
@@ -591,11 +667,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
         setTrustMessages(oldestFirst(messages || []));
         return result.data?.id ? [{ table: 'group_messages', id: result.data.id }] : [];
       } else if (channel === 'community') {
-        const senderAuthId = who.isGuest ? null : who.authId;
-        const created = selectedThreadId
-          ? await replyToLandingMessage({ parentId: selectedThreadId, name: who.name, email: who.email, authId: senderAuthId, message: body })
-          : await createLandingMessage({ name: who.name, email: who.email, authId: senderAuthId, message: body, isPublic: true });
-        setCommunityThreads(await fetchPublicThreads(50, { authId: senderAuthId, guestKey: guestLikeKey }));
+        const created = await postCommunityMessage(body, who, selectedThreadId);
         return created?.id ? [{ table: 'landing_messages', id: created.id }] : [];
       } else {
         const key = who.isGuest ? 'guest' : `user_${who.userId}`;
@@ -743,6 +815,17 @@ const ChatWidget = ({ hasBottomNav = false }) => {
   return (
     <>
       {!identity?.isGuest && <VoiceNoteRetentionPrompt ownerId={identity?.authId} />}
+      {/* Forces itself over everything — open widget, closed widget, whatever
+          tab/stage is showing — the instant a call rings in, WhatsApp-style.
+          Accepting opens the widget too, so the active-call UI underneath
+          (CallStage for video, CallDock for audio) isn't hidden behind a
+          closed bubble the moment this overlay goes away. */}
+      <IncomingCallOverlay
+        call={call}
+        onAccept={() => { handleOpen(); call.acceptCall(); }}
+        onPickRingtone={handlePickRingtone}
+        ringtoneName={ringtoneName}
+      />
     <div className="fixed z-[999]" style={fullScreen ? undefined : { left: position.left, top: position.top }}>
       {open && (
         <div
@@ -773,7 +856,18 @@ const ChatWidget = ({ hasBottomNav = false }) => {
 
           {showCallStage && <CallStage call={call} />}
           {!showCallStage && <CallDock call={call} dark={dark} tint={channel === 'trust' ? 'amber' : 'indigo'} />}
-          {showCommunityLiveStage && <CommunityLiveStage live={communityLive} />}
+          {showCommunityLiveStage && (
+            <CommunityLiveStage
+              live={communityLive}
+              messages={communityThreads}
+              onLike={handleLike}
+              draft={liveChatDraft}
+              onDraftChange={setLiveChatDraft}
+              onSend={handleSendLiveChat}
+              sending={liveChatSending}
+              error={liveChatError}
+            />
+          )}
 
           <div className={`flex gap-1 border-b px-3 py-2 ${dark ? 'border-slate-700/50 bg-slate-950' : 'border-slate-200 bg-slate-50'}`}>
             <button
@@ -1228,17 +1322,6 @@ const ChatWidget = ({ hasBottomNav = false }) => {
               </div>
             </div>
           )}
-        </div>
-      )}
-
-      {!open && call.callState === 'ringing-in' && (
-        <div className={`absolute bottom-full right-0 mb-2 flex w-56 animate-bounce items-center gap-2 rounded-2xl border px-3 py-2 shadow-2xl ${dark ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'}`}>
-          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white">
-            {call.isVideo ? <Video className="h-4 w-4" /> : <Phone className="h-4 w-4" />}
-          </span>
-          <span className={`min-w-0 flex-1 truncate text-xs font-medium ${dark ? 'text-slate-100' : 'text-slate-800'}`}>{call.peerName || 'Someone'} is calling</span>
-          <button onClick={call.declineCall} className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-red-500 text-white" title="Decline"><X className="h-3.5 w-3.5" /></button>
-          <button onClick={() => { handleOpen(); call.acceptCall(); }} className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white" title="Accept"><Phone className="h-3.5 w-3.5" /></button>
         </div>
       )}
 

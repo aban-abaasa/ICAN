@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { Eye, Mic, MicOff, PhoneOff, Video, VideoOff } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Eye, MessageCircle, Mic, MicOff, PhoneOff, Send, ThumbsUp, Video, VideoOff, X } from 'lucide-react';
 
 const formatElapsed = (seconds) => {
   const m = Math.floor(seconds / 60);
@@ -20,15 +20,87 @@ const ToolbarButton = ({ icon, label, active = true, danger = false, onClick, bi
   </button>
 );
 
+// Chat + reactions drawer over the live video — reuses the existing public
+// Community board (landing_messages, the same one the normal Community tab
+// reads/writes) rather than inventing separate live-stream-only storage, so
+// a message posted during the stream is still there (and still gets
+// replies) after the stream ends.
+const LiveChatDrawer = ({ messages, onLike, draft, onDraftChange, onSend, sending, error, onClose }) => {
+  const listRef = useRef(null);
+  useEffect(() => {
+    if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
+  }, [messages.length]);
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      onSend();
+    }
+  };
+
+  return (
+    <div className="absolute inset-x-0 bottom-0 z-10 flex max-h-[55%] flex-col rounded-t-2xl bg-black/70 backdrop-blur-md">
+      <div className="flex items-center justify-between px-4 pt-2.5">
+        <p className="text-[11px] font-bold uppercase tracking-wide text-white/70">Community chat</p>
+        <button onClick={onClose} className="rounded-full p-1 text-white/70 hover:bg-white/10 hover:text-white" title="Hide chat">
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      <div ref={listRef} className="flex-1 space-y-2 overflow-y-auto px-4 py-2">
+        {messages.length === 0 && (
+          <p className="py-4 text-center text-xs text-white/50">No messages yet — say something!</p>
+        )}
+        {[...messages].reverse().map((m) => (
+          <div key={m.id} className="rounded-xl bg-white/10 px-2.5 py-1.5 text-sm text-white">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-white/60">{m.name || 'Website visitor'}</p>
+            <p className="whitespace-pre-wrap break-words">{m.message}</p>
+            <button
+              onClick={() => onLike(m.id)}
+              disabled={m.likedByMe}
+              className={`mt-0.5 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${m.likedByMe ? 'text-indigo-300' : 'text-white/60 hover:text-white'}`}
+            >
+              <ThumbsUp className="h-3 w-3" /> {m.likeCount || 0}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {error && <p className="px-4 pb-1 text-[11px] text-red-300">{error}</p>}
+
+      <div className="flex items-center gap-2 px-4 pb-3 pt-1">
+        <input
+          value={draft}
+          onChange={(e) => onDraftChange(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Say something to Community…"
+          className="min-w-0 flex-1 rounded-full border border-white/20 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/50 outline-none focus:border-white/40"
+        />
+        <button
+          onClick={onSend}
+          disabled={sending || !draft.trim()}
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg transition disabled:opacity-40"
+          title="Send"
+        >
+          <Send className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+};
+
 /**
  * Full-page YouTube-Live-style takeover for the Community "Go Live" feature —
  * shown for as long as `live.role` is 'broadcasting' or 'watching'. The
  * broadcaster sees their own camera as the main feed (there's nothing else
  * to show — viewers don't send video back); a viewer sees the broadcaster's
- * stream.
+ * stream. A chat/reactions drawer (`LiveChatDrawer`) can slide up over the
+ * video, reusing the same public Community message board as the regular
+ * Community tab.
  */
-const CommunityLiveStage = ({ live }) => {
+const CommunityLiveStage = ({ live, messages = [], onLike, draft = '', onDraftChange, onSend, sending = false, error = '' }) => {
   const videoRef = useRef(null);
+  const [chatOpen, setChatOpen] = useState(false);
   const isBroadcaster = live.role === 'broadcasting';
   const mainStream = isBroadcaster ? live.localStream : live.remoteStream;
 
@@ -73,6 +145,29 @@ const CommunityLiveStage = ({ live }) => {
         <div className="absolute bottom-4 left-4 max-w-[60%] rounded-lg bg-black/50 px-2.5 py-1 backdrop-blur-sm">
           <p className="truncate text-sm font-medium text-white">{isBroadcaster ? "You're live to Community" : title}</p>
         </div>
+
+        {!chatOpen && (
+          <button
+            onClick={() => setChatOpen(true)}
+            className="absolute bottom-4 right-4 flex items-center gap-1.5 rounded-full bg-black/50 px-3 py-2 text-xs font-medium text-white backdrop-blur-sm transition hover:bg-black/70"
+            title="Show chat"
+          >
+            <MessageCircle className="h-4 w-4" /> Chat {messages.length > 0 && `(${messages.length})`}
+          </button>
+        )}
+
+        {chatOpen && (
+          <LiveChatDrawer
+            messages={messages}
+            onLike={onLike}
+            draft={draft}
+            onDraftChange={onDraftChange}
+            onSend={onSend}
+            sending={sending}
+            error={error}
+            onClose={() => setChatOpen(false)}
+          />
+        )}
       </div>
 
       {live.error && <p className="bg-red-500/90 px-4 py-1.5 text-center text-xs text-white">{live.error}</p>}

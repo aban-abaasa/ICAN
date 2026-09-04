@@ -11,6 +11,23 @@ class AudioNotificationService {
     this.volume = 0.7;
     this.loadedSounds = new Set();
     this.initAudioContext();
+
+    // A user-picked ringtone file (see ringtoneService) takes over from the
+    // synthesized tone for incoming calls only — outgoing ring-back and
+    // every other notification sound stay synthesized.
+    this.customRingtoneUrl = null;
+    this.ringtoneAudioEl = null;
+
+    // Ringing (incoming/outgoing call) loops for as long as `ringingToken`
+    // matches the token the loop was started with — stopAllSounds() bumps
+    // the token so the in-flight loop's next iteration sees the mismatch
+    // and exits, instead of the old fixed-repeat-count ring that could stop
+    // itself (or need re-triggering) before the call was actually answered.
+    this.ringingToken = 0;
+  }
+
+  setCustomRingtoneUrl(url) {
+    this.customRingtoneUrl = url || null;
   }
 
   // Initialize Web Audio API context
@@ -214,25 +231,59 @@ class AudioNotificationService {
     osc.stop(startTime + duration);
   }
 
-  // Play notification sound with repeat pattern
+  // Play notification sound with repeat pattern. `count` is either a finite
+  // number of repeats (old/default behavior — used by callers, like
+  // LiveBoardroom's group-call ring, that stop the sound themselves along
+  // every path back to "not ringing") or Infinity, which rings continuously
+  // — like an actual phone — until stopAllSounds() bumps ringingToken. Only
+  // opt into Infinity from a caller that guarantees stopAllSounds() runs on
+  // every exit from the ringing state, or the ring never ends.
   async playRingtone(soundType, count = 3) {
     if (!this.isEnabled) return false;
 
+    if (soundType === 'incomingCall' && count === Infinity && this.customRingtoneUrl) {
+      return this.playCustomRingtoneLoop();
+    }
+
+    const continuous = count === Infinity;
+    const token = ++this.ringingToken;
     let played = false;
-    for (let i = 0; i < count; i++) {
-      if (await this.playSound(soundType)) {
-        played = true;
-        // Wait between repeats
-        if (i < count - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1500));
-        }
+    let i = 0;
+    while (continuous ? this.ringingToken === token : i < count) {
+      if (await this.playSound(soundType)) played = true;
+      i += 1;
+      if (continuous ? this.ringingToken === token : i < count) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
       }
     }
     return played;
   }
 
+  // Loop the user's own chosen audio file as the incoming-call ringtone via
+  // a real <audio> element (not the Web Audio synth path) so any format the
+  // browser can play just works.
+  async playCustomRingtoneLoop() {
+    try {
+      if (!this.ringtoneAudioEl) this.ringtoneAudioEl = new Audio();
+      const el = this.ringtoneAudioEl;
+      el.src = this.customRingtoneUrl;
+      el.loop = true;
+      el.volume = this.volume;
+      await el.play();
+      return true;
+    } catch (err) {
+      console.warn('[audioNotificationService] custom ringtone playback failed, falling back to synth tone:', err);
+      this.customRingtoneUrl = null;
+      return this.playRingtone('incomingCall', Infinity);
+    }
+  }
+
   // Stop all sounds
   stopAllSounds() {
+    this.ringingToken += 1; // ends any in-flight continuous ring loop
+    if (this.ringtoneAudioEl) {
+      try { this.ringtoneAudioEl.pause(); this.ringtoneAudioEl.currentTime = 0; } catch (_) { /* not playing */ }
+    }
     if (!this.audioContext) return;
     try {
       // Stop all oscillators by suspending the context
@@ -252,6 +303,7 @@ class AudioNotificationService {
   // Set volume (0-1)
   setVolume(volume) {
     this.volume = Math.max(0, Math.min(1, volume));
+    if (this.ringtoneAudioEl) this.ringtoneAudioEl.volume = this.volume;
   }
 
   // Get current volume

@@ -100,6 +100,12 @@ export const useDirectCall = ({ roomId, selfId, selfName }) => {
     clearRingTimers();
     clearElapsedTimer();
     teardownMedia();
+    // Ringing (in or out) now loops until explicitly stopped (see
+    // audioNotificationService.playRingtone) instead of a fixed rep count,
+    // so every path back to idle — including a plain timeout with no
+    // decline/end broadcast round-trip — must silence it here, or a ring
+    // with nobody left to answer it would ring forever.
+    audioServiceRef.current?.stopAllSounds();
     peerIdRef.current = '';
     setElapsed(0);
     setEndReason(reason);
@@ -177,7 +183,7 @@ export const useDirectCall = ({ roomId, selfId, selfName }) => {
     setPeerName(peerNameHint);
     setCallState('ringing-out');
     audioServiceRef.current?.ensureReady?.();
-    audioServiceRef.current?.playRingtone('outgoingCall', 15);
+    audioServiceRef.current?.playRingtone('outgoingCall', Infinity);
 
     const ring = () => send('ring', { fromName: subscribedConfig.selfName, video });
     ring();
@@ -266,7 +272,7 @@ export const useDirectCall = ({ roomId, selfId, selfName }) => {
         setError('');
         setEndReason('');
         audioServiceRef.current?.ensureReady?.();
-        audioServiceRef.current?.playRingtone('incomingCall', 20);
+        audioServiceRef.current?.playRingtone('incomingCall', Infinity);
       })
       .on('broadcast', { event: 'accept' }, async ({ payload }) => {
         if (!payload || payload.from === sid || callStateRef.current !== 'ringing-out') return;
