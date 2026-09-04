@@ -412,6 +412,35 @@ const ChatWidget = ({ hasBottomNav = false }) => {
 
   const selectedThread = communityThreads.find((t) => t.id === selectedThreadId) || null;
 
+  // One card per author in the Community list instead of one per post — a
+  // prolific poster no longer pushes everyone else's questions off screen.
+  // user_id identifies a logged-in author across posts; a guest has no id,
+  // so name+email stands in (imperfect, but the best guest identity this
+  // board has — matches how the reply/like code treats guests elsewhere).
+  const communityAuthorKey = (m) => m.user_id || `guest:${(m.email || '').trim().toLowerCase()}:${(m.name || '').trim().toLowerCase()}`;
+  const communityMessagesByAuthor = useMemo(() => {
+    const map = new Map();
+    // communityThreads is newest-first (see fetchPublicThreads), so each
+    // author's bucket ends up newest-first too — index 0 is their "current".
+    communityThreads.forEach((m) => {
+      const key = communityAuthorKey(m);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(m);
+    });
+    return map;
+  }, [communityThreads]);
+  // Oldest-author-activity-first, matching the existing feed's layout (it
+  // scrolls to the bottom, so the newest is the one already in view).
+  const groupedCommunityFeed = useMemo(
+    () => [...communityMessagesByAuthor.values()].map((msgs) => ({ current: msgs[0], earlier: msgs.slice(1) })).reverse(),
+    [communityMessagesByAuthor]
+  );
+  const selectedAuthorEarlierMessages = selectedThread
+    ? (communityMessagesByAuthor.get(communityAuthorKey(selectedThread)) || []).filter((m) => m.id !== selectedThread.id)
+    : [];
+  const [showAuthorHistory, setShowAuthorHistory] = useState(false);
+  useEffect(() => { setShowAuthorHistory(false); }, [selectedThreadId]);
+
   const trustActiveConversation = trustActiveContactId && trustActiveContactId !== ALL_TRUST_MEMBERS
     ? trustMessages.filter((m) => m.user_id === identity?.authId || m.user_id === trustActiveContactId)
     : trustActiveContactId === ALL_TRUST_MEMBERS ? trustMessages : [];
@@ -1122,6 +1151,33 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                       <ThumbsUp className="h-3 w-3" /> {selectedThread.likeCount || 0}
                     </button>
                   </div>
+                  {selectedAuthorEarlierMessages.length > 0 && (
+                    <div className="mt-2">
+                      <button
+                        onClick={() => setShowAuthorHistory((v) => !v)}
+                        className={`text-[11px] font-medium ${dark ? 'text-slate-400 hover:text-slate-300' : 'text-slate-500 hover:text-slate-700'}`}
+                      >
+                        {showAuthorHistory ? '▾' : '▸'} {selectedAuthorEarlierMessages.length} earlier {selectedAuthorEarlierMessages.length === 1 ? 'message' : 'messages'} from {selectedThread.name || 'them'}
+                      </button>
+                      {showAuthorHistory && (
+                        <div className="mt-1.5 space-y-1.5">
+                          {selectedAuthorEarlierMessages.map((m) => (
+                            <button
+                              key={m.id}
+                              onClick={() => setSelectedThreadId(m.id)}
+                              className={`block w-full rounded-lg border px-2.5 py-1.5 text-left text-xs transition ${
+                                dark ? 'border-slate-700/50 bg-white/5 hover:bg-white/10 text-slate-300' : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600'
+                              }`}
+                            >
+                              <p className="line-clamp-2 whitespace-pre-wrap break-words">
+                                {isVoiceNoteBody(m.message) ? 'Voice message' : m.message}
+                              </p>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {selectedThread.replies.map((r) => (
                     <div
                       key={r.id}
@@ -1158,7 +1214,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                   No public questions yet — ask something below.
                 </p>
               ) : (
-                [...communityThreads].reverse().map((t) => (
+                groupedCommunityFeed.map(({ current: t, earlier }) => (
                   <button
                     key={t.id}
                     onClick={() => setSelectedThreadId(t.id)}
@@ -1174,9 +1230,12 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                         <span className="inline-flex items-center gap-1 text-cyan-400"><Mic className="h-3 w-3" /> Voice message</span>
                       ) : t.message}
                     </p>
-                    {t.replies.length > 0 && (
+                    {(t.replies.length > 0 || earlier.length > 0) && (
                       <p className={`mt-1 text-[10px] ${dark ? 'text-slate-500' : 'text-slate-400'}`}>
-                        {t.replies.length} {t.replies.length === 1 ? 'reply' : 'replies'}
+                        {[
+                          t.replies.length > 0 ? `${t.replies.length} ${t.replies.length === 1 ? 'reply' : 'replies'}` : null,
+                          earlier.length > 0 ? `${earlier.length} earlier ${earlier.length === 1 ? 'message' : 'messages'}` : null,
+                        ].filter(Boolean).join(' · ')}
                       </p>
                     )}
                   </button>
