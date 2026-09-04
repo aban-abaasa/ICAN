@@ -41,7 +41,6 @@ import { getUserTrustGroups, getGroupMembersDetailed, getGroupMessages, sendGrou
 
 const dedupe = (list, item) => (list.some((m) => m.id === item.id) ? list : [...list, item]);
 const oldestFirst = (messages = []) => [...messages].sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
-const sortedPair = (a, b) => [String(a), String(b)].sort().join('_');
 
 // Small audio/video call-launch buttons, reused wherever a channel has one
 // clear "who am I talking to" contact (support/cmms/trust contact header,
@@ -445,52 +444,62 @@ const ChatWidget = ({ hasBottomNav = false }) => {
     ? trustMessages.filter((m) => m.user_id === identity?.authId || m.user_id === trustActiveContactId)
     : trustActiveContactId === ALL_TRUST_MEMBERS ? trustMessages : [];
 
-  // Who a "call" button in the current channel would reach, and what room
-  // to reach them at — one fixed 1:1 room per channel's existing notion of
-  // "who am I talking to" (the open support conversation, the selected CMMS/
-  // Trust contact, the author of the community thread I'm reading). Group
-  // targets ("All employees"/"All members") aren't callable.
-  const callContext = useMemo(() => {
-    const selfName = identity?.name || 'Guest';
-    if (channel === 'support') {
-      if (!supportConvId) return null;
-      const selfId = identity?.userId || identity?.authId || guestLikeKey;
-      return { roomId: `support:${supportConvId}`, selfId, selfName, peerNameHint: 'Support team' };
-    }
-    if (channel === 'community') {
-      if (!identity || identity.isGuest || !identity.authId || !selectedThread) return null;
-      const authorId = selectedThread.user_id;
-      if (!authorId || authorId === identity.authId) return null;
-      return { roomId: `community:${sortedPair(identity.authId, authorId)}`, selfId: identity.authId, selfName, peerNameHint: selectedThread.name || 'Member' };
-    }
-    if (channel === 'cmms') {
-      // Both sides of the room name must live in the same id space —
-      // cmmsActiveContactId is a cmms_users.id (see cmmsRecipients), not an
-      // auth.uid()/profiles.id, so `self` here has to be the current user's
-      // own cmms_users.id (cmmsSelfId) too, or the two parties compute
-      // different room names and the call never reaches the other side.
-      if (!cmmsActiveContactId || cmmsActiveContactId === ALL_CMMS_RECIPIENTS || !identity || !cmmsSelfId) return null;
-      const selfId = cmmsSelfId;
-      const peerNameHint = cmmsRecipients.find((m) => m.id === cmmsActiveContactId)?.name || 'Teammate';
-      return { roomId: `cmms:${cmmsCompanyId}:${sortedPair(selfId, cmmsActiveContactId)}`, selfId, selfName, peerNameHint };
-    }
-    if (channel === 'trust') {
-      if (!trustActiveContactId || trustActiveContactId === ALL_TRUST_MEMBERS || !identity?.authId) return null;
-      const peerNameHint = trustMembers.find((m) => m.user_id === trustActiveContactId)?.name || 'Member';
-      return { roomId: `trust:${trustGroupId}:${sortedPair(identity.authId, trustActiveContactId)}`, selfId: identity.authId, selfName, peerNameHint };
-    }
-    return null;
-  }, [channel, supportConvId, identity, guestLikeKey, selectedThread, cmmsActiveContactId, cmmsCompanyId, cmmsRecipients, cmmsSelfId, trustActiveContactId, trustGroupId, trustMembers]);
+  // Each channel gets its own always-on call listener, bound to *my own*
+  // stable "personal inbox" room — never to who I currently have selected as
+  // a contact, and never to which tab happens to be open. That's what makes
+  // a CMMS/Trust call actually reach someone: they're reachable the instant
+  // they have access, not only while they happen to be staring at that exact
+  // 1:1 conversation. A caller then dials straight into the callee's own
+  // inbox room via `startCall`'s `dialRoomId` (see useDirectCall.js).
+  const selfName = identity?.name || 'Guest';
+  const supportSelfId = identity?.userId || identity?.authId || guestLikeKey;
+  const supportRoomId = supportConvId ? `support:${supportConvId}` : null;
+  const supportCall = useDirectCall({ roomId: supportRoomId, selfId: supportSelfId, selfName });
 
-  const call = useDirectCall({
-    roomId: callContext?.roomId || null,
-    selfId: callContext?.selfId || null,
-    selfName: callContext?.selfName || '',
-  });
-  const peerNameHintRef = useRef('');
-  peerNameHintRef.current = callContext?.peerNameHint || '';
-  const startAudioCall = () => call.startCall(false, peerNameHintRef.current);
-  const startVideoCall = () => call.startCall(true, peerNameHintRef.current);
+  const communityRoomId = (identity && !identity.isGuest && identity.authId) ? `community:${identity.authId}` : null;
+  const communityCall = useDirectCall({ roomId: communityRoomId, selfId: identity?.authId || null, selfName });
+
+  const cmmsRoomId = (hasCmmsAccess && cmmsSelfId) ? `cmms:${cmmsCompanyId}:${cmmsSelfId}` : null;
+  const cmmsCall = useDirectCall({ roomId: cmmsRoomId, selfId: cmmsSelfId || null, selfName });
+
+  const trustRoomId = (hasTrustAccess && identity?.authId) ? `trust:${trustGroupId}:${identity.authId}` : null;
+  const trustCall = useDirectCall({ roomId: trustRoomId, selfId: identity?.authId || null, selfName });
+
+  const callInstances = { support: supportCall, community: communityCall, cmms: cmmsCall, trust: trustCall };
+  const callChannelKeys = ['cmms', 'trust', 'community', 'support'];
+  // Only one call can realistically be happening at once — whichever
+  // instance is ringing (or, failing that, active) drives the shared
+  // overlay/dock/stage; otherwise fall back to whichever channel tab is
+  // open so its call button correctly shows as available.
+  const ringingChannel = callChannelKeys.find((key) => callInstances[key].callState === 'ringing-in');
+  const activeChannel = ringingChannel || callChannelKeys.find((key) => callInstances[key].callState !== 'idle');
+  const call = callInstances[activeChannel || channel] || supportCall;
+
+  const callCommunityContact = (video) => {
+    if (!selectedThread || selectedThread.user_id === identity?.authId) return;
+    communityCall.startCall(video, selectedThread.name || 'Member', `community:${selectedThread.user_id}`);
+  };
+  const callCmmsContact = (video) => {
+    if (!cmmsActiveContactId || cmmsActiveContactId === ALL_CMMS_RECIPIENTS) return;
+    const peerNameHint = cmmsRecipients.find((m) => m.id === cmmsActiveContactId)?.name || 'Teammate';
+    cmmsCall.startCall(video, peerNameHint, `cmms:${cmmsCompanyId}:${cmmsActiveContactId}`);
+  };
+  const callTrustContact = (video) => {
+    if (!trustActiveContactId || trustActiveContactId === ALL_TRUST_MEMBERS) return;
+    const peerNameHint = trustMembers.find((m) => m.user_id === trustActiveContactId)?.name || 'Member';
+    trustCall.startCall(video, peerNameHint, `trust:${trustGroupId}:${trustActiveContactId}`);
+  };
+
+  const handleAcceptCall = () => {
+    handleOpen();
+    if (ringingChannel) {
+      setChannel(ringingChannel);
+      if (ringingChannel === 'cmms' && call.peerId) setCmmsActiveContactId(call.peerId);
+      if (ringingChannel === 'trust' && call.peerId) setTrustActiveContactId(call.peerId);
+    }
+    call.acceptCall();
+  };
+
   // A video call takes over the whole widget (real room to see the other
   // person) instead of the slim dock — audio calls and an incoming ring
   // (no camera yet, media isn't requested until Accept) stay on the dock.
@@ -851,7 +860,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
           closed bubble the moment this overlay goes away. */}
       <IncomingCallOverlay
         call={call}
-        onAccept={() => { handleOpen(); call.acceptCall(); }}
+        onAccept={handleAcceptCall}
         onPickRingtone={handlePickRingtone}
         ringtoneName={ringtoneName}
       />
@@ -870,7 +879,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
               </p>}
             </div>
             <div className="flex items-center gap-1">
-              {channel === 'support' && <CallButtons call={call} onAudio={startAudioCall} onVideo={startVideoCall} onLight />}
+              {channel === 'support' && <CallButtons call={supportCall} onAudio={() => supportCall.startCall(false, 'Support team')} onVideo={() => supportCall.startCall(true, 'Support team')} onLight />}
               {channel === 'community' && communityLive.canBroadcast && (
                 <button onClick={communityLive.goLive} className="rounded-lg p-1.5 text-white hover:bg-white/20 transition" title="Go live to Community">
                   <Radio className="h-4 w-4" />
@@ -965,7 +974,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                     <span className={`truncate text-sm font-semibold ${dark ? 'text-slate-100' : 'text-slate-800'}`}>
                       {cmmsActiveContactId === ALL_CMMS_RECIPIENTS ? 'All CMMS employees' : (cmmsRecipients.find((m) => m.id === cmmsActiveContactId)?.name || cmmsRecipients.find((m) => m.id === cmmsActiveContactId)?.email || 'CMMS member')}
                     </span>
-                    <CallButtons call={call} onAudio={startAudioCall} onVideo={startVideoCall} dark={dark} />
+                    <CallButtons call={cmmsActiveContactId !== ALL_CMMS_RECIPIENTS ? cmmsCall : null} onAudio={() => callCmmsContact(false)} onVideo={() => callCmmsContact(true)} dark={dark} />
                   </div>
                   {cmmsActiveContactId === ALL_CMMS_RECIPIENTS ? (
                     cmmsMessages.length === 0 ? <p className={`mt-6 text-center text-xs ${dark ? 'text-slate-500' : 'text-slate-400'}`}>No broadcast messages yet.</p> : cmmsMessages.map((message) => {
@@ -1067,7 +1076,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                     <span className={`truncate text-sm font-semibold ${dark ? 'text-slate-100' : 'text-slate-800'}`}>
                       {trustActiveContactId === ALL_TRUST_MEMBERS ? 'All group members' : (trustMembers.find((m) => m.user_id === trustActiveContactId)?.name || 'Member')}
                     </span>
-                    <CallButtons call={call} onAudio={startAudioCall} onVideo={startVideoCall} dark={dark} />
+                    <CallButtons call={trustActiveContactId !== ALL_TRUST_MEMBERS ? trustCall : null} onAudio={() => callTrustContact(false)} onVideo={() => callTrustContact(true)} dark={dark} />
                   </div>
                   {trustActiveConversation.length === 0 ? (
                     <p className={`mt-6 text-center text-xs ${dark ? 'text-slate-500' : 'text-slate-400'}`}>No messages yet — say hello!</p>
@@ -1134,7 +1143,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                     >
                       ← Back to Community
                     </button>
-                    <CallButtons call={call} onAudio={startAudioCall} onVideo={startVideoCall} dark={dark} />
+                    <CallButtons call={selectedThread.user_id !== identity?.authId ? communityCall : null} onAudio={() => callCommunityContact(false)} onVideo={() => callCommunityContact(true)} dark={dark} />
                   </div>
                   <div className={`rounded-xl px-3 py-2 text-sm ${dark ? 'bg-white/5 text-slate-100' : 'bg-white text-slate-800 border border-slate-200'}`}>
                     <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-400">

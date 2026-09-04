@@ -25,7 +25,7 @@ const ToolbarButton = ({ icon, label, active = true, danger = false, onClick, bi
 // reads/writes) rather than inventing separate live-stream-only storage, so
 // a message posted during the stream is still there (and still gets
 // replies) after the stream ends.
-const LiveChatDrawer = ({ messages, onLike, draft, onDraftChange, onSend, sending, error, onClose }) => {
+const LiveChatDrawer = ({ messages, onLike, draft, onDraftChange, onSend, sending, error, onClose, isMobile }) => {
   const listRef = useRef(null);
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
@@ -39,10 +39,13 @@ const LiveChatDrawer = ({ messages, onLike, draft, onDraftChange, onSend, sendin
   };
 
   return (
-    <div className="absolute inset-x-0 bottom-0 z-10 flex max-h-[55%] flex-col rounded-t-2xl bg-black/70 backdrop-blur-md">
+    // Capped shorter on phones than on desktop — at 55% a small phone's
+    // drawer swallows most of the video behind it, leaving almost nothing
+    // of the stream visible while chatting.
+    <div className={`absolute inset-x-0 bottom-0 z-10 flex ${isMobile ? 'max-h-[38%]' : 'max-h-[55%]'} flex-col rounded-t-2xl bg-black/70 backdrop-blur-md`}>
       <div className="flex items-center justify-between px-4 pt-2.5">
-        <p className="text-[11px] font-bold uppercase tracking-wide text-white/70">Community chat</p>
-        <button onClick={onClose} className="rounded-full p-1 text-white/70 hover:bg-white/10 hover:text-white" title="Hide chat">
+        <p className="text-xs font-bold uppercase tracking-wide text-white/70">Community chat</p>
+        <button onClick={onClose} className="rounded-full p-2 -mr-1 text-white/70 hover:bg-white/10 hover:text-white" title="Hide chat">
           <X className="h-3.5 w-3.5" />
         </button>
       </div>
@@ -66,9 +69,11 @@ const LiveChatDrawer = ({ messages, onLike, draft, onDraftChange, onSend, sendin
         ))}
       </div>
 
-      {error && <p className="px-4 pb-1 text-[11px] text-red-300">{error}</p>}
+      {error && <p className="px-4 pb-1 text-xs text-red-300">{error}</p>}
 
-      <div className="flex items-center gap-2 px-4 pb-3 pt-1">
+      {/* Bottom padding respects the iOS home-indicator/gesture-bar safe
+          area so the input isn't crowded against it on a phone. */}
+      <div className="flex items-center gap-2 px-4 pt-1" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
         <input
           value={draft}
           onChange={(e) => onDraftChange(e.target.value)}
@@ -101,6 +106,14 @@ const LiveChatDrawer = ({ messages, onLike, draft, onDraftChange, onSend, sendin
 const CommunityLiveStage = ({ live, messages = [], onLike, draft = '', onDraftChange, onSend, sending = false, error = '' }) => {
   const videoRef = useRef(null);
   const [chatOpen, setChatOpen] = useState(false);
+  // Matches the `window.innerWidth < 768` convention used elsewhere in the
+  // app (App.jsx, ChatWidget.jsx) rather than inventing a new breakpoint.
+  const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 768 : false));
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   const isBroadcaster = live.role === 'broadcasting';
   const mainStream = isBroadcaster ? live.localStream : live.remoteStream;
 
@@ -130,13 +143,13 @@ const CommunityLiveStage = ({ live, messages = [], onLike, draft = '', onDraftCh
         <div className="absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 via-black/30 to-transparent px-4 py-3">
           <div className="flex items-center gap-2 rounded-full bg-black/40 px-2.5 py-1 backdrop-blur-sm">
             <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
-            <span className="text-[11px] font-bold uppercase tracking-wider text-white">Live</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-white">Live</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="flex items-center gap-1 rounded-full bg-black/40 px-2.5 py-1 text-[11px] font-medium text-white/90 backdrop-blur-sm">
+            <span className="flex items-center gap-1 rounded-full bg-black/40 px-2.5 py-1 text-xs font-medium text-white/90 backdrop-blur-sm">
               <Eye className="h-3 w-3" /> {live.viewerCount}
             </span>
-            <span className="rounded-full bg-black/40 px-2.5 py-1 font-mono text-[11px] tabular-nums text-white/90 backdrop-blur-sm">
+            <span className="rounded-full bg-black/40 px-2.5 py-1 font-mono text-xs tabular-nums text-white/90 backdrop-blur-sm">
               {formatElapsed(live.elapsed)}
             </span>
           </div>
@@ -166,13 +179,19 @@ const CommunityLiveStage = ({ live, messages = [], onLike, draft = '', onDraftCh
             sending={sending}
             error={error}
             onClose={() => setChatOpen(false)}
+            isMobile={isMobile}
           />
         )}
       </div>
 
       {live.error && <p className="bg-red-500/90 px-4 py-1.5 text-center text-xs text-white">{live.error}</p>}
 
-      <div className="flex items-center justify-center gap-6 bg-slate-950/95 px-4 py-3.5 backdrop-blur">
+      {/* Bottom padding respects the iOS home-indicator/gesture-bar safe
+          area so the mic/camera/leave controls aren't crowded against it. */}
+      <div
+        className="flex items-center justify-center gap-6 bg-slate-950/95 px-4 pt-3.5 backdrop-blur"
+        style={{ paddingBottom: 'max(0.875rem, env(safe-area-inset-bottom))' }}
+      >
         {isBroadcaster && (
           <ToolbarButton
             icon={live.micOn ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}

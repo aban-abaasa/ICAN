@@ -11,11 +11,16 @@
  * though the widget side has no idea which developer will answer, and the
  * Dev Panel side has no real auth.uid() to identify itself with.
  *
- * `roomId` is expected to be stable for as long as the caller wants to be
- * reachable at it (e.g. the currently-selected CMMS/Trust contact, the
- * open support conversation). Changing `roomId`/`selfId` while idle moves
- * the hook to the new room; changing it mid-call is deferred until the
- * call ends, so switching tabs in the UI can't yank an in-progress call.
+ * `roomId` should be the caller's own stable "personal inbox" — e.g.
+ * `cmms:<companyId>:<myCmmsUserId>` or `trust:<groupId>:<myAuthId>` — so
+ * this hook is always listening for an incoming ring regardless of which
+ * chat tab happens to be open. It has nothing to do with who the *next*
+ * outgoing call goes to: pass that peer's own inbox room as `startCall`'s
+ * `dialRoomId` instead, and the hook joins it for the life of that one call
+ * before reverting to listening on `roomId` again. Changing `roomId`/
+ * `selfId` while idle moves the hook to the new default room; changing it
+ * mid-call is deferred until the call ends, so switching tabs in the UI
+ * can't yank an in-progress call.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getSupabaseClient } from '../lib/supabase/client';
@@ -42,6 +47,7 @@ export const useDirectCall = ({ roomId, selfId, selfName }) => {
   const [remoteStream, setRemoteStream] = useState(null);
   const [error, setError] = useState('');
   const [endReason, setEndReason] = useState(''); // 'declined' | 'busy' | 'no-answer' | 'ended' | ''
+  const [peerId, setPeerId] = useState('');
 
   const [subscribedConfig, setSubscribedConfig] = useState({ roomId: null, selfId: null, selfName: '' });
 
@@ -57,10 +63,21 @@ export const useDirectCall = ({ roomId, selfId, selfName }) => {
   const audioServiceRef = useRef(null);
   const micOnRef = useRef(true);
   const camOnRef = useRef(true);
+  // The hook's own "at rest" room — where it listens for incoming rings when
+  // nobody's mid-call. `startCall` can point `subscribedConfig` at a peer's
+  // room instead for the life of one outgoing call; `resetToIdle` reads this
+  // to know where to go back to listening afterward.
+  const defaultRoomRef = useRef({ roomId, selfId, selfName });
+  // One entry per room id we've ever subscribed to, resolved once that room's
+  // channel reports SUBSCRIBED — lets `startCall` wait out the async
+  // subscribe-then-tear-down-old-channel cycle triggered by switching rooms,
+  // instead of racing a `ring` broadcast against a channel that isn't open yet.
+  const roomReadyRef = useRef(new Map());
 
   useEffect(() => { callStateRef.current = callState; }, [callState]);
   useEffect(() => { micOnRef.current = micOn; }, [micOn]);
   useEffect(() => { camOnRef.current = camOn; }, [camOn]);
+  useEffect(() => { defaultRoomRef.current = { roomId, selfId, selfName }; }, [roomId, selfId, selfName]);
   useEffect(() => {
     try { audioServiceRef.current = getAudioNotificationService(); } catch (_) { /* audio is optional */ }
   }, []);
@@ -72,6 +89,22 @@ export const useDirectCall = ({ roomId, selfId, selfName }) => {
       setSubscribedConfig({ roomId, selfId, selfName });
     }
   }, [roomId, selfId, selfName]);
+
+  // Waits for the channel bound to `rid` to report SUBSCRIBED (set up by the
+  // channel-setup effect below). Polls for the entry to exist first, since
+  // `setSubscribedConfig` triggers that effect asynchronously (next render),
+  // and gives up after ~3s so a broken room can't hang a call forever.
+  const waitForRoomReady = useCallback((rid) => new Promise((resolve) => {
+    let attempts = 0;
+    const check = () => {
+      const entry = roomReadyRef.current.get(rid);
+      if (entry) { entry.promise.then(resolve); return; }
+      attempts += 1;
+      if (attempts > 150) { resolve(); return; }
+      setTimeout(check, 20);
+    };
+    check();
+  }), []);
 
   const clearRingTimers = () => {
     if (ringIntervalRef.current) { clearInterval(ringIntervalRef.current); ringIntervalRef.current = null; }
@@ -107,9 +140,14 @@ export const useDirectCall = ({ roomId, selfId, selfName }) => {
     // with nobody left to answer it would ring forever.
     audioServiceRef.current?.stopAllSounds();
     peerIdRef.current = '';
+    setPeerId('');
     setElapsed(0);
     setEndReason(reason);
     setCallState('idle');
+    // `startCall` may have pointed the channel at a peer's room for this one
+    // call (see `dialRoomId`); go back to listening on our own room so the
+    // next incoming ring has somewhere to arrive.
+    setSubscribedConfig(defaultRoomRef.current);
   }, [teardownMedia]);
 
   const send = useCallback((event, payload) => {
@@ -167,10 +205,26 @@ export const useDirectCall = ({ roomId, selfId, selfName }) => {
     }
   }, []);
 
-  const startCall = useCallback(async (video, peerNameHint = '') => {
-    if (callStateRef.current !== 'idle' || !channelRef.current) return;
+  // `dialRoomId` lets the caller reach into a specific peer's own room —
+  // e.g. their personal CMMS/Trust/Community inbox — instead of whatever
+  // room this hook is currently sitting on. Omit it (as Support does) when
+  // the hook's own room is already the shared room both sides use.
+  const startCall = useCallback(async (video, peerNameHint = '', dialRoomId = null) => {
+    if (callStateRef.current !== 'idle') return;
+    const targetRoomId = dialRoomId || subscribedConfig.roomId;
+    if (!targetRoomId || !subscribedConfig.selfId) return;
     setError('');
     setEndReason('');
+
+    if (targetRoomId !== subscribedConfig.roomId) {
+      setSubscribedConfig({ roomId: targetRoomId, selfId: subscribedConfig.selfId, selfName: subscribedConfig.selfName });
+      await waitForRoomReady(targetRoomId);
+      // The idle check may no longer hold if something else (an incoming
+      // ring, a cancel) happened while we were waiting on the channel.
+      if (callStateRef.current !== 'idle') return;
+    }
+    if (!channelRef.current) return;
+
     try {
       await ensureLocalMedia(video);
     } catch (err) {
@@ -192,7 +246,7 @@ export const useDirectCall = ({ roomId, selfId, selfName }) => {
       send('end', {});
       resetToIdle('no-answer');
     }, RING_TIMEOUT_MS);
-  }, [ensureLocalMedia, send, resetToIdle, subscribedConfig.selfName]);
+  }, [ensureLocalMedia, send, resetToIdle, waitForRoomReady, subscribedConfig.roomId, subscribedConfig.selfId, subscribedConfig.selfName]);
 
   const acceptCall = useCallback(async () => {
     if (callStateRef.current !== 'ringing-in') return;
@@ -256,6 +310,10 @@ export const useDirectCall = ({ roomId, selfId, selfName }) => {
 
     const channel = supabase.channel(`ican-call:${rid}`, { config: { broadcast: { self: true } } });
 
+    let resolveReady;
+    const readyPromise = new Promise((res) => { resolveReady = res; });
+    roomReadyRef.current.set(rid, { promise: readyPromise });
+
     channel
       .on('broadcast', { event: 'ring' }, async ({ payload }) => {
         if (!payload || payload.from === sid) return;
@@ -266,6 +324,7 @@ export const useDirectCall = ({ roomId, selfId, selfName }) => {
           return;
         }
         peerIdRef.current = payload.from;
+        setPeerId(payload.from);
         setIsVideo(!!payload.video);
         setPeerName(payload.fromName || 'Someone');
         setCallState('ringing-in');
@@ -277,6 +336,7 @@ export const useDirectCall = ({ roomId, selfId, selfName }) => {
       .on('broadcast', { event: 'accept' }, async ({ payload }) => {
         if (!payload || payload.from === sid || callStateRef.current !== 'ringing-out') return;
         peerIdRef.current = payload.from;
+        setPeerId(payload.from);
         if (payload.fromName) setPeerName(payload.fromName);
         clearRingTimers();
         audioServiceRef.current?.stopAllSounds();
@@ -334,7 +394,9 @@ export const useDirectCall = ({ roomId, selfId, selfName }) => {
           pendingIceRef.current.push(payload.candidate);
         }
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') resolveReady();
+      });
 
     channelRef.current = channel;
 
@@ -347,6 +409,7 @@ export const useDirectCall = ({ roomId, selfId, selfName }) => {
       }
       supabase.removeChannel(channel);
       if (channelRef.current === channel) channelRef.current = null;
+      roomReadyRef.current.delete(rid);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subscribedConfig.roomId, subscribedConfig.selfId, createPeerConnection, flushPendingIce, resetToIdle]);
@@ -362,6 +425,7 @@ export const useDirectCall = ({ roomId, selfId, selfName }) => {
     callState,
     isVideo,
     peerName,
+    peerId,
     elapsed,
     micOn,
     camOn,
