@@ -5,7 +5,10 @@ import VoiceNotePlayer from './voice/VoiceNotePlayer';
 import VoiceNoteRetentionPrompt from './voice/VoiceNoteRetentionPrompt';
 import CallDock from './calls/CallDock';
 import CallStage from './calls/CallStage';
+import CommunityLiveStage from './community/CommunityLiveStage';
+import CommunityLiveBanner from './community/CommunityLiveBanner';
 import { useDirectCall } from '../hooks/useDirectCall';
+import { useCommunityLive } from '../hooks/useCommunityLive';
 import { uploadVoiceNote, linkVoiceNoteMessages } from '../services/voiceNoteService';
 import {
   resolveChatIdentity,
@@ -422,6 +425,16 @@ const ChatWidget = ({ hasBottomNav = false }) => {
   // (no camera yet, media isn't requested until Accept) stay on the dock.
   const showCallStage = call.isVideo && (call.callState === 'ringing-out' || call.callState === 'active');
 
+  // Community "Go Live" broadcast — independent of `channel` so a stream you
+  // started keeps running (and its full-screen stage keeps showing) even if
+  // you switch to another tab in the widget. Guests can watch but not go live.
+  const communityLive = useCommunityLive({
+    selfId: identity?.userId || identity?.authId || guestLikeKey,
+    selfName: identity?.name || 'Guest',
+    canBroadcast: Boolean(identity && !identity.isGuest && identity.authId),
+  });
+  const showCommunityLiveStage = communityLive.role === 'broadcasting' || communityLive.role === 'watching';
+
   useEffect(() => {
     if (open && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -715,6 +728,11 @@ const ChatWidget = ({ hasBottomNav = false }) => {
             </div>
             <div className="flex items-center gap-1">
               {channel === 'support' && <CallButtons call={call} onAudio={startAudioCall} onVideo={startVideoCall} onLight />}
+              {channel === 'community' && communityLive.canBroadcast && (
+                <button onClick={communityLive.goLive} className="rounded-lg p-1.5 text-white hover:bg-white/20 transition" title="Go live to Community">
+                  <Radio className="h-4 w-4" />
+                </button>
+              )}
               <button onClick={() => setFullScreen((value) => !value)} className="rounded-lg p-1.5 hover:bg-white/20 transition" title={fullScreen ? 'Exit full screen' : 'Open full screen'}>
                 {fullScreen ? <Minimize className="h-4 w-4" /> : <Expand className="h-4 w-4" />}
               </button>
@@ -724,6 +742,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
 
           {showCallStage && <CallStage call={call} />}
           {!showCallStage && <CallDock call={call} dark={dark} tint={channel === 'trust' ? 'amber' : 'indigo'} />}
+          {showCommunityLiveStage && <CommunityLiveStage live={communityLive} />}
 
           <div className={`flex gap-1 border-b px-3 py-2 ${dark ? 'border-slate-700/50 bg-slate-950' : 'border-slate-200 bg-slate-50'}`}>
             <button
@@ -746,6 +765,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
               }`}
             >
               <Globe className="h-3.5 w-3.5" /> Community
+              {communityLive.liveInfo && channel !== 'community' && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />}
             </button>
             {hasCmmsAccess && (
               <button
@@ -949,7 +969,9 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                 </section>
               )
             ) : channel === 'community' ? (
-              selectedThread ? (
+              <>
+              {!selectedThread && <CommunityLiveBanner live={communityLive} dark={dark} />}
+              {selectedThread ? (
                 <>
                   <div className="mb-1 flex items-center justify-between">
                     <button
@@ -1034,7 +1056,8 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                     )}
                   </button>
                 ))
-              )
+              )}
+              </>
             ) : (
               <>
                 {supportMessages.length === 0 && (
@@ -1132,6 +1155,15 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                       dark ? 'border-slate-700/50 bg-white/5 text-white placeholder:text-slate-500' : 'border-slate-200 bg-slate-50 text-slate-800'
                     }`}
                   />
+                )}
+                {channel === 'community' && communityLive.canBroadcast && voicePhase === 'idle' && (
+                  <button
+                    onClick={communityLive.goLive}
+                    className="flex h-9 flex-shrink-0 items-center gap-1 rounded-xl bg-gradient-to-br from-red-500 to-orange-500 px-3 text-xs font-semibold text-white shadow-lg transition"
+                    title="Go live to Community"
+                  >
+                    <Radio className="h-3.5 w-3.5" /> Live
+                  </button>
                 )}
                 {voicePhase === 'recording' ? (
                   <button
