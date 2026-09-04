@@ -56,13 +56,14 @@ $$;
 -- stamped 'Construction' by the old catch-all pick up the correct industry
 -- now, without needing to wait for their next login/onboarding sync (which
 -- would fix them anyway, since it re-runs this function).
+-- (LATERAL can't reference the UPDATE target table itself, so the function
+-- is called directly in SET/WHERE instead -- it's IMMUTABLE and cheap.)
 UPDATE public.cmms_company_profiles cp
-SET industry = (t.arch ->> 'industry')::cmms_industry_type,
-    architecture = t.arch,
+SET industry = (public.cmms_business_type_architecture(cp.pichin_business_type) ->> 'industry')::cmms_industry_type,
+    architecture = public.cmms_business_type_architecture(cp.pichin_business_type),
     updated_at = now()
-FROM LATERAL (SELECT public.cmms_business_type_architecture(cp.pichin_business_type) AS arch) t
 WHERE cp.pichin_business_profile_id IS NOT NULL
-  AND cp.industry IS DISTINCT FROM (t.arch ->> 'industry')::cmms_industry_type;
+  AND cp.industry IS DISTINCT FROM (public.cmms_business_type_architecture(cp.pichin_business_type) ->> 'industry')::cmms_industry_type;
 
 NOTIFY pgrst, 'reload schema';
 
