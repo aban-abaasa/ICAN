@@ -27,29 +27,54 @@ const CallDock = ({ call, dark = false, tint = 'indigo' }) => {
   if (call.callState === 'idle') return null;
 
   const gradient = tint === 'amber' ? 'from-amber-500 to-orange-600' : 'from-indigo-500 to-purple-600';
+  const hasRemote = call.callState === 'active' && Boolean(call.remoteStream);
+
+  // A real video stage — not a thumbnail — while a video call is ringing
+  // out or active: full dock width, tall enough to actually see someone on.
+  // Ringing-in has no video yet (media isn't requested until Accept).
+  const videoStage = call.isVideo && call.callState !== 'ringing-in' && (
+    <div className={`relative mb-2 h-40 w-full overflow-hidden rounded-xl bg-black ${!hasRemote ? 'flex items-center justify-center' : ''}`}>
+      {hasRemote && <video ref={remoteVideoRef} autoPlay playsInline className="h-full w-full object-cover" />}
+      <video
+        ref={localVideoRef}
+        autoPlay
+        playsInline
+        muted
+        className={hasRemote ? 'absolute bottom-2 right-2 h-16 w-24 rounded-lg object-cover ring-2 ring-white/60 shadow-lg' : 'h-full w-full object-cover'}
+      />
+      {!hasRemote && call.callState === 'active' && (
+        <p className="absolute bottom-2 left-2 rounded-full bg-black/50 px-2 py-0.5 text-[10px] text-white">Waiting for {call.peerName || 'them'}…</p>
+      )}
+    </div>
+  );
 
   return (
     <div className={`border-b px-3 py-2.5 ${dark ? 'border-slate-700/50 bg-slate-900' : 'border-slate-200 bg-slate-100'}`}>
       {call.error && <p className="mb-1.5 text-[11px] text-red-400">{call.error}</p>}
 
       {call.callState === 'ringing-out' && (
-        <div className="flex items-center gap-3">
-          <span className={`flex h-9 w-9 flex-shrink-0 animate-pulse items-center justify-center rounded-full bg-gradient-to-br ${gradient} text-white`}>
-            <Phone className="h-4 w-4" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className={`truncate text-sm font-medium ${dark ? 'text-slate-100' : 'text-slate-800'}`}>
-              Calling {call.peerName || 'them'}…
-            </p>
-            <p className={`text-[11px] ${dark ? 'text-slate-500' : 'text-slate-400'}`}>{call.isVideo ? 'Video call' : 'Audio call'}</p>
+        <div>
+          {videoStage}
+          <div className="flex items-center gap-3">
+            {!call.isVideo && (
+              <span className={`flex h-9 w-9 flex-shrink-0 animate-pulse items-center justify-center rounded-full bg-gradient-to-br ${gradient} text-white`}>
+                <Phone className="h-4 w-4" />
+              </span>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className={`truncate text-sm font-medium ${dark ? 'text-slate-100' : 'text-slate-800'}`}>
+                Calling {call.peerName || 'them'}…
+              </p>
+              <p className={`text-[11px] ${dark ? 'text-slate-500' : 'text-slate-400'}`}>{call.isVideo ? 'Video call' : 'Audio call'}</p>
+            </div>
+            <button
+              onClick={call.endCall}
+              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-red-500 text-white shadow transition hover:bg-red-600"
+              title="Cancel"
+            >
+              <PhoneOff className="h-4 w-4" />
+            </button>
           </div>
-          <button
-            onClick={call.endCall}
-            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-red-500 text-white shadow transition hover:bg-red-600"
-            title="Cancel"
-          >
-            <PhoneOff className="h-4 w-4" />
-          </button>
         </div>
       )}
 
@@ -83,13 +108,9 @@ const CallDock = ({ call, dark = false, tint = 'indigo' }) => {
 
       {call.callState === 'active' && (
         <div>
+          {videoStage}
           <div className="flex items-center gap-3">
-            {call.isVideo ? (
-              <div className="relative h-14 w-20 flex-shrink-0 overflow-hidden rounded-lg bg-black">
-                <video ref={remoteVideoRef} autoPlay playsInline className="h-full w-full object-cover" />
-                <video ref={localVideoRef} autoPlay playsInline muted className="absolute bottom-0.5 right-0.5 h-6 w-9 rounded object-cover ring-1 ring-white/50" />
-              </div>
-            ) : (
+            {!call.isVideo && (
               <span className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${gradient} text-white`}>
                 <Phone className="h-4 w-4" />
               </span>
