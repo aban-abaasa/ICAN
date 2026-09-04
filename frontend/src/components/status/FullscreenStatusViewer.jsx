@@ -13,6 +13,7 @@ import {
 } from '../../services/statusMessagesService';
 import { getUserStorefronts } from '../../services/dropshipService';
 import { useAuth } from '../../context/AuthContext';
+import StatusCaptionText from './StatusCaptionText';
 
 const timeAgo = (timestamp) => {
   if (!timestamp) return 'Now';
@@ -315,23 +316,14 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
                 className="w-full h-full object-contain"
               />
               {/* Caption overlay on image */}
-              {currentStatus.caption && (
-                <div
-                  className="absolute bottom-32 left-0 right-0 px-6 flex flex-col items-center justify-center cursor-pointer"
-                  onClick={(e) => { e.stopPropagation(); setCaptionExpanded(v => !v); }}
-                >
-                  <p className={`text-white text-center text-xl font-bold leading-snug max-w-xs drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] [text-shadow:0_2px_8px_rgba(0,0,0,0.9),0_0_2px_rgba(0,0,0,1)] ${
-                    captionExpanded ? '' : 'line-clamp-2'
-                  }`}>
-                    {currentStatus.caption}
-                  </p>
-                  {currentStatus.caption.length > 80 && (
-                    <span className="mt-1 text-xs font-semibold text-white/80 bg-black/40 backdrop-blur-sm px-3 py-0.5 rounded-full">
-                      {captionExpanded ? 'less' : 'more'}
-                    </span>
-                  )}
-                </div>
-              )}
+              <StatusCaptionText
+                text={currentStatus.caption}
+                expanded={captionExpanded}
+                onToggle={() => setCaptionExpanded(v => !v)}
+                variant="overlay"
+                clampLines={4}
+                className="absolute bottom-32 left-0 right-0 px-6 flex flex-col items-center justify-center cursor-pointer [&_p]:max-w-md [&_p]:mx-auto [&_p]:[text-shadow:0_2px_8px_rgba(0,0,0,0.9),0_0_2px_rgba(0,0,0,1)]"
+              />
             </div>
           ) : currentStatus.media_type === 'video' ? (
             <div className="relative w-full h-full">
@@ -341,32 +333,28 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
                 className="w-full h-full object-contain"
               />
               {/* Caption overlay on video */}
-              {currentStatus.caption && (
-                <div
-                  className="absolute bottom-32 left-0 right-0 px-6 flex flex-col items-center justify-center cursor-pointer"
-                  onClick={(e) => { e.stopPropagation(); setCaptionExpanded(v => !v); }}
-                >
-                  <p className={`text-white text-center text-xl font-bold leading-snug max-w-xs drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] [text-shadow:0_2px_8px_rgba(0,0,0,0.9),0_0_2px_rgba(0,0,0,1)] ${
-                    captionExpanded ? '' : 'line-clamp-2'
-                  }`}>
-                    {currentStatus.caption}
-                  </p>
-                  {currentStatus.caption.length > 80 && (
-                    <span className="mt-1 text-xs font-semibold text-white/80 bg-black/40 backdrop-blur-sm px-3 py-0.5 rounded-full">
-                      {captionExpanded ? 'less' : 'more'}
-                    </span>
-                  )}
-                </div>
-              )}
+              <StatusCaptionText
+                text={currentStatus.caption}
+                expanded={captionExpanded}
+                onToggle={() => setCaptionExpanded(v => !v)}
+                variant="overlay"
+                clampLines={4}
+                className="absolute bottom-32 left-0 right-0 px-6 flex flex-col items-center justify-center cursor-pointer [&_p]:max-w-md [&_p]:mx-auto [&_p]:[text-shadow:0_2px_8px_rgba(0,0,0,0.9),0_0_2px_rgba(0,0,0,1)]"
+              />
             </div>
           ) : (
             <div
               style={{ backgroundColor: currentStatus.background_color }}
               className="w-full h-full flex items-center justify-center p-8"
             >
-              <p className="text-4xl font-bold text-white text-center max-w-2xl">
-                {currentStatus.caption}
-              </p>
+              <StatusCaptionText
+                text={currentStatus.caption}
+                expanded={captionExpanded}
+                onToggle={() => setCaptionExpanded(v => !v)}
+                variant="big"
+                clampLines={8}
+                className="w-full max-w-md cursor-pointer"
+              />
             </div>
           )}
 

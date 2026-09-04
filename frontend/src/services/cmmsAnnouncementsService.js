@@ -293,7 +293,12 @@ export const shareAnnouncementAsUpdate = async (post, authUserId) => {
 
   const link = buildPublicNoticeLink(post.cmms_company_id, post.id);
   const ctaLabel = post.post_type === 'job' ? 'Apply now' : 'Read more';
-  const caption = [post.title, post.summary, `${ctaLabel}: ${link}`]
+  // Title as a real sentence lead-in, then the full body (not just the
+  // one-line summary) so a shared job/announcement reads as the actual
+  // post instead of a teaser, with the deep link folded in as a normal
+  // trailing sentence -- StatusCaptionText linkifies it, so it renders as
+  // a real inline link rather than a bare URL dumped on its own line.
+  const caption = [post.title, post.body || post.summary, `${ctaLabel}: ${link}`]
     .filter(Boolean)
     .join('\n\n')
     .slice(0, 2000);

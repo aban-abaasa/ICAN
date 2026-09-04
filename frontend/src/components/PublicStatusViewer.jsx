@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { AuthPage } from './auth';
 import { getStatusById, incrementStatusView } from '../services/statusService';
 import { getStatusMessages, sendStatusMessage, subscribeToStatusMessages } from '../services/statusMessagesService';
+import StatusCaptionText from './status/StatusCaptionText';
 
 const timeAgo = (timestamp) => {
   if (!timestamp) return 'Now';
@@ -32,6 +33,7 @@ const PublicStatusViewer = ({ statusId }) => {
   const [sending, setSending] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [mediaBroken, setMediaBroken] = useState(false);
+  const [captionExpanded, setCaptionExpanded] = useState(false);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -172,16 +174,26 @@ const PublicStatusViewer = ({ statusId }) => {
           />
         ) : (
           <div style={{ backgroundColor: status.background_color || '#6366f1' }} className="w-full h-full flex items-center justify-center p-8">
-            <p className="text-4xl font-bold text-white text-center max-w-2xl">{status.caption}</p>
+            <StatusCaptionText
+              text={status.caption}
+              expanded={captionExpanded}
+              onToggle={() => setCaptionExpanded(v => !v)}
+              variant="big"
+              clampLines={8}
+              className="w-full max-w-md cursor-pointer"
+            />
           </div>
         )}
 
-        {status.caption && status.media_type !== 'text' && (
-          <div className="absolute bottom-32 left-0 right-0 px-6 flex items-center justify-center">
-            <p className="text-white text-center text-xl font-bold leading-snug max-w-xs drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
-              {status.caption}
-            </p>
-          </div>
+        {status.media_type !== 'text' && (
+          <StatusCaptionText
+            text={status.caption}
+            expanded={captionExpanded}
+            onToggle={() => setCaptionExpanded(v => !v)}
+            variant="overlay"
+            clampLines={4}
+            className="absolute bottom-32 left-0 right-0 px-6 flex flex-col items-center justify-center cursor-pointer [&_p]:max-w-md [&_p]:mx-auto [&_p]:drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]"
+          />
         )}
 
         {/* Poster + close */}
