@@ -6,6 +6,12 @@
  * Mirrors backend/services/r2StorageService.js (the same logic for the local
  * Express dev server), since Vercel deploys api/**\/*.js as serverless
  * functions and never runs backend/server.js in production.
+ *
+ * DEPLOYED COPY: the Vercel project's Root Directory is set to `frontend`,
+ * so only frontend/api/** is ever built into functions — the sibling
+ * ../../api/_lib/r2Client.js at the repo root is never deployed. This file
+ * must stay in sync with it (or Root Directory should be changed to the
+ * repo root and this copy retired) until that setting is fixed.
  */
 
 import crypto from 'crypto';

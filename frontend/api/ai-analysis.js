@@ -1,11 +1,15 @@
 /**
- * Vercel Serverless Function — OpenAI proxy for accounting AI analysis
+ * Vercel Serverless Function — AI proxy for accounting AI analysis
  *
- * Keeps the OpenAI API key server-side (OPENAI_API_KEY env var in Vercel dashboard).
- * The browser never sees the key and CORS is never an issue.
+ * Keeps API keys server-side (OPENAI_API_KEY / GEMINI_API_KEY env vars in
+ * the Vercel dashboard). The browser never sees either key and CORS is
+ * never an issue. When both are configured, callAI() races them and uses
+ * whichever responds first — see api/_lib/aiProvider.js.
  *
  * Route: POST /api/ai-analysis
  */
+
+import { callAI } from './_lib/aiProvider.js';
 
 const FINANCE_TUTOR_PACK = {
   pillars: [
@@ -112,33 +116,27 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    // No key configured → tell client to use fallback
-    return res.status(503).json({ error: 'AI service not configured' });
-  }
-
   try {
     const incoming = req.body || {};
-    const upstreamPayload = {
-      ...incoming,
-      model: incoming.model || 'gpt-4o-mini',
-      temperature: typeof incoming.temperature === 'number' ? incoming.temperature : 0.5,
-      max_tokens: incoming.max_tokens || 900,
-      messages: normalizeMessages(incoming.messages)
-    };
+    const messages = normalizeMessages(incoming.messages);
+    const temperature = typeof incoming.temperature === 'number' ? incoming.temperature : 0.5;
+    const maxTokens = incoming.max_tokens || 900;
 
-    const upstream = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify(upstreamPayload)
+    let result;
+    try {
+      result = await callAI({ messages, temperature, maxTokens });
+    } catch (aiError) {
+      // No provider configured, or both failed → tell client to use fallback
+      return res.status(503).json({ error: 'AI service not configured', detail: aiError.message });
+    }
+
+    // Keep the response OpenAI-shaped (choices[0].message.content) regardless
+    // of which provider actually served it — the frontend always reads
+    // data.choices[0]?.message?.content.
+    return res.status(200).json({
+      choices: [{ message: { role: 'assistant', content: result.content } }],
+      provider: result.provider
     });
-
-    const data = await upstream.json();
-    return res.status(upstream.status).json(data);
   } catch (err) {
     console.error('AI proxy error:', err);
     return res.status(502).json({ error: 'AI proxy failed', detail: err.message });

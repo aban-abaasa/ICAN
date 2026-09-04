@@ -3,7 +3,16 @@
   "outputDirectory": "dist",
   "framework": "vite",
   "rewrites": [
+    { "source": "/status/:id", "destination": "/api/share-preview?type=status&id=:id" },
+    { "source": "/pitchin/:id", "destination": "/api/share-preview?type=pitch&id=:id" },
+    { "source": "/store/:id", "destination": "/api/share-preview?type=store&id=:id" },
     { "source": "/(.*)", "destination": "/" }
+  ],
+  "crons": [
+    { "path": "/api/report-automation?mode=daily", "schedule": "15 1 * * *" },
+    { "path": "/api/report-automation?mode=weekly", "schedule": "40 1 * * 1" },
+    { "path": "/api/report-automation?mode=monthly", "schedule": "55 1 1 * *" },
+    { "path": "/api/investment-expiry-sweep", "schedule": "0 * * * *" }
   ],
   "routes": [
     {
