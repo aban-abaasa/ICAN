@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Link2, Copy, Eye, Plus, Trash2, Edit2, RefreshCw, Upload, ShieldCheck,
   Briefcase, Award, GraduationCap, FolderKanban, Rocket, FlaskConical, Presentation,
-  Loader2, Check, X as XIcon, Users, ExternalLink,
+  Loader2, Check, X as XIcon, Users, ExternalLink, MessageCircle, ArrowLeft, Send, Paperclip,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -13,6 +13,13 @@ import {
   uploadVerificationDocument, getMyVerifications,
   getReviewableVerifications, reviewVerification,
 } from '../../services/portfolioService';
+import {
+  listMyConversations, getConversationMessagesDirect, sendOwnerMessage,
+  markConversationRead, subscribeToConversationMessages, subscribeToMyConversations,
+  uploadChatAttachment,
+} from '../../services/portfolioChatService';
+import { fmtRelativeTime } from '../landing/relativeTime';
+import ChatBubble from './ChatBubble';
 import PublicPortfolioPage from './PublicPortfolioPage';
 
 const ITEM_ICONS = {
@@ -71,17 +78,27 @@ export default function PortfolioTab() {
   const [showPreview, setShowPreview] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  const [conversations, setConversations] = useState([]);
+  const [selectedConversationId, setSelectedConversationId] = useState(null);
+  const [threadMessages, setThreadMessages] = useState([]);
+  const [threadLoading, setThreadLoading] = useState(false);
+  const [messageBody, setMessageBody] = useState('');
+  const [pendingFile, setPendingFile] = useState(null);
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [messageError, setMessageError] = useState(null);
+
   const load = async () => {
     if (!user?.id) return;
     setIsLoading(true);
     try {
-      const [{ portfolio, handle: h }, portfolioItems, portfolioReferences, memberCheck, myDocs, reviewable] = await Promise.all([
+      const [{ portfolio, handle: h }, portfolioItems, portfolioReferences, memberCheck, myDocs, reviewable, myConversations] = await Promise.all([
         getMyPortfolio(user.id),
         getPortfolioItems(user.id),
         getPortfolioReferences(user.id),
         isCmmsMember(user.email),
         getMyVerifications(user.id),
         getReviewableVerifications().catch(() => []),
+        listMyConversations().catch(() => []),
       ]);
 
       setHandleState(h || '');
@@ -101,6 +118,7 @@ export default function PortfolioTab() {
       setCmmsMember(memberCheck);
       setVerifications(myDocs);
       setReviewQueue(reviewable);
+      setConversations(myConversations);
 
       if (memberCheck) {
         syncCmmsPortfolioItems(user.id, user.email)
@@ -119,6 +137,72 @@ export default function PortfolioTab() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
+
+  // Live-refresh the conversation list (new conversations, new last-message
+  // previews/unread flags) while the tab is open — cheap re-fetch on any
+  // change rather than hand-merging the realtime payload into local state.
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    const unsubscribe = subscribeToMyConversations(() => {
+      listMyConversations().then(setConversations).catch(() => {});
+    });
+    return unsubscribe;
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!selectedConversationId) {
+      setThreadMessages([]);
+      return undefined;
+    }
+    let cancelled = false;
+    setThreadLoading(true);
+    getConversationMessagesDirect(selectedConversationId)
+      .then((msgs) => { if (!cancelled) setThreadMessages(msgs); })
+      .catch((err) => console.error('Error loading conversation:', err))
+      .finally(() => { if (!cancelled) setThreadLoading(false); });
+    markConversationRead(selectedConversationId).catch(() => {});
+
+    const unsubscribe = subscribeToConversationMessages(selectedConversationId, (message) => {
+      setThreadMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message]));
+      markConversationRead(selectedConversationId).catch(() => {});
+    });
+    return () => { cancelled = true; unsubscribe(); };
+  }, [selectedConversationId]);
+
+  const openConversation = (conversationId) => {
+    setMessageError(null);
+    setSelectedConversationId(conversationId);
+  };
+
+  const pickMessageFile = (e) => {
+    const file = e.target.files?.[0];
+    if (file) setPendingFile(file);
+    e.target.value = '';
+  };
+
+  const sendConversationMessage = async () => {
+    if (!selectedConversationId || isSendingMessage) return;
+    if (!messageBody.trim() && !pendingFile) return;
+
+    setIsSendingMessage(true);
+    setMessageError(null);
+    try {
+      let attachment = null;
+      if (pendingFile) {
+        attachment = await uploadChatAttachment(pendingFile);
+      }
+      const sent = await sendOwnerMessage(selectedConversationId, { body: messageBody.trim() || null, attachment });
+      setThreadMessages((prev) => (prev.some((m) => m.id === sent.id) ? prev : [...prev, sent]));
+      setMessageBody('');
+      setPendingFile(null);
+      listMyConversations().then(setConversations).catch(() => {});
+    } catch (err) {
+      console.error('Error sending message:', err);
+      setMessageError(err.message || 'Could not send — please try again.');
+    } finally {
+      setIsSendingMessage(false);
+    }
+  };
 
   const saveHandle = async () => {
     setSavingHandle(true);
@@ -200,7 +284,7 @@ export default function PortfolioTab() {
     setItemError(null);
     try {
       if (editingItemId) {
-        await updatePortfolioItem(editingItemId, itemForm);
+        await updatePortfolioItem(user.id, editingItemId, itemForm);
       } else {
         await addPortfolioItem(user.id, itemForm);
       }
@@ -215,7 +299,7 @@ export default function PortfolioTab() {
 
   const removeItem = async (itemId) => {
     try {
-      await deletePortfolioItem(itemId);
+      await deletePortfolioItem(user.id, itemId);
       setItems(await getPortfolioItems(user.id));
     } catch (err) {
       console.error('Error deleting portfolio item:', err);
@@ -253,7 +337,7 @@ export default function PortfolioTab() {
     }
     try {
       if (editingReferenceId) {
-        await updatePortfolioReference(editingReferenceId, referenceForm);
+        await updatePortfolioReference(user.id, editingReferenceId, referenceForm);
       } else {
         await addPortfolioReference(user.id, referenceForm);
       }
@@ -268,7 +352,7 @@ export default function PortfolioTab() {
 
   const removeReference = async (referenceId) => {
     try {
-      await deletePortfolioReference(referenceId);
+      await deletePortfolioReference(user.id, referenceId);
       setReferences(await getPortfolioReferences(user.id));
     } catch (err) {
       console.error('Error deleting reference:', err);
@@ -625,6 +709,114 @@ export default function PortfolioTab() {
             <p className="text-sm text-gray-500 text-center py-4">No entries yet — add your first one.</p>
           )}
         </div>
+      </div>
+
+      {/* Messages — direct 1:1 chats started from the public resume page */}
+      <div className="bg-slate-900/50 border border-indigo-700/30 rounded-xl p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-white font-semibold flex items-center gap-2">
+            <MessageCircle className="w-4 h-4 text-indigo-400" /> Messages
+            {conversations.some((c) => c.unread_by_owner) && (
+              <span className="w-2 h-2 rounded-full bg-indigo-500" />
+            )}
+          </h3>
+          {selectedConversationId && (
+            <button
+              onClick={() => setSelectedConversationId(null)}
+              className="flex items-center gap-1 text-xs text-gray-400 hover:text-white"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" /> Back
+            </button>
+          )}
+        </div>
+
+        {!selectedConversationId ? (
+          <div className="space-y-1.5">
+            {conversations.length === 0 && (
+              <p className="text-sm text-gray-500 text-center py-4">
+                No messages yet — visitors to your public resume page can message you here.
+              </p>
+            )}
+            {conversations.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => openConversation(c.id)}
+                className="w-full flex items-center gap-2 p-2.5 bg-slate-950/30 hover:bg-slate-950/60 rounded-lg text-left transition-colors"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm text-white font-medium truncate">
+                      {c.visitor_name || c.guest_name || 'A visitor'}
+                    </p>
+                    {c.unread_by_owner && <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 flex-shrink-0" />}
+                  </div>
+                  {c.last_message_preview && (
+                    <p className="text-xs text-gray-400 truncate">{c.last_message_preview}</p>
+                  )}
+                </div>
+                {c.last_message_at && (
+                  <span className="text-[10px] text-gray-500 flex-shrink-0">{fmtRelativeTime(c.last_message_at)}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div>
+            <div className="max-h-80 min-h-[8rem] overflow-y-auto space-y-2 mb-2 px-0.5">
+              {threadLoading ? (
+                <div className="flex items-center justify-center py-8 text-gray-500">
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading...
+                </div>
+              ) : (
+                threadMessages.map((m) => (
+                  <ChatBubble key={m.id} message={m} isMine={m.sender_role === 'owner'} />
+                ))
+              )}
+            </div>
+
+            {messageError && <p className="text-xs text-red-400 mb-1.5">{messageError}</p>}
+
+            {pendingFile && (
+              <div className="mb-1.5 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-800 text-xs text-slate-300 w-fit">
+                <Paperclip className="w-3 h-3" />
+                <span className="truncate max-w-[10rem]">{pendingFile.name}</span>
+                <button onClick={() => setPendingFile(null)} className="text-slate-500 hover:text-white">
+                  <XIcon className="w-3 h-3" />
+                </button>
+              </div>
+            )}
+
+            <div className="flex items-center gap-1.5">
+              <input type="file" id="portfolio-message-file" accept="image/*,.pdf" className="hidden" onChange={pickMessageFile} />
+              <label
+                htmlFor="portfolio-message-file"
+                className="p-2 rounded-lg text-gray-400 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer"
+              >
+                <Paperclip className="w-4 h-4" />
+              </label>
+              <textarea
+                value={messageBody}
+                onChange={(e) => setMessageBody(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendConversationMessage();
+                  }
+                }}
+                placeholder="Write a reply..."
+                rows={1}
+                className="flex-1 min-w-0 resize-none px-3 py-2 bg-slate-950/50 border border-slate-700 rounded-lg text-white placeholder-gray-500 text-sm"
+              />
+              <button
+                onClick={sendConversationMessage}
+                disabled={isSendingMessage || (!messageBody.trim() && !pendingFile)}
+                className="p-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white transition-colors disabled:opacity-40"
+              >
+                {isSendingMessage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* References */}

@@ -5,6 +5,7 @@
  */
 
 import { supabase } from '../lib/supabase/client';
+import { getUserStatuses } from './statusService';
 
 // ─── Own portfolio (authenticated) ─────────────────────────────────────────
 
@@ -103,7 +104,7 @@ export async function addPortfolioItem(userId, item) {
   return data;
 }
 
-export async function updatePortfolioItem(itemId, updates) {
+export async function updatePortfolioItem(userId, itemId, updates) {
   const { data, error } = await supabase
     .from('user_portfolio_items')
     .update({
@@ -116,6 +117,7 @@ export async function updatePortfolioItem(itemId, updates) {
       is_public: updates.isPublic,
     })
     .eq('id', itemId)
+    .eq('user_id', userId)
     .eq('source', 'manual')
     .select()
     .single();
@@ -124,11 +126,12 @@ export async function updatePortfolioItem(itemId, updates) {
   return data;
 }
 
-export async function deletePortfolioItem(itemId) {
+export async function deletePortfolioItem(userId, itemId) {
   const { error } = await supabase
     .from('user_portfolio_items')
     .delete()
     .eq('id', itemId)
+    .eq('user_id', userId)
     .eq('source', 'manual');
 
   if (error) throw error;
@@ -167,7 +170,7 @@ export async function addPortfolioReference(userId, ref) {
   return data;
 }
 
-export async function updatePortfolioReference(referenceId, updates) {
+export async function updatePortfolioReference(userId, referenceId, updates) {
   const { data, error } = await supabase
     .from('portfolio_references')
     .update({
@@ -179,6 +182,7 @@ export async function updatePortfolioReference(referenceId, updates) {
       is_public: updates.isPublic,
     })
     .eq('id', referenceId)
+    .eq('user_id', userId)
     .select()
     .single();
 
@@ -186,8 +190,12 @@ export async function updatePortfolioReference(referenceId, updates) {
   return data;
 }
 
-export async function deletePortfolioReference(referenceId) {
-  const { error } = await supabase.from('portfolio_references').delete().eq('id', referenceId);
+export async function deletePortfolioReference(userId, referenceId) {
+  const { error } = await supabase
+    .from('portfolio_references')
+    .delete()
+    .eq('id', referenceId)
+    .eq('user_id', userId);
   if (error) throw error;
 }
 
@@ -466,7 +474,7 @@ export async function getPublicPortfolio(handle) {
   if (profileError) throw profileError;
   if (!profile) return null;
 
-  const [portfolio, items, ratingSummary, ratings, references] = await Promise.all([
+  const [portfolio, items, ratingSummary, ratings, references, statusesResult] = await Promise.all([
     supabase.from('user_portfolios').select('*').eq('user_id', profile.id).eq('is_public', true).maybeSingle().then((r) => r.data),
     supabase
       .from('user_portfolio_items')
@@ -484,6 +492,11 @@ export async function getPublicPortfolio(handle) {
       .eq('is_public', true)
       .order('display_order', { ascending: true })
       .then((r) => r.data),
+    // Scoped to this profile's owner — RLS further restricts what a non-owner
+    // viewer (anon or another user) can see to visibility='public' rows only
+    // (allow_public_statuses_anon_select.sql / 04_status_sharing_tables.sql),
+    // so this can never surface anyone else's updates or the owner's private ones.
+    getUserStatuses(profile.id),
   ]);
 
   return {
@@ -493,5 +506,6 @@ export async function getPublicPortfolio(handle) {
     ratingSummary,
     ratings,
     references: references || [],
+    statuses: statusesResult?.statuses || [],
   };
 }

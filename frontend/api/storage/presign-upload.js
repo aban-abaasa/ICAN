@@ -7,7 +7,7 @@ import { verifySupabaseUser } from '../_lib/verifyUser.js';
 import { buildKey, getUploadUrl } from '../_lib/r2Client.js';
 import { applyCors } from '../_lib/cors.js';
 
-const ALLOWED_FOLDERS = ['pitches', 'statuses', 'avatars', 'cmms-reports', 'cmms-announcements', 'voice-notes'];
+const ALLOWED_FOLDERS = ['pitches', 'statuses', 'avatars', 'cmms-reports', 'cmms-announcements', 'voice-notes', 'portfolio-chat'];
 
 export default async function handler(req, res) {
   if (applyCors(req, res)) return;

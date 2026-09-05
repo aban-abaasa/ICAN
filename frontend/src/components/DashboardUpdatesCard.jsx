@@ -150,11 +150,14 @@ const DashboardUpdatesCard = ({ userId, sectionBorder, cardBackground, onOpenVie
   const [loading, setLoading] = useState(true);
 
   const loadStatuses = useCallback(async () => {
+    if (!userId) {
+      setStatuses([]);
+      setLoading(false);
+      return;
+    }
     try {
-      const { statuses: active = [] } = await getActiveStatuses();
-      const own = active.filter(s => s.user_id === userId).map(s => ({ ...s, isOwn: true }));
-      const others = active.filter(s => s.user_id !== userId);
-      setStatuses([...own, ...others]);
+      const { statuses: own = [] } = await getActiveStatuses(userId);
+      setStatuses(own.map(s => ({ ...s, isOwn: true })));
     } catch (err) {
       console.error('DashboardUpdatesCard: failed to load statuses', err);
       setStatuses([]);

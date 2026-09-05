@@ -15,7 +15,7 @@ const adminSupabase =
       })
     : null;
 
-const ALLOWED_FOLDERS = ['pitches', 'statuses', 'avatars', 'cmms-reports', 'cmms-announcements', 'voice-notes'];
+const ALLOWED_FOLDERS = ['pitches', 'statuses', 'avatars', 'cmms-reports', 'cmms-announcements', 'voice-notes', 'portfolio-chat'];
 
 // Job applicants never have an ICAN account, so their resume upload can't
 // carry a Bearer token like every other upload here -- this is the one
@@ -28,6 +28,16 @@ const PUBLIC_UPLOAD_FOLDER = 'cmms-job-applications';
 const PUBLIC_UPLOAD_WINDOW_MS = 10 * 60 * 1000;
 const PUBLIC_UPLOAD_MAX_PER_WINDOW = 12;
 const publicUploadHits = new Map(); // ip -> [timestamps]
+
+// Anonymous guest attachments on a public resume page's chat (see
+// CREATE_PORTFOLIO_DIRECT_MESSAGES.sql) — same soft-target reasoning as the
+// job-application upload above: no Bearer token to scope by, so a separate
+// fixed folder (never in ALLOWED_FOLDERS, so it can't be touched by the
+// owner-only DELETE route below), a narrow content-type allowlist, and the
+// same per-IP rate limit, reused as-is since it's already IP-scoped rather
+// than job-specific.
+const PORTFOLIO_CHAT_GUEST_FOLDER = 'portfolio-chat-guest';
+const PORTFOLIO_CHAT_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
 
 const publicUploadRateLimit = (req, res, next) => {
   const ip = req.ip || req.connection?.remoteAddress || 'unknown';
@@ -111,6 +121,36 @@ router.post('/presign-upload-public', publicUploadRateLimit, async (req, res) =>
     return res.json({ success: true, key, uploadUrl });
   } catch (error) {
     console.error('Error creating public presigned upload URL:', error);
+    return res.status(500).json({ success: false, error: 'Failed to create upload URL' });
+  }
+});
+
+/**
+ * POST /api/storage/presign-upload-chat
+ * Body: { filename, contentType }
+ * No auth — used for an anonymous guest's attachment on the public resume
+ * page's direct-message chat (see CREATE_PORTFOLIO_DIRECT_MESSAGES.sql). A
+ * signed-in sender (owner or visitor) instead uses the normal authenticated
+ * presign-upload with folder: 'portfolio-chat', which namespaces by their
+ * real user id and stays deletable via DELETE /object.
+ */
+router.post('/presign-upload-chat', publicUploadRateLimit, async (req, res) => {
+  try {
+    const { filename, contentType } = req.body || {};
+    if (!filename) {
+      return res.status(400).json({ success: false, error: 'filename is required' });
+    }
+    if (!PORTFOLIO_CHAT_ALLOWED_TYPES.includes(contentType)) {
+      return res.status(400).json({ success: false, error: `contentType must be one of: ${PORTFOLIO_CHAT_ALLOWED_TYPES.join(', ')}` });
+    }
+
+    const anonymousId = crypto.randomUUID();
+    const key = r2.buildKey(PORTFOLIO_CHAT_GUEST_FOLDER, anonymousId, filename);
+    const uploadUrl = await r2.getUploadUrl({ key, contentType });
+
+    return res.json({ success: true, key, uploadUrl });
+  } catch (error) {
+    console.error('Error creating chat presigned upload URL:', error);
     return res.status(500).json({ success: false, error: 'Failed to create upload URL' });
   }
 });

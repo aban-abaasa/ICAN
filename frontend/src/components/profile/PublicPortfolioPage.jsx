@@ -2,8 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   X, ShieldCheck, Briefcase, Award, GraduationCap, FolderKanban, Rocket,
   FlaskConical, Presentation, Loader2, Sparkles, MapPin, Phone, Mail,
-  Users, PhoneCall, Video, MessageCircle, ExternalLink, ArrowRight,
+  Users, PhoneCall, Video, MessageCircle, ExternalLink, ArrowRight, MessageSquare,
 } from 'lucide-react';
+import { fmtRelativeTime } from '../landing/relativeTime';
+import { getOrCreatePortfolioGuestId } from '../../utils/portfolioGuestId';
+import PortfolioChatPanel from './PortfolioChatPanel';
 import { getPublicPortfolio } from '../../services/portfolioService';
 import { useAuth } from '../../context/AuthContext';
 import { useDirectCall } from '../../hooks/useDirectCall';
@@ -32,21 +35,6 @@ const SECTIONS = [
   { key: 'presentations', title: 'Presentations & Competitions', types: ['presentation'] },
 ];
 
-const GUEST_ID_KEY = 'ican_portfolio_guest_id';
-
-function getOrCreateGuestId() {
-  try {
-    let id = window.localStorage.getItem(GUEST_ID_KEY);
-    if (!id) {
-      id = `guest-${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
-      window.localStorage.setItem(GUEST_ID_KEY, id);
-    }
-    return id;
-  } catch (_) {
-    return `guest-${Math.random().toString(36).slice(2)}`;
-  }
-}
-
 function formatMonthYear(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr);
@@ -72,6 +60,45 @@ function DescriptionBlock({ text }) {
     );
   }
   return <p className="text-sm text-slate-400 mt-1.5">{text}</p>;
+}
+
+// One read-only "Update" card on the public resume page — the owner's own
+// active (non-expired, public-visibility) status posts only. Never
+// interactive/click-to-open here; visitors just see what's currently live.
+function StatusCard({ status }) {
+  const hasMedia = Boolean(status.media_url && String(status.media_url).trim());
+  const kind = !hasMedia ? 'text' : status.media_type === 'video' ? 'video' : 'image';
+
+  return (
+    <div className="relative w-32 h-56 shrink-0 snap-start rounded-xl overflow-hidden border border-slate-800 bg-slate-900">
+      {kind === 'video' && (
+        <video src={status.media_url} className="w-full h-full object-cover" muted playsInline preload="none" controls />
+      )}
+      {kind === 'image' && (
+        <img src={status.media_url} alt={status.caption || 'Update'} className="w-full h-full object-cover" loading="lazy" />
+      )}
+      {kind === 'text' && (
+        <div
+          style={{ backgroundColor: status.background_color || '#6366f1' }}
+          className="w-full h-full flex items-center justify-center p-4"
+        >
+          {status.caption ? (
+            <p className="text-white text-center text-sm font-medium line-clamp-4">{status.caption}</p>
+          ) : (
+            <MessageSquare className="w-6 h-6 text-white/70" />
+          )}
+        </div>
+      )}
+      <div className="absolute inset-x-0 top-0 flex items-center gap-1.5 p-2 bg-gradient-to-b from-black/60 to-transparent pointer-events-none">
+        <span className="text-[10px] text-white/90 font-semibold">{fmtRelativeTime(status.created_at)}</span>
+      </div>
+      {kind !== 'text' && status.caption && (
+        <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/70 to-transparent pointer-events-none">
+          <p className="text-[11px] text-white line-clamp-2">{status.caption}</p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function SectionHeading({ children }) {
@@ -127,24 +154,13 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
   // reusing the same `community:<authId>` room convention ChatWidget's
   // Community tab already dials into for 1:1 calls — the professional
   // answers on whatever device already has the app open.
-  const guestId = useMemo(() => getOrCreateGuestId(), []);
+  const guestId = useMemo(() => getOrCreatePortfolioGuestId(), []);
   const viewerId = user?.id || guestId;
   const viewerName = viewerProfile?.full_name || guestName.trim() || 'A visitor from your portfolio';
   const call = useDirectCall({ roomId: `portfolio-visitor:${viewerId}`, selfId: viewerId, selfName: viewerName });
+  const [showChat, setShowChat] = useState(false);
 
   const isOwnProfile = Boolean(user?.id && data?.profile?.id && user.id === data.profile.id);
-
-  const openCommunityChat = () => {
-    if (onClose) {
-      // Already inside the app shell (overlay usage) — ChatWidget is mounted
-      // and listens for this exact event to jump straight to its Community tab.
-      window.dispatchEvent(new CustomEvent('ican-open-community-live'));
-    } else {
-      // Standalone /portfolio/<handle> route has no ChatWidget mounted —
-      // send the visitor into the main app, which opens it on load.
-      window.location.href = '/?join=community-live';
-    }
-  };
 
   // "Create your own IcanEra portfolio" — signed-in visitors jump straight to
   // their own My Resume tab (instantly if the app shell is already mounted
@@ -303,6 +319,24 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
             )}
             {links.length === 0 && contactLine.length === 0 && <div className="mb-6" />}
 
+            {/* Owner's own live Updates (24h status posts) — scoped server-side
+                to this profile's user_id, and RLS further restricts a
+                non-owner viewer to visibility='public' rows only, so this can
+                only ever show updates that belong to this profile's owner. */}
+            {data.statuses?.length > 0 && (
+              <div
+                className="mb-8 animate-fadeInUp"
+                style={{ animationDelay: '0.07s', animationFillMode: 'backwards' }}
+              >
+                <SectionHeading>Recent Updates</SectionHeading>
+                <div className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory">
+                  {data.statuses.map((status) => (
+                    <StatusCard key={status.id} status={status} />
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Call / community-chat action bar — lets a client reach this
                 professional directly from their resume page. */}
             {!isOwnProfile && (
@@ -316,7 +350,7 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
                       <input
                         value={guestName}
                         onChange={(e) => setGuestName(e.target.value)}
-                        placeholder="Your name (for the call)"
+                        placeholder="Your name (for calls & messages)"
                         className="min-w-0 flex-1 px-3 py-2 bg-slate-950/60 border border-slate-700 rounded-lg text-white placeholder-slate-500 text-xs focus:outline-none focus:border-indigo-500/60"
                       />
                     )}
@@ -333,10 +367,10 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
                       <Video className="w-3.5 h-3.5" /> Video Call
                     </button>
                     <button
-                      onClick={openCommunityChat}
+                      onClick={() => setShowChat(true)}
                       className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-xs font-medium rounded-lg transition-colors"
                     >
-                      <MessageCircle className="w-3.5 h-3.5" /> Community Chat
+                      <MessageCircle className="w-3.5 h-3.5" /> Message {data.profile.full_name?.split(' ')[0] || 'them'}
                     </button>
                   </div>
                 ) : (
@@ -344,10 +378,21 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
                 )}
                 {call.callState === 'idle' && (
                   <p className="text-[11px] text-slate-500 mt-2">
-                    Calls connect only while {data.profile.full_name?.split(' ')[0] || 'they'} has IcanEra open — if there's no answer, try Community Chat instead.
+                    Calls connect only while {data.profile.full_name?.split(' ')[0] || 'they'} has IcanEra open — if there's no answer, send a message instead.
                   </p>
                 )}
               </div>
+            )}
+
+            {showChat && !isOwnProfile && (
+              <PortfolioChatPanel
+                ownerUserId={data.profile.id}
+                ownerName={data.profile.full_name}
+                guestId={guestId}
+                guestName={guestName}
+                onGuestNameChange={setGuestName}
+                onClose={() => setShowChat(false)}
+              />
             )}
 
             {data.portfolio?.summary && (
@@ -473,18 +518,14 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
             {/* Recommend IcanEra — invite the visitor to build the same page */}
             {!isOwnProfile && (
               <div
-                className="mt-8 p-5 rounded-xl bg-gradient-to-r from-indigo-950/60 to-slate-900/60 border border-indigo-500/20 text-center animate-fadeIn"
+                className="mt-8 p-5 rounded-xl border border-indigo-500/20 text-center animate-fadeIn"
                 style={{ animationDelay: '0.65s', animationFillMode: 'backwards' }}
               >
-                <p className="text-white font-semibold">Impressed by this resume?</p>
-                <p className="text-slate-400 text-sm mt-1 mb-3">
-                  Build your own free professional portfolio on IcanEra — get your own shareable page, ratings, and a direct line for clients to call or message you.
-                </p>
                 <button
                   onClick={startOwnPortfolio}
                   className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors"
                 >
-                  Create Your Free IcanEra Portfolio <ArrowRight className="w-4 h-4" />
+                  Create Your Own on IcanEra <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
             )}
