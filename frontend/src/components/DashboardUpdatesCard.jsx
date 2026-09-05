@@ -156,8 +156,12 @@ const DashboardUpdatesCard = ({ userId, sectionBorder, cardBackground, onOpenVie
       return;
     }
     try {
-      const { statuses: own = [] } = await getActiveStatuses(userId);
-      setStatuses(own.map(s => ({ ...s, isOwn: true })));
+      // No userId here -- that would filter the query down to ONLY this
+      // user's own rows (see getActiveStatuses), hiding every other user's
+      // public update from the dashboard feed. Fetch the full public/
+      // followers/own feed instead, same as everyone else in the system sees.
+      const { statuses: all = [] } = await getActiveStatuses();
+      setStatuses(all.map(s => ({ ...s, isOwn: s.user_id === userId })));
     } catch (err) {
       console.error('DashboardUpdatesCard: failed to load statuses', err);
       setStatuses([]);
