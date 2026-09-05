@@ -14,10 +14,16 @@ import {
 
 const EMPTY_MEMBERS = [];
 
-const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose = () => {} }) => {
+const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context = 'trust', onClose = () => {} }) => {
   const { user } = useAuth();
   const userId = user?.id;
   const userEmail = user?.email;
+  // `boarding_room_chat` (persisted chat history + system-event log used for
+  // late-join "call in progress" detection) has a hard FK to trust_groups.id,
+  // so it only works for real trust group ids. Non-trust callers (e.g. CMMS)
+  // skip it entirely and get a broadcast-only, non-persisted chat instead —
+  // see the `chat-message` handling on the call channel below.
+  const isTrustContext = context === 'trust';
   const normalizedMembers = useMemo(
     () => (Array.isArray(members) ? members : EMPTY_MEMBERS),
     [members]
@@ -342,7 +348,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
   // Load chat history and set up real-time chat
   useEffect(() => {
     const setupChat = async () => {
-      if (!supabase || !groupId || (!meetingStarted && boardroomMode !== 'chat')) return;
+      if (!isTrustContext || !supabase || !groupId || (!meetingStarted && boardroomMode !== 'chat')) return;
 
       try {
         // Load recent messages — call join/leave/ring events are logged to
@@ -408,7 +414,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
         chatSubscriptionRef.current.unsubscribe();
       }
     };
-  }, [groupId, supabase, meetingStarted, boardroomMode, user]);
+  }, [groupId, supabase, meetingStarted, boardroomMode, user, isTrustContext]);
 
   // Set up call broadcast channel for incoming/outgoing call notifications
   // This must run immediately and persist for the entire session
@@ -477,6 +483,23 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
             if (audioServiceRef.current) audioServiceRef.current.playSound('memberJoined');
           }
         })
+        .on('broadcast', { event: 'chat-message' }, ({ payload }) => {
+          // Non-trust (e.g. CMMS) chat has no DB table to sync through, so it
+          // rides this same always-open call channel instead — live-only,
+          // no history on reload. Trust keeps its DB-backed chat untouched.
+          if (isTrustContext || !payload) return;
+          const isOwnMessage = payload.userId === user?.id;
+          if (!isOwnMessage && audioServiceRef.current) {
+            audioServiceRef.current.playSound('messageNotification');
+          }
+          setChatMessages((prev) => [...prev, {
+            id: payload.id || `${payload.userId}-${payload.timestamp}`,
+            sender: payload.userEmail?.split('@')[0] || 'User',
+            message: payload.message,
+            timestamp: new Date(payload.timestamp || Date.now()),
+            isThis: isOwnMessage,
+          }]);
+        })
         .on('broadcast', { event: 'screen-share-state' }, ({ payload }) => {
           if (!payload?.userId || payload.userId === user?.id) return;
 
@@ -513,7 +536,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
   // Recover missed call-start/call-end broadcasts by checking recent system events.
   useEffect(() => {
     const probeRecentCallState = async () => {
-      if (!supabase || !groupId || !user?.id || isHost || meetingStarted) return;
+      if (!isTrustContext || !supabase || !groupId || !user?.id || isHost || meetingStarted) return;
 
       try {
         const { data, error } = await supabase
@@ -561,7 +584,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     probeRecentCallState();
     const interval = setInterval(probeRecentCallState, 10_000);
     return () => clearInterval(interval);
-  }, [supabase, groupId, user?.id, isHost, meetingStarted, incomingCall]);
+  }, [supabase, groupId, user?.id, isHost, meetingStarted, incomingCall, isTrustContext]);
 
   // Monitor for incoming calls from host
   useEffect(() => {
@@ -1256,12 +1279,12 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
 
     const payload = recipients.map((recipientId) => ({
       recipient_id: recipientId,
-      notification_type: 'trust_boardroom_call',
-      title: `Incoming Live Boardroom Call: ${groupName || 'Trust Group'}`,
-      message: `${userEmail || 'A group member'} is calling your trust group now. Join the live boardroom.`,
-      action_tab: 'trust',
-      action_label: 'Open Trust',
-      action_url: `/trust?groupId=${groupId}&boardroom=1`,
+      notification_type: isTrustContext ? 'trust_boardroom_call' : 'cmms_boardroom_call',
+      title: `Incoming Live Boardroom Call: ${groupName || (isTrustContext ? 'Trust Group' : 'Team')}`,
+      message: `${userEmail || 'A group member'} is calling ${isTrustContext ? 'your trust group' : 'your team'} now. Join the live boardroom.`,
+      action_tab: isTrustContext ? 'trust' : 'cmms',
+      action_label: isTrustContext ? 'Open Trust' : 'Open CMMS',
+      action_url: isTrustContext ? `/trust?groupId=${groupId}&boardroom=1` : `/cmms?boardroom=1`,
       status: 'unread',
       metadata: {
         group_id: groupId,
@@ -1272,11 +1295,14 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
       }
     }));
 
+    // Best effort — CMMS staff ids in `members` may not match the notification
+    // table's recipient id space (see cmmsMessagingService.getCompanyUsers),
+    // so a failure here just means no bell alert, not a broken call.
     const { error } = await supabase.from('notifications').insert(payload);
     if (error) {
-      console.warn('Could not create trust boardroom notifications:', error);
+      console.warn('Could not create boardroom call notifications:', error);
     }
-  }, [groupId, groupMembers, groupName, supabase, userEmail, userId]);
+  }, [groupId, groupMembers, groupName, supabase, userEmail, userId, isTrustContext]);
 
   const startMeeting = async () => {
     // Don't start meeting yet — ring the members first
@@ -1319,7 +1345,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     }
     
     // Notify other members of incoming call via chat
-    if (supabase && groupId) {
+    if (isTrustContext && supabase && groupId) {
       try {
         await supabase.from('boarding_room_chat').insert({
           group_id: groupId,
@@ -1377,7 +1403,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     }
 
     // Persist call-end marker so members who missed broadcast don't stay on waiting screen.
-    if (supabase && groupId && isHost) {
+    if (isTrustContext && supabase && groupId && isHost) {
       try {
         await supabase.from('boarding_room_chat').insert({
           group_id: groupId,
@@ -1419,7 +1445,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     }
     
     // Log call acceptance
-    if (supabase) {
+    if (isTrustContext && supabase) {
       try {
         await supabase.from('boarding_room_chat').insert({
           group_id: groupId,
@@ -1490,7 +1516,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
     }
 
     // Log meeting end
-    if (supabase) {
+    if (isTrustContext && supabase) {
       try {
         await supabase.from('boarding_room_chat').insert({
           group_id: groupId,
@@ -1532,8 +1558,29 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, onClose 
   }, [closeAllPeerConnections]);
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || !supabase) return;
+    if (!newMessage.trim()) return;
 
+    if (!isTrustContext) {
+      if (!callChannelRef.current) return;
+      try {
+        await callChannelRef.current.send({
+          type: 'broadcast',
+          event: 'chat-message',
+          payload: {
+            userId: user?.id,
+            userEmail: user?.email,
+            message: newMessage,
+            timestamp: new Date().toISOString(),
+          },
+        });
+        setNewMessage('');
+      } catch (err) {
+        console.error('Error broadcasting message:', err);
+      }
+      return;
+    }
+
+    if (!supabase) return;
     try {
       const { error } = await supabase.from('boarding_room_chat').insert({
         group_id: groupId,

@@ -6,6 +6,7 @@ import VoiceNoteRetentionPrompt from './voice/VoiceNoteRetentionPrompt';
 import CallDock from './calls/CallDock';
 import CallStage from './calls/CallStage';
 import IncomingCallOverlay from './calls/IncomingCallOverlay';
+import LiveBoardroom from './LiveBoardroom';
 import CommunityLiveStage from './community/CommunityLiveStage';
 import CommunityLiveBanner from './community/CommunityLiveBanner';
 import { useDirectCall } from '../hooks/useDirectCall';
@@ -141,6 +142,13 @@ const ChatWidget = ({ hasBottomNav = false }) => {
   const [cmmsConversation, setCmmsConversation] = useState([]);
   const [cmmsConversationLoading, setCmmsConversationLoading] = useState(false);
   const [cmmsComposeError, setCmmsComposeError] = useState('');
+
+  // Group ("call all members") calling reuses the same multi-person mesh
+  // engine as TrustSystem's "Boardroom" button (see LiveBoardroom.jsx)
+  // instead of the 1:1 useDirectCall hook, which can only ever have two
+  // participants. null = closed; otherwise { context, groupId, groupName,
+  // members, creatorId } describing which room to open.
+  const [boardroom, setBoardroom] = useState(null);
 
   const [trustGroupId, setTrustGroupId] = useState(null);
   const [trustGroupName, setTrustGroupName] = useState('');
@@ -480,12 +488,40 @@ const ChatWidget = ({ hasBottomNav = false }) => {
     communityCall.startCall(video, selectedThread.name || 'Member', `community:${selectedThread.user_id}`);
   };
   const callCmmsContact = (video) => {
-    if (!cmmsActiveContactId || cmmsActiveContactId === ALL_CMMS_RECIPIENTS) return;
+    if (!cmmsActiveContactId) return;
+    if (cmmsActiveContactId === ALL_CMMS_RECIPIENTS) {
+      if (cmmsRecipients.length < 2) return;
+      setBoardroom({
+        context: 'cmms',
+        groupId: `cmms-${cmmsCompanyId}`,
+        groupName: 'CMMS Team',
+        members: cmmsRecipients.map((m) => ({ id: m.id, email: m.email || m.name })),
+        creatorId: null,
+      });
+      return;
+    }
     const peerNameHint = cmmsRecipients.find((m) => m.id === cmmsActiveContactId)?.name || 'Teammate';
     cmmsCall.startCall(video, peerNameHint, `cmms:${cmmsCompanyId}:${cmmsActiveContactId}`);
   };
   const callTrustContact = (video) => {
-    if (!trustActiveContactId || trustActiveContactId === ALL_TRUST_MEMBERS) return;
+    if (!trustActiveContactId) return;
+    if (trustActiveContactId === ALL_TRUST_MEMBERS) {
+      if (trustMembers.length < 2) return;
+      // Members prop deliberately omitted: trustMembers here has no email
+      // (see loadTrustFeed above), so LiveBoardroom's own trust_group_members
+      // + profiles lookup (its fallback when `members` is empty) resolves
+      // real names — the same query TrustSystem.jsx's Boardroom relies on.
+      // Same groupId as TrustSystem's Boardroom button, so both entry points
+      // join the same live call.
+      setBoardroom({
+        context: 'trust',
+        groupId: trustGroupId,
+        groupName: trustGroupName,
+        members: [],
+        creatorId: null,
+      });
+      return;
+    }
     const peerNameHint = trustMembers.find((m) => m.user_id === trustActiveContactId)?.name || 'Member';
     trustCall.startCall(video, peerNameHint, `trust:${trustGroupId}:${trustActiveContactId}`);
   };
@@ -883,6 +919,18 @@ const ChatWidget = ({ hasBottomNav = false }) => {
         onPickRingtone={handlePickRingtone}
         ringtoneName={ringtoneName}
       />
+      {boardroom && (
+        <div className="fixed inset-0 z-[1000] bg-black">
+          <LiveBoardroom
+            groupId={boardroom.groupId}
+            groupName={boardroom.groupName}
+            members={boardroom.members}
+            creatorId={boardroom.creatorId}
+            context={boardroom.context}
+            onClose={() => setBoardroom(null)}
+          />
+        </div>
+      )}
     <div className="fixed z-[999]" style={fullScreen ? undefined : { left: position.left, top: position.top }}>
       {open && (
         <div
@@ -993,7 +1041,12 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                     <span className={`truncate text-sm font-semibold ${dark ? 'text-slate-100' : 'text-slate-800'}`}>
                       {cmmsActiveContactId === ALL_CMMS_RECIPIENTS ? 'All CMMS employees' : (cmmsRecipients.find((m) => m.id === cmmsActiveContactId)?.name || cmmsRecipients.find((m) => m.id === cmmsActiveContactId)?.email || 'CMMS member')}
                     </span>
-                    <CallButtons call={cmmsActiveContactId !== ALL_CMMS_RECIPIENTS ? cmmsCall : null} onAudio={() => callCmmsContact(false)} onVideo={() => callCmmsContact(true)} dark={dark} />
+                    <CallButtons
+                      call={cmmsActiveContactId === ALL_CMMS_RECIPIENTS ? { canCall: cmmsRecipients.length > 1 } : cmmsCall}
+                      onAudio={() => callCmmsContact(false)}
+                      onVideo={() => callCmmsContact(true)}
+                      dark={dark}
+                    />
                   </div>
                   {cmmsActiveContactId === ALL_CMMS_RECIPIENTS ? (
                     cmmsMessages.length === 0 ? <p className={`mt-6 text-center text-xs ${dark ? 'text-slate-500' : 'text-slate-400'}`}>No broadcast messages yet.</p> : cmmsMessages.map((message) => {
@@ -1095,7 +1148,12 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                     <span className={`truncate text-sm font-semibold ${dark ? 'text-slate-100' : 'text-slate-800'}`}>
                       {trustActiveContactId === ALL_TRUST_MEMBERS ? 'All group members' : (trustMembers.find((m) => m.user_id === trustActiveContactId)?.name || 'Member')}
                     </span>
-                    <CallButtons call={trustActiveContactId !== ALL_TRUST_MEMBERS ? trustCall : null} onAudio={() => callTrustContact(false)} onVideo={() => callTrustContact(true)} dark={dark} />
+                    <CallButtons
+                      call={trustActiveContactId === ALL_TRUST_MEMBERS ? { canCall: trustMembers.length > 1 } : trustCall}
+                      onAudio={() => callTrustContact(false)}
+                      onVideo={() => callTrustContact(true)}
+                      dark={dark}
+                    />
                   </div>
                   {trustActiveConversation.length === 0 ? (
                     <p className={`mt-6 text-center text-xs ${dark ? 'text-slate-500' : 'text-slate-400'}`}>No messages yet — say hello!</p>
