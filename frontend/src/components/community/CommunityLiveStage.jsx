@@ -20,12 +20,14 @@ const ToolbarButton = ({ icon, label, active = true, danger = false, onClick, bi
   </button>
 );
 
-// Chat + reactions drawer over the live video — reuses the existing public
-// Community board (landing_messages, the same one the normal Community tab
-// reads/writes) rather than inventing separate live-stream-only storage, so
-// a message posted during the stream is still there (and still gets
-// replies) after the stream ends.
-const LiveChatDrawer = ({ messages, onLike, draft, onDraftChange, onSend, sending, error, onClose, isMobile }) => {
+// Chat drawer over the live video — reuses whichever board the caller's
+// audience already reads/writes (landing_messages for Community, the CMMS
+// broadcast feed or Trust group chat for those scopes) rather than inventing
+// separate live-stream-only storage, so a message posted during the stream
+// is still there after the stream ends. `onLike` is optional — CMMS/Trust
+// messages have no like feature, so the reaction button only renders when
+// a handler is passed (Community).
+const LiveChatDrawer = ({ messages, onLike, draft, onDraftChange, onSend, sending, error, onClose, isMobile, scopeLabel = 'Community' }) => {
   const listRef = useRef(null);
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
@@ -44,7 +46,7 @@ const LiveChatDrawer = ({ messages, onLike, draft, onDraftChange, onSend, sendin
     // of the stream visible while chatting.
     <div className={`absolute inset-x-0 bottom-0 z-10 flex ${isMobile ? 'max-h-[38%]' : 'max-h-[55%]'} flex-col rounded-t-2xl bg-black/70 backdrop-blur-md`}>
       <div className="flex items-center justify-between px-4 pt-2.5">
-        <p className="text-xs font-bold uppercase tracking-wide text-white/70">Community chat</p>
+        <p className="text-xs font-bold uppercase tracking-wide text-white/70">{scopeLabel} chat</p>
         <button onClick={onClose} className="rounded-full p-2 -mr-1 text-white/70 hover:bg-white/10 hover:text-white" title="Hide chat">
           <X className="h-3.5 w-3.5" />
         </button>
@@ -58,13 +60,15 @@ const LiveChatDrawer = ({ messages, onLike, draft, onDraftChange, onSend, sendin
           <div key={m.id} className="rounded-xl bg-white/10 px-2.5 py-1.5 text-sm text-white">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-white/60">{m.name || 'Website visitor'}</p>
             <p className="whitespace-pre-wrap break-words">{m.message}</p>
-            <button
-              onClick={() => onLike(m.id)}
-              disabled={m.likedByMe}
-              className={`mt-0.5 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${m.likedByMe ? 'text-indigo-300' : 'text-white/60 hover:text-white'}`}
-            >
-              <ThumbsUp className="h-3 w-3" /> {m.likeCount || 0}
-            </button>
+            {onLike && (
+              <button
+                onClick={() => onLike(m.id)}
+                disabled={m.likedByMe}
+                className={`mt-0.5 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${m.likedByMe ? 'text-indigo-300' : 'text-white/60 hover:text-white'}`}
+              >
+                <ThumbsUp className="h-3 w-3" /> {m.likeCount || 0}
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -78,7 +82,7 @@ const LiveChatDrawer = ({ messages, onLike, draft, onDraftChange, onSend, sendin
           value={draft}
           onChange={(e) => onDraftChange(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Say something to Community…"
+          placeholder={`Say something to ${scopeLabel}…`}
           className="min-w-0 flex-1 rounded-full border border-white/20 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/50 outline-none focus:border-white/40"
         />
         <button
@@ -95,15 +99,18 @@ const LiveChatDrawer = ({ messages, onLike, draft, onDraftChange, onSend, sendin
 };
 
 /**
- * Full-page YouTube-Live-style takeover for the Community "Go Live" feature —
- * shown for as long as `live.role` is 'broadcasting' or 'watching'. The
+ * Full-page YouTube-Live-style takeover for a "Go Live" broadcast — shown
+ * for as long as `live.role` is 'broadcasting' or 'watching'. The
  * broadcaster sees their own camera as the main feed (there's nothing else
  * to show — viewers don't send video back); a viewer sees the broadcaster's
- * stream. A chat/reactions drawer (`LiveChatDrawer`) can slide up over the
- * video, reusing the same public Community message board as the regular
- * Community tab.
+ * stream. A chat drawer (`LiveChatDrawer`) can slide up over the video.
+ *
+ * Originally built for the public Community "Go Live" feature and reused
+ * as-is (via `scopeLabel`) for the CMMS and Trust & SACCO group video calls
+ * in ChatWidget.jsx — same one-tap takeover, just labeled for whichever
+ * audience `live` (a useCommunityLive instance) is scoped to.
  */
-const CommunityLiveStage = ({ live, messages = [], onLike, draft = '', onDraftChange, onSend, sending = false, error = '' }) => {
+const CommunityLiveStage = ({ live, messages = [], onLike, draft = '', onDraftChange, onSend, sending = false, error = '', scopeLabel = 'Community' }) => {
   const videoRef = useRef(null);
   const [chatOpen, setChatOpen] = useState(false);
   // Matches the `window.innerWidth < 768` convention used elsewhere in the
@@ -122,7 +129,7 @@ const CommunityLiveStage = ({ live, messages = [], onLike, draft = '', onDraftCh
   }, [mainStream]);
 
   const hasVideo = Boolean(mainStream);
-  const title = isBroadcaster ? 'You' : (live.liveInfo?.broadcasterName || 'Broadcaster');
+  const personLabel = isBroadcaster ? 'You' : (live.liveInfo?.broadcasterName || 'Broadcaster');
 
   return (
     <div className="fixed inset-0 z-[1000] flex flex-col bg-black">
@@ -132,10 +139,10 @@ const CommunityLiveStage = ({ live, messages = [], onLike, draft = '', onDraftCh
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-white">
             <span className="flex h-16 w-16 animate-pulse items-center justify-center rounded-full bg-gradient-to-br from-red-500 to-orange-500 text-2xl font-bold">
-              {title.trim().slice(0, 1).toUpperCase()}
+              {personLabel.trim().slice(0, 1).toUpperCase()}
             </span>
             <p className="text-sm font-medium text-white/90">
-              {isBroadcaster ? 'Starting your camera…' : `Connecting to ${title}…`}
+              {isBroadcaster ? 'Starting your camera…' : `Connecting to ${personLabel}…`}
             </p>
           </div>
         )}
@@ -156,7 +163,7 @@ const CommunityLiveStage = ({ live, messages = [], onLike, draft = '', onDraftCh
         </div>
 
         <div className="absolute bottom-4 left-4 max-w-[60%] rounded-lg bg-black/50 px-2.5 py-1 backdrop-blur-sm">
-          <p className="truncate text-sm font-medium text-white">{isBroadcaster ? "You're live to Community" : title}</p>
+          <p className="truncate text-sm font-medium text-white">{isBroadcaster ? `You're live to ${scopeLabel}` : personLabel}</p>
         </div>
 
         {!chatOpen && (
@@ -180,6 +187,7 @@ const CommunityLiveStage = ({ live, messages = [], onLike, draft = '', onDraftCh
             error={error}
             onClose={() => setChatOpen(false)}
             isMobile={isMobile}
+            scopeLabel={scopeLabel}
           />
         )}
       </div>

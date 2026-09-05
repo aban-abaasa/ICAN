@@ -1,19 +1,30 @@
 /**
- * One-to-many "Go Live" video broadcast for the Community tab — YouTube-Live
- * style: one broadcaster's camera, any number of read-only viewers. Same
- * signaling mechanism as useDirectCall.js/LiveBoardroom.jsx (Supabase
- * Realtime broadcast channel, STUN-only RTCPeerConnection, pending-ICE
- * queue), but star-shaped instead of 1:1 or full-mesh: the broadcaster holds
- * one send-only RTCPeerConnection per viewer, each viewer holds exactly one
+ * One-to-many "Go Live" video broadcast — YouTube-Live style: one
+ * broadcaster's camera, any number of read-only viewers. Same signaling
+ * mechanism as useDirectCall.js/LiveBoardroom.jsx (Supabase Realtime
+ * broadcast channel, STUN-only RTCPeerConnection, pending-ICE queue), but
+ * star-shaped instead of 1:1 or full-mesh: the broadcaster holds one
+ * send-only RTCPeerConnection per viewer, each viewer holds exactly one
  * receive-only RTCPeerConnection back to the broadcaster.
  *
+ * Originally built for the Community tab (public, `scope: 'community'`) and
+ * reused as-is for the CMMS/Trust & SACCO "video group call" buttons in
+ * ChatWidget.jsx — those pass a company/group-scoped `scope`
+ * (`cmms:<companyId>`, `trust:<groupId>`) instead of going through
+ * LiveBoardroom's ring/accept/start flow, so a teammate can go live to their
+ * team the same one-tap way a Community broadcaster goes live to visitors.
+ * `scope` is what makes visibility exclusive to that audience: presence and
+ * signaling channel names are namespaced by it, so a CMMS company's stream
+ * never shows up as "live" to Trust members, Community visitors, or anyone
+ * outside that scope, and vice versa.
+ *
  * "Who is live right now" and the live viewer count are derived from a
- * single shared Supabase Realtime *presence* channel that every widget
- * instance joins (broadcaster tracks a 'broadcaster' presence row, each
- * watcher tracks a 'viewer' row) — that channel is joined unconditionally
- * (even for guests just browsing) so the Community tab can show a live
- * indicator without anyone having pressed anything yet. Actual video only
- * flows once a viewer calls watch().
+ * single shared Supabase Realtime *presence* channel (per scope) that every
+ * widget instance in that scope joins (broadcaster tracks a 'broadcaster'
+ * presence row, each watcher tracks a 'viewer' row) — that channel is joined
+ * unconditionally (even for guests just browsing Community) so a "live"
+ * indicator can show without anyone having pressed anything yet. Actual
+ * video only flows once a viewer calls watch().
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getSupabaseClient } from '../lib/supabase/client';
@@ -25,10 +36,10 @@ const ICE_SERVERS = [
   { urls: 'stun:stun1.l.google.com:19302' },
 ];
 
-const PRESENCE_CHANNEL = 'ican-community-live-presence';
-const signalChannelName = (streamId) => `ican-community-live-signal:${streamId}`;
+const presenceChannelFor = (scope) => `ican-live-presence:${scope}`;
+const signalChannelName = (streamId) => `ican-live-signal:${streamId}`;
 
-export const useCommunityLive = ({ selfId, selfName, canBroadcast }) => {
+export const useCommunityLive = ({ selfId, selfName, canBroadcast, scope = 'community' }) => {
   const [liveInfo, setLiveInfo] = useState(null); // { streamId, broadcasterId, broadcasterName, startedAt } | null
   const [viewerCount, setViewerCount] = useState(0);
   const [role, setRole] = useState('idle'); // idle | broadcasting | watching
@@ -43,6 +54,7 @@ export const useCommunityLive = ({ selfId, selfName, canBroadcast }) => {
   const roleRef = useRef('idle');
   const selfIdRef = useRef(selfId);
   const selfNameRef = useRef(selfName);
+  const scopeRef = useRef(scope);
   const streamIdRef = useRef('');
   const broadcasterIdRef = useRef('');
   const localStreamRef = useRef(null);
@@ -56,6 +68,7 @@ export const useCommunityLive = ({ selfId, selfName, canBroadcast }) => {
   useEffect(() => { roleRef.current = role; }, [role]);
   useEffect(() => { selfIdRef.current = selfId; }, [selfId]);
   useEffect(() => { selfNameRef.current = selfName; }, [selfName]);
+  useEffect(() => { scopeRef.current = scope; }, [scope]);
 
   const clearElapsedTimer = () => {
     if (elapsedTimerRef.current) { clearInterval(elapsedTimerRef.current); elapsedTimerRef.current = null; }
@@ -96,8 +109,8 @@ export const useCommunityLive = ({ selfId, selfName, canBroadcast }) => {
 
   // --- Presence: who is live + how many are watching -----------------------
   useEffect(() => {
-    if (!selfId) return undefined;
-    const channel = supabase.channel(PRESENCE_CHANNEL, { config: { presence: { key: selfId } } });
+    if (!selfId || !scope) return undefined;
+    const channel = supabase.channel(presenceChannelFor(scope), { config: { presence: { key: selfId } } });
 
     const syncFromState = () => {
       const state = channel.presenceState();
@@ -133,7 +146,7 @@ export const useCommunityLive = ({ selfId, selfName, canBroadcast }) => {
       if (presenceChannelRef.current === channel) presenceChannelRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selfId]);
+  }, [selfId, scope]);
 
   const send = useCallback((event, payload) => {
     if (!signalChannelRef.current) return;
@@ -168,8 +181,8 @@ export const useCommunityLive = ({ selfId, selfName, canBroadcast }) => {
 
   // --- Broadcaster -----------------------------------------------------------
   const goLive = useCallback(async () => {
-    if (!canBroadcast || roleRef.current !== 'idle' || !selfIdRef.current) return;
-    if (liveInfo) { setError('Someone is already live in Community right now.'); return; }
+    if (!canBroadcast || roleRef.current !== 'idle' || !selfIdRef.current || !scopeRef.current) return;
+    if (liveInfo) { setError('Someone is already live right now.'); return; }
     setError('');
     setEndReason('');
 
@@ -185,7 +198,7 @@ export const useCommunityLive = ({ selfId, selfName, canBroadcast }) => {
     setMicOn(true);
     setCamOn(true);
 
-    const streamId = `community:${selfIdRef.current}:${Date.now()}`;
+    const streamId = `${scopeRef.current}:${selfIdRef.current}:${Date.now()}`;
     streamIdRef.current = streamId;
     broadcasterIdRef.current = selfIdRef.current;
 
@@ -240,10 +253,16 @@ export const useCommunityLive = ({ selfId, selfName, canBroadcast }) => {
         elapsedTimerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
         // Best-effort: push a "X is live" alert to everyone's phone. Never
         // block/fail the broadcast itself on this - notification delivery
-        // is a nice-to-have, going live is the point.
-        try {
-          await supabase.rpc('ican_notify_community_live', { p_broadcaster_name: selfNameRef.current || 'Someone' });
-        } catch (err) { console.warn('[useCommunityLive] failed to notify:', err); }
+        // is a nice-to-have, going live is the point. Only the public
+        // Community scope has a push fan-out set up (see
+        // ICAN_COMMUNITY_LIVE_PUSH_SETUP.sql) — CMMS/Trust scopes rely on
+        // the in-widget "live now" banner + pulsing tab dot instead, since
+        // their audience is already inside the app.
+        if (scopeRef.current === 'community') {
+          try {
+            await supabase.rpc('ican_notify_community_live', { p_broadcaster_name: selfNameRef.current || 'Someone' });
+          } catch (err) { console.warn('[useCommunityLive] failed to notify:', err); }
+        }
       });
   }, [canBroadcast, liveInfo, createBroadcasterPeer, send, flushPendingIce]);
 

@@ -9,12 +9,12 @@ import { getSupabaseClient } from '../lib/supabase/client';
 import { getAudioNotificationService } from '../services/audioNotificationService';
 import {
   X, Video, Mic, MicOff, VideoOff, Phone, Users, Monitor, Send,
-  MessageCircle, Eye, Wifi, WifiOff, Circle, Volume2, VolumeX, MoreVertical
+  MessageCircle, Eye, Wifi, WifiOff, Circle, Volume2, VolumeX, MoreVertical, ThumbsUp
 } from 'lucide-react';
 
 const EMPTY_MEMBERS = [];
 
-const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context = 'trust', onClose = () => {} }) => {
+const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context = 'trust', onClose = () => {}, autoStart = false }) => {
   const { user } = useAuth();
   const userId = user?.id;
   const userEmail = user?.email;
@@ -28,15 +28,29 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
     () => (Array.isArray(members) ? members : EMPTY_MEMBERS),
     [members]
   );
-  const [isVideoOn, setIsVideoOn] = useState(false);
+  // `autoStart` (ChatWidget's "call all members" button) skips the
+  // picker/"Ready to start?"/ring-and-wait screens entirely — camera comes
+  // on and the mesh call connects the instant this mounts, same for the
+  // first person in as for the fifth. Callers that still want the picker
+  // (TrustSystem.jsx's own "Boardroom" button, GroupDetailsModal.jsx) simply
+  // don't pass it, so their ring/accept flow is untouched.
+  const [isVideoOn, setIsVideoOn] = useState(Boolean(autoStart));
   const [isMicOn, setIsMicOn] = useState(true);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
-  const [meetingStarted, setMeetingStarted] = useState(false);
+  const [meetingStarted, setMeetingStarted] = useState(Boolean(autoStart));
   const [isHost, setIsHost] = useState(false);
   const [meetingTime, setMeetingTime] = useState(0);
   const [chatMessages, setChatMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [showChat, setShowChat] = useState(true);
+  // Reactions on the in-call chat — broadcast-only (rides the same
+  // always-open call channel as CMMS's chat-message, see the listener
+  // below), deliberately not persisted to `boarding_room_chat`: a reaction
+  // is live-in-the-moment feedback, not something that needs to survive a
+  // reload, and keeping it broadcast-only means no DB migration and works
+  // identically for both the persisted Trust chat and the ephemeral CMMS one.
+  const [messageLikes, setMessageLikes] = useState({}); // { [messageId]: count }
+  const [likedMessageIds, setLikedMessageIds] = useState(() => new Set());
   const [hoveredControl, setHoveredControl] = useState(null);
   const [connectedMembers, setConnectedMembers] = useState([]);
   const [groupMembers, setGroupMembers] = useState(normalizedMembers);
@@ -54,7 +68,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
   const [incomingCall, setIncomingCall] = useState(null);
   const [callAccepted, setCallAccepted] = useState(false);
   const [hasActiveCall, setHasActiveCall] = useState(false);
-  const [boardroomMode, setBoardroomMode] = useState(null); // null = picker | 'chat' | 'live'
+  const [boardroomMode, setBoardroomMode] = useState(autoStart ? 'live' : null); // null = picker | 'chat' | 'live'
   const [isCalling, setIsCalling] = useState(false); // host is ringing members
   const [callingTimer, setCallingTimer] = useState(0); // seconds since call started
   const [remoteStreams, setRemoteStreams] = useState([]); // [{ userId, email, stream }]
@@ -68,6 +82,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
   const previousMembersRef = useRef([]);
   const touchStartX = useRef(0);
   const callChannelRef = useRef(null);
+  const likeEventKeysRef = useRef(new Set()); // dedupes `${messageId}:${userId}` so a reconnect-replayed reaction isn't double-counted
   const webrtcChannelRef = useRef(null);
   const localStreamRef = useRef(null);
   const screenStreamRef = useRef(null);
@@ -499,6 +514,13 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
             timestamp: new Date(payload.timestamp || Date.now()),
             isThis: isOwnMessage,
           }]);
+        })
+        .on('broadcast', { event: 'message-reaction' }, ({ payload }) => {
+          if (!payload?.messageId || !payload?.userId) return;
+          const key = `${payload.messageId}:${payload.userId}`;
+          if (likeEventKeysRef.current.has(key)) return;
+          likeEventKeysRef.current.add(key);
+          setMessageLikes((prev) => ({ ...prev, [payload.messageId]: (prev[payload.messageId] || 0) + 1 }));
         })
         .on('broadcast', { event: 'screen-share-state' }, ({ payload }) => {
           if (!payload?.userId || payload.userId === user?.id) return;
@@ -1598,6 +1620,20 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
     }
   };
 
+  const likeMessage = useCallback(async (messageId) => {
+    if (!messageId || likedMessageIds.has(messageId) || !callChannelRef.current || !userId) return;
+    setLikedMessageIds((prev) => new Set(prev).add(messageId));
+    try {
+      await callChannelRef.current.send({
+        type: 'broadcast',
+        event: 'message-reaction',
+        payload: { messageId, userId },
+      });
+    } catch (err) {
+      console.warn('Error broadcasting message reaction:', err);
+    }
+  }, [likedMessageIds, userId]);
+
   // Incoming call screen
   if (incomingCall && !callAccepted) {
     console.log('🔔 [INCOMING CALL] Rendering incoming call screen - incomingCall:', !!incomingCall, 'isHost:', isHost, 'callAccepted:', callAccepted);
@@ -2350,6 +2386,15 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
                           }`}>
                             {msg.message}
                           </div>
+                          <button
+                            onClick={() => likeMessage(msg.id)}
+                            disabled={likedMessageIds.has(msg.id)}
+                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition ${
+                              likedMessageIds.has(msg.id) ? 'text-blue-400' : 'text-gray-500 hover:text-gray-300'
+                            }`}
+                          >
+                            <ThumbsUp className="h-3 w-3" /> {messageLikes[msg.id] || 0}
+                          </button>
                         </div>
                       </div>
                     </div>

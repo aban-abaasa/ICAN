@@ -9,8 +9,10 @@ import IncomingCallOverlay from './calls/IncomingCallOverlay';
 import LiveBoardroom from './LiveBoardroom';
 import CommunityLiveStage from './community/CommunityLiveStage';
 import CommunityLiveBanner from './community/CommunityLiveBanner';
+import BoardroomLiveBanner from './community/BoardroomLiveBanner';
 import { useDirectCall } from '../hooks/useDirectCall';
 import { useCommunityLive } from '../hooks/useCommunityLive';
+import { useBoardroomPresence } from '../hooks/useBoardroomPresence';
 import { uploadVoiceNote, linkVoiceNoteMessages } from '../services/voiceNoteService';
 import { getAudioNotificationService } from '../services/audioNotificationService';
 import { getCustomRingtone, setCustomRingtone } from '../services/ringtoneService';
@@ -46,15 +48,20 @@ const oldestFirst = (messages = []) => [...messages].sort((a, b) => new Date(a.c
 // Small audio/video call-launch buttons, reused wherever a channel has one
 // clear "who am I talking to" contact (support/cmms/trust contact header,
 // community thread header) — hidden once a call is already in progress.
-const CallButtons = ({ call, onAudio, onVideo, dark = false, onLight = false }) => {
+// For the "All members" broadcast contact, `hideAudio` drops the audio-only
+// option (going live is video-only) and `videoLabel` relabels the remaining
+// button as "Go live…" instead of "Video call".
+const CallButtons = ({ call, onAudio, onVideo, dark = false, onLight = false, hideAudio = false, videoLabel = 'Video call' }) => {
   if (!call?.canCall) return null;
   const btnClass = onLight ? 'text-white hover:bg-white/20' : dark ? 'text-slate-300 hover:bg-white/10' : 'text-slate-500 hover:bg-black/5';
   return (
     <div className="flex flex-shrink-0 items-center gap-1">
-      <button onClick={onAudio} className={`rounded-full p-1.5 transition ${btnClass}`} title="Audio call">
-        <Phone className="h-4 w-4" />
-      </button>
-      <button onClick={onVideo} className={`rounded-full p-1.5 transition ${btnClass}`} title="Video call">
+      {!hideAudio && (
+        <button onClick={onAudio} className={`rounded-full p-1.5 transition ${btnClass}`} title="Audio call">
+          <Phone className="h-4 w-4" />
+        </button>
+      )}
+      <button onClick={onVideo} className={`rounded-full p-1.5 transition ${btnClass}`} title={videoLabel}>
         <Video className="h-4 w-4" />
       </button>
     </div>
@@ -143,11 +150,12 @@ const ChatWidget = ({ hasBottomNav = false }) => {
   const [cmmsConversationLoading, setCmmsConversationLoading] = useState(false);
   const [cmmsComposeError, setCmmsComposeError] = useState('');
 
-  // Group ("call all members") calling reuses the same multi-person mesh
-  // engine as TrustSystem's "Boardroom" button (see LiveBoardroom.jsx)
-  // instead of the 1:1 useDirectCall hook, which can only ever have two
-  // participants. null = closed; otherwise { context, groupId, groupName,
-  // members, creatorId } describing which room to open.
+  // Group ("call all members") calling opens the same full-mesh boardroom
+  // engine as TrustSystem's "Boardroom" button (see LiveBoardroom.jsx),
+  // just with `autoStart` so it skips straight into the live call instead of
+  // its picker/ring-and-wait screens. null = closed; otherwise
+  // { context, groupId, groupName, members, creatorId } describing which
+  // room to open.
   const [boardroom, setBoardroom] = useState(null);
 
   const [trustGroupId, setTrustGroupId] = useState(null);
@@ -487,41 +495,44 @@ const ChatWidget = ({ hasBottomNav = false }) => {
     if (!selectedThread || selectedThread.user_id === identity?.authId) return;
     communityCall.startCall(video, selectedThread.name || 'Member', `community:${selectedThread.user_id}`);
   };
+  // "Call all members"/the "N people are live now" banner no longer ring
+  // anyone or open a start/waiting screen — tapping either drops straight
+  // into the full-mesh boardroom call (LiveBoardroom with autoStart), the
+  // same call every member of this CMMS company / Trust group joins,
+  // whether they're the first one in or the fifth.
+  const openCmmsBoardroom = () => {
+    setBoardroom({
+      context: 'cmms',
+      groupId: `cmms-${cmmsCompanyId}`,
+      groupName: 'CMMS Team',
+      members: cmmsRecipients.map((m) => ({ id: m.id, email: m.email || m.name })),
+      creatorId: null,
+    });
+  };
+  const openTrustBoardroom = () => {
+    // Members prop deliberately omitted: trustMembers here has no email
+    // (see loadTrustFeed above), so LiveBoardroom's own trust_group_members
+    // + profiles lookup (its fallback when `members` is empty) resolves
+    // real names — the same query TrustSystem.jsx's Boardroom relies on.
+    // Same groupId as TrustSystem's Boardroom button, so both entry points
+    // join the same live call.
+    setBoardroom({
+      context: 'trust',
+      groupId: trustGroupId,
+      groupName: trustGroupName,
+      members: [],
+      creatorId: null,
+    });
+  };
   const callCmmsContact = (video) => {
     if (!cmmsActiveContactId) return;
-    if (cmmsActiveContactId === ALL_CMMS_RECIPIENTS) {
-      if (cmmsRecipients.length < 2) return;
-      setBoardroom({
-        context: 'cmms',
-        groupId: `cmms-${cmmsCompanyId}`,
-        groupName: 'CMMS Team',
-        members: cmmsRecipients.map((m) => ({ id: m.id, email: m.email || m.name })),
-        creatorId: null,
-      });
-      return;
-    }
+    if (cmmsActiveContactId === ALL_CMMS_RECIPIENTS) { openCmmsBoardroom(); return; }
     const peerNameHint = cmmsRecipients.find((m) => m.id === cmmsActiveContactId)?.name || 'Teammate';
     cmmsCall.startCall(video, peerNameHint, `cmms:${cmmsCompanyId}:${cmmsActiveContactId}`);
   };
   const callTrustContact = (video) => {
     if (!trustActiveContactId) return;
-    if (trustActiveContactId === ALL_TRUST_MEMBERS) {
-      if (trustMembers.length < 2) return;
-      // Members prop deliberately omitted: trustMembers here has no email
-      // (see loadTrustFeed above), so LiveBoardroom's own trust_group_members
-      // + profiles lookup (its fallback when `members` is empty) resolves
-      // real names — the same query TrustSystem.jsx's Boardroom relies on.
-      // Same groupId as TrustSystem's Boardroom button, so both entry points
-      // join the same live call.
-      setBoardroom({
-        context: 'trust',
-        groupId: trustGroupId,
-        groupName: trustGroupName,
-        members: [],
-        creatorId: null,
-      });
-      return;
-    }
+    if (trustActiveContactId === ALL_TRUST_MEMBERS) { openTrustBoardroom(); return; }
     const peerNameHint = trustMembers.find((m) => m.user_id === trustActiveContactId)?.name || 'Member';
     trustCall.startCall(video, peerNameHint, `trust:${trustGroupId}:${trustActiveContactId}`);
   };
@@ -548,8 +559,18 @@ const ChatWidget = ({ hasBottomNav = false }) => {
     selfId: identity?.userId || identity?.authId || guestLikeKey,
     selfName: identity?.name || 'Guest',
     canBroadcast: Boolean(identity && !identity.isGuest && identity.authId),
+    scope: 'community',
   });
   const showCommunityLiveStage = communityLive.role === 'broadcasting' || communityLive.role === 'watching';
+
+  // CMMS/Trust "call all members" doesn't use this broadcast hook at all —
+  // it opens the full-mesh LiveBoardroom instead (see callCmmsContact/
+  // callTrustContact and the `boardroom` state above). These two just watch
+  // whether a boardroom call is already under way for this company/group,
+  // purely to drive the "N people are live now" banner + pulsing tab dot —
+  // see useBoardroomPresence.js for why observing costs nothing extra.
+  const cmmsBoardroomPresence = useBoardroomPresence(hasCmmsAccess && cmmsCompanyId ? `cmms-${cmmsCompanyId}` : null);
+  const trustBoardroomPresence = useBoardroomPresence(hasTrustAccess ? trustGroupId : null);
 
   // CommunityLiveStage renders `fixed inset-0` meaning to cover the whole
   // screen, but the non-fullscreen widget panel below has a CSS `transform`
@@ -559,6 +580,8 @@ const ChatWidget = ({ hasBottomNav = false }) => {
   // the small ~22rem widget box instead of the real viewport, leaving the
   // app's own header/bottom-nav visible around it. Forcing the widget itself
   // into fullscreen (which drops that transform) sidesteps the trap.
+  // (LiveBoardroom doesn't need this — its `boardroom &&` wrapper below is
+  // rendered outside the transformed widget panel entirely.)
   const wasFullScreenBeforeLiveRef = useRef(false);
   useEffect(() => {
     if (showCommunityLiveStage) {
@@ -928,6 +951,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
             creatorId={boardroom.creatorId}
             context={boardroom.context}
             onClose={() => setBoardroom(null)}
+            autoStart
           />
         </div>
       )}
@@ -1007,6 +1031,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                 }`}
               >
                 <Briefcase className="h-3.5 w-3.5" /> CMMS
+                {cmmsBoardroomPresence.isActive && channel !== 'cmms' && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />}
               </button>
             )}
             {hasTrustAccess && (
@@ -1019,6 +1044,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                 }`}
               >
                 <Shield className="h-3.5 w-3.5" /> Trust
+                {trustBoardroomPresence.isActive && channel !== 'trust' && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />}
               </button>
             )}
           </div>
@@ -1042,10 +1068,12 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                       {cmmsActiveContactId === ALL_CMMS_RECIPIENTS ? 'All CMMS employees' : (cmmsRecipients.find((m) => m.id === cmmsActiveContactId)?.name || cmmsRecipients.find((m) => m.id === cmmsActiveContactId)?.email || 'CMMS member')}
                     </span>
                     <CallButtons
-                      call={cmmsActiveContactId === ALL_CMMS_RECIPIENTS ? { canCall: cmmsRecipients.length > 1 } : cmmsCall}
+                      call={cmmsActiveContactId === ALL_CMMS_RECIPIENTS ? { canCall: cmmsRecipients.length > 0 } : cmmsCall}
                       onAudio={() => callCmmsContact(false)}
                       onVideo={() => callCmmsContact(true)}
                       dark={dark}
+                      hideAudio={cmmsActiveContactId === ALL_CMMS_RECIPIENTS}
+                      videoLabel={cmmsActiveContactId === ALL_CMMS_RECIPIENTS ? 'Start/join the CMMS video call' : 'Video call'}
                     />
                   </div>
                   {cmmsActiveContactId === ALL_CMMS_RECIPIENTS ? (
@@ -1091,6 +1119,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                 </>
               ) : (
                 <>
+                  <BoardroomLiveBanner participantCount={cmmsBoardroomPresence.participantCount} onJoin={openCmmsBoardroom} dark={dark} />
                   <section>
                     <p className={`mb-2 text-[11px] font-semibold uppercase tracking-wide ${dark ? 'text-slate-400' : 'text-slate-500'}`}>Assigned tasks</p>
                     {cmmsTasks.length === 0 ? <p className={`rounded-xl border px-3 py-2 text-xs ${dark ? 'border-slate-700/50 text-slate-500' : 'border-slate-200 text-slate-400'}`}>No CMMS tasks are assigned to you.</p> : cmmsTasks.map((task) => (
@@ -1149,10 +1178,12 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                       {trustActiveContactId === ALL_TRUST_MEMBERS ? 'All group members' : (trustMembers.find((m) => m.user_id === trustActiveContactId)?.name || 'Member')}
                     </span>
                     <CallButtons
-                      call={trustActiveContactId === ALL_TRUST_MEMBERS ? { canCall: trustMembers.length > 1 } : trustCall}
+                      call={trustActiveContactId === ALL_TRUST_MEMBERS ? { canCall: trustMembers.length > 0 } : trustCall}
                       onAudio={() => callTrustContact(false)}
                       onVideo={() => callTrustContact(true)}
                       dark={dark}
+                      hideAudio={trustActiveContactId === ALL_TRUST_MEMBERS}
+                      videoLabel={trustActiveContactId === ALL_TRUST_MEMBERS ? 'Start/join the group video call' : 'Video call'}
                     />
                   </div>
                   {trustActiveConversation.length === 0 ? (
@@ -1179,6 +1210,8 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                   })}
                 </>
               ) : (
+                <>
+                <BoardroomLiveBanner participantCount={trustBoardroomPresence.participantCount} onJoin={openTrustBoardroom} dark={dark} />
                 <section>
                   <p className={`mb-2 text-[11px] font-semibold uppercase tracking-wide ${dark ? 'text-slate-400' : 'text-slate-500'}`}>Message a group member</p>
                   {trustMembers.length === 0 ? (
@@ -1207,6 +1240,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                     </div>
                   )}
                 </section>
+                </>
               )
             ) : channel === 'community' ? (
               <>
