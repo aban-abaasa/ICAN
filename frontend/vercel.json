@@ -8,9 +8,6 @@
     { "source": "/store/:id", "destination": "/api/share-preview?type=store&id=:id" },
     { "source": "/(.*)", "destination": "/" }
   ],
-  "crons": [
-    { "path": "/api/cron/cleanup-portfolio-messages", "schedule": "30 2 * * *" }
-  ],
   "routes": [
     {
       "src": "/share",

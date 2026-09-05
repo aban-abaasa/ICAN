@@ -82,9 +82,15 @@ BEGIN
 END;
 $$;
 
--- Bulk sweep for messages nobody reopened before expiry (called by the
--- Vercel cron below — the RPC in get_portfolio_conversation_messages()
--- already handles the common case of an actively-viewed thread).
+-- Bulk sweep for messages nobody reopened before expiry — no scheduled
+-- caller wired up (dropped the Vercel cron that would have called this to
+-- stay under the account's serverless-function limit; see git history for
+-- frontend/api/cron/cleanup-portfolio-messages.js). The RPC in
+-- get_portfolio_conversation_messages() already handles the common case of
+-- an actively-viewed thread, so this is a genuinely optional backstop —
+-- call it manually/via the Supabase SQL editor occasionally, or wire up an
+-- external scheduler (e.g. cron-job.org hitting a PostgREST RPC endpoint)
+-- if unclaimed old messages piling up ever actually matters.
 CREATE OR REPLACE FUNCTION public.cleanup_expired_portfolio_messages()
 RETURNS TABLE(deleted_count INTEGER)
 SECURITY DEFINER
