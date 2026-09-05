@@ -88,10 +88,25 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
   const callChannelRef = useRef(null);
   const likeEventKeysRef = useRef(new Set()); // dedupes `${messageId}:${userId}` so a reconnect-replayed reaction isn't double-counted
   const webrtcChannelRef = useRef(null);
+  // Resolves once the webrtc signaling channel's websocket has actually
+  // joined. ICE candidates and offers can fire within milliseconds of the
+  // channel being created (see createPeerConnection), well before Supabase
+  // finishes joining — sending before that point makes the realtime client
+  // silently fall back to REST (httpSend) and log a deprecation warning.
+  // Awaiting this before every send keeps signaling on the websocket.
+  const webrtcChannelReadyRef = useRef(Promise.resolve());
   const localStreamRef = useRef(null);
   const screenStreamRef = useRef(null);
   const peerConnectionsRef = useRef(new Map());
   const pendingIceCandidatesRef = useRef(new Map());
+  // The audio/video RTCRtpSender for each peer, keyed by peer userId. Senders
+  // come from transceivers reserved up front at connection creation (see
+  // createPeerConnection) so mic/camera/screen-share changes only ever call
+  // sender.replaceTrack() — never pc.addTrack() after the fact, which is what
+  // used to shift the m-line order mid-call and made Chrome reject the next
+  // offer with "order of m-lines ... doesn't match order from previous offer".
+  const audioSendersRef = useRef(new Map());
+  const videoSendersRef = useRef(new Map());
   // Every mounted remote <audio> element, keyed by peer userId — this is the
   // single, always-on audio output per peer (video tiles are muted; see
   // bindRemoteAudioEl below), so retrying playback only has to walk this map.
@@ -765,6 +780,27 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
         audio: true
       });
       localStreamRef.current = stream;
+
+      // Peer connections created before this resolved (e.g. a slow or
+      // initially-denied permission prompt) were given empty audio/video
+      // transceivers — wire the real tracks into them now via replaceTrack
+      // only, never addTrack, so this can't trigger a renegotiation that
+      // reshuffles the m-line order.
+      const audioTrack = stream.getAudioTracks()[0];
+      const videoTrack = stream.getVideoTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = isMicOnRef.current;
+        audioSendersRef.current.forEach((sender) => {
+          if (!sender.track) sender.replaceTrack(audioTrack).catch(() => {});
+        });
+      }
+      if (videoTrack && !screenStreamRef.current) {
+        videoTrack.enabled = isVideoOnRef.current;
+        videoSendersRef.current.forEach((sender) => {
+          if (!sender.track) sender.replaceTrack(videoTrack).catch(() => {});
+        });
+      }
+
       return stream;
     } catch (error) {
       console.error('Camera/microphone access error:', error);
@@ -823,25 +859,16 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
     }
   }, [getRemoteStreamByUserId]);
 
-  const replaceOutgoingVideoTrack = useCallback(async (videoTrack, ssStream = null) => {
+  const replaceOutgoingVideoTrack = useCallback(async (videoTrack) => {
     if (!videoTrack) return;
-    const peers = Array.from(peerConnectionsRef.current.values());
-    for (const pc of peers) {
-      const sender = pc.getSenders().find((s) => s.track && s.track.kind === 'video');
-      if (sender) {
-        try {
-          await sender.replaceTrack(videoTrack);
-        } catch (err) {
-          console.warn('Failed to replace outgoing video track:', err);
-        }
-      } else if (ssStream) {
-        // No video sender exists (e.g. presenter joined with camera off).
-        // Add the track — this fires onnegotiationneeded which re-offers to the remote peer.
-        try {
-          pc.addTrack(videoTrack, ssStream);
-        } catch (err) {
-          console.warn('Failed to add screen track via addTrack:', err);
-        }
+    // Every peer already has a video transceiver reserved at connection
+    // creation (see createPeerConnection), so this is always a plain
+    // replaceTrack — no addTrack, no renegotiation, no m-line reshuffle.
+    for (const sender of videoSendersRef.current.values()) {
+      try {
+        await sender.replaceTrack(videoTrack);
+      } catch (err) {
+        console.warn('Failed to replace outgoing video track:', err);
       }
     }
   }, []);
@@ -907,7 +934,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
       setIsCameraPresentation(true);
 
       // Replace outgoing track with camera
-      await replaceOutgoingVideoTrack(cameraTrack, cameraStream);
+      await replaceOutgoingVideoTrack(cameraTrack);
 
       if (videoRef.current) {
         videoRef.current.srcObject = cameraStream;
@@ -964,7 +991,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
 
       // Replace the outgoing track FIRST so remote peers get the screen data
       // immediately when they receive the broadcast notification below.
-      await replaceOutgoingVideoTrack(screenTrack, displayStream);
+      await replaceOutgoingVideoTrack(screenTrack);
 
       if (videoRef.current) {
         videoRef.current.srcObject = displayStream;
@@ -1048,6 +1075,16 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
     updateLocalTrackState();
   }, [isVideoOn, isMicOn, updateLocalTrackState]);
 
+  // Sends over the webrtc signaling channel, waiting for it to finish
+  // joining first so Supabase never has to fall back to REST delivery.
+  const sendWebrtcSignal = useCallback(async (payload) => {
+    const channel = webrtcChannelRef.current;
+    if (!channel) return;
+    await webrtcChannelReadyRef.current;
+    if (webrtcChannelRef.current !== channel) return; // channel was torn down while we waited
+    await channel.send(payload);
+  }, []);
+
   const createPeerConnection = useCallback(async (peerUserId, peerEmail = '') => {
     if (!peerUserId || peerUserId === userId) return null;
     if (peerConnectionsRef.current.has(peerUserId)) {
@@ -1064,7 +1101,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
     pc.onicecandidate = async (event) => {
       if (!event.candidate || !webrtcChannelRef.current) return;
       try {
-        await webrtcChannelRef.current.send({
+        await sendWebrtcSignal({
           type: 'broadcast',
           event: 'webrtc-signal',
           payload: {
@@ -1092,17 +1129,22 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
     pc.onconnectionstatechange = () => {
       if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) {
         setRemoteStreams((prev) => prev.filter((s) => s.userId !== peerUserId));
+        audioSendersRef.current.delete(peerUserId);
+        videoSendersRef.current.delete(peerUserId);
       }
     };
 
-    // Handle renegotiation (triggered by addTrack when no video sender existed, e.g. screen share with camera off)
+    // Defensive fallback only — every peer now gets audio/video transceivers
+    // reserved up front below, so nothing in this component calls addTrack()
+    // after creation any more (that's what used to trigger this and crash
+    // with a m-line-order mismatch on the next offer).
     pc.onnegotiationneeded = async () => {
       if (pc.signalingState !== 'stable' || !webrtcChannelRef.current) return;
       try {
         const offer = await pc.createOffer();
         if (pc.signalingState !== 'stable') return; // guard after async gap
         await pc.setLocalDescription(offer);
-        await webrtcChannelRef.current.send({
+        await sendWebrtcSignal({
           type: 'broadcast',
           event: 'webrtc-signal',
           payload: {
@@ -1118,12 +1160,24 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
       }
     };
 
+    // Reserve stable m-line positions (audio, then video) up front, whether
+    // or not a local stream is ready yet. Every later track change — mic
+    // toggle, camera on/off, starting/stopping screen share — then only ever
+    // calls sender.replaceTrack() on these two, so the offer this connection
+    // sends never adds a new m-line after the first one and Chrome never
+    // rejects it for reordering m-lines.
+    const audioTransceiver = pc.addTransceiver('audio', { direction: 'sendrecv' });
+    const videoTransceiver = pc.addTransceiver('video', { direction: 'sendrecv' });
+    audioSendersRef.current.set(peerUserId, audioTransceiver.sender);
+    videoSendersRef.current.set(peerUserId, videoTransceiver.sender);
+
     const localStream = await ensureLocalStream();
     if (localStream) {
-      localStream.getAudioTracks().forEach((track) => {
-        track.enabled = isMicOnRef.current;
-        pc.addTrack(track, localStream);
-      });
+      const audioTrack = localStream.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = isMicOnRef.current;
+        await audioTransceiver.sender.replaceTrack(audioTrack);
+      }
 
       const screenTrack = screenStreamRef.current?.getVideoTracks()?.[0];
       const cameraTrack = localStream.getVideoTracks()?.[0];
@@ -1131,13 +1185,13 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
 
       if (outboundVideoTrack) {
         outboundVideoTrack.enabled = screenTrack ? true : isVideoOnRef.current;
-        pc.addTrack(outboundVideoTrack, screenTrack ? screenStreamRef.current : localStream);
+        await videoTransceiver.sender.replaceTrack(outboundVideoTrack);
       }
     }
 
     peerConnectionsRef.current.set(peerUserId, pc);
     return pc;
-  }, [ensureLocalStream, userId, userEmail]);
+  }, [ensureLocalStream, userId, userEmail, sendWebrtcSignal]);
 
   const closeAllPeerConnections = useCallback(() => {
     peerConnectionsRef.current.forEach((pc) => {
@@ -1145,6 +1199,8 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
     });
     peerConnectionsRef.current.clear();
     pendingIceCandidatesRef.current.clear();
+    audioSendersRef.current.clear();
+    videoSendersRef.current.clear();
     setRemoteStreams([]);
   }, []);
 
@@ -1155,6 +1211,9 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
     const signalingChannel = supabase.channel(`boardroom-webrtc:${groupId}`, {
       config: { broadcast: { self: true } }
     });
+
+    let resolveReady;
+    webrtcChannelReadyRef.current = new Promise((resolve) => { resolveReady = resolve; });
 
     signalingChannel
       .on('broadcast', { event: 'webrtc-signal' }, async ({ payload }) => {
@@ -1222,7 +1281,9 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
           console.warn('WebRTC signal handling error:', err);
         }
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') resolveReady();
+      });
 
     webrtcChannelRef.current = signalingChannel;
 
@@ -1231,6 +1292,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
         webrtcChannelRef.current.unsubscribe();
         webrtcChannelRef.current = null;
       }
+      webrtcChannelReadyRef.current = Promise.resolve();
       closeAllPeerConnections();
     };
   }, [supabase, groupId, userId, userEmail, meetingStarted, createPeerConnection, closeAllPeerConnections]);
@@ -1261,7 +1323,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
         try {
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
-          await webrtcChannelRef.current.send({
+          await sendWebrtcSignal({
             type: 'broadcast',
             event: 'webrtc-signal',
             payload: {
@@ -1283,7 +1345,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
     // Retry offers periodically in case one side subscribed late.
     const retry = setInterval(createOffersToPeers, 5000);
     return () => clearInterval(retry);
-  }, [peerTargets, meetingStarted, userId, userEmail, createPeerConnection, getRemoteStreamByUserId]);
+  }, [peerTargets, meetingStarted, userId, userEmail, createPeerConnection, getRemoteStreamByUserId, sendWebrtcSignal]);
 
   // Auto-clear featured participant when they disconnect.
   useEffect(() => {
