@@ -478,17 +478,14 @@ const ChatWidget = ({ hasBottomNav = false }) => {
   const supportRoomId = supportConvId ? `support:${supportConvId}` : null;
   const supportCall = useDirectCall({ roomId: supportRoomId, selfId: supportSelfId, selfName });
 
-  const communityRoomId = (identity && !identity.isGuest && identity.authId) ? `community:${identity.authId}` : null;
-  const communityCall = useDirectCall({ roomId: communityRoomId, selfId: identity?.authId || null, selfName });
-
   const cmmsRoomId = (hasCmmsAccess && cmmsSelfId) ? `cmms:${cmmsCompanyId}:${cmmsSelfId}` : null;
   const cmmsCall = useDirectCall({ roomId: cmmsRoomId, selfId: cmmsSelfId || null, selfName });
 
   const trustRoomId = (hasTrustAccess && identity?.authId) ? `trust:${trustGroupId}:${identity.authId}` : null;
   const trustCall = useDirectCall({ roomId: trustRoomId, selfId: identity?.authId || null, selfName });
 
-  const callInstances = { support: supportCall, community: communityCall, cmms: cmmsCall, trust: trustCall };
-  const callChannelKeys = ['cmms', 'trust', 'community', 'support'];
+  const callInstances = { support: supportCall, cmms: cmmsCall, trust: trustCall };
+  const callChannelKeys = ['cmms', 'trust', 'support'];
   // Only one call can realistically be happening at once — whichever
   // instance is ringing (or, failing that, active) drives the shared
   // overlay/dock/stage; otherwise fall back to whichever channel tab is
@@ -497,10 +494,6 @@ const ChatWidget = ({ hasBottomNav = false }) => {
   const activeChannel = ringingChannel || callChannelKeys.find((key) => callInstances[key].callState !== 'idle');
   const call = callInstances[activeChannel || channel] || supportCall;
 
-  const callCommunityContact = (video) => {
-    if (!selectedThread || selectedThread.user_id === identity?.authId) return;
-    communityCall.startCall(video, selectedThread.name || 'Member', `community:${selectedThread.user_id}`);
-  };
   // "Call all members"/the "N people are live now" banner no longer ring
   // anyone or open a start/waiting screen — tapping either drops straight
   // into the full-mesh boardroom call (LiveBoardroom with autoStart), the
@@ -1277,7 +1270,6 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                     >
                       ← Back to Community
                     </button>
-                    <CallButtons call={selectedThread.user_id !== identity?.authId ? communityCall : null} onAudio={() => callCommunityContact(false)} onVideo={() => callCommunityContact(true)} dark={dark} />
                   </div>
                   <div className={`rounded-xl px-3 py-2 text-sm ${dark ? 'bg-white/5 text-slate-100' : 'bg-white text-slate-800 border border-slate-200'}`}>
                     <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-400">
