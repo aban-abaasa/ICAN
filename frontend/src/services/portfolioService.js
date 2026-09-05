@@ -11,7 +11,7 @@ import { supabase } from '../lib/supabase/client';
 export async function getMyPortfolio(userId) {
   const [{ data: portfolio, error: portfolioError }, { data: profile, error: profileError }] = await Promise.all([
     supabase.from('user_portfolios').select('*').eq('user_id', userId).maybeSingle(),
-    supabase.from('ican_user_profiles').select('handle').eq('id', userId).maybeSingle(),
+    supabase.from('profiles').select('handle').eq('id', userId).maybeSingle(),
   ]);
 
   if (portfolioError) throw portfolioError;
@@ -20,7 +20,7 @@ export async function getMyPortfolio(userId) {
   return { portfolio: portfolio || null, handle: profile?.handle || null };
 }
 
-export async function upsertPortfolio(userId, { headline, summary, skills, links, isPublic } = {}) {
+export async function upsertPortfolio(userId, { headline, summary, skills, links, isPublic, location, phone, contactEmail } = {}) {
   const { data, error } = await supabase
     .from('user_portfolios')
     .upsert(
@@ -31,6 +31,9 @@ export async function upsertPortfolio(userId, { headline, summary, skills, links
         skills: skills || [],
         links: links || {},
         is_public: isPublic !== undefined ? isPublic : true,
+        location: location || null,
+        phone: phone || null,
+        contact_email: contactEmail || null,
       },
       { onConflict: 'user_id' }
     )
@@ -54,7 +57,7 @@ export async function setHandle(userId, handle) {
   }
 
   const { data, error } = await supabase
-    .from('ican_user_profiles')
+    .from('profiles')
     .update({ handle: normalized })
     .eq('id', userId)
     .select('handle')
@@ -128,6 +131,63 @@ export async function deletePortfolioItem(itemId) {
     .eq('id', itemId)
     .eq('source', 'manual');
 
+  if (error) throw error;
+}
+
+// ─── References ─────────────────────────────────────────────────────────────
+
+export async function getPortfolioReferences(userId) {
+  const { data, error } = await supabase
+    .from('portfolio_references')
+    .select('*')
+    .eq('user_id', userId)
+    .order('display_order', { ascending: true })
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function addPortfolioReference(userId, ref) {
+  const { data, error } = await supabase
+    .from('portfolio_references')
+    .insert({
+      user_id: userId,
+      name: ref.name,
+      title: ref.title || null,
+      organization: ref.organization || null,
+      email: ref.email || null,
+      phone: ref.phone || null,
+      is_public: ref.isPublic !== undefined ? ref.isPublic : true,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updatePortfolioReference(referenceId, updates) {
+  const { data, error } = await supabase
+    .from('portfolio_references')
+    .update({
+      name: updates.name,
+      title: updates.title || null,
+      organization: updates.organization || null,
+      email: updates.email || null,
+      phone: updates.phone || null,
+      is_public: updates.isPublic,
+    })
+    .eq('id', referenceId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function deletePortfolioReference(referenceId) {
+  const { error } = await supabase.from('portfolio_references').delete().eq('id', referenceId);
   if (error) throw error;
 }
 
@@ -398,7 +458,7 @@ export async function getPublicPortfolio(handle) {
   if (!normalized) return null;
 
   const { data: profile, error: profileError } = await supabase
-    .from('ican_user_profiles')
+    .from('profiles')
     .select('id, full_name, avatar_url, handle, is_verified')
     .eq('handle', normalized)
     .maybeSingle();
@@ -406,7 +466,7 @@ export async function getPublicPortfolio(handle) {
   if (profileError) throw profileError;
   if (!profile) return null;
 
-  const [{ data: portfolio }, { data: items }, ratingSummary, ratings] = await Promise.all([
+  const [portfolio, items, ratingSummary, ratings, references] = await Promise.all([
     supabase.from('user_portfolios').select('*').eq('user_id', profile.id).eq('is_public', true).maybeSingle().then((r) => r.data),
     supabase
       .from('user_portfolio_items')
@@ -417,6 +477,13 @@ export async function getPublicPortfolio(handle) {
       .then((r) => r.data),
     getRatingSummary(profile.id),
     getRatings(profile.id),
+    supabase
+      .from('portfolio_references')
+      .select('*')
+      .eq('user_id', profile.id)
+      .eq('is_public', true)
+      .order('display_order', { ascending: true })
+      .then((r) => r.data),
   ]);
 
   return {
@@ -425,5 +492,6 @@ export async function getPublicPortfolio(handle) {
     items: items || [],
     ratingSummary,
     ratings,
+    references: references || [],
   };
 }
