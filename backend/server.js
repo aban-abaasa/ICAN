@@ -134,9 +134,14 @@ app.use('/api/storage', storageRoutes);
 async function loadRoutesAndStartServer() {
   try {
     const emailModule = await import('./routes/emailRoutes.js');
+    const reportShareModule = await import('./routes/reportShareRoutes.js');
 
     // Email Routes (send PIN reset, unlock confirmations)
     app.use('/api/email', emailModule.default);
+
+    // CMMS Report Share Routes (email the OTP for a "restricted to
+    // specific emails" shared report link — see CMMS_REPORT_SHARING_SYSTEM.sql)
+    app.use('/api/report-shares', reportShareModule.default);
 
     console.log('✅ ES6 module routes loaded successfully');
   } catch (error) {

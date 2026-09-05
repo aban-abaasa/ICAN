@@ -34,7 +34,8 @@ import {
   Briefcase,
   DollarSign,
   Car,
-  Megaphone
+  Megaphone,
+  Link2
 } from 'lucide-react';
 
 // Import Supabase CMMS service
@@ -43,6 +44,7 @@ import { supabase } from '../lib/supabase/client';
 import { searchICANUsers, verifyICANUser } from '../services/pitchingService';
 import { uploadToR2 } from '../services/r2StorageService';
 import cmmsReportService from '../services/cmmsReportAccessService';
+import ShareExportModal from './ShareExportModal';
 import cmmsMessagingService from '../services/cmmsMessagingService';
 import NotificationsPanel from './NotificationsPanel';
 import RequisitionWorkspace from './CMMS/RequisitionWorkspace.jsx';
@@ -3050,6 +3052,7 @@ const CMMSModule = ({
     const [reportPhotoPreview, setReportPhotoPreview] = useState('');
     const [isUploadingReportPhoto, setIsUploadingReportPhoto] = useState(false);
     const [lightboxPhotoUrl, setLightboxPhotoUrl] = useState('');
+    const [showExportShareModal, setShowExportShareModal] = useState(false);
 
     const companyReports = Array.isArray(cmmsData.reports) ? cmmsData.reports : [];
 
@@ -4224,12 +4227,32 @@ const CMMSModule = ({
             >
               🖨️ Print Written Reports — {reportScopeLabel}
             </button>
+            {userRole === 'admin' && (
+              <button
+                onClick={() => setShowExportShareModal(true)}
+                disabled={filteredCompanyReports.length === 0}
+                className="px-3 md:px-4 py-2 bg-emerald-500 bg-opacity-30 text-emerald-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold text-xs md:text-sm disabled:opacity-40 flex items-center gap-2"
+              >
+                <Link2 size={14} />
+                Share Written Reports — {reportScopeLabel}
+              </button>
+            )}
           </div>
           <p className="text-gray-400 text-[11px] md:text-xs mt-2">
             Written reports are collected by department and employee — use the department picker above, or the filters in the Company Report Board further up the page, to narrow this export to one department or one person.
           </p>
         </div>
           </>
+        )}
+
+        {showExportShareModal && (
+          <ShareExportModal
+            companyId={companyIdToUse}
+            departmentFilter={reportDepartmentFilter}
+            scopeLabel={reportScopeLabel}
+            reportCount={filteredCompanyReports.length}
+            onClose={() => setShowExportShareModal(false)}
+          />
         )}
       </div>
     );

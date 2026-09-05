@@ -12,11 +12,13 @@ import {
   Edit2,
   Plus,
   Filter,
-  Download
+  Download,
+  Link2
 } from 'lucide-react';
 
 // Import the service
 import cmmsReportService from '../services/cmmsReportAccessService';
+import ShareReportModal from './ShareReportModal';
 
 const CMSSReportingManager = ({ 
   cmmsCompanyId, 
@@ -48,6 +50,9 @@ const CMSSReportingManager = ({
 
   // Edit mode
   const [editingReport, setEditingReport] = useState(null);
+
+  // Share modal (admin-only "Share" button on a report card)
+  const [sharingReport, setSharingReport] = useState(null);
 
   // ============================================================
   // INITIALIZATION
@@ -558,26 +563,40 @@ const CMSSReportingManager = ({
             </div>
 
             {/* Actions */}
-            {canUserEditReport(report) && (
+            {(canUserEditReport(report) || userRole === 'admin') && (
               <div className="flex gap-2 pt-4 border-t">
-                <select
-                  value={report.status}
-                  onChange={(e) => handleUpdateReportStatus(report.id, e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                >
-                  <option value="open">Mark as Open</option>
-                  <option value="in_review">Mark as In Review</option>
-                  <option value="resolved">Mark as Resolved</option>
-                  <option value="closed">Mark as Closed</option>
-                </select>
+                {canUserEditReport(report) && (
+                  <select
+                    value={report.status}
+                    onChange={(e) => handleUpdateReportStatus(report.id, e.target.value)}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  >
+                    <option value="open">Mark as Open</option>
+                    <option value="in_review">Mark as In Review</option>
+                    <option value="resolved">Mark as Resolved</option>
+                    <option value="closed">Mark as Closed</option>
+                  </select>
+                )}
 
-                <button
-                  onClick={() => handleDeleteReport(report.id)}
-                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
-                >
-                  <Trash2 size={16} />
-                  Delete
-                </button>
+                {userRole === 'admin' && (
+                  <button
+                    onClick={() => setSharingReport(report)}
+                    className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg flex items-center gap-2"
+                  >
+                    <Link2 size={16} />
+                    Share
+                  </button>
+                )}
+
+                {canUserEditReport(report) && (
+                  <button
+                    onClick={() => handleDeleteReport(report.id)}
+                    className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+                  >
+                    <Trash2 size={16} />
+                    Delete
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -596,6 +615,9 @@ const CMSSReportingManager = ({
       {renderForm()}
       {renderFilters()}
       {renderReportsList()}
+      {sharingReport && (
+        <ShareReportModal report={sharingReport} onClose={() => setSharingReport(null)} />
+      )}
     </div>
   );
 };

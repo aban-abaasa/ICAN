@@ -41,6 +41,20 @@ const dropshipStoreMatch = window.location.pathname.match(/^\/store\/([^/]+)/);
 // stock Tailwind color class -- a hardcoded background this standalone,
 // bring-your-own-palette page must never inherit.
 const cmmsNoticeBoardMatch = window.location.pathname.match(/^\/notices\/([^/]+)/);
+// A shared CMMS report link (e.g. https://icanera.space/reports/<token>) --
+// same no-login share-link reasoning as the links above, except access can
+// additionally be gated by a password or an emailed one-time code
+// (PublicReportViewer.jsx handles all three modes itself by calling the
+// anon-callable RPCs in CMMS_REPORT_SHARING_SYSTEM.sql). Rendered with no
+// providers at all, like the QR check-in pages below, since a report
+// viewer never needs an ICAN session or the app's theme system.
+const reportShareMatch = window.location.pathname.match(/^\/reports\/([^/]+)/);
+// A shared, department-scoped "Written Reports" export link (e.g.
+// https://icanera.space/report-exports/<token>) -- same reasoning as
+// reportShareMatch above, except it opens the grouped Department ->
+// Employee -> Reports view the Export Reports panel's Download/Print
+// buttons produce, rather than a single report.
+const reportExportShareMatch = window.location.pathname.match(/^\/report-exports\/([^/]+)/);
 // A stale service-worker/browser cache can leave a phone holding an
 // index.html that points at a JS chunk hash the last deploy removed from the
 // server — the chunk 404s, the dynamic import() rejects, and with no retry
@@ -82,6 +96,8 @@ const PublicStatusViewer = lazyWithReloadOnChunkFailure(() => import('./componen
 const PublicPortfolioPage = lazyWithReloadOnChunkFailure(() => import('./components/profile/PublicPortfolioPage'));
 const PublicDropshipStorefront = lazyWithReloadOnChunkFailure(() => import('./components/PublicDropshipStorefront'));
 const PublicCompanyNoticeBoard = lazyWithReloadOnChunkFailure(() => import('./components/PublicCompanyNoticeBoard'));
+const PublicReportViewer = lazyWithReloadOnChunkFailure(() => import('./components/PublicReportViewer'));
+const PublicReportExportViewer = lazyWithReloadOnChunkFailure(() => import('./components/PublicReportExportViewer'));
 const Loading = () => <div className="min-h-screen bg-slate-950" />;
 
 // Without this, ANY uncaught error during first render (a chunk failure that
@@ -117,6 +133,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <Suspense fallback={<Loading />}>
         {isAttendanceQrPath ? <PublicStaffAttendanceCheckIn />
           : isVisitorQrPath ? <PublicVisitorCheckIn />
+          : reportShareMatch ? <PublicReportViewer shareToken={reportShareMatch[1]} />
+          : reportExportShareMatch ? <PublicReportExportViewer shareToken={reportExportShareMatch[1]} />
           : cmmsNoticeBoardMatch ? (
             <AuthProvider>
               <PublicCompanyNoticeBoard companyId={cmmsNoticeBoardMatch[1]} />

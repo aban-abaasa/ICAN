@@ -48,7 +48,7 @@ CREATE INDEX IF NOT EXISTS idx_cmms_company_business_profile ON public.cmms_comp
 UPDATE public.cmms_company_profiles cp
 SET business_profile_id = matched.business_profile_id
 FROM (
-  SELECT bp.user_id, MIN(bp.id) AS business_profile_id
+  SELECT bp.user_id, (array_agg(bp.id))[1] AS business_profile_id
   FROM public.business_profiles bp
   GROUP BY bp.user_id
   HAVING COUNT(*) = 1
