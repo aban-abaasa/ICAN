@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { MessageCircle, X, Send, Headphones, Globe, ThumbsUp, Briefcase, Shield, ArrowLeft, Radio, Expand, Minimize, GripVertical, Mic, Trash2, Loader2, Phone, Video } from 'lucide-react';
+import { MessageCircle, X, Send, Headphones, Globe, ThumbsUp, Briefcase, Shield, ArrowLeft, Radio, Expand, Minimize, GripVertical, Mic, Square, Trash2, Loader2, Phone, Video } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import VoiceNotePlayer from './voice/VoiceNotePlayer';
 import VoiceNoteRetentionPrompt from './voice/VoiceNoteRetentionPrompt';
@@ -167,9 +167,10 @@ const ChatWidget = ({ hasBottomNav = false }) => {
   const [trustActiveContactId, setTrustActiveContactId] = useState('');
   const [trustComposeError, setTrustComposeError] = useState('');
 
-  const [voicePhase, setVoicePhase] = useState('idle'); // 'idle' | 'recording' | 'uploading'
+  const [voicePhase, setVoicePhase] = useState('idle'); // 'idle' | 'recording' | 'preview' | 'uploading'
   const [voiceElapsed, setVoiceElapsed] = useState(0);
   const [voiceError, setVoiceError] = useState('');
+  const [voicePreviewUrl, setVoicePreviewUrl] = useState(null);
 
   const [ringtoneName, setRingtoneName] = useState('');
 
@@ -207,7 +208,8 @@ const ChatWidget = ({ hasBottomNav = false }) => {
   const voiceChunksRef = useRef([]);
   const voiceStreamRef = useRef(null);
   const voiceTimerRef = useRef(null);
-  const voiceSendRef = useRef(false);
+  const voiceActionRef = useRef(null); // 'preview' | 'discard', set right before recorder.stop()
+  const voicePreviewBlobRef = useRef(null);
   const identityRef = useRef(identity);
   const guestFormRef = useRef(guestForm);
   useEffect(() => { openRef.current = open; }, [open]);
@@ -218,6 +220,10 @@ const ChatWidget = ({ hasBottomNav = false }) => {
     if (voiceTimerRef.current) clearInterval(voiceTimerRef.current);
     if (voiceStreamRef.current) voiceStreamRef.current.getTracks().forEach((t) => t.stop());
   }, []);
+  // Revokes the previous preview blob URL whenever it's replaced, and on unmount.
+  useEffect(() => () => {
+    if (voicePreviewUrl) URL.revokeObjectURL(voicePreviewUrl);
+  }, [voicePreviewUrl]);
 
   const hidden = isDeveloperSession();
   const scopeKey = identity ? (identity.isGuest ? 'guest' : `user_${identity.userId}`) : null;
@@ -849,13 +855,13 @@ const ChatWidget = ({ hasBottomNav = false }) => {
         if (e.data.size > 0) voiceChunksRef.current.push(e.data);
       };
 
-      recorder.onstop = async () => {
+      recorder.onstop = () => {
         stream.getTracks().forEach((t) => t.stop());
         if (voiceTimerRef.current) clearInterval(voiceTimerRef.current);
 
-        const shouldSend = voiceSendRef.current;
-        voiceSendRef.current = false;
-        if (!shouldSend) {
+        const action = voiceActionRef.current;
+        voiceActionRef.current = null;
+        if (action !== 'preview') {
           setVoicePhase('idle');
           return;
         }
@@ -866,29 +872,9 @@ const ChatWidget = ({ hasBottomNav = false }) => {
           return;
         }
 
-        setVoicePhase('uploading');
-        const who = ensureIdentity();
-        if (!who) {
-          setVoicePhase('idle');
-          return;
-        }
-        const result = await uploadVoiceNote(blob);
-        if (result.success) {
-          try {
-            const links = await deliverMessage(VOICE_NOTE_PREFIX + result.url, who);
-            if (result.retentionId && links?.length) {
-              await linkVoiceNoteMessages(result.retentionId, links);
-            }
-          } catch (err) {
-            console.error('[ChatWidget] voice note send failed:', err);
-            if (channel === 'cmms') setCmmsComposeError(err.message || 'Unable to send CMMS message.');
-            else if (channel === 'trust') setTrustComposeError(err.message || 'Unable to send Trust & SACCO message.');
-            else setVoiceError(err.message || 'Unable to send voice note.');
-          }
-        } else {
-          setVoiceError(result.error || 'Upload failed');
-        }
-        setVoicePhase('idle');
+        voicePreviewBlobRef.current = blob;
+        setVoicePreviewUrl(URL.createObjectURL(blob));
+        setVoicePhase('preview');
       };
 
       recorder.start();
@@ -901,21 +887,58 @@ const ChatWidget = ({ hasBottomNav = false }) => {
     }
   };
 
-  const stopAndSendVoiceRecording = () => {
+  // Stops recording and moves to the preview phase — it does not send yet.
+  const stopVoiceRecording = () => {
     if (voiceRecorderRef.current && voicePhase === 'recording') {
-      voiceSendRef.current = true;
+      voiceActionRef.current = 'preview';
       voiceRecorderRef.current.stop();
     }
   };
 
+  // Discards whatever's in progress: mid-recording (stops without keeping
+  // audio) or a recorded-but-unsent preview (drops the blob).
   const cancelVoiceRecording = () => {
     if (voiceRecorderRef.current && voicePhase === 'recording') {
-      voiceSendRef.current = false;
+      voiceActionRef.current = 'discard';
       voiceRecorderRef.current.stop();
-    } else {
-      if (voiceTimerRef.current) clearInterval(voiceTimerRef.current);
-      setVoicePhase('idle');
+      return;
     }
+    voicePreviewBlobRef.current = null;
+    setVoicePreviewUrl(null);
+    if (voiceTimerRef.current) clearInterval(voiceTimerRef.current);
+    setVoicePhase('idle');
+  };
+
+  // Uploads and sends the previewed voice note.
+  const sendVoiceNote = async () => {
+    const blob = voicePreviewBlobRef.current;
+    if (!blob) {
+      setVoicePhase('idle');
+      return;
+    }
+    const who = ensureIdentity();
+    if (!who) return;
+
+    setVoicePhase('uploading');
+    const result = await uploadVoiceNote(blob);
+    if (result.success) {
+      try {
+        const links = await deliverMessage(VOICE_NOTE_PREFIX + result.url, who);
+        if (result.retentionId && links?.length) {
+          await linkVoiceNoteMessages(result.retentionId, links);
+        }
+      } catch (err) {
+        console.error('[ChatWidget] voice note send failed:', err);
+        if (channel === 'cmms') setCmmsComposeError(err.message || 'Unable to send CMMS message.');
+        else if (channel === 'trust') setTrustComposeError(err.message || 'Unable to send Trust & SACCO message.');
+        else setVoiceError(err.message || 'Unable to send voice note.');
+      }
+    } else {
+      setVoiceError(result.error || 'Upload failed');
+    }
+    voicePreviewBlobRef.current = null;
+    setVoicePreviewUrl(null);
+    setVoicePhase('idle');
   };
 
   const handleDraftChange = (event) => {
@@ -1436,7 +1459,19 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                     <span className="h-2 w-2 flex-shrink-0 animate-pulse rounded-full bg-red-500" />
                     <span className="flex-shrink-0 text-xs font-mono tabular-nums text-red-400">{formatVoiceDuration(voiceElapsed)}</span>
                     <span className={`flex-1 truncate text-xs ${dark ? 'text-slate-400' : 'text-slate-500'}`}>Recording voice note…</span>
-                    <button onClick={cancelVoiceRecording} className="flex-shrink-0 rounded-full p-1 hover:bg-black/10" title="Cancel">
+                    <button onClick={cancelVoiceRecording} className="flex-shrink-0 rounded-full p-1 hover:bg-black/10" title="Discard">
+                      <Trash2 className="h-4 w-4 text-slate-400" />
+                    </button>
+                  </div>
+                ) : voicePhase === 'preview' || voicePhase === 'uploading' ? (
+                  <div className={`flex flex-1 items-center gap-2 rounded-xl border px-3 py-2 ${dark ? 'border-slate-700/50 bg-white/5' : 'border-slate-200 bg-slate-50'}`}>
+                    <VoiceNotePlayer url={voicePreviewUrl} tint={dark ? 'white' : 'cyan'} className="flex-1" />
+                    <button
+                      onClick={cancelVoiceRecording}
+                      disabled={voicePhase === 'uploading'}
+                      className="flex-shrink-0 rounded-full p-1 hover:bg-black/10 disabled:opacity-40"
+                      title="Delete"
+                    >
                       <Trash2 className="h-4 w-4 text-slate-400" />
                     </button>
                   </div>
@@ -1471,9 +1506,17 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                 )}
                 {voicePhase === 'recording' ? (
                   <button
-                    onClick={stopAndSendVoiceRecording}
+                    onClick={stopVoiceRecording}
                     className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-red-500 to-red-600 text-white shadow-lg transition"
-                    title="Stop and send"
+                    title="Stop recording"
+                  >
+                    <Square className="h-4 w-4" fill="currentColor" />
+                  </button>
+                ) : voicePhase === 'preview' ? (
+                  <button
+                    onClick={sendVoiceNote}
+                    className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-white shadow-lg transition bg-gradient-to-br ${channel === 'trust' ? 'from-amber-500 to-orange-600' : 'from-indigo-500 to-purple-600'}`}
+                    title="Send voice note"
                   >
                     <Send className="h-4 w-4" />
                   </button>
