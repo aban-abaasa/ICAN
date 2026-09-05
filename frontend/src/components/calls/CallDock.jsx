@@ -15,6 +15,7 @@ const formatElapsed = (seconds) => {
 const CallDock = ({ call, dark = false, tint = 'indigo' }) => {
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
+  const remoteAudioRef = useRef(null);
 
   useEffect(() => {
     if (localVideoRef.current) localVideoRef.current.srcObject = call.localStream || null;
@@ -22,6 +23,13 @@ const CallDock = ({ call, dark = false, tint = 'indigo' }) => {
 
   useEffect(() => {
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = call.remoteStream || null;
+  }, [call.remoteStream]);
+
+  // Video calls play the remote audio track via the <video> element in
+  // videoStage below. Audio-only calls never render that element, so they
+  // need their own <audio> sink or the peer's voice never comes through.
+  useEffect(() => {
+    if (remoteAudioRef.current) remoteAudioRef.current.srcObject = call.remoteStream || null;
   }, [call.remoteStream]);
 
   if (call.callState === 'idle') return null;
@@ -50,6 +58,7 @@ const CallDock = ({ call, dark = false, tint = 'indigo' }) => {
 
   return (
     <div className={`border-b px-3 py-2.5 ${dark ? 'border-slate-700/50 bg-slate-900' : 'border-slate-200 bg-slate-100'}`}>
+      {!call.isVideo && <audio ref={remoteAudioRef} autoPlay />}
       {call.error && <p className="mb-1.5 text-[11px] text-red-400">{call.error}</p>}
 
       {call.callState === 'ringing-out' && (
