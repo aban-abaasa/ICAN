@@ -3487,6 +3487,26 @@ const ICANCapitalEngine = () => {
     serviceProviders: []
   });
   const [showProfilePage, setShowProfilePage] = useState(false);
+  const [profileInitialTab, setProfileInitialTab] = useState('overview');
+
+  // "Create your own IcanEra portfolio" from someone else's public resume
+  // page drops the visitor straight onto the My Resume tab instead of the
+  // default dashboard — either instantly (same session, via the event) or
+  // after a fresh sign-up/reload (via the sessionStorage flag it also sets).
+  useEffect(() => {
+    const openResumeTab = () => {
+      setProfileInitialTab('resume');
+      setShowProfilePage(true);
+    };
+    try {
+      if (window.sessionStorage.getItem('ican_pending_start_tab') === 'resume') {
+        window.sessionStorage.removeItem('ican_pending_start_tab');
+        openResumeTab();
+      }
+    } catch (_) { /* storage unavailable */ }
+    window.addEventListener('ican-open-resume-tab', openResumeTab);
+    return () => window.removeEventListener('ican-open-resume-tab', openResumeTab);
+  }, []);
   const [showStatusPage, setShowStatusPage] = useState(false);
   const [showStatusUploader, setShowStatusUploader] = useState(false);
   const [statusRefresh, setStatusRefresh] = useState(0);
@@ -9689,10 +9709,12 @@ Data Freshness: ${reportData.metadata.dataFreshness}
       {showProfilePage && (
         <div className="fixed inset-0 bg-black/40 z-[1000]" onClick={() => setShowProfilePage(false)}>
           <div className="fixed inset-0 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <ProfilePage 
-              onClose={() => setShowProfilePage(false)}
+            <ProfilePage
+              initialTab={profileInitialTab}
+              onClose={() => { setShowProfilePage(false); setProfileInitialTab('overview'); }}
               onLogout={() => {
                 setShowProfilePage(false);
+                setProfileInitialTab('overview');
                 // Logout will be handled by AuthContext and redirect will happen
               }}
             />

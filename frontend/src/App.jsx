@@ -75,6 +75,24 @@ const App = () => {
   });
   const [appError, setAppError] = useState(null);
   const [showSplash, setShowSplash] = useState(false);
+  // A "Create your own IcanEra portfolio" link (from someone else's public
+  // /portfolio/<handle> page) lands a signed-out visitor straight on sign-up
+  // instead of the landing page — see PublicPortfolioPage.jsx's startOwnPortfolio.
+  const [wantsSignup] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('auth') === 'signup';
+    }
+    return false;
+  });
+  useEffect(() => {
+    if (!wantsSignup) return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      params.delete('auth');
+      const rest = params.toString();
+      window.history.replaceState({}, '', window.location.pathname + (rest ? `?${rest}` : '') + window.location.hash);
+    } catch (_) { /* URL not available */ }
+  }, [wantsSignup]);
   const isRestoringAppHistoryRef = useRef(false);
   const lastPublicViewRef = useRef(null);
 
@@ -261,6 +279,15 @@ const App = () => {
   }
 
   if (!user) {
+    if (wantsSignup) {
+      return (
+        <ErrorBoundary>
+          <SplashScreen show={showSplash} onHide={() => setShowSplash(false)} />
+          <AuthPage initialView="signup" />
+          <ChatWidget />
+        </ErrorBoundary>
+      );
+    }
     if (showLanding) {
       return (
         <ErrorBoundary>

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   X, ShieldCheck, Briefcase, Award, GraduationCap, FolderKanban, Rocket,
   FlaskConical, Presentation, Loader2, Sparkles, MapPin, Phone, Mail,
-  Users, PhoneCall, Video, MessageCircle,
+  Users, PhoneCall, Video, MessageCircle, ExternalLink, ArrowRight,
 } from 'lucide-react';
 import { getPublicPortfolio } from '../../services/portfolioService';
 import { useAuth } from '../../context/AuthContext';
@@ -66,12 +66,21 @@ function DescriptionBlock({ text }) {
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
   if (lines.length > 1) {
     return (
-      <ul className="mt-1.5 space-y-1 list-disc list-inside text-sm text-gray-400">
+      <ul className="mt-1.5 space-y-1 list-disc list-inside text-sm text-slate-400">
         {lines.map((line, i) => <li key={i}>{line}</li>)}
       </ul>
     );
   }
-  return <p className="text-sm text-gray-400 mt-1.5">{text}</p>;
+  return <p className="text-sm text-slate-400 mt-1.5">{text}</p>;
+}
+
+function SectionHeading({ children }) {
+  return (
+    <h2 className="text-base font-semibold text-slate-100 mb-3 pb-2 border-b border-slate-800 flex items-center gap-2">
+      <span className="w-1 h-4 rounded-full bg-indigo-500" />
+      {children}
+    </h2>
+  );
 }
 
 /**
@@ -137,6 +146,26 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
     }
   };
 
+  // "Create your own IcanEra portfolio" — signed-in visitors jump straight to
+  // their own My Resume tab (instantly if the app shell is already mounted
+  // around us, e.g. the overlay usage; otherwise via a one-time flag the
+  // main app's mount effect picks up after the page reloads). Signed-out
+  // visitors go to sign-up first; the same flag carries through so they land
+  // on My Resume the moment their account exists, not on the dashboard.
+  const startOwnPortfolio = () => {
+    try { window.sessionStorage.setItem('ican_pending_start_tab', 'resume'); } catch (_) { /* storage unavailable */ }
+    if (!user) {
+      window.location.href = '/?auth=signup';
+      return;
+    }
+    if (onClose) {
+      onClose();
+      window.dispatchEvent(new CustomEvent('ican-open-resume-tab'));
+    } else {
+      window.location.href = '/';
+    }
+  };
+
   // Overlay chrome (close button, fixed positioning) only applies when a
   // caller gives us a way to close — the in-app preview/directory usages.
   // The real /portfolio/<handle> route (main.jsx) passes `handle` with no
@@ -155,32 +184,42 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
     ? [data.portfolio.location, data.portfolio.phone, data.portfolio.contact_email].filter(Boolean)
     : [];
 
+  const links = useMemo(() => {
+    const raw = data?.portfolio?.links;
+    if (!raw || typeof raw !== 'object') return [];
+    return Object.entries(raw)
+      .filter(([, url]) => typeof url === 'string' && url.trim())
+      .map(([label, url]) => {
+        const trimmed = url.trim();
+        return { label, url: /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}` };
+      });
+  }, [data?.portfolio?.links]);
+
   const content = (
-    <div className="relative min-h-[100dvh] bg-gradient-to-b from-[#241511] via-[#3a2418] to-[#241511] text-white overflow-hidden">
-      {/* Ambient background glow */}
+    <div className="relative min-h-[100dvh] bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-slate-200 overflow-hidden">
+      {/* Subtle ambient glow — restrained, professional accent rather than a busy gradient */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-24 -left-24 w-72 h-72 bg-purple-600/20 rounded-full blur-3xl animate-blob" />
-        <div className="absolute top-1/3 -right-24 w-80 h-80 bg-amber-500/20 rounded-full blur-3xl animate-blob animation-delay-2000" />
-        <div className="absolute bottom-0 left-1/4 w-72 h-72 bg-purple-500/10 rounded-full blur-3xl animate-blob animation-delay-4000" />
+        <div className="absolute -top-24 -left-24 w-72 h-72 bg-indigo-600/10 rounded-full blur-3xl" />
+        <div className="absolute top-1/3 -right-24 w-80 h-80 bg-teal-500/10 rounded-full blur-3xl" />
       </div>
 
       <div className="relative max-w-3xl mx-auto px-4 py-8 sm:py-12">
         {isOverlay && (
-          <button onClick={onClose} className="mb-4 p-2 rounded-lg hover:bg-white/10 transition-colors">
+          <button onClick={onClose} className="mb-4 p-2 rounded-lg hover:bg-white/5 transition-colors">
             <X className="w-5 h-5" />
           </button>
         )}
 
         {isLoading && (
-          <div className="flex items-center justify-center py-24 text-amber-200/70">
+          <div className="flex items-center justify-center py-24 text-slate-400">
             <Loader2 className="w-6 h-6 animate-spin mr-2" /> Loading portfolio...
           </div>
         )}
 
         {!isLoading && notFound && (
           <div className="text-center py-24 animate-fadeIn">
-            <p className="text-xl font-semibold mb-2">Profile not found</p>
-            <p className="text-gray-400 text-sm">This IcanEra portfolio link isn't available or was made private.</p>
+            <p className="text-xl font-semibold mb-2 text-slate-100">Profile not found</p>
+            <p className="text-slate-400 text-sm">This IcanEra portfolio link isn't available or was made private.</p>
           </div>
         )}
 
@@ -188,38 +227,37 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
           <>
             <div className="flex items-center gap-4 mb-3 animate-fadeInDown">
               <div className="relative flex-shrink-0">
-                <div className="absolute inset-0 rounded-full bg-gradient-to-br from-amber-400 to-purple-500 blur-md opacity-60 animate-pulse-slow" />
                 {data.profile.avatar_url ? (
                   <img
                     src={data.profile.avatar_url}
                     alt={data.profile.full_name}
-                    className="relative w-24 h-24 rounded-full object-cover ring-4 ring-purple-600/50"
+                    className="w-24 h-24 rounded-full object-cover ring-2 ring-slate-700"
                   />
                 ) : (
-                  <div className="relative w-24 h-24 rounded-full bg-gradient-to-br from-amber-700 to-purple-600 flex items-center justify-center text-3xl font-bold ring-4 ring-purple-600/50">
+                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-slate-700 to-indigo-700 flex items-center justify-center text-3xl font-bold text-white ring-2 ring-slate-700">
                     {(data.profile.full_name || 'U').charAt(0)}
                   </div>
                 )}
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-2xl font-bold truncate bg-gradient-to-r from-amber-200 via-white to-purple-200 bg-clip-text text-transparent">
+                  <h1 className="text-2xl font-bold text-white truncate">
                     {data.profile.full_name}
                   </h1>
                   {data.profile.is_verified ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-medium">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium">
                       <ShieldCheck className="w-3.5 h-3.5" /> Verified
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-700/40 border border-slate-500/30 text-gray-400 text-xs font-medium">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800/60 border border-slate-700 text-slate-400 text-xs font-medium">
                       <ShieldCheck className="w-3.5 h-3.5" /> Not yet verified
                     </span>
                   )}
                 </div>
-                <p className="text-amber-200/70 text-sm">@{data.profile.handle}</p>
+                <p className="text-indigo-300/80 text-sm">@{data.profile.handle}</p>
                 {data.portfolio?.headline && (
-                  <p className="text-gray-200 mt-1 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-300 flex-shrink-0" />
+                  <p className="text-slate-300 mt-1 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
                     {data.portfolio.headline}
                   </p>
                 )}
@@ -229,26 +267,47 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
             {/* Resume-style contact line */}
             {contactLine.length > 0 && (
               <div
-                className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-6 text-xs text-gray-400 animate-fadeIn"
+                className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 text-xs text-slate-400 animate-fadeIn"
                 style={{ animationDelay: '0.05s', animationFillMode: 'backwards' }}
               >
                 {data.portfolio.location && (
-                  <span className="inline-flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-amber-400" /> {data.portfolio.location}</span>
+                  <span className="inline-flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-indigo-400" /> {data.portfolio.location}</span>
                 )}
                 {data.portfolio.phone && (
-                  <span className="inline-flex items-center gap-1"><Phone className="w-3.5 h-3.5 text-amber-400" /> {data.portfolio.phone}</span>
+                  <span className="inline-flex items-center gap-1"><Phone className="w-3.5 h-3.5 text-indigo-400" /> {data.portfolio.phone}</span>
                 )}
                 {data.portfolio.contact_email && (
-                  <span className="inline-flex items-center gap-1"><Mail className="w-3.5 h-3.5 text-amber-400" /> {data.portfolio.contact_email}</span>
+                  <span className="inline-flex items-center gap-1"><Mail className="w-3.5 h-3.5 text-indigo-400" /> {data.portfolio.contact_email}</span>
                 )}
               </div>
             )}
+
+            {/* Links — LinkedIn, personal site, GitHub, anything the owner added */}
+            {links.length > 0 && (
+              <div
+                className="flex flex-wrap items-center gap-2 mb-6 animate-fadeIn"
+                style={{ animationDelay: '0.06s', animationFillMode: 'backwards' }}
+              >
+                {links.map((link) => (
+                  <a
+                    key={link.label}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800/60 border border-slate-700 text-xs text-slate-300 hover:border-indigo-400/60 hover:text-white transition-colors"
+                  >
+                    <ExternalLink className="w-3 h-3" /> {link.label}
+                  </a>
+                ))}
+              </div>
+            )}
+            {links.length === 0 && contactLine.length === 0 && <div className="mb-6" />}
 
             {/* Call / community-chat action bar — lets a client reach this
                 professional directly from their resume page. */}
             {!isOwnProfile && (
               <div
-                className="mb-6 p-3 rounded-xl bg-slate-900/50 border border-amber-700/20 animate-fadeIn"
+                className="mb-6 p-3 rounded-xl bg-slate-900/70 border border-slate-800 animate-fadeIn"
                 style={{ animationDelay: '0.08s', animationFillMode: 'backwards' }}
               >
                 {call.callState === 'idle' ? (
@@ -258,33 +317,33 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
                         value={guestName}
                         onChange={(e) => setGuestName(e.target.value)}
                         placeholder="Your name (for the call)"
-                        className="min-w-0 flex-1 px-3 py-2 bg-slate-950/50 border border-slate-700 rounded-lg text-white placeholder-gray-500 text-xs"
+                        className="min-w-0 flex-1 px-3 py-2 bg-slate-950/60 border border-slate-700 rounded-lg text-white placeholder-slate-500 text-xs focus:outline-none focus:border-indigo-500/60"
                       />
                     )}
                     <button
                       onClick={() => call.startCall(false, viewerName, `community:${data.profile.id}`)}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-amber-700 to-purple-600 hover:from-amber-600 hover:to-purple-500 text-white text-xs font-medium rounded-lg"
+                      className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-lg transition-colors"
                     >
                       <PhoneCall className="w-3.5 h-3.5" /> Call {data.profile.full_name?.split(' ')[0] || 'them'}
                     </button>
                     <button
                       onClick={() => call.startCall(true, viewerName, `community:${data.profile.id}`)}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-medium rounded-lg"
+                      className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-xs font-medium rounded-lg transition-colors"
                     >
                       <Video className="w-3.5 h-3.5" /> Video Call
                     </button>
                     <button
                       onClick={openCommunityChat}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-medium rounded-lg"
+                      className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-xs font-medium rounded-lg transition-colors"
                     >
                       <MessageCircle className="w-3.5 h-3.5" /> Community Chat
                     </button>
                   </div>
                 ) : (
-                  <CallDock call={call} dark tint="amber" />
+                  <CallDock call={call} dark tint="indigo" />
                 )}
                 {call.callState === 'idle' && (
-                  <p className="text-[11px] text-gray-500 mt-2">
+                  <p className="text-[11px] text-slate-500 mt-2">
                     Calls connect only while {data.profile.full_name?.split(' ')[0] || 'they'} has IcanEra open — if there's no answer, try Community Chat instead.
                   </p>
                 )}
@@ -296,8 +355,8 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
                 className="mb-6 animate-fadeInUp"
                 style={{ animationDelay: '0.1s', animationFillMode: 'backwards' }}
               >
-                <h2 className="text-lg font-semibold mb-2">Professional Summary</h2>
-                <p className="text-gray-300 leading-relaxed whitespace-pre-wrap">{data.portfolio.summary}</p>
+                <SectionHeading>Professional Summary</SectionHeading>
+                <p className="text-slate-300 leading-relaxed whitespace-pre-wrap">{data.portfolio.summary}</p>
               </div>
             )}
 
@@ -306,13 +365,12 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
                 className="mb-8 animate-fadeInUp"
                 style={{ animationDelay: '0.2s', animationFillMode: 'backwards' }}
               >
-                <h2 className="text-lg font-semibold mb-2">Core Competencies &amp; Technical Skills</h2>
+                <SectionHeading>Core Competencies &amp; Technical Skills</SectionHeading>
                 <div className="flex flex-wrap gap-2">
-                  {data.portfolio.skills.map((skill, i) => (
+                  {data.portfolio.skills.map((skill) => (
                     <span
                       key={skill}
-                      className="px-3 py-1 bg-purple-900/40 border border-purple-600/30 rounded-full text-xs text-purple-200 transition-all hover:scale-110 hover:bg-purple-800/60 hover:border-purple-400/60 hover:text-white cursor-default animate-fadeIn"
-                      style={{ animationDelay: `${0.25 + i * 0.05}s`, animationFillMode: 'backwards' }}
+                      className="px-3 py-1 bg-slate-800/70 border border-slate-700 rounded-full text-xs text-slate-200 hover:border-indigo-400/60 hover:text-white transition-colors cursor-default"
                     >
                       {skill}
                     </span>
@@ -323,7 +381,7 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
 
             {data.items.length === 0 && !data.portfolio?.summary && !data.portfolio?.skills?.length && (
               <div
-                className="mb-8 p-5 rounded-xl border border-dashed border-amber-700/30 bg-slate-950/30 text-center text-sm text-gray-400 animate-fadeIn"
+                className="mb-8 p-5 rounded-xl border border-dashed border-slate-700 bg-slate-900/40 text-center text-sm text-slate-400 animate-fadeIn"
                 style={{ animationDelay: '0.15s', animationFillMode: 'backwards' }}
               >
                 {data.profile.full_name} hasn't added their resume details yet — check back soon.
@@ -339,7 +397,7 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
                   className="mb-8 animate-fadeInUp"
                   style={{ animationDelay: `${0.3 + sIdx * 0.05}s`, animationFillMode: 'backwards' }}
                 >
-                  <h2 className="text-lg font-semibold mb-3">{section.title}</h2>
+                  <SectionHeading>{section.title}</SectionHeading>
                   <div className="space-y-3">
                     {sectionItems.map((item) => {
                       const Icon = ITEM_ICONS[item.item_type] || Briefcase;
@@ -347,20 +405,20 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
                       return (
                         <div
                           key={item.id}
-                          className="p-4 rounded-xl bg-slate-900/50 border border-amber-700/20 hover:border-purple-500/50 transition-colors duration-300"
+                          className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 hover:border-indigo-500/40 transition-colors duration-300"
                         >
                           <div className="flex items-start gap-3">
-                            <div className="p-1.5 rounded-lg bg-gradient-to-br from-amber-700/30 to-purple-700/30 flex-shrink-0 mt-0.5">
-                              <Icon className="w-4 h-4 text-amber-300" />
+                            <div className="p-1.5 rounded-lg bg-slate-800 flex-shrink-0 mt-0.5">
+                              <Icon className="w-4 h-4 text-indigo-400" />
                             </div>
                             <div className="min-w-0 flex-1">
                               <p className="font-medium text-white leading-snug">
                                 {item.title}
-                                {item.org_name && <span className="font-normal text-amber-200/70"> | {item.org_name}</span>}
-                                {dateRange && <span className="font-normal text-gray-400"> ({dateRange})</span>}
+                                {item.org_name && <span className="font-normal text-indigo-300/80"> | {item.org_name}</span>}
+                                {dateRange && <span className="font-normal text-slate-500"> ({dateRange})</span>}
                               </p>
                               {item.source === 'cmms' && (
-                                <span className="inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                                <span className="inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/30">
                                   Auto · CMMS
                                 </span>
                               )}
@@ -380,18 +438,18 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
                 className="mb-8 animate-fadeInUp"
                 style={{ animationDelay: '0.55s', animationFillMode: 'backwards' }}
               >
-                <h2 className="text-lg font-semibold mb-3">References</h2>
+                <SectionHeading>References</SectionHeading>
                 <div className="grid sm:grid-cols-2 gap-3">
                   {data.references.map((ref) => (
-                    <div key={ref.id} className="p-4 rounded-xl bg-slate-900/50 border border-amber-700/20 flex items-start gap-3">
-                      <Users className="w-4 h-4 text-purple-300 flex-shrink-0 mt-0.5" />
+                    <div key={ref.id} className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                      <Users className="w-4 h-4 text-indigo-400 flex-shrink-0 mt-0.5" />
                       <div className="min-w-0">
                         <p className="font-medium text-white leading-snug">{ref.name}</p>
                         {(ref.title || ref.organization) && (
-                          <p className="text-sm text-amber-200/70">{[ref.title, ref.organization].filter(Boolean).join(' — ')}</p>
+                          <p className="text-sm text-indigo-300/80">{[ref.title, ref.organization].filter(Boolean).join(' — ')}</p>
                         )}
                         {(ref.email || ref.phone) && (
-                          <p className="text-xs text-gray-400 mt-1">{[ref.email, ref.phone].filter(Boolean).join(' · ')}</p>
+                          <p className="text-xs text-slate-400 mt-1">{[ref.email, ref.phone].filter(Boolean).join(' · ')}</p>
                         )}
                       </div>
                     </div>
@@ -412,8 +470,27 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
               />
             </div>
 
-            <div className="mt-10 text-center text-xs text-amber-200/50">
-              Powered by <span className="font-semibold text-amber-300">IcanEra</span>
+            {/* Recommend IcanEra — invite the visitor to build the same page */}
+            {!isOwnProfile && (
+              <div
+                className="mt-8 p-5 rounded-xl bg-gradient-to-r from-indigo-950/60 to-slate-900/60 border border-indigo-500/20 text-center animate-fadeIn"
+                style={{ animationDelay: '0.65s', animationFillMode: 'backwards' }}
+              >
+                <p className="text-white font-semibold">Impressed by this resume?</p>
+                <p className="text-slate-400 text-sm mt-1 mb-3">
+                  Build your own free professional portfolio on IcanEra — get your own shareable page, ratings, and a direct line for clients to call or message you.
+                </p>
+                <button
+                  onClick={startOwnPortfolio}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  Create Your Free IcanEra Portfolio <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            <div className="mt-10 text-center text-xs text-slate-600">
+              Powered by <span className="font-semibold text-indigo-400">IcanEra</span>
             </div>
           </>
         )}

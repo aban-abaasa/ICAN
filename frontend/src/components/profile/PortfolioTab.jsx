@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Link2, Copy, Eye, Plus, Trash2, Edit2, RefreshCw, Upload, ShieldCheck,
   Briefcase, Award, GraduationCap, FolderKanban, Rocket, FlaskConical, Presentation,
-  Loader2, Check, X as XIcon, Users,
+  Loader2, Check, X as XIcon, Users, ExternalLink,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -46,6 +46,7 @@ export default function PortfolioTab() {
   const [handleSaved, setHandleSaved] = useState(false);
 
   const [form, setForm] = useState({ headline: '', summary: '', skills: '', links: {}, location: '', phone: '', contactEmail: '' });
+  const [linksList, setLinksList] = useState([]); // [{ label, url }] — edited as rows, saved as a {label: url} object
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
   const [profileError, setProfileError] = useState(null);
@@ -94,6 +95,7 @@ export default function PortfolioTab() {
         phone: portfolio?.phone || '',
         contactEmail: portfolio?.contact_email || '',
       });
+      setLinksList(Object.entries(portfolio?.links || {}).map(([label, url]) => ({ label, url })));
       setItems(portfolioItems);
       setReferences(portfolioReferences);
       setCmmsMember(memberCheck);
@@ -149,11 +151,15 @@ export default function PortfolioTab() {
     setIsSavingProfile(true);
     setProfileError(null);
     try {
+      const links = {};
+      linksList.forEach(({ label, url }) => {
+        if (label.trim() && url.trim()) links[label.trim()] = url.trim();
+      });
       await upsertPortfolio(user.id, {
         headline: form.headline,
         summary: form.summary,
         skills: form.skills.split(',').map((s) => s.trim()).filter(Boolean),
-        links: form.links,
+        links,
         location: form.location,
         phone: form.phone,
         contactEmail: form.contactEmail,
@@ -215,6 +221,11 @@ export default function PortfolioTab() {
       console.error('Error deleting portfolio item:', err);
     }
   };
+
+  const addLinkRow = () => setLinksList((rows) => [...rows, { label: '', url: '' }]);
+  const updateLinkRow = (index, field, value) =>
+    setLinksList((rows) => rows.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
+  const removeLinkRow = (index) => setLinksList((rows) => rows.filter((_, i) => i !== index));
 
   const openAddReference = () => {
     setEditingReferenceId(null);
@@ -404,6 +415,40 @@ export default function PortfolioTab() {
         <p className="text-[11px] text-gray-500">
           Location/phone/email above are shown on your public page only if you fill them in — leave blank to keep them private.
         </p>
+
+        <div className="pt-1">
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-xs font-medium text-gray-300 flex items-center gap-1.5">
+              <ExternalLink className="w-3.5 h-3.5 text-amber-400" /> Links (LinkedIn, website, GitHub, etc.)
+            </p>
+            <button onClick={addLinkRow} className="flex items-center gap-1 px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white text-xs rounded-lg">
+              <Plus className="w-3 h-3" /> Add Link
+            </button>
+          </div>
+          <div className="space-y-1.5">
+            {linksList.map((row, i) => (
+              <div key={i} className="flex gap-1.5">
+                <input
+                  value={row.label}
+                  onChange={(e) => updateLinkRow(i, 'label', e.target.value)}
+                  placeholder="Label (e.g. LinkedIn)"
+                  className="w-32 flex-shrink-0 px-2 py-1.5 bg-slate-950/50 border border-slate-700 rounded-lg text-white placeholder-gray-500 text-xs"
+                />
+                <input
+                  value={row.url}
+                  onChange={(e) => updateLinkRow(i, 'url', e.target.value)}
+                  placeholder="https://..."
+                  className="flex-1 min-w-0 px-2 py-1.5 bg-slate-950/50 border border-slate-700 rounded-lg text-white placeholder-gray-500 text-xs"
+                />
+                <button onClick={() => removeLinkRow(i)} className="p-1.5 hover:bg-slate-800 rounded text-red-400 flex-shrink-0">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+            {linksList.length === 0 && <p className="text-xs text-gray-500">No links added yet.</p>}
+          </div>
+        </div>
+
         <button
           onClick={saveProfileForm}
           disabled={isSavingProfile}

@@ -4349,6 +4349,23 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     setSelectedDetail({ tab, item, initialTab });
   };
 
+  // "Create your own IcanEra portfolio" from someone else's public resume
+  // page drops the visitor straight onto the My Resume tab instead of the
+  // default dashboard — either instantly (same session, via the event) or
+  // after a fresh sign-up/reload (via the sessionStorage flag it also sets).
+  useEffect(() => {
+    const openResumeTab = () => openDetailView('profile', 'My Profile', 'resume');
+    try {
+      if (window.sessionStorage.getItem('ican_pending_start_tab') === 'resume') {
+        window.sessionStorage.removeItem('ican_pending_start_tab');
+        openResumeTab();
+      }
+    } catch (_) { /* storage unavailable */ }
+    window.addEventListener('ican-open-resume-tab', openResumeTab);
+    return () => window.removeEventListener('ican-open-resume-tab', openResumeTab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const openSearchOverlay = () => {
     closeHeaderPanels();
     setSelectedDetail(null);
