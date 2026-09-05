@@ -72,6 +72,10 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
   const [isCalling, setIsCalling] = useState(false); // host is ringing members
   const [callingTimer, setCallingTimer] = useState(0); // seconds since call started
   const [remoteStreams, setRemoteStreams] = useState([]); // [{ userId, email, stream }]
+  // True when the browser blocked autoplay of a remote peer's audio (common on
+  // Chrome/Safari when playback isn't tied to a user gesture) — surfaced as a
+  // "tap to enable audio" banner instead of silently losing sound.
+  const [audioBlocked, setAudioBlocked] = useState(false);
 
   const videoRef = useRef(null);
   const meetingTimerRef = useRef(null);
@@ -88,6 +92,10 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
   const screenStreamRef = useRef(null);
   const peerConnectionsRef = useRef(new Map());
   const pendingIceCandidatesRef = useRef(new Map());
+  // Every mounted remote <audio> element, keyed by peer userId — this is the
+  // single, always-on audio output per peer (video tiles are muted; see
+  // bindRemoteAudioEl below), so retrying playback only has to walk this map.
+  const remoteAudioElsRef = useRef(new Map());
   const callingTimerRef = useRef(null);
   const onCloseRef = useRef(onClose);
   const isVideoOnRef = useRef(false);
@@ -210,11 +218,24 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
   }, [soundEnabled, soundVolume]);
 
   // Warm up/resume audio context after any user interaction so incoming call
-  // sounds can play reliably on browsers with autoplay restrictions.
+  // sounds can play reliably on browsers with autoplay restrictions. The same
+  // gesture also retries any remote peer <audio> elements the browser blocked
+  // from autoplaying, since that block is exactly what silences live calls.
   useEffect(() => {
     const unlockAudio = () => {
       if (audioServiceRef.current?.ensureReady) {
         audioServiceRef.current.ensureReady();
+      }
+
+      if (remoteAudioElsRef.current.size > 0) {
+        // Optimistic clear — a gesture is exactly what browsers require to
+        // allow unmuted playback, so this succeeds the overwhelming majority
+        // of the time. Any element that still fails re-flags the banner.
+        setAudioBlocked(false);
+        remoteAudioElsRef.current.forEach((el) => {
+          if (!el) return;
+          el.play?.()?.catch(() => setAudioBlocked(true));
+        });
       }
     };
 
@@ -764,6 +785,43 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
       videoRef.current.srcObject = stream;
     }
   }, [isVideoOn, isMicOn]);
+
+  // Callback ref for the self-preview <video> — it needs to keep working as
+  // `videoRef` for the screen-share/mic effects above, but it also now mounts
+  // in more than one place (speaker stage vs. grid tile), so it sets its own
+  // stream immediately on mount instead of waiting for the next effect run.
+  const bindLocalVideoEl = useCallback((el) => {
+    videoRef.current = el;
+    if (!el) return;
+    const stream = screenStreamRef.current || localStreamRef.current;
+    if (stream && el.srcObject !== stream) {
+      el.srcObject = stream;
+      el.play?.().catch(() => {});
+    }
+  }, []);
+
+  // Every remote peer gets exactly one <audio> element, independent of how
+  // many video tiles show that peer's stream — this is what actually fixes
+  // "audio doesn't come through": previously each visible video tile carried
+  // its own copy of the remote stream's audio track and tried to autoplay it
+  // unmuted, which browsers routinely block without a user gesture, and the
+  // failure was swallowed silently. Centralizing audio here means it plays
+  // once, reliably, regardless of which tiles are on screen.
+  const bindRemoteAudioEl = useCallback((peerUserId, el) => {
+    if (!el) {
+      remoteAudioElsRef.current.delete(peerUserId);
+      return;
+    }
+    remoteAudioElsRef.current.set(peerUserId, el);
+    const stream = getRemoteStreamByUserId(peerUserId);
+    if (stream && el.srcObject !== stream) {
+      el.srcObject = stream;
+    }
+    const playResult = el.play?.();
+    if (playResult?.catch) {
+      playResult.catch(() => setAudioBlocked(true));
+    }
+  }, [getRemoteStreamByUserId]);
 
   const replaceOutgoingVideoTrack = useCallback(async (videoTrack, ssStream = null) => {
     if (!videoTrack) return;
@@ -1911,21 +1969,109 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
   }
 
   // Live meeting screen
+  // Gallery ("smart grid") mode kicks in whenever nobody has been singled out
+  // and nobody (including you) is presenting — it tiles everyone evenly,
+  // Meet/Zoom-style, instead of the old "your camera is the main stage, plus
+  // a cramped thumbnail strip" layout that stopped scaling past 2-3 people.
+  const showGalleryGrid = !featuredParticipantId && !isScreenSharing && connectedMembers.length > 0;
+
   return (
     <div ref={containerRef} className="w-full h-full bg-black relative overflow-hidden group sm:pb-0 pb-24">
+      {/* Remote call audio — one persistent, always-unmuted <audio> element per
+          peer, completely decoupled from which video tiles happen to be on
+          screen. Video tiles below are muted; this is the only place remote
+          audio actually plays, so it can't be silenced by a tile unmounting
+          or by three tiles fighting over the same unmuted stream. */}
+      <div className="hidden">
+        {remoteStreams.map(({ userId: peerId, stream }) => (
+          <audio key={`${peerId}:${stream?.id || ''}`} autoPlay ref={(el) => bindRemoteAudioEl(peerId, el)} />
+        ))}
+      </div>
+
+      {/* Autoplay-blocked banner — browsers routinely refuse unmuted autoplay
+          without a fresh user gesture; surface it instead of failing silently. */}
+      {audioBlocked && (
+        <button
+          onClick={() => {
+            remoteAudioElsRef.current.forEach((el) => el?.play?.()?.catch(() => {}));
+            setAudioBlocked(false);
+          }}
+          className="absolute top-3 left-1/2 -translate-x-1/2 z-[200] bg-amber-500 hover:bg-amber-400 text-black text-xs sm:text-sm font-semibold px-4 py-2 rounded-full shadow-xl flex items-center gap-2 animate-pulse"
+        >
+          <Volume2 className="w-4 h-4" />
+          Tap to enable call audio
+        </button>
+      )}
+
       <div className="w-full h-full flex flex-col">
         {/* Video Gallery Container */}
         <div className="flex-1 relative bg-black flex flex-col overflow-hidden">
-          {/* Main Video Area - Local or selected remote participant */}
+          {/* Main Video Area - Local, selected remote participant, or the full smart grid */}
           <div className="flex-1 relative bg-gradient-to-br from-slate-900 to-black flex items-center justify-center overflow-hidden">
             {/* Ambient corner glow — gives the stage a premium, "live" frame without touching the video itself */}
             <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_140px_30px_rgba(59,130,246,0.10)]"></div>
-            {featuredParticipantId ? (
+            {showGalleryGrid ? (
+              <div
+                className="w-full h-full grid gap-2 p-2 sm:p-4 overflow-y-auto content-start sm:content-center"
+                style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gridAutoRows: 'minmax(120px, 1fr)' }}
+              >
+                {/* Self tile */}
+                <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-slate-700 to-slate-800 border border-white/10">
+                  {(isVideoOn) ? (
+                    <video ref={bindLocalVideoEl} autoPlay playsInline muted className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <VideoOff className="w-8 h-8 text-red-400" />
+                    </div>
+                  )}
+                  <div className="absolute bottom-1.5 left-1.5 bg-black/70 backdrop-blur-md px-2 py-1 rounded-lg flex items-center gap-1.5 border border-white/10">
+                    <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isMicOn ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                    <span className="text-white text-xs font-semibold">You</span>
+                  </div>
+                </div>
+
+                {/* Remote tiles */}
+                {connectedMembers.map((member, idx) => {
+                  const stream = getRemoteStreamByUserId(member?.userId);
+                  return (
+                    <button
+                      key={member?.userId || idx}
+                      onClick={() => setFeaturedParticipantId(member?.userId)}
+                      className={`relative rounded-xl overflow-hidden bg-gradient-to-br ${memberTileVariant(member?.email || member?.userId || String(idx))} border flex items-center justify-center shadow-lg hover:shadow-2xl transition-all ${activeScreenSharerId === member?.userId ? 'ring-2 ring-emerald-400/80' : 'border-white/10'}`}
+                      title="Focus this participant"
+                    >
+                      {stream ? (
+                        <video
+                          autoPlay
+                          playsInline
+                          muted
+                          ref={(el) => {
+                            if (!el || el.srcObject === stream) return;
+                            el.srcObject = stream;
+                            el.play?.().catch(() => {});
+                          }}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-white font-bold text-2xl">{member?.email?.charAt(0)?.toUpperCase() || '?'}</span>
+                      )}
+                      <div className="absolute bottom-1.5 left-1.5 right-1.5 bg-black/70 backdrop-blur-md px-2 py-1 rounded-lg flex items-center gap-1.5 border border-white/10">
+                        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${member.micOn ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                        <span className="text-white text-xs font-semibold truncate">{member?.email?.split('@')[0] || 'Participant'}</span>
+                        {activeScreenSharerId === member?.userId && (
+                          <span className="text-[9px] uppercase tracking-wide text-emerald-300 ml-auto flex-shrink-0">Live</span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : featuredParticipantId ? (
               featuredRemoteStream ? (
                 <video
                   autoPlay
                   playsInline
-                    muted={false}
+                  muted
                   ref={(el) => {
                     if (!el || !featuredRemoteStream) return;
                     if (el.srcObject !== featuredRemoteStream) {
@@ -1951,7 +2097,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
                 </div>
               )
             ) : (isVideoOn || isScreenSharing) ? (
-              <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+              <video ref={bindLocalVideoEl} autoPlay playsInline muted className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center p-4">
                 <div className="text-center">
@@ -1960,8 +2106,8 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
                   </div>
                   <p className="hidden sm:block text-lg sm:text-3xl text-white font-bold mb-2">Camera Disabled</p>
                   <p className="hidden sm:block text-gray-400 text-sm sm:text-lg mb-4 sm:mb-6">Enable camera to be visible</p>
-                  <button 
-                    onClick={toggleVideo} 
+                  <button
+                    onClick={toggleVideo}
                     className="px-6 sm:px-8 py-2 sm:py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg sm:rounded-xl font-bold transition-all flex items-center gap-2 sm:gap-3 mx-auto text-sm sm:text-base"
                   >
                     <Video className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -1972,20 +2118,22 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
             )}
 
             {/* Main Stage Badge */}
-            <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-lg flex items-center gap-2 border border-white/20 shadow-lg shadow-black/40 max-w-[70%]">
-              <div className="relative w-2 h-2 flex-shrink-0">
-                <div className="absolute inset-0 rounded-full bg-green-500"></div>
-                <div className="absolute -inset-1 rounded-full bg-green-500/50 animate-ping"></div>
+            {!showGalleryGrid && (
+              <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-lg flex items-center gap-2 border border-white/20 shadow-lg shadow-black/40 max-w-[70%]">
+                <div className="relative w-2 h-2 flex-shrink-0">
+                  <div className="absolute inset-0 rounded-full bg-green-500"></div>
+                  <div className="absolute -inset-1 rounded-full bg-green-500/50 animate-ping"></div>
+                </div>
+                <span className="text-xs sm:text-sm text-white font-semibold truncate">
+                  {featuredParticipantId ? (featuredRemoteMember?.email?.split('@')[0] || 'Participant') : 'You'}
+                </span>
+                {(activeScreenSharerId && (activeScreenSharerId === featuredParticipantId || (!featuredParticipantId && activeScreenSharerId === userId))) && (
+                  <span className="text-[10px] sm:text-xs uppercase tracking-wide text-emerald-300">Presenting</span>
+                )}
               </div>
-              <span className="text-xs sm:text-sm text-white font-semibold truncate">
-                {featuredParticipantId ? (featuredRemoteMember?.email?.split('@')[0] || 'Participant') : 'You'}
-              </span>
-              {(activeScreenSharerId && (activeScreenSharerId === featuredParticipantId || (!featuredParticipantId && activeScreenSharerId === userId))) && (
-                <span className="text-[10px] sm:text-xs uppercase tracking-wide text-emerald-300">Presenting</span>
-              )}
-            </div>
+            )}
 
-            {featuredParticipantId && (isVideoOn || isScreenSharing) && (
+            {!showGalleryGrid && featuredParticipantId && (isVideoOn || isScreenSharing) && (
               <button
                 onClick={() => setFeaturedParticipantId(null)}
                 className="absolute bottom-3 right-3 w-20 h-14 sm:w-28 sm:h-20 rounded-xl overflow-hidden border border-white/20 bg-black/50 backdrop-blur-md shadow-xl"
@@ -2029,8 +2177,8 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
             </div>
           </div>
 
-          {/* Participants Gallery - Compact on mobile to keep video area dominant */}
-          {connectedMembers && connectedMembers.length > 0 && (
+          {/* Participants Gallery - Compact thumbnail strip, only used in speaker mode (grid mode already shows everyone above) */}
+          {!showGalleryGrid && connectedMembers && connectedMembers.length > 0 && (
             <div className="h-16 sm:h-32 bg-black/75 border-t border-slate-700/50 overflow-x-auto flex gap-2 p-2 backdrop-blur-sm">
               {connectedMembers.map((member, idx) => (
                 <button
@@ -2043,7 +2191,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
                     <video
                       autoPlay
                       playsInline
-                      muted={false}
+                      muted
                       ref={(el) => {
                         if (!el) return;
                         const stream = getRemoteStreamByUserId(member?.userId);
@@ -2057,7 +2205,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
                   ) : (
                     <span className="text-white font-bold text-sm sm:text-2xl">{member?.email?.charAt(0).toUpperCase()}</span>
                   )}
-                  
+
                   {/* Member Status Indicators */}
                   <div className="absolute top-1 right-1 flex gap-0.5">
                     {member.videoOn && (
@@ -2270,58 +2418,6 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
             </div>
           )}
 
-          {/* Participants Sidebar - Right - Shows connected members with status */}
-          <div className="absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-black/40 to-transparent flex flex-col py-6 gap-3 px-2 overflow-y-auto transition-opacity duration-300 opacity-0 group-hover:opacity-100">
-            {connectedMembers && connectedMembers.length > 0 ? (
-              connectedMembers.map((member, idx) => (
-                <div key={idx} className="w-full aspect-square bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg hover:shadow-2xl transition-all cursor-pointer transform hover:scale-110 relative group/member">
-                  {getRemoteStreamByUserId(member?.userId) ? (
-                    <video
-                      autoPlay
-                      playsInline
-                      muted
-                      ref={(el) => {
-                        if (!el) return;
-                        const stream = getRemoteStreamByUserId(member?.userId);
-                        if (stream && el.srcObject !== stream) {
-                          el.srcObject = stream;
-                        }
-                      }}
-                      className="w-full h-full object-cover rounded-xl"
-                    />
-                  ) : (
-                    <span className="text-white font-bold text-lg">{member?.email?.charAt(0).toUpperCase()}</span>
-                  )}
-                  
-                  {/* Status indicators */}
-                  <div className="absolute bottom-1 right-1 flex gap-0.5">
-                    {member.videoOn && (
-                      <div className="w-2 h-2 bg-blue-300 rounded-full" title="Video on"></div>
-                    )}
-                    {member.micOn && (
-                      <div className="w-2 h-2 bg-green-300 rounded-full" title="Mic on"></div>
-                    )}
-                  </div>
-
-                  <div className="absolute inset-0 rounded-xl opacity-0 group-hover/member:opacity-100 transition-opacity">
-                    <div className="w-full h-full bg-black/60 backdrop-blur-sm rounded-xl flex flex-col items-center justify-center p-1">
-                      <span className="text-white text-xs text-center font-semibold break-words">{member?.email?.split('@')[0]}</span>
-                      <div className="text-xs text-gray-300 mt-1">
-                        {member.videoOn ? '📹' : '🔴'} {member.micOn ? '🎤' : '🔇'}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="w-full h-20 flex items-center justify-center">
-                <div className="text-center">
-                  <Users className="w-6 h-6 text-gray-500 mx-auto mb-1" />
-                  <p className="text-xs text-gray-500">No members</p>
-                </div>
-              </div>
-            )}
-          </div>
         </div>
       </div>
 
