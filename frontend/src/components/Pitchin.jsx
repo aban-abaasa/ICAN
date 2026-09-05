@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { ThumbsUp, MessageCircle, Share2, Clock, Users, FileText, Zap, AlertCircle, Building2, Loader, Plus, Trash2, Lock, Unlock, X, Send, Copy, Check, Play, Home, BookMarked, Heart, Briefcase, Bell, Search, ShoppingBag } from 'lucide-react';
+import { ThumbsUp, MessageCircle, Share2, Clock, Users, FileText, Zap, AlertCircle, Building2, Loader, Plus, Trash2, Lock, Unlock, X, Send, Copy, Check, Play, Home, BookMarked, Heart, Briefcase, Bell, Search, ShoppingBag, Download } from 'lucide-react';
+import DiamondLoader from './DiamondLoader';
 import PitchVideoRecorder from './PitchVideoRecorder';
 import SmartContractGenerator from './SmartContractGenerator';
 import ShareSigningFlow from './ShareSigningFlow';
@@ -45,7 +46,7 @@ import {
 } from '../services/pitchInteractionsService';
 import { getUserNotifications } from '../services/investmentNotificationsService';
 import { getLiveShareOffer } from '../services/pitchinValuationService';
-import { resolveMediaValue } from '../services/r2StorageService';
+import { resolveMediaValue, resolveDownloadUrl } from '../services/r2StorageService';
 import { getBusinessStorefronts } from '../services/dropshipService';
 
 // Why an Invest tap can't open the signing flow. Each case is a missing piece
@@ -103,6 +104,8 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
   // Investment Progress" button in the viewing-pitcher banner below.
   const [viewingPitcherOwnAgreement, setViewingPitcherOwnAgreement] = useState(null);
   const [videoErrors, setVideoErrors] = useState({});
+  const [bufferingPitches, setBufferingPitches] = useState(new Set()); // pitch ids whose video is currently buffering
+  const [downloadingPitchId, setDownloadingPitchId] = useState(null);
   const [businessProfiles, setBusinessProfiles] = useState([]);
   const [currentBusinessProfile, setCurrentBusinessProfile] = useState(null);
   const [showBusinessForm, setShowBusinessForm] = useState(false);
@@ -1013,7 +1016,45 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
     }
   };
 
+  // A video entering a stall (start of load, seek, or a mid-playback rebuffer)
+  // shows the diamond loader over it; leaving one clears it. Used as the
+  // onLoadStart/onWaiting vs onCanPlay/onPlaying pair on every pitch <video>.
+  const markVideoBuffering = (pitchId) => {
+    setBufferingPitches(prev => (prev.has(pitchId) ? prev : new Set(prev).add(pitchId)));
+  };
+  const clearVideoBuffering = (pitchId) => {
+    setBufferingPitches(prev => {
+      if (!prev.has(pitchId)) return prev;
+      const next = new Set(prev);
+      next.delete(pitchId);
+      return next;
+    });
+  };
+
+  // Downloads carry the same burned-in IcanEra mark as playback, since the
+  // watermark is baked into the video's pixels at upload time (see
+  // PitchVideoRecorder + utils/videoWatermark) rather than overlaid live.
+  const handleDownloadVideo = async (pitch) => {
+    if (!pitch?.video_url || downloadingPitchId === pitch.id) return;
+    setDownloadingPitchId(pitch.id);
+    try {
+      const safeTitle = (pitch.title || 'IcanEra-Pitch').replace(/[^a-z0-9-_ ]/gi, '').trim() || 'IcanEra-Pitch';
+      const downloadUrl = await resolveDownloadUrl(pitch.video_url, `${safeTitle}.webm`);
+      if (!downloadUrl) {
+        alert('Could not prepare this video for download right now. Please try again.');
+        return;
+      }
+      window.open(downloadUrl, '_blank', 'noopener');
+    } catch (error) {
+      console.error('Error downloading video:', error);
+      alert('Could not download this video right now. Please try again.');
+    } finally {
+      setDownloadingPitchId(null);
+    }
+  };
+
   const handleVideoError = (pitchId, event) => {
+    clearVideoBuffering(pitchId);
     console.error(`❌ Video failed to load for pitch ${pitchId}`);
     const errorCode = event?.target?.error?.code;
     const errorMessage = event?.target?.error?.message || 'Unknown error';
@@ -1427,40 +1468,10 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
                   </div>
                 </div>
 
-                <div className="relative z-10 text-center space-y-6 px-4">
-                  <div className="flex justify-center mb-6">
-                    <div className="relative">
-                      <Briefcase className="w-24 h-24 text-white animate-pulse-slow drop-shadow-2xl" />
-                      <div className="absolute inset-0 bg-purple-500/50 blur-3xl animate-pulse"></div>
-                    </div>
-                  </div>
-                  <h1 className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-orange-400 animate-gradient-x">
-                    Pitchin
-                  </h1>
-                  <p className="text-xl text-gray-300 font-light tracking-wide animate-fade-in">
-                    Where Ideas Meet Investment
-                  </p>
-                  <div className="flex items-center justify-center gap-2 pt-4">
-                    <div className="w-3 h-3 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
-                    <div className="w-3 h-3 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                    <div className="w-3 h-3 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
-                  </div>
-                  <p className="text-sm text-gray-400 animate-pulse">
-                    Loading amazing pitches...
-                  </p>
-                  <div className="grid grid-cols-3 gap-4 mt-8 max-w-md mx-auto">
-                    <div className="bg-white/5 backdrop-blur-sm rounded-lg p-3 border border-white/10 animate-fade-in" style={{ animationDelay: '0.3s' }}>
-                      <div className="text-2xl font-bold text-purple-400">100+</div>
-                      <div className="text-xs text-gray-400">Pitches</div>
-                    </div>
-                    <div className="bg-white/5 backdrop-blur-sm rounded-lg p-3 border border-white/10 animate-fade-in" style={{ animationDelay: '0.6s' }}>
-                      <div className="text-2xl font-bold text-pink-400">50+</div>
-                      <div className="text-xs text-gray-400">Investors</div>
-                    </div>
-                    <div className="bg-white/5 backdrop-blur-sm rounded-lg p-3 border border-white/10 animate-fade-in" style={{ animationDelay: '0.9s' }}>
-                      <div className="text-2xl font-bold text-orange-400">$1M+</div>
-                      <div className="text-xs text-gray-400">Funded</div>
-                    </div>
+                <div className="relative z-10 text-center px-4">
+                  <div className="relative inline-block">
+                    <DiamondLoader size={168} />
+                    <div className="absolute inset-0 bg-purple-500/50 blur-3xl animate-pulse -z-10"></div>
                   </div>
                 </div>
 
@@ -1491,7 +1502,16 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
                         playsInline
                         onError={(event) => handleVideoError(pitch.id, event)}
                         onLoadedMetadata={(event) => handleVideoLoadedMetadata(pitch.id, event)}
+                        onLoadStart={() => markVideoBuffering(pitch.id)}
+                        onWaiting={() => markVideoBuffering(pitch.id)}
+                        onPlaying={() => clearVideoBuffering(pitch.id)}
+                        onCanPlay={() => clearVideoBuffering(pitch.id)}
                       />
+                    )}
+                    {bufferingPitches.has(pitch.id) && !videoErrors[pitch.id] && (
+                      <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none bg-black/20">
+                        <DiamondLoader size={52} />
+                      </div>
                     )}
                   </div>
 
@@ -1547,6 +1567,21 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
                           <Share2 className="w-4 h-4 text-white drop-shadow-lg" />
                         </div>
                         <span className="text-white text-[9px] font-bold drop-shadow-lg">{pitch.shares_count || 0}</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleDownloadVideo(pitch)}
+                        disabled={downloadingPitchId === pitch.id}
+                        className="icon-btn-transparent flex flex-col items-center gap-0.5"
+                        title="Download"
+                      >
+                        <div className="w-9 h-9 flex items-center justify-center transition-all">
+                          {downloadingPitchId === pitch.id ? (
+                            <DiamondLoader size={18} />
+                          ) : (
+                            <Download className="w-4 h-4 text-white drop-shadow-lg" />
+                          )}
+                        </div>
                       </button>
 
                       {storefrontsByBusiness.has(pitch.business_profile_id) && (
@@ -2053,51 +2088,10 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
                   </div>
 
                   {/* Center Content */}
-                  <div className="relative z-10 text-center space-y-6 px-4">
-                    {/* Logo with Glow */}
-                    <div className="flex justify-center mb-6">
-                      <div className="relative">
-                        <Briefcase className="w-24 h-24 text-white animate-pulse-slow drop-shadow-2xl" />
-                        <div className="absolute inset-0 bg-purple-500/50 blur-3xl animate-pulse"></div>
-                      </div>
-                    </div>
-
-                    {/* Pitchin Text */}
-                    <h1 className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-orange-400 animate-gradient-x">
-                      Pitchin
-                    </h1>
-                    
-                    {/* Tagline */}
-                    <p className="text-xl text-gray-300 font-light tracking-wide animate-fade-in">
-                      Where Ideas Meet Investment
-                    </p>
-
-                    {/* Loading Animation */}
-                    <div className="flex items-center justify-center gap-2 pt-4">
-                      <div className="w-3 h-3 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
-                      <div className="w-3 h-3 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                      <div className="w-3 h-3 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
-                    </div>
-
-                    {/* Loading Text */}
-                    <p className="text-sm text-gray-400 animate-pulse">
-                      Loading amazing pitches...
-                    </p>
-
-                    {/* Floating Stats */}
-                    <div className="grid grid-cols-3 gap-4 mt-8 max-w-md mx-auto">
-                      <div className="bg-white/5 backdrop-blur-sm rounded-lg p-3 border border-white/10 animate-fade-in" style={{ animationDelay: '0.3s' }}>
-                        <div className="text-2xl font-bold text-purple-400">100+</div>
-                        <div className="text-xs text-gray-400">Pitches</div>
-                      </div>
-                      <div className="bg-white/5 backdrop-blur-sm rounded-lg p-3 border border-white/10 animate-fade-in" style={{ animationDelay: '0.6s' }}>
-                        <div className="text-2xl font-bold text-pink-400">50+</div>
-                        <div className="text-xs text-gray-400">Investors</div>
-                      </div>
-                      <div className="bg-white/5 backdrop-blur-sm rounded-lg p-3 border border-white/10 animate-fade-in" style={{ animationDelay: '0.9s' }}>
-                        <div className="text-2xl font-bold text-orange-400">$1M+</div>
-                        <div className="text-xs text-gray-400">Funded</div>
-                      </div>
+                  <div className="relative z-10 text-center px-4">
+                    <div className="relative inline-block">
+                      <DiamondLoader size={168} />
+                      <div className="absolute inset-0 bg-purple-500/50 blur-3xl animate-pulse -z-10"></div>
                     </div>
                   </div>
 
@@ -2133,7 +2127,16 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
                           playsInline
                           onError={(event) => handleVideoError(pitch.id, event)}
                           onLoadedMetadata={(event) => handleVideoLoadedMetadata(pitch.id, event)}
+                          onLoadStart={() => markVideoBuffering(pitch.id)}
+                          onWaiting={() => markVideoBuffering(pitch.id)}
+                          onPlaying={() => clearVideoBuffering(pitch.id)}
+                          onCanPlay={() => clearVideoBuffering(pitch.id)}
                         />
+                      )}
+                      {bufferingPitches.has(pitch.id) && !videoErrors[pitch.id] && (
+                        <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none bg-black/20">
+                          <DiamondLoader size={52} />
+                        </div>
                       )}
                     </div>
 
@@ -2195,6 +2198,22 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
                             <Share2 className="w-4 h-4 text-white drop-shadow-lg" />
                           </div>
                           <span className="text-white text-[9px] font-bold drop-shadow-lg">{pitch.shares_count || 0}</span>
+                        </button>
+
+                        {/* Download Button — the file already carries the burned-in IcanEra mark */}
+                        <button
+                          onClick={() => handleDownloadVideo(pitch)}
+                          disabled={downloadingPitchId === pitch.id}
+                          className="icon-btn-transparent flex flex-col items-center gap-0.5"
+                          title="Download"
+                        >
+                          <div className="w-9 h-9 flex items-center justify-center transition-all">
+                            {downloadingPitchId === pitch.id ? (
+                              <DiamondLoader size={18} />
+                            ) : (
+                              <Download className="w-4 h-4 text-white drop-shadow-lg" />
+                            )}
+                          </div>
                         </button>
 
                         {/* Invest Button */}
@@ -3228,7 +3247,16 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
                 preload="auto"
                 onError={(event) => handleVideoError(videoPlayerPitch.id, event)}
                 controlsList="nodownload"
+                onLoadStart={() => markVideoBuffering(videoPlayerPitch.id)}
+                onWaiting={() => markVideoBuffering(videoPlayerPitch.id)}
+                onPlaying={() => clearVideoBuffering(videoPlayerPitch.id)}
+                onCanPlay={() => clearVideoBuffering(videoPlayerPitch.id)}
               />
+            )}
+            {bufferingPitches.has(videoPlayerPitch.id) && !videoErrors[videoPlayerPitch.id] && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none bg-black/20">
+                <DiamondLoader size={64} />
+              </div>
             )}
           </div>
 
@@ -3274,6 +3302,22 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
               <span className="text-white text-sm font-bold drop-shadow-lg">
                 {copiedPitchId === videoPlayerPitch.id ? 'Copied!' : (videoPlayerPitch.shares_count || 0)}
               </span>
+            </button>
+
+            {/* Download Button — the file already carries the burned-in IcanEra mark */}
+            <button
+              onClick={() => handleDownloadVideo(videoPlayerPitch)}
+              disabled={downloadingPitchId === videoPlayerPitch.id}
+              className="icon-btn-transparent flex flex-col items-center gap-1"
+              title="Download"
+            >
+              <div className="w-14 h-14 flex items-center justify-center transition-all hover:scale-110">
+                {downloadingPitchId === videoPlayerPitch.id ? (
+                  <DiamondLoader size={28} />
+                ) : (
+                  <Download className="w-7 h-7 text-white drop-shadow-lg" />
+                )}
+              </div>
             </button>
 
             {/* Invest Button */}

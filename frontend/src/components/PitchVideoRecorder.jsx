@@ -5,6 +5,8 @@ import { VideoClipper } from './status/SimpleVideoClipper';
 import BusinessProfileDocuments from './BusinessProfileDocuments';
 import PitchDetailsForm from './PitchDetailsForm';
 import BusinessProfileSelector from './BusinessProfileSelector';
+import DiamondLoader from './DiamondLoader';
+import { drawIcanEraWatermark, applyWatermarkToVideoBlob } from '../utils/videoWatermark';
 
 const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', onPitchCreated, onClose, hideControls = false, onVideoRecorded, currentBusinessProfile, businessProfiles = [], onSelectProfile, onShowProfileSelector }) => {
   const videoRef = useRef(null);
@@ -40,6 +42,8 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
   const [showPitchDetailsForm, setShowPitchDetailsForm] = useState(false); // Control PitchDetailsForm visibility
   const [workflowStatus, setWorkflowStatus] = useState(''); // Show workflow status messages
   const [showMoreMenu, setShowMoreMenu] = useState(false); // Secondary controls dropdown (⋮)
+  const [isWatermarking, setIsWatermarking] = useState(false); // Re-encoding an uploaded file with the IcanEra mark
+  const [watermarkProgress, setWatermarkProgress] = useState(0);
   
   const [formData, setFormData] = useState({
     title: '',
@@ -214,6 +218,9 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                 
                 // Draw video frame
                 ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+                // Burn the IcanEra mark into this frame so it's baked into
+                // the recording MediaRecorder is capturing from this canvas.
+                drawIcanEraWatermark(ctx, canvas.width, canvas.height);
               }
             }
           } catch (e) {
@@ -336,44 +343,60 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
     }
   };
 
-  const handleUploadVideo = (e) => {
+  const handleUploadVideo = async (e) => {
     const file = e.target.files[0];
     if (file) {
       // Validate file size - maximum 100MB
       const maxUploadMB = 100;
       const fileSizeMB = file.size / 1024 / 1024;
-      
+
       if (fileSizeMB > maxUploadMB) {
         console.error(`❌ Video is ${fileSizeMB.toFixed(2)}MB, exceeds maximum ${maxUploadMB}MB`);
         alert(`❌ Video Too Large!\n\nYour video is ${fileSizeMB.toFixed(2)}MB but the maximum allowed is ${maxUploadMB}MB.\n\nPlease:\n1. Compress your video using tools like:\n   - HandBrake (free)\n   - ffmpeg (command line)\n   - Online compressors\n2. Reduce resolution or frame rate\n3. Try again with a smaller file\n\n💡 Tip: A 5-minute pitch video typically needs 50-80MB for good quality, or 20-50MB if heavily compressed`);
         return;
       }
-      
+
       // Warn if over 80MB (5-minute videos typically range from 50-80MB)
       if (fileSizeMB > 80) {
         console.warn(`⚠️ Notice: Video is ${fileSizeMB.toFixed(2)}MB. Upload may take a few minutes depending on connection speed.`);
       }
-      
+
       // Show real preview immediately for uploaded videos (skip trim dialog)
       if (file.type.startsWith('video')) {
-        const url = URL.createObjectURL(file);
+        // A file picked from the device never passed through the recorder's
+        // canvas, so it has no IcanEra mark yet — burn it in now via an
+        // offline re-encode before it ever becomes the working videoBlob.
+        setIsWatermarking(true);
+        setWatermarkProgress(0);
+        let watermarkedFile = file;
+        try {
+          watermarkedFile = await applyWatermarkToVideoBlob(file, {
+            onProgress: (fraction) => setWatermarkProgress(fraction * 100),
+          });
+        } catch (err) {
+          console.warn('⚠️ Watermarking failed, uploading original video:', err?.message);
+        } finally {
+          setIsWatermarking(false);
+        }
+
+        const url = URL.createObjectURL(watermarkedFile);
         setPreviewUrl(url);
-        setVideoBlob(file);
-        setRecordedChunks([file]);
-        
+        setVideoBlob(watermarkedFile);
+        setRecordedChunks([watermarkedFile]);
+
         // Notify parent of video blob so it persists
         if (onVideoRecorded) {
-          onVideoRecorded(file);
+          onVideoRecorded(watermarkedFile);
         }
         return;
       }
-      
+
       // For non-videos, just set directly
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
       setVideoBlob(file);
       setRecordedChunks([file]);
-      
+
       // Notify parent of video blob (not URL) so it persists
       if (onVideoRecorded) {
         onVideoRecorded(file);
@@ -758,6 +781,13 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
         {/* Full-Screen Video Container */}
         <div ref={fullscreenRef} className="relative w-full h-full bg-black overflow-hidden flex-1">
           
+          {/* Watermarking Overlay - re-encoding an uploaded file with the IcanEra mark */}
+          {isWatermarking && (
+            <div className="absolute inset-0 z-[70] bg-black/85 backdrop-blur-sm flex items-center justify-center">
+              <DiamondLoader size={72} label="Stamping your video with IcanEra…" progress={watermarkProgress} />
+            </div>
+          )}
+
           {/* Workflow Status Indicator */}
           {workflowStatus && (
             <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 bg-green-600/90 backdrop-blur-md text-white px-4 py-2 rounded-full flex items-center gap-2 shadow-lg animate-pulse">
@@ -1128,7 +1158,7 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
                 >
                   {isSubmitting ? (
                     <>
-                      <Upload className="w-5 h-5 animate-spin" />
+                      <DiamondLoader size={22} />
                       <span>Processing Your Pitch...</span>
                     </>
                   ) : (

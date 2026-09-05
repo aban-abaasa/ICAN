@@ -36,8 +36,12 @@ const ICE_SERVERS = [
   { urls: 'stun:stun1.l.google.com:19302' },
 ];
 
-const presenceChannelFor = (scope) => `ican-live-presence:${scope}`;
-const signalChannelName = (streamId) => `ican-live-signal:${streamId}`;
+// Shared prefix (not app-specific) so a scope like 'community' is the same
+// Realtime room across ICAN, digital-city-era, and mybodaguy — they already
+// share one Supabase project and one landing_messages table for chat; this
+// makes the "who's live" presence/signaling match that.
+const presenceChannelFor = (scope) => `live-presence:${scope}`;
+const signalChannelName = (streamId) => `live-signal:${streamId}`;
 
 export const useCommunityLive = ({ selfId, selfName, canBroadcast, scope = 'community' }) => {
   const [liveInfo, setLiveInfo] = useState(null); // { streamId, broadcasterId, broadcasterName, startedAt } | null
