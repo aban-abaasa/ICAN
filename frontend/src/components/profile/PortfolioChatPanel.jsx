@@ -114,7 +114,10 @@ export default function PortfolioChatPanel({ ownerUserId, ownerName, guestId, gu
   return (
     <div className="mb-6 rounded-xl border border-slate-800 bg-slate-900/80 overflow-hidden animate-fadeIn">
       <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800 bg-slate-900/90">
-        <p className="text-sm font-semibold text-white">Message {ownerName?.split(' ')[0] || ''}</p>
+        <div>
+          <p className="text-sm font-semibold text-white">Message {ownerName?.split(' ')[0] || ''}</p>
+          <p className="text-[10px] text-slate-500">Messages disappear after 24h unless kept</p>
+        </div>
         <button onClick={onClose} className="p-1 rounded hover:bg-white/5">
           <X className="w-4 h-4 text-slate-400" />
         </button>

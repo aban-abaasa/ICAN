@@ -51,8 +51,17 @@ export const getUploadUrl = async ({ key, contentType, expiresIn = UPLOAD_URL_EX
   return getSignedUrl(s3Client, command, { expiresIn });
 };
 
-export const getDownloadUrl = async ({ key, expiresIn = DOWNLOAD_URL_EXPIRY_SECONDS }) => {
-  const command = new GetObjectCommand({ Bucket: BUCKET, Key: key });
+export const getDownloadUrl = async ({ key, expiresIn = DOWNLOAD_URL_EXPIRY_SECONDS, filename }) => {
+  const command = new GetObjectCommand({
+    Bucket: BUCKET,
+    Key: key,
+    // Only set when the caller wants a forced "Save As" download (e.g. a
+    // chat attachment's Download button) — R2/S3 honors this regardless of
+    // cross-origin, unlike an <a download> attribute, which browsers ignore
+    // for a cross-origin href. Omitted for every other caller (image/video
+    // preview resolution etc.) so those keep displaying inline as today.
+    ...(filename ? { ResponseContentDisposition: `attachment; filename="${sanitizeFilename(filename)}"` } : {}),
+  });
   return getSignedUrl(s3Client, command, { expiresIn });
 };
 

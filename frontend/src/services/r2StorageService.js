@@ -157,6 +157,36 @@ export const resolveMediaValue = async (value) => {
 };
 
 /**
+ * Resolve an r2:// value to a URL that forces a "Save As" download (R2's
+ * ResponseContentDisposition, honored even cross-origin — unlike an
+ * <a download> attribute) instead of the browser rendering it inline.
+ * Separate from resolveMediaValue/resolveMediaValues, which stay plain
+ * inline-viewable URLs for every existing preview use (images, avatars,
+ * statuses, ...). A legacy non-r2:// URL is returned as-is since there's no
+ * backend route to re-sign it with a forced disposition.
+ */
+export const resolveDownloadUrl = async (value, filename) => {
+  if (!isR2Key(value)) return value;
+  const backendUrl = getBackendUrl();
+  try {
+    const res = await fetch(`${backendUrl}/api/storage/presign-download`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: fromR2Value(value), filename }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data?.success) {
+      console.warn('Could not resolve forced-download URL:', data?.error);
+      return null;
+    }
+    return data.url;
+  } catch (error) {
+    console.warn('Could not resolve forced-download URL:', error.message);
+    return null;
+  }
+};
+
+/**
  * Delete an object from R2. Only the owning user (embedded in the key as
  * folder/{userId}/...) can delete it — enforced server-side.
  * @param {Object} params

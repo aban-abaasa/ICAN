@@ -7,6 +7,7 @@ import {
 import { fmtRelativeTime } from '../landing/relativeTime';
 import { getOrCreatePortfolioGuestId } from '../../utils/portfolioGuestId';
 import PortfolioChatPanel from './PortfolioChatPanel';
+import PortfolioMessagesInbox from './PortfolioMessagesInbox';
 import { getPublicPortfolio } from '../../services/portfolioService';
 import { useAuth } from '../../context/AuthContext';
 import { useDirectCall } from '../../hooks/useDirectCall';
@@ -322,18 +323,28 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
             {/* Owner's own live Updates (24h status posts) — scoped server-side
                 to this profile's user_id, and RLS further restricts a
                 non-owner viewer to visibility='public' rows only, so this can
-                only ever show updates that belong to this profile's owner. */}
-            {data.statuses?.length > 0 && (
+                only ever show updates that belong to this profile's owner.
+                When the owner is looking at their own page, their direct-
+                message inbox (PortfolioMessagesInbox — same component used
+                in the dashboard's My Resume tab) sits alongside it in the
+                same row, so they don't have to leave this page to see
+                messages visitors have sent them here. */}
+            {(data.statuses?.length > 0 || isOwnProfile) && (
               <div
-                className="mb-8 animate-fadeInUp"
+                className={`mb-8 animate-fadeInUp ${isOwnProfile ? 'grid grid-cols-1 sm:grid-cols-2 gap-4 items-start' : ''}`}
                 style={{ animationDelay: '0.07s', animationFillMode: 'backwards' }}
               >
-                <SectionHeading>Recent Updates</SectionHeading>
-                <div className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory">
-                  {data.statuses.map((status) => (
-                    <StatusCard key={status.id} status={status} />
-                  ))}
-                </div>
+                {data.statuses?.length > 0 && (
+                  <div>
+                    <SectionHeading>Recent Updates</SectionHeading>
+                    <div className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory">
+                      {data.statuses.map((status) => (
+                        <StatusCard key={status.id} status={status} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {isOwnProfile && <PortfolioMessagesInbox userId={data.profile.id} />}
               </div>
             )}
 

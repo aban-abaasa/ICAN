@@ -83,6 +83,11 @@ export async function startConversation(ownerUserId, { guestId, guestName } = {}
   return data;
 }
 
+// Used by both sides — a signed-in caller needs no guestId at all (the
+// owner's dashboard calls this too, not just the public-page visitor
+// panel), since it also opportunistically sweeps this conversation's
+// expired, not-kept messages (see ADD_PORTFOLIO_MESSAGE_EXPIRY.sql), which
+// a plain table SELECT wouldn't do.
 export async function getConversationMessages(conversationId, { guestId } = {}) {
   const { data, error } = await supabase.rpc('get_portfolio_conversation_messages', {
     p_conversation_id: conversationId,
@@ -117,16 +122,6 @@ export async function listMyConversations() {
   return data || [];
 }
 
-export async function getConversationMessagesDirect(conversationId) {
-  const { data, error } = await supabase
-    .from('portfolio_messages')
-    .select('*')
-    .eq('conversation_id', conversationId)
-    .order('created_at', { ascending: true });
-  if (error) throw error;
-  return data || [];
-}
-
 export async function sendOwnerMessage(conversationId, { body, attachment } = {}) {
   return sendMessage(conversationId, { body, attachment });
 }
@@ -134,6 +129,15 @@ export async function sendOwnerMessage(conversationId, { body, attachment } = {}
 export async function markConversationRead(conversationId) {
   const { error } = await supabase.rpc('mark_portfolio_conversation_read', { p_conversation_id: conversationId });
   if (error) throw error;
+}
+
+/** Owner-only: exempt one message from the 24h auto-delete (or put it back
+ * on the clock). Works on a message either side sent, not just the
+ * owner's own — e.g. keeping a client's contact details. */
+export async function setMessageKept(messageId, keep) {
+  const { data, error } = await supabase.rpc('keep_portfolio_message', { p_message_id: messageId, p_keep: keep });
+  if (error) throw error;
+  return data;
 }
 
 export function subscribeToConversationMessages(conversationId, onInsert) {

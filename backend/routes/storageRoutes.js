@@ -195,6 +195,33 @@ router.post('/presign-get-batch', async (req, res) => {
 });
 
 /**
+ * POST /api/storage/presign-download
+ * Body: { key, filename }
+ * No auth required — same reasoning as presign-get-batch (keys are
+ * unguessable, backend-generated paths). Kept separate from
+ * presign-get-batch rather than adding a filename option there, since that
+ * route is the shared preview-resolution path used everywhere else in the
+ * app and must keep resolving to a plain inline-viewable URL. This one
+ * forces a "Save As" download instead (R2/S3's ResponseContentDisposition,
+ * which — unlike an <a download> attribute — browsers honor even
+ * cross-origin), for a chat attachment's Download button.
+ */
+router.post('/presign-download', async (req, res) => {
+  try {
+    const { key, filename } = req.body || {};
+    if (!key) {
+      return res.status(400).json({ success: false, error: 'key is required' });
+    }
+
+    const url = await r2.getDownloadUrl({ key, filename: filename || 'download' });
+    return res.json({ success: true, url });
+  } catch (error) {
+    console.error('Error creating presigned download URL:', error);
+    return res.status(500).json({ success: false, error: 'Failed to create download URL' });
+  }
+});
+
+/**
  * DELETE /api/storage/object
  * Body: { key }
  * Keys are namespaced folder/{userId}/... — only the owning user may delete.
