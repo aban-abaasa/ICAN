@@ -1445,27 +1445,16 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                   <button onClick={() => setSelectedThreadId(null)} className="flex-shrink-0 underline">Cancel</button>
                 </div>
               )}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 {voicePhase === 'recording' ? (
-                  <div className={`flex flex-1 items-center gap-2 rounded-xl border px-3 py-2 ${dark ? 'border-red-500/30 bg-red-500/10' : 'border-red-300 bg-red-50'}`}>
+                  <div className={`flex min-w-0 flex-1 items-center gap-1.5 rounded-xl border px-2.5 py-2 ${dark ? 'border-red-500/30 bg-red-500/10' : 'border-red-300 bg-red-50'}`}>
                     <span className="h-2 w-2 flex-shrink-0 animate-pulse rounded-full bg-red-500" />
                     <span className="flex-shrink-0 text-xs font-mono tabular-nums text-red-400">{formatVoiceDuration(voiceElapsed)}</span>
-                    <span className={`flex-1 truncate text-xs ${dark ? 'text-slate-400' : 'text-slate-500'}`}>Recording voice note…</span>
-                    <button onClick={cancelVoiceRecording} className="flex-shrink-0 rounded-full p-1 hover:bg-black/10" title="Discard">
-                      <Trash2 className="h-4 w-4 text-slate-400" />
-                    </button>
+                    <span className={`min-w-0 flex-1 truncate text-xs ${dark ? 'text-slate-400' : 'text-slate-500'}`}>Recording voice note…</span>
                   </div>
                 ) : voicePhase === 'preview' || voicePhase === 'uploading' ? (
-                  <div className={`flex flex-1 items-center gap-2 rounded-xl border px-3 py-2 ${dark ? 'border-slate-700/50 bg-white/5' : 'border-slate-200 bg-slate-50'}`}>
-                    <VoiceNotePlayer url={voicePreviewUrl} tint={dark ? 'white' : 'cyan'} className="flex-1" />
-                    <button
-                      onClick={cancelVoiceRecording}
-                      disabled={voicePhase === 'uploading'}
-                      className="flex-shrink-0 rounded-full p-1 hover:bg-black/10 disabled:opacity-40"
-                      title="Delete"
-                    >
-                      <Trash2 className="h-4 w-4 text-slate-400" />
-                    </button>
+                  <div className={`flex min-w-0 flex-1 items-center gap-1.5 rounded-xl border px-2.5 py-2 ${dark ? 'border-slate-700/50 bg-white/5' : 'border-slate-200 bg-slate-50'}`}>
+                    <VoiceNotePlayer url={voicePreviewUrl} tint={dark ? 'white' : 'cyan'} className="min-w-0 flex-1" />
                   </div>
                 ) : (
                   <textarea
@@ -1494,6 +1483,16 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                     title="Go live to Community"
                   >
                     <Radio className="h-3.5 w-3.5" /> Live
+                  </button>
+                )}
+                {(voicePhase === 'recording' || voicePhase === 'preview' || voicePhase === 'uploading') && (
+                  <button
+                    onClick={cancelVoiceRecording}
+                    disabled={voicePhase === 'uploading'}
+                    className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full hover:bg-black/10 disabled:opacity-40"
+                    title="Delete"
+                  >
+                    <Trash2 className="h-4 w-4 text-slate-400" />
                   </button>
                 )}
                 {voicePhase === 'recording' ? (
