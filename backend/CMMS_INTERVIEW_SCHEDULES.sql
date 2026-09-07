@@ -133,7 +133,7 @@ BEGIN
     v_schedule.duration_minutes,
     v_schedule.status,
     v_application.applicant_name,
-    (SELECT company_name FROM public.cmms_company_profiles WHERE id = v_schedule.cmms_company_id),
+    (SELECT cp.company_name FROM public.cmms_company_profiles cp WHERE cp.id = v_schedule.cmms_company_id),
     v_application.ican_user_id,
     -- Interviewer {id, email, name} list, for LiveBoardroom's `members` prop
     -- (initial participant display before presence populates it) -- an
