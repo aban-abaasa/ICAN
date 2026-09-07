@@ -813,7 +813,17 @@ const CMMSAnnouncementsPanel = ({
 const ApplicationRow = ({ application, saving, onSave, companyId, companyStaff, currentCmmsUserId, onIssueDocuments }) => {
   const [status, setStatus] = useState(application.status);
   const [note, setNote] = useState(application.status_note || '');
+  const [pipelineAction, setPipelineAction] = useState(null);
   const dirty = status !== application.status || note !== (application.status_note || '');
+
+  // Picking "Written test" or "Interview" from the status dropdown isn't
+  // just a label -- it should open the actual page for doing that step,
+  // instead of leaving the admin to separately notice the buttons below.
+  const changeStatus = (nextStatus) => {
+    setStatus(nextStatus);
+    if (nextStatus === 'written_test') setPipelineAction('test');
+    else if (nextStatus === 'interview') setPipelineAction('interview');
+  };
 
   return (
     <div className="glass-card p-4 border border-white/10">
@@ -839,7 +849,7 @@ const ApplicationRow = ({ application, saving, onSave, companyId, companyStaff, 
           </div>
         </div>
         <div className="flex flex-col gap-2 min-w-[220px]">
-          <select value={status} onChange={(e) => setStatus(e.target.value)} className="text-sm rounded bg-slate-900 border border-white/20 px-2 py-1.5 text-white">
+          <select value={status} onChange={(e) => changeStatus(e.target.value)} className="text-sm rounded bg-slate-900 border border-white/20 px-2 py-1.5 text-white">
             {applicationStatusOptions.map((opt) => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
           </select>
           <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note visible to applicant on follow-up (optional)" rows={2} className="text-xs rounded bg-white/10 border border-white/20 px-2 py-1.5 text-white" />
@@ -859,6 +869,8 @@ const ApplicationRow = ({ application, saving, onSave, companyId, companyStaff, 
         companyStaff={companyStaff}
         currentCmmsUserId={currentCmmsUserId}
         onIssueDocuments={onIssueDocuments}
+        openAction={pipelineAction}
+        onActionOpened={() => setPipelineAction(null)}
       />
     </div>
   );
@@ -872,15 +884,26 @@ const ApplicationRow = ({ application, saving, onSave, companyId, companyStaff, 
  * appointment letter/contract. Admin can trigger any of these at any point
  * (a flexible pipeline, not a rigid gate).
  */
-const ApplicationPipelineControls = ({ application, companyId, companyStaff, currentCmmsUserId, onIssueDocuments }) => {
+const ApplicationPipelineControls = ({ application, companyId, companyStaff, currentCmmsUserId, onIssueDocuments, openAction, onActionOpened }) => {
   const [tests, setTests] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [interviews, setInterviews] = useState([]);
   const [sendingTestId, setSendingTestId] = useState(null);
   const [copiedLink, setCopiedLink] = useState('');
+  const [showTestPicker, setShowTestPicker] = useState(false);
   const [showScheduler, setShowScheduler] = useState(false);
   const [scheduleForm, setScheduleForm] = useState({ scheduledAt: '', durationMinutes: 30, interviewerIds: [], notes: '' });
   const [scheduling, setScheduling] = useState(false);
+
+  // Picking "Written test" or "Interview" from the status dropdown above
+  // opens the matching panel directly, instead of leaving the admin to find
+  // the right button on their own -- a clear next step for each stage.
+  useEffect(() => {
+    if (!openAction) return;
+    if (openAction === 'test') setShowTestPicker(true);
+    if (openAction === 'interview') setShowScheduler(true);
+    onActionOpened?.();
+  }, [openAction, onActionOpened]);
 
   const loadPipeline = async () => {
     if (application.job_posting_id) {
@@ -907,6 +930,7 @@ const ApplicationPipelineControls = ({ application, companyId, companyStaff, cur
     const result = await cmmsWrittenTestService.assignTestToApplication(test.id, application, currentCmmsUserId);
     setSendingTestId(null);
     if (!result.success) { alert(`❌ ${result.error}`); return; }
+    setShowTestPicker(false);
     await loadPipeline();
     await copyLink(cmmsWrittenTestService.buildCandidateTestLink(result.accessToken));
   };
@@ -937,20 +961,9 @@ const ApplicationPipelineControls = ({ application, companyId, companyStaff, cur
 
   return (
     <div className="mt-4 pt-3 border-t border-white/10 flex flex-wrap items-center gap-2">
-      {tests.length > 0 && (
-        <div className="relative group">
-          <button className="px-3 py-1.5 rounded bg-indigo-600/80 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5">
-            <ClipboardList className="w-3.5 h-3.5" /> Send written test
-          </button>
-          <div className="hidden group-hover:block absolute z-10 mt-1 min-w-[200px] rounded bg-slate-900 border border-white/20 shadow-xl">
-            {tests.map((test) => (
-              <button key={test.id} disabled={sendingTestId === test.id} onClick={() => sendTest(test)} className="block w-full text-left px-3 py-2 text-xs text-white hover:bg-white/10">
-                {sendingTestId === test.id ? 'Sending…' : test.title}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      <button onClick={() => setShowTestPicker((v) => !v)} className="px-3 py-1.5 rounded bg-indigo-600/80 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5">
+        <ClipboardList className="w-3.5 h-3.5" /> Send written test
+      </button>
 
       <button onClick={() => setShowScheduler((v) => !v)} className="px-3 py-1.5 rounded bg-sky-600/80 hover:bg-sky-500 text-white text-xs font-semibold flex items-center gap-1.5">
         <Video className="w-3.5 h-3.5" /> Schedule live interview
@@ -983,8 +996,36 @@ const ApplicationPipelineControls = ({ application, companyId, companyStaff, cur
         </div>
       ))}
 
+      {showTestPicker && (
+        <div className="w-full mt-2 p-3 rounded bg-white/5 border border-white/10 space-y-2">
+          <p className="text-sm font-semibold text-white">Send a written test</p>
+          {tests.length === 0 ? (
+            <p className="text-xs text-gray-400">
+              No published written test for this job yet. Go to the <span className="text-white font-medium">Posts</span> tab and use the <span className="text-white font-medium">Written test</span> button on this job posting to build and publish one first.
+            </p>
+          ) : (
+            <div className="space-y-1.5">
+              {tests.map((test) => (
+                <button
+                  key={test.id}
+                  disabled={sendingTestId === test.id}
+                  onClick={() => sendTest(test)}
+                  className="w-full text-left px-3 py-2 rounded bg-white/10 hover:bg-white/20 text-white text-sm disabled:opacity-50"
+                >
+                  {sendingTestId === test.id ? 'Sending…' : test.title}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="flex justify-end">
+            <button onClick={() => setShowTestPicker(false)} className="px-3 py-1.5 text-xs text-gray-300 hover:text-white">Close</button>
+          </div>
+        </div>
+      )}
+
       {showScheduler && (
         <div className="w-full mt-2 p-3 rounded bg-white/5 border border-white/10 space-y-2">
+          <p className="text-sm font-semibold text-white">Schedule a live video interview</p>
           <div className="grid md:grid-cols-2 gap-2">
             <input type="datetime-local" value={scheduleForm.scheduledAt} onChange={(e) => setScheduleForm((c) => ({ ...c, scheduledAt: e.target.value }))} className="px-2 py-1.5 rounded bg-slate-900 text-white border border-white/20 text-sm" />
             <input type="number" min="5" value={scheduleForm.durationMinutes} onChange={(e) => setScheduleForm((c) => ({ ...c, durationMinutes: e.target.value }))} placeholder="Duration (minutes)" className="px-2 py-1.5 rounded bg-white/10 text-white border border-white/20 text-sm" />

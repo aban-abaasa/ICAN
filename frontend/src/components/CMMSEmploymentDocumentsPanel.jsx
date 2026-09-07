@@ -49,10 +49,19 @@ const CMMSEmploymentDocumentsPanel = ({ companyId, companyName, application, cur
     if (!title.trim() || !position.trim()) { alert('Please provide at least a title and position.'); return; }
     setIssuing(true); setError('');
     try {
+      // Issuing the actual paperwork is the real "you're hired" moment --
+      // this is what turns the applicant into a real CMMS employee
+      // (cmms_users row) so they have somewhere to sign in and receive it.
+      // Idempotent: a later document for the same applicant reuses the
+      // employee record this creates the first time.
+      const hireResult = await cmmsEmploymentDocumentsService.hireApplicantIntoCmms(application.id);
+      if (!hireResult.success) throw new Error(hireResult.error);
+      const cmmsUserId = hireResult.cmmsUserId;
+
       const content = { position, department, employmentType, salary, startDate, terms };
       const createResult = await cmmsEmploymentDocumentsService.createEmploymentDocument(
         companyId,
-        { jobApplicationId: application.id, documentType, title, content },
+        { jobApplicationId: application.id, cmmsUserId, documentType, title, content },
         currentCmmsUserId
       );
       if (!createResult.success) throw new Error(createResult.error);

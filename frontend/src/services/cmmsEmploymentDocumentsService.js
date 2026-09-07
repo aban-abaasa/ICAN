@@ -20,6 +20,20 @@ const genVerifyToken = () => {
 
 export const buildVerifyUrl = (verifyToken) => `${window.location.origin}/verify-document?token=${verifyToken}`;
 
+/**
+ * Auto-provisions the applicant as a real CMMS employee (cmms_users row) at
+ * the moment their appointment letter/contract is issued -- until this
+ * runs, a "hired" applicant exists only as a cmms_job_applications row and
+ * has no way to reach the CMMS workspace to see or sign their own document.
+ * Idempotent: issuing a second document later reuses the same employee
+ * record. Returns the cmms_users.id to attach to the document being issued.
+ */
+export const hireApplicantIntoCmms = async (jobApplicationId) => {
+  const { data, error } = await supabase.rpc('fn_hire_applicant_into_cmms', { p_job_application_id: jobApplicationId });
+  if (error) return { success: false, error: error.message };
+  return { success: true, cmmsUserId: data };
+};
+
 // ============================================================
 // Staff-facing (authenticated, RLS-enforced)
 // ============================================================
@@ -127,6 +141,7 @@ export const verifyEmploymentDocument = async (token) => {
 
 export default {
   buildVerifyUrl,
+  hireApplicantIntoCmms,
   createEmploymentDocument,
   issueEmploymentDocument,
   revokeEmploymentDocument,
