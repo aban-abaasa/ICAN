@@ -48,6 +48,7 @@ const cmmsNoticeBoardMatch = window.location.pathname.match(/^\/notices\/([^/]+)
 // session straight to LiveBoardroom), but never the app's theme system.
 const isCandidateTestPath = window.location.pathname === '/candidate-test';
 const isCandidateInterviewPath = window.location.pathname === '/candidate-interview';
+const isCandidateDocumentPath = window.location.pathname === '/candidate-document';
 // Scanning a QR-sealed appointment letter/contract's "seal" opens this --
 // fully public, no account, same reasoning as the report-share/attendance
 // QR pages below.
@@ -111,6 +112,7 @@ const PublicReportViewer = lazyWithReloadOnChunkFailure(() => import('./componen
 const PublicReportExportViewer = lazyWithReloadOnChunkFailure(() => import('./components/PublicReportExportViewer'));
 const CandidateTestRunner = lazyWithReloadOnChunkFailure(() => import('./components/CandidateTestRunner'));
 const CandidateInterviewRoom = lazyWithReloadOnChunkFailure(() => import('./components/CandidateInterviewRoom'));
+const CandidateDocumentViewer = lazyWithReloadOnChunkFailure(() => import('./components/CandidateDocumentViewer'));
 const PublicDocumentVerify = lazyWithReloadOnChunkFailure(() => import('./components/PublicDocumentVerify'));
 const Loading = () => <div className="min-h-screen bg-slate-950" />;
 
@@ -161,6 +163,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           ) : isCandidateInterviewPath ? (
             <AuthProvider>
               <CandidateInterviewRoom />
+            </AuthProvider>
+          ) : isCandidateDocumentPath ? (
+            <AuthProvider>
+              <CandidateDocumentViewer />
             </AuthProvider>
           ) : (
             <ThemeProvider>

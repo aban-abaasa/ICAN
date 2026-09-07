@@ -1030,7 +1030,10 @@ const ApplyForm = ({ job, onBack, onClose, viewerUser, onWantAccount }) => {
   );
 };
 
-const StatusCard = ({ jobTitle, companyName, submittedAt, status, statusNote }) => (
+const StatusCard = ({
+  jobTitle, companyName, submittedAt, status, statusNote,
+  testAccessToken, interviewScheduleId, interviewScheduledAt, documentId, documentStatus,
+}) => (
   <div className="nb-card rounded-2xl shadow-sm p-4 animate-fadeInUp">
     <p className="nb-text font-semibold">{jobTitle}</p>
     <p className="text-xs nb-text-faint mb-3">{companyName ? `${companyName} · ` : ''}Applied {new Date(submittedAt).toLocaleDateString()}</p>
@@ -1038,6 +1041,30 @@ const StatusCard = ({ jobTitle, companyName, submittedAt, status, statusNote }) 
       {status.replace('_', ' ')}
     </span>
     {statusNote && <p className="text-sm nb-text-muted mt-3">{statusNote}</p>}
+    {testAccessToken && (
+      <a
+        href={`/candidate-test?token=${testAccessToken}`}
+        className="mt-3 w-full py-2 rounded-lg nb-btn-primary font-semibold text-sm text-center transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2"
+      >
+        Take your written test
+      </a>
+    )}
+    {interviewScheduleId && (
+      <a
+        href={`/candidate-interview?scheduleId=${interviewScheduleId}`}
+        className="mt-3 w-full py-2 rounded-lg nb-btn-primary font-semibold text-sm text-center transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2"
+      >
+        Join your video interview{interviewScheduledAt ? ` · ${new Date(interviewScheduledAt).toLocaleString()}` : ''}
+      </a>
+    )}
+    {documentId && (
+      <a
+        href={`/candidate-document?documentId=${documentId}`}
+        className="mt-3 w-full py-2 rounded-lg nb-btn-primary font-semibold text-sm text-center transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2"
+      >
+        {documentStatus === 'signed' ? 'View your appointment letter' : 'View & sign your appointment letter'}
+      </a>
+    )}
   </div>
 );
 
@@ -1109,7 +1136,18 @@ const TrackApplication = ({ companyId, viewerUser, onWantAccount }) => {
         ) : (
           <div className="space-y-3">
             {myApplications.map((app) => (
-              <StatusCard key={app.reference_code} jobTitle={app.job_title} submittedAt={app.submitted_at} status={app.status} statusNote={app.status_note} />
+              <StatusCard
+                key={app.reference_code}
+                jobTitle={app.job_title}
+                submittedAt={app.submitted_at}
+                status={app.status}
+                statusNote={app.status_note}
+                testAccessToken={app.test_access_token}
+                interviewScheduleId={app.interview_schedule_id}
+                interviewScheduledAt={app.interview_scheduled_at}
+                documentId={app.document_id}
+                documentStatus={app.document_status}
+              />
             ))}
           </div>
         )}
@@ -1161,7 +1199,18 @@ const TrackApplication = ({ companyId, viewerUser, onWantAccount }) => {
         result ? (
           <>
             <div className="mt-5">
-              <StatusCard jobTitle={result.job_title} companyName={result.company_name} submittedAt={result.submitted_at} status={result.status} statusNote={result.status_note} />
+              <StatusCard
+                jobTitle={result.job_title}
+                companyName={result.company_name}
+                submittedAt={result.submitted_at}
+                status={result.status}
+                statusNote={result.status_note}
+                testAccessToken={result.test_access_token}
+                interviewScheduleId={result.interview_schedule_id}
+                interviewScheduledAt={result.interview_scheduled_at}
+                documentId={result.document_id}
+                documentStatus={result.document_status}
+              />
             </div>
             <div className="mt-4 p-4 rounded-xl nb-surface-alt border nb-border text-left">
               <p className="nb-text font-semibold text-sm mb-1">💡 Never type that code again</p>

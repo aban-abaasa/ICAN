@@ -139,6 +139,41 @@ export const verifyEmploymentDocument = async (token) => {
   return { success: true, data: data[0] };
 };
 
+// ============================================================
+// Candidate-facing (authenticated, standalone /candidate-document page --
+// see CandidateDocumentViewer.jsx, mirrors CandidateTestRunner/
+// CandidateInterviewRoom's link-then-load pattern)
+// ============================================================
+
+export const buildCandidateDocumentLink = (documentId) => `${window.location.origin}/candidate-document?documentId=${documentId}`;
+
+/** Callable before the candidate is signed in at all -- pre-fills the ICAN
+ * signup form from the document's owner (job application, or the linked
+ * cmms_users row if there's no application on file). */
+export const getDocumentPrefillContact = async (documentId) => {
+  const { data, error } = await supabase.rpc('fn_get_document_prefill_contact', { p_document_id: documentId });
+  if (error || !data?.length) return { success: false, error: error?.message, data: null };
+  return { success: true, data: data[0] };
+};
+
+/** Called right after the candidate signs up/signs in via the document
+ * link -- links their new ICAN account to whichever owner (application or
+ * cmms_users row) matches the email they just authenticated with. */
+export const linkIcanAccountViaDocument = async (documentId) => {
+  const { data, error } = await supabase.rpc('fn_link_ican_account_via_document', { p_document_id: documentId });
+  if (error) return { success: false, error: error.message };
+  return { success: true, linked: Boolean(data) };
+};
+
+/** The signed-in candidate's own document by id -- RLS
+ * (cmms_employment_documents_employee_select) restricts this to a document
+ * linked to their own cmms_users/cmms_job_applications record. */
+export const getDocumentById = async (documentId) => {
+  const { data, error } = await supabase.from('cmms_employment_documents').select('*').eq('id', documentId).single();
+  if (error) return { success: false, error: error.message, data: null };
+  return { success: true, data: { ...data, document_url: await resolveMediaValue(data.document_url) } };
+};
+
 export default {
   buildVerifyUrl,
   hireApplicantIntoCmms,
@@ -150,4 +185,8 @@ export default {
   getMyEmploymentDocuments,
   signEmploymentDocument,
   verifyEmploymentDocument,
+  buildCandidateDocumentLink,
+  getDocumentPrefillContact,
+  linkIcanAccountViaDocument,
+  getDocumentById,
 };
