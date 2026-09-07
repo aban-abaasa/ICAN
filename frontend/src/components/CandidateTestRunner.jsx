@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { CheckCircle2, Clock, Loader2, ShieldCheck, XCircle } from 'lucide-react';
+import { CheckCircle2, Clock, Loader2, ShieldCheck, X, XCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import AuthPage from './auth/AuthPage';
 import cmmsWrittenTestService from '../services/cmmsWrittenTestService';
@@ -126,13 +126,30 @@ const CandidateTestRunner = () => {
 
   if (phase === 'submitted') {
     const passed = result?.maxScore ? (result.score / result.maxScore) * 100 : 0;
+    // A same-tab link (e.g. the "Take your written test" button on the
+    // public tracking page) can't be closed via window.close() -- browsers
+    // silently refuse to close a tab a script didn't open. Try anyway (it
+    // works for the email-link/new-tab case), then fall back to sending the
+    // candidate back to the public site instead of leaving them stranded.
+    const closePage = () => {
+      window.close();
+      setTimeout(() => { window.location.href = '/'; }, 200);
+    };
     return (
       <main className="min-h-screen flex items-center justify-center bg-slate-950 px-4 text-white">
-        <div className="max-w-md w-full rounded-2xl border border-white/10 bg-slate-900/80 p-8 text-center">
+        <div className="max-w-md w-full relative rounded-2xl border border-white/10 bg-slate-900/80 p-8 text-center">
+          <button
+            onClick={closePage}
+            aria-label="Close"
+            className="absolute top-3 right-3 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10"
+          >
+            <X className="w-5 h-5" />
+          </button>
           <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto mb-3" />
           <h1 className="text-xl font-bold mb-1">Test submitted</h1>
           <p className="text-slate-300 mb-4">Your score: <span className="font-bold">{result?.score} / {result?.maxScore}</span> ({passed.toFixed(0)}%)</p>
-          <p className="text-sm text-slate-500">The hiring team has been notified. You can close this page now.</p>
+          <p className="text-sm text-slate-500 mb-5">The hiring team has been notified. You can close this page now.</p>
+          <button onClick={closePage} className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 font-semibold text-sm">Close</button>
         </div>
       </main>
     );
