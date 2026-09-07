@@ -219,6 +219,33 @@ export const submitPublicJobApplication = async ({
   }
 };
 
+/**
+ * Called right after an applicant creates/signs into an ICAN account from
+ * the "Application submitted!" screen -- links the account so they never
+ * need the reference code again to check status. Proof of ownership is the
+ * same reference code + contact fn_track_public_job_application already
+ * uses.
+ */
+export const linkIcanAccountToApplication = async (referenceCode, contact) => {
+  const { data, error } = await supabase.rpc('fn_link_ican_account_to_application', {
+    p_reference_code: referenceCode,
+    p_contact: contact,
+  });
+  if (error) return { success: false, error: error.message };
+  return { success: true, linked: Boolean(data) };
+};
+
+/**
+ * A signed-in visitor's own applications at this company, no reference
+ * code required -- self-healing (see fn_get_my_job_applications) even if
+ * the explicit link above never got a chance to run.
+ */
+export const getMyJobApplications = async (companyId) => {
+  const { data, error } = await supabase.rpc('fn_get_my_job_applications', { p_company_id: companyId });
+  if (error) return { success: false, error: error.message, data: [] };
+  return { success: true, data: data || [] };
+};
+
 export const trackPublicJobApplication = async (referenceCode, contact) => {
   const { data, error } = await supabase.rpc('fn_track_public_job_application', {
     p_reference_code: referenceCode,
@@ -377,6 +404,8 @@ export default {
   getPublicNotices,
   getPublicNotice,
   submitPublicJobApplication,
+  linkIcanAccountToApplication,
+  getMyJobApplications,
   trackPublicJobApplication,
   uploadPublicResume,
   buildPublicNoticeLink,

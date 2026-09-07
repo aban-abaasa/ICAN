@@ -82,6 +82,24 @@ export const verifyReportSharePassword = async (token, password) => {
   }
 };
 
+// Email-only access for "restricted" shares -- no code, no email sent.
+// Grants access as soon as the typed address matches the admin's list.
+// Weaker than the OTP flow below (no proof the visitor controls that
+// inbox), a deliberate trade-off for less friction — see
+// CMMS_REPORT_SHARE_EMAIL_ONLY_ACCESS.sql.
+export const verifyReportShareEmail = async (token, email) => {
+  try {
+    const { data, error } = await supabase.rpc('fn_verify_report_share_email', {
+      p_token: token,
+      p_email: email
+    });
+    if (error) return { success: false, error: error.message };
+    return { success: true, data: data?.[0] || null };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+};
+
 export const requestReportShareOtp = async (token, email) => {
   try {
     const response = await fetch(`${API_BASE_URL}/report-shares/request-otp`, {
@@ -183,6 +201,21 @@ export const verifyReportExportSharePassword = async (token, password) => {
   }
 };
 
+// Email-only access, export-share equivalent of verifyReportShareEmail
+// above — see CMMS_REPORT_SHARE_EMAIL_ONLY_ACCESS.sql for the trade-off.
+export const verifyReportExportShareEmail = async (token, email) => {
+  try {
+    const { data, error } = await supabase.rpc('fn_verify_report_export_share_email', {
+      p_token: token,
+      p_email: email
+    });
+    if (error) return { success: false, error: error.message };
+    return { success: true, data: data?.[0] || null };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+};
+
 export const requestReportExportShareOtp = async (token, email) => {
   try {
     const response = await fetch(`${API_BASE_URL}/report-shares/request-export-otp`, {
@@ -217,12 +250,14 @@ export default {
   revokeReportShare,
   getReportShareAccess,
   verifyReportSharePassword,
+  verifyReportShareEmail,
   requestReportShareOtp,
   verifyReportShareOtp,
   createReportExportShare,
   listReportExportShares,
   revokeReportExportShare,
   getReportExportShareAccess,
+  verifyReportExportShareEmail,
   verifyReportExportSharePassword,
   requestReportExportShareOtp,
   verifyReportExportShareOtp

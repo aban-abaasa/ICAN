@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Lock, Mail, ShieldCheck, Loader, FileWarning, ArrowLeft } from 'lucide-react';
+import { Lock, Mail, ShieldCheck, Loader, FileWarning } from 'lucide-react';
 import {
   getReportShareAccess,
   verifyReportSharePassword,
-  requestReportShareOtp,
-  verifyReportShareOtp
+  verifyReportShareEmail
 } from '../services/cmmsReportShareService';
 
 // Scoped CSS variables, same technique as PublicCompanyNoticeBoard.jsx: this
@@ -105,11 +104,7 @@ const PublicReportViewer = ({ shareToken }) => {
   const [isVerifying, setIsVerifying] = useState(false);
 
   const [email, setEmail] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
-  const [code, setCode] = useState('');
-  const [otpError, setOtpError] = useState('');
-  const [resendCooldown, setResendCooldown] = useState(0);
-  const [otpMessage, setOtpMessage] = useState('');
+  const [emailError, setEmailError] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -129,12 +124,6 @@ const PublicReportViewer = ({ shareToken }) => {
       }
     })();
   }, [shareToken]);
-
-  useEffect(() => {
-    if (resendCooldown <= 0) return;
-    const timer = setInterval(() => setResendCooldown((s) => Math.max(0, s - 1)), 1000);
-    return () => clearInterval(timer);
-  }, [resendCooldown]);
 
   const handlePasswordSubmit = async (e) => {
     e.preventDefault();
@@ -162,24 +151,15 @@ const PublicReportViewer = ({ shareToken }) => {
     }
   };
 
-  const handleSendCode = async (e) => {
+  const handleEmailSubmit = async (e) => {
     e.preventDefault();
-    setOtpError('');
-    const result = await requestReportShareOtp(shareToken, email);
-    setOtpMessage(result.message || 'If that email has access, a code has been sent.');
-    setOtpSent(true);
-    setResendCooldown(60);
-  };
-
-  const handleVerifyCode = async (e) => {
-    e.preventDefault();
-    setOtpError('');
+    setEmailError('');
     setIsVerifying(true);
-    const result = await verifyReportShareOtp(shareToken, email, code);
+    const result = await verifyReportShareEmail(shareToken, email);
     setIsVerifying(false);
 
     if (!result.success || !result.data) {
-      setOtpError('Something went wrong. Please try again.');
+      setEmailError('Something went wrong. Please try again.');
       return;
     }
 
@@ -187,14 +167,8 @@ const PublicReportViewer = ({ shareToken }) => {
     if (verifyStatus === 'ok') {
       setReport(rest);
       setStatus('ok');
-    } else if (verifyStatus === 'invalid_code') {
-      setOtpError('Incorrect code.');
-    } else if (verifyStatus === 'too_many_attempts') {
-      setOtpError('Too many attempts. Request a new code.');
-    } else if (verifyStatus === 'no_active_code') {
-      setOtpError('That code has expired. Request a new one.');
     } else {
-      setOtpError('This email does not have access to this report.');
+      setEmailError('This email does not have access to this report.');
     }
   };
 
@@ -247,66 +221,27 @@ const PublicReportViewer = ({ shareToken }) => {
   if (status === 'email_required') {
     return (
       <CenteredCard icon={Mail} title="This report is restricted">
-        <p className="rs-text-muted text-sm mb-4">
-          {otpSent
-            ? 'Enter the code we emailed you.'
-            : 'Enter your email address to request a viewing code.'}
-        </p>
-
-        {!otpSent ? (
-          <form onSubmit={handleSendCode} className="space-y-3 text-left">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              className="rs-input w-full px-4 py-2 rounded-lg focus:outline-none"
-              autoFocus
-              required
-            />
-            <button type="submit" className="rs-btn w-full px-4 py-2 rounded-lg flex items-center justify-center gap-2">
-              <Mail size={16} />
-              Send code
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={handleVerifyCode} className="space-y-3 text-left">
-            {otpMessage && <p className="rs-text-faint text-xs">{otpMessage}</p>}
-            <input
-              type="text"
-              inputMode="numeric"
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              placeholder="6-digit code"
-              className="rs-input w-full px-4 py-2 rounded-lg text-center tracking-[0.5em] focus:outline-none"
-              autoFocus
-            />
-            {otpError && <p className="text-sm" style={{ color: 'var(--rs-maroon)' }}>{otpError}</p>}
-            <button
-              type="submit"
-              disabled={isVerifying || code.length !== 6}
-              className="rs-btn w-full px-4 py-2 rounded-lg disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {isVerifying ? <Loader size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
-              View report
-            </button>
-            <button
-              type="button"
-              onClick={handleSendCode}
-              disabled={resendCooldown > 0}
-              className="w-full text-xs rs-text-muted hover:underline disabled:opacity-50"
-            >
-              {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : 'Resend code'}
-            </button>
-            <button
-              type="button"
-              onClick={() => { setOtpSent(false); setCode(''); setOtpError(''); }}
-              className="w-full text-xs rs-text-faint flex items-center justify-center gap-1"
-            >
-              <ArrowLeft size={12} /> Use a different email
-            </button>
-          </form>
-        )}
+        <p className="rs-text-muted text-sm mb-4">Enter your email address to view this report.</p>
+        <form onSubmit={handleEmailSubmit} className="space-y-3 text-left">
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            className="rs-input w-full px-4 py-2 rounded-lg focus:outline-none"
+            autoFocus
+            required
+          />
+          {emailError && <p className="text-sm" style={{ color: 'var(--rs-maroon)' }}>{emailError}</p>}
+          <button
+            type="submit"
+            disabled={isVerifying || !email}
+            className="rs-btn w-full px-4 py-2 rounded-lg disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {isVerifying ? <Loader size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+            View report
+          </button>
+        </form>
       </CenteredCard>
     );
   }

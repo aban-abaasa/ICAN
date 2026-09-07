@@ -25,6 +25,8 @@ const EMPLOYMENT_LABELS = {
 // Status chips read off the "how far along" scale rather than fixed colors
 // per status, so the palette stays inside the green/maroon/neutral brand
 // instead of the old ad-hoc slate/amber/blue/violet/red mix.
+const PENDING_APPLICATION_LINK_KEY = 'ican_notice_board_pending_application_link';
+
 const STATUS_STYLES = {
   submitted: 'nb-chip-neutral',
   under_review: 'nb-chip-amber',
@@ -157,6 +159,43 @@ const NB_STYLES = `
  */
 const PublicCompanyNoticeBoard = ({ companyId }) => {
   const { user, loading: authLoading } = useAuth();
+
+  // Set from ApplyForm's / TrackApplication's post-submit "create a free
+  // account" recommendation -- { referenceCode, contact, prefill } while
+  // pending, or { done: true, message } once linking finishes, so we can
+  // show a plain confirmation before returning to the board.
+  const [accountPrompt, setAccountPrompt] = useState(null);
+
+  // Google sign-up is a full-page redirect away and back (see
+  // AuthContext.signInWithGoogle) -- any in-memory accountPrompt state is
+  // gone by the time the visitor returns, so the pending link survives in
+  // sessionStorage instead. The email/password path (no redirect) also goes
+  // through this same key, so both paths funnel through one place.
+  const requestAccountCreation = (payload) => {
+    try {
+      sessionStorage.setItem(PENDING_APPLICATION_LINK_KEY, JSON.stringify({ referenceCode: payload.referenceCode, contact: payload.contact }));
+    } catch { /* sessionStorage unavailable (e.g. private browsing) -- link falls back to fn_get_my_job_applications' self-healing match on "Track my application" instead */ }
+    setAccountPrompt(payload);
+  };
+
+  // Fires once the visitor is actually signed in -- whether that happened
+  // instantly (email/password, no confirmation required) or after a full
+  // redirect round-trip to Google and back to this exact page.
+  useEffect(() => {
+    if (!user) return;
+    let pending = null;
+    try { pending = JSON.parse(sessionStorage.getItem(PENDING_APPLICATION_LINK_KEY) || 'null'); } catch { /* ignore */ }
+    if (!pending) return;
+    try { sessionStorage.removeItem(PENDING_APPLICATION_LINK_KEY); } catch { /* ignore */ }
+    cmmsAnnouncementsService.linkIcanAccountToApplication(pending.referenceCode, pending.contact).then((linkResult) => {
+      setAccountPrompt({
+        done: true,
+        message: linkResult.success && linkResult.linked
+          ? 'Your account is linked. You can check this application anytime from "Track my application" while signed in -- no code needed.'
+          : "Your account is ready. Open \"Track my application\" while signed in and it'll match this application automatically.",
+      });
+    });
+  }, [user]);
 
   const [company, setCompany] = useState(null);
   const [notFound, setNotFound] = useState(false);
@@ -301,6 +340,29 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
     );
   }
 
+  if (accountPrompt && !accountPrompt.done) {
+    // No onAuthSuccess here -- linking (and leaving this screen) is driven
+    // entirely by the `user`-keyed effect above, which is what makes both
+    // the instant email/password path AND the full-redirect Google path
+    // (see SignUp.jsx's "Continue with Google") work the same way.
+    return <AuthPage initialView="signup" prefill={accountPrompt.prefill} />;
+  }
+
+  if (accountPrompt?.done) {
+    return (
+      <div className="icanera-nb min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
+        <style>{NB_STYLES}</style>
+        <div className="w-16 h-16 rounded-2xl nb-chip-green flex items-center justify-center">
+          <CheckCircle2 className="w-8 h-8" />
+        </div>
+        <p className="nb-text text-lg font-semibold max-w-sm">{accountPrompt.message}</p>
+        <button onClick={() => setAccountPrompt(null)} className="px-5 py-2.5 nb-btn-primary rounded-xl font-semibold transition-all hover:scale-[1.02] active:scale-[0.98] shadow-sm">
+          Back to notice board
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="icanera-nb min-h-screen">
       <style>{NB_STYLES}</style>
@@ -364,7 +426,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
           {section === 'careers' && (
             <JobList jobs={jobs} onSelect={(job) => openDetail(job, setSelectedJob)} />
           )}
-          {section === 'track' && <TrackApplication />}
+          {section === 'track' && <TrackApplication companyId={companyId} viewerUser={user} onWantAccount={requestAccountCreation} />}
         </div>
       </main>
 
@@ -376,7 +438,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
       </footer>
 
       {selectedNotice && <NoticeDetailModal notice={selectedNotice} onClose={() => setSelectedNotice(null)} onShare={handleShare} />}
-      {selectedJob && <JobDetailModal job={selectedJob} onClose={() => setSelectedJob(null)} onShare={handleShare} viewerUser={user} />}
+      {selectedJob && <JobDetailModal job={selectedJob} onClose={() => setSelectedJob(null)} onShare={handleShare} viewerUser={user} onWantAccount={requestAccountCreation} />}
     </div>
   );
 };
@@ -740,7 +802,7 @@ const ShareButton = ({ copied, onClick }) => (
   </button>
 );
 
-const JobDetailModal = ({ job, onClose, onShare, viewerUser }) => {
+const JobDetailModal = ({ job, onClose, onShare, viewerUser, onWantAccount }) => {
   const [showApply, setShowApply] = useState(false);
   const [copied, setCopied] = useState(false);
   return (
@@ -803,13 +865,13 @@ const JobDetailModal = ({ job, onClose, onShare, viewerUser }) => {
           )}
         </>
       ) : (
-        <ApplyForm job={job} onBack={() => setShowApply(false)} onClose={onClose} viewerUser={viewerUser} />
+        <ApplyForm job={job} onBack={() => setShowApply(false)} onClose={onClose} viewerUser={viewerUser} onWantAccount={onWantAccount} />
       )}
     </Modal>
   );
 };
 
-const ApplyForm = ({ job, onBack, onClose, viewerUser }) => {
+const ApplyForm = ({ job, onBack, onClose, viewerUser, onWantAccount }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -896,8 +958,25 @@ const ApplyForm = ({ job, onBack, onClose, viewerUser }) => {
           <CheckCircle2 className="w-9 h-9" />
         </div>
         <h3 className="text-lg font-bold nb-text mb-2">Application submitted!</h3>
-        <p className="nb-text-muted text-sm mb-4">Save this reference code to check your status later using the "Track my application" tab.</p>
+        <p className="nb-text-muted text-sm mb-4">This code is the only way to check your status in "Track my application."</p>
         <p className="text-2xl font-mono font-bold nb-link tracking-wider nb-chip-green rounded-xl py-3 px-4 inline-block">{referenceCode}</p>
+        <p className="nb-error-text text-xs font-semibold mt-3">⚠ If you lose this code, this application cannot be recovered -- there is no other way to look it up.</p>
+
+        {!viewerUser && (
+          <div className="mt-5 p-4 rounded-xl nb-surface-alt border nb-border text-left">
+            <p className="nb-text font-semibold text-sm mb-1">✅ The safe way: create a free ICAN account</p>
+            <p className="nb-text-muted text-xs mb-3">
+              No code to lose -- this application (and any future ones, including getting to interview) is always right there when you sign in.
+            </p>
+            <button
+              onClick={() => onWantAccount?.({ referenceCode, contact: email.trim(), prefill: { email: email.trim(), fullName: name.trim(), phone: phone.trim() } })}
+              className="w-full py-2.5 rounded-lg nb-btn-primary font-semibold text-sm transition-all hover:scale-[1.01] active:scale-[0.99]"
+            >
+              Create my free account (or continue with Google)
+            </button>
+          </div>
+        )}
+
         <button onClick={onClose} className="block mx-auto mt-6 px-5 py-2.5 rounded-xl nb-btn-secondary font-semibold transition">Close</button>
       </div>
     );
@@ -941,7 +1020,18 @@ const ApplyForm = ({ job, onBack, onClose, viewerUser }) => {
   );
 };
 
-const TrackApplication = () => {
+const StatusCard = ({ jobTitle, companyName, submittedAt, status, statusNote }) => (
+  <div className="nb-card rounded-2xl shadow-sm p-4 animate-fadeInUp">
+    <p className="nb-text font-semibold">{jobTitle}</p>
+    <p className="text-xs nb-text-faint mb-3">{companyName ? `${companyName} · ` : ''}Applied {new Date(submittedAt).toLocaleDateString()}</p>
+    <span className={`inline-block px-3 py-1 rounded-full text-sm font-bold capitalize ${STATUS_STYLES[status] || STATUS_STYLES.submitted}`}>
+      {status.replace('_', ' ')}
+    </span>
+    {statusNote && <p className="text-sm nb-text-muted mt-3">{statusNote}</p>}
+  </div>
+);
+
+const TrackApplication = ({ companyId, viewerUser, onWantAccount }) => {
   const [referenceCode, setReferenceCode] = useState('');
   const [contact, setContact] = useState('');
   const [result, setResult] = useState(null);
@@ -949,7 +1039,26 @@ const TrackApplication = () => {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
 
+  const [myApplications, setMyApplications] = useState(null);
+  const [myApplicationsLoading, setMyApplicationsLoading] = useState(false);
+
   const inputClass = 'w-full px-3.5 py-2.5 rounded-xl nb-input transition';
+
+  // Signed-in visitors never need the code at all -- see the self-healing
+  // fn_get_my_job_applications (also auto-links any of their past
+  // applications submitted with the same email, even if they signed up
+  // after applying and the explicit link never got a chance to run).
+  useEffect(() => {
+    if (!viewerUser?.id || !companyId) { setMyApplications(null); return; }
+    let cancelled = false;
+    setMyApplicationsLoading(true);
+    cmmsAnnouncementsService.getMyJobApplications(companyId).then((response) => {
+      if (cancelled) return;
+      setMyApplications(response.success ? response.data : []);
+      setMyApplicationsLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [viewerUser?.id, companyId]);
 
   const search = async () => {
     if (!referenceCode.trim() || !contact.trim()) {
@@ -964,6 +1073,26 @@ const TrackApplication = () => {
     setResult(response.data || null);
     setLoading(false);
   };
+
+  if (viewerUser) {
+    return (
+      <div className="max-w-md mx-auto">
+        <h2 className="text-xl font-bold nb-text mb-1">Track my application</h2>
+        <p className="text-sm nb-text-muted mb-5">Signed in as {viewerUser.email} -- no reference code needed.</p>
+        {myApplicationsLoading ? (
+          <div className="flex justify-center py-8"><Loader className="w-6 h-6 nb-link animate-spin" /></div>
+        ) : !myApplications || myApplications.length === 0 ? (
+          <p className="text-center nb-text-faint text-sm">No applications found for this email at this company yet.</p>
+        ) : (
+          <div className="space-y-3">
+            {myApplications.map((app) => (
+              <StatusCard key={app.reference_code} jobTitle={app.job_title} submittedAt={app.submitted_at} status={app.status} statusNote={app.status_note} />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-md mx-auto">
@@ -984,14 +1113,21 @@ const TrackApplication = () => {
 
       {searched && !loading && (
         result ? (
-          <div className="mt-5 nb-card rounded-2xl shadow-sm p-4 animate-fadeInUp">
-            <p className="nb-text font-semibold">{result.job_title}</p>
-            <p className="text-xs nb-text-faint mb-3">{result.company_name} · Applied {new Date(result.submitted_at).toLocaleDateString()}</p>
-            <span className={`inline-block px-3 py-1 rounded-full text-sm font-bold capitalize ${STATUS_STYLES[result.status] || STATUS_STYLES.submitted}`}>
-              {result.status.replace('_', ' ')}
-            </span>
-            {result.status_note && <p className="text-sm nb-text-muted mt-3">{result.status_note}</p>}
-          </div>
+          <>
+            <div className="mt-5">
+              <StatusCard jobTitle={result.job_title} companyName={result.company_name} submittedAt={result.submitted_at} status={result.status} statusNote={result.status_note} />
+            </div>
+            <div className="mt-4 p-4 rounded-xl nb-surface-alt border nb-border text-left">
+              <p className="nb-text font-semibold text-sm mb-1">💡 Never type that code again</p>
+              <p className="nb-text-muted text-xs mb-3">Create a free ICAN account with this same contact and every application you've made here (and any future ones) shows up automatically when you sign in.</p>
+              <button
+                onClick={() => onWantAccount?.({ referenceCode: referenceCode.trim(), contact: contact.trim(), prefill: contact.includes('@') ? { email: contact.trim() } : { phone: contact.trim() } })}
+                className="w-full py-2.5 rounded-lg nb-btn-primary font-semibold text-sm transition-all hover:scale-[1.01] active:scale-[0.99]"
+              >
+                Create my free account
+              </button>
+            </div>
+          </>
         ) : (
           <p className="mt-5 text-center nb-text-faint text-sm animate-fadeIn">No application found for that reference code and contact. Double-check for typos.</p>
         )

@@ -464,10 +464,17 @@ export const AuthProvider = ({ children }) => {
     const supabase = getSupabase();
     if (!supabase) throw new Error('Supabase not initialized');
     
-    // Redirect to root - Supabase will handle the token from URL hash
-    const redirectTo = window.location.hostname === 'localhost' 
-      ? `http://localhost:${window.location.port}`
-      : window.location.origin;
+    // Return to the exact page (path + query) the sign-in was started from,
+    // not just the site root -- Supabase appends the token as a URL hash on
+    // top of whatever we pass here, so this still lets the main app handle
+    // that hash normally at "/", while a standalone public page (e.g. a
+    // candidate's /candidate-test?token=... or /candidate-interview?scheduleId=...
+    // link, see main.jsx's pathname-based routing) comes right back to
+    // itself instead of stranding the visitor at the app root having lost
+    // which test/interview/share link they were on.
+    const redirectTo = window.location.hostname === 'localhost'
+      ? `http://localhost:${window.location.port}${window.location.pathname}${window.location.search}`
+      : `${window.location.origin}${window.location.pathname}${window.location.search}`;
     
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
