@@ -111,6 +111,75 @@ CREATE TABLE IF NOT EXISTS public.cmms_service_provider_contracts (
   CONSTRAINT cmms_sp_contracts_email_chk CHECK (access_mode != 'email' OR allowed_email IS NOT NULL)
 );
 
+-- CREATE TABLE IF NOT EXISTS is a no-op against a table that already
+-- exists in some earlier shape -- e.g. this file's table already having
+-- been created by a prior run before access_mode/pin_hash/etc. existed in
+-- it, which is exactly what produced 'column "access_mode" does not
+-- exist' downstream. These backfill any column the table might be
+-- missing; on a table that was just freshly created above (or already has
+-- every column) every ADD COLUMN here is a no-op.
+ALTER TABLE public.cmms_service_provider_contracts
+  ADD COLUMN IF NOT EXISTS cmms_company_id UUID REFERENCES public.cmms_company_profiles(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS job_assignment_id UUID REFERENCES public.cmms_job_assignments(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS provider_name VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS provider_contact VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS title VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS content JSONB NOT NULL DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'published',
+  ADD COLUMN IF NOT EXISTS access_mode VARCHAR(10),
+  ADD COLUMN IF NOT EXISTS pin_hash TEXT,
+  ADD COLUMN IF NOT EXISTS allowed_email TEXT,
+  ADD COLUMN IF NOT EXISTS failed_attempts INT NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS access_token VARCHAR(64),
+  ADD COLUMN IF NOT EXISTS valid_from TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ADD COLUMN IF NOT EXISTS valid_until TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ADD COLUMN IF NOT EXISTS published_by UUID REFERENCES public.cmms_users(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+-- access_token/access_mode/provider_name/title/valid_until have no natural
+-- default (unlike the columns above), so they're backfilled nullable, then
+-- tightened to NOT NULL + unique here -- this two-step keeps the ALTER safe
+-- on a table already holding rows from a partial earlier run (a one-shot
+-- "NOT NULL with no default" ADD COLUMN fails outright against any
+-- existing row). On a table with no such stale rows every statement below
+-- is a no-op/already-true.
+DO $$ BEGIN
+  ALTER TABLE public.cmms_service_provider_contracts ALTER COLUMN cmms_company_id SET NOT NULL;
+EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'Skipped (likely already satisfied, or existing rows need a value first): %', SQLERRM; END $$;
+DO $$ BEGIN
+  ALTER TABLE public.cmms_service_provider_contracts ALTER COLUMN provider_name SET NOT NULL;
+EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'Skipped (likely already satisfied, or existing rows need a value first): %', SQLERRM; END $$;
+DO $$ BEGIN
+  ALTER TABLE public.cmms_service_provider_contracts ALTER COLUMN title SET NOT NULL;
+EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'Skipped (likely already satisfied, or existing rows need a value first): %', SQLERRM; END $$;
+DO $$ BEGIN
+  ALTER TABLE public.cmms_service_provider_contracts ALTER COLUMN access_mode SET NOT NULL;
+EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'Skipped (likely already satisfied, or existing rows need a value first): %', SQLERRM; END $$;
+DO $$ BEGIN
+  ALTER TABLE public.cmms_service_provider_contracts ALTER COLUMN access_token SET NOT NULL;
+EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'Skipped (likely already satisfied, or existing rows need a value first): %', SQLERRM; END $$;
+DO $$ BEGIN
+  ALTER TABLE public.cmms_service_provider_contracts ALTER COLUMN valid_until SET NOT NULL;
+EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'Skipped (likely already satisfied, or existing rows need a value first): %', SQLERRM; END $$;
+-- Enforces uniqueness the same way the inline UNIQUE on a freshly-created
+-- table would -- a unique index natively supports IF NOT EXISTS, unlike
+-- ADD CONSTRAINT, so this can't end up creating a second, redundantly-named
+-- unique constraint alongside the fresh table's own.
+CREATE UNIQUE INDEX IF NOT EXISTS cmms_sp_contracts_access_token_key ON public.cmms_service_provider_contracts(access_token);
+DO $$ BEGIN
+  ALTER TABLE public.cmms_service_provider_contracts ADD CONSTRAINT cmms_sp_contracts_access_mode_chk CHECK (access_mode IN ('pin', 'email'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE public.cmms_service_provider_contracts ADD CONSTRAINT cmms_sp_contracts_pin_chk CHECK (access_mode != 'pin' OR pin_hash IS NOT NULL);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE public.cmms_service_provider_contracts ADD CONSTRAINT cmms_sp_contracts_email_chk CHECK (access_mode != 'email' OR allowed_email IS NOT NULL);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
 CREATE INDEX IF NOT EXISTS idx_cmms_sp_contracts_company ON public.cmms_service_provider_contracts(cmms_company_id);
 CREATE INDEX IF NOT EXISTS idx_cmms_sp_contracts_job_assignment ON public.cmms_service_provider_contracts(job_assignment_id);
 CREATE INDEX IF NOT EXISTS idx_cmms_sp_contracts_token ON public.cmms_service_provider_contracts(access_token);
