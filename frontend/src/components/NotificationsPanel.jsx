@@ -160,6 +160,15 @@ const NotificationsPanel = ({
     if (!notification.is_read) {
       await markAsRead(notification.id);
     }
+    // action_link points at a standalone page outside the CMMS app shell
+    // (e.g. /candidate-interview?scheduleId=... for an interviewer's join
+    // link) -- a real navigation, not an in-app tab switch, so it takes
+    // priority over action_tab when both are set.
+    if (notification.action_link) {
+      setShowDropdown(false);
+      window.location.href = notification.action_link;
+      return;
+    }
     if (notification.action_tab) {
       onActionClick(notification.action_tab, notification.related_task_id || null);
       setShowDropdown(false);

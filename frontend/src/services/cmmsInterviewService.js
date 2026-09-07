@@ -30,6 +30,11 @@ export const scheduleInterview = async (companyId, application, fields, createdB
     .update({ status: 'interview', status_note: 'Live interview scheduled', status_updated_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq('id', application.id);
 
+  // Each named interviewer gets their own notification with a direct join
+  // link (fn_notify_interview_scheduled, CMMS_INTERVIEW_NOTIFICATIONS.sql)
+  // -- best-effort, never blocks scheduling itself if it fails.
+  supabase.rpc('fn_notify_interview_scheduled', { p_schedule_id: data.id }).catch(() => {});
+
   return { success: true, data };
 };
 
