@@ -73,7 +73,7 @@ export const revokeServiceProviderContract = async (contractId) => {
 export const getServiceProviderContractsForCompany = async (companyId) => {
   const { data, error } = await supabase
     .from('cmms_service_provider_contracts')
-    .select('id, cmms_company_id, job_assignment_id, provider_name, provider_contact, title, content, status, access_mode, allowed_email, access_token, valid_from, valid_until, published_at, revoked_at, created_at')
+    .select('id, cmms_company_id, job_assignment_id, provider_name, provider_contact, title, content, status, access_mode, allowed_email, access_token, valid_from, valid_until, published_at, revoked_at, created_at, provider_wallet_user_id, provider_wallet_linked_at')
     .eq('cmms_company_id', companyId)
     .order('created_at', { ascending: false });
   if (error) return { success: false, error: error.message, data: [] };
@@ -101,6 +101,11 @@ export const getFollowupsForContract = async (contractId) => {
   return { success: true, data: data || [] };
 };
 
+/** fields.paymentMethod: 'cash' | 'wallet'. For 'wallet', fields.
+ * walletTransactionId should be the id returned by icanWalletService.
+ * transferFromBusinessWallet (the real ican_business_wallet_transactions
+ * row) -- that transfer must already have been requested before this is
+ * called; this only records the ledger entry against the contract. */
 export const recordServiceProviderPayment = async (contractId, companyId, fields, recordedByCmmsUserId) => {
   const { data, error } = await supabase
     .from('cmms_service_provider_payments')
@@ -110,6 +115,8 @@ export const recordServiceProviderPayment = async (contractId, companyId, fields
       amount: fields.amount,
       currency: fields.currency || 'UGX',
       method: fields.method || null,
+      payment_method: fields.paymentMethod === 'wallet' ? 'wallet' : 'cash',
+      wallet_transaction_id: fields.walletTransactionId || null,
       reference: fields.reference || null,
       payment_date: fields.paymentDate || new Date().toISOString().slice(0, 10),
       notes: fields.notes || null,
@@ -121,6 +128,10 @@ export const recordServiceProviderPayment = async (contractId, companyId, fields
   return { success: true, data };
 };
 
+/** Merges in each wallet payment's live status from ican_business_wallet_
+ * transactions (pending_approval / completed / rejected / cancelled) as
+ * wallet_status -- a payment row itself never rewrites that, the wallet
+ * transaction is the source of truth. */
 export const getPaymentsForContract = async (contractId) => {
   const { data, error } = await supabase
     .from('cmms_service_provider_payments')
@@ -128,7 +139,17 @@ export const getPaymentsForContract = async (contractId) => {
     .eq('contract_id', contractId)
     .order('payment_date', { ascending: true });
   if (error) return { success: false, error: error.message, data: [] };
-  return { success: true, data: data || [] };
+  const payments = data || [];
+  const walletTxIds = payments.map((p) => p.wallet_transaction_id).filter(Boolean);
+  if (walletTxIds.length) {
+    const { data: txRows } = await supabase
+      .from('ican_business_wallet_transactions')
+      .select('id, status')
+      .in('id', walletTxIds);
+    const statusById = new Map((txRows || []).map((t) => [t.id, t.status]));
+    payments.forEach((p) => { if (p.wallet_transaction_id) p.wallet_status = statusById.get(p.wallet_transaction_id) || null; });
+  }
+  return { success: true, data: payments };
 };
 
 // ============================================================
@@ -168,6 +189,26 @@ export const addServiceProviderFollowupPublic = async (token, credential, note) 
   return { success: true };
 };
 
+/** Links auth.uid() -- the provider, now signed into their own IcanEra
+ * Wallet account in this same browser tab -- as this contract's payout
+ * recipient. Requires a real session (see authService.signIn/signUp,
+ * used inline on the public contract page), unlike the other public calls
+ * here which need only the PIN/email gate credential. */
+export const linkServiceProviderWallet = async (token, credential) => {
+  const { error } = await supabase.rpc('fn_link_service_provider_wallet', { p_token: token, p_credential: credential });
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+};
+
+/** The provider's own "I received this payment" action -- the real proof of
+ * receipt, re-checked against the same gate credential on every call since
+ * this page holds no session of its own. */
+export const confirmServiceProviderPayment = async (token, credential, paymentId) => {
+  const { error } = await supabase.rpc('fn_confirm_service_provider_payment', { p_token: token, p_credential: credential, p_payment_id: paymentId });
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+};
+
 export default {
   buildServiceProviderContractUrl,
   publishServiceProviderContract,
@@ -182,4 +223,6 @@ export default {
   verifyServiceProviderContractPin,
   verifyServiceProviderContractEmail,
   addServiceProviderFollowupPublic,
+  linkServiceProviderWallet,
+  confirmServiceProviderPayment,
 };

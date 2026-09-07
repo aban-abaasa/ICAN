@@ -1,6 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { BadgeCheck, Lock, Loader2, Mail, MessageSquarePlus, ShieldX, Wallet } from 'lucide-react';
+import { BadgeCheck, CheckCircle2, Lock, Loader2, Mail, MessageSquarePlus, ShieldX, Wallet } from 'lucide-react';
 import cmmsServiceProviderContractsService from '../services/cmmsServiceProviderContractsService';
+import { signIn, signUp } from '../services/authService';
+import { supabase } from '../lib/supabase/client';
+
+// Google sign-in redirects the whole page away and back, so the gate
+// credential the provider already typed in (and which accessMode/verify
+// function to re-check with) has to survive that round trip -- sessionStorage
+// is the simplest thing that does, matching the redirectTo trick AuthContext.
+// signInWithGoogle already uses to return standalone token pages (like this
+// one) to themselves instead of the app root.
+const GOOGLE_LINK_PENDING_KEY = 'sp_contract_wallet_link_pending';
 
 /**
  * Standalone public page at /service-provider-contract?token=<access_token>
@@ -27,6 +37,11 @@ const PublicServiceProviderContract = () => {
   const [note, setNote] = useState('');
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState('');
+  const [confirmingId, setConfirmingId] = useState(null);
+  const [walletMode, setWalletMode] = useState('signin'); // 'signin' | 'signup'
+  const [walletForm, setWalletForm] = useState({ email: '', password: '', fullName: '' });
+  const [walletBusy, setWalletBusy] = useState(false);
+  const [walletError, setWalletError] = useState('');
 
   useEffect(() => {
     if (!token) { setPhase('invalid'); return; }
@@ -35,6 +50,39 @@ const PublicServiceProviderContract = () => {
       setPhase(result.data.status);
       if (result.data.access_mode) setAccessMode(result.data.access_mode);
     });
+  }, [token]);
+
+  // Coming back from Google: re-unlock with the credential saved before
+  // redirecting, then link the now-signed-in wallet.
+  useEffect(() => {
+    const raw = sessionStorage.getItem(GOOGLE_LINK_PENDING_KEY);
+    if (!raw) return;
+    sessionStorage.removeItem(GOOGLE_LINK_PENDING_KEY);
+    let pending;
+    try { pending = JSON.parse(raw); } catch { return; }
+    if (!pending || pending.token !== token) return;
+
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const verify = pending.accessMode === 'email'
+        ? cmmsServiceProviderContractsService.verifyServiceProviderContractEmail
+        : cmmsServiceProviderContractsService.verifyServiceProviderContractPin;
+      const result = await verify(token, pending.credential);
+      if (!result.success || result.data.status !== 'ok') return;
+      setCredential(pending.credential);
+      setAccessMode(pending.accessMode);
+      setInfo(result.data);
+      setPhase('unlocked');
+      const link = await cmmsServiceProviderContractsService.linkServiceProviderWallet(token, pending.credential);
+      if (link.success) {
+        const refreshed = await verify(token, pending.credential);
+        if (refreshed.success && refreshed.data.status === 'ok') setInfo(refreshed.data);
+      } else {
+        setWalletError(link.error || 'Signed in, but could not link your wallet to this contract.');
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   const handleUnlock = async (event) => {
@@ -76,6 +124,52 @@ const PublicServiceProviderContract = () => {
     if (!result.success) { setPostError(result.error || 'Could not post your update.'); return; }
     setNote('');
     await reload();
+  };
+
+  const handleConfirmPayment = async (paymentId) => {
+    setConfirmingId(paymentId);
+    const result = await cmmsServiceProviderContractsService.confirmServiceProviderPayment(token, credential, paymentId);
+    setConfirmingId(null);
+    if (result.success) await reload();
+  };
+
+  const handleWalletAuth = async (event) => {
+    event.preventDefault();
+    if (!walletForm.email.trim() || !walletForm.password) return;
+    setWalletBusy(true);
+    setWalletError('');
+    try {
+      const result = walletMode === 'signup'
+        ? await signUp(walletForm.email.trim(), walletForm.password, { fullName: walletForm.fullName })
+        : await signIn(walletForm.email.trim(), walletForm.password);
+      if (result.error) throw new Error(result.error.message || 'Could not sign in / sign up.');
+      if (result.needsEmailConfirmation) {
+        setWalletError('Account created. Check your email to confirm it, then come back to this link and sign in to finish linking your wallet.');
+        setWalletBusy(false);
+        return;
+      }
+      const link = await cmmsServiceProviderContractsService.linkServiceProviderWallet(token, credential);
+      if (!link.success) throw new Error(link.error || 'Could not link your wallet to this contract.');
+      await reload();
+    } catch (err) {
+      setWalletError(err.message || 'Could not sign in / sign up.');
+    }
+    setWalletBusy(false);
+  };
+
+  const handleGoogleWalletLink = async () => {
+    setWalletError('');
+    try {
+      sessionStorage.setItem(GOOGLE_LINK_PENDING_KEY, JSON.stringify({ token, credential, accessMode }));
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.href },
+      });
+      if (error) throw error;
+    } catch (err) {
+      sessionStorage.removeItem(GOOGLE_LINK_PENDING_KEY);
+      setWalletError(err.message || 'Could not start Google sign-in.');
+    }
   };
 
   const content = info?.content || {};
@@ -150,12 +244,65 @@ const PublicServiceProviderContract = () => {
             <div className="mb-5">
               <h2 className="text-sm font-semibold text-slate-300 mb-2 flex items-center gap-2"><Wallet className="w-4 h-4" /> Payments</h2>
               {!info.payments?.length && <p className="text-slate-500 text-sm">No payments recorded yet.</p>}
-              {info.payments?.map((p, i) => (
-                <div key={i} className="flex items-center justify-between text-sm border-b border-white/5 py-1.5">
-                  <span className="text-slate-400">{new Date(p.payment_date).toLocaleDateString()}{p.method ? ` · ${p.method}` : ''}</span>
-                  <span className="font-medium">{p.currency} {Number(p.amount).toLocaleString()}</span>
+              {info.payments?.map((p) => {
+                const walletNotSentYet = p.payment_method === 'wallet' && p.wallet_status !== 'completed';
+                return (
+                  <div key={p.id} className="flex items-center justify-between text-sm border-b border-white/5 py-1.5 gap-2">
+                    <span className="text-slate-400">{new Date(p.payment_date).toLocaleDateString()}{p.method ? ` · ${p.method}` : ''}</span>
+                    <span className="font-medium shrink-0">{p.currency} {Number(p.amount).toLocaleString()}</span>
+                    {p.confirmed_at ? (
+                      <span title={`Confirmed ${new Date(p.confirmed_at).toLocaleString()}`} className="flex items-center gap-1 text-emerald-400 text-xs shrink-0"><CheckCircle2 className="w-3.5 h-3.5" /> Received</span>
+                    ) : walletNotSentYet ? (
+                      <span className={`text-xs shrink-0 ${['rejected', 'cancelled'].includes(p.wallet_status) ? 'text-red-400' : 'text-amber-400'}`}
+                        title="The company still needs to send this through their wallet before you can confirm it">
+                        {p.wallet_status === 'rejected' ? 'Payment failed' : p.wallet_status === 'cancelled' ? 'Payment cancelled' : 'Not sent yet'}
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleConfirmPayment(p.id)}
+                        disabled={confirmingId === p.id}
+                        className="text-xs px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 shrink-0"
+                      >
+                        {confirmingId === p.id ? '...' : 'Confirm received'}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mb-5">
+              <h2 className="text-sm font-semibold text-slate-300 mb-2 flex items-center gap-2"><Wallet className="w-4 h-4" /> IcanEra Wallet</h2>
+              {info.wallet_linked ? (
+                <p className="text-emerald-400 text-sm flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4" /> Linked -- the company can pay you directly to your wallet.</p>
+              ) : (
+                <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                  <p className="text-slate-400 text-xs mb-3">Sign in or create a free IcanEra Wallet account so this company can pay you straight into your wallet, instead of only cash.</p>
+                  <button type="button" onClick={handleGoogleWalletLink}
+                    className="w-full mb-3 rounded-lg bg-white text-slate-800 py-2 text-sm font-semibold hover:bg-slate-100">
+                    Continue with Google
+                  </button>
+                  <div className="flex items-center gap-2 mb-3 text-[11px] text-slate-500"><div className="flex-1 h-px bg-white/10" />or<div className="flex-1 h-px bg-white/10" /></div>
+                  <div className="flex gap-2 mb-3">
+                    <button type="button" onClick={() => setWalletMode('signin')} className={`flex-1 text-xs py-1.5 rounded border ${walletMode === 'signin' ? 'bg-indigo-600 border-indigo-500' : 'bg-white/5 border-white/10 text-slate-400'}`}>Sign in</button>
+                    <button type="button" onClick={() => setWalletMode('signup')} className={`flex-1 text-xs py-1.5 rounded border ${walletMode === 'signup' ? 'bg-indigo-600 border-indigo-500' : 'bg-white/5 border-white/10 text-slate-400'}`}>Create account</button>
+                  </div>
+                  <form onSubmit={handleWalletAuth} className="space-y-2">
+                    {walletMode === 'signup' && (
+                      <input type="text" value={walletForm.fullName} onChange={(e) => setWalletForm({ ...walletForm, fullName: e.target.value })}
+                        placeholder="Full name" className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm placeholder:text-slate-500" />
+                    )}
+                    <input type="email" required value={walletForm.email} onChange={(e) => setWalletForm({ ...walletForm, email: e.target.value })}
+                      placeholder="you@example.com" className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm placeholder:text-slate-500" />
+                    <input type="password" required value={walletForm.password} onChange={(e) => setWalletForm({ ...walletForm, password: e.target.value })}
+                      placeholder="Password" className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm placeholder:text-slate-500" />
+                    {walletError && <p className="text-red-400 text-xs">{walletError}</p>}
+                    <button type="submit" disabled={walletBusy} className="w-full rounded-lg bg-indigo-600 hover:bg-indigo-700 py-2 text-sm font-semibold disabled:opacity-50">
+                      {walletBusy ? 'Working...' : walletMode === 'signup' ? 'Create account & link wallet' : 'Sign in & link wallet'}
+                    </button>
+                  </form>
                 </div>
-              ))}
+              )}
             </div>
 
             <div className="mb-5">

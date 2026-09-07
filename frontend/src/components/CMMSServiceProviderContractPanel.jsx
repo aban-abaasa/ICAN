@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Copy, ExternalLink, Lock, Mail, Plus, Share2, Wallet, X } from 'lucide-react';
+import { CheckCircle2, Copy, ExternalLink, Lock, Mail, Plus, Share2, Wallet, X } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 import cmmsServiceProviderContractsService from '../services/cmmsServiceProviderContractsService';
+import { approveBusinessWalletTransaction, transferFromBusinessWallet, ugxToICAN } from '../services/icanWalletService';
 
 /**
  * Lives inside the Tasks -> Assign tab (CMSSModule.jsx), gated by
@@ -12,8 +13,16 @@ import cmmsServiceProviderContractsService from '../services/cmmsServiceProvider
  * backend/CMMS_SERVICE_PROVIDER_CONTRACTS.sql for the full data-isolation
  * story: this feature only ever touches its own three tables, never
  * payroll or inventory.
+ *
+ * Payments are real (backend/CMMS_SERVICE_PROVIDER_CONTRACT_REAL_PAYMENTS.
+ * sql): cash is recorded here and the provider confirms receipt themselves
+ * from their own contract link; wallet payments only unlock once the
+ * provider has signed up/in and linked their own IcanEra Wallet from that
+ * same link, then move through the exact same pitchin_business_wallet_
+ * transfer() RPC (transferFromBusinessWallet) CMMSPayrollPanel.jsx already
+ * uses to pay salary from this company's Pichin business wallet.
  */
-const CMMSServiceProviderContractPanel = ({ companyId, currentUser }) => {
+const CMMSServiceProviderContractPanel = ({ companyId, currentUser, businessProfileId }) => {
   const [myCmmsUserId, setMyCmmsUserId] = useState(null);
   const [jobAssignments, setJobAssignments] = useState([]);
   const [contracts, setContracts] = useState([]);
@@ -130,7 +139,7 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser }) => {
       </div>
 
       <p className="text-slate-400 text-xs md:text-sm mb-4">
-        Publish a simple, time-limited public link for an outside service provider (no CMMS login needed) to view their contract, post task follow-ups, and see payments recorded for their work. The link is private -- it needs the PIN or email you set below to open.
+        Publish a simple, time-limited public link for an outside service provider (no CMMS login needed) to view their contract, post task follow-ups, and see payments recorded for their work. The link is private -- it needs the PIN or email you set below to open. Payments are real: cash needs the provider's own confirmation from that link, and wallet payments send directly to the provider's IcanEra Wallet once they sign up and link it there.
       </p>
 
       {showForm && publishedLink && (
@@ -255,6 +264,7 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser }) => {
               statusColor={statusColor}
               myCmmsUserId={myCmmsUserId}
               companyId={companyId}
+              businessProfileId={businessProfileId}
               onChanged={loadAll}
             />
           ))}
@@ -264,16 +274,25 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser }) => {
   );
 };
 
-const ContractRow = ({ contract, expanded, onToggle, onCopyLink, onShareLink, onRevoke, onExtend, statusColor, myCmmsUserId, companyId, onChanged }) => {
+const ContractRow = ({ contract, expanded, onToggle, onCopyLink, onShareLink, onRevoke, onExtend, statusColor, myCmmsUserId, companyId, businessProfileId, onChanged }) => {
   const [followups, setFollowups] = useState([]);
   const [payments, setPayments] = useState([]);
   const [note, setNote] = useState('');
-  const [paymentForm, setPaymentForm] = useState({ amount: '', method: '', reference: '' });
+  const [paymentForm, setPaymentForm] = useState({ amount: '', method: 'cash', reference: '', pin: '' });
+  const [payBusy, setPayBusy] = useState(false);
+  const [payError, setPayError] = useState('');
+  const [approvingId, setApprovingId] = useState(null);
+  const [approvePin, setApprovePin] = useState('');
+
+  const walletLinked = Boolean(contract.provider_wallet_user_id);
+
+  const reloadPayments = () => cmmsServiceProviderContractsService.getPaymentsForContract(contract.id).then((r) => setPayments(r.data || []));
 
   useEffect(() => {
     if (!expanded) return;
     cmmsServiceProviderContractsService.getFollowupsForContract(contract.id).then((r) => setFollowups(r.data || []));
-    cmmsServiceProviderContractsService.getPaymentsForContract(contract.id).then((r) => setPayments(r.data || []));
+    reloadPayments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expanded, contract.id]);
 
   const handleAddNote = async () => {
@@ -285,9 +304,64 @@ const ContractRow = ({ contract, expanded, onToggle, onCopyLink, onShareLink, on
 
   const handleAddPayment = async () => {
     if (!paymentForm.amount) return;
-    await cmmsServiceProviderContractsService.recordServiceProviderPayment(contract.id, companyId, paymentForm, myCmmsUserId);
-    setPaymentForm({ amount: '', method: '', reference: '' });
-    cmmsServiceProviderContractsService.getPaymentsForContract(contract.id).then((r) => setPayments(r.data || []));
+    setPayError('');
+
+    if (paymentForm.method === 'wallet') {
+      if (!walletLinked) { setPayError("This provider hasn't linked an IcanEra Wallet yet -- ask them to open their contract link and sign up, or record this as cash."); return; }
+      if (!businessProfileId) { setPayError('Link this company to its Pichin business profile before paying by wallet.'); return; }
+      if (!paymentForm.pin) { setPayError('Enter the business-wallet PIN.'); return; }
+      setPayBusy(true);
+      try {
+        const transfer = await transferFromBusinessWallet({
+          businessProfileId,
+          recipientUserId: contract.provider_wallet_user_id,
+          amount: ugxToICAN(Number(paymentForm.amount)),
+          note: `${contract.title} -- ${paymentForm.reference || 'contract payment'}`,
+          referenceId: contract.id,
+          pin: paymentForm.pin,
+        });
+        await cmmsServiceProviderContractsService.recordServiceProviderPayment(contract.id, companyId, {
+          amount: paymentForm.amount,
+          method: 'IcanEra Wallet',
+          paymentMethod: 'wallet',
+          walletTransactionId: transfer.transaction_id || transfer.id || null,
+          reference: paymentForm.reference,
+        }, myCmmsUserId);
+        setPaymentForm({ amount: '', method: 'wallet', reference: '', pin: '' });
+        await reloadPayments();
+      } catch (err) {
+        setPayError(err.message || 'Wallet payment failed.');
+      }
+      setPayBusy(false);
+      return;
+    }
+
+    setPayBusy(true);
+    await cmmsServiceProviderContractsService.recordServiceProviderPayment(contract.id, companyId, {
+      amount: paymentForm.amount, method: 'Cash', paymentMethod: 'cash', reference: paymentForm.reference,
+    }, myCmmsUserId);
+    setPaymentForm({ amount: '', method: 'cash', reference: '', pin: '' });
+    await reloadPayments();
+    setPayBusy(false);
+  };
+
+  // transferFromBusinessWallet only ever queues a pending_approval request
+  // (pitchin_business_wallet_transfer) -- no ICAN actually moves, and the
+  // provider can't validly confirm receipt, until the business administrator
+  // approves it here with the wallet PIN. Same RPC ICANWalletInbox.jsx uses,
+  // just reachable without leaving this panel.
+  const handleApproveWalletPayment = async (payment) => {
+    if (!approvePin) { setPayError('Enter the business-wallet PIN to approve this transfer.'); return; }
+    setApprovingId(payment.id);
+    setPayError('');
+    try {
+      await approveBusinessWalletTransaction(payment.wallet_transaction_id, 'approved', approvePin);
+      setApprovePin('');
+      await reloadPayments();
+    } catch (err) {
+      setPayError(err.message || 'Could not approve this transfer.');
+    }
+    setApprovingId(null);
   };
 
   return (
@@ -297,6 +371,8 @@ const ContractRow = ({ contract, expanded, onToggle, onCopyLink, onShareLink, on
           <p className="text-white text-sm font-semibold">{contract.title}</p>
           <p className="text-slate-400 text-xs">{contract.provider_name} · <span className={statusColor[contract.status]}>{contract.status}</span>
             {contract.valid_until && ` · valid until ${new Date(contract.valid_until).toLocaleDateString()}`}
+            {' · '}
+            <span className={walletLinked ? 'text-emerald-400' : 'text-slate-500'}>{walletLinked ? 'Wallet linked' : 'No wallet linked'}</span>
           </p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -316,20 +392,60 @@ const ContractRow = ({ contract, expanded, onToggle, onCopyLink, onShareLink, on
         <div className="mt-3 pt-3 border-t border-slate-700 space-y-3">
           <div>
             <p className="text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1"><Wallet className="w-3.5 h-3.5" /> Payments</p>
-            {payments.map((p) => (
-              <div key={p.id} className="flex justify-between text-xs text-slate-400 py-0.5">
-                <span>{new Date(p.payment_date).toLocaleDateString()}{p.method ? ` · ${p.method}` : ''}</span>
-                <span className="text-white">{p.currency} {Number(p.amount).toLocaleString()}</span>
+            {payments.map((p) => {
+              const needsApproval = p.payment_method === 'wallet' && p.wallet_status && p.wallet_status !== 'completed';
+              return (
+                <div key={p.id} className="text-xs text-slate-400 py-1 border-b border-slate-800/60 last:border-0">
+                  <div className="flex justify-between items-center">
+                    <span>
+                      {new Date(p.payment_date).toLocaleDateString()}{p.method ? ` · ${p.method}` : ''}
+                      {needsApproval && <span className="ml-1 text-amber-400">({p.wallet_status.replace('_', ' ')})</span>}
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <span className="text-white">{p.currency} {Number(p.amount).toLocaleString()}</span>
+                      {p.confirmed_at ? (
+                        <span title={`Provider confirmed ${new Date(p.confirmed_at).toLocaleString()}`} className="flex items-center gap-0.5 text-emerald-400"><CheckCircle2 className="w-3.5 h-3.5" /> Confirmed</span>
+                      ) : needsApproval ? (
+                        <span className="text-amber-400">Not sent yet</span>
+                      ) : (
+                        <span className="text-amber-400">Pending confirmation</span>
+                      )}
+                    </span>
+                  </div>
+                  {needsApproval && p.wallet_status === 'pending_approval' && (
+                    <div className="flex gap-1.5 mt-1">
+                      <input type="password" placeholder="Wallet PIN to approve" value={approvePin} onChange={(e) => setApprovePin(e.target.value)}
+                        className="flex-1 bg-slate-700 text-white text-[11px] rounded px-2 py-1 border border-slate-600" />
+                      <button onClick={() => handleApproveWalletPayment(p)} disabled={approvingId === p.id}
+                        className="text-[11px] px-2 py-1 rounded bg-indigo-700 hover:bg-indigo-600 text-white disabled:opacity-50">
+                        {approvingId === p.id ? 'Approving...' : 'Approve & send'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            <div className="space-y-1.5 mt-2">
+              <div className="flex gap-1.5">
+                <input type="number" placeholder="Amount (UGX)" value={paymentForm.amount} onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+                  className="w-28 bg-slate-700 text-white text-xs rounded px-2 py-1 border border-slate-600" />
+                <select value={paymentForm.method} onChange={(e) => setPaymentForm({ ...paymentForm, method: e.target.value })}
+                  className="bg-slate-700 text-white text-xs rounded px-2 py-1 border border-slate-600">
+                  <option value="cash">Cash</option>
+                  <option value="wallet">IcanEra Wallet</option>
+                </select>
+                <input type="text" placeholder="Reference" value={paymentForm.reference} onChange={(e) => setPaymentForm({ ...paymentForm, reference: e.target.value })}
+                  className="flex-1 bg-slate-700 text-white text-xs rounded px-2 py-1 border border-slate-600" />
               </div>
-            ))}
-            <div className="flex gap-1.5 mt-2">
-              <input type="number" placeholder="Amount" value={paymentForm.amount} onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
-                className="w-24 bg-slate-700 text-white text-xs rounded px-2 py-1 border border-slate-600" />
-              <input type="text" placeholder="Method" value={paymentForm.method} onChange={(e) => setPaymentForm({ ...paymentForm, method: e.target.value })}
-                className="w-24 bg-slate-700 text-white text-xs rounded px-2 py-1 border border-slate-600" />
-              <input type="text" placeholder="Reference" value={paymentForm.reference} onChange={(e) => setPaymentForm({ ...paymentForm, reference: e.target.value })}
-                className="flex-1 bg-slate-700 text-white text-xs rounded px-2 py-1 border border-slate-600" />
-              <button onClick={handleAddPayment} className="text-xs px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white">Add</button>
+              {paymentForm.method === 'wallet' && (
+                <input type="password" placeholder="Business-wallet PIN" value={paymentForm.pin} onChange={(e) => setPaymentForm({ ...paymentForm, pin: e.target.value })}
+                  className="w-full bg-slate-700 text-white text-xs rounded px-2 py-1 border border-slate-600" />
+              )}
+              {payError && <p className="text-red-400 text-[11px]">{payError}</p>}
+              <button onClick={handleAddPayment} disabled={payBusy || !paymentForm.amount}
+                className="text-xs px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white disabled:opacity-50">
+                {payBusy ? 'Sending...' : paymentForm.method === 'wallet' ? 'Send via IcanEra Wallet' : 'Record cash payment'}
+              </button>
             </div>
           </div>
 

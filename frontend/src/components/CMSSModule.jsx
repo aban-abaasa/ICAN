@@ -2945,7 +2945,7 @@ const CMMSModule = ({
             )}
 
             {canPublishServiceProviderContracts && (
-              <CMMSServiceProviderContractPanel companyId={companyIdToUse} currentUser={user} />
+              <CMMSServiceProviderContractPanel companyId={companyIdToUse} currentUser={user} businessProfileId={cmmsData.companyProfile?.pichin_business_profile_id} />
             )}
           </div>
         )}
