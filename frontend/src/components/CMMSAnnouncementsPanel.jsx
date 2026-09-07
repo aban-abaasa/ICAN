@@ -443,8 +443,20 @@ const CMMSAnnouncementsPanel = ({
   const saveApplicationStatus = async (application, status, note) => {
     setSavingApplicationId(application.id);
     const result = await cmmsAnnouncementsService.updateApplicationStatus(application.id, status, note, myCmmsUserId);
-    if (!result.success) alert(`❌ ${result.error}`);
-    else await loadApplications();
+    if (!result.success) {
+      alert(`❌ ${result.error}`);
+    } else {
+      await loadApplications();
+      // Marking someone "Hired" is the moment that matters -- open the
+      // QR-sealed appointment letter/contract flow immediately instead of
+      // leaving the admin to notice a button lower on the card (same
+      // "the dropdown IS the action" idea as the written-test/interview
+      // auto-open in ApplicationRow.changeStatus below). Only fires on the
+      // transition into "hired", not every re-save while already hired.
+      if (status === 'hired' && application.status !== 'hired') {
+        setDocumentsForApplication({ ...application, status });
+      }
+    }
     setSavingApplicationId(null);
   };
 
