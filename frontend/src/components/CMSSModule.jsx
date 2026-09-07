@@ -7077,6 +7077,29 @@ const CMMSModule = ({
       }
     }, [menuOpen]);
 
+    // Show a fixed 6 modules directly; everything past that collapses
+    // behind a trailing "More" item rendered as a dropdown.
+    const MAX_VISIBLE_TABS = 6;
+    const [moreOpen, setMoreOpen] = useState(false);
+    const moreRef = useRef(null);
+
+    // Close "More" dropdown when clicking outside
+    useEffect(() => {
+      const handleClickOutside = (e) => {
+        if (moreRef.current && !moreRef.current.contains(e.target)) {
+          setMoreOpen(false);
+        }
+      };
+      if (moreOpen) {
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+      }
+    }, [moreOpen]);
+
+    const visibleTabs = accessibleTabs.slice(0, MAX_VISIBLE_TABS);
+    const overflowTabs = accessibleTabs.slice(MAX_VISIBLE_TABS);
+    const activeOverflowTab = overflowTabs.find(t => t.id === activeTab);
+
     // Mobile view - 3-dot menu only
     if (isMobile) {
       return (
@@ -7149,32 +7172,81 @@ const CMMSModule = ({
       );
     }
 
-    // Desktop view - show all accessible tabs directly
+    // Desktop view - show a fixed 6 tabs directly; the rest collapse into a
+    // trailing "More" item rendered as a dropdown.
+
+    const renderTabButton = (tab) => {
+      const palette = tabPalette[tab.id] || tabPalette.company;
+      return (
+        <button
+          key={tab.id}
+          onClick={() => selectCmmsTab(tab.id)}
+          className={`px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm font-semibold transition-all whitespace-nowrap rounded-lg border ${activeTab === tab.id ? 'text-white' : 'hover:brightness-110'}`}
+          style={activeTab === tab.id
+            ? { background: palette.activeBg, borderColor: palette.border, boxShadow: '0 8px 18px rgba(0, 0, 0, 0.2)' }
+            : { background: palette.inactiveBg, borderColor: palette.border, color: palette.inactiveText }
+          }
+        >
+          {tab.label}
+        </button>
+      );
+    };
 
     return (
       <div className="mb-6 border-b border-white border-opacity-10 -mx-4 md:-mx-6 lg:-mx-8">
-        <div className="flex gap-1 md:gap-2 items-center justify-between px-4 md:px-6 lg:px-8 py-2 md:py-3">
-          {/* All Tabs */}
-          <div className="flex gap-1 md:gap-2 items-center overflow-x-auto flex-1">
-            {accessibleTabs.map(tab => (
-              (() => {
-                const palette = tabPalette[tab.id] || tabPalette.company;
-                return (
-              <button
-                key={tab.id}
-                onClick={() => selectCmmsTab(tab.id)}
-                className={`px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm font-semibold transition-all whitespace-nowrap rounded-lg border ${activeTab === tab.id ? 'text-white' : 'hover:brightness-110'}`}
-                style={activeTab === tab.id
-                  ? { background: palette.activeBg, borderColor: palette.border, boxShadow: '0 8px 18px rgba(0, 0, 0, 0.2)' }
-                  : { background: palette.inactiveBg, borderColor: palette.border, color: palette.inactiveText }
-                }
-              >
-                {tab.label}
-              </button>
-                );
-              })()
-            ))}
+        <div className="relative flex gap-1 md:gap-2 items-center px-4 md:px-6 lg:px-8 py-2 md:py-3">
+          {/* Visible tabs */}
+          <div className="flex gap-1 md:gap-2 items-center min-w-0 overflow-x-auto">
+            {visibleTabs.map(tab => renderTabButton(tab))}
           </div>
+
+          {/* Smart "More" overflow */}
+          {overflowTabs.length > 0 && (
+            <div className="relative flex-shrink-0" ref={moreRef}>
+              <button
+                onClick={() => setMoreOpen(o => !o)}
+                className="px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm font-semibold transition-all whitespace-nowrap rounded-lg border flex items-center gap-1.5 hover:brightness-110"
+                style={{ background: 'rgba(255, 255, 255, 0.08)', borderColor: 'rgba(255, 255, 255, 0.25)', color: '#cbd5e1' }}
+                title="More modules"
+              >
+                <span>More</span>
+                {activeOverflowTab && <span className="w-1.5 h-1.5 rounded-full bg-blue-400" title={`${activeOverflowTab.label} is active`} />}
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${moreOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {moreOpen && (
+                <div className="absolute right-0 top-full mt-2 bg-slate-900/95 border border-slate-600 rounded-lg shadow-2xl z-30 min-w-64 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="px-4 py-3 border-b border-slate-700 text-slate-300 text-xs font-semibold bg-slate-900 rounded-t-lg">
+                    📋 MORE MODULES
+                  </div>
+                  <div className="divide-y divide-slate-700 max-h-96 overflow-y-auto">
+                    {overflowTabs.map(tab => {
+                      const palette = tabPalette[tab.id] || tabPalette.company;
+                      return (
+                        <button
+                          key={tab.id}
+                          onClick={() => {
+                            selectCmmsTab(tab.id);
+                            setMoreOpen(false);
+                          }}
+                          className={`w-full px-4 py-3 text-sm font-medium transition-all text-left flex items-center gap-3 ${
+                            activeTab === tab.id ? 'text-white' : 'text-slate-200'
+                          }`}
+                          style={activeTab === tab.id
+                            ? { background: palette.activeBg, borderLeft: `3px solid ${palette.border}` }
+                            : { background: palette.inactiveBg }
+                          }
+                        >
+                          <span className="flex-1">{tab.label}</span>
+                          {activeTab === tab.id && <span className="text-white">✓</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     );

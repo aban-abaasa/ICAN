@@ -647,6 +647,126 @@ const STAGE_STYLES = {
   4: { cardBg: 'from-green-900/60 to-green-900/40', cardBorder: 'border-green-500/60', barGradient: 'from-green-500 to-green-400', badgeText: 'text-green-300', titleText: 'text-green-100/80', activeBtn: 'bg-gradient-to-br from-green-600/40 to-green-700/30 border-green-500/40', activeIcon: 'text-green-400', activeLabel: 'text-green-300' },
 };
 
+// Dashboard header navigation row — shows as many sections as actually fit
+// the available width, and collapses whatever doesn't fit behind a trailing
+// "More" dropdown, instead of leaving them in a horizontally scrolling row
+// (which relied on a `scrollbar-hide` class that was never defined anywhere
+// in this codebase, so the row's native scrollbar/slider was always visible
+// under it). Mirrors the CMSTabsWithMenu smart-overflow pattern used for the
+// CMMS module row in CMSSModule.jsx.
+const MAX_VISIBLE_HEADER_TABS = 6;
+
+const DashboardHeaderNavTabs = ({ tabs, activeTab, onTabClick, showBack, onBack }) => {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef(null);
+
+  const renderTabButton = (tab) => {
+    const isActive = activeTab === tab.id;
+    const TabIcon = tab.icon;
+    return (
+      <button
+        key={tab.id}
+        onClick={() => onTabClick(tab.id)}
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 2xl:px-5 2xl:py-2.5 rounded-lg text-xs md:text-sm 2xl:text-base font-semibold whitespace-nowrap border transition-all duration-200 ${
+          isActive
+            ? 'bg-indigo-500/25 text-indigo-100 border-indigo-300/50 shadow-[0_8px_16px_rgba(99,102,241,0.22)]'
+            : 'bg-transparent text-slate-300 border-slate-600/60 hover:text-white hover:bg-slate-700/35 hover:border-slate-400/70'
+        }`}
+      >
+        <TabIcon className={`w-3.5 h-3.5 md:w-4 md:h-4 ${isActive ? 'text-indigo-300' : 'text-slate-500'}`} />
+        {tab.label}
+      </button>
+    );
+  };
+
+  // Close "More" dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (moreRef.current && !moreRef.current.contains(e.target)) {
+        setMoreOpen(false);
+      }
+    };
+    if (moreOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [moreOpen]);
+
+  const visibleTabs = tabs.slice(0, MAX_VISIBLE_HEADER_TABS);
+  const overflowTabs = tabs.slice(MAX_VISIBLE_HEADER_TABS);
+  // A small dot marks the "More" button when the active section is hidden
+  // inside it, without the button taking over that section's label/color.
+  const activeOverflowTab = overflowTabs.find(t => t.id === activeTab);
+
+  return (
+    <div className="mt-2 border-t border-slate-700/60 pt-2">
+      <div className="relative flex flex-nowrap items-center gap-1.5 md:gap-2 pb-1">
+        {/* Back button — visible only when there is history to go back to */}
+        {showBack && (
+          <button
+            onClick={onBack}
+            title="Go back"
+            className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-500/60 bg-slate-700/50 hover:bg-indigo-500/30 hover:border-indigo-400/60 text-slate-300 hover:text-white transition-all duration-200 group"
+          >
+            <ChevronLeft className="w-4 h-4 group-hover:scale-110 transition-transform" />
+            <span className="text-xs font-semibold whitespace-nowrap">Back</span>
+          </button>
+        )}
+
+        {/* Tabs that fit directly */}
+        <div className="flex flex-nowrap items-center gap-1.5 md:gap-2 min-w-0 overflow-x-auto">
+          {visibleTabs.map(tab => renderTabButton(tab))}
+        </div>
+
+        {/* Smart "More" overflow */}
+        {overflowTabs.length > 0 && (
+          <div className="relative flex-shrink-0" ref={moreRef}>
+            <button
+              onClick={() => setMoreOpen(o => !o)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 2xl:px-5 2xl:py-2.5 rounded-lg text-xs md:text-sm 2xl:text-base font-semibold whitespace-nowrap border transition-all duration-200 bg-transparent text-slate-300 border-slate-600/60 hover:text-white hover:bg-slate-700/35 hover:border-slate-400/70"
+              title="More sections"
+            >
+              <span>More</span>
+              {activeOverflowTab && <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" title={`${activeOverflowTab.label} is active`} />}
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${moreOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {moreOpen && (
+              <div className="absolute right-0 top-full mt-2 bg-slate-900/95 border border-slate-600 rounded-lg shadow-2xl z-30 min-w-56 animate-in fade-in zoom-in-95 duration-200">
+                <div className="px-4 py-3 border-b border-slate-700 text-slate-300 text-xs font-semibold bg-slate-900 rounded-t-lg">
+                  MORE SECTIONS
+                </div>
+                <div className="divide-y divide-slate-700 max-h-96 overflow-y-auto">
+                  {overflowTabs.map(tab => {
+                    const TabIcon = tab.icon;
+                    const isActive = activeTab === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => {
+                          onTabClick(tab.id);
+                          setMoreOpen(false);
+                        }}
+                        className={`w-full px-4 py-3 text-sm font-medium transition-all text-left flex items-center gap-3 ${
+                          isActive ? 'bg-indigo-500/25 text-indigo-100 border-l-4 border-indigo-300/60' : 'text-slate-200 hover:bg-slate-800'
+                        }`}
+                      >
+                        <TabIcon className={`w-4 h-4 ${isActive ? 'text-indigo-300' : 'text-slate-500'}`} />
+                        <span className="flex-1">{tab.label}</span>
+                        {isActive && <span className="text-white">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const { actualTheme } = useTheme();
   const { isOfflineMode, queueAction, user: authContextUser, getAvatarUrl, getDisplayName } = useAuth();
@@ -4880,54 +5000,26 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           </div>
 
           {isWebDashboard && (
-            <div className="mt-2 border-t border-slate-700/60 pt-2">
-              <div className="flex flex-nowrap items-center gap-1.5 md:gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            <DashboardHeaderNavTabs
+              tabs={headerNavTabs}
+              activeTab={activeHeaderTab}
+              onTabClick={handleHeaderTabClick}
+              showBack={navHistory.length > 0}
+              onBack={() => {
+                if (navHistory.length === 0) return;
+                const prev = navHistory[navHistory.length - 1];
+                setNavHistory(h => h.slice(0, -1));
 
-                {/* ← Back button — visible only when there is history to go back to */}
-                {navHistory.length > 0 && (
-                  <button
-                    onClick={() => {
-                      if (navHistory.length === 0) return;
-                      const prev = navHistory[navHistory.length - 1];
-                      setNavHistory(h => h.slice(0, -1));
-
-                      if (prev && typeof prev === 'object' && prev.panel && prev.tab) {
-                        // Sub-page back: tell the open panel to switch its internal tab
-                        const refMap = { wallet: walletNavRef, trust: trustNavRef, pitchin: pitchinNavRef, cmms: cmssNavRef };
-                        refMap[prev.panel]?.current?.(prev.tab);
-                      } else {
-                        // Panel-level back: restore previous panel
-                        restorePanel(prev || 'dashboard');
-                      }
-                    }}
-                    title="Go back"
-                    className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-500/60 bg-slate-700/50 hover:bg-indigo-500/30 hover:border-indigo-400/60 text-slate-300 hover:text-white transition-all duration-200 group"
-                  >
-                    <ChevronLeft className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                    <span className="text-xs font-semibold whitespace-nowrap">Back</span>
-                  </button>
-                )}
-
-                {headerNavTabs.map((tab) => {
-                  const isActive = activeHeaderTab === tab.id;
-                  const TabIcon = tab.icon;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => handleHeaderTabClick(tab.id)}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 2xl:px-5 2xl:py-2.5 rounded-lg text-xs md:text-sm 2xl:text-base font-semibold whitespace-nowrap border transition-all duration-200 ${
-                        isActive
-                          ? 'bg-indigo-500/25 text-indigo-100 border-indigo-300/50 shadow-[0_8px_16px_rgba(99,102,241,0.22)]'
-                          : 'bg-transparent text-slate-300 border-slate-600/60 hover:text-white hover:bg-slate-700/35 hover:border-slate-400/70'
-                      }`}
-                    >
-                      <TabIcon className={`w-3.5 h-3.5 md:w-4 md:h-4 ${isActive ? 'text-indigo-300' : 'text-slate-500'}`} />
-                      {tab.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+                if (prev && typeof prev === 'object' && prev.panel && prev.tab) {
+                  // Sub-page back: tell the open panel to switch its internal tab
+                  const refMap = { wallet: walletNavRef, trust: trustNavRef, pitchin: pitchinNavRef, cmms: cmssNavRef };
+                  refMap[prev.panel]?.current?.(prev.tab);
+                } else {
+                  // Panel-level back: restore previous panel
+                  restorePanel(prev || 'dashboard');
+                }
+              }}
+            />
           )}
           </div>
         </div>
