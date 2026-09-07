@@ -9,11 +9,8 @@ import { useAuth } from '../../context/AuthContext';
 import { User, Mail, Phone, Edit2, Save, X, Upload, Shield, Wallet, Key, LogOut, Plus, Camera, Trash2, Clock, Bell } from 'lucide-react';
 import { StatusUploader } from '../status/StatusUploader';
 import ShareholderApprovalsCenter from '../ShareholderApprovalsCenter';
-import ReadinessPanel from '../profile/ReadinessPanel';
-import GrowthPanel from '../profile/GrowthPanel';
-import PortfolioTab from '../profile/PortfolioTab';
 
-export const ProfilePage = ({ onClose = null, onLogout = null, initialTab = 'overview', readinessProps = {}, growthProps = {} }) => {
+export const ProfilePage = ({ onClose = null, onLogout = null }) => {
   const {
     user,
     profile,
@@ -25,7 +22,6 @@ export const ProfilePage = ({ onClose = null, onLogout = null, initialTab = 'ove
     signOut
   } = useAuth();
 
-  const [activeTab, setActiveTab] = useState(initialTab);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -211,13 +207,6 @@ export const ProfilePage = ({ onClose = null, onLogout = null, initialTab = 'ove
       ? 'bg-yellow-100 text-yellow-700 border-yellow-200'
       : 'bg-emerald-100 text-emerald-700 border-emerald-200';
 
-  const TABS = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'readiness', label: 'Readiness' },
-    { id: 'growth', label: 'Growth' },
-    { id: 'resume', label: 'My Resume' },
-  ];
-
   return (
     <div className="min-h-[100dvh] bg-gradient-to-b from-slate-950 via-purple-950 to-slate-950">
       <div className="p-3 sm:p-3 md:p-8 pb-[calc(7.5rem+env(safe-area-inset-bottom))] sm:pb-3 md:pb-8 pt-[calc(0.75rem+env(safe-area-inset-top))]">
@@ -238,29 +227,6 @@ export const ProfilePage = ({ onClose = null, onLogout = null, initialTab = 'ove
             )}
           </div>
 
-          {/* Tab Bar */}
-          <div className="flex gap-1.5 mb-3 sm:mb-4 md:mb-8 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex-shrink-0 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  activeTab === tab.id
-                    ? 'bg-gradient-to-r from-amber-700 to-purple-600 text-white shadow-md'
-                    : 'bg-slate-800/60 text-gray-300 hover:bg-slate-800'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-        {activeTab === 'readiness' && <ReadinessPanel {...readinessProps} />}
-        {activeTab === 'growth' && <GrowthPanel {...growthProps} />}
-        {activeTab === 'resume' && <PortfolioTab />}
-
-        {activeTab === 'overview' && (
-        <>
         {/* Alerts - Compact on Mobile */}
         {error && (
           <div className="mb-3 sm:mb-4 md:mb-6 p-2.5 sm:p-3 md:p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs sm:text-sm md:text-base">
@@ -697,8 +663,6 @@ export const ProfilePage = ({ onClose = null, onLogout = null, initialTab = 'ove
             currentUserEmail={user?.email}
             onClose={() => setShowApprovalsModal(false)}
           />
-        )}
-        </>
         )}
         </div>
       </div>

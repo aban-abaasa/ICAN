@@ -65,6 +65,7 @@ import SmartTransactionEntry from './SmartTransactionEntry';
 import { ProfilePage } from './auth/ProfilePage';
 import ReadinessPanel from './profile/ReadinessPanel';
 import GrowthPanel from './profile/GrowthPanel';
+import PortfolioTab from './profile/PortfolioTab';
 import ProfessionalsDirectory from './profile/ProfessionalsDirectory';
 import Pitchin from './Pitchin';
 import ICANWallet from './ICANWallet';
@@ -4354,7 +4355,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
   // default dashboard — either instantly (same session, via the event) or
   // after a fresh sign-up/reload (via the sessionStorage flag it also sets).
   useEffect(() => {
-    const openResumeTab = () => openDetailView('profile', 'My Profile', 'resume');
+    const openResumeTab = () => openDetailView('resume', 'My Resume');
     try {
       if (window.sessionStorage.getItem('ican_pending_start_tab') === 'resume') {
         window.sessionStorage.removeItem('ican_pending_start_tab');
@@ -4645,7 +4646,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           <div className={`flex items-center w-full gap-3 ${isWebDashboard ? 'min-h-[48px]' : ''}`}>
             {/* IcanEra Branding - Left aligned */}
             <h1
-              className={`${isWebDashboard ? 'text-2xl md:text-3xl 2xl:text-4xl' : 'text-2xl sm:text-3xl'} font-serif font-bold tracking-wide sm:tracking-wider leading-tight flex-shrink-0`}
+              className={`${isWebDashboard ? 'text-2xl md:text-3xl 2xl:text-4xl' : 'text-xl min-[360px]:text-2xl sm:text-3xl'} font-serif font-bold tracking-wide sm:tracking-wider leading-tight flex-shrink-0`}
               style={{
                 color: isWebDashboard ? '#818cf8' : 'var(--color-secondary)',
                 textShadow: isWebDashboard ? '0 2px 12px rgba(129, 140, 248, 0.32)' : '0 0 10px rgba(129, 140, 248, 0.35)'
@@ -4666,29 +4667,32 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             {/* Spacer */}
             <div className="flex-1"></div>
 
-            {/* Pending Badge - Mobile Visible */}
+            {/* Pending Badge - hidden on very small phones so it never crowds out the avatar/menu */}
             {pendingActionsCount > 0 && (
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-500/25 border border-orange-500/50 text-orange-300 text-xs font-semibold whitespace-nowrap">
+              <div className="hidden min-[360px]:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-500/25 border border-orange-500/50 text-orange-300 text-xs font-semibold whitespace-nowrap flex-shrink-0">
                 <Zap className="w-3.5 h-3.5" />
                 <span>{pendingActionsCount} Pending</span>
               </div>
             )}
 
-            {/* Header Menu Actions - RIGHT (avatar + kebab, shared by mobile and web dashboard) */}
+            {/* Header Menu Actions - RIGHT (avatar + menu, shared by mobile and web dashboard).
+                flex-shrink-0 so this group is never the one squeezed/clipped on narrow screens —
+                the avatar (and its menu) must always stay reachable. */}
             {(() => {
               const avatarUrl = getAvatarUrl?.();
               const displayName = getDisplayName?.() || '';
               return (
-              <div className="flex items-center gap-2 sm:gap-3">
+              <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
               <div className={isWebDashboard ? 'rounded-full border border-slate-600/70 bg-transparent px-2 py-1' : 'scale-90'}>
                 <ThemeSwitcher />
               </div>
 
-              {/* Avatar */}
+              <div className="relative">
+              {/* Avatar — now the single trigger for the full menu (no more kebab) */}
               <button
-                onClick={() => openDetailView('profile', 'My Profile')}
+                onClick={() => setShowMenuDropdown(!showMenuDropdown)}
                 className="flex-shrink-0 rounded-full ring-2 ring-purple-500/40 hover:ring-purple-400/70 transition"
-                title="Open my profile"
+                title="Menu"
               >
                 {avatarUrl ? (
                   <img
@@ -4701,15 +4705,6 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     {displayName.charAt(0) || 'U'}
                   </div>
                 )}
-              </button>
-
-              <div className="relative">
-              <button 
-                onClick={() => setShowMenuDropdown(!showMenuDropdown)}
-                className="p-1.5 sm:p-2 hover:bg-purple-500/30 rounded-lg transition active:scale-95 flex-shrink-0"
-                title="Menu options"
-              >
-                <MoreVertical className="w-5 sm:w-6 h-5 sm:h-6 text-purple-300 hover:text-white" />
               </button>
 
               {/* Dropdown Menu - Exact Image Layout */}
@@ -4765,7 +4760,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     {/* Readiness */}
                     <button
                       onClick={() => {
-                        openDetailView('profile', 'My Profile', 'readiness');
+                        openDetailView('readiness', 'Readiness');
                         setShowMenuDropdown(false);
                       }}
                       className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-purple-500/20 hover:text-purple-300 rounded transition"
@@ -4776,7 +4771,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     {/* Growth */}
                     <button
                       onClick={() => {
-                        openDetailView('profile', 'My Profile', 'growth');
+                        openDetailView('growth', 'Growth');
                         setShowMenuDropdown(false);
                       }}
                       className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-purple-500/20 hover:text-purple-300 rounded transition"
@@ -4787,7 +4782,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     {/* My Resume / Portfolio */}
                     <button
                       onClick={() => {
-                        openDetailView('profile', 'My Profile', 'resume');
+                        openDetailView('resume', 'My Resume');
                         setShowMenuDropdown(false);
                       }}
                       className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-amber-500/20 hover:text-amber-300 rounded transition"
@@ -5174,9 +5169,6 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     onLogout={() => {
                       setSelectedDetail(null);
                     }}
-                    initialTab={selectedDetail.initialTab || 'overview'}
-                    readinessProps={{ mode, setMode, operatingCountry, setOperatingCountry, performComplianceCheck, isLoading, complianceData }}
-                    growthProps={{ optimizeSchedule, isLoading, scheduleData }}
                   />
                 </div>
               )}
@@ -5289,6 +5281,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               {/* GROWTH - PROSPERITY ARCHITECT */}
               {selectedDetail.tab === 'growth' && selectedDetail.item === 'Growth' && (
                 <GrowthPanel optimizeSchedule={optimizeSchedule} isLoading={isLoading} scheduleData={scheduleData} />
+              )}
+
+              {/* MY RESUME / PORTFOLIO */}
+              {selectedDetail.tab === 'resume' && selectedDetail.item === 'My Resume' && (
+                <PortfolioTab />
               )}
 
               {/* DANGER ZONE - DELETE ACCOUNT */}
