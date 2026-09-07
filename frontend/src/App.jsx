@@ -9,6 +9,7 @@ import ActionQueue from './components/ActionQueue';
 import { SplashScreen } from './components/SplashScreen';
 import ICANDevPanel, { SESSION_KEY as ICAN_DEV_KEY } from './components/ICANDevPanel';
 import ResetPinPage from './components/ResetPinPage';
+import ConfirmDeleteAccountPage from './components/ConfirmDeleteAccountPage';
 import ChatWidget from './components/ChatWidget';
 import { offlineManager } from './lib/offlineManager';
 import { Loader2, AlertCircle } from 'lucide-react';
@@ -63,6 +64,12 @@ const App = () => {
   const [isResetPinPath, setIsResetPinPath] = useState(() => {
     if (typeof window !== 'undefined') {
       return window.location.pathname === '/reset-pin';
+    }
+    return false;
+  });
+  const [isConfirmDeleteAccountPath, setIsConfirmDeleteAccountPath] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.location.pathname === '/confirm-delete-account';
     }
     return false;
   });
@@ -133,6 +140,7 @@ const App = () => {
     const handlePopState = () => {
       setIsResetPasswordPath(window.location.pathname === '/reset-password');
       setIsResetPinPath(window.location.pathname === '/reset-pin');
+      setIsConfirmDeleteAccountPath(window.location.pathname === '/confirm-delete-account');
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -161,7 +169,7 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    if (user || isRecoveryMode || isResetPasswordPath || isResetPinPath) return;
+    if (user || isRecoveryMode || isResetPasswordPath || isResetPinPath || isConfirmDeleteAccountPath) return;
 
     const publicView = showLanding ? 'landing' : 'auth';
 
@@ -181,11 +189,11 @@ const App = () => {
     }
 
     lastPublicViewRef.current = publicView;
-  }, [user, showLanding, isRecoveryMode, isResetPasswordPath, isResetPinPath]);
+  }, [user, showLanding, isRecoveryMode, isResetPasswordPath, isResetPinPath, isConfirmDeleteAccountPath]);
 
   useEffect(() => {
     const handlePopState = (event) => {
-      if (user || isRecoveryMode || isResetPasswordPath || isResetPinPath) return;
+      if (user || isRecoveryMode || isResetPasswordPath || isResetPinPath || isConfirmDeleteAccountPath) return;
 
       const view = event.state?.__icanApp?.publicView;
       if (view === 'landing' || view === 'auth') {
@@ -200,7 +208,7 @@ const App = () => {
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [user, isRecoveryMode, isResetPasswordPath, isResetPinPath]);
+  }, [user, isRecoveryMode, isResetPasswordPath, isResetPinPath, isConfirmDeleteAccountPath]);
 
   const handleRecoveryHandled = () => {
     clearRecoveryMode();
@@ -216,6 +224,11 @@ const App = () => {
   const handlePinResetDone = () => {
     setShowLanding(false);
     setIsResetPinPath(false);
+  };
+
+  const handleConfirmDeleteAccountDone = () => {
+    setShowLanding(false);
+    setIsConfirmDeleteAccountPath(false);
   };
 
   // Developer panel — silent intercept, no auth session required
@@ -274,6 +287,15 @@ const App = () => {
       <ErrorBoundary>
         <SplashScreen show={showSplash} onHide={() => setShowSplash(false)} />
         <ResetPinPage onDone={handlePinResetDone} />
+      </ErrorBoundary>
+    );
+  }
+
+  if (isConfirmDeleteAccountPath) {
+    return (
+      <ErrorBoundary>
+        <SplashScreen show={showSplash} onHide={() => setShowSplash(false)} />
+        <ConfirmDeleteAccountPage onDone={handleConfirmDeleteAccountDone} />
       </ErrorBoundary>
     );
   }

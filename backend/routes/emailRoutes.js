@@ -295,6 +295,156 @@ router.post('/request-pin-reset', async (req, res) => {
 });
 
 // ============================================
+// SELF-SERVICE ACCOUNT DELETION — request an emailed link
+// ============================================
+// Danger Zone (MobileView.jsx) no longer deletes on the spot from a typed
+// password. It instead makes the user type their registered Gmail and the
+// literal phrase "delete my account" here; only once both match do we email
+// a one-time deletion link to that same address (see
+// backend/DELETE_ACCOUNT_EMAIL_SELFSERVICE.sql). Actually deleting the
+// account happens later, when that link is opened and the delete-account
+// edge function redeems the token — this endpoint never deletes anything
+// itself.
+//
+// Same discipline as /request-pin-reset above: the raw token is embedded
+// only in the emailed link, never in this endpoint's JSON response, so the
+// calling browser tab can't skip the email step and delete the account
+// directly.
+router.post('/request-account-deletion', async (req, res) => {
+  try {
+    if (!adminSupabase) {
+      return res.status(500).json({
+        success: false,
+        message: 'Server is missing Supabase configuration.'
+      });
+    }
+
+    const authHeader = req.headers.authorization || '';
+    if (!authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        success: false,
+        message: 'Missing authorization token.'
+      });
+    }
+
+    const accessToken = authHeader.replace('Bearer ', '').trim();
+    const { data: tokenUserData, error: tokenUserError } = await adminSupabase.auth.getUser(accessToken);
+    const currentUser = tokenUserData?.user;
+
+    if (tokenUserError || !currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid or expired session.'
+      });
+    }
+
+    if (!currentUser.email) {
+      return res.status(400).json({
+        success: false,
+        message: 'No email on file for this account.'
+      });
+    }
+
+    const confirmEmail = String(req.body?.confirmEmail || '').trim().toLowerCase();
+    const confirmPhrase = String(req.body?.confirmPhrase || '').trim().toLowerCase();
+
+    if (confirmEmail !== currentUser.email.trim().toLowerCase()) {
+      return res.status(400).json({
+        success: false,
+        message: 'That email does not match your account email.'
+      });
+    }
+
+    if (confirmPhrase !== 'delete my account') {
+      return res.status(400).json({
+        success: false,
+        message: 'Please type "delete my account" exactly to confirm.'
+      });
+    }
+
+    // Cooldown: don't send another email if a live token was already issued
+    // for this user in the last couple of minutes.
+    const { data: recent } = await adminSupabase
+      .from('account_deletion_tokens')
+      .select('id, created_at')
+      .eq('user_id', currentUser.id)
+      .is('used_at', null)
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (recent && Date.now() - new Date(recent.created_at).getTime() < 2 * 60 * 1000) {
+      return res.status(200).json({
+        success: true,
+        message: 'A deletion link was already sent — check your email.'
+      });
+    }
+
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+
+    const { data: inserted, error: insertError } = await adminSupabase
+      .from('account_deletion_tokens')
+      .insert([{ user_id: currentUser.id, token_hash: tokenHash, expires_at: expiresAt }])
+      .select('id')
+      .single();
+
+    if (insertError) {
+      console.error('❌ Error creating account deletion token:', insertError);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to create deletion link.'
+      });
+    }
+
+    const deletionLink = `${appUrl}/confirm-delete-account?token=${rawToken}`;
+
+    const msg = {
+      to: currentUser.email,
+      from: fromEmail,
+      subject: '⚠️ Confirm Deletion of Your ICAN Account',
+      html: `
+        <html>
+          <body style="font-family: Arial, sans-serif; color: #333;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+              <div style="background: #dc2626; color: white; padding: 20px; border-radius: 8px 8px 0 0; text-align: center;">
+                <h1>⚠️ Delete Your Account</h1>
+              </div>
+              <div style="background: #f9f9f9; padding: 20px; border-radius: 0 0 8px 8px;">
+                <p>Hi ${currentUser.email},</p>
+                <p>We received a request to permanently delete your ICAN account. This action cannot be undone.</p>
+                <a href="${deletionLink}" style="display: inline-block; background: #dc2626; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0;">Permanently Delete My Account</a>
+                <p style="font-size: 12px; word-break: break-all;">${deletionLink}</p>
+                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 10px 15px; margin: 15px 0; border-radius: 4px;">
+                  ⚠️ This link expires in 30 minutes and can only be used once. If you didn't request this, ignore this email — your account stays exactly as it is.
+                </div>
+                <p style="font-size: 12px; color: #666;">Support: ${supportEmail}</p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `
+    };
+
+    await sendEmail(msg);
+    console.log('✅ Self-service account deletion email sent to:', currentUser.email, 'token row:', inserted.id);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Deletion link sent — check your email.'
+    });
+  } catch (error) {
+    console.error('❌ Error requesting account deletion:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to send deletion link.'
+    });
+  }
+});
+
+// ============================================
 // SIGNUP EMAIL OTP — verify email before first-time PIN creation
 // ============================================
 // Sends a 6-digit code (not a link — account creation is a multi-field

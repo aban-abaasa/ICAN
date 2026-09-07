@@ -8,6 +8,17 @@ const jsonResponse = (body: Record<string, unknown>, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+// Same SHA-256-of-the-raw-token scheme as redeem_pin_reset_token() in
+// PIN_RESET_EMAIL_SELFSERVICE.sql, just computed here with Deno's Web Crypto
+// API instead of Postgres's pgcrypto.
+const sha256Hex = async (raw: string) => {
+  const bytes = new TextEncoder().encode(raw);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -21,24 +32,24 @@ serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get("Authorization") || "";
-    if (!authHeader.startsWith("Bearer ")) {
+    const requestBody = await req.json().catch(() => ({}));
+    const token = String(requestBody?.token || "").trim();
+
+    if (!token) {
       return jsonResponse(
-        { success: false, message: "Missing authorization token." },
-        401,
+        {
+          success: false,
+          message:
+            "Missing deletion token. Request a deletion link from your account's Danger Zone first.",
+        },
+        400,
       );
     }
 
-    const accessToken = authHeader.replace("Bearer ", "").trim();
-
-    const requestBody = await req.json().catch(() => ({}));
-    const password = String(requestBody?.password || "").trim();
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || serviceRoleKey;
 
-    if (!supabaseUrl || !serviceRoleKey || !anonKey) {
+    if (!supabaseUrl || !serviceRoleKey) {
       return jsonResponse(
         {
           success: false,
@@ -48,81 +59,61 @@ serve(async (req) => {
       );
     }
 
+    // This link is opened from the account owner's email inbox, which may be
+    // a fresh browser tab with no Supabase session at all — the token itself
+    // (mailed only to the account's registered address, see
+    // backend/routes/emailRoutes.js POST /api/email/request-account-deletion)
+    // is the proof of ownership, exactly like Supabase's own recovery links.
+    // Every read/write below therefore goes through the service-role client.
     const adminClient = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const authClient = createClient(supabaseUrl, anonKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+    const tokenHash = await sha256Hex(token);
 
-    const { data: tokenUserData, error: tokenUserError } =
-      await adminClient.auth.getUser(accessToken);
-    const currentUser = tokenUserData?.user;
+    const { data: tokenRow, error: tokenLookupError } = await adminClient
+      .from("account_deletion_tokens")
+      .select("id, user_id, used_at, expires_at")
+      .eq("token_hash", tokenHash)
+      .maybeSingle();
 
-    if (tokenUserError || !currentUser) {
+    if (tokenLookupError) {
+      console.error("Deletion token lookup error:", tokenLookupError);
       return jsonResponse(
-        { success: false, message: "Invalid or expired session." },
-        401,
+        { success: false, message: "Failed to verify deletion link." },
+        500,
       );
     }
 
-    if (!currentUser.email) {
+    if (
+      !tokenRow ||
+      tokenRow.used_at ||
+      new Date(tokenRow.expires_at).getTime() <= Date.now()
+    ) {
       return jsonResponse(
         {
           success: false,
-          message: "User email is missing. Cannot verify password.",
+          message:
+            "This deletion link is invalid or has expired. Request a new one from your account's Danger Zone.",
         },
         400,
       );
     }
 
-    const providers = currentUser.app_metadata?.providers || [];
-    const hasEmailPasswordProvider =
-      providers.includes("email") || providers.length === 0;
+    const userId = tokenRow.user_id as string;
 
-    if (hasEmailPasswordProvider) {
-      if (!password) {
-        return jsonResponse(
-          { success: false, message: "Password is required for this account." },
-          400,
-        );
-      }
+    // Burn this token (and any other still-live ones for the same user) up
+    // front so a slow double-click or a replayed link can't redeem twice.
+    await adminClient
+      .from("account_deletion_tokens")
+      .update({ used_at: new Date().toISOString() })
+      .eq("user_id", userId)
+      .is("used_at", null);
 
-      const { data: reauthData, error: reauthError } =
-        await authClient.auth.signInWithPassword({
-          email: currentUser.email,
-          password,
-        });
-
-      if (
-        reauthError ||
-        !reauthData?.user ||
-        reauthData.user.id !== currentUser.id
-      ) {
-        const authMessage = reauthError?.message || "Password verification failed.";
-        return jsonResponse(
-          {
-            success: false,
-            message: `Password verification failed: ${authMessage}`,
-          },
-          401,
-        );
-      }
-    } else if (!password) {
-      return jsonResponse(
-        {
-          success: false,
-          message: "Please enter your confirmation credential to continue.",
-        },
-        400,
-      );
-    }
-
-    await adminClient.from("profiles").delete().eq("id", currentUser.id);
+    await adminClient.from("profiles").delete().eq("id", userId);
 
     const { error: deleteError } = await adminClient.auth.admin.deleteUser(
-      currentUser.id,
+      userId,
     );
     if (deleteError) {
       console.error("Delete user error:", deleteError);
