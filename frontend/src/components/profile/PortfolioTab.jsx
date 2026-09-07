@@ -14,6 +14,7 @@ import {
   getReviewableVerifications, reviewVerification,
 } from '../../services/portfolioService';
 import PortfolioMessagesInbox from './PortfolioMessagesInbox';
+import ResumeOpportunityBidsPanel from './ResumeOpportunityBidsPanel';
 import PublicPortfolioPage from './PublicPortfolioPage';
 
 const ITEM_ICONS = {
@@ -630,6 +631,9 @@ export default function PortfolioTab() {
 
       {/* Messages — direct 1:1 chats started from the public resume page */}
       <PortfolioMessagesInbox userId={user?.id} />
+
+      {/* Bid for Work — browse open business opportunities and bid as yourself */}
+      <ResumeOpportunityBidsPanel userId={user?.id} displayName={profile?.full_name || user?.email} />
 
       {/* References */}
       <div className="bg-slate-900/50 border border-purple-700/30 rounded-xl p-4">

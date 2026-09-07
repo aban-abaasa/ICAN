@@ -7946,6 +7946,8 @@ const CMMSModule = ({
             canEdit={hasToolAction('announcements', 'edit')}
             canDelete={hasToolAction('announcements', 'delete')}
             canManageApplications={hasToolAction('announcements', 'manage_applications')}
+            canManageOpportunities={hasToolAction('opportunities', 'manage')}
+            canViewOpportunityBids={hasToolAction('opportunities', 'view')}
           />
         )}
         {activeTab === 'fees' && getTabs().includes('fees') && <CMMSFeesPanel companyId={companyIdToUse} businessProfileId={cmmsData.companyProfile?.pichin_business_profile_id} cmmsUsers={cmmsData.users} studentView={isActiveStudent} />}

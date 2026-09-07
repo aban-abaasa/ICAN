@@ -1,45 +1,81 @@
 import React, { useEffect, useState } from 'react';
-import { BadgeCheck, Loader2, MessageSquarePlus, ShieldX, Wallet } from 'lucide-react';
+import { BadgeCheck, Lock, Loader2, Mail, MessageSquarePlus, ShieldX, Wallet } from 'lucide-react';
 import cmmsServiceProviderContractsService from '../services/cmmsServiceProviderContractsService';
 
 /**
  * Standalone public page at /service-provider-contract?token=<access_token>
  * (see main.jsx) -- the ONLY thing an outside contractor with no CMMS/ICAN
  * account ever opens. No login, no providers, same reasoning as
- * PublicDocumentVerify.jsx. Shows the contract, its task, its follow-up
- * history, and its payment/transaction history -- nothing else -- via the
- * anon-callable fn_get_service_provider_contract_public RPC. The contractor
- * can post their own follow-up note through fn_add_service_provider_followup.
+ * PublicDocumentVerify.jsx.
+ *
+ * Every contract is private by construction: the link alone opens nothing.
+ * A pre-auth check (fn_get_service_provider_contract_public) says whether
+ * to prompt for a PIN or an email, and only fn_verify_service_provider_
+ * contract_pin / _email hand back the contract + follow-ups + payments.
+ * The same credential is re-sent on every follow-up post since this page
+ * holds no session.
  */
 const PublicServiceProviderContract = () => {
   const token = new URLSearchParams(window.location.search).get('token') || '';
-  const [state, setState] = useState('loading'); // loading | valid | invalid | error
+  const [phase, setPhase] = useState('loading'); // loading | pin_required | email_required | locked | invalid | unlocked
+  const [gateInput, setGateInput] = useState('');
+  const [gateError, setGateError] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [credential, setCredential] = useState(''); // remembered after unlock, resent when posting a follow-up
+  const [accessMode, setAccessMode] = useState(null); // 'pin' | 'email', set once the gate is known
   const [info, setInfo] = useState(null);
   const [note, setNote] = useState('');
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState('');
 
-  const load = () => {
-    if (!token) { setState('error'); return; }
-    cmmsServiceProviderContractsService.getServiceProviderContractPublic(token).then((result) => {
-      if (!result.success) { setState('error'); return; }
-      setInfo(result.data);
-      setState(result.data.is_valid ? 'valid' : 'invalid');
+  useEffect(() => {
+    if (!token) { setPhase('invalid'); return; }
+    cmmsServiceProviderContractsService.getServiceProviderContractGateStatus(token).then((result) => {
+      if (!result.success) { setPhase('invalid'); return; }
+      setPhase(result.data.status);
+      if (result.data.access_mode) setAccessMode(result.data.access_mode);
     });
+  }, [token]);
+
+  const handleUnlock = async (event) => {
+    event.preventDefault();
+    if (!gateInput.trim()) return;
+    setVerifying(true);
+    setGateError('');
+    const verify = phase === 'pin_required'
+      ? cmmsServiceProviderContractsService.verifyServiceProviderContractPin
+      : cmmsServiceProviderContractsService.verifyServiceProviderContractEmail;
+    const result = await verify(token, gateInput.trim());
+    setVerifying(false);
+    if (!result.success || result.data.status !== 'ok') {
+      const status = result.data?.status;
+      if (status === 'locked') { setPhase('locked'); return; }
+      setGateError(status === 'invalid_pin' ? 'Incorrect PIN.' : status === 'not_allowed' ? 'That email is not authorized to view this contract.' : 'Could not verify. Try again.');
+      return;
+    }
+    setCredential(gateInput.trim());
+    setInfo(result.data);
+    setPhase('unlocked');
   };
 
-  useEffect(load, [token]);
+  const reload = async () => {
+    const verify = accessMode === 'email'
+      ? cmmsServiceProviderContractsService.verifyServiceProviderContractEmail
+      : cmmsServiceProviderContractsService.verifyServiceProviderContractPin;
+    const result = await verify(token, credential);
+    if (result.success && result.data.status === 'ok') setInfo(result.data);
+  };
 
   const handlePostFollowup = async (event) => {
     event.preventDefault();
     if (!note.trim()) return;
     setPosting(true);
     setPostError('');
-    const result = await cmmsServiceProviderContractsService.addServiceProviderFollowupPublic(token, note.trim());
+    const result = await cmmsServiceProviderContractsService.addServiceProviderFollowupPublic(token, credential, note.trim());
     setPosting(false);
     if (!result.success) { setPostError(result.error || 'Could not post your update.'); return; }
     setNote('');
-    load();
+    await reload();
   };
 
   const content = info?.content || {};
@@ -47,25 +83,55 @@ const PublicServiceProviderContract = () => {
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-950 flex items-center justify-center px-4 py-10 text-white">
       <section className="w-full max-w-lg rounded-3xl border border-white/10 bg-slate-900/80 p-7 shadow-2xl backdrop-blur">
-        {state === 'loading' && <Loader2 className="w-10 h-10 mx-auto animate-spin text-indigo-300" />}
+        {phase === 'loading' && <Loader2 className="w-10 h-10 mx-auto animate-spin text-indigo-300" />}
 
-        {state === 'error' && (
+        {phase === 'invalid' && (
           <div className="text-center">
             <ShieldX className="w-14 h-14 mx-auto mb-4 text-red-400" />
             <h1 className="text-xl font-bold mb-1">Not found</h1>
-            <p className="text-slate-400">This link does not match any contract we've issued. It may be invalid or have been mistyped.</p>
+            <p className="text-slate-400">This link does not match any active contract, or it has been revoked / expired.</p>
           </div>
         )}
 
-        {state === 'invalid' && (
+        {phase === 'locked' && (
           <div className="text-center">
-            <ShieldX className="w-14 h-14 mx-auto mb-4 text-amber-400" />
-            <h1 className="text-xl font-bold mb-1">Link no longer active</h1>
-            <p className="text-slate-400">This contract from {info?.company_name || 'the company'} has been revoked or its access period has ended. Contact them directly if you believe this is a mistake.</p>
+            <Lock className="w-14 h-14 mx-auto mb-4 text-amber-400" />
+            <h1 className="text-xl font-bold mb-1">Too many attempts</h1>
+            <p className="text-slate-400">This link is temporarily locked after too many incorrect tries. Please try again in a few minutes.</p>
           </div>
         )}
 
-        {state === 'valid' && (
+        {(phase === 'pin_required' || phase === 'email_required') && (
+          <div>
+            <div className="text-center mb-5">
+              {phase === 'pin_required' ? <Lock className="w-12 h-12 mx-auto mb-3 text-indigo-300" /> : <Mail className="w-12 h-12 mx-auto mb-3 text-indigo-300" />}
+              <h1 className="text-xl font-bold mb-1">This contract is private</h1>
+              <p className="text-slate-400 text-sm">
+                {phase === 'pin_required' ? 'Enter the PIN you were given to view it.' : 'Enter the email address this contract was issued to.'}
+              </p>
+            </div>
+            <form onSubmit={handleUnlock} className="space-y-3">
+              <input
+                type={phase === 'pin_required' ? 'password' : 'email'}
+                value={gateInput}
+                onChange={(e) => setGateInput(e.target.value)}
+                placeholder={phase === 'pin_required' ? 'Enter PIN' : 'you@example.com'}
+                className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 text-sm placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                autoFocus
+              />
+              {gateError && <p className="text-red-400 text-xs">{gateError}</p>}
+              <button
+                type="submit"
+                disabled={verifying || !gateInput.trim()}
+                className="w-full rounded-lg bg-indigo-600 hover:bg-indigo-700 py-2.5 text-sm font-semibold disabled:opacity-50"
+              >
+                {verifying ? 'Checking...' : 'Unlock'}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {phase === 'unlocked' && info && (
           <div>
             <div className="text-center mb-5">
               <BadgeCheck className="w-12 h-12 mx-auto mb-3 text-emerald-400" />

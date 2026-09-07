@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Copy, ExternalLink, Plus, Wallet, X } from 'lucide-react';
+import { Copy, ExternalLink, Lock, Mail, Plus, Wallet, X } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 import cmmsServiceProviderContractsService from '../services/cmmsServiceProviderContractsService';
 
@@ -25,10 +25,14 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser }) => {
 
   const [form, setForm] = useState({
     providerName: '', providerContact: '', title: '', scopeOfWork: '', rate: '', terms: '',
-    validDays: 30, jobAssignmentId: '',
+    validDays: 30, jobAssignmentId: '', accessMode: 'pin', pin: '', allowedEmail: '',
   });
+  const [publishedLink, setPublishedLink] = useState(null);
 
-  const resetForm = () => setForm({ providerName: '', providerContact: '', title: '', scopeOfWork: '', rate: '', terms: '', validDays: 30, jobAssignmentId: '' });
+  const resetForm = () => setForm({
+    providerName: '', providerContact: '', title: '', scopeOfWork: '', rate: '', terms: '',
+    validDays: 30, jobAssignmentId: '', accessMode: 'pin', pin: '', allowedEmail: '',
+  });
 
   const loadAll = async () => {
     if (!companyId) return;
@@ -60,23 +64,26 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser }) => {
 
   const handlePublish = async () => {
     if (!form.providerName.trim() || !form.title.trim()) return;
+    if (form.accessMode === 'pin' && form.pin.trim().length < 4) { setError('PIN must be at least 4 characters.'); return; }
+    if (form.accessMode === 'email' && !form.allowedEmail.trim()) { setError('Enter the email allowed to open this contract.'); return; }
     setSaving(true);
     setError('');
-    const created = await cmmsServiceProviderContractsService.createServiceProviderContract(companyId, {
+    const published = await cmmsServiceProviderContractsService.publishServiceProviderContract(companyId, {
       providerName: form.providerName,
       providerContact: form.providerContact,
       title: form.title,
       jobAssignmentId: form.jobAssignmentId || null,
       content: { scope_of_work: form.scopeOfWork, rate: form.rate, terms: form.terms },
+      accessMode: form.accessMode,
+      pin: form.pin,
+      allowedEmail: form.allowedEmail,
+      validDays: Number(form.validDays) || 30,
     });
-    if (!created.success) { setError(created.error); setSaving(false); return; }
-
-    const published = await cmmsServiceProviderContractsService.publishServiceProviderContract(created.data.id, Number(form.validDays) || null);
     setSaving(false);
     if (!published.success) { setError(published.error); return; }
 
+    setPublishedLink(cmmsServiceProviderContractsService.buildServiceProviderContractUrl(published.data.access_token));
     resetForm();
-    setShowForm(false);
     await loadAll();
   };
 
@@ -98,14 +105,14 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser }) => {
     await loadAll();
   };
 
-  const statusColor = { draft: 'text-slate-400', published: 'text-emerald-400', completed: 'text-blue-400', revoked: 'text-red-400' };
+  const statusColor = { published: 'text-emerald-400', revoked: 'text-red-400' };
 
   return (
     <div className="glass-card p-4 md:p-6 border border-slate-700">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">📄 Service Provider Contracts</h3>
         <button
-          onClick={() => setShowForm((v) => !v)}
+          onClick={() => { setShowForm((v) => !v); setPublishedLink(null); setError(''); }}
           className="flex items-center gap-1 text-xs md:text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded px-3 py-1.5 font-semibold"
         >
           {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
@@ -114,8 +121,18 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser }) => {
       </div>
 
       <p className="text-slate-400 text-xs md:text-sm mb-4">
-        Publish a simple, time-limited public link for an outside service provider (no CMMS login needed) to view their contract, post task follow-ups, and see payments recorded for their work.
+        Publish a simple, time-limited public link for an outside service provider (no CMMS login needed) to view their contract, post task follow-ups, and see payments recorded for their work. The link is private -- it needs the PIN or email you set below to open.
       </p>
+
+      {showForm && publishedLink && (
+        <div className="bg-emerald-900/30 border border-emerald-700 rounded-lg p-3 mb-4">
+          <p className="text-emerald-300 text-xs font-semibold mb-1">Contract published. Share this link plus the PIN/email separately with the provider:</p>
+          <div className="flex gap-2">
+            <input readOnly value={publishedLink} className="flex-1 bg-slate-800 text-slate-300 text-xs rounded px-2 py-1.5 border border-slate-700" onFocus={(e) => e.target.select()} />
+            <button onClick={() => navigator.clipboard?.writeText(publishedLink)} className="text-xs px-2 py-1.5 rounded bg-emerald-700 hover:bg-emerald-600 text-white">Copy</button>
+          </div>
+        </div>
+      )}
 
       {showForm && (
         <div className="space-y-3 bg-slate-800/60 rounded-lg p-4 border border-slate-700 mb-4">
@@ -172,6 +189,28 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser }) => {
             <label className="block text-xs font-semibold text-gray-300 mb-1">Terms</label>
             <textarea value={form.terms} onChange={(e) => setForm({ ...form, terms: e.target.value })}
               className="w-full bg-slate-700 text-white text-xs rounded px-2 py-2 border border-slate-600 h-16 resize-none" placeholder="Any other simple terms" />
+          </div>
+
+          <div className="bg-slate-900/60 rounded-lg p-3 border border-slate-700">
+            <label className="block text-xs font-semibold text-gray-300 mb-2">Keep it private -- require *</label>
+            <div className="flex gap-2 mb-2">
+              <button type="button" onClick={() => setForm({ ...form, accessMode: 'pin' })}
+                className={`flex-1 flex items-center justify-center gap-1.5 text-xs py-2 rounded border ${form.accessMode === 'pin' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-700 border-slate-600 text-slate-300'}`}>
+                <Lock className="w-3.5 h-3.5" /> Secret PIN
+              </button>
+              <button type="button" onClick={() => setForm({ ...form, accessMode: 'email' })}
+                className={`flex-1 flex items-center justify-center gap-1.5 text-xs py-2 rounded border ${form.accessMode === 'email' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-700 border-slate-600 text-slate-300'}`}>
+                <Mail className="w-3.5 h-3.5" /> Their Email
+              </button>
+            </div>
+            {form.accessMode === 'pin' ? (
+              <input type="text" value={form.pin} onChange={(e) => setForm({ ...form, pin: e.target.value })}
+                className="w-full bg-slate-700 text-white text-xs rounded px-2 py-2 border border-slate-600" placeholder="e.g. 4821 (min 4 characters, tell the provider separately)" />
+            ) : (
+              <input type="email" value={form.allowedEmail} onChange={(e) => setForm({ ...form, allowedEmail: e.target.value })}
+                className="w-full bg-slate-700 text-white text-xs rounded px-2 py-2 border border-slate-600" placeholder="provider@example.com -- only this address can open the link" />
+            )}
+            <p className="text-slate-500 text-[11px] mt-1.5">The link alone will not open the contract -- whoever opens it must also know this {form.accessMode === 'pin' ? 'PIN' : 'email address'}.</p>
           </div>
 
           {error && <p className="text-red-400 text-xs">{error}</p>}

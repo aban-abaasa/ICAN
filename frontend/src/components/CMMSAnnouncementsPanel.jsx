@@ -12,6 +12,7 @@ import cmmsWrittenTestService from '../services/cmmsWrittenTestService';
 import cmmsInterviewService from '../services/cmmsInterviewService';
 import CMMSWrittenTestBuilder from './CMMSWrittenTestBuilder';
 import CMMSEmploymentDocumentsPanel from './CMMSEmploymentDocumentsPanel';
+import CMMSBusinessOpportunitiesPanel from './CMMSBusinessOpportunitiesPanel';
 import LiveBoardroom from './LiveBoardroom';
 
 const MAX_POSTER_BYTES = 6 * 1024 * 1024;
@@ -75,6 +76,8 @@ const CMMSAnnouncementsPanel = ({
   canEdit = false,
   canDelete = false,
   canManageApplications = false,
+  canManageOpportunities = false,
+  canViewOpportunityBids = false,
 }) => {
   const [subTab, setSubTab] = useState('posts');
   const [posts, setPosts] = useState([]);
@@ -493,6 +496,12 @@ const CMMSAnnouncementsPanel = ({
               Board profile
             </button>
           )}
+          {/* Browsing/bidding needs no special permission -- posting an
+              opportunity or seeing bids on it does (checked inside the
+              panel via canManageOpportunities/canViewOpportunityBids). */}
+          <button onClick={() => setSubTab('opportunities')} className={`px-4 py-2 text-sm font-semibold border-b-2 transition ${subTab === 'opportunities' ? 'border-purple-400 text-white' : 'border-transparent text-gray-400 hover:text-white'}`}>
+            Opportunities
+          </button>
         </div>
       </div>
 
@@ -670,6 +679,16 @@ const CMMSAnnouncementsPanel = ({
             ))
           )}
         </div>
+      )}
+
+      {subTab === 'opportunities' && (
+        <CMMSBusinessOpportunitiesPanel
+          companyId={companyId}
+          companyName={companyName}
+          myCmmsUserId={myCmmsUserId}
+          canManage={canManageOpportunities}
+          canViewBids={canViewOpportunityBids}
+        />
       )}
 
       {showForm && (

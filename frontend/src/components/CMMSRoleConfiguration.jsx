@@ -36,7 +36,12 @@ export const CMMS_TOOL_OPTIONS = [
   // /notices/<companyId> once published -- see CMMS_ANNOUNCEMENTS_AND_JOBS.sql.
   // manage_applications is separate from edit/delete so a role can be
   // trusted to draft postings without also seeing applicant PII, or vice versa.
-  { id: 'announcements', label: 'Announcements & job postings', permission: 'canManageAnnouncements', actions: ['view', 'create', 'edit', 'delete', 'manage_applications'] }
+  { id: 'announcements', label: 'Announcements & job postings', permission: 'canManageAnnouncements', actions: ['view', 'create', 'edit', 'delete', 'manage_applications'] },
+  // 'view' sees every bid placed on this company's own opportunities
+  // (bids are otherwise private to the bidder); 'manage' posts/edits an
+  // opportunity and picks a winning bid. See
+  // backend/CMMS_BUSINESS_OPPORTUNITIES_AND_BIDS.sql.
+  { id: 'opportunities', label: 'Business opportunities & bids', permission: 'canManageOpportunities', actions: ['view', 'manage'] }
 ];
 
 const EMPLOYMENT_TYPES = [
