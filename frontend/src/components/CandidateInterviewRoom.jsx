@@ -26,9 +26,16 @@ const CandidateInterviewRoom = () => {
     if (authLoading) return;
 
     if (!user) {
+      // fn_get_interview_prefill_contact only ever looks up a job
+      // application -- a business-opportunity-bid interview
+      // (backend/CMMS_OPPORTUNITY_BID_PIPELINE.sql) has none, since that
+      // bidder already holds an ICAN account from bidding. Rather than treat
+      // "no prefill" as an invalid link, fall through to a plain sign-in --
+      // fn_can_join_interview below is still the real gate either way.
       cmmsInterviewService.getInterviewPrefillContact(scheduleId).then((result) => {
-        if (!result.success) { setPhase('error'); setError('This interview link is invalid.'); return; }
-        setPrefill({ email: result.data.applicant_email, fullName: result.data.applicant_name, phone: result.data.applicant_phone });
+        if (result.success) {
+          setPrefill({ email: result.data.applicant_email, fullName: result.data.applicant_name, phone: result.data.applicant_phone });
+        }
         setPhase('auth');
       });
       return;
@@ -62,7 +69,7 @@ const CandidateInterviewRoom = () => {
   }
 
   if (phase === 'auth') {
-    return <AuthPage initialView="signup" prefill={prefill} onAuthSuccess={() => {}} />;
+    return <AuthPage initialView={prefill ? 'signup' : 'signin'} prefill={prefill} onAuthSuccess={() => {}} />;
   }
 
   if (phase === 'link-error') {

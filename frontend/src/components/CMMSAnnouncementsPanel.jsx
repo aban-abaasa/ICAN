@@ -686,6 +686,7 @@ const CMMSAnnouncementsPanel = ({
           companyId={companyId}
           companyName={companyName}
           myCmmsUserId={myCmmsUserId}
+          companyStaff={companyStaff}
           canManage={canManageOpportunities}
           canViewBids={canViewOpportunityBids}
         />

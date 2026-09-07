@@ -3,10 +3,11 @@ import {
   Megaphone, Briefcase, MapPin, Calendar, Users, FileText, X, Loader,
   AlertCircle, CheckCircle2, Search, Building2, ArrowLeft, Upload, Share2,
   Check, ChevronRight, Clock, ShoppingBag, ShoppingCart, Plus, Minus,
-  Trash2, Truck, Store
+  Trash2, Truck, Store, Award
 } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 import cmmsAnnouncementsService from '../services/cmmsAnnouncementsService';
+import cmmsBusinessOpportunitiesService from '../services/cmmsBusinessOpportunitiesService';
 import { getDropshipStorefront, dropshipCheckout } from '../services/dropshipService';
 import { useAuth } from '../context/AuthContext';
 import { AuthPage } from './auth';
@@ -175,10 +176,13 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   // gone by the time the visitor returns, so the pending link survives in
   // sessionStorage instead. The email/password path (no redirect) also goes
   // through this same key, so both paths funnel through one place.
+  // payload.type distinguishes which reference code this is -- 'job' (the
+  // default, for backward compat with callers that don't pass one) or
+  // 'bid', so the link-up below calls the matching RPC.
   const requestAccountCreation = (payload) => {
     try {
-      sessionStorage.setItem(PENDING_APPLICATION_LINK_KEY, JSON.stringify({ referenceCode: payload.referenceCode, contact: payload.contact }));
-    } catch { /* sessionStorage unavailable (e.g. private browsing) -- link falls back to fn_get_my_job_applications' self-healing match on "Track my application" instead */ }
+      sessionStorage.setItem(PENDING_APPLICATION_LINK_KEY, JSON.stringify({ type: payload.type || 'job', referenceCode: payload.referenceCode, contact: payload.contact }));
+    } catch { /* sessionStorage unavailable (e.g. private browsing) -- link falls back to fn_get_my_job_applications'/fn_get_my_opportunity_bids' self-healing match on the matching "Track" tab instead */ }
     setAccountPrompt(payload);
   };
 
@@ -191,12 +195,15 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
     try { pending = JSON.parse(sessionStorage.getItem(PENDING_APPLICATION_LINK_KEY) || 'null'); } catch { /* ignore */ }
     if (!pending) return;
     try { sessionStorage.removeItem(PENDING_APPLICATION_LINK_KEY); } catch { /* ignore */ }
-    cmmsAnnouncementsService.linkIcanAccountToApplication(pending.referenceCode, pending.contact).then((linkResult) => {
+    const isBid = pending.type === 'bid';
+    const linkFn = isBid ? cmmsBusinessOpportunitiesService.linkIcanAccountToOpportunityBid : cmmsAnnouncementsService.linkIcanAccountToApplication;
+    const trackTabLabel = isBid ? 'Track my bid' : 'Track my application';
+    linkFn(pending.referenceCode, pending.contact).then((linkResult) => {
       setAccountPrompt({
         done: true,
         message: linkResult.success && linkResult.linked
-          ? 'Your account is linked. You can check this application anytime from "Track my application" while signed in -- no code needed.'
-          : "Your account is ready. Open \"Track my application\" while signed in and it'll match this application automatically.",
+          ? `Your account is linked. You can check this ${isBid ? 'bid' : 'application'} anytime from "${trackTabLabel}" while signed in -- no code needed.`
+          : `Your account is ready. Open "${trackTabLabel}" while signed in and it'll match this ${isBid ? 'bid' : 'application'} automatically.`,
       });
     });
   }, [user]);
@@ -213,8 +220,10 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   });
   const [notices, setNotices] = useState([]);
   const [jobs, setJobs] = useState([]);
+  const [opportunities, setOpportunities] = useState([]);
   const [selectedJob, setSelectedJob] = useState(null);
   const [selectedNotice, setSelectedNotice] = useState(null);
+  const [selectedOpportunity, setSelectedOpportunity] = useState(null);
 
   // The company's Dropship storefront, when it has linked one (see "Board
   // profile" in CMMSAnnouncementsPanel.jsx / fn_set_cmms_company_business_
@@ -228,10 +237,11 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
     let cancelled = false;
     const load = async () => {
       setLoading(true);
-      const [headerResult, noticesResult, jobsResult] = await Promise.all([
+      const [headerResult, noticesResult, jobsResult, opportunitiesResult] = await Promise.all([
         cmmsAnnouncementsService.getPublicCompanyHeader(companyId),
         cmmsAnnouncementsService.getPublicNotices(companyId, 'announcement'),
         cmmsAnnouncementsService.getPublicNotices(companyId, 'job'),
+        cmmsBusinessOpportunitiesService.getPublicCompanyOpportunities(companyId),
       ]);
       if (cancelled) return;
       if (!headerResult.success || !headerResult.data) {
@@ -240,6 +250,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
         setCompany(headerResult.data);
         setNotices(noticesResult.data || []);
         setJobs(jobsResult.data || []);
+        setOpportunities(opportunitiesResult.data || []);
       }
       setLoading(false);
     };
@@ -265,18 +276,27 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   // was looking, the same way a shared Pitchin link opens that one video.
   useEffect(() => {
     if (loading || notFound) return;
-    const postId = new URLSearchParams(window.location.search).get('post');
-    if (!postId) return;
-    cmmsAnnouncementsService.getPublicNotice(postId).then((result) => {
-      if (!result.success || !result.data) return;
-      if (result.data.post_type === 'job') {
-        setSection('careers');
-        setSelectedJob(result.data);
-      } else {
-        setSection('notices');
-        setSelectedNotice(result.data);
-      }
-    });
+    const params = new URLSearchParams(window.location.search);
+    const postId = params.get('post');
+    const opportunityId = params.get('opp');
+    if (postId) {
+      cmmsAnnouncementsService.getPublicNotice(postId).then((result) => {
+        if (!result.success || !result.data) return;
+        if (result.data.post_type === 'job') {
+          setSection('careers');
+          setSelectedJob(result.data);
+        } else {
+          setSection('notices');
+          setSelectedNotice(result.data);
+        }
+      });
+    } else if (opportunityId) {
+      cmmsBusinessOpportunitiesService.getPublicOpportunity(opportunityId).then((result) => {
+        if (!result.success || !result.data) return;
+        setSection('opportunities');
+        setSelectedOpportunity(result.data);
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, notFound]);
 
@@ -300,12 +320,21 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
     });
   };
 
+  const openOpportunityDetail = (opportunity) => {
+    setSelectedOpportunity(opportunity);
+    cmmsBusinessOpportunitiesService.getPublicOpportunity(opportunity.id).then((result) => {
+      if (result.success && result.data) {
+        setSelectedOpportunity((current) => (current?.id === opportunity.id ? result.data : current));
+      }
+    });
+  };
+
   // Hands the specific post off to whatever apps the visitor's own device
   // offers to share through (WhatsApp, email, SMS, etc.) via the Web Share
   // API, falling back to a clipboard copy where that API isn't available
   // (most desktop browsers) -- same pattern as PublicPitchViewer's Share.
-  const handleShare = async (item, onCopied) => {
-    const link = cmmsAnnouncementsService.buildPublicNoticeLink(companyId, item.id);
+  const handleShare = async (item, onCopied, linkBuilder = cmmsAnnouncementsService.buildPublicNoticeLink) => {
+    const link = linkBuilder(companyId, item.id);
     const shareData = { title: item.title, text: item.summary || item.title, url: link };
     try {
       if (navigator.share && (!navigator.canShare || navigator.canShare(shareData))) {
@@ -401,7 +430,9 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
             { id: 'notices', label: 'Notices', icon: Megaphone },
             ...(products.length > 0 ? [{ id: 'shop', label: 'Products & Services', icon: ShoppingBag }] : []),
             { id: 'careers', label: 'Careers', icon: Briefcase },
+            ...(opportunities.length > 0 ? [{ id: 'opportunities', label: 'Opportunities', icon: Award }] : []),
             { id: 'track', label: 'Track my application', icon: Search },
+            ...(opportunities.length > 0 ? [{ id: 'track-bid', label: 'Track my bid', icon: Search }] : []),
           ].map((tab) => (
             <button
               key={tab.id}
@@ -436,7 +467,11 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
           {section === 'careers' && (
             <JobList jobs={jobs} onSelect={(job) => openDetail(job, setSelectedJob)} />
           )}
+          {section === 'opportunities' && (
+            <OpportunityList opportunities={opportunities} onSelect={openOpportunityDetail} />
+          )}
           {section === 'track' && <TrackApplication companyId={companyId} viewerUser={user} onWantAccount={requestAccountCreation} />}
+          {section === 'track-bid' && <TrackOpportunityBid viewerUser={user} onWantAccount={requestAccountCreation} />}
         </div>
       </main>
 
@@ -449,6 +484,15 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
 
       {selectedNotice && <NoticeDetailModal notice={selectedNotice} onClose={() => setSelectedNotice(null)} onShare={handleShare} />}
       {selectedJob && <JobDetailModal job={selectedJob} onClose={() => setSelectedJob(null)} onShare={handleShare} viewerUser={user} onWantAccount={requestAccountCreation} />}
+      {selectedOpportunity && (
+        <OpportunityDetailModal
+          opportunity={selectedOpportunity}
+          onClose={() => setSelectedOpportunity(null)}
+          onShare={(item, onCopied) => handleShare(item, onCopied, cmmsBusinessOpportunitiesService.buildPublicOpportunityLink)}
+          viewerUser={user}
+          onWantAccount={requestAccountCreation}
+        />
+      )}
     </div>
   );
 };
@@ -561,6 +605,49 @@ const JobList = ({ jobs, onSelect }) => {
               {job.application_deadline && (
                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full nb-chip-amber">
                   <Calendar className="w-3 h-3" /> Apply by {job.application_deadline}
+                </span>
+              )}
+            </div>
+          </div>
+          <ChevronRight className="w-5 h-5 nb-icon-muted flex-shrink-0 transition-transform duration-300 group-hover:translate-x-1" />
+        </button>
+      ))}
+    </div>
+  );
+};
+
+const OpportunityList = ({ opportunities, onSelect }) => {
+  if (opportunities.length === 0) {
+    return <EmptyState icon={Award} text="No open opportunities right now. Check back later." />;
+  }
+  return (
+    <div className="space-y-3">
+      {opportunities.map((o, i) => (
+        <button
+          key={o.id}
+          onClick={() => onSelect(o)}
+          style={{ animationDelay: `${Math.min(i, 8) * 60}ms`, animationFillMode: 'backwards' }}
+          className="group w-full text-left nb-card rounded-2xl shadow-sm transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 flex items-center gap-4 p-4 animate-fadeInUp"
+        >
+          {o.poster_url ? (
+            <img src={o.poster_url} alt="" className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-xl flex-shrink-0" />
+          ) : (
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl nb-chip-green flex items-center justify-center flex-shrink-0">
+              <Award className="w-7 h-7" />
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <h3 className="font-bold nb-text line-clamp-1">{o.title}</h3>
+            {o.description && <p className="text-sm nb-text-muted line-clamp-1">{o.description}</p>}
+            <div className="flex flex-wrap gap-2 mt-2">
+              {o.budget_hint && (
+                <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full nb-chip-green">
+                  {o.budget_hint}
+                </span>
+              )}
+              {o.deadline && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full nb-chip-amber">
+                  <Calendar className="w-3 h-3" /> Closes {new Date(o.deadline).toLocaleDateString()}
                 </span>
               )}
             </div>
@@ -881,6 +968,155 @@ const JobDetailModal = ({ job, onClose, onShare, viewerUser, onWantAccount }) =>
   );
 };
 
+// Bidding needs no account, exactly like a job application -- a signed-out
+// visitor gets a reference code to track status later
+// (backend/CMMS_OPPORTUNITY_ANONYMOUS_BID.sql); a visitor who happens to
+// already be signed in bids as themselves immediately, same as the in-app
+// "Browse & Bid" tab.
+const OpportunityDetailModal = ({ opportunity, onClose, onShare, viewerUser, onWantAccount }) => {
+  const [showBidForm, setShowBidForm] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <Modal onClose={onClose}>
+      {!showBidForm ? (
+        <>
+          {opportunity.poster_url && <img src={opportunity.poster_url} alt="" className="w-full max-h-64 object-cover rounded-xl mb-4" />}
+          <div className="flex items-start justify-between gap-3 mb-1">
+            <h2 className="text-xl font-bold nb-text">{opportunity.title}</h2>
+            <ShareButton copied={copied} onClick={() => onShare(opportunity, () => { setCopied(true); setTimeout(() => setCopied(false), 2000); })} />
+          </div>
+          {opportunity.company_name && <p className="text-sm nb-text-faint mb-2">{opportunity.company_name}</p>}
+          <div className="flex flex-wrap gap-2 mb-4">
+            {opportunity.budget_hint && (
+              <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full nb-chip-green">{opportunity.budget_hint}</span>
+            )}
+            {opportunity.deadline && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full nb-chip-amber">
+                <Calendar className="w-3 h-3" /> Closes {new Date(opportunity.deadline).toLocaleDateString()}
+              </span>
+            )}
+          </div>
+          <p className="nb-text-muted whitespace-pre-wrap leading-relaxed">{opportunity.description}</p>
+          {opportunity.document_url && (
+            <a href={opportunity.document_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 mt-4 nb-link text-sm font-semibold">
+              <FileText className="w-4 h-4" /> Full details (PDF)
+            </a>
+          )}
+          {opportunity.is_open === false ? (
+            <p className="mt-6 nb-closed-banner rounded-lg px-4 py-2.5 text-sm font-semibold text-center">This opportunity is no longer open for bids.</p>
+          ) : (
+            <button
+              onClick={() => setShowBidForm(true)}
+              className="mt-6 w-full py-3 rounded-xl nb-btn-primary font-semibold transition-all hover:scale-[1.01] active:scale-[0.99] shadow-sm"
+            >
+              Bid on this opportunity — no account needed
+            </button>
+          )}
+        </>
+      ) : (
+        <OpportunityBidForm opportunity={opportunity} viewerUser={viewerUser} onBack={() => setShowBidForm(false)} onClose={onClose} onWantAccount={onWantAccount} />
+      )}
+    </Modal>
+  );
+};
+
+const OpportunityBidForm = ({ opportunity, viewerUser, onBack, onClose, onWantAccount }) => {
+  const [bidderName, setBidderName] = useState('');
+  const [bidderEmail, setBidderEmail] = useState(viewerUser?.email || '');
+  const [bidderPhone, setBidderPhone] = useState('');
+  const [amount, setAmount] = useState('');
+  const [proposal, setProposal] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [referenceCode, setReferenceCode] = useState('');
+
+  useEffect(() => {
+    if (!viewerUser?.id) return;
+    supabase.from('profiles').select('full_name, phone').eq('id', viewerUser.id).maybeSingle().then(({ data }) => {
+      if (data?.full_name) setBidderName((current) => current || data.full_name);
+      if (data?.phone) setBidderPhone((current) => current || data.phone);
+    });
+  }, [viewerUser?.id]);
+
+  const inputClass = 'w-full px-3.5 py-2.5 rounded-xl nb-input transition';
+
+  const submit = async () => {
+    if (!bidderName.trim() || !bidderEmail.trim() || !proposal.trim()) {
+      setError('Please provide your name, email, and a proposal.');
+      return;
+    }
+    setSubmitting(true);
+    setError('');
+    const result = await cmmsBusinessOpportunitiesService.submitPublicOpportunityBid(opportunity.id, {
+      bidderName: bidderName.trim(),
+      bidderEmail: bidderEmail.trim(),
+      bidderPhone: bidderPhone.trim() || null,
+      amount: amount ? Number(amount) : null,
+      proposal: proposal.trim(),
+    });
+    setSubmitting(false);
+    if (!result.success) { setError(result.error || 'Failed to submit your bid. Please try again.'); return; }
+    setReferenceCode(result.referenceCode);
+  };
+
+  if (referenceCode) {
+    return (
+      <div className="text-center py-4 animate-fadeIn">
+        <div className="w-16 h-16 rounded-full nb-chip-green flex items-center justify-center mx-auto mb-4">
+          <CheckCircle2 className="w-9 h-9" />
+        </div>
+        <h3 className="text-lg font-bold nb-text mb-2">Bid submitted!</h3>
+        <p className="nb-text-muted text-sm mb-4">This code is the only way to check your status in "Track my bid."</p>
+        <p className="text-2xl font-mono font-bold nb-link tracking-wider nb-chip-green rounded-xl py-3 px-4 inline-block">{referenceCode}</p>
+        <p className="nb-error-text text-xs font-semibold mt-3">⚠ If you lose this code, this bid cannot be recovered -- there is no other way to look it up.</p>
+
+        {!viewerUser && (
+          <div className="mt-5 p-4 rounded-xl nb-surface-alt border nb-border text-left">
+            <p className="nb-text font-semibold text-sm mb-1">✅ The safe way: create a free ICAN account</p>
+            <p className="nb-text-muted text-xs mb-3">
+              No code to lose -- this bid (and any future ones) is always right there when you sign in.
+            </p>
+            <button
+              onClick={() => onWantAccount?.({ type: 'bid', referenceCode, contact: bidderEmail.trim(), prefill: { email: bidderEmail.trim(), fullName: bidderName.trim(), phone: bidderPhone.trim() } })}
+              className="w-full py-2.5 rounded-lg nb-btn-primary font-semibold text-sm transition-all hover:scale-[1.01] active:scale-[0.99]"
+            >
+              Create my free account (or continue with Google)
+            </button>
+          </div>
+        )}
+
+        <button onClick={onClose} className="block mx-auto mt-6 px-5 py-2.5 rounded-xl nb-btn-secondary font-semibold transition">Close</button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <button onClick={onBack} className="flex items-center gap-1 text-sm nb-text-muted hover:opacity-80 mb-4 transition-colors"><ArrowLeft className="w-4 h-4" /> Back</button>
+      <h3 className="text-lg font-bold nb-text mb-1">Bid on {opportunity.title}</h3>
+      <p className="text-sm nb-text-muted mb-4">No account required. You'll receive a reference code to track your bid.</p>
+      <div className="space-y-3">
+        <input value={bidderName} onChange={(e) => setBidderName(e.target.value)} placeholder="Your name (or business name)" className={inputClass} />
+        <div className="grid sm:grid-cols-2 gap-3">
+          <input type="email" value={bidderEmail} onChange={(e) => setBidderEmail(e.target.value)} placeholder="Email address" className={inputClass} />
+          <input value={bidderPhone} onChange={(e) => setBidderPhone(e.target.value)} placeholder="Phone number (optional)" className={inputClass} />
+        </div>
+        <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Bid amount (optional)" className={inputClass} />
+        <textarea value={proposal} onChange={(e) => setProposal(e.target.value)} placeholder="Your proposal" rows={4} className={inputClass} />
+        {error && <p className="nb-error-text text-sm">{error}</p>}
+        <button
+          disabled={submitting}
+          onClick={submit}
+          className="w-full py-3 rounded-xl nb-btn-primary disabled:opacity-50 font-semibold transition-all hover:scale-[1.01] active:scale-[0.99] shadow-sm"
+        >
+          {submitting ? 'Submitting…' : 'Submit bid'}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const ApplyForm = ({ job, onBack, onClose, viewerUser, onWantAccount }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -979,7 +1215,7 @@ const ApplyForm = ({ job, onBack, onClose, viewerUser, onWantAccount }) => {
               No code to lose -- this application (and any future ones, including getting to interview) is always right there when you sign in.
             </p>
             <button
-              onClick={() => onWantAccount?.({ referenceCode, contact: email.trim(), prefill: { email: email.trim(), fullName: name.trim(), phone: phone.trim() } })}
+              onClick={() => onWantAccount?.({ type: 'job', referenceCode, contact: email.trim(), prefill: { email: email.trim(), fullName: name.trim(), phone: phone.trim() } })}
               className="w-full py-2.5 rounded-lg nb-btn-primary font-semibold text-sm transition-all hover:scale-[1.01] active:scale-[0.99]"
             >
               Create my free account (or continue with Google)
@@ -1216,7 +1452,7 @@ const TrackApplication = ({ companyId, viewerUser, onWantAccount }) => {
               <p className="nb-text font-semibold text-sm mb-1">💡 Never type that code again</p>
               <p className="nb-text-muted text-xs mb-3">Create a free ICAN account with this same contact and every application you've made here (and any future ones) shows up automatically when you sign in.</p>
               <button
-                onClick={() => onWantAccount?.({ referenceCode: referenceCode.trim(), contact: contact.trim(), prefill: contact.includes('@') ? { email: contact.trim() } : { phone: contact.trim() } })}
+                onClick={() => onWantAccount?.({ type: 'job', referenceCode: referenceCode.trim(), contact: contact.trim(), prefill: contact.includes('@') ? { email: contact.trim() } : { phone: contact.trim() } })}
                 className="w-full py-2.5 rounded-lg nb-btn-primary font-semibold text-sm transition-all hover:scale-[1.01] active:scale-[0.99]"
               >
                 Create my free account
@@ -1225,6 +1461,144 @@ const TrackApplication = ({ companyId, viewerUser, onWantAccount }) => {
           </>
         ) : (
           <p className="mt-5 text-center nb-text-faint text-sm animate-fadeIn">No application found for that reference code and contact. Double-check for typos.</p>
+        )
+      )}
+    </div>
+  );
+};
+
+const BID_STATUS_STYLES = {
+  submitted: 'nb-chip-neutral',
+  under_review: 'nb-chip-amber',
+  shortlisted: 'nb-chip-teal',
+  interview: 'nb-chip-green',
+  selected: 'nb-chip-green-solid',
+  rejected: 'nb-chip-maroon',
+  withdrawn: 'nb-chip-neutral nb-chip-faded',
+};
+
+const BidStatusCard = ({ opportunityTitle, companyName, submittedAt, status, statusNote }) => (
+  <div className="nb-card rounded-2xl shadow-sm p-4 animate-fadeInUp">
+    <p className="nb-text font-semibold">{opportunityTitle}</p>
+    <p className="text-xs nb-text-faint mb-3">{companyName ? `${companyName} · ` : ''}Bid {new Date(submittedAt).toLocaleDateString()}</p>
+    <span className={`inline-block px-3 py-1 rounded-full text-sm font-bold capitalize ${BID_STATUS_STYLES[status] || BID_STATUS_STYLES.submitted}`}>
+      {status.replace('_', ' ')}
+    </span>
+    {statusNote && <p className="text-sm nb-text-muted mt-3">{statusNote}</p>}
+  </div>
+);
+
+// Mirrors TrackApplication exactly, one level down (opportunity bids instead
+// of job applications) -- same reference-code-or-signed-in-account duality,
+// same self-healing "my bids" lookup once signed in.
+const TrackOpportunityBid = ({ viewerUser, onWantAccount }) => {
+  const [referenceCode, setReferenceCode] = useState('');
+  const [contact, setContact] = useState('');
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
+
+  const [myBids, setMyBids] = useState(null);
+  const [myBidsLoading, setMyBidsLoading] = useState(false);
+
+  const inputClass = 'w-full px-3.5 py-2.5 rounded-xl nb-input transition';
+
+  useEffect(() => {
+    if (!viewerUser?.id) { setMyBids(null); return; }
+    let cancelled = false;
+    setMyBidsLoading(true);
+    cmmsBusinessOpportunitiesService.getMyOpportunityBids().then((response) => {
+      if (cancelled) return;
+      setMyBids(response.success ? response.data : []);
+      setMyBidsLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [viewerUser?.id]);
+
+  const search = async () => {
+    if (!referenceCode.trim() || !contact.trim()) {
+      setError('Enter your reference code and the email or phone you bid with.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    setSearched(true);
+    const response = await cmmsBusinessOpportunitiesService.trackPublicOpportunityBid(referenceCode.trim(), contact.trim());
+    if (!response.success) setError(response.error || 'Something went wrong. Please try again.');
+    setResult(response.data || null);
+    setLoading(false);
+  };
+
+  if (viewerUser) {
+    return (
+      <div className="max-w-md mx-auto">
+        <h2 className="text-xl font-bold nb-text mb-1">Track my bid</h2>
+        <p className="text-sm nb-text-muted mb-5">Signed in as {viewerUser.email} -- no reference code needed.</p>
+        {myBidsLoading ? (
+          <div className="flex justify-center py-8"><Loader className="w-6 h-6 nb-link animate-spin" /></div>
+        ) : !myBids || myBids.length === 0 ? (
+          <p className="text-center nb-text-faint text-sm">No bids found for this email yet.</p>
+        ) : (
+          <div className="space-y-3">
+            {myBids.map((bid) => (
+              <BidStatusCard
+                key={bid.id}
+                opportunityTitle={bid.opportunity_title}
+                companyName={bid.company_name}
+                submittedAt={bid.created_at}
+                status={bid.status}
+                statusNote={bid.status_note}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-md mx-auto">
+      <h2 className="text-xl font-bold nb-text mb-1">Track my bid</h2>
+      <p className="text-sm nb-text-muted mb-5">Enter the reference code you received, plus the email or phone you bid with.</p>
+      <div className="space-y-3">
+        <input value={referenceCode} onChange={(e) => setReferenceCode(e.target.value)} placeholder="Reference code (e.g. BID-A1B2C3D4)" className={`${inputClass} font-mono`} />
+        <input value={contact} onChange={(e) => setContact(e.target.value)} placeholder="Email or phone used to bid" className={inputClass} />
+        {error && <p className="nb-error-text text-sm">{error}</p>}
+        <button
+          disabled={loading}
+          onClick={search}
+          className="w-full py-3 rounded-xl nb-btn-primary disabled:opacity-50 font-semibold transition-all hover:scale-[1.01] active:scale-[0.99] shadow-sm flex items-center justify-center gap-2"
+        >
+          {loading ? <Loader className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />} {loading ? 'Searching…' : 'Check status'}
+        </button>
+      </div>
+
+      {searched && !loading && (
+        result ? (
+          <>
+            <div className="mt-5">
+              <BidStatusCard
+                opportunityTitle={result.opportunity_title}
+                companyName={result.company_name}
+                submittedAt={result.submitted_at}
+                status={result.status}
+                statusNote={result.status_note}
+              />
+            </div>
+            <div className="mt-4 p-4 rounded-xl nb-surface-alt border nb-border text-left">
+              <p className="nb-text font-semibold text-sm mb-1">💡 Never type that code again</p>
+              <p className="nb-text-muted text-xs mb-3">Create a free ICAN account with this same contact and every bid you've placed (and any future ones) shows up automatically when you sign in.</p>
+              <button
+                onClick={() => onWantAccount?.({ type: 'bid', referenceCode: referenceCode.trim(), contact: contact.trim(), prefill: contact.includes('@') ? { email: contact.trim() } : { phone: contact.trim() } })}
+                className="w-full py-2.5 rounded-lg nb-btn-primary font-semibold text-sm transition-all hover:scale-[1.01] active:scale-[0.99]"
+              >
+                Create my free account
+              </button>
+            </div>
+          </>
+        ) : (
+          <p className="mt-5 text-center nb-text-faint text-sm animate-fadeIn">No bid found for that reference code and contact. Double-check for typos.</p>
         )
       )}
     </div>

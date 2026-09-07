@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Copy, ExternalLink, Lock, Mail, Plus, Wallet, X } from 'lucide-react';
+import { Copy, ExternalLink, Lock, Mail, Plus, Share2, Wallet, X } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 import cmmsServiceProviderContractsService from '../services/cmmsServiceProviderContractsService';
 
@@ -28,6 +28,7 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser }) => {
     validDays: 30, jobAssignmentId: '', accessMode: 'pin', pin: '', allowedEmail: '',
   });
   const [publishedLink, setPublishedLink] = useState(null);
+  const [publishedTitle, setPublishedTitle] = useState('');
 
   const resetForm = () => setForm({
     providerName: '', providerContact: '', title: '', scopeOfWork: '', rate: '', terms: '',
@@ -83,12 +84,20 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser }) => {
     if (!published.success) { setError(published.error); return; }
 
     setPublishedLink(cmmsServiceProviderContractsService.buildServiceProviderContractUrl(published.data.access_token));
+    setPublishedTitle(form.title);
     resetForm();
     await loadAll();
   };
 
   const handleCopyLink = (accessToken) => {
     navigator.clipboard?.writeText(cmmsServiceProviderContractsService.buildServiceProviderContractUrl(accessToken));
+  };
+
+  const handleShareLink = async (link, title) => {
+    if (navigator.share) {
+      try { await navigator.share({ title, url: link }); return; } catch { /* user cancelled */ return; }
+    }
+    navigator.clipboard?.writeText(link);
   };
 
   const handleRevoke = async (contractId) => {
@@ -125,11 +134,16 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser }) => {
       </p>
 
       {showForm && publishedLink && (
-        <div className="bg-emerald-900/30 border border-emerald-700 rounded-lg p-3 mb-4">
-          <p className="text-emerald-300 text-xs font-semibold mb-1">Contract published. Share this link plus the PIN/email separately with the provider:</p>
+        <div className="bg-emerald-900/30 border border-emerald-700 rounded-lg p-3 mb-4 relative">
+          <button onClick={() => setPublishedLink(null)} title="Dismiss" className="absolute top-2 right-2 p-1 rounded hover:bg-emerald-800/60">
+            <X className="w-3.5 h-3.5 text-emerald-300" />
+          </button>
+          <p className="text-emerald-300 text-xs font-semibold mb-1 pr-6">Contract published. Share this link plus the PIN/email separately with the provider:</p>
           <div className="flex gap-2">
             <input readOnly value={publishedLink} className="flex-1 bg-slate-800 text-slate-300 text-xs rounded px-2 py-1.5 border border-slate-700" onFocus={(e) => e.target.select()} />
-            <button onClick={() => navigator.clipboard?.writeText(publishedLink)} className="text-xs px-2 py-1.5 rounded bg-emerald-700 hover:bg-emerald-600 text-white">Copy</button>
+            <button onClick={() => navigator.clipboard?.writeText(publishedLink)} title="Copy link" className="text-xs px-2 py-1.5 rounded bg-emerald-700 hover:bg-emerald-600 text-white">Copy</button>
+            <button onClick={() => handleShareLink(publishedLink, publishedTitle)} title="Share link" className="p-1.5 rounded bg-emerald-700 hover:bg-emerald-600 text-white"><Share2 className="w-3.5 h-3.5" /></button>
+            <a href={publishedLink} target="_blank" rel="noreferrer" title="Open" className="p-1.5 rounded bg-emerald-700 hover:bg-emerald-600 text-white"><ExternalLink className="w-3.5 h-3.5" /></a>
           </div>
         </div>
       )}
@@ -235,6 +249,7 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser }) => {
               expanded={expandedId === c.id}
               onToggle={() => setExpandedId(expandedId === c.id ? null : c.id)}
               onCopyLink={() => handleCopyLink(c.access_token)}
+              onShareLink={() => handleShareLink(cmmsServiceProviderContractsService.buildServiceProviderContractUrl(c.access_token), c.title)}
               onRevoke={() => handleRevoke(c.id)}
               onExtend={() => handleExtend(c)}
               statusColor={statusColor}
@@ -249,7 +264,7 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser }) => {
   );
 };
 
-const ContractRow = ({ contract, expanded, onToggle, onCopyLink, onRevoke, onExtend, statusColor, myCmmsUserId, companyId, onChanged }) => {
+const ContractRow = ({ contract, expanded, onToggle, onCopyLink, onShareLink, onRevoke, onExtend, statusColor, myCmmsUserId, companyId, onChanged }) => {
   const [followups, setFollowups] = useState([]);
   const [payments, setPayments] = useState([]);
   const [note, setNote] = useState('');
@@ -285,9 +300,10 @@ const ContractRow = ({ contract, expanded, onToggle, onCopyLink, onRevoke, onExt
           </p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-          {contract.status === 'published' && (
+          {contract.status !== 'revoked' && (
             <>
               <button onClick={onCopyLink} title="Copy link" className="p-1.5 rounded bg-slate-700 hover:bg-slate-600"><Copy className="w-3.5 h-3.5 text-slate-300" /></button>
+              <button onClick={onShareLink} title="Share link" className="p-1.5 rounded bg-slate-700 hover:bg-slate-600"><Share2 className="w-3.5 h-3.5 text-slate-300" /></button>
               <a href={`/service-provider-contract?token=${contract.access_token}`} target="_blank" rel="noreferrer" title="Open" className="p-1.5 rounded bg-slate-700 hover:bg-slate-600"><ExternalLink className="w-3.5 h-3.5 text-slate-300" /></a>
               <button onClick={onExtend} className="text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300">Extend</button>
               <button onClick={onRevoke} className="text-xs px-2 py-1 rounded bg-red-900/50 hover:bg-red-900 text-red-300">Revoke</button>

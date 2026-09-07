@@ -49,6 +49,46 @@ export const getInterviewsForApplication = async (applicationId) => {
   return { success: true, data: data || [] };
 };
 
+/** Same schedule table, keyed by opportunity_bid_id instead of
+ * job_application_id (see backend/CMMS_OPPORTUNITY_BID_PIPELINE.sql) --
+ * only ever used for an individual bidder, who already has a known
+ * bidder_ican_user_id at bid time. */
+export const scheduleInterviewForBid = async (companyId, bid, fields, createdByCmmsUserId) => {
+  const { data, error } = await supabase
+    .from('cmms_interview_schedules')
+    .insert({
+      opportunity_bid_id: bid.id,
+      cmms_company_id: companyId,
+      scheduled_at: fields.scheduledAt,
+      duration_minutes: Number(fields.durationMinutes) || 30,
+      interviewer_cmms_user_ids: fields.interviewerIds || [],
+      notes: fields.notes?.trim() || null,
+      created_by: createdByCmmsUserId || null,
+    })
+    .select()
+    .single();
+  if (error) return { success: false, error: error.message };
+
+  await supabase
+    .from('cmms_business_opportunity_bids')
+    .update({ status: 'interview', status_note: 'Live interview scheduled', status_updated_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq('id', bid.id);
+
+  supabase.rpc('fn_notify_interview_scheduled', { p_schedule_id: data.id }).catch(() => {});
+
+  return { success: true, data };
+};
+
+export const getInterviewsForBid = async (bidId) => {
+  const { data, error } = await supabase
+    .from('cmms_interview_schedules')
+    .select('*')
+    .eq('opportunity_bid_id', bidId)
+    .order('scheduled_at', { ascending: false });
+  if (error) return { success: false, error: error.message, data: [] };
+  return { success: true, data: data || [] };
+};
+
 export const cancelInterview = async (scheduleId) => {
   const { error } = await supabase
     .from('cmms_interview_schedules')
@@ -92,6 +132,8 @@ export const linkIcanAccountViaInterviewSchedule = async (scheduleId) => {
 export default {
   scheduleInterview,
   getInterviewsForApplication,
+  scheduleInterviewForBid,
+  getInterviewsForBid,
   cancelInterview,
   buildCandidateInterviewLink,
   canJoinInterview,

@@ -25,7 +25,11 @@ export const buildServiceProviderContractUrl = (accessToken) =>
 // ============================================================
 
 /** fields: { jobAssignmentId, providerName, providerContact, title, content,
- * accessMode: 'pin' | 'email', pin, allowedEmail, validDays } */
+ * accessMode: 'pin' | 'email', pin, allowedEmail, validDays, opportunityBidId }
+ * opportunityBidId (optional) is the "won bid becomes a task" step -- see
+ * backend/CMMS_OPPORTUNITY_BID_PIPELINE.sql: the bid must already be
+ * status='selected' and not yet converted, and this call stamps the bid's
+ * converted_contract_id in the same transaction. */
 export const publishServiceProviderContract = async (companyId, fields) => {
   const { data, error } = await supabase.rpc('fn_publish_service_provider_contract', {
     p_company_id: companyId,
@@ -38,6 +42,7 @@ export const publishServiceProviderContract = async (companyId, fields) => {
     p_pin: fields.accessMode === 'pin' ? fields.pin : null,
     p_allowed_email: fields.accessMode === 'email' ? fields.allowedEmail : null,
     p_valid_days: fields.validDays || 30,
+    p_opportunity_bid_id: fields.opportunityBidId || null,
   });
   if (error) return { success: false, error: error.message };
   if (!data?.length) return { success: false, error: 'Could not publish contract.' };

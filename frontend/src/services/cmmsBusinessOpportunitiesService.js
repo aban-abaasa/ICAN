@@ -12,6 +12,10 @@
  */
 
 import { supabase } from '../lib/supabase/client';
+import { resolveMediaValues } from './r2StorageService';
+
+const MEDIA_FIELDS = ['poster_url', 'document_url'];
+const PUBLIC_SITE_ORIGIN = 'https://icanera.space';
 
 // ============================================================
 // Posting company (staff, gated by the 'opportunities' tool's
@@ -28,6 +32,10 @@ export const createOpportunity = async (companyId, fields, createdByCmmsUserId) 
       budget_hint: fields.budgetHint || null,
       deadline: fields.deadline || null,
       created_by: createdByCmmsUserId || null,
+      poster_url: fields.posterUrl || null,
+      poster_path: fields.posterPath || null,
+      document_url: fields.documentUrl || null,
+      document_path: fields.documentPath || null,
     })
     .select()
     .single();
@@ -36,14 +44,21 @@ export const createOpportunity = async (companyId, fields, createdByCmmsUserId) 
 };
 
 export const updateOpportunity = async (opportunityId, fields) => {
+  const patch = {
+    title: fields.title?.trim(),
+    description: fields.description || null,
+    budget_hint: fields.budgetHint || null,
+    deadline: fields.deadline || null,
+  };
+  // Only touch poster/document columns when a new file was uploaded --
+  // otherwise the already-resolved live URL sitting in component state would
+  // overwrite the stored key with an expiring signed link (same reasoning as
+  // CMMSAnnouncementsPanel's saveDraft).
+  if (fields.posterUrl !== undefined) { patch.poster_url = fields.posterUrl; patch.poster_path = fields.posterPath || null; }
+  if (fields.documentUrl !== undefined) { patch.document_url = fields.documentUrl; patch.document_path = fields.documentPath || null; }
   const { data, error } = await supabase
     .from('cmms_business_opportunities')
-    .update({
-      title: fields.title?.trim(),
-      description: fields.description || null,
-      budget_hint: fields.budgetHint || null,
-      deadline: fields.deadline || null,
-    })
+    .update(patch)
     .eq('id', opportunityId)
     .select()
     .single();
@@ -83,6 +98,26 @@ export const selectWinningBid = async (bidId) => {
   return { success: true };
 };
 
+/** Moves a bid through the screening pipeline (submitted/under_review/
+ * shortlisted/interview/rejected/withdrawn) -- mirrors
+ * cmmsAnnouncementsService.updateApplicationStatus. NOT used for 'selected':
+ * that stays exclusively through selectWinningBid (fn_select_opportunity_bid),
+ * which atomically rejects every other bid and closes the opportunity --
+ * the RLS policy backing this plain update rejects status='selected'. */
+export const updateBidStatus = async (bidId, status, note, updatedByCmmsUserId) => {
+  const { error } = await supabase
+    .from('cmms_business_opportunity_bids')
+    .update({
+      status,
+      status_note: note || null,
+      status_updated_at: new Date().toISOString(),
+      status_updated_by: updatedByCmmsUserId || null,
+    })
+    .eq('id', bidId);
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+};
+
 // ============================================================
 // Browsing (any signed-in ICAN user) -- the "available businesses" list
 // ============================================================
@@ -106,6 +141,80 @@ export const getMyCompanies = async (userEmail) => {
     .select('cmms_company_id, role, cmms_company_profiles(company_name)')
     .ilike('email', userEmail)
     .eq('is_active', true);
+  if (error) return { success: false, error: error.message, data: [] };
+  return { success: true, data: data || [] };
+};
+
+// ============================================================
+// Public page -- no ICAN account needed to browse (see
+// backend/CMMS_OPPORTUNITY_PUBLIC_PAGE.sql). Rendered from
+// PublicCompanyNoticeBoard.jsx's "Opportunities" tab, same
+// /notices/<companyId> board jobs/announcements already share. Bidding
+// itself is unchanged -- still requires signing in first, then goes through
+// submitBidAsIndividual below like anywhere else in the app.
+// ============================================================
+
+export const getPublicCompanyOpportunities = async (companyId) => {
+  const { data, error } = await supabase.rpc('fn_get_public_cmms_opportunities', { p_company_id: companyId });
+  if (error) return { success: false, error: error.message, data: [] };
+  const resolved = await resolveMediaValues(data || [], MEDIA_FIELDS);
+  return { success: true, data: resolved };
+};
+
+export const getPublicOpportunity = async (opportunityId) => {
+  const { data, error } = await supabase.rpc('fn_get_public_cmms_opportunity', { p_opportunity_id: opportunityId });
+  if (error || !data?.length) return { success: false, error: error?.message, data: null };
+  const [resolved] = await resolveMediaValues([data[0]], MEDIA_FIELDS);
+  return { success: true, data: resolved };
+};
+
+export const buildPublicOpportunityLink = (companyId, opportunityId) =>
+  `${PUBLIC_SITE_ORIGIN}/notices/${companyId}${opportunityId ? `?opp=${opportunityId}` : ''}`;
+
+// ============================================================
+// Public bidding -- no ICAN account needed (see
+// backend/CMMS_OPPORTUNITY_ANONYMOUS_BID.sql). A visitor who happens to
+// already be signed in bids as themselves immediately; a signed-out visitor
+// gets a reference code to track status later, exactly like a public job
+// application.
+// ============================================================
+
+export const submitPublicOpportunityBid = async (opportunityId, fields) => {
+  const { data, error } = await supabase.rpc('fn_submit_public_opportunity_bid', {
+    p_opportunity_id: opportunityId,
+    p_bidder_name: fields.bidderName?.trim(),
+    p_bidder_email: fields.bidderEmail?.trim(),
+    p_bidder_phone: fields.bidderPhone?.trim() || null,
+    p_amount: fields.amount || null,
+    p_proposal: fields.proposal?.trim(),
+  });
+  if (error || !data?.length) return { success: false, error: error?.message };
+  return { success: true, referenceCode: data[0].reference_code };
+};
+
+export const trackPublicOpportunityBid = async (referenceCode, contact) => {
+  const { data, error } = await supabase.rpc('fn_track_public_opportunity_bid', {
+    p_reference_code: referenceCode,
+    p_contact: contact,
+  });
+  if (error) return { success: false, error: error.message, data: null };
+  return { success: true, data: data?.[0] || null };
+};
+
+export const linkIcanAccountToOpportunityBid = async (referenceCode, contact) => {
+  const { data, error } = await supabase.rpc('fn_link_ican_account_to_opportunity_bid', {
+    p_reference_code: referenceCode,
+    p_contact: contact,
+  });
+  if (error) return { success: false, error: error.message };
+  return { success: true, linked: Boolean(data) };
+};
+
+/** Self-healing "my bids" for a signed-in visitor -- no reference code
+ * needed. See ResumeOpportunityBidsPanel.jsx (in-app) and
+ * PublicCompanyNoticeBoard.jsx's "Track my bid" tab (public page). */
+export const getMyOpportunityBids = async () => {
+  const { data, error } = await supabase.rpc('fn_get_my_opportunity_bids');
   if (error) return { success: false, error: error.message, data: [] };
   return { success: true, data: data || [] };
 };
@@ -183,8 +292,16 @@ export default {
   getOpportunitiesForCompany,
   getBidsForOpportunity,
   selectWinningBid,
+  updateBidStatus,
   getOpenOpportunities,
   getMyCompanies,
+  getPublicCompanyOpportunities,
+  getPublicOpportunity,
+  buildPublicOpportunityLink,
+  submitPublicOpportunityBid,
+  trackPublicOpportunityBid,
+  linkIcanAccountToOpportunityBid,
+  getMyOpportunityBids,
   submitBidAsIndividual,
   submitBidAsBusiness,
   withdrawBid,
