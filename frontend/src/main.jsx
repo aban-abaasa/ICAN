@@ -53,6 +53,11 @@ const isCandidateDocumentPath = window.location.pathname === '/candidate-documen
 // fully public, no account, same reasoning as the report-share/attendance
 // QR pages below.
 const isDocumentVerifyPath = window.location.pathname === '/verify-document';
+// A service-provider contract link (CMMS_SERVICE_PROVIDER_CONTRACTS.sql) --
+// the ONE page an outside contractor with no CMMS/ICAN account ever opens:
+// their contract, task follow-ups, and payment history, time-limited and
+// fully public, same no-login reasoning as the QR/verify pages above.
+const isServiceProviderContractPath = window.location.pathname === '/service-provider-contract';
 // A shared CMMS report link (e.g. https://icanera.space/reports/<token>) --
 // same no-login share-link reasoning as the links above, except access can
 // additionally be gated by a password or an emailed one-time code
@@ -114,6 +119,7 @@ const CandidateTestRunner = lazyWithReloadOnChunkFailure(() => import('./compone
 const CandidateInterviewRoom = lazyWithReloadOnChunkFailure(() => import('./components/CandidateInterviewRoom'));
 const CandidateDocumentViewer = lazyWithReloadOnChunkFailure(() => import('./components/CandidateDocumentViewer'));
 const PublicDocumentVerify = lazyWithReloadOnChunkFailure(() => import('./components/PublicDocumentVerify'));
+const PublicServiceProviderContract = lazyWithReloadOnChunkFailure(() => import('./components/PublicServiceProviderContract'));
 const Loading = () => <div className="min-h-screen bg-slate-950" />;
 
 // Without this, ANY uncaught error during first render (a chunk failure that
@@ -150,6 +156,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         {isAttendanceQrPath ? <PublicStaffAttendanceCheckIn />
           : isVisitorQrPath ? <PublicVisitorCheckIn />
           : isDocumentVerifyPath ? <PublicDocumentVerify />
+          : isServiceProviderContractPath ? <PublicServiceProviderContract />
           : reportShareMatch ? <PublicReportViewer shareToken={reportShareMatch[1]} />
           : reportExportShareMatch ? <PublicReportExportViewer shareToken={reportExportShareMatch[1]} />
           : cmmsNoticeBoardMatch ? (

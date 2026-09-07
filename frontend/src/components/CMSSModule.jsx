@@ -63,6 +63,7 @@ import CMSSAttendancePanel from './CMSSAttendancePanel.jsx';
 import CMSSVisitorManagementPanel from './CMSSVisitorManagementPanel.jsx';
 import CMMSEmployeeSelfService from './CMMSEmployeeSelfService.jsx';
 import CMMSAnnouncementsPanel from './CMMSAnnouncementsPanel.jsx';
+import CMMSServiceProviderContractPanel from './CMMSServiceProviderContractPanel.jsx';
 
 const CMMSModule = ({
   onDataUpdate,
@@ -2071,6 +2072,10 @@ const CMMSModule = ({
 
     // Determine if user can assign jobs
     const canAssignJobs = hasToolAction('tasks', 'assign');
+    // Separate from canAssignJobs so a role can be trusted to publish a
+    // public service-provider contract link without also being able to
+    // assign internal tasks, or vice versa (see CMMSRoleConfiguration.jsx).
+    const canPublishServiceProviderContracts = hasToolAction('tasks', 'publish_contract');
 
     // Load all data on mount
     useEffect(() => {
@@ -2479,8 +2484,8 @@ const CMMSModule = ({
             <span className="hidden sm:inline">Messages</span>
           </button>
 
-          {/* Tab 3: Assign Job (only for admins/coordinators/supervisors) */}
-          {canAssignJobs && (
+          {/* Tab 3: Assign Job (only for admins/coordinators/supervisors, or anyone granted publish_contract) */}
+          {(canAssignJobs || canPublishServiceProviderContracts) && (
             <button
               onClick={() => setTasksTab('assign')}
               className={`w-full px-3 md:px-4 py-2 md:py-3 rounded-lg font-semibold text-xs md:text-sm transition-all border-2 flex items-center justify-center gap-2 ${
@@ -2838,8 +2843,10 @@ const CMMSModule = ({
         )}
 
         {/* TAB 3: ASSIGN JOB (Admin/Coordinator/Supervisor only) */}
-        {tasksTab === 'assign' && canAssignJobs && (
+        {tasksTab === 'assign' && (canAssignJobs || canPublishServiceProviderContracts) && (
           <div className="space-y-4">
+            {canAssignJobs && (
+            <>
             <div className="glass-card p-4 md:p-6 border border-slate-700">
               <h3 className="text-lg md:text-xl font-bold text-white mb-4 flex items-center gap-2">
                 🎯 Assign Job
@@ -2934,6 +2941,12 @@ const CMMSModule = ({
                 💡 <strong>Tip:</strong> Jobs assigned here will be added to the recipient's "Your Assigned Tasks" list and will receive a notification.
               </p>
             </div>
+            </>
+            )}
+
+            {canPublishServiceProviderContracts && (
+              <CMMSServiceProviderContractPanel companyId={companyIdToUse} currentUser={user} />
+            )}
           </div>
         )}
 
