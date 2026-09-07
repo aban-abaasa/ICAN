@@ -124,13 +124,29 @@ export default function PortfolioChatPanel({ ownerUserId, ownerName, guestId, gu
       </div>
 
       {!user && (
-        <div className="px-3 pt-2">
+        <div className="px-3 pt-2 space-y-2">
           <input
             value={guestName}
             onChange={(e) => onGuestNameChange(e.target.value)}
             placeholder="Your name (so they know who's messaging)"
             className="w-full px-3 py-1.5 bg-slate-950/60 border border-slate-700 rounded-lg text-white placeholder-slate-500 text-xs focus:outline-none focus:border-indigo-500/60"
           />
+          {/* Accurate about what's actually at risk here: a guest identity
+              is a localStorage id tied to this one browser, and there is no
+              way to notify a guest of a reply -- unlike the 24h message
+              expiry (owner-controlled either way, account or not), an
+              account genuinely fixes both of those. */}
+          <div className="px-2.5 py-2 rounded-lg bg-amber-950/30 border border-amber-800/40">
+            <p className="text-[11px] text-amber-200">
+              ⚠ As a guest, you won't be notified if {ownerName?.split(' ')[0] || 'they'} replies, and this chat only exists on this browser.
+            </p>
+            <button
+              onClick={() => { window.location.href = '/?auth=signup'; }}
+              className="mt-1.5 text-[11px] font-semibold text-indigo-300 hover:text-indigo-200"
+            >
+              Create a free account (or continue with Google) to get notified →
+            </button>
+          </div>
         </div>
       )}
 

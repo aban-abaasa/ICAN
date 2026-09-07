@@ -120,7 +120,7 @@ function SectionHeading({ children }) {
  *   Resume tab.
  */
 export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
-  const { user, profile: viewerProfile } = useAuth();
+  const { user, profile: viewerProfile, signInWithGoogle } = useAuth();
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -167,12 +167,19 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
   // their own My Resume tab (instantly if the app shell is already mounted
   // around us, e.g. the overlay usage; otherwise via a one-time flag the
   // main app's mount effect picks up after the page reloads). Signed-out
-  // visitors go to sign-up first; the same flag carries through so they land
-  // on My Resume the moment their account exists, not on the dashboard.
-  const startOwnPortfolio = () => {
+  // visitors go straight to Google -- the fastest path for a casual "I want
+  // one too" click, no form to fill in first -- and land on My Resume the
+  // same way once their account exists via the same flag, which survives
+  // the OAuth redirect round-trip in sessionStorage. Falls back to the
+  // plain sign-up form only if Google sign-in couldn't even be started.
+  const startOwnPortfolio = async () => {
     try { window.sessionStorage.setItem('ican_pending_start_tab', 'resume'); } catch (_) { /* storage unavailable */ }
     if (!user) {
-      window.location.href = '/?auth=signup';
+      try {
+        await signInWithGoogle();
+      } catch (_) {
+        window.location.href = '/?auth=signup';
+      }
       return;
     }
     if (onClose) {
