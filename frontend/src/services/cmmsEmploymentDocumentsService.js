@@ -11,6 +11,7 @@
 
 import { supabase } from '../lib/supabase/client';
 import { resolveMediaValue } from './r2StorageService';
+import { getPublicAppUrl } from '../utils/publicAppUrl';
 
 const genVerifyToken = () => {
   const bytes = new Uint8Array(24);
@@ -18,7 +19,10 @@ const genVerifyToken = () => {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 };
 
-export const buildVerifyUrl = (verifyToken) => `${window.location.origin}/verify-document?token=${verifyToken}`;
+// Always the real production domain -- see cmmsInterviewService's
+// buildCandidateInterviewLink for why (a QR seal on a printed letter is
+// especially unforgiving of a dev/staging origin baked in at issue time).
+export const buildVerifyUrl = (verifyToken) => getPublicAppUrl(`/verify-document?token=${verifyToken}`);
 
 /**
  * Auto-provisions the applicant as a real CMMS employee (cmms_users row) at
@@ -145,7 +149,8 @@ export const verifyEmploymentDocument = async (token) => {
 // CandidateInterviewRoom's link-then-load pattern)
 // ============================================================
 
-export const buildCandidateDocumentLink = (documentId) => `${window.location.origin}/candidate-document?documentId=${documentId}`;
+// Always the real production domain -- see buildVerifyUrl above.
+export const buildCandidateDocumentLink = (documentId) => getPublicAppUrl(`/candidate-document?documentId=${documentId}`);
 
 /** Callable before the candidate is signed in at all -- pre-fills the ICAN
  * signup form from the document's owner (job application, or the linked

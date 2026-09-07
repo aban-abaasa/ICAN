@@ -19,12 +19,17 @@
 --      parameter is trailing and defaults to NULL.
 --   2. fn_notify_interview_scheduled -- loops the schedule's
 --      interviewer_cmms_user_ids and sends each one their own notification
---      with action_link = /candidate-interview?scheduleId=<id>, the SAME
---      standalone join page the candidate uses (fn_can_join_interview
---      already tells that page whether the caller is the interviewer or
---      the candidate). Called by cmmsInterviewService.scheduleInterview()
---      right after the schedule row is inserted -- best-effort, never
---      blocks scheduling itself if it fails.
+--      with action_link = https://icanera.space/candidate-interview?scheduleId=<id>
+--      (always the production domain, never wherever the admin happened to
+--      schedule from), the SAME standalone join page the candidate uses
+--      (fn_can_join_interview already tells that page whether the caller is
+--      the interviewer or the candidate). Called by
+--      cmmsInterviewService.scheduleInterview() right after the schedule
+--      row is inserted -- best-effort, never blocks scheduling itself if it
+--      fails. Interviewers can also join without leaving the CMMS app at
+--      all via the new "Join call" button in CMMSAnnouncementsPanel.jsx,
+--      which calls fn_can_join_interview directly and drops straight into
+--      LiveBoardroom in place.
 --
 -- Run after: CMMS_INTERVIEW_SCHEDULES.sql, CMMS_NOTIFICATIONS_TABLE.sql,
 -- CMMS_TASK_NOTIFICATION_DEEPLINK.sql.
@@ -130,7 +135,12 @@ BEGIN
       'notices',
       'Join interview',
       NULL,
-      '/candidate-interview?scheduleId=' || v_schedule.id
+      -- Absolute, hardcoded to the production domain -- never
+      -- window.location.origin/a relative path, so the link always lands on
+      -- the real deployed site (where Supabase Realtime signaling for the
+      -- call is actually configured) regardless of which environment the
+      -- interview was scheduled from.
+      'https://icanera.space/candidate-interview?scheduleId=' || v_schedule.id
     );
   END LOOP;
 END;

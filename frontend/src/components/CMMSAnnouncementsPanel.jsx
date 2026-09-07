@@ -12,6 +12,7 @@ import cmmsWrittenTestService from '../services/cmmsWrittenTestService';
 import cmmsInterviewService from '../services/cmmsInterviewService';
 import CMMSWrittenTestBuilder from './CMMSWrittenTestBuilder';
 import CMMSEmploymentDocumentsPanel from './CMMSEmploymentDocumentsPanel';
+import LiveBoardroom from './LiveBoardroom';
 
 const MAX_POSTER_BYTES = 6 * 1024 * 1024;
 const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
@@ -894,6 +895,8 @@ const ApplicationPipelineControls = ({ application, companyId, companyStaff, cur
   const [showScheduler, setShowScheduler] = useState(false);
   const [scheduleForm, setScheduleForm] = useState({ scheduledAt: '', durationMinutes: 30, interviewerIds: [], notes: '' });
   const [scheduling, setScheduling] = useState(false);
+  const [joiningInterviewId, setJoiningInterviewId] = useState(null);
+  const [boardroomAccess, setBoardroomAccess] = useState(null);
 
   // Picking "Written test" or "Interview" from the status dropdown above
   // opens the matching panel directly, instead of leaving the admin to find
@@ -959,6 +962,22 @@ const ApplicationPipelineControls = ({ application, companyId, companyStaff, cur
     await loadPipeline();
   };
 
+  // Lets an interviewer (or the admin, if they're one of the named
+  // interviewers) join the live call without ever leaving the CMMS panel --
+  // same fn_can_join_interview gate and LiveBoardroom the standalone
+  // /candidate-interview page uses (CandidateInterviewRoom.jsx), just
+  // rendered in place instead of navigating away from the app.
+  const joinInterview = async (interview) => {
+    setJoiningInterviewId(interview.id);
+    const result = await cmmsInterviewService.canJoinInterview(interview.id);
+    setJoiningInterviewId(null);
+    if (!result.success || !result.data?.can_join) {
+      alert(`❌ ${result.data?.status === 'cancelled' ? 'This interview has been cancelled.' : (result.error || 'You are not authorized to join this interview.')}`);
+      return;
+    }
+    setBoardroomAccess(result.data);
+  };
+
   return (
     <div className="mt-4 pt-3 border-t border-white/10 flex flex-wrap items-center gap-2">
       <button onClick={() => setShowTestPicker((v) => !v)} className="px-3 py-1.5 rounded bg-indigo-600/80 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5">
@@ -991,10 +1010,27 @@ const ApplicationPipelineControls = ({ application, companyId, companyStaff, cur
         <div key={interview.id} className="w-full flex items-center gap-2 text-xs text-gray-400">
           <Video className="w-3.5 h-3.5 text-sky-300" />
           Interview scheduled: {new Date(interview.scheduled_at).toLocaleString()} ({interview.duration_minutes} min)
+          <button onClick={() => joinInterview(interview)} disabled={joiningInterviewId === interview.id} className="text-emerald-300 hover:text-emerald-200 disabled:opacity-50">
+            {joiningInterviewId === interview.id ? 'Checking…' : 'Join call'}
+          </button>
           <button onClick={() => copyLink(cmmsInterviewService.buildCandidateInterviewLink(interview.id))} className="text-blue-300 hover:text-blue-200">Copy link</button>
           <button onClick={() => cancelInterview(interview)} className="text-red-300 hover:text-red-200">Cancel</button>
         </div>
       ))}
+
+      {boardroomAccess && (
+        <div className="fixed inset-0 z-[90] bg-black">
+          <LiveBoardroom
+            groupId={boardroomAccess.room_id}
+            groupName={`Interview — ${boardroomAccess.candidate_name}`}
+            members={boardroomAccess.is_interviewer ? [{ id: boardroomAccess.candidate_ican_user_id, email: boardroomAccess.candidate_name }] : (boardroomAccess.members || [])}
+            creatorId={null}
+            context="cmms-interview"
+            onClose={() => setBoardroomAccess(null)}
+            autoStart
+          />
+        </div>
+      )}
 
       {showTestPicker && (
         <div className="w-full mt-2 p-3 rounded bg-white/5 border border-white/10 space-y-2">

@@ -10,6 +10,7 @@
  */
 
 import { supabase } from '../lib/supabase/client';
+import { getPublicAppUrl } from '../utils/publicAppUrl';
 
 const genAccessToken = () => {
   const bytes = new Uint8Array(24);
@@ -134,7 +135,8 @@ export const getAssignmentsForApplication = async (applicationId) => {
   return { success: true, data: data || [] };
 };
 
-export const buildCandidateTestLink = (accessToken) => `${window.location.origin}/candidate-test?token=${accessToken}`;
+// Always the real production domain -- see buildCandidateInterviewLink.
+export const buildCandidateTestLink = (accessToken) => getPublicAppUrl(`/candidate-test?token=${accessToken}`);
 
 // ============================================================
 // Candidate-facing (authenticated -- SECURITY DEFINER RPCs)

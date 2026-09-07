@@ -8,6 +8,7 @@
  */
 
 import { supabase } from '../lib/supabase/client';
+import { getPublicAppUrl } from '../utils/publicAppUrl';
 
 export const scheduleInterview = async (companyId, application, fields, createdByCmmsUserId) => {
   const { data, error } = await supabase
@@ -57,7 +58,12 @@ export const cancelInterview = async (scheduleId) => {
   return { success: true };
 };
 
-export const buildCandidateInterviewLink = (scheduleId) => `${window.location.origin}/candidate-interview?scheduleId=${scheduleId}`;
+// Always the real production domain (icanera.space), not
+// window.location.origin -- an admin scheduling from a dev/staging build
+// would otherwise hand the candidate/interviewer a link nobody but them
+// can open, and video calls (Supabase Realtime signaling) must always run
+// on the canonical domain.
+export const buildCandidateInterviewLink = (scheduleId) => getPublicAppUrl(`/candidate-interview?scheduleId=${scheduleId}`);
 
 /** The single join-permission check both the admin's and candidate's
  * boardroom entry points call before mounting LiveBoardroom. */
