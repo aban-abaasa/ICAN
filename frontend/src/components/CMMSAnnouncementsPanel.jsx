@@ -691,10 +691,20 @@ const CMMSAnnouncementsPanel = ({
 
               <div className="space-y-4">
                 <div className="grid md:grid-cols-2 gap-3">
+                  {draft.postType === 'job' && roles.length > 0 && (
+                    <select
+                      value={roles.find((r) => r.job_title === draft.title)?.id || ''}
+                      onChange={(e) => { if (e.target.value) applyRoleAutofill(e.target.value); }}
+                      className="w-full px-3 py-2 rounded bg-slate-900 text-emerald-300 border border-emerald-400/40 md:col-span-2"
+                    >
+                      <option value="">Job title — pick from a configured role…</option>
+                      {roles.map((role) => <option key={role.id} value={role.id}>{role.job_title} ({role.display_name})</option>)}
+                    </select>
+                  )}
                   <input
                     value={draft.title}
                     onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-                    placeholder={draft.postType === 'job' ? 'Job title (e.g. Warehouse Supervisor)' : 'Announcement title'}
+                    placeholder={draft.postType === 'job' ? (roles.length > 0 ? 'Job title (edit if needed, or type a custom one)' : 'Job title (e.g. Warehouse Supervisor)') : 'Announcement title'}
                     className="w-full px-3 py-2 rounded bg-white/10 text-white border border-white/20 md:col-span-2"
                   />
                   <select value={draft.visibility} onChange={(e) => setDraft({ ...draft, visibility: e.target.value })} className="w-full px-3 py-2 rounded bg-slate-900 text-white border border-white/20">
@@ -726,16 +736,6 @@ const CMMSAnnouncementsPanel = ({
 
                 {draft.postType === 'job' && (
                   <div className="grid md:grid-cols-2 gap-3 border-t border-white/10 pt-4">
-                    {roles.length > 0 && (
-                      <select
-                        defaultValue=""
-                        onChange={(e) => { if (e.target.value) applyRoleAutofill(e.target.value); e.target.value = ''; }}
-                        className="px-3 py-2 rounded bg-slate-900 text-emerald-300 border border-emerald-400/40 md:col-span-2"
-                      >
-                        <option value="">Fill from role's Position Details…</option>
-                        {roles.map((role) => <option key={role.id} value={role.id}>{role.display_name} ({role.job_title})</option>)}
-                      </select>
-                    )}
                     <input value={draft.department} onChange={(e) => setDraft({ ...draft, department: e.target.value })} placeholder="Department" className="px-3 py-2 rounded bg-white/10 text-white border border-white/20" />
                     <input value={draft.location} onChange={(e) => setDraft({ ...draft, location: e.target.value })} placeholder="Location" className="px-3 py-2 rounded bg-white/10 text-white border border-white/20" />
                     <select value={draft.employmentType} onChange={(e) => setDraft({ ...draft, employmentType: e.target.value })} className="px-3 py-2 rounded bg-slate-900 text-white border border-white/20">
