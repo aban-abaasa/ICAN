@@ -34,7 +34,20 @@ export const CMMS_TOOL_OPTIONS = [
   { id: 'announcements', label: 'Announcements & job postings', permission: 'canManageAnnouncements', actions: ['view', 'create', 'edit', 'delete', 'manage_applications'] }
 ];
 
-const emptyRole = { display_name: '', description: '', permission_level: 1, tool_access: {} };
+const EMPLOYMENT_TYPES = [
+  { id: 'full_time', label: 'Full-time' },
+  { id: 'part_time', label: 'Part-time' },
+  { id: 'contract', label: 'Contract' },
+  { id: 'internship', label: 'Internship' },
+  { id: 'temporary', label: 'Temporary' },
+  { id: 'volunteer', label: 'Volunteer' },
+];
+
+const emptyRole = {
+  display_name: '', description: '', permission_level: 1, tool_access: {},
+  job_title: '', department: '', employment_type: '', positions_available: '',
+  salary_range: '', job_description: '', responsibilities: '', required_skills: '',
+};
 
 const makeKey = (name) => `custom_${name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}_${Date.now()}`;
 
@@ -132,6 +145,17 @@ const CMMSRoleConfiguration = ({ companyId, isAdmin, onRolesChanged }) => {
       tool_access: selectedTools,
       is_system_role: false,
       is_active: true,
+      // Position Details -- optional HR facts a job posting can auto-fill
+      // from (see CMMSAnnouncementsPanel.jsx's "Fill from role"). All
+      // nullable: a role can stay a pure permission bundle.
+      job_title: draft.job_title?.trim() || null,
+      department: draft.department?.trim() || null,
+      employment_type: draft.employment_type || null,
+      positions_available: draft.positions_available ? Number(draft.positions_available) : null,
+      salary_range: draft.salary_range?.trim() || null,
+      job_description: draft.job_description?.trim() || null,
+      responsibilities: draft.responsibilities?.trim() || null,
+      required_skills: draft.required_skills?.trim() || null,
       updated_at: new Date().toISOString()
     };
     const query = editingId
@@ -189,6 +213,23 @@ const CMMSRoleConfiguration = ({ companyId, isAdmin, onRolesChanged }) => {
                   </div>}
                 </div>;
               })}
+            </div>
+          </div>
+          <div className="border-t border-white/10 pt-4">
+            <p className="text-white font-semibold mb-1">Position details <span className="text-xs font-normal text-gray-500">(optional)</span></p>
+            <p className="text-xs text-gray-400 mb-3">Fill this in once and a job posting created "from this role" auto-fills these fields instead of retyping them — see Announcements &amp; job postings.</p>
+            <div className="grid md:grid-cols-2 gap-3">
+              <input value={draft.job_title || ''} onChange={(e) => setDraft({ ...draft, job_title: e.target.value })} placeholder="Job title (e.g. Warehouse Supervisor)" className="px-3 py-2 rounded bg-white/10 text-white border border-white/20" />
+              <input value={draft.department || ''} onChange={(e) => setDraft({ ...draft, department: e.target.value })} placeholder="Department" className="px-3 py-2 rounded bg-white/10 text-white border border-white/20" />
+              <select value={draft.employment_type || ''} onChange={(e) => setDraft({ ...draft, employment_type: e.target.value })} className="px-3 py-2 rounded bg-slate-900 text-white border border-white/20">
+                <option value="">Employment type</option>
+                {EMPLOYMENT_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+              </select>
+              <input type="number" min="1" value={draft.positions_available || ''} onChange={(e) => setDraft({ ...draft, positions_available: e.target.value })} placeholder="Positions available" className="px-3 py-2 rounded bg-white/10 text-white border border-white/20" />
+              <input value={draft.salary_range || ''} onChange={(e) => setDraft({ ...draft, salary_range: e.target.value })} placeholder="Salary range (e.g. UGX 800,000 - 1,200,000)" className="px-3 py-2 rounded bg-white/10 text-white border border-white/20 md:col-span-2" />
+              <textarea value={draft.job_description || ''} onChange={(e) => setDraft({ ...draft, job_description: e.target.value })} placeholder="Job description" rows={2} className="px-3 py-2 rounded bg-white/10 text-white border border-white/20 md:col-span-2" />
+              <textarea value={draft.responsibilities || ''} onChange={(e) => setDraft({ ...draft, responsibilities: e.target.value })} placeholder="Key responsibilities" rows={2} className="px-3 py-2 rounded bg-white/10 text-white border border-white/20 md:col-span-2" />
+              <textarea value={draft.required_skills || ''} onChange={(e) => setDraft({ ...draft, required_skills: e.target.value })} placeholder="Required skills / qualifications" rows={2} className="px-3 py-2 rounded bg-white/10 text-white border border-white/20 md:col-span-2" />
             </div>
           </div>
           {error && <p className="text-red-300 text-sm">{error}</p>}

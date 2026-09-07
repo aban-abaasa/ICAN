@@ -4,15 +4,15 @@ import { useTheme } from '../../context/ThemeContext';
 import { CountryService } from '../../services/countryService';
 import IcanEraLogo from '../../IcanEra.png';
 
-const SignUp = ({ onSwitchToSignIn, onSuccess }) => {
+const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
   const { signUp } = useAuth();
   const { actualTheme } = useTheme();
   const [formData, setFormData] = useState({
-    email: '',
+    email: prefill?.email || '',
     password: '',
     confirmPassword: '',
-    fullName: '',
-    phone: '',
+    fullName: prefill?.fullName || '',
+    phone: prefill?.phone || '',
     countryCode: 'US', // NEW: Country selection
     operatingMode: 'SE', // 'SE' = Salaried Employee, 'BO' = Business Owner
     financialGoal: '',
@@ -307,7 +307,13 @@ const SignUp = ({ onSwitchToSignIn, onSuccess }) => {
               style={inputStyle}
               placeholder="you@example.com"
               required
+              readOnly={Boolean(prefill?.email)}
             />
+            {prefill?.email && (
+              <p className="text-xs mt-1" style={{ color: palette.muted }}>
+                Using the email from your application — this account will be linked to it automatically.
+              </p>
+            )}
           </div>
 
           {/* 🌍 Country Selection */}

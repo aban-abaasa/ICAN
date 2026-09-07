@@ -41,6 +41,17 @@ const dropshipStoreMatch = window.location.pathname.match(/^\/store\/([^/]+)/);
 // stock Tailwind color class -- a hardcoded background this standalone,
 // bring-your-own-palette page must never inherit.
 const cmmsNoticeBoardMatch = window.location.pathname.match(/^\/notices\/([^/]+)/);
+// A candidate's written-test / live-interview link (see
+// CMMS_WRITTEN_TESTS.sql, CMMS_INTERVIEW_SCHEDULES.sql) -- like the notice
+// board, these need AuthProvider (a candidate must sign in/sign up with a
+// lightweight ICAN account to proceed, and CandidateInterviewRoom hands the
+// session straight to LiveBoardroom), but never the app's theme system.
+const isCandidateTestPath = window.location.pathname === '/candidate-test';
+const isCandidateInterviewPath = window.location.pathname === '/candidate-interview';
+// Scanning a QR-sealed appointment letter/contract's "seal" opens this --
+// fully public, no account, same reasoning as the report-share/attendance
+// QR pages below.
+const isDocumentVerifyPath = window.location.pathname === '/verify-document';
 // A shared CMMS report link (e.g. https://icanera.space/reports/<token>) --
 // same no-login share-link reasoning as the links above, except access can
 // additionally be gated by a password or an emailed one-time code
@@ -98,6 +109,9 @@ const PublicDropshipStorefront = lazyWithReloadOnChunkFailure(() => import('./co
 const PublicCompanyNoticeBoard = lazyWithReloadOnChunkFailure(() => import('./components/PublicCompanyNoticeBoard'));
 const PublicReportViewer = lazyWithReloadOnChunkFailure(() => import('./components/PublicReportViewer'));
 const PublicReportExportViewer = lazyWithReloadOnChunkFailure(() => import('./components/PublicReportExportViewer'));
+const CandidateTestRunner = lazyWithReloadOnChunkFailure(() => import('./components/CandidateTestRunner'));
+const CandidateInterviewRoom = lazyWithReloadOnChunkFailure(() => import('./components/CandidateInterviewRoom'));
+const PublicDocumentVerify = lazyWithReloadOnChunkFailure(() => import('./components/PublicDocumentVerify'));
 const Loading = () => <div className="min-h-screen bg-slate-950" />;
 
 // Without this, ANY uncaught error during first render (a chunk failure that
@@ -133,11 +147,20 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <Suspense fallback={<Loading />}>
         {isAttendanceQrPath ? <PublicStaffAttendanceCheckIn />
           : isVisitorQrPath ? <PublicVisitorCheckIn />
+          : isDocumentVerifyPath ? <PublicDocumentVerify />
           : reportShareMatch ? <PublicReportViewer shareToken={reportShareMatch[1]} />
           : reportExportShareMatch ? <PublicReportExportViewer shareToken={reportExportShareMatch[1]} />
           : cmmsNoticeBoardMatch ? (
             <AuthProvider>
               <PublicCompanyNoticeBoard companyId={cmmsNoticeBoardMatch[1]} />
+            </AuthProvider>
+          ) : isCandidateTestPath ? (
+            <AuthProvider>
+              <CandidateTestRunner />
+            </AuthProvider>
+          ) : isCandidateInterviewPath ? (
+            <AuthProvider>
+              <CandidateInterviewRoom />
             </AuthProvider>
           ) : (
             <ThemeProvider>

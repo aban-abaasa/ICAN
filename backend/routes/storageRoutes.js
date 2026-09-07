@@ -15,7 +15,7 @@ const adminSupabase =
       })
     : null;
 
-const ALLOWED_FOLDERS = ['pitches', 'statuses', 'avatars', 'cmms-reports', 'cmms-announcements', 'voice-notes', 'portfolio-chat'];
+const ALLOWED_FOLDERS = ['pitches', 'statuses', 'avatars', 'cmms-reports', 'cmms-announcements', 'voice-notes', 'portfolio-chat', 'cmms-employment-documents'];
 
 // Job applicants never have an ICAN account, so their resume upload can't
 // carry a Bearer token like every other upload here -- this is the one

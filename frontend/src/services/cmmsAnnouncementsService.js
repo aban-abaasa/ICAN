@@ -107,6 +107,25 @@ export const setCompanyBusinessProfileLink = async (companyId, businessProfileId
   return { success: true };
 };
 
+/**
+ * Roles with Position Details set (CMMSRoleConfiguration.jsx), for the
+ * "Fill from role" autofill when creating a job posting. Roles with no
+ * Position Details (job_title IS NULL) are excluded -- they have nothing
+ * useful to autofill with.
+ */
+export const getRolesForAutofill = async (companyId) => {
+  if (!companyId) return { success: false, error: 'companyId is required', data: [] };
+  const { data, error } = await supabase
+    .from('cmms_roles')
+    .select('id, display_name, job_title, department, employment_type, positions_available, salary_range, job_description, responsibilities, required_skills')
+    .or(`cmms_company_id.eq.${companyId},cmms_company_id.is.null`)
+    .eq('is_active', true)
+    .not('job_title', 'is', null)
+    .order('display_name', { ascending: true });
+  if (error) return { success: false, error: error.message, data: [] };
+  return { success: true, data: data || [] };
+};
+
 export const getJobApplications = async (companyId) => {
   if (!companyId) return { success: false, error: 'companyId is required', data: [] };
   const { data, error } = await supabase
@@ -174,6 +193,7 @@ export const submitPublicJobApplication = async ({
   coverNote,
   resumeUrl,
   resumePath,
+  portfolioHandle,
 }) => {
   try {
     const { data, error } = await supabase.rpc('fn_submit_public_job_application', {
@@ -184,6 +204,7 @@ export const submitPublicJobApplication = async ({
       p_cover_note: coverNote || null,
       p_resume_url: resumeUrl || null,
       p_resume_path: resumePath || null,
+      p_portfolio_handle: portfolioHandle || null,
     });
     if (error) return { success: false, error: error.message };
     return { success: true, referenceCode: data?.[0]?.reference_code };
@@ -349,6 +370,7 @@ export default {
   deleteAnnouncement,
   updateCompanyAbout,
   setCompanyBusinessProfileLink,
+  getRolesForAutofill,
   getJobApplications,
   updateApplicationStatus,
   getPublicCompanyHeader,

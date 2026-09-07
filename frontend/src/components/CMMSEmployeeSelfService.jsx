@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Bus, CalendarDays, DollarSign, Loader, Star, Wallet } from 'lucide-react';
+import { Bus, CalendarDays, DollarSign, FileText, Loader, Star, Wallet } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 import { getEmployeeRewardPoints, getStaffVisitorRatings, getAttendanceCheckoutPayConfirmations, getMyTransportPlan, getMySalaryAdvances, requestSalaryAdvance, confirmSalaryAdvanceReceived, cancelSalaryAdvance, getMyCompanySalaryWalletTransactions } from '../services/businessManagementService';
+import cmmsEmploymentDocumentsService from '../services/cmmsEmploymentDocumentsService';
+import CMMSDocumentSignModal from './CMMSDocumentSignModal';
 
 const money = (value, currency = 'UGX') => `${currency} ${Number(value || 0).toLocaleString()}`;
 
@@ -26,6 +28,9 @@ export default function CMMSEmployeeSelfService({ companyProfile, mode }) {
   const [advanceBusy, setAdvanceBusy] = useState(false);
   const [advanceNotice, setAdvanceNotice] = useState('');
   const [advanceError, setAdvanceError] = useState('');
+  const [documents, setDocuments] = useState([]);
+  const [myUserId, setMyUserId] = useState(null);
+  const [signingDocument, setSigningDocument] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -102,6 +107,24 @@ export default function CMMSEmployeeSelfService({ companyProfile, mode }) {
     load();
     return () => { cancelled = true; };
   }, [companyProfile?.id, companyProfile?.pichin_business_profile_id, mode]);
+
+  useEffect(() => {
+    if (mode !== 'payroll' || !companyProfile?.id) return;
+    let cancelled = false;
+    (async () => {
+      const { data: authData } = await supabase.auth.getUser();
+      if (cancelled || !authData?.user?.id) return;
+      setMyUserId(authData.user.id);
+      const result = await cmmsEmploymentDocumentsService.getMyEmploymentDocuments(companyProfile.id);
+      if (!cancelled && result.success) setDocuments(result.data);
+    })();
+    return () => { cancelled = true; };
+  }, [mode, companyProfile?.id]);
+
+  const reloadDocuments = async () => {
+    const result = await cmmsEmploymentDocumentsService.getMyEmploymentDocuments(companyProfile.id);
+    if (result.success) setDocuments(result.data);
+  };
 
   const reloadAdvances = async () => { const refreshed = await getMySalaryAdvances(); setAdvances(refreshed.data || []); };
   const submitAdvanceRequest = async (e) => {
@@ -252,5 +275,33 @@ export default function CMMSEmployeeSelfService({ companyProfile, mode }) {
         <button disabled={advanceBusy} className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">{advanceBusy ? 'Requesting…' : 'Request advance'}</button>
       </form>}
     </section>
+    {documents.length > 0 && (
+      <section>
+        <h3 className="mb-2 flex items-center gap-2 font-semibold text-white"><FileText className="h-4 w-4" /> My employment documents</h3>
+        <div className="space-y-2">
+          {documents.map((doc) => (
+            <div key={doc.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-sm">
+              <div>
+                <p className="font-semibold text-white">{doc.title}</p>
+                <p className="text-xs capitalize text-slate-400">{doc.status} · {doc.document_type === 'employment_contract' ? 'Contract' : 'Appointment letter'}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                {doc.document_url && <a href={doc.document_url} target="_blank" rel="noreferrer" className="text-xs text-blue-300 hover:text-blue-200">View PDF</a>}
+                {doc.status === 'issued' && <button onClick={() => setSigningDocument(doc)} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500">Review & sign</button>}
+                {doc.status === 'signed' && <span className="text-xs text-emerald-400">Signed {doc.signed_at ? new Date(doc.signed_at).toLocaleDateString() : ''}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    )}
+    {signingDocument && (
+      <CMMSDocumentSignModal
+        document={signingDocument}
+        userId={myUserId}
+        onClose={() => setSigningDocument(null)}
+        onSigned={() => { setSigningDocument(null); reloadDocuments(); }}
+      />
+    )}
   </div>;
 }

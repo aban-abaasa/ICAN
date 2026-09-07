@@ -8,7 +8,7 @@ const ALLOWED_VIEWS = ['signin', 'signup', 'forgot-password', 'reset-password'];
 
 const getSafeView = (view) => (ALLOWED_VIEWS.includes(view) ? view : 'signin');
 
-const AuthPage = ({ onAuthSuccess, initialView = 'signin', onRecoveryHandled }) => {
+const AuthPage = ({ onAuthSuccess, initialView = 'signin', onRecoveryHandled, prefill }) => {
   const [view, setView] = useState(getSafeView(initialView));
   const isRestoringAuthHistoryRef = useRef(false);
   const lastAuthViewRef = useRef(null);
@@ -62,6 +62,7 @@ const AuthPage = ({ onAuthSuccess, initialView = 'signin', onRecoveryHandled }) 
       <SignUp
         onSwitchToSignIn={() => setView('signin')}
         onSuccess={handleAuthSuccess}
+        prefill={prefill}
       />
     );
   }

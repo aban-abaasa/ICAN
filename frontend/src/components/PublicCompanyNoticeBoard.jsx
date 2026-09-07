@@ -5,6 +5,7 @@ import {
   Check, ChevronRight, Clock, ShoppingBag, ShoppingCart, Plus, Minus,
   Trash2, Truck, Store
 } from 'lucide-react';
+import { supabase } from '../lib/supabase/client';
 import cmmsAnnouncementsService from '../services/cmmsAnnouncementsService';
 import { getDropshipStorefront, dropshipCheckout } from '../services/dropshipService';
 import { useAuth } from '../context/AuthContext';
@@ -28,6 +29,7 @@ const STATUS_STYLES = {
   submitted: 'nb-chip-neutral',
   under_review: 'nb-chip-amber',
   shortlisted: 'nb-chip-teal',
+  written_test: 'nb-chip-amber',
   interview: 'nb-chip-green',
   hired: 'nb-chip-green-solid',
   rejected: 'nb-chip-maroon',
@@ -374,7 +376,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
       </footer>
 
       {selectedNotice && <NoticeDetailModal notice={selectedNotice} onClose={() => setSelectedNotice(null)} onShare={handleShare} />}
-      {selectedJob && <JobDetailModal job={selectedJob} onClose={() => setSelectedJob(null)} onShare={handleShare} />}
+      {selectedJob && <JobDetailModal job={selectedJob} onClose={() => setSelectedJob(null)} onShare={handleShare} viewerUser={user} />}
     </div>
   );
 };
@@ -738,7 +740,7 @@ const ShareButton = ({ copied, onClick }) => (
   </button>
 );
 
-const JobDetailModal = ({ job, onClose, onShare }) => {
+const JobDetailModal = ({ job, onClose, onShare, viewerUser }) => {
   const [showApply, setShowApply] = useState(false);
   const [copied, setCopied] = useState(false);
   return (
@@ -801,13 +803,13 @@ const JobDetailModal = ({ job, onClose, onShare }) => {
           )}
         </>
       ) : (
-        <ApplyForm job={job} onBack={() => setShowApply(false)} onClose={onClose} />
+        <ApplyForm job={job} onBack={() => setShowApply(false)} onClose={onClose} viewerUser={viewerUser} />
       )}
     </Modal>
   );
 };
 
-const ApplyForm = ({ job, onBack, onClose }) => {
+const ApplyForm = ({ job, onBack, onClose, viewerUser }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -816,6 +818,26 @@ const ApplyForm = ({ job, onBack, onClose }) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [referenceCode, setReferenceCode] = useState('');
+  // If the visitor is already signed into their own ICAN account and has
+  // built a Portfolio (a real, structured resume at /portfolio/<handle> --
+  // see PortfolioTab.jsx), recommend reusing it instead of uploading a
+  // fresh PDF: it's free, already built, and stays current -- an easier and
+  // cheaper path than redoing a resume for every application.
+  const [myPortfolio, setMyPortfolio] = useState(null);
+  const [usePortfolio, setUsePortfolio] = useState(false);
+
+  useEffect(() => {
+    if (!viewerUser?.id) return;
+    supabase.from('profiles').select('handle, full_name, phone').eq('id', viewerUser.id).maybeSingle().then(({ data }) => {
+      if (data?.handle) {
+        setMyPortfolio(data);
+        setUsePortfolio(true);
+        setName((current) => current || data.full_name || '');
+        setEmail((current) => current || viewerUser.email || '');
+        setPhone((current) => current || data.phone || '');
+      }
+    });
+  }, [viewerUser?.id, viewerUser?.email]);
 
   const inputClass = 'w-full px-3.5 py-2.5 rounded-xl nb-input transition';
 
@@ -841,7 +863,7 @@ const ApplyForm = ({ job, onBack, onClose }) => {
     try {
       let resumeUrl = null;
       let resumePath = null;
-      if (resumeFile) {
+      if (resumeFile && !(usePortfolio && myPortfolio)) {
         const uploaded = await cmmsAnnouncementsService.uploadPublicResume(resumeFile);
         if (!uploaded.success) throw new Error(uploaded.error);
         resumeUrl = uploaded.url;
@@ -856,6 +878,7 @@ const ApplyForm = ({ job, onBack, onClose }) => {
         coverNote: coverNote.trim() || null,
         resumeUrl,
         resumePath,
+        portfolioHandle: usePortfolio && myPortfolio ? myPortfolio.handle : null,
       });
       if (!result.success) throw new Error(result.error);
       setReferenceCode(result.referenceCode);
@@ -892,11 +915,19 @@ const ApplyForm = ({ job, onBack, onClose }) => {
           <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone number (optional)" className={inputClass} />
         </div>
         <textarea value={coverNote} onChange={(e) => setCoverNote(e.target.value)} placeholder="Short cover note (optional)" rows={3} className={inputClass} />
-        <label className="flex items-center justify-center gap-2 border-2 border-dashed nb-border-strong rounded-xl p-4 text-center cursor-pointer transition hover:border-current">
-          <Upload className="w-4 h-4 nb-text-muted" />
-          <span className="text-sm nb-text-muted">{resumeFile ? resumeFile.name : 'Attach resume/CV (PDF)'}</span>
-          <input type="file" accept="application/pdf" onChange={handleResumeSelect} className="hidden" />
-        </label>
+        {myPortfolio && (
+          <label className="flex items-center gap-2 p-3 rounded-xl nb-surface-alt border nb-border text-sm cursor-pointer">
+            <input type="checkbox" checked={usePortfolio} onChange={(e) => setUsePortfolio(e.target.checked)} />
+            <span className="nb-text">Use my ICAN Portfolio as my resume <span className="nb-text-muted">(already built, no need to upload one)</span></span>
+          </label>
+        )}
+        {!(usePortfolio && myPortfolio) && (
+          <label className="flex items-center justify-center gap-2 border-2 border-dashed nb-border-strong rounded-xl p-4 text-center cursor-pointer transition hover:border-current">
+            <Upload className="w-4 h-4 nb-text-muted" />
+            <span className="text-sm nb-text-muted">{resumeFile ? resumeFile.name : 'Attach resume/CV (PDF)'}</span>
+            <input type="file" accept="application/pdf" onChange={handleResumeSelect} className="hidden" />
+          </label>
+        )}
         {error && <p className="nb-error-text text-sm">{error}</p>}
         <button
           disabled={submitting}
