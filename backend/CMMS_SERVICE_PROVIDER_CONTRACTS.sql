@@ -426,10 +426,10 @@ AS $$
 DECLARE
   v_contract record;
 BEGIN
-  SELECT * INTO v_contract
-  FROM public.cmms_service_provider_contracts
-  WHERE access_token = p_token AND access_mode = 'pin'
-    AND status = 'published' AND revoked_at IS NULL AND valid_until > NOW();
+  SELECT sp.* INTO v_contract
+  FROM public.cmms_service_provider_contracts sp
+  WHERE sp.access_token = p_token AND sp.access_mode = 'pin'
+    AND sp.status = 'published' AND sp.revoked_at IS NULL AND sp.valid_until > NOW();
 
   IF v_contract IS NULL THEN
     RETURN QUERY SELECT 'invalid'::TEXT, NULL::TIMESTAMPTZ, NULL::VARCHAR, NULL::JSONB, NULL::VARCHAR,
@@ -507,10 +507,10 @@ DECLARE
   v_contract record;
   v_email TEXT := LOWER(TRIM(COALESCE(p_email, '')));
 BEGIN
-  SELECT * INTO v_contract
-  FROM public.cmms_service_provider_contracts
-  WHERE access_token = p_token AND access_mode = 'email'
-    AND status = 'published' AND revoked_at IS NULL AND valid_until > NOW();
+  SELECT sp.* INTO v_contract
+  FROM public.cmms_service_provider_contracts sp
+  WHERE sp.access_token = p_token AND sp.access_mode = 'email'
+    AND sp.status = 'published' AND sp.revoked_at IS NULL AND sp.valid_until > NOW();
 
   IF v_contract IS NULL OR v_email = '' OR v_email != v_contract.allowed_email THEN
     RETURN QUERY SELECT 'not_allowed'::TEXT, NULL::VARCHAR, NULL::JSONB, NULL::VARCHAR,
