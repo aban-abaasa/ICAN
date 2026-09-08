@@ -117,7 +117,7 @@ const CMMSBusinessOpportunitiesPanel = ({ companyId, companyName, myCmmsUserId, 
       let posterUpload = null;
       if (posterFile) {
         if (!accessToken) throw new Error('Could not verify your session to upload the poster.');
-        const result = await uploadToR2({ file: posterFile, folder: 'cmms-opportunities', accessToken });
+        const result = await uploadToR2({ file: posterFile, folder: 'cmms-announcements', accessToken });
         if (!result.success) throw new Error(result.error || 'Poster upload failed');
         posterUpload = { url: result.url, key: result.key };
       }
@@ -125,7 +125,7 @@ const CMMSBusinessOpportunitiesPanel = ({ companyId, companyName, myCmmsUserId, 
       let documentUpload = null;
       if (documentFile) {
         if (!accessToken) throw new Error('Could not verify your session to upload the document.');
-        const result = await uploadToR2({ file: documentFile, folder: 'cmms-opportunities', accessToken });
+        const result = await uploadToR2({ file: documentFile, folder: 'cmms-announcements', accessToken });
         if (!result.success) throw new Error(result.error || 'Document upload failed');
         documentUpload = { url: result.url, key: result.key };
       }
