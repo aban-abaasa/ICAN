@@ -6,11 +6,18 @@
  *         POST /api/storage/presign-get-batch
  *         POST /api/storage/presign-download
  *         DELETE /api/storage/object
- * Consolidated from six separate files into one catch-all function to stay
- * under the Hobby plan's 12-Serverless-Functions-per-deployment limit —
+ * Consolidated from six separate files into one dynamic-segment function to
+ * stay under the Hobby plan's 12-Serverless-Functions-per-deployment limit —
  * frontend/api had 13 function files, which made every production deploy
  * fail at the "Deploying outputs" step. Each case below is the original
  * file's handler body, unchanged, just no longer its own function.
+ *
+ * Named [action].js, not the Next.js-style catch-all [...action].js: Vercel
+ * Functions (outside Next.js) treat "..." as a literal part of the query
+ * key rather than stripping it, so req.query would come back keyed
+ * "...action" instead of "action". Every route here is one path segment
+ * anyway, so the plain dynamic segment (same convention as the sibling
+ * tax-rules/[countryCode].js) is both correct and simpler.
  */
 import { verifySupabaseUser } from '../_lib/verifyUser.js';
 import { buildKey, getUploadUrl, getDownloadUrl, deleteObject } from '../_lib/r2Client.js';
@@ -269,9 +276,7 @@ const ACTIONS = {
 export default async function handler(req, res) {
   if (applyCors(req, res)) return;
 
-  const segments = req.query.action;
-  const action = Array.isArray(segments) ? segments.join('/') : segments;
-  const fn = ACTIONS[action];
+  const fn = ACTIONS[req.query.action];
   if (!fn) {
     return res.status(404).json({ success: false, error: 'Not found' });
   }
