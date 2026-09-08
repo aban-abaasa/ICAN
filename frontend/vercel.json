@@ -8,21 +8,17 @@
     { "source": "/store/:id", "destination": "/api/share-preview?type=store&id=:id" },
     { "source": "/(.*)", "destination": "/" }
   ],
-  "routes": [
-    {
-      "src": "/share",
-      "methods": ["POST"],
-      "dest": "/",
-      "headers": {
-        "cache-control": "no-cache"
-      }
-    }
-  ],
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/share",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache" }
       ]
     },
     {
