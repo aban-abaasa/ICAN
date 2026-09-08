@@ -122,18 +122,26 @@ export default function CMMSPayrollPanel({ companyProfile, users = [], currentUs
     const runKey = `${businessProfileId}:${monthStart}:${monthEnd}:${attendanceSettings.enabled ? 'attendance' : 'base'}`;
     if (automaticRunRef.current.has(runKey)) return;
     automaticRunRef.current.add(runKey);
+    // This draft/calc run is an automatic background convenience, not
+    // something the person on screen asked for. Surfacing its failures
+    // through the same notice/error banner used for explicit actions
+    // (like "Salary profile saved") overwrites that message and makes a
+    // successful save look like it failed. Log instead so it's still
+    // diagnosable without misleading the user; automaticRunRef keeps this
+    // from silently retrying every render, and the explicit "Create run"
+    // button still surfaces its own errors normally.
     const ensureCurrentMonthDraft = async () => {
       let currentPeriod = periods.find(item => item.period_start === monthStart && item.period_end === monthEnd && !['cancelled', 'locked'].includes(item.status));
       if (!currentPeriod) {
         const created = await createBusinessPayrollPeriod({ businessProfileId, periodStart: monthStart, periodEnd: monthEnd, compensation });
-        if (!created.success) { say(created.error, true); return; }
+        if (!created.success) { console.warn('Automatic payroll draft creation skipped:', created.error); return; }
         currentPeriod = created.data;
         await load();
       }
       await loadEntries(currentPeriod.id);
       if (attendanceSettings.enabled && ['draft', 'pending_approval'].includes(currentPeriod.status)) {
         const calculated = await applyAttendanceToPayroll(currentPeriod.id);
-        if (!calculated.success) say(calculated.error, true);
+        if (!calculated.success) console.warn('Automatic attendance payroll calculation skipped:', calculated.error);
         else await loadEntries(currentPeriod.id);
       }
     };
