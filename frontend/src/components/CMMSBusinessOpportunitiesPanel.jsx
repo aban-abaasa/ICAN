@@ -148,8 +148,21 @@ const CMMSBusinessOpportunitiesPanel = ({ companyId, companyName, myCmmsUserId, 
     }
   };
 
+  // Hands the opportunity off to whatever the device's own share sheet
+  // offers (WhatsApp, email, SMS, etc.) -- same pattern as
+  // CMMSAnnouncementsPanel's sharePost. Falls back to copying the link when
+  // the Web Share API isn't available (most desktop browsers).
   const shareOpportunity = async (opportunity) => {
     const link = cmmsBusinessOpportunitiesService.buildPublicOpportunityLink(companyId, opportunity.id);
+    const shareData = { title: opportunity.title, text: opportunity.description || opportunity.title, url: link };
+    try {
+      if (navigator.share && (!navigator.canShare || navigator.canShare(shareData))) {
+        await navigator.share(shareData);
+        return;
+      }
+    } catch (err) {
+      if (err?.name === 'AbortError') return;
+    }
     try {
       await navigator.clipboard.writeText(link);
       setCopiedShareId(opportunity.id);
