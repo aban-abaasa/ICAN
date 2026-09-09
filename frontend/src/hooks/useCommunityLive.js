@@ -66,8 +66,12 @@ const presenceChannelFor = (scope) => `live-presence:${scope}`;
 const signalChannelName = (streamId) => `live-signal:${streamId}`;
 
 export const useCommunityLive = ({ selfId, selfName, canBroadcast, scope = 'community' }) => {
-  const [liveInfo, setLiveInfo] = useState(null); // { streamId, broadcasterId, broadcasterName, startedAt } | null
-  const [viewerCount, setViewerCount] = useState(0);
+  // Any number of people can broadcast to the same scope at once — this is
+  // every currently-live broadcaster (not just one), oldest-started-first so
+  // the newest live lands last, same "latest at the bottom" ordering as the
+  // chat feed itself (see groupedCommunityFeed in ChatWidget.jsx).
+  const [liveStreams, setLiveStreams] = useState([]); // { streamId, broadcasterId, broadcasterName, startedAt, viewerCount }[]
+  const [activeStreamId, setActiveStreamId] = useState(''); // the stream I'm broadcasting or watching, if any
   const [role, setRole] = useState('idle'); // idle | broadcasting | watching
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
@@ -86,6 +90,7 @@ export const useCommunityLive = ({ selfId, selfName, canBroadcast, scope = 'comm
   const scopeRef = useRef(scope);
   const streamIdRef = useRef('');
   const broadcasterIdRef = useRef('');
+  const liveStreamsRef = useRef([]); // mirrors liveStreams state — watch() needs the latest list without becoming stale in its own closure
   const localStreamRef = useRef(null); // always the camera+mic stream, even while screen-sharing (so stopping the share can revert to it)
   const screenStreamRef = useRef(null); // set only while screen-sharing
   const peerConnectionsRef = useRef(new Map()); // broadcaster: viewerId -> pc
@@ -99,6 +104,7 @@ export const useCommunityLive = ({ selfId, selfName, canBroadcast, scope = 'comm
   useEffect(() => { selfIdRef.current = selfId; }, [selfId]);
   useEffect(() => { selfNameRef.current = selfName; }, [selfName]);
   useEffect(() => { scopeRef.current = scope; }, [scope]);
+  useEffect(() => { liveStreamsRef.current = liveStreams; }, [liveStreams]);
 
   const clearElapsedTimer = () => {
     if (elapsedTimerRef.current) { clearInterval(elapsedTimerRef.current); elapsedTimerRef.current = null; }
@@ -139,36 +145,51 @@ export const useCommunityLive = ({ selfId, selfName, canBroadcast, scope = 'comm
     setElapsed(0);
     setEndReason(reason);
     setRole('idle');
+    setActiveStreamId('');
   }, [teardownMedia, closeSignalChannel, untrackSelfPresence]);
 
-  // --- Presence: who is live + how many are watching -----------------------
+  // --- Presence: who is live + how many are watching each stream -----------
+  // Any number of broadcaster presence rows can be live at once now (one per
+  // person who's gone live), each with its own viewer count — this used to
+  // track a single implicit broadcaster, which is what made a second person
+  // going live blocked/overwrite the first.
   useEffect(() => {
     if (!selfId || !scope) return undefined;
     const channel = supabase.channel(presenceChannelFor(scope), { config: { presence: { key: selfId } } });
 
     const syncFromState = () => {
       const state = channel.presenceState();
-      let broadcaster = null;
-      let watching = 0;
+      const broadcasters = new Map(); // streamId -> presence entry
       Object.values(state).forEach((entries) => {
         const entry = entries?.[0];
-        if (!entry) return;
-        if (entry.role === 'broadcaster') broadcaster = entry;
-        else if (entry.role === 'viewer' && broadcaster && entry.streamId === broadcaster.streamId) watching += 1;
+        if (entry?.role === 'broadcaster') broadcasters.set(entry.streamId, entry);
       });
-      // A watcher entry can sync in before its broadcaster's does — recount below once both are known.
-      if (broadcaster) {
-        watching = Object.values(state).reduce((count, entries) => {
-          const entry = entries?.[0];
-          return entry?.role === 'viewer' && entry.streamId === broadcaster.streamId ? count + 1 : count;
-        }, 0);
-        setLiveInfo({ streamId: broadcaster.streamId, broadcasterId: broadcaster.userId, broadcasterName: broadcaster.name, startedAt: broadcaster.startedAt });
-        setViewerCount(watching);
-      } else {
-        setLiveInfo(null);
-        setViewerCount(0);
-        // The broadcaster vanished (crash/close-tab) without sending stream-ended.
-        if (roleRef.current === 'watching') resetToIdle('ended');
+      const viewerCounts = new Map(); // streamId -> count
+      Object.values(state).forEach((entries) => {
+        const entry = entries?.[0];
+        if (entry?.role === 'viewer' && broadcasters.has(entry.streamId)) {
+          viewerCounts.set(entry.streamId, (viewerCounts.get(entry.streamId) || 0) + 1);
+        }
+      });
+
+      const streams = Array.from(broadcasters.values())
+        .map((b) => ({
+          streamId: b.streamId,
+          broadcasterId: b.userId,
+          broadcasterName: b.name,
+          startedAt: b.startedAt,
+          viewerCount: viewerCounts.get(b.streamId) || 0,
+        }))
+        // Oldest-started-first, so the newest live lands last — same
+        // "latest at the bottom" ordering as the chat feed itself.
+        .sort((a, b) => new Date(a.startedAt) - new Date(b.startedAt));
+
+      setLiveStreams(streams);
+
+      // The stream I was watching vanished (broadcaster crashed/closed the
+      // tab without sending stream-ended) — everyone else stays live.
+      if (roleRef.current === 'watching' && streamIdRef.current && !broadcasters.has(streamIdRef.current)) {
+        resetToIdle('ended');
       }
     };
 
@@ -231,8 +252,10 @@ export const useCommunityLive = ({ selfId, selfName, canBroadcast, scope = 'comm
 
   // --- Broadcaster -----------------------------------------------------------
   const goLive = useCallback(async () => {
+    // Any number of people can be live at once now — this only guards
+    // against starting a second broadcast of my own on top of one already
+    // running, not against anyone else's stream already being live.
     if (!canBroadcast || roleRef.current !== 'idle' || !selfIdRef.current || !scopeRef.current) return;
-    if (liveInfo) { setError('Someone is already live right now.'); return; }
     setError('');
     setEndReason('');
 
@@ -263,6 +286,7 @@ export const useCommunityLive = ({ selfId, selfName, canBroadcast, scope = 'comm
     const streamId = `${scopeRef.current}:${selfIdRef.current}:${Date.now()}`;
     streamIdRef.current = streamId;
     broadcasterIdRef.current = selfIdRef.current;
+    setActiveStreamId(streamId);
 
     const channel = supabase.channel(signalChannelName(streamId), { config: { broadcast: { self: false } } });
     channel
@@ -326,7 +350,7 @@ export const useCommunityLive = ({ selfId, selfName, canBroadcast, scope = 'comm
           } catch (err) { console.warn('[useCommunityLive] failed to notify:', err); }
         }
       });
-  }, [canBroadcast, liveInfo, createBroadcasterPeer, send, flushPendingIce]);
+  }, [canBroadcast, createBroadcasterPeer, send, flushPendingIce]);
 
   const stopLive = useCallback(() => {
     if (roleRef.current !== 'broadcasting') return;
@@ -335,13 +359,18 @@ export const useCommunityLive = ({ selfId, selfName, canBroadcast, scope = 'comm
   }, [send, resetToIdle]);
 
   // --- Viewer ------------------------------------------------------------
-  const watch = useCallback(() => {
-    if (roleRef.current !== 'idle' || !liveInfo || !selfIdRef.current) return;
+  // Takes which stream to join — with several people live at once there's no
+  // longer a single implicit one, so the caller (the picker list, or an
+  // auto-join that only fires when there's exactly one candidate) has to say.
+  const watch = useCallback((streamId) => {
+    const target = liveStreamsRef.current.find((s) => s.streamId === streamId);
+    if (roleRef.current !== 'idle' || !target || !selfIdRef.current) return;
     setError('');
     setEndReason('');
-    const { streamId, broadcasterId, broadcasterName } = liveInfo;
+    const { broadcasterId, broadcasterName } = target;
     streamIdRef.current = streamId;
     broadcasterIdRef.current = broadcasterId;
+    setActiveStreamId(streamId);
 
     const channel = supabase.channel(signalChannelName(streamId), { config: { broadcast: { self: false } } });
     channel
@@ -399,9 +428,9 @@ export const useCommunityLive = ({ selfId, selfName, canBroadcast, scope = 'comm
         send('viewer-join', {});
         setRole('watching');
         elapsedTimerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
-        void broadcasterName; // kept in liveInfo for the UI; nothing further to do with it here
+        void broadcasterName; // kept in liveStreams/activeStream for the UI; nothing further to do with it here
       });
-  }, [liveInfo, send, flushPendingIce, resetToIdle]);
+  }, [send, flushPendingIce, resetToIdle]);
 
   const stopWatching = useCallback(() => {
     if (roleRef.current !== 'watching') return;
@@ -541,9 +570,17 @@ export const useCommunityLive = ({ selfId, selfName, canBroadcast, scope = 'comm
     untrackSelfPresence();
   }, [teardownMedia, closeSignalChannel, untrackSelfPresence]);
 
+  // The stream I'm currently broadcasting or watching, if any — looked up
+  // live out of liveStreams (rather than kept as its own copy) so its
+  // viewerCount stays in sync with presence without an extra effect.
+  const activeStream = liveStreams.find((s) => s.streamId === activeStreamId) || null;
+
   return {
-    liveInfo,
-    viewerCount,
+    liveStreams,
+    activeStream,
+    // Kept for the pieces of the UI (CommunityLiveStage's top-right badge)
+    // that only ever care about "the stream I'm in right now", not the full list.
+    viewerCount: activeStream?.viewerCount || 0,
     role,
     localStream,
     remoteStream,
@@ -557,8 +594,12 @@ export const useCommunityLive = ({ selfId, selfName, canBroadcast, scope = 'comm
     error,
     endReason,
     canBroadcast: Boolean(canBroadcast) && role === 'idle',
-    canWatch: Boolean(liveInfo && selfId) && role === 'idle',
-    isSelfBroadcaster: Boolean(liveInfo && selfId && liveInfo.broadcasterId === selfId),
+    // Generic "is there anything to watch" gate. Callers deciding whether to
+    // *auto*-join should check liveStreams.length === 1 instead — forcing a
+    // visitor into one of several concurrent streams would be picking for
+    // them; the picker list is what handles the ambiguous case.
+    canWatch: Boolean(selfId) && role === 'idle' && liveStreams.length > 0,
+    isSelfBroadcaster: role === 'broadcasting',
     goLive,
     stopLive,
     watch,

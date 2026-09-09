@@ -169,7 +169,7 @@ const CommunityLiveStage = ({ live, messages = [], onLike, draft = '', onDraftCh
   }, [mainStream]);
 
   const hasVideo = Boolean(mainStream);
-  const personLabel = isBroadcaster ? 'You' : (live.liveInfo?.broadcasterName || 'Broadcaster');
+  const personLabel = isBroadcaster ? 'You' : (live.activeStream?.broadcasterName || 'Broadcaster');
 
   return (
     // `h-screen` then `h-[100dvh]` (not `inset-0`, which also pins bottom:0):

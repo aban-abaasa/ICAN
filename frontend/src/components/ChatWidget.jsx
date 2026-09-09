@@ -594,8 +594,12 @@ const ChatWidget = ({ hasBottomNav = false }) => {
 
   // Tapping a "X is live" push notification (or its NOTIFICATION_CLICK
   // message from sw.js when a tab is already open — see MobileView.jsx)
-  // should drop the visitor straight into the stream, not just onto
-  // whatever screen happened to be showing.
+  // should drop the visitor straight into the stream — but only when
+  // there's exactly one to drop them into. With several people live at
+  // once the notification doesn't say which one it was about, so with 2+
+  // candidates this just lands them on the Community tab and lets the
+  // live-streams list (bottom of the feed) ask them to choose, same as
+  // opening the tab organically does below.
   const [pendingCommunityJoin, setPendingCommunityJoin] = useState(false);
   useEffect(() => {
     try {
@@ -617,22 +621,31 @@ const ChatWidget = ({ hasBottomNav = false }) => {
     setOpen(true);
     setChannel('community');
     setSelectedThreadId(null);
-    if (communityLive.canWatch) {
-      communityLive.watch();
+    if (communityLive.role !== 'idle') { setPendingCommunityJoin(false); return; }
+    if (communityLive.liveStreams.length === 1) {
+      communityLive.watch(communityLive.liveStreams[0].streamId);
+      setPendingCommunityJoin(false);
+    } else if (communityLive.liveStreams.length > 1) {
       setPendingCommunityJoin(false);
     }
-  }, [pendingCommunityJoin, communityLive.canWatch]);
+    // else: still 0 — presence may not have synced yet; stay pending and
+    // let this re-run once communityLive.liveStreams changes.
+  }, [pendingCommunityJoin, communityLive.liveStreams, communityLive.role]);
 
-  // Landing on the Community tab while someone's already live should drop
-  // the visitor straight into the stream, the same as tapping the "X is
-  // live" push notification does above — not leave them looking at the
-  // ordinary Q&A thread list with only the live banner as a hint. Fires on
-  // each fresh arrival at the Community tab (widget opened onto it, or
-  // switched to from another tab), tracked below rather than on every
-  // `canWatch` flip, so a visitor who explicitly hits "Leave" isn't
-  // immediately forced back into the same stream — leaving and coming back
-  // (or a stream starting while they're already sitting on the tab, once
-  // presence sync catches up) is what re-triggers it.
+  // Landing on the Community tab while exactly one person is live should
+  // drop the visitor straight into that stream, the same as tapping the "X
+  // is live" push notification does above — not leave them looking at the
+  // ordinary Q&A thread list with only the live card as a hint. With
+  // several people live at once, forcing one would be picking for them, so
+  // this only auto-joins the unambiguous case and otherwise just leaves the
+  // live-streams list (bottom of the feed) for them to choose from.
+  //
+  // Fires on each fresh arrival at the Community tab (widget opened onto
+  // it, or switched to from another tab), tracked below rather than on
+  // every liveStreams change, so a visitor who explicitly hits "Leave"
+  // isn't immediately forced back into the same stream — leaving and coming
+  // back (or a stream starting while they're already sitting on the tab,
+  // once presence sync catches up) is what re-triggers it.
   const communityViewWasOpenRef = useRef(false);
   const joinedThisCommunityViewRef = useRef(false);
   useEffect(() => {
@@ -642,17 +655,27 @@ const ChatWidget = ({ hasBottomNav = false }) => {
     }
     communityViewWasOpenRef.current = isCommunityViewOpen;
 
-    if (isCommunityViewOpen && !joinedThisCommunityViewRef.current && communityLive.canWatch) {
-      communityLive.watch();
+    if (
+      isCommunityViewOpen &&
+      !joinedThisCommunityViewRef.current &&
+      communityLive.role === 'idle' &&
+      communityLive.liveStreams.length === 1
+    ) {
+      communityLive.watch(communityLive.liveStreams[0].streamId);
       joinedThisCommunityViewRef.current = true;
     }
-  }, [open, channel, communityLive.canWatch]);
+  }, [open, channel, communityLive.liveStreams, communityLive.role]);
 
   useEffect(() => {
     if (open && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [supportMessages, communityThreads, selectedThreadId, cmmsConversation, cmmsActiveContactId, trustMessages, trustActiveContactId, open, channel]);
+    // communityLive.liveStreams: the live card(s) now render at the bottom
+    // of the Community feed like a new message would (see
+    // CommunityLiveBanner) — scroll down to reveal one the instant it
+    // appears (or disappears) instead of leaving it below the fold until
+    // the visitor happens to scroll.
+  }, [supportMessages, communityThreads, selectedThreadId, cmmsConversation, cmmsActiveContactId, trustMessages, trustActiveContactId, open, channel, communityLive.liveStreams]);
 
   const markChannelRead = (ch) => {
     if (ch === 'support') {
@@ -1060,7 +1083,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
               }`}
             >
               <Globe className="h-3.5 w-3.5" /> Community
-              {communityLive.liveInfo && channel !== 'community' && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />}
+              {communityLive.liveStreams.length > 0 && channel !== 'community' && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />}
             </button>
             {hasCmmsAccess && (
               <button
@@ -1285,7 +1308,6 @@ const ChatWidget = ({ hasBottomNav = false }) => {
               )
             ) : channel === 'community' ? (
               <>
-              {!selectedThread && <CommunityLiveBanner live={communityLive} dark={dark} />}
               {selectedThread ? (
                 <>
                   <div className="mb-1 flex items-center justify-between">
@@ -1401,6 +1423,9 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                   </button>
                 ))
               )}
+              {/* Live card(s) land at the very bottom of the feed, same spot
+                  a new message would — see CommunityLiveBanner. */}
+              {!selectedThread && <CommunityLiveBanner live={communityLive} dark={dark} />}
               </>
             ) : (
               <>
