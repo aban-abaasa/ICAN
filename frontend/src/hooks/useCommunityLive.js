@@ -31,10 +31,32 @@ import { getSupabaseClient } from '../lib/supabase/client';
 
 const supabase = getSupabaseClient();
 
+// STUN alone frequently can't punch a direct peer-to-peer path through
+// carrier-grade NAT on mobile data (and plenty of corporate/hotel wifi) —
+// that's the #1 cause of a phone broadcaster never connecting to a desktop
+// viewer, or the call dying the moment either side's network blips. TURN
+// relays the media through a server instead of relying on a direct path.
+// openrelay.metered.ca is a free, intentionally-public demo relay — fine for
+// getting real reliability today, but it's rate-limited with no SLA, so
+// swap in a paid TURN provider (Twilio Network Traversal, Cloudflare Calls,
+// metered.ca's paid tier, etc.) before this carries real production load.
 const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
 ];
+
+// Static capability check (doesn't change at runtime) — Safari/iOS still
+// don't implement getDisplayMedia, so the share-screen control stays hidden
+// there instead of showing a button that always fails.
+const canShareScreen = typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices?.getDisplayMedia);
+
+// How long a 'disconnected' peer connection (a network blip WebRTC can often
+// recover from on its own) is given before it's treated as dead. 'failed' is
+// still terminal immediately — only 'disconnected' gets this grace period.
+const RECONNECT_GRACE_MS = 8000;
 
 // Shared prefix (not app-specific) so a scope like 'community' is the same
 // Realtime room across ICAN, digital-city-era, and mybodaguy — they already
@@ -51,6 +73,9 @@ export const useCommunityLive = ({ selfId, selfName, canBroadcast, scope = 'comm
   const [remoteStream, setRemoteStream] = useState(null);
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
+  const [facingMode, setFacingMode] = useState('user');
+  const [canSwitchCamera, setCanSwitchCamera] = useState(false);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState('');
   const [endReason, setEndReason] = useState(''); // 'ended' | 'error' | ''
@@ -61,7 +86,8 @@ export const useCommunityLive = ({ selfId, selfName, canBroadcast, scope = 'comm
   const scopeRef = useRef(scope);
   const streamIdRef = useRef('');
   const broadcasterIdRef = useRef('');
-  const localStreamRef = useRef(null);
+  const localStreamRef = useRef(null); // always the camera+mic stream, even while screen-sharing (so stopping the share can revert to it)
+  const screenStreamRef = useRef(null); // set only while screen-sharing
   const peerConnectionsRef = useRef(new Map()); // broadcaster: viewerId -> pc
   const viewerPcRef = useRef(null); // viewer: pc to the broadcaster
   const pendingIceRef = useRef(new Map()); // peerId -> candidate[]
@@ -89,10 +115,14 @@ export const useCommunityLive = ({ selfId, selfName, canBroadcast, scope = 'comm
     peerConnectionsRef.current.forEach((pc) => { try { pc.close(); } catch (_) { /* already closed */ } });
     peerConnectionsRef.current.clear();
     if (viewerPcRef.current) { try { viewerPcRef.current.close(); } catch (_) { /* already closed */ } viewerPcRef.current = null; }
+    if (screenStreamRef.current) { screenStreamRef.current.getTracks().forEach((t) => t.stop()); screenStreamRef.current = null; }
     if (localStreamRef.current) { localStreamRef.current.getTracks().forEach((t) => t.stop()); localStreamRef.current = null; }
     pendingIceRef.current.clear();
     setLocalStream(null);
     setRemoteStream(null);
+    setFacingMode('user');
+    setCanSwitchCamera(false);
+    setIsScreenSharing(false);
   }, []);
 
   const untrackSelfPresence = useCallback(async () => {
@@ -163,13 +193,29 @@ export const useCommunityLive = ({ selfId, selfName, canBroadcast, scope = 'comm
       if (event.candidate) send('ice', { target: viewerId, candidate: event.candidate });
     };
     pc.onconnectionstatechange = () => {
-      if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) {
+      if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
         peerConnectionsRef.current.delete(viewerId);
+      } else if (pc.connectionState === 'disconnected') {
+        // Common on mobile (wifi<->cellular handoff, a moment of weak
+        // signal) and often self-heals — don't drop the viewer instantly.
+        setTimeout(() => {
+          if (peerConnectionsRef.current.get(viewerId) === pc && pc.connectionState === 'disconnected') {
+            try { pc.close(); } catch (_) { /* already closed */ }
+            peerConnectionsRef.current.delete(viewerId);
+          }
+        }, RECONNECT_GRACE_MS);
       }
     };
     const stream = localStreamRef.current;
     if (stream) {
-      stream.getTracks().forEach((track) => pc.addTransceiver(track, { direction: 'sendonly', streams: [stream] }));
+      stream.getTracks().forEach((track) => {
+        // A viewer who joins mid-screen-share still needs to see the shared
+        // screen, not the camera underneath it — seed their video
+        // transceiver with whichever track is actually the live outgoing
+        // one right now.
+        const outgoing = track.kind === 'video' ? (screenStreamRef.current?.getVideoTracks()[0] || track) : track;
+        pc.addTransceiver(outgoing, { direction: 'sendonly', streams: [stream] });
+      });
     }
     peerConnectionsRef.current.set(viewerId, pc);
     return pc;
@@ -192,7 +238,10 @@ export const useCommunityLive = ({ selfId, selfName, canBroadcast, scope = 'comm
 
     let stream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: true });
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'user' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: true,
+      });
     } catch (err) {
       setError(err?.name === 'NotAllowedError' ? 'Camera/microphone permission denied' : 'Could not access camera/microphone');
       return;
@@ -201,6 +250,15 @@ export const useCommunityLive = ({ selfId, selfName, canBroadcast, scope = 'comm
     setLocalStream(stream);
     setMicOn(true);
     setCamOn(true);
+    setFacingMode('user');
+    // Only offer the flip-camera control when there's actually more than one
+    // camera to flip to (front+back phone, not a single desktop webcam).
+    // Device labels are only populated after permission is granted, which it
+    // just was, so this enumerate call will see them.
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      setCanSwitchCamera(devices.filter((d) => d.kind === 'videoinput').length > 1);
+    } catch (_) { /* leave canSwitchCamera false — button just stays hidden */ }
 
     const streamId = `${scopeRef.current}:${selfIdRef.current}:${Date.now()}`;
     streamIdRef.current = streamId;
@@ -296,8 +354,20 @@ export const useCommunityLive = ({ selfId, selfName, canBroadcast, scope = 'comm
         };
         pc.ontrack = (event) => { const [s] = event.streams; if (s) setRemoteStream(s); };
         pc.onconnectionstatechange = () => {
-          if (['failed', 'disconnected', 'closed'].includes(pc.connectionState) && roleRef.current === 'watching') {
+          if (roleRef.current !== 'watching') return;
+          if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
             resetToIdle('ended');
+          } else if (pc.connectionState === 'disconnected') {
+            // Give a flaky mobile network a chance to recover before we tell
+            // the viewer the stream ended out from under them.
+            setError('Connection unstable — reconnecting…');
+            setTimeout(() => {
+              if (viewerPcRef.current !== pc || roleRef.current !== 'watching') return;
+              if (pc.connectionState === 'disconnected') resetToIdle('ended');
+              else if (pc.connectionState === 'connected') setError('');
+            }, RECONNECT_GRACE_MS);
+          } else if (pc.connectionState === 'connected') {
+            setError('');
           }
         };
         try {
@@ -355,6 +425,114 @@ export const useCommunityLive = ({ selfId, selfName, canBroadcast, scope = 'comm
     });
   }, []);
 
+  // Flip between front/back camera mid-broadcast. Grabs a fresh video-only
+  // track for the other camera, swaps it into the existing local stream (so
+  // the broadcaster's own preview updates immediately — the video element is
+  // already bound to that same MediaStream object), then hands the new track
+  // to every connected viewer's peer connection via replaceTrack. replaceTrack
+  // pushes the new frames without renegotiating the whole connection, so
+  // viewers see the flip seamlessly instead of the call briefly dropping.
+  const switchCamera = useCallback(async () => {
+    if (roleRef.current !== 'broadcasting' || !localStreamRef.current) return;
+    const nextFacing = facingMode === 'user' ? 'environment' : 'user';
+    let newStream;
+    try {
+      newStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: nextFacing }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+    } catch (err) {
+      setError('Could not switch camera');
+      return;
+    }
+    const newTrack = newStream.getVideoTracks()[0];
+    if (!newTrack) return;
+    newTrack.enabled = camOn;
+
+    const oldTrack = localStreamRef.current.getVideoTracks()[0];
+    if (oldTrack) {
+      localStreamRef.current.removeTrack(oldTrack);
+      oldTrack.stop();
+    }
+    localStreamRef.current.addTrack(newTrack);
+
+    // While screen-sharing, viewers are receiving the screen track, not the
+    // camera — don't push the flipped camera over it. It's already swapped
+    // into localStreamRef, so it'll take over as soon as sharing stops.
+    if (!screenStreamRef.current) {
+      peerConnectionsRef.current.forEach((pc) => {
+        const sender = pc.getSenders().find((s) => s.track && s.track.kind === 'video');
+        if (sender) sender.replaceTrack(newTrack).catch(() => {});
+      });
+    }
+
+    setFacingMode(nextFacing);
+  }, [facingMode, camOn]);
+
+  // Revert every viewer's video sender back to the camera and stop the
+  // display-capture track. Also fires when the user stops sharing via the
+  // browser/OS's own "Stop sharing" control rather than our button, since
+  // that only stops the track (screenTrack.onended, wired below) — this is
+  // the one place that undoes everything else a share touched.
+  const stopScreenShare = useCallback(() => {
+    if (!screenStreamRef.current) return;
+    screenStreamRef.current.getTracks().forEach((t) => { try { t.stop(); } catch (_) { /* already stopped */ } });
+    screenStreamRef.current = null;
+
+    const cameraStream = localStreamRef.current;
+    const cameraTrack = cameraStream?.getVideoTracks()?.[0] || null;
+    if (cameraTrack) {
+      peerConnectionsRef.current.forEach((pc) => {
+        const sender = pc.getSenders().find((s) => s.track && s.track.kind === 'video');
+        if (sender) sender.replaceTrack(cameraTrack).catch(() => {});
+      });
+    }
+
+    setLocalStream(cameraStream || null);
+    setIsScreenSharing(false);
+  }, []);
+
+  // Shares a window/tab/whole screen instead of the camera — reuses the same
+  // getDisplayMedia + replaceTrack approach as LiveBoardroom.jsx's group
+  // calls. Unlike LiveBoardroom (full mesh, every peer's own sender), this
+  // hook already keeps one RTCPeerConnection per viewer in
+  // peerConnectionsRef, so pushing the screen out is just a replaceTrack per
+  // viewer — no renegotiation, no visible glitch for anyone already watching.
+  const startScreenShare = useCallback(async () => {
+    if (roleRef.current !== 'broadcasting' || screenStreamRef.current) return;
+    let displayStream;
+    try {
+      displayStream = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: { ideal: 15 }, cursor: 'always' },
+        audio: false,
+      });
+    } catch (err) {
+      // NotAllowedError/AbortError = the user cancelled the share picker — not an error.
+      if (err?.name !== 'NotAllowedError' && err?.name !== 'AbortError') {
+        setError(err?.name === 'NotSupportedError' ? 'Screen sharing is not supported in this browser' : 'Could not start screen sharing');
+      }
+      return;
+    }
+    const screenTrack = displayStream.getVideoTracks()[0];
+    if (!screenTrack) { displayStream.getTracks().forEach((t) => t.stop()); return; }
+
+    screenStreamRef.current = displayStream;
+    peerConnectionsRef.current.forEach((pc) => {
+      const sender = pc.getSenders().find((s) => s.track && s.track.kind === 'video');
+      if (sender) sender.replaceTrack(screenTrack).catch(() => {});
+    });
+    // Covers the OS/browser's own "Stop sharing" bar/button, not just ours.
+    screenTrack.onended = () => stopScreenShare();
+
+    setLocalStream(displayStream);
+    setIsScreenSharing(true);
+  }, [stopScreenShare]);
+
+  const toggleScreenShare = useCallback(() => {
+    if (isScreenSharing) stopScreenShare();
+    else startScreenShare();
+  }, [isScreenSharing, startScreenShare, stopScreenShare]);
+
   // Full cleanup on unmount.
   useEffect(() => () => {
     clearElapsedTimer();
@@ -371,6 +549,10 @@ export const useCommunityLive = ({ selfId, selfName, canBroadcast, scope = 'comm
     remoteStream,
     micOn,
     camOn,
+    facingMode,
+    canSwitchCamera,
+    isScreenSharing,
+    canShareScreen,
     elapsed,
     error,
     endReason,
@@ -383,6 +565,8 @@ export const useCommunityLive = ({ selfId, selfName, canBroadcast, scope = 'comm
     stopWatching,
     toggleMic,
     toggleCam,
+    switchCamera,
+    toggleScreenShare,
   };
 };
 
