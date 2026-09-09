@@ -1,4 +1,4 @@
--- Fix: BodaGoEra's two Pichin category templates (transport_company,
+ -- Fix: BodaGoEra's two Pichin category templates (transport_company,
 -- security_escort — CREATE_BODAGOERA_BUSINESS_CATEGORIES_AND_REGISTRATION.sql
 -- in the mybodaguy repo) were never added to
 -- cmms_business_type_architecture()'s keyword match, so both fell through to
