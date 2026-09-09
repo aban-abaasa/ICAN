@@ -623,6 +623,31 @@ const ChatWidget = ({ hasBottomNav = false }) => {
     }
   }, [pendingCommunityJoin, communityLive.canWatch]);
 
+  // Landing on the Community tab while someone's already live should drop
+  // the visitor straight into the stream, the same as tapping the "X is
+  // live" push notification does above — not leave them looking at the
+  // ordinary Q&A thread list with only the live banner as a hint. Fires on
+  // each fresh arrival at the Community tab (widget opened onto it, or
+  // switched to from another tab), tracked below rather than on every
+  // `canWatch` flip, so a visitor who explicitly hits "Leave" isn't
+  // immediately forced back into the same stream — leaving and coming back
+  // (or a stream starting while they're already sitting on the tab, once
+  // presence sync catches up) is what re-triggers it.
+  const communityViewWasOpenRef = useRef(false);
+  const joinedThisCommunityViewRef = useRef(false);
+  useEffect(() => {
+    const isCommunityViewOpen = open && channel === 'community';
+    if (isCommunityViewOpen && !communityViewWasOpenRef.current) {
+      joinedThisCommunityViewRef.current = false;
+    }
+    communityViewWasOpenRef.current = isCommunityViewOpen;
+
+    if (isCommunityViewOpen && !joinedThisCommunityViewRef.current && communityLive.canWatch) {
+      communityLive.watch();
+      joinedThisCommunityViewRef.current = true;
+    }
+  }, [open, channel, communityLive.canWatch]);
+
   useEffect(() => {
     if (open && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
