@@ -1,8 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ShoppingCart, Plus, Minus, X, Loader, AlertCircle, CheckCircle, Store, Trash2, Truck } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, X, Loader, AlertCircle, CheckCircle, Store, Trash2, Truck, Navigation, Bike, Star, Clock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { AuthPage } from './auth';
-import { getDropshipStorefront, dropshipCheckout } from '../services/dropshipService';
+import { getDropshipStorefront, dropshipCheckout, findDeliveryRiders } from '../services/dropshipService';
+
+// Presets for the customer-chosen delivery deadline — mirrors the backend's
+// delivery.min_deadline_hours/delivery.max_deadline_hours bounds (1-48h by
+// default). Once this window elapses after the store scans the order out,
+// the rider is warned and the order becomes refundable straight from their
+// own wallet — see ADD_DELIVERY_ESCROW_DEADLINE_AND_RIDER_LIABILITY.sql.
+const DELIVERY_WINDOW_OPTIONS = [
+  { hours: 1, label: 'Within 1 hour' },
+  { hours: 2, label: 'Within 2 hours' },
+  { hours: 4, label: 'Within 4 hours' },
+  { hours: 8, label: 'Within 8 hours' },
+  { hours: 24, label: 'Within 24 hours' },
+  { hours: 48, label: 'Within 2 days' },
+];
 
 const formatUGX = (amount) => `UGX ${Number(amount || 0).toLocaleString('en-UG', { maximumFractionDigits: 0 })}`;
 
@@ -29,6 +43,16 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
   const [checkoutError, setCheckoutError] = useState(null);
   const [receipt, setReceipt] = useState(null);
 
+  // Delivery location, window and rider choice — required by dropship_checkout
+  // so it can book a real BodaGoera rider (see dropshipService.js).
+  const [deliveryCoords, setDeliveryCoords] = useState(null); // { lat, lng }
+  const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState(null);
+  const [maxDeliveryHours, setMaxDeliveryHours] = useState(4);
+  const [riders, setRiders] = useState([]);
+  const [ridersLoading, setRidersLoading] = useState(false);
+  const [selectedRiderId, setSelectedRiderId] = useState(null); // null = auto-assign nearest
+
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -48,6 +72,51 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
   }, [businessProfileId]);
 
   const resellerName = listings[0]?.reseller_name || 'Store';
+  const storeLat = listings[0]?.store_lat;
+  const storeLng = listings[0]?.store_lng;
+
+  // Once we know both the store's pickup point and where the customer wants
+  // it delivered, look up real nearby riders so they can actually pick one —
+  // same list BodaGoera's own ride-request screen shows, not a silent
+  // auto-assign.
+  useEffect(() => {
+    let cancelled = false;
+    // mbg_find_available_riders is authenticated-only — an anonymous visitor
+    // can still share their location and pick a delivery window, they just
+    // won't see the picker (and checkout itself requires sign-in anyway).
+    if (!user || storeLat == null || storeLng == null || !deliveryCoords) {
+      setRiders([]);
+      return;
+    }
+    setRidersLoading(true);
+    findDeliveryRiders(storeLat, storeLng, deliveryCoords.lat, deliveryCoords.lng).then(({ data }) => {
+      if (cancelled) return;
+      setRiders(data || []);
+      setRidersLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [user, storeLat, storeLng, deliveryCoords]);
+
+  const shareLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationError('Your browser can\'t share location — enter your address and we\'ll auto-assign a rider');
+      return;
+    }
+    setLocating(true);
+    setLocationError(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setDeliveryCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setSelectedRiderId(null);
+        setLocating(false);
+      },
+      () => {
+        setLocationError('Could not get your location — please allow location access to book delivery');
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000 }
+    );
+  };
 
   const cartItems = useMemo(
     () => Object.entries(cart)
@@ -77,6 +146,10 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
     if (authLoading) return;
     if (!user) { setShowAuthModal(true); return; }
     if (cartItems.length === 0) return;
+    if (!deliveryCoords) {
+      setCheckoutError('Share your delivery location first — a real rider is booked for this order');
+      return;
+    }
 
     setPlacing(true);
     setCheckoutError(null);
@@ -87,6 +160,10 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
         customerPhone: customerPhone.trim() || undefined,
         deliveryAddress: deliveryAddress.trim() || undefined,
         deliveryFee: deliveryFeeAmount,
+        deliveryLat: deliveryCoords.lat,
+        deliveryLng: deliveryCoords.lng,
+        maxDeliveryHours,
+        riderId: selectedRiderId || undefined,
       });
       if (error || !data?.success) {
         throw new Error(error?.message || data?.error || 'Checkout failed');
@@ -137,7 +214,16 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
             {receipt.delivery_address && (
               <div className="flex justify-between text-sm"><span className="text-slate-400">Delivery to</span><span className="text-white text-right">{receipt.delivery_address}</span></div>
             )}
-            <p className="text-xs text-slate-500 pt-2">Delivery is arranged via BodaGoera. Keep your receipt number handy.</p>
+            {receipt.max_delivery_hours && (
+              <div className="flex justify-between text-sm"><span className="text-slate-400">Delivery window</span><span className="text-white">Within {receipt.max_delivery_hours}h of dispatch</span></div>
+            )}
+            <p className="text-xs text-slate-500 pt-2">
+              A BodaGoera rider has been booked for this order. The store/reseller only gets paid once the rider scans it out — track that and confirm delivery at{' '}
+              {receipt.verify_url ? (
+                <a href={receipt.verify_url} target="_blank" rel="noreferrer" className="text-indigo-400 underline">{receipt.verify_url}</a>
+              ) : 'your receipt link'}.
+              {' '}If it misses the window above, you can reclaim your money from the rider's account there.
+            </p>
           </div>
           <button onClick={goToApp} className="mt-6 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-semibold transition">
             Open ICANEra
@@ -225,7 +311,75 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
                   <div className="space-y-2 pt-2">
                     <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Your name" className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500" />
                     <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Phone number" className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500" />
-                    <input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="Delivery address" className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500" />
+                    <input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="Delivery address (e.g. street, landmark)" className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500" />
+
+                    <button
+                      type="button"
+                      onClick={shareLocation}
+                      disabled={locating}
+                      className={`w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-semibold border transition ${
+                        deliveryCoords ? 'border-emerald-700 bg-emerald-500/10 text-emerald-400' : 'border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800'
+                      }`}
+                    >
+                      {locating ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Navigation className="w-3.5 h-3.5" />}
+                      {deliveryCoords ? 'Delivery location shared' : 'Share my delivery location'}
+                    </button>
+                    {locationError && <p className="text-xs text-red-400">{locationError}</p>}
+
+                    <div>
+                      <label className="flex items-center gap-1.5 text-xs text-slate-400 mb-1"><Clock className="w-3.5 h-3.5" />Deliver within</label>
+                      <select
+                        value={maxDeliveryHours}
+                        onChange={(e) => setMaxDeliveryHours(Number(e.target.value))}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white"
+                      >
+                        {DELIVERY_WINDOW_OPTIONS.map((opt) => (
+                          <option key={opt.hours} value={opt.hours}>{opt.label}</option>
+                        ))}
+                      </select>
+                      <p className="mt-1 text-[11px] text-slate-500">If the rider misses this window, you can reclaim your money straight from their account.</p>
+                    </div>
+
+                    {deliveryCoords && user && (
+                      <div>
+                        <label className="flex items-center gap-1.5 text-xs text-slate-400 mb-1"><Bike className="w-3.5 h-3.5" />Rider / driver</label>
+                        {ridersLoading ? (
+                          <div className="flex items-center gap-2 text-xs text-slate-500 py-2"><Loader className="w-3.5 h-3.5 animate-spin" />Finding nearby riders…</div>
+                        ) : riders.length === 0 ? (
+                          <p className="text-xs text-amber-400 py-1">No riders nearby right now — we'll auto-assign one as soon as checkout completes.</p>
+                        ) : (
+                          <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedRiderId(null)}
+                              className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg border text-left text-xs transition ${
+                                selectedRiderId === null ? 'border-indigo-500 bg-indigo-500/10' : 'border-slate-800 bg-slate-900 hover:bg-slate-800'
+                              }`}
+                            >
+                              <span className="text-white font-medium">Auto-assign nearest available</span>
+                              <span className="text-slate-500">Fastest</span>
+                            </button>
+                            {riders.map((r) => (
+                              <button
+                                key={r.rider_id}
+                                type="button"
+                                onClick={() => setSelectedRiderId(r.rider_id)}
+                                className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg border text-left text-xs transition ${
+                                  selectedRiderId === r.rider_id ? 'border-indigo-500 bg-indigo-500/10' : 'border-slate-800 bg-slate-900 hover:bg-slate-800'
+                                }`}
+                              >
+                                <span className="min-w-0">
+                                  <span className="block text-white font-medium truncate">{r.full_name} · {r.vehicle_type}</span>
+                                  <span className="flex items-center gap-1 text-slate-400"><Star className="w-3 h-3 text-amber-400" />{Number(r.rating || 0).toFixed(1)} · {Number(r.distance_to_pickup_km || 0).toFixed(1)}km away</span>
+                                </span>
+                                <span className="shrink-0 text-slate-500">~{r.estimated_arrival_min}min</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {allFreeDelivery ? (
                       <p className="flex items-center gap-1.5 text-xs text-emerald-400"><Truck className="w-3.5 h-3.5" />Free delivery on this order</p>
                     ) : (
@@ -252,11 +406,11 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
                   {checkoutError && <p className="text-xs text-red-400">{checkoutError}</p>}
                   <button
                     onClick={handleCheckout}
-                    disabled={placing}
+                    disabled={placing || (!!user && !deliveryCoords)}
                     className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-semibold transition flex items-center justify-center gap-2"
                   >
                     {placing ? <Loader className="w-4 h-4 animate-spin" /> : null}
-                    {user ? `Pay ${formatUGX(orderTotal)} with ICANera` : 'Sign in to pay with ICANera'}
+                    {!user ? 'Sign in to pay with ICANera' : !deliveryCoords ? 'Share your delivery location to continue' : `Pay ${formatUGX(orderTotal)} with ICANera`}
                   </button>
                 </>
               )}
