@@ -1904,6 +1904,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
   // 💳 Send via MOMO
   const handleSendViaMOMO = async (phoneNumber, amount, description) => {
+    let debited = false;
     try {
       // Check sender's balance first
       if (parseFloat(amount) > parseFloat(currentWallet.balance)) {
@@ -1917,39 +1918,31 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
       // Deduct from sender's wallet first
       const supabase = getSupabaseClient();
-      
+
       // CRITICAL: Check authentication BEFORE querying wallet_accounts
       const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
       if (authError || !authUser) {
         throw new Error('User not authenticated');
       }
 
-      const { data: senderWallet } = await supabase
-        .from('wallet_accounts')
-        .select('id, balance')
-        .eq('user_id', currentUserId)
-        .eq('currency', selectedCurrency)
-        .single();
+      // Atomic, row-locked debit keyed off auth.uid() server-side — a plain
+      // read-then-write here would race with any other concurrent balance
+      // change (see FIX_WALLET_ACCOUNTS_ATOMIC_BALANCE.sql).
+      const { data: deductResult, error: deductError } = await supabase.rpc(
+        'adjust_wallet_account_balance',
+        { p_delta: -parseFloat(amount) }
+      );
 
-      if (!senderWallet) {
+      if (deductError) throw deductError;
+      if (!deductResult?.success) {
         setTransactionResult({
           type: 'send',
           success: false,
-          message: 'Wallet account not found'
+          message: deductResult?.error || 'Wallet account not found or insufficient balance'
         });
         return;
       }
-
-      // Deduct from sender's balance
-      const { error: deductError } = await supabase
-        .from('wallet_accounts')
-        .update({
-          balance: parseFloat(senderWallet.balance) - parseFloat(amount),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', senderWallet.id);
-
-      if (deductError) throw deductError;
+      debited = true;
 
       // Process MOMO payment
       const result = await momoService.processTransfer({
@@ -1989,14 +1982,9 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
         console.log('💸 MOMO transfer completed:', result.transactionId);
       } else {
-        // Refund to sender if MOMO failed
-        await supabase
-          .from('wallet_accounts')
-          .update({
-            balance: parseFloat(senderWallet.balance),
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', senderWallet.id);
+        // Refund to sender if MOMO failed — atomic credit-back, not a
+        // reset to a stale snapshot (see FIX_WALLET_ACCOUNTS_ATOMIC_BALANCE.sql).
+        await supabase.rpc('adjust_wallet_account_balance', { p_delta: parseFloat(amount) });
 
         setTransactionResult({
           type: 'send',
@@ -2007,28 +1995,20 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       }
     } catch (error) {
       console.error('❌ MOMO transfer failed:', error);
-      
-      // Refund on error
-      try {
-        const supabase = getSupabaseClient();
-        
-        // CRITICAL: Check authentication BEFORE querying wallet_accounts
-        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
-        if (!authError && authUser) {
-          const { data: senderWallet } = await supabase
-            .from('wallet_accounts')
-            .select('id')
-            .eq('user_id', currentUserId)
-            .eq('currency', selectedCurrency)
-            .single();
 
-          if (senderWallet) {
-            // Reload current balance and refund
+      // Refund on error, but only if the debit actually went through —
+      // the RPC call itself can be what threw, in which case nothing was
+      // ever debited and crediting back here would hand out free balance.
+      if (debited) {
+        try {
+          const supabase = getSupabaseClient();
+          await supabase.rpc('adjust_wallet_account_balance', { p_delta: parseFloat(amount) });
+          if (currentUserId) {
             await loadWalletBalances(currentUserId);
           }
+        } catch (e) {
+          console.warn('⚠️ Could not refund:', e);
         }
-      } catch (e) {
-        console.warn('⚠️ Could not refund:', e);
       }
 
       setTransactionResult({
