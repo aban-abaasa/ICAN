@@ -1644,7 +1644,18 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
           (tx.transaction_type === 'transfer_in' && !isPersonTransfer);
         return {
           amount,
-          transaction_type: isPersonTransfer ? 'transfer' : isIncome ? 'income' : isBusinessExpense || tx.transaction_type === 'tithe' ? 'expense' : 'transfer',
+          // isIncome must win over isPersonTransfer — earn/cashback/sale/refund
+          // rows (e.g. a rider's "Ride earning" credit) have no business tag
+          // and no sender, so classification() above falls through to
+          // 'person_transfer' by default, making isPersonTransfer true even
+          // though the row is genuinely income. Checking isPersonTransfer
+          // first (the old order) silently reclassified every one of those
+          // as a 'transfer' — which the transaction-row UI then renders as a
+          // red/negative "-" instead of the green/positive "+" it actually
+          // is. isIncome already excludes real person-to-person transfer_in
+          // rows itself (see its own `&& !isPersonTransfer` above), so this
+          // reorder doesn't change how genuine transfers are classified.
+          transaction_type: isIncome ? 'income' : isPersonTransfer ? 'transfer' : isBusinessExpense || tx.transaction_type === 'tithe' ? 'expense' : 'transfer',
           description: tx.note || tx.merchant_name || `${tx.source_app || 'IcanEra wallet'} — ${tx.transaction_type || 'transfer'}`,
           currency: tx.local_currency || 'UGX',
           created_at: tx.created_at,
@@ -1652,7 +1663,15 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
           metadata: {
             category: tx.source_app === 'digital-city-era' ? 'SupermartKera' : (tx.source_app || 'ican'),
             source_app: tx.source_app,
-            record_category: (hasBusinessTag || classification === 'business_expense') ? 'business' : 'personal',
+            // An explicit customer choice ('personal_expense') must win over
+            // hasBusinessTag — e.g. a mybodaguy store-delivery goods leg
+            // still carries the STORE's business_profile_id for the store's
+            // own bookkeeping, but if the CUSTOMER tagged the whole order
+            // Personal at request time, hasBusinessTag being true here would
+            // otherwise force it back into Business against their choice.
+            record_category: tx.expense_classification === 'personal_expense'
+              ? 'personal'
+              : (hasBusinessTag || classification === 'business_expense') ? 'business' : 'personal',
             reporting_bucket: tx.transaction_type === 'tithe' ? 'tithe_payment' :
               isBusinessExpense ? 'operating_expense' : isIncome ? 'sold_income' : null,
             expense_classification: classification,
