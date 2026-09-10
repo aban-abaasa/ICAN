@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { X, Plus, Trash2, Save, Loader } from 'lucide-react';
+import { X, Plus, Trash2, Save, Loader, Sparkles } from 'lucide-react';
 import cmmsWrittenTestService from '../services/cmmsWrittenTestService';
+import openaiService from '../services/openaiService';
 
 const emptyQuestion = () => ({
   key: `q_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -15,7 +16,7 @@ const emptyQuestion = () => ({
  * per job posting is the common case, so this loads/creates the job's most
  * recent test rather than presenting a separate "manage tests" list.
  */
-const CMMSWrittenTestBuilder = ({ companyId, jobPostingId, jobTitle, currentCmmsUserId, onClose }) => {
+const CMMSWrittenTestBuilder = ({ companyId, jobPostingId, jobTitle, jobDepartment, jobDescription, currentCmmsUserId, onClose }) => {
   const [test, setTest] = useState(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -25,6 +26,8 @@ const CMMSWrittenTestBuilder = ({ companyId, jobPostingId, jobTitle, currentCmms
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [generating, setGenerating] = useState(false);
+  const [generateCount, setGenerateCount] = useState('5');
 
   useEffect(() => {
     const load = async () => {
@@ -62,6 +65,37 @@ const CMMSWrittenTestBuilder = ({ companyId, jobPostingId, jobTitle, currentCmms
   const updateOption = (key, optionId, text) => setQuestions((qs) => qs.map((q) => (
     q.key === key ? { ...q, options: q.options.map((o) => (o.id === optionId ? { ...o, text } : o)) } : q
   )));
+
+  // Drafts questions from the job's own title/department/description so the
+  // admin starts from a full test to edit/trim rather than a blank page.
+  // Appended after any questions already written by hand; only replaces the
+  // single still-untouched starter question left over from opening the form.
+  const generateWithAI = async () => {
+    setGenerating(true);
+    setError('');
+    const result = await openaiService.generateTestQuestions(
+      { title: jobTitle, department: jobDepartment, description: jobDescription },
+      Math.max(1, Math.min(20, Number(generateCount) || 5))
+    );
+    setGenerating(false);
+    if (!result.success) { alert(`❌ Could not generate questions: ${result.error}`); return; }
+
+    const generated = result.data.map((q) => ({
+      key: `q_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      questionText: q.questionText || '',
+      options: (q.options?.length === 4 ? q.options : emptyQuestion().options).map((o, i) => ({
+        id: o.id || ['a', 'b', 'c', 'd'][i],
+        text: o.text || '',
+      })),
+      correctOptionId: q.correctOptionId || 'a',
+      points: Number(q.points) || 1,
+    }));
+
+    setQuestions((qs) => {
+      const isUntouchedStarter = qs.length === 1 && !qs[0].questionText.trim() && qs[0].options.every((o) => !o.text.trim());
+      return isUntouchedStarter ? generated : [...qs, ...generated];
+    });
+  };
 
   const valid = title.trim() && questions.length > 0 && questions.every((q) => q.questionText.trim() && q.options.every((o) => o.text.trim()));
 
@@ -116,6 +150,23 @@ const CMMSWrittenTestBuilder = ({ companyId, jobPostingId, jobTitle, currentCmms
                 <input type="number" min="0" max="100" value={passingScore} onChange={(e) => setPassingScore(e.target.value)} placeholder="Passing score (%)" className="px-3 py-2 rounded bg-white/10 text-white border border-white/20" />
               </div>
               <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Instructions shown to the candidate before they start (optional)" rows={2} className="w-full px-3 py-2 rounded bg-white/10 text-white border border-white/20" />
+
+              <div className="flex flex-wrap items-center gap-2 rounded border border-indigo-400/30 bg-indigo-500/10 p-3">
+                <Sparkles className="w-4 h-4 text-indigo-300 flex-shrink-0" />
+                <span className="text-xs text-gray-300">Generate questions from this job's title, department, and description</span>
+                <input
+                  type="number" min="1" max="20" value={generateCount}
+                  onChange={(e) => setGenerateCount(e.target.value)}
+                  className="w-16 px-2 py-1 rounded bg-white/10 text-white border border-white/20 text-sm"
+                />
+                <button
+                  disabled={generating}
+                  onClick={generateWithAI}
+                  className="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center gap-1.5"
+                >
+                  {generating ? <><Loader className="w-3.5 h-3.5 animate-spin" /> Generating…</> : <><Sparkles className="w-3.5 h-3.5" /> Generate with AI</>}
+                </button>
+              </div>
 
               <div className="space-y-4">
                 {questions.map((q, index) => (

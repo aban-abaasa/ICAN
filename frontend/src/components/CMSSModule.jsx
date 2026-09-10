@@ -435,7 +435,12 @@ const CMMSModule = ({
             return;
           }
         } else if (pichinAccessError) {
-          console.warn('Pichin CMMS access RPC unavailable; using legacy membership lookup:', pichinAccessError.message);
+          console.warn('Pichin CMMS access RPC unavailable; using legacy membership lookup:', {
+            message: pichinAccessError.message,
+            code: pichinAccessError.code,
+            details: pichinAccessError.details,
+            hint: pichinAccessError.hint,
+          });
         }
 
         // Pichin business profiles are the authority for CMMS. Ensure every
@@ -451,7 +456,12 @@ const CMMSModule = ({
             p_business_profile_id: business.id
           });
           if (error) {
-            console.warn(`Could not provision CMMS access for Pichin business ${business.id}:`, error.message);
+            console.warn(`Could not provision CMMS access for Pichin business ${business.id}:`, {
+              message: error.message,
+              code: error.code,
+              details: error.details,
+              hint: error.hint,
+            });
           }
         }));
         console.log('ðŸ” Loading CMMS company memberships for:', user.email);

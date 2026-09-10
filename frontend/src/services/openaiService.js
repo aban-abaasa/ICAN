@@ -293,6 +293,59 @@ Return JSON with:
   }
 
   /**
+   * 📝 Generate multiple-choice questions for a job posting's written test
+   * @param {Object} job - { title, department, description, skills }
+   * @param {number} numQuestions - How many questions to generate
+   * @returns {Promise<Object>} { success, data: [{ questionText, options: [{id,text}], correctOptionId, points }] }
+   */
+  async generateTestQuestions(job, numQuestions = 5) {
+    const prompt = `You are writing a pre-employment screening test for this job posting. Write exactly ${numQuestions} multiple-choice questions that test job-relevant knowledge and skills a qualified candidate should have. Avoid trivia unrelated to the role.
+
+Job title: ${job.title || 'Not specified'}
+Department: ${job.department || 'Not specified'}
+Job description: ${(job.description || 'Not specified').substring(0, 3000)}
+
+Return ONLY a valid JSON array (no surrounding text) with this exact structure:
+[
+  {
+    "questionText": "string",
+    "options": [
+      { "id": "a", "text": "string" },
+      { "id": "b", "text": "string" },
+      { "id": "c", "text": "string" },
+      { "id": "d", "text": "string" }
+    ],
+    "correctOptionId": "a|b|c|d",
+    "points": 1
+  }
+]
+
+Rules:
+- Exactly 4 options per question, exactly one correct.
+- Plausible, non-obvious distractors -- no "all of the above" or "none of the above".
+- Vary which option id is correct across questions instead of always "a".`;
+
+    try {
+      const response = await this.chat(prompt, '', {
+        temperature: 0.6,
+        maxTokens: 2000,
+        model: this.model,
+      });
+
+      const jsonMatch = response.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) throw new Error('Invalid JSON response from OpenAI');
+      const questions = JSON.parse(jsonMatch[0]);
+      if (!Array.isArray(questions) || questions.length === 0) {
+        throw new Error('No questions were generated');
+      }
+      return { success: true, data: questions };
+    } catch (error) {
+      console.error('❌ Test question generation failed:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
    * 🔧 Internal: Make OpenAI API call
    * @private
    */

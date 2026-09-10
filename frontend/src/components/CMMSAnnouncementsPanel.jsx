@@ -825,6 +825,8 @@ const CMMSAnnouncementsPanel = ({
           companyId={companyId}
           jobPostingId={testBuilderJob.id}
           jobTitle={testBuilderJob.title}
+          jobDepartment={testBuilderJob.department}
+          jobDescription={testBuilderJob.body}
           currentCmmsUserId={myCmmsUserId}
           onClose={() => setTestBuilderJob(null)}
         />

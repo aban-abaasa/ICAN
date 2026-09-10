@@ -90,14 +90,14 @@ export async function reconcileInvestorShareholderStatus(agreement, pitch, curre
     return { promoted: false, reason: addInvestorError.message };
   }
 
-  await supabase.rpc('confirm_investor_as_shareholder_after_approval', {
+  await Promise.resolve(supabase.rpc('confirm_investor_as_shareholder_after_approval', {
     p_investment_id: agreement.escrow_id || agreement.id,
     p_business_profile_id: businessProfileId,
     p_investor_id: currentUser.id,
     p_investor_email: currentUser.email,
     p_investor_name: currentUser?.user_metadata?.full_name || 'Investor',
     p_ownership_share: sharesAmount
-  }).catch(() => null);
+  })).catch(() => null);
 
   return { promoted: true, equityOffering };
 }
