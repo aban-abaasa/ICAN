@@ -78,7 +78,7 @@ export default function CertificateRequestsInbox({ className = '' }) {
 
   return (
     <div className={`bg-slate-900/50 border border-indigo-700/30 rounded-xl p-4 ${className}`}>
-      <input type="file" ref={fileInputRef} className="hidden" onChange={handleFilePicked} />
+      <input type="file" accept="application/pdf,.pdf" ref={fileInputRef} className="hidden" onChange={handleFilePicked} />
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-white font-semibold flex items-center gap-2">
           <FileText className="w-4 h-4 text-indigo-400" /> Certificate Requests

@@ -54,9 +54,18 @@ export async function getMyCertificateRequests() {
   return data || [];
 }
 
-/** Upload the certificate file the owner is approving a request with. */
+/**
+ * Upload the certificate file the owner is approving a request with.
+ * PDF-only: the previous "poor document" download reports turned out to be
+ * the forced-download filename having no extension, so the browser/OS
+ * couldn't tell what it was. Fixed by keeping this a fixed, known type end
+ * to end instead of round-tripping an arbitrary one.
+ */
 export async function uploadCertificateFile(file) {
   if (!file) throw new Error('No file selected');
+  if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name || '')) {
+    throw new Error('Please upload the certificate as a PDF file');
+  }
   if (file.size > CERTIFICATE_MAX_MB * 1024 * 1024) {
     throw new Error(`File exceeds ${CERTIFICATE_MAX_MB}MB limit`);
   }
@@ -96,5 +105,5 @@ export async function denyCertificateRequest(requestId, { note } = {}) {
 /** Resolve an approved request's stored certificate to a downloadable URL. */
 export async function resolveCertificateDownloadUrl(request) {
   if (!request?.certificate_url) return null;
-  return resolveDownloadUrl(request.certificate_url, `certificate-${request.id}`);
+  return resolveDownloadUrl(request.certificate_url, `certificate-${request.id}.pdf`);
 }
