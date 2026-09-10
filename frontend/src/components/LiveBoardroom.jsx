@@ -14,6 +14,24 @@ import {
 
 const EMPTY_MEMBERS = [];
 
+// STUN alone only finds a direct path when both sides are on open/simply
+// NATed networks -- a candidate on mobile data and an interviewer behind a
+// corporate/CGNAT network (a very normal pairing for this feature) usually
+// can't punch through, so the offer/answer + ICE candidates all succeed
+// (presence shows the other person, ontrack just never fires) with no video
+// or audio ever flowing. useCommunityLive.js already carries a TURN relay
+// for the same reason -- this was the one real-time video path still
+// missing it. openrelay.metered.ca is free/rate-limited with no SLA; swap
+// in a paid TURN provider (Twilio Network Traversal, Cloudflare Calls,
+// metered.ca's paid tier, etc.) before this carries real production load.
+const ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+];
+
 const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context = 'trust', onClose = () => {}, autoStart = false }) => {
   const { user } = useAuth();
   const userId = user?.id;
@@ -42,7 +60,6 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
   const [meetingTime, setMeetingTime] = useState(0);
   const [chatMessages, setChatMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
-  const [showChat, setShowChat] = useState(true);
   // Reactions on the in-call chat — broadcast-only (rides the same
   // always-open call channel as CMMS's chat-message, see the listener
   // below), deliberately not persisted to `boarding_room_chat`: a reaction
@@ -761,17 +778,6 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
     return () => { if (meetingTimerRef.current) clearInterval(meetingTimerRef.current); };
   }, [meetingStarted]);
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && showChat) {
-        setShowChat(false);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showChat]);
-
   const ensureLocalStream = useCallback(async () => {
     if (localStreamRef.current) return localStreamRef.current;
     try {
@@ -1091,12 +1097,7 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
       return peerConnectionsRef.current.get(peerUserId);
     }
 
-    const pc = new RTCPeerConnection({
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-      ]
-    });
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 
     pc.onicecandidate = async (event) => {
       if (!event.candidate || !webrtcChannelRef.current) return;
@@ -2335,14 +2336,6 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
                 {hoveredControl === 'sound' && <div className="absolute bottom-full mb-3 bg-black/80 backdrop-blur-xl border border-white/20 text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap">{soundEnabled ? 'Mute Notifications' : 'Unmute Notifications'}</div>}
               </div>
 
-              {/* Chat Button - Glassmorphism */}
-              <div onMouseEnter={() => setHoveredControl('chat')} onMouseLeave={() => setHoveredControl(null)} className="relative">
-                <button onClick={() => setShowChat(!showChat)} className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold transition-all transform hover:scale-105 active:scale-95 backdrop-blur-xl border border-white/20 ${showChat ? 'bg-gradient-to-br from-purple-400/40 to-violet-600/40 hover:from-purple-400/50 hover:to-violet-600/50 text-purple-100 shadow-lg shadow-purple-500/30' : 'bg-gradient-to-br from-slate-400/40 to-slate-600/40 hover:from-slate-400/50 hover:to-slate-600/50 text-slate-100 shadow-lg shadow-slate-500/30'}`} title={showChat ? 'Hide Chat' : 'Show Chat'}>
-                  {showChat ? <MessageCircle className="w-6 h-6" /> : <MessageCircle className="w-6 h-6" />}
-                </button>
-                {hoveredControl === 'chat' && <div className="absolute bottom-full mb-3 bg-black/80 backdrop-blur-xl border border-white/20 text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap">{showChat ? 'Hide Chat' : 'Show Chat'}</div>}
-              </div>
-
               {/* More Menu (Desktop) - Contains screen sharing */}
               <div onMouseEnter={() => setHoveredControl('more')} onMouseLeave={() => setHoveredControl(null)} className="relative">
                 <button onClick={() => setShowDesktopMenu((prev) => !prev)} className="w-14 h-14 rounded-2xl flex items-center justify-center font-bold transition-all transform hover:scale-105 active:scale-95 backdrop-blur-xl border border-white/20 bg-gradient-to-br from-slate-500/40 to-slate-700/40 hover:from-slate-500/50 hover:to-slate-700/50 text-slate-100 shadow-lg shadow-slate-500/30" title={showDesktopMenu ? 'Hide menu' : 'More options'}>
@@ -2391,16 +2384,6 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
                   title={isVideoOn ? 'Turn off Camera' : 'Turn on Camera'}
                 >
                   {isVideoOn ? <Video className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}
-                </button>
-                <button
-                  onClick={() => setShowChat(!showChat)}
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all relative ${showChat ? 'bg-purple-500/25 text-purple-100 border border-purple-300/20' : 'bg-slate-500/25 text-slate-100 border border-slate-300/20'}`}
-                  title={showChat ? 'Hide Chat' : 'Show Chat'}
-                >
-                  <MessageCircle className="w-4 h-4" />
-                  {chatMessages.length > 0 && !showChat && (
-                    <span className="absolute -top-2 -right-2 bg-red-500/80 text-white text-[10px] rounded-full w-4.5 h-4.5 flex items-center justify-center font-bold border border-red-300/30">{Math.min(chatMessages.length, 9)}</span>
-                  )}
                 </button>
                 <button
                   onClick={() => setSoundEnabled(!soundEnabled)}
@@ -2483,117 +2466,6 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
         </div>
       </div>
 
-      {/* Chat Sidebar - Responsive drawer for mobile */}
-      {showChat && (
-        <>
-          {/* Mobile/Web overlay */}
-          <div className="fixed sm:absolute right-0 top-0 bottom-0 w-full sm:w-96 z-50 sm:pb-0 pb-20 sm:top-0 sm:right-0">
-            {/* Backdrop overlay for mobile */}
-            <div 
-              onClick={() => setShowChat(false)}
-              className="absolute inset-0 bg-black/40 backdrop-blur-sm sm:hidden"
-            />
-            
-            {/* Chat sidebar - slides in from right */}
-            <div className="fixed sm:absolute right-0 top-0 sm:bottom-0 bottom-20 w-4/5 sm:w-96 bg-black/95 backdrop-blur-lg border-l border-purple-500/20 flex flex-col shadow-2xl z-50 animate-in slide-in-from-right h-screen sm:h-full">
-              {/* Chat Header */}
-              <div className="flex-shrink-0 p-3 sm:p-4 border-b border-purple-500/20 flex items-center justify-between bg-gradient-to-r from-slate-900 via-purple-900/20 to-black backdrop-blur-md relative z-50">
-                <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-                  <div className="p-1.5 sm:p-2 bg-purple-500/20 rounded-lg flex-shrink-0">
-                    <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="text-white font-bold text-xs sm:text-sm truncate">Chat</h3>
-                    <p className="text-xs text-gray-400">{chatMessages.length} msgs</p>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => setShowChat(false)} 
-                  className="p-2 hover:bg-purple-500/30 rounded-lg transition-all flex-shrink-0 hover:scale-110"
-                  title="Close chat (ESC)"
-                >
-                  <X className="w-5 h-5 sm:w-6 sm:h-6 text-gray-300 hover:text-white" />
-                </button>
-              </div>
-
-              {/* Messages Container - Improved scrolling for mobile */}
-              <div className="flex-1 overflow-y-auto px-2 sm:px-4 py-4 sm:py-5 space-y-3 sm:space-y-4 bg-gradient-to-b from-black/50 to-black/30 scrollbar-hide">
-                {chatMessages.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-gray-500">
-                    <MessageCircle className="w-6 h-6 sm:w-12 sm:h-12 text-gray-600 mb-1 sm:mb-2 opacity-50" />
-                    <p className="text-xs sm:text-sm text-center">No messages<br/>yet</p>
-                  </div>
-                ) : (
-                  chatMessages.map((msg) => (
-                    <div key={msg.id} className="group hover:bg-black/30 rounded-lg transition-colors px-1 py-2 sm:px-2 sm:py-2.5">
-                      <div className={`flex gap-2 sm:gap-2.5 ${msg.isThis ? 'flex-row-reverse' : ''}`}>
-                        <div className={`h-6 w-6 sm:h-8 sm:w-8 rounded-lg flex items-center justify-center text-xs sm:text-sm font-bold flex-shrink-0 shadow-lg transition-transform group-hover:scale-110 ${msg.isThis ? 'bg-gradient-to-br from-blue-600 to-blue-500 text-white' : 'bg-gradient-to-br from-purple-600 to-violet-600 text-white'}`}>
-                          {msg.sender.charAt(0).toUpperCase()}
-                        </div>
-                        <div className={`flex flex-col gap-1 ${msg.isThis ? 'items-end' : 'items-start'} flex-1 min-w-0`}>
-                          <div className={`flex items-center gap-2 px-1 ${msg.isThis ? 'flex-row-reverse' : ''}`}>
-                            <p className="text-xs sm:text-sm font-semibold text-gray-200">{msg.isThis ? 'You' : msg.sender.split('@')[0]}</p>
-                            <span className="text-[10px] sm:text-xs text-gray-500 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-                              {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          </div>
-                          <div className={`max-w-xs sm:max-w-md px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-2xl text-xs sm:text-sm break-words backdrop-blur-sm shadow-lg transition-all group-hover:shadow-xl ${
-                            msg.isThis
-                              ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-br-lg shadow-blue-500/20 hover:shadow-blue-500/40'
-                              : 'bg-gradient-to-br from-slate-800 to-slate-750 text-gray-100 rounded-bl-lg border border-slate-700/60 hover:border-slate-600/80 hover:bg-gradient-to-br hover:from-slate-750 hover:to-slate-700'
-                          }`}>
-                            {msg.message}
-                          </div>
-                          <button
-                            onClick={() => likeMessage(msg.id)}
-                            disabled={likedMessageIds.has(msg.id)}
-                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition ${
-                              likedMessageIds.has(msg.id) ? 'text-blue-400' : 'text-gray-500 hover:text-gray-300'
-                            }`}
-                          >
-                            <ThumbsUp className="h-3 w-3" /> {messageLikes[msg.id] || 0}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {/* Message Input - Enhanced with icons and better UX */}
-              <div className="flex-shrink-0 p-2.5 sm:p-4 border-t border-purple-500/30 bg-gradient-to-r from-black via-slate-950/40 to-black backdrop-blur-md shadow-2xl shadow-black/50">
-                <div className="flex gap-2 sm:gap-2.5 items-center">
-                  <div className="flex-1 flex items-center bg-slate-800/50 hover:bg-slate-800/70 focus-within:bg-slate-800 rounded-full border border-slate-700/40 focus-within:border-purple-500/60 transition-all duration-200 px-3.5 sm:px-4 py-1.5 sm:py-2.5 shadow-lg shadow-black/30 focus-within:shadow-purple-500/20 group">
-                    <MessageCircle className="w-4 h-4 text-gray-500 group-focus-within:text-purple-400 flex-shrink-0 mr-2 transition-colors" />
-                    <input 
-                      type="text" 
-                      value={newMessage} 
-                      onChange={(e) => setNewMessage(e.target.value)} 
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          sendMessage();
-                        }
-                      }}
-                      placeholder="Type your message..." 
-                      className="flex-1 bg-transparent text-white text-xs sm:text-sm focus:outline-none placeholder-gray-500 font-medium tracking-wide" 
-                    />
-                  </div>
-                  <button 
-                    onClick={sendMessage} 
-                    disabled={!newMessage.trim()}
-                    className="relative p-2 sm:p-2.5 bg-gradient-to-br from-purple-600 via-purple-500 to-blue-600 hover:from-purple-700 hover:via-purple-600 hover:to-blue-700 disabled:from-slate-700 disabled:via-slate-600 disabled:to-slate-700 text-white rounded-full transition-all transform hover:scale-110 active:scale-95 disabled:scale-100 disabled:hover:scale-100 shadow-2xl shadow-purple-500/30 disabled:shadow-slate-700/30 flex-shrink-0 group"
-                    title={newMessage.trim() ? 'Send message (Enter)' : 'Type a message first'}
-                  >
-                    <Send className="w-4 h-4 sm:w-5 sm:h-5 transition-all transform group-hover:-translate-x-0.5 group-hover:translate-y-0" />
-                    {newMessage.trim() && <div className="absolute inset-0 rounded-full border border-white/30 animate-ping opacity-50"></div>}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
     </div>
   );
 };

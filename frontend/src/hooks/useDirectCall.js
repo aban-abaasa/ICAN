@@ -28,9 +28,15 @@ import { getAudioNotificationService } from '../services/audioNotificationServic
 
 const supabase = getSupabaseClient();
 
+// STUN alone can't punch through every NAT pairing (e.g. mobile data <->
+// corporate/CGNAT) -- see useCommunityLive.js's ICE_SERVERS for the same
+// TURN relay, added there for the identical "connects but no media" symptom.
 const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
 ];
 
 const RING_INTERVAL_MS = 3000;
