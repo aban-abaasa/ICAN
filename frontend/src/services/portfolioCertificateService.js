@@ -61,7 +61,12 @@ export async function uploadCertificateFile(file) {
     throw new Error(`File exceeds ${CERTIFICATE_MAX_MB}MB limit`);
   }
   const { data: { session } } = await supabase.auth.getSession();
-  const result = await uploadToR2({ file, folder: 'portfolio-certificates', accessToken: session?.access_token });
+  // Reuses the existing 'portfolio-chat' folder (already in the backend's
+  // ALLOWED_FOLDERS) rather than adding a new one — that would need a fresh
+  // backend deploy before uploads would work. The folder is just an R2 key
+  // prefix, not a security boundary (that's the authenticated presign route
+  // namespacing by the caller's own user id), so sharing it is safe.
+  const result = await uploadToR2({ file, folder: 'portfolio-chat', accessToken: session?.access_token });
   if (!result.success) throw new Error(result.error || 'Upload failed');
   return { url: result.url, path: result.key };
 }

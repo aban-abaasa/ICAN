@@ -2,8 +2,9 @@
 -- request that person's academic certificate (result slip / transcript —
 -- most people know these documents as "certificates", so that's the term
 -- used throughout this feature), and lets the owner approve (attaching the
--- document, uploaded to R2 — see backend/routes/storageRoutes.js's
--- 'portfolio-certificates' folder) or deny the request.
+-- document, uploaded to R2 — reuses the existing 'portfolio-chat' folder
+-- from backend/routes/storageRoutes.js rather than adding a new one, so no
+-- backend redeploy is needed for uploads to work) or deny the request.
 --
 -- Modeled directly on CREATE_PORTFOLIO_DIRECT_MESSAGES.sql's
 -- portfolio_conversations table: a visitor may be a signed-in ICAN user OR an
@@ -140,7 +141,7 @@ END;
 $$;
 
 -- Owner approves (optionally attaching the certificate file, already uploaded
--- to R2's 'portfolio-certificates' folder by the caller) or denies a request.
+-- to R2's 'portfolio-chat' folder by the caller) or denies a request.
 CREATE OR REPLACE FUNCTION public.respond_portfolio_certificate_request(
   p_request_id UUID,
   p_action TEXT,
