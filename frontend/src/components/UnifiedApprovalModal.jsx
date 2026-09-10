@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   Lock,
-  Fingerprint,
   X,
   CheckCircle,
   AlertCircle,
@@ -26,7 +25,7 @@ import './UnifiedApprovalModal.css';
  * Appears for ANY transaction requiring approval:
  * - Send, Receive, Withdraw, Deposit
  * - Cash-In, Cash-Out, Top-Up
- * - Supports: PIN entry, Fingerprint biometric
+ * - PIN entry only
  * - Mobile-optimized with creative UI
  */
 const UnifiedApprovalModal = ({
@@ -44,15 +43,11 @@ const UnifiedApprovalModal = ({
   onCancel,
   isLoading = false,
   error = null,
-  attemptsRemaining = 3,
-  supportsBiometric = false
+  attemptsRemaining = 3
 }) => {
-  const [authMethod, setAuthMethod] = useState('pin'); // 'pin' or 'biometric'
   const [pin, setPin] = useState('');
   const [showPin, setShowPin] = useState(false);
   const [rememberPin, setRememberPin] = useState(false);
-  const [biometricAttempting, setBiometricAttempting] = useState(false);
-  const [biometricStatus, setBiometricStatus] = useState(null);
   const [localError, setLocalError] = useState(error);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPINRecovery, setShowPINRecovery] = useState(false);
@@ -119,40 +114,9 @@ const UnifiedApprovalModal = ({
     setPin(pin.slice(0, -1));
   };
 
-  // Handle biometric authentication
-  const handleBiometricAuth = async () => {
-    if (!supportsBiometric) {
-      setLocalError('Biometric authentication not available on this device');
-      return;
-    }
-
-    setBiometricAttempting(true);
-    setBiometricStatus('scanning');
-    setLocalError(null);
-
-    try {
-      // Check if WebAuthn/Fingerprint API is available
-      if (window.PublicKeyCredential) {
-        // Simulate biometric scan (in production, use WebAuthn)
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-
-        setBiometricStatus('success');
-        setTimeout(() => {
-          handleApprove('biometric');
-        }, 1000);
-      } else {
-        throw new Error('Biometric authentication not supported');
-      }
-    } catch (err) {
-      setBiometricStatus('failed');
-      setLocalError('Biometric scan failed. Try PIN instead.');
-      setBiometricAttempting(false);
-    }
-  };
-
   // Handle approval
-  const handleApprove = async (method = 'pin') => {
-    if (method === 'pin' && pin.length !== 4) {
+  const handleApprove = async () => {
+    if (pin.length !== 4) {
       setLocalError('PIN must be 4 digits');
       return;
     }
@@ -160,7 +124,7 @@ const UnifiedApprovalModal = ({
     setIsSubmitting(true);
     try {
       // Save PIN if user wants to remember it
-      if (rememberPin && method === 'pin') {
+      if (rememberPin) {
         try {
           localStorage.setItem('ican_wallet_pin', pin);
           localStorage.setItem('ican_wallet_remember_pin', 'true');
@@ -172,7 +136,7 @@ const UnifiedApprovalModal = ({
       // Special handling for confirmCashIn - bypass universal service
       if (transactionType === 'confirmCashIn') {
         // Call parent's onApprove directly without universal service processing
-        await onApprove(pin, method, { success: true, message: 'Ready to confirm' });
+        await onApprove(pin, 'pin', { success: true, message: 'Ready to confirm' });
         setPin('');
         return;
       }
@@ -182,7 +146,7 @@ const UnifiedApprovalModal = ({
         transactionType,
         userId,
         agentId: null,
-        pin: method === 'pin' ? pin : 'BIOMETRIC_AUTH',
+        pin,
         currency,
         amount,
         metadata
@@ -190,7 +154,7 @@ const UnifiedApprovalModal = ({
 
       if (result.success) {
         // Call parent's onApprove with result
-        await onApprove(pin, method, result);
+        await onApprove(pin, 'pin', result);
         setPin('');
       } else {
         setLocalError(result.message);
@@ -205,8 +169,6 @@ const UnifiedApprovalModal = ({
   const handleCancel = () => {
     setPin('');
     setLocalError(null);
-    setBiometricStatus(null);
-    setBiometricAttempting(false);
     onCancel();
   };
 
@@ -271,117 +233,92 @@ const UnifiedApprovalModal = ({
           )}
         </div>
 
-        {/* Authentication Method Selector */}
-        <div className="auth-method-selector">
-          <button
-            className={`auth-method-btn ${authMethod === 'pin' ? 'active' : ''}`}
-            onClick={() => setAuthMethod('pin')}
-            disabled={isSubmitting}
-          >
-            <Lock size={18} />
-            PIN
-          </button>
-
-          {supportsBiometric && (
-            <button
-              className={`auth-method-btn ${authMethod === 'biometric' ? 'active' : ''}`}
-              onClick={() => setAuthMethod('biometric')}
-              disabled={isSubmitting}
-            >
-              <Fingerprint size={18} />
-              Biometric
-            </button>
-          )}
-        </div>
-
-        {/* Scrollable Content Area - PIN Entry Method */}
-        {authMethod === 'pin' && (
-          <div className="pin-entry-section">
-            {/* PIN Display */}
-            <div className="pin-display-container">
-              <div className="pin-dots">
-                {[0, 1, 2, 3].map((index) => (
-                  <div
-                    key={index}
-                    className={`pin-dot ${index < pin.length ? 'filled' : ''}`}
-                  >
-                    {showPin && pin[index] ? pin[index] : '•'}
-                  </div>
-                ))}
-              </div>
-              <button
-                type="button"
-                className="show-pin-toggle"
-                onClick={() => setShowPin(!showPin)}
-                title={showPin ? 'Hide PIN' : 'Show PIN'}
-              >
-                {showPin ? '👁️‍🗨️' : '👁️'}
-              </button>
-            </div>
-
-            {/* Error Message */}
-            {(localError || error) && (
-              <div className="error-message">
-                <AlertCircle size={16} />
-                <div>
-                  <p>{localError || error}</p>
-                  {attemptsRemaining && (
-                    <p className="attempts-info">
-                      Attempts remaining: {attemptsRemaining}
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Numeric Keypad */}
-            <div className="numeric-keypad">
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
-                <button
-                  key={num}
-                  type="button"
-                  className="keypad-btn number-btn"
-                  onClick={() => handleNumericInput(num)}
-                  disabled={pin.length >= 4 || isSubmitting}
+        {/* PIN Entry */}
+        <div className="pin-entry-section">
+          {/* PIN Display */}
+          <div className="pin-display-container">
+            <div className="pin-dots">
+              {[0, 1, 2, 3].map((index) => (
+                <div
+                  key={index}
+                  className={`pin-dot ${index < pin.length ? 'filled' : ''}`}
                 >
-                  {num}
-                </button>
+                  {showPin && pin[index] ? pin[index] : '•'}
+                </div>
               ))}
+            </div>
+            <button
+              type="button"
+              className="show-pin-toggle"
+              onClick={() => setShowPin(!showPin)}
+              title={showPin ? 'Hide PIN' : 'Show PIN'}
+            >
+              {showPin ? '👁️‍🗨️' : '👁️'}
+            </button>
+          </div>
+
+          {/* Error Message */}
+          {(localError || error) && (
+            <div className="error-message">
+              <AlertCircle size={16} />
+              <div>
+                <p>{localError || error}</p>
+                {attemptsRemaining && (
+                  <p className="attempts-info">
+                    Attempts remaining: {attemptsRemaining}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Numeric Keypad */}
+          <div className="numeric-keypad">
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
               <button
+                key={num}
                 type="button"
-                className="keypad-btn zero-btn"
-                onClick={() => handleNumericInput(0)}
+                className="keypad-btn number-btn"
+                onClick={() => handleNumericInput(num)}
                 disabled={pin.length >= 4 || isSubmitting}
               >
-                0
+                {num}
               </button>
-              <button
-                type="button"
-                className="keypad-btn backspace-btn"
-                onClick={handleBackspace}
-                disabled={pin.length === 0 || isSubmitting}
-              >
-                ⌫
-              </button>
-            </div>
-
-            {isAccountLocked && (
-              <button
-                onClick={() => setShowPINRecovery(true)}
-                className="mt-4 w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
-              >
-                <Lock size={18} />
-                Reset PIN - Unlock Account
-              </button>
-            )}
-
-            {/* Security Info */}
-            <div className="security-info">
-              <Lock size={14} />
-              <span>Your transaction is protected with end-to-end encryption</span>
-            </div>
+            ))}
+            <button
+              type="button"
+              className="keypad-btn zero-btn"
+              onClick={() => handleNumericInput(0)}
+              disabled={pin.length >= 4 || isSubmitting}
+            >
+              0
+            </button>
+            <button
+              type="button"
+              className="keypad-btn backspace-btn"
+              onClick={handleBackspace}
+              disabled={pin.length === 0 || isSubmitting}
+            >
+              ⌫
+            </button>
           </div>
-        )}
+
+          {isAccountLocked && (
+            <button
+              onClick={() => setShowPINRecovery(true)}
+              className="mt-4 w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              <Lock size={18} />
+              Reset PIN - Unlock Account
+            </button>
+          )}
+
+          {/* Security Info */}
+          <div className="security-info">
+            <Lock size={14} />
+            <span>Your transaction is protected with end-to-end encryption</span>
+          </div>
+        </div>
 
         {/* PIN Recovery Modal */}
         {isOpen && (
@@ -391,63 +328,6 @@ const UnifiedApprovalModal = ({
             userId={userId}
             userEmail={userEmail}
           />
-        )}
-
-        {/* Scrollable Content Area - Biometric Method */}
-        {authMethod === 'biometric' && supportsBiometric && (
-          <div className="biometric-section">
-            {biometricStatus === 'scanning' && (
-              <div className="biometric-scanning">
-                <div className="fingerprint-scanner">
-                  <Fingerprint size={64} className="scanning-animation" />
-                </div>
-                <p>Place your fingerprint on the sensor...</p>
-              </div>
-            )}
-
-            {biometricStatus === 'success' && (
-              <div className="biometric-success">
-                <CheckCircle size={64} className="success-animation" />
-                <p>Fingerprint recognized!</p>
-              </div>
-            )}
-
-            {biometricStatus === 'failed' && (
-              <div className="biometric-failed">
-                <AlertCircle size={64} />
-                <p>Fingerprint not recognized</p>
-                <button
-                  className="retry-btn"
-                  onClick={handleBiometricAuth}
-                  disabled={isSubmitting}
-                >
-                  Try Again
-                </button>
-              </div>
-            )}
-
-            {!biometricStatus && (
-              <div className="biometric-ready">
-                <Fingerprint size={80} className="fingerprint-icon" />
-                <p className="biometric-instruction">
-                  Press the button below to scan your fingerprint
-                </p>
-                <button
-                  className="biometric-scan-btn"
-                  onClick={handleBiometricAuth}
-                  disabled={biometricAttempting || isSubmitting}
-                >
-                  {biometricAttempting ? 'Scanning...' : 'Start Fingerprint Scan'}
-                </button>
-              </div>
-            )}
-
-            {/* Security Info */}
-            <div className="security-info">
-              <Lock size={14} />
-              <span>Your transaction is protected with end-to-end encryption</span>
-            </div>
-          </div>
         )}
 
         {/* Action Buttons - Fixed at bottom */}
@@ -460,22 +340,20 @@ const UnifiedApprovalModal = ({
             Cancel
           </button>
 
-          {authMethod === 'pin' && (
-            <button
-              className="btn-approve"
-              onClick={() => handleApprove('pin')}
-              disabled={pin.length !== 4 || isSubmitting || isLoading}
-            >
-              {isSubmitting || isLoading ? (
-                <>
-                  <div className="spinner"></div>
-                  Verifying...
-                </>
-              ) : (
-                'Approve'
-              )}
-            </button>
-          )}
+          <button
+            className="btn-approve"
+            onClick={handleApprove}
+            disabled={pin.length !== 4 || isSubmitting || isLoading}
+          >
+            {isSubmitting || isLoading ? (
+              <>
+                <div className="spinner"></div>
+                Verifying...
+              </>
+            ) : (
+              'Approve'
+            )}
+          </button>
         </div>
       </div>
     </div>

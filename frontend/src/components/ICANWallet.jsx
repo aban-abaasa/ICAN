@@ -7321,7 +7321,6 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
               })()
             : 3
         }
-        supportsBiometric={true}
       />
 
       {/* TRADE TAB - Tabbed Interface with Chart, Buy, Sell, History */}
