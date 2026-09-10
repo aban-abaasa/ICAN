@@ -1606,6 +1606,14 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           return;
         }
 
+        const businessPin = window.prompt('Enter your transaction PIN to send this IcanEra:');
+        if (businessPin === null) return;
+        const businessPinCheck = await walletAccountService.verifyUserPIN(currentUserId, businessPin);
+        if (!businessPinCheck?.success) {
+          setTransactionResult({ type: 'send', success: false, message: businessPinCheck?.error || 'Incorrect transaction PIN. Transfer cancelled.' });
+          return;
+        }
+
         const result = await sendICANToBusiness({
           fromUserId: currentUserId,
           businessProfileId: businessWallet.business_profile_id,
@@ -1724,10 +1732,10 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   // 💎 Send icaneracoin (ICAN coin) — a separate balance from local currency,
   // shared across all four apps via ican_user_wallets. Uses the same
   // recipient lookup (account number, email, or phone → user_id) as
-  // handleSendToICANUser, then transfers through transfer_ican() directly —
-  // that RPC is itself the atomic, balance-checked, server-side-authorized
-  // boundary (same pattern used for icaneracoin sends in the other three
-  // apps), so this does not route through the currency approval modal.
+  // handleSendToICANUser, then transfers through transfer_ican() directly.
+  // Still asks for the wallet PIN first, the same simple way Pay does
+  // (window.prompt + verifyUserPIN) — real money moves here, so it doesn't
+  // skip confirmation just because it bypasses the bigger approval modal.
   const handleSendICANCoin = async (recipientIdentifier, amount, description) => {
     try {
       const supabase = getSupabaseClient();
@@ -1760,6 +1768,14 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         const parsedAmount = parseFloat(amount);
         if (!(parsedAmount > 0)) {
           setTransactionResult({ type: 'send', success: false, message: 'Enter a valid IcanEra amount' });
+          return;
+        }
+
+        const businessPin = window.prompt('Enter your transaction PIN to send this IcanEra:');
+        if (businessPin === null) return;
+        const businessPinCheck = await walletAccountService.verifyUserPIN(currentUserId, businessPin);
+        if (!businessPinCheck?.success) {
+          setTransactionResult({ type: 'send', success: false, message: businessPinCheck?.error || 'Incorrect transaction PIN. Transfer cancelled.' });
           return;
         }
 
@@ -1825,6 +1841,14 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       const parsedAmount = parseFloat(amount);
       if (!(parsedAmount > 0)) {
         setTransactionResult({ type: 'send', success: false, message: 'Enter a valid IcanEra amount' });
+        return;
+      }
+
+      const pin = window.prompt('Enter your transaction PIN to send this IcanEra:');
+      if (pin === null) return;
+      const pinCheck = await walletAccountService.verifyUserPIN(currentUserId, pin);
+      if (!pinCheck?.success) {
+        setTransactionResult({ type: 'send', success: false, message: pinCheck?.error || 'Incorrect transaction PIN. Transfer cancelled.' });
         return;
       }
 
