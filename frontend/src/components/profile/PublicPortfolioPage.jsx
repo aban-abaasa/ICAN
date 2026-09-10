@@ -2,12 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   X, ShieldCheck, Briefcase, Award, GraduationCap, FolderKanban, Rocket,
   FlaskConical, Presentation, Loader2, Sparkles, MapPin, Phone, Mail,
-  Users, PhoneCall, Video, MessageCircle, ExternalLink, ArrowRight, MessageSquare,
+  Users, PhoneCall, Video, MessageCircle, ExternalLink, ArrowRight, MessageSquare, FileText,
 } from 'lucide-react';
 import { fmtRelativeTime } from '../landing/relativeTime';
 import { getOrCreatePortfolioGuestId } from '../../utils/portfolioGuestId';
 import PortfolioChatPanel from './PortfolioChatPanel';
 import PortfolioMessagesInbox from './PortfolioMessagesInbox';
+import CertificateRequestModal from './CertificateRequestModal';
 import { getPublicPortfolio } from '../../services/portfolioService';
 import { useAuth } from '../../context/AuthContext';
 import { useDirectCall } from '../../hooks/useDirectCall';
@@ -160,6 +161,7 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
   const viewerName = viewerProfile?.full_name || guestName.trim() || 'A visitor from your portfolio';
   const call = useDirectCall({ roomId: `portfolio-visitor:${viewerId}`, selfId: viewerId, selfName: viewerName });
   const [showChat, setShowChat] = useState(false);
+  const [showCertificateRequest, setShowCertificateRequest] = useState(false);
 
   const isOwnProfile = Boolean(user?.id && data?.profile?.id && user.id === data.profile.id);
 
@@ -390,6 +392,12 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
                     >
                       <MessageCircle className="w-3.5 h-3.5" /> Message {data.profile.full_name?.split(' ')[0] || 'them'}
                     </button>
+                    <button
+                      onClick={() => setShowCertificateRequest(true)}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-xs font-medium rounded-lg transition-colors"
+                    >
+                      <FileText className="w-3.5 h-3.5" /> Request Certificate
+                    </button>
                   </div>
                 ) : (
                   <CallDock call={call} dark tint="indigo" />
@@ -410,6 +418,17 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
                 guestName={guestName}
                 onGuestNameChange={setGuestName}
                 onClose={() => setShowChat(false)}
+              />
+            )}
+
+            {showCertificateRequest && !isOwnProfile && (
+              <CertificateRequestModal
+                ownerUserId={data.profile.id}
+                ownerName={data.profile.full_name}
+                guestId={guestId}
+                guestName={guestName}
+                onGuestNameChange={setGuestName}
+                onClose={() => setShowCertificateRequest(false)}
               />
             )}
 

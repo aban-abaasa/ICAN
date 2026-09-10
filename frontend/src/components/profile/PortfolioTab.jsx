@@ -10,10 +10,11 @@ import {
   getPortfolioItems, addPortfolioItem, updatePortfolioItem, deletePortfolioItem,
   getPortfolioReferences, addPortfolioReference, updatePortfolioReference, deletePortfolioReference,
   isCmmsMember, syncCmmsPortfolioItems,
-  uploadVerificationDocument, getMyVerifications,
+  uploadVerificationDocument, getMyVerifications, deleteVerificationDocument,
   getReviewableVerifications, reviewVerification,
 } from '../../services/portfolioService';
 import PortfolioMessagesInbox from './PortfolioMessagesInbox';
+import CertificateRequestsInbox from './CertificateRequestsInbox';
 import ResumeOpportunityBidsPanel from './ResumeOpportunityBidsPanel';
 import PublicPortfolioPage from './PublicPortfolioPage';
 
@@ -39,7 +40,7 @@ const EMPTY_ITEM_FORM = { itemType: 'experience', title: '', orgName: '', descri
 const EMPTY_REFERENCE_FORM = { name: '', title: '', organization: '', email: '', phone: '' };
 
 export default function PortfolioTab() {
-  const { user, profile, getAvatarUrl } = useAuth();
+  const { user, profile, getAvatarUrl, loadProfile } = useAuth();
 
   const [handle, setHandleState] = useState('');
   const [handleInput, setHandleInput] = useState('');
@@ -68,6 +69,7 @@ export default function PortfolioTab() {
 
   const [verifications, setVerifications] = useState([]);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  const [removingVerificationId, setRemovingVerificationId] = useState(null);
   const [reviewQueue, setReviewQueue] = useState([]);
 
   const [showPreview, setShowPreview] = useState(false);
@@ -313,6 +315,27 @@ export default function PortfolioTab() {
     }
   };
 
+  const removeVerification = async (doc) => {
+    if (doc.status === 'approved' && !window.confirm(
+      "Remove this approved document? If it's your only one, your profile will no longer show as verified."
+    )) {
+      return;
+    }
+
+    setRemovingVerificationId(doc.id);
+    try {
+      await deleteVerificationDocument(doc);
+      setVerifications((prev) => prev.filter((v) => v.id !== doc.id));
+      if (doc.status === 'approved') {
+        await loadProfile(user.id);
+      }
+    } catch (err) {
+      console.error('Error removing verification document:', err);
+    } finally {
+      setRemovingVerificationId(null);
+    }
+  };
+
   if (isLoading) {
     return <div className="py-16 text-center text-amber-200/70">Loading your resume &amp; portfolio...</div>;
   }
@@ -482,11 +505,21 @@ export default function PortfolioTab() {
             {verifications.map((v) => (
               <div key={v.id} className="flex items-center justify-between text-xs bg-slate-950/40 rounded px-2.5 py-1.5">
                 <span className="text-gray-300">{v.document_type} · {new Date(v.created_at).toLocaleDateString()}</span>
-                <span className={
-                  v.status === 'approved' ? 'text-emerald-400' : v.status === 'rejected' ? 'text-red-400' : 'text-yellow-400'
-                }>
-                  {v.status}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className={
+                    v.status === 'approved' ? 'text-emerald-400' : v.status === 'rejected' ? 'text-red-400' : 'text-yellow-400'
+                  }>
+                    {v.status}
+                  </span>
+                  <button
+                    onClick={() => removeVerification(v)}
+                    disabled={removingVerificationId === v.id}
+                    className="p-1 hover:bg-slate-800 rounded text-red-400 disabled:opacity-40"
+                    title={v.status === 'approved' ? 'Remove — this will un-verify your profile' : 'Remove this submission'}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -631,6 +664,10 @@ export default function PortfolioTab() {
 
       {/* Messages — direct 1:1 chats started from the public resume page */}
       <PortfolioMessagesInbox userId={user?.id} />
+
+      {/* Certificate requests — companies asking for your academic certificate
+          from the public resume page */}
+      <CertificateRequestsInbox />
 
       {/* Bid for Work — browse open business opportunities and bid as yourself */}
       <ResumeOpportunityBidsPanel userId={user?.id} displayName={profile?.full_name || user?.email} />

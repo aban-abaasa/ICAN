@@ -408,6 +408,32 @@ export async function getMyVerifications(userId) {
   return data || [];
 }
 
+/**
+ * Remove a document the user submitted for verification. Only 'pending' or
+ * 'rejected' rows can be deleted — RLS (ADD_DOCUMENT_VERIFICATION_DELETE.sql)
+ * refuses an 'approved' one, since that's the audit record behind their
+ * verified badge. Best-effort storage cleanup: the DB row is the source of
+ * truth for what shows up in the UI, so a storage error here doesn't block
+ * removing it from the list.
+ */
+export async function deleteVerificationDocument(document) {
+  if (!document?.id) throw new Error('document is required');
+
+  if (document.document_url) {
+    const { error: storageError } = await supabase.storage
+      .from('verification-documents')
+      .remove([document.document_url]);
+    if (storageError) console.warn('Error removing verification document from storage:', storageError);
+  }
+
+  const { error } = await supabase
+    .from('document_verifications')
+    .delete()
+    .eq('id', document.id);
+
+  if (error) throw error;
+}
+
 /** Pending documents this user (as a CMMS firm admin or platform admin) is allowed to review. */
 export async function getReviewableVerifications() {
   const { data, error } = await supabase
