@@ -231,3 +231,21 @@ export const devGrantLandingBonus = async (devToken, targetUserId, amount, note 
   if (error) throw error;
   return data;
 };
+
+// Real platform-wide stats for the landing page's "10K+ Active Users /
+// $50M+ Volume Managed" cards — see ICAN_LANDING_PLATFORM_STATS.sql for
+// what these numbers actually aggregate. Returns null on failure so the
+// caller can fall back to a static label instead of showing a broken 0.
+export const getLandingPlatformStats = async () => {
+  const { data, error } = await supabase.rpc('ican_get_landing_stats');
+  if (error) {
+    console.error('[landingMessagesService] failed to load platform stats:', error);
+    return null;
+  }
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) return null;
+  return {
+    activeUsers: Number(row.active_users) || 0,
+    volumeManagedUsd: Number(row.volume_managed_usd) || 0,
+  };
+};

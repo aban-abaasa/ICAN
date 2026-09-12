@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ShoppingBag, Truck, Store, X, Loader } from 'lucide-react';
+import { ShoppingBag, Truck, Store, X, Loader, ArrowRight } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { getDropshipBrowseProducts, getDropshipProductOffers } from '../../services/dropshipService';
 
@@ -78,20 +78,20 @@ const DropshipPreview = () => {
         </div>
 
         {loading ? (
-          <div className="grid gap-5 grid-cols-2 md:grid-cols-4">
+          <div className="flex gap-5 overflow-x-auto pb-2">
             {[0, 1, 2, 3].map((i) => (
-              <div key={i} className={`h-56 rounded-2xl border animate-pulse ${isDarkTheme ? 'border-slate-700/40 bg-slate-800/40' : 'border-slate-200 bg-slate-100'}`} />
+              <div key={i} className={`h-56 w-[170px] sm:w-[200px] shrink-0 rounded-2xl border animate-pulse ${isDarkTheme ? 'border-slate-700/40 bg-slate-800/40' : 'border-slate-200 bg-slate-100'}`} />
             ))}
           </div>
         ) : (
-          <div className="grid gap-5 grid-cols-2 md:grid-cols-4">
+          <div className="flex gap-5 overflow-x-auto snap-x snap-mandatory pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
             {products.map((product) => {
               const isSelected = selectedProduct?.product_id === product.product_id;
               return (
                 <button
                   key={product.product_id}
                   onClick={() => selectProduct(product)}
-                  className={`flex flex-col text-left rounded-2xl border overflow-hidden transition ${
+                  className={`flex flex-col text-left w-[170px] sm:w-[200px] shrink-0 snap-start rounded-2xl border overflow-hidden transition ${
                     isSelected
                       ? (isDarkTheme ? 'border-indigo-400 bg-indigo-500/10' : 'border-indigo-500 bg-indigo-50')
                       : (isDarkTheme ? 'border-slate-700/40 bg-slate-900/60' : 'border-slate-200 bg-white')
@@ -126,19 +126,28 @@ const DropshipPreview = () => {
                 </button>
               );
             })}
-          </div>
-        )}
 
-        {!loading && hasMore && products.length > 0 && (
-          <div className="mt-6 flex justify-center">
-            <button
-              type="button"
-              onClick={handleLoadMore}
-              disabled={loadingMore}
-              className={`rounded-xl border px-5 py-2.5 text-sm font-bold transition disabled:opacity-50 ${isDarkTheme ? 'border-slate-600/40 bg-white/5 text-slate-200 hover:bg-white/10' : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
-            >
-              {loadingMore ? 'Loading…' : 'Load more'}
-            </button>
+            {/* "More" tile at the end of the row instead of a button below
+                a growing grid — keeps this a single scrollable row. */}
+            {hasMore && products.length > 0 && (
+              <button
+                type="button"
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+                className={`flex flex-col items-center justify-center gap-2 w-[130px] sm:w-[150px] shrink-0 snap-start rounded-2xl border-2 border-dashed transition disabled:opacity-50 ${isDarkTheme ? 'border-slate-600/50 bg-white/5 text-slate-200 hover:bg-white/10 hover:border-indigo-400/50' : 'border-slate-300 bg-slate-50 text-slate-700 hover:bg-slate-100 hover:border-indigo-400/60'}`}
+              >
+                {loadingMore ? (
+                  <span className="text-sm font-bold">Loading…</span>
+                ) : (
+                  <>
+                    <span className={`flex items-center justify-center w-10 h-10 rounded-full ${isDarkTheme ? 'bg-indigo-400/10' : 'bg-indigo-100'}`}>
+                      <ArrowRight className="w-5 h-5 text-indigo-500" />
+                    </span>
+                    <span className="text-sm font-bold">More</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
         )}
 

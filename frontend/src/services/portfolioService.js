@@ -475,13 +475,13 @@ export async function listProfessionals({ search = '', limit = 60 } = {}) {
   return data || [];
 }
 
-export async function listFeaturedProfessionals(limit = 12) {
+export async function listFeaturedProfessionals(limit = 12, offset = 0) {
   const { data, error } = await supabase
     .from('public_professionals')
     .select('*')
     .order('avg_rating', { ascending: false })
     .order('ratings_count', { ascending: false })
-    .limit(limit);
+    .range(offset, offset + limit - 1);
 
   if (error) throw error;
   return data || [];

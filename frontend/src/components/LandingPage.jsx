@@ -15,6 +15,7 @@ import { getSupabaseClient } from '../lib/supabase/client';
 import {
   createLandingMessage,
   fetchPublicThreads,
+  getLandingPlatformStats,
   getMyIcanBalance,
   getOrCreateGuestLikeKey,
   hasIcanWallet,
@@ -44,6 +45,16 @@ const setGuestIdentity = (identity) => {
   }
 };
 
+// Compact "12.3K+" / "$52.3M+" style formatting for the hero stat cards —
+// mirrors how these were hand-written as static strings before they were
+// wired to real numbers.
+const formatStatCompact = (value, prefix = '') => {
+  if (value == null || Number.isNaN(value)) return null;
+  if (value >= 1_000_000) return `${prefix}${(value / 1_000_000).toFixed(1).replace(/\.0$/, '')}M+`;
+  if (value >= 1_000) return `${prefix}${(value / 1_000).toFixed(1).replace(/\.0$/, '')}K+`;
+  return `${prefix}${Math.round(value)}`;
+};
+
 const fmtBoardTime = (value) => {
   if (!value) return '';
   const date = new Date(value);
@@ -59,7 +70,6 @@ const LandingPage = ({ onGetStarted }) => {
   const { actualTheme } = useTheme();
   const isDarkTheme = actualTheme === 'dark';
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [currentBadgeInfo, setCurrentBadgeInfo] = useState(0);
   const [currentTestimonial, setCurrentTestimonial] = useState(0);
   const [scrollPosition, setScrollPosition] = useState(0);
   const [isHeroExpanded, setIsHeroExpanded] = useState(false);
@@ -84,6 +94,7 @@ const LandingPage = ({ onGetStarted }) => {
   const [selectedContributor, setSelectedContributor] = useState(null);
   const [contributorBalance, setContributorBalance] = useState(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
+  const [platformStats, setPlatformStats] = useState(null);
 
   // Real posters shown individually (name + message count); every guest
   // post (no user_id) folds into one aggregate "Guests" entry instead of
@@ -506,102 +517,6 @@ const LandingPage = ({ onGetStarted }) => {
     }
   ];
 
-  // Right-column companions for the hero's seven feature paragraphs (same
-  // wording, reused verbatim) so the right side fills with words alongside
-  // the left column instead of sitting empty next to it.
-  const heroFeatureVisuals = [
-    {
-      image: heroSlides[15].image,
-      emoji: '🚀',
-      title: 'IcanEra - The Ultimate Business Platform',
-      blurb: 'SupermartKera, AgriBone, BodaGoEra, and all business modules unified in one powerful platform.'
-    },
-    {
-      image: heroSlides[8].image,
-      emoji: '💼',
-      title: 'Enterprise-Grade CMMS with Complete Supply Chain Integration',
-      blurb: 'Comprehensive Computerized Maintenance Management System with role-based access hierarchy from admin to staff.'
-    },
-    {
-      image: heroSlides[2].image,
-      emoji: '💳',
-      title: 'IcanEra Wallet - Universal Payment System & Money Management',
-      blurb: 'Send and receive money across borders instantly with zero delays.'
-    },
-    {
-      image: heroSlides[10].image,
-      emoji: '🏦',
-      title: 'Blockchain TRUST & SACCO with Agent Network',
-      blurb: 'Blockchain-secured TRUST groups offering 8-15% returns with complete transparency.'
-    },
-    {
-      image: heroSlides[4].image,
-      emoji: '💰',
-      title: 'PitchIn - Public Stock Market with Real-Time Share Valuation',
-      blurb: 'Revolutionary public stock market where every transaction across SupermartKera, AgriBone, and BodaGoEra flows into one unified database.'
-    },
-    {
-      image: heroSlides[12].image,
-      emoji: '🌍',
-      title: 'Multi-Country Currency & AI-Powered Tax Intelligence',
-      blurb: 'Operate seamlessly across multiple countries with automatic currency conversion and country-specific compliance.'
-    },
-    {
-      image: heroSlides[13].image,
-      emoji: '🔐',
-      title: 'Blockchain-Secured Messaging & Transaction Stability',
-      blurb: 'Every message in IcanEra is blockchain-verified and immutably recorded.'
-    }
-  ];
-
-  // Badge Information - Rotating Messages
-  const badgeInfo = [
-    {
-      title: 'Complete Financial Solutions',
-      description: 'IcanEra\'s comprehensive suite of integrated platforms designed to empower your financial journey—from opportunity discovery to wealth management and beyond'
-    },
-    {
-      title: '🚀 Smart Financial Management',
-      description: 'Track expenses, manage income, and gain real-time insights into your financial health with AI-powered analytics'
-    },
-    {
-      title: '💰 Wealth Accumulation Hub',
-      description: 'Build generational wealth through SACCO groups, smart investing, and community-driven financial growth'
-    },
-    {
-      title: '🔐 Enterprise Security',
-      description: 'Blockchain-verified transactions, bank-level encryption, and transparent fund management for complete peace of mind'
-    },
-    {
-      title: '🌍 Global Opportunities',
-      description: 'Access international investment opportunities and get your IcanEra Opportunity Rating for global business readiness'
-    },
-    {
-      title: '🤝 Community Powered',
-      description: 'Join thousands collaborating to create transparent, thriving savings groups with rapid wealth growth potential'
-    },
-    {
-      title: '⚡ Lightning Fast Transactions',
-      description: 'Experience blazing-fast wallet transfers, instant settlements, and real-time transaction updates 24/7'
-    },
-    {
-      title: '📊 Advanced Analytics',
-      description: 'Deep financial insights, predictive analytics, and smart recommendations to optimize your financial decisions'
-    },
-    {
-      title: '🙏 Spiritual Giving Made Simple',
-      description: 'Give back to your faith community with automated tithe calculations, giving tracking, and meaningful spiritual accountability'
-    },
-    {
-      title: '💝 Give with Purpose',
-      description: 'Manage offerings, donations, and community giving with transparent records and impact reports that matter'
-    },
-    {
-      title: '✨ Spiritual Guidance & Finance',
-      description: 'Integrate your spiritual values with smart financial decisions—align giving with your faith and community'
-    }
-  ];
-
   const features = [
     {
       icon: <Zap className="w-8 h-8" />,
@@ -622,49 +537,6 @@ const LandingPage = ({ onGetStarted }) => {
       icon: <Users className="w-8 h-8" />,
       title: 'Community First',
       description: 'Build and grow with like-minded individuals in our vibrant ecosystem'
-    }
-  ];
-
-  const badgeCardThemes = [
-    {
-      glow: 'from-violet-500/35 via-fuchsia-500/25 to-purple-500/35',
-      card: 'from-violet-950/95 via-violet-900/95 to-fuchsia-950/95',
-      border: 'border-violet-300/70',
-      pulse: 'from-violet-400/0 via-violet-300/25 to-fuchsia-300/0',
-      title: 'text-violet-100',
-      desc: 'text-violet-100/95',
-      indicatorActive: 'bg-violet-300',
-      indicatorInactive: 'bg-violet-400/35 hover:bg-violet-300/70'
-    },
-    {
-      glow: 'from-cyan-500/35 via-sky-500/25 to-blue-500/35',
-      card: 'from-cyan-950/95 via-sky-900/95 to-blue-950/95',
-      border: 'border-cyan-300/70',
-      pulse: 'from-cyan-400/0 via-cyan-300/25 to-blue-300/0',
-      title: 'text-cyan-100',
-      desc: 'text-cyan-100/95',
-      indicatorActive: 'bg-cyan-300',
-      indicatorInactive: 'bg-cyan-400/35 hover:bg-cyan-300/70'
-    },
-    {
-      glow: 'from-emerald-500/35 via-teal-500/25 to-green-500/35',
-      card: 'from-emerald-950/95 via-teal-900/95 to-green-950/95',
-      border: 'border-emerald-300/70',
-      pulse: 'from-emerald-400/0 via-emerald-300/25 to-green-300/0',
-      title: 'text-emerald-100',
-      desc: 'text-emerald-100/95',
-      indicatorActive: 'bg-emerald-300',
-      indicatorInactive: 'bg-emerald-400/35 hover:bg-emerald-300/70'
-    },
-    {
-      glow: 'from-amber-500/35 via-orange-500/25 to-yellow-500/35',
-      card: 'from-amber-950/95 via-orange-900/95 to-yellow-950/95',
-      border: 'border-amber-300/70',
-      pulse: 'from-amber-400/0 via-amber-300/25 to-yellow-300/0',
-      title: 'text-amber-100',
-      desc: 'text-amber-100/95',
-      indicatorActive: 'bg-amber-300',
-      indicatorInactive: 'bg-amber-400/35 hover:bg-amber-300/70'
     }
   ];
 
@@ -713,14 +585,6 @@ const LandingPage = ({ onGetStarted }) => {
     const interval = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % slides.length);
     }, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Auto-rotate badge information
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentBadgeInfo((prev) => (prev + 1) % badgeInfo.length);
-    }, 6000);
     return () => clearInterval(interval);
   }, []);
 
@@ -796,6 +660,17 @@ const LandingPage = ({ onGetStarted }) => {
     loadThreads();
     return subscribeToPublicLandingMessages(() => { loadThreads(); });
   }, [loadThreads]);
+
+  // Real "Active Users" / "Volume Managed" figures for the hero stat cards
+  // (see ICAN_LANDING_PLATFORM_STATS.sql) — null keeps the static fallback
+  // text on screen instead of flashing a broken 0 while this loads.
+  useEffect(() => {
+    let cancelled = false;
+    getLandingPlatformStats().then((stats) => {
+      if (!cancelled && stats) setPlatformStats(stats);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const handleLike = async (messageId) => {
     setThreads((prev) => prev.map((t) => {
@@ -914,15 +789,6 @@ const LandingPage = ({ onGetStarted }) => {
     setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length);
   };
 
-  const activeBadgeTheme = badgeCardThemes[currentBadgeInfo % badgeCardThemes.length];
-  const badgeWordPalette = [
-    { title: '#b91c1c', desc: '#dc2626' },
-    { title: '#065f46', desc: '#047857' },
-    { title: '#1d4ed8', desc: '#2563eb' },
-    { title: '#6d28d9', desc: '#7c3aed' },
-    { title: '#9a3412', desc: '#c2410c' }
-  ];
-  const activeBadgeWordPalette = badgeWordPalette[currentBadgeInfo % badgeWordPalette.length];
   const slideWordPalette = [
     { subtitle: '#7c2d12', title: '#7f1d1d', body: '#991b1b', feature: '#b91c1c' },
     { subtitle: '#14532d', title: '#166534', body: '#15803d', feature: '#16a34a' },
@@ -1071,10 +937,10 @@ const LandingPage = ({ onGetStarted }) => {
         <div className="absolute top-10 left-5 w-32 h-32 bg-slate-500/10 rounded-full blur-3xl"></div>
         <div className="absolute bottom-10 right-10 w-40 h-40 bg-blue-400/10 rounded-full blur-3xl"></div>
         
-        <div className="max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] mx-auto grid md:grid-cols-2 gap-6 md:gap-8 lg:gap-12 2xl:gap-16 relative">
+        <div className="max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] mx-auto flex flex-col gap-6 md:gap-8 lg:gap-12 2xl:gap-16 relative">
           {/* Left Content - Collapsed to Icon */}
-          <div className="flex items-center justify-center md:justify-start animate-fadeInUp relative z-40 w-full md:w-auto">
-            <div className="w-full md:w-auto">
+          <div className="flex items-center justify-center md:justify-start animate-fadeInUp relative z-40 w-full">
+            <div className="w-full">
               {/* Mobile: Collapsible Badge */}
               <div className="md:hidden">
                 <button 
@@ -1153,7 +1019,7 @@ const LandingPage = ({ onGetStarted }) => {
               </div>
 
               {/* Desktop: Always Visible Full Container */}
-              <div className={`hidden md:block border ican-cove-card p-6 md:p-8 2xl:p-10 space-y-5 2xl:space-y-7 shadow-2xl backdrop-blur-xl w-full md:w-full lg:max-w-2xl 2xl:max-w-3xl ${isDarkTheme ? 'bg-slate-900/90 border-slate-600/45 shadow-slate-900/50' : 'bg-slate-100/95 border-slate-300/70 shadow-slate-300/45'}`}>
+              <div className={`hidden md:block border ican-cove-card p-6 md:p-8 2xl:p-10 space-y-5 2xl:space-y-7 shadow-2xl backdrop-blur-xl w-full ${isDarkTheme ? 'bg-slate-900/90 border-slate-600/45 shadow-slate-900/50' : 'bg-slate-100/95 border-slate-300/70 shadow-slate-300/45'}`}>
                 {/* Tag */}
                 <div className={`inline-flex items-center space-x-2 border ican-cove-tab px-4 py-2 ${isDarkTheme ? 'bg-slate-800/80 border-slate-600/55' : 'bg-white/95 border-slate-300/80'}`}>
                   <Zap className="w-4 h-4 text-blue-200 flex-shrink-0" />
@@ -1220,39 +1086,19 @@ const LandingPage = ({ onGetStarted }) => {
               </div>
             </div>
           </div>
-
-          {/* Right - Feature visuals, one per left-column paragraph */}
-          {/* Plain normal-flow stack (no sticky/centering tricks) so this
-              column's height is simply the sum of its own real content —
-              it naturally runs the same length as the long text column
-              instead of leaving empty space beside it. */}
-          <div className="hidden md:flex md:flex-col gap-5 lg:gap-6 2xl:gap-8 relative z-0 animate-fadeInDown">
-            {heroFeatureVisuals.map((item) => (
-              <div
-                key={item.title}
-                className={`flex items-center gap-4 lg:gap-5 rounded-2xl border p-4 lg:p-5 ${isDarkTheme ? 'border-slate-700/40 bg-slate-900/60' : 'border-slate-200 bg-white/80'}`}
-              >
-                <div className="w-24 h-24 lg:w-28 lg:h-28 2xl:w-32 2xl:h-32 shrink-0 rounded-xl overflow-hidden ican-cove-panel">
-                  <img
-                    src={item.image}
-                    alt={item.title}
-                    className="w-full h-full object-cover"
-                    onError={(e) => { e.target.style.display = 'none'; }}
-                  />
-                </div>
-                <div className="min-w-0">
-                  <h4 className={`text-sm lg:text-base 2xl:text-lg font-bold ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>
-                    {item.emoji} {item.title}
-                  </h4>
-                  <p className={`mt-1.5 text-xs lg:text-sm 2xl:text-base leading-relaxed text-justify ${isDarkTheme ? 'text-gray-300' : 'text-slate-600'}`}>
-                    {item.blurb}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
+
+      {/* PitchIn — the flagship investment feature, surfaced first so it's
+          the very first thing a visitor sees below the hero. Marketplace,
+          Professionals, and Live Updates follow right after it, ahead of
+          the rest of the page, instead of being buried near the bottom. */}
+      <PitchinPreview onGetStarted={onGetStarted} authId={identity?.authId ?? null} />
+      <DropshipPreview />
+      <ProfessionalsCarousel />
+      <CommunityStoriesCarousel />
+      <TrustGroupsPreview onGetStarted={onGetStarted} />
+      <WalletMockTrader onGetStarted={onGetStarted} authId={identity?.authId ?? null} />
 
       {/* Image Carousel Section - Our Platforms */}
       {/* Features Section - COMMENTED OUT */}
@@ -1304,67 +1150,6 @@ const LandingPage = ({ onGetStarted }) => {
       {/* Image Carousel Section */}
       <section id="platforms" className="relative py-20 2xl:py-28 px-4 sm:px-6 lg:px-8 2xl:px-16">
         <div className="max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] mx-auto">
-          {/* Animated Badge Section */}
-          <div className="text-center mb-12 md:mb-16">
-            {/* Main Badge Container */}
-            <div className="inline-block mb-8">
-              <div className="relative group">
-                {/* Glow effect */}
-                <div className={`absolute inset-0 bg-gradient-to-r ${activeBadgeTheme.glow} ican-cove-card blur-2xl group-hover:opacity-100 opacity-80 transition duration-500 animate-pulse`}></div>
-                
-                {/* Badge */}
-                <div className={`relative bg-gradient-to-br ${activeBadgeTheme.card} border-[3px] ${activeBadgeTheme.border} ican-cove-card overflow-hidden px-6 md:px-10 py-4 md:py-6 backdrop-blur-xl shadow-2xl animate-[fadeIn_350ms_ease-out]`}>
-                  {/* Animated gradient border */}
-                  <div className={`absolute inset-0 ican-cove-card bg-gradient-to-r ${activeBadgeTheme.pulse} animate-pulse pointer-events-none`}></div>
-                  <div className="absolute -top-3 right-10 w-7 h-7 rounded-full bg-white/20 blur-md animate-bounce pointer-events-none"></div>
-                  <div className="absolute -bottom-3 left-10 w-6 h-6 rounded-full bg-white/15 blur-md animate-pulse pointer-events-none"></div>
-                  
-                  {/* Badge Content */}
-                  <div className="relative space-y-2 min-h-24 md:min-h-20 flex flex-col justify-center">
-                    {/* Animated Title */}
-                    <div className="relative">
-                      <h2 className="text-2xl md:text-4xl lg:text-5xl 2xl:text-6xl font-extrabold mb-2 md:mb-3 leading-tight min-h-16 md:min-h-14 flex items-center justify-center">
-                        <span 
-                          key={currentBadgeInfo}
-                          className="font-black tracking-tight animate-fadeIn"
-                          style={{ color: activeBadgeWordPalette.title }}
-                        >
-                          {badgeInfo[currentBadgeInfo].title}
-                        </span>
-                      </h2>
-                    </div>
-                    
-                    {/* Animated Description */}
-                    <div className="relative min-h-12 flex items-center justify-center">
-                      <p 
-                        key={`desc-${currentBadgeInfo}`}
-                        className="font-extrabold text-sm md:text-base 2xl:text-lg max-w-3xl 2xl:max-w-4xl mx-auto leading-relaxed animate-fadeIn"
-                        style={{ color: activeBadgeWordPalette.desc }}
-                      >
-                        {badgeInfo[currentBadgeInfo].description}
-                      </p>
-                    </div>
-
-                    {/* Badge Indicators - Hidden on Mobile */}
-                    <div className="hidden md:flex gap-1 justify-center mt-4 flex-wrap">
-                      {badgeInfo.map((_, index) => (
-                        <button
-                          key={index}
-                          onClick={() => setCurrentBadgeInfo(index)}
-                          className={`rounded-full transition transform hover:scale-125 ${
-                            index === currentBadgeInfo
-                              ? `${activeBadgeTheme.indicatorActive} w-3 h-3 shadow-lg`
-                              : `${activeBadgeTheme.indicatorInactive} w-2 h-2`
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
           {/* Carousel Container with Golden Border Animation */}
           <div className="relative">
             {/* Main Carousel */}
@@ -1507,11 +1292,15 @@ const LandingPage = ({ onGetStarted }) => {
             {/* Stats */}
             <div className="grid grid-cols-3 gap-2 md:gap-4 2xl:gap-8 pt-3 md:pt-8 2xl:pt-12 border-t border-purple-500/20">
               <div className="text-center ican-cove-panel border-2 border-violet-400/50 bg-violet-950/25 py-3 md:py-4 hover:border-violet-300/80 hover:shadow-lg hover:shadow-violet-500/30 transition-all duration-300 animate-[fadeIn_700ms_ease-out]">
-                <p className="text-lg md:text-4xl 2xl:text-5xl font-black text-purple-300 tracking-tight">10K+</p>
+                <p className="text-lg md:text-4xl 2xl:text-5xl font-black text-purple-300 tracking-tight">
+                  {formatStatCompact(platformStats?.activeUsers) || '10K+'}
+                </p>
                 <p className="text-gray-300 text-xs md:text-base 2xl:text-lg font-semibold">Active Users</p>
               </div>
               <div className="text-center ican-cove-panel border-2 border-cyan-400/50 bg-cyan-950/25 py-3 md:py-4 hover:border-cyan-300/80 hover:shadow-lg hover:shadow-cyan-500/30 transition-all duration-300 animate-[fadeIn_850ms_ease-out]">
-                <p className="text-lg md:text-4xl 2xl:text-5xl font-black text-fuchsia-300 tracking-tight">$50M+</p>
+                <p className="text-lg md:text-4xl 2xl:text-5xl font-black text-fuchsia-300 tracking-tight">
+                  {formatStatCompact(platformStats?.volumeManagedUsd, '$') || '$50M+'}
+                </p>
                 <p className="text-gray-300 text-xs md:text-base 2xl:text-lg font-semibold">Volume Managed</p>
               </div>
               <div className="text-center ican-cove-panel border-2 border-rose-400/50 bg-rose-950/25 py-3 md:py-4 hover:border-rose-300/80 hover:shadow-lg hover:shadow-rose-500/30 transition-all duration-300 animate-[fadeIn_1000ms_ease-out]">
@@ -1602,27 +1391,6 @@ const LandingPage = ({ onGetStarted }) => {
                 ))}
               </div>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="relative py-8 md:py-12 lg:py-20 2xl:py-28 px-4 sm:px-6 lg:px-8 2xl:px-16">
-        <div className="max-w-4xl 2xl:max-w-6xl mx-auto">
-          <div className={`border-[3px] ican-cove-card p-4 md:p-8 lg:p-16 2xl:p-20 text-center shadow-2xl animate-[fadeIn_750ms_ease-out] ${isDarkTheme ? 'bg-gradient-to-r from-amber-900/45 via-yellow-900/45 to-emerald-900/45 border-emerald-300/55 shadow-emerald-500/20' : 'bg-gradient-to-r from-amber-100 via-yellow-100 to-emerald-100 border-emerald-400/65 shadow-emerald-300/45'}`}>
-            <h2 className="text-xl md:text-3xl lg:text-5xl 2xl:text-6xl font-black mb-3 md:mb-4 lg:mb-6 leading-tight drop-shadow-[0_2px_12px_rgba(76,29,149,0.6)]">
-              <span style={rainbowTextStyle}>Ready to Transform Your Capital?</span>
-            </h2>
-            <p className="text-xs md:text-sm lg:text-xl 2xl:text-2xl text-gray-300 mb-4 md:mb-6 lg:mb-8 2xl:mb-10 leading-relaxed">
-              Join the revolution and take control of your financial future today.
-            </p>
-            <button
-              onClick={onGetStarted}
-              className={`group border-2 px-4 md:px-8 lg:px-10 2xl:px-12 py-2 md:py-3 lg:py-4 2xl:py-5 ican-cove-panel font-black text-xs md:text-sm lg:text-lg 2xl:text-xl inline-flex items-center space-x-2 transition-all duration-300 transform hover:-translate-y-0.5 hover:scale-[1.03] ${isDarkTheme ? 'bg-gradient-to-r from-emerald-400 to-cyan-500 border-emerald-300/70 text-slate-900 hover:shadow-2xl hover:shadow-emerald-500/50' : 'bg-gradient-to-r from-emerald-300 to-cyan-400 border-emerald-500/55 text-slate-900 hover:shadow-2xl hover:shadow-cyan-400/45'}`}
-            >
-              <span>Get Started Now</span>
-              <ArrowRight className="w-4 h-4 md:w-5 md:h-5 group-hover:translate-x-1 transition" />
-            </button>
           </div>
         </div>
       </section>
@@ -1988,13 +1756,56 @@ const LandingPage = ({ onGetStarted }) => {
         </div>
       )}
 
-      <CommunityStoriesCarousel />
-      <ProfessionalsCarousel />
-      <PitchinPreview onGetStarted={onGetStarted} authId={identity?.authId ?? null} />
-      <DropshipPreview />
-      <WalletMockTrader onGetStarted={onGetStarted} authId={identity?.authId ?? null} />
-      <TrustGroupsPreview onGetStarted={onGetStarted} />
       <CMMSNoticeBoardPreview />
+
+      {/* Final CTA — the closing pitch, now the last thing a visitor sees
+          before the footer instead of being buried mid-page ahead of the
+          community board. */}
+      <section className="relative py-10 md:py-16 lg:py-24 2xl:py-28 px-4 sm:px-6 lg:px-8 2xl:px-16 overflow-hidden">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_50%_20%,rgba(16,185,129,0.18),transparent_60%)]"
+        />
+        <div className="max-w-4xl 2xl:max-w-6xl mx-auto">
+          <div className={`relative border-[3px] ican-cove-card p-6 md:p-10 lg:p-16 2xl:p-20 text-center shadow-2xl animate-[fadeIn_750ms_ease-out] ${isDarkTheme ? 'bg-gradient-to-r from-amber-900/45 via-yellow-900/45 to-emerald-900/45 border-emerald-300/55 shadow-emerald-500/20' : 'bg-gradient-to-r from-amber-100 via-yellow-100 to-emerald-100 border-emerald-400/65 shadow-emerald-300/45'}`}>
+            <div className={`inline-flex items-center gap-2 mb-4 md:mb-6 px-3 py-1.5 rounded-full border text-[10px] md:text-xs font-bold uppercase tracking-[0.25em] ${isDarkTheme ? 'border-emerald-300/40 bg-emerald-400/10 text-emerald-200' : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700'}`}>
+              <Globe className="w-3.5 h-3.5 md:w-4 md:h-4" />
+              <span>Built for global capital, from East Africa</span>
+            </div>
+
+            <h2 className="text-xl md:text-3xl lg:text-5xl 2xl:text-6xl font-black mb-3 md:mb-4 lg:mb-6 leading-tight drop-shadow-[0_2px_12px_rgba(76,29,149,0.6)]">
+              <span style={rainbowTextStyle}>Ready to Transform Your Capital?</span>
+            </h2>
+            <p className="text-xs md:text-sm lg:text-xl 2xl:text-2xl text-gray-300 mb-5 md:mb-8 lg:mb-10 2xl:mb-12 leading-relaxed max-w-2xl mx-auto">
+              Join the revolution and take control of your financial future today — wherever in the world you're building it from.
+            </p>
+
+            <div className="flex flex-wrap items-center justify-center gap-2 md:gap-3 mb-6 md:mb-8">
+              {[
+                { icon: Globe, label: 'Multi-currency, borderless' },
+                { icon: Lock, label: 'Blockchain-secured' },
+                { icon: Zap, label: 'Instant settlements' }
+              ].map(({ icon: PillIcon, label }) => (
+                <span
+                  key={label}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] md:text-xs font-semibold border ${isDarkTheme ? 'border-white/15 bg-white/5 text-white/80' : 'border-slate-900/10 bg-white/70 text-slate-700'}`}
+                >
+                  <PillIcon className="w-3 h-3 md:w-3.5 md:h-3.5" />
+                  {label}
+                </span>
+              ))}
+            </div>
+
+            <button
+              onClick={onGetStarted}
+              className={`group border-2 px-4 md:px-8 lg:px-10 2xl:px-12 py-2 md:py-3 lg:py-4 2xl:py-5 ican-cove-panel font-black text-xs md:text-sm lg:text-lg 2xl:text-xl inline-flex items-center space-x-2 transition-all duration-300 transform hover:-translate-y-0.5 hover:scale-[1.03] ${isDarkTheme ? 'bg-gradient-to-r from-emerald-400 to-cyan-500 border-emerald-300/70 text-slate-900 hover:shadow-2xl hover:shadow-emerald-500/50' : 'bg-gradient-to-r from-emerald-300 to-cyan-400 border-emerald-500/55 text-slate-900 hover:shadow-2xl hover:shadow-cyan-400/45'}`}
+            >
+              <span>Get Started Now</span>
+              <ArrowRight className="w-4 h-4 md:w-5 md:h-5 group-hover:translate-x-1 transition" />
+            </button>
+          </div>
+        </div>
+      </section>
 
       {/* Footer */}
       <footer className="relative border-t border-purple-500/10 py-6 md:py-10 lg:py-12 2xl:py-16 px-4 sm:px-6 lg:px-8 2xl:px-16">

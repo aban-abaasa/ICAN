@@ -16,7 +16,7 @@
 
 import { getSupabase } from './pitchingService';
 
-export const fetchPublicStatusStories = async (limit = 10) => {
+export const fetchPublicStatusStories = async (limit = 10, offset = 0) => {
   const sb = getSupabase();
   if (!sb) return [];
 
@@ -28,7 +28,7 @@ export const fetchPublicStatusStories = async (limit = 10) => {
       .in('media_type', ['image', 'video'])
       .gt('expires_at', new Date().toISOString())
       .order('created_at', { ascending: false })
-      .limit(limit);
+      .range(offset, offset + limit - 1);
 
     if (error) {
       console.warn('[landingStatusService] failed to fetch public stories (likely missing RLS SELECT policy on ican_statuses):', error);

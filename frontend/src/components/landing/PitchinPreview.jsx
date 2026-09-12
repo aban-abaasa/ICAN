@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Rocket, Sparkles } from 'lucide-react';
+import { Rocket, Sparkles, ArrowRight } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { getAllPitches } from '../../services/pitchingService';
 import { getOrCreateGuestLikeKey } from '../../services/landingMessagesService';
@@ -93,20 +93,20 @@ const PitchinPreview = ({ onGetStarted, authId = null }) => {
         </div>
 
         {loading ? (
-          <div className="grid gap-5 md:grid-cols-3">
+          <div className="flex gap-5 overflow-x-auto pb-2">
             {[0, 1, 2].map((i) => (
-              <div key={i} className={`h-64 rounded-2xl border animate-pulse ${isDarkTheme ? 'border-slate-700/40 bg-slate-800/40' : 'border-slate-200 bg-slate-100'}`} />
+              <div key={i} className={`h-64 w-[280px] sm:w-[320px] shrink-0 rounded-2xl border animate-pulse ${isDarkTheme ? 'border-slate-700/40 bg-slate-800/40' : 'border-slate-200 bg-slate-100'}`} />
             ))}
           </div>
         ) : (
-          <div className="grid gap-5 md:grid-cols-3">
+          <div className="flex gap-5 overflow-x-auto snap-x snap-mandatory pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
             {pitches.map((pitch) => {
               const result = results[pitch.id];
               const progressPct = pitch.target_funding
                 ? Math.min(((pitch.raised_amount || 0) / pitch.target_funding) * 100, 100)
                 : 0;
               return (
-                <div key={pitch.id} className={`flex flex-col rounded-2xl border overflow-hidden ${isDarkTheme ? 'border-slate-700/40 bg-slate-900/60' : 'border-slate-200 bg-white'}`}>
+                <div key={pitch.id} className={`flex flex-col w-[280px] sm:w-[320px] shrink-0 snap-start rounded-2xl border overflow-hidden ${isDarkTheme ? 'border-slate-700/40 bg-slate-900/60' : 'border-slate-200 bg-white'}`}>
                   <div className={`relative aspect-video ${isDarkTheme ? 'bg-slate-800' : 'bg-slate-100'}`}>
                     {pitch.video_url && !videoErrors[pitch.id] ? (
                       <video
@@ -178,19 +178,29 @@ const PitchinPreview = ({ onGetStarted, authId = null }) => {
                 </div>
               );
             })}
-          </div>
-        )}
 
-        {!loading && hasMore && pitches.length > 0 && (
-          <div className="mt-6 flex justify-center">
-            <button
-              type="button"
-              onClick={handleLoadMore}
-              disabled={loadingMore}
-              className={`rounded-xl border px-5 py-2.5 text-sm font-bold transition disabled:opacity-50 ${isDarkTheme ? 'border-slate-600/40 bg-white/5 text-slate-200 hover:bg-white/10' : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
-            >
-              {loadingMore ? 'Loading…' : 'Load more'}
-            </button>
+            {/* "More" tile at the end of the row instead of a button below
+                a growing grid — keeps this a single scrollable row and
+                loads the next page of pitches right where you're looking. */}
+            {hasMore && pitches.length > 0 && (
+              <button
+                type="button"
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+                className={`flex flex-col items-center justify-center gap-2 w-[160px] sm:w-[180px] shrink-0 snap-start rounded-2xl border-2 border-dashed transition disabled:opacity-50 ${isDarkTheme ? 'border-slate-600/50 bg-white/5 text-slate-200 hover:bg-white/10 hover:border-fuchsia-400/50' : 'border-slate-300 bg-slate-50 text-slate-700 hover:bg-slate-100 hover:border-fuchsia-400/60'}`}
+              >
+                {loadingMore ? (
+                  <span className="text-sm font-bold">Loading…</span>
+                ) : (
+                  <>
+                    <span className={`flex items-center justify-center w-10 h-10 rounded-full ${isDarkTheme ? 'bg-fuchsia-400/10' : 'bg-fuchsia-100'}`}>
+                      <ArrowRight className="w-5 h-5 text-fuchsia-500" />
+                    </span>
+                    <span className="text-sm font-bold">More</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
         )}
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Users } from 'lucide-react';
+import { Users, ArrowRight } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { listFeaturedProfessionals } from '../../services/portfolioService';
 import ProfessionalCard from '../profile/ProfessionalCard';
@@ -17,15 +17,33 @@ const ProfessionalsCarousel = () => {
   const isDarkTheme = actualTheme === 'dark';
   const [professionals, setProfessionals] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const PAGE_SIZE = 12;
 
   useEffect(() => {
     let cancelled = false;
-    listFeaturedProfessionals(12)
-      .then((rows) => { if (!cancelled) setProfessionals(rows); })
+    listFeaturedProfessionals(PAGE_SIZE, 0)
+      .then((rows) => {
+        if (cancelled) return;
+        setProfessionals(rows);
+        setHasMore(rows.length >= PAGE_SIZE);
+      })
       .catch(() => { if (!cancelled) setProfessionals([]); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
+
+  const handleLoadMore = () => {
+    setLoadingMore(true);
+    listFeaturedProfessionals(PAGE_SIZE, professionals.length)
+      .then((rows) => {
+        setProfessionals((prev) => [...prev, ...rows]);
+        setHasMore(rows.length >= PAGE_SIZE);
+      })
+      .catch((err) => console.error('[ProfessionalsCarousel] failed to load more professionals:', err))
+      .finally(() => setLoadingMore(false));
+  };
 
   if (!loading && professionals.length === 0) return null;
 
@@ -57,6 +75,28 @@ const ProfessionalsCarousel = () => {
                 />
               </div>
             ))}
+
+            {/* "More" tile at the end of the row instead of a button below
+                a growing grid — keeps this a single scrollable row. */}
+            {hasMore && professionals.length > 0 && (
+              <button
+                type="button"
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+                className={`flex flex-col items-center justify-center gap-2 w-28 h-32 shrink-0 snap-start rounded-xl border-2 border-dashed transition disabled:opacity-50 ${isDarkTheme ? 'border-slate-600/50 bg-white/5 text-slate-200 hover:bg-white/10 hover:border-amber-400/50' : 'border-slate-300 bg-slate-50 text-slate-700 hover:bg-slate-100 hover:border-amber-400/60'}`}
+              >
+                {loadingMore ? (
+                  <span className="text-xs font-bold">Loading…</span>
+                ) : (
+                  <>
+                    <span className={`flex items-center justify-center w-8 h-8 rounded-full ${isDarkTheme ? 'bg-amber-400/10' : 'bg-amber-100'}`}>
+                      <ArrowRight className="w-4 h-4 text-amber-500" />
+                    </span>
+                    <span className="text-xs font-bold">More</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
         )}
       </div>
