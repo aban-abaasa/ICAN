@@ -19,6 +19,7 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [priceDrafts, setPriceDrafts] = useState({});
   const [freeDeliveryDrafts, setFreeDeliveryDrafts] = useState({});
+  const [subsidyDrafts, setSubsidyDrafts] = useState({});
   const [savingId, setSavingId] = useState(null);
   const [sales, setSales] = useState([]);
   const [loadingSales, setLoadingSales] = useState(false);
@@ -71,15 +72,16 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
     const price = Number(draft ?? product.listed_price ?? suggestPrice(product.selling_price));
     if (!price || price < product.selling_price) return;
     const freeDelivery = freeDeliveryDrafts[product.product_id] ?? product.free_delivery ?? false;
+    const maxSubsidy = Number(subsidyDrafts[product.product_id] ?? product.max_delivery_subsidy ?? 0);
     setSavingId(product.product_id);
-    const { error } = await setDropshipListing(businessProfileId, product.product_id, price, true, freeDelivery);
+    const { error } = await setDropshipListing(businessProfileId, product.product_id, price, true, freeDelivery, maxSubsidy);
     if (!error) loadProducts(query);
     setSavingId(null);
   };
 
   const handleUnlist = async (product) => {
     setSavingId(product.product_id);
-    const { error } = await setDropshipListing(businessProfileId, product.product_id, product.listed_price, false, product.free_delivery);
+    const { error } = await setDropshipListing(businessProfileId, product.product_id, product.listed_price, false, product.free_delivery, product.max_delivery_subsidy);
     if (!error) loadProducts(query);
     setSavingId(null);
   };
@@ -89,15 +91,16 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
     const price = Number(draft ?? item.listed_price);
     if (!price) return;
     const freeDelivery = freeDeliveryDrafts[item.product_id] ?? item.free_delivery ?? false;
+    const maxSubsidy = Number(subsidyDrafts[item.product_id] ?? item.max_delivery_subsidy ?? 0);
     setSavingId(item.product_id);
-    const { error } = await setDropshipListing(businessProfileId, item.product_id, price, true, freeDelivery);
+    const { error } = await setDropshipListing(businessProfileId, item.product_id, price, true, freeDelivery, maxSubsidy);
     if (!error) loadMyListings();
     setSavingId(null);
   };
 
   const handleUnlistMyListing = async (item) => {
     setSavingId(item.product_id);
-    const { error } = await setDropshipListing(businessProfileId, item.product_id, item.listed_price, false, item.free_delivery);
+    const { error } = await setDropshipListing(businessProfileId, item.product_id, item.listed_price, false, item.free_delivery, item.max_delivery_subsidy);
     if (!error) loadMyListings();
     setSavingId(null);
   };
@@ -169,7 +172,7 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
                       <p className="text-xs text-slate-500 truncate">{product.supermarket_name} · store price {formatUGX(product.selling_price)} · stock {product.available_stock}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <label className="flex items-center gap-1 text-xs text-slate-400 cursor-pointer" title="Free delivery">
+                      <label className="flex items-center gap-1 text-xs text-slate-400 cursor-pointer" title="Free delivery — you cover the real fare in full (up to your margin on the order)">
                         <input
                           type="checkbox"
                           checked={freeDeliveryDrafts[product.product_id] ?? product.free_delivery ?? false}
@@ -178,6 +181,16 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
                         />
                         <Truck className="w-3.5 h-3.5" />
                       </label>
+                      <input
+                        type="number"
+                        min="0"
+                        title="Max delivery subsidy (UGX) — cut from your margin, never the rider's pay"
+                        placeholder="Max off delivery"
+                        disabled={freeDeliveryDrafts[product.product_id] ?? product.free_delivery ?? false}
+                        value={subsidyDrafts[product.product_id] ?? product.max_delivery_subsidy ?? ''}
+                        onChange={(e) => setSubsidyDrafts((prev) => ({ ...prev, [product.product_id]: e.target.value }))}
+                        className="w-24 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white disabled:opacity-40"
+                      />
                       <input
                         type="number"
                         min={product.selling_price}
@@ -226,7 +239,7 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
                       <p className="text-xs text-slate-500 truncate">{item.in_stock ? `In stock · ${item.available_stock}` : 'Out of stock'}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <label className="flex items-center gap-1 text-xs text-slate-400 cursor-pointer" title="Free delivery">
+                      <label className="flex items-center gap-1 text-xs text-slate-400 cursor-pointer" title="Free delivery — you cover the real fare in full (up to your margin on the order)">
                         <input
                           type="checkbox"
                           checked={freeDeliveryDrafts[item.product_id] ?? item.free_delivery ?? false}
@@ -235,6 +248,16 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
                         />
                         <Truck className="w-3.5 h-3.5" />
                       </label>
+                      <input
+                        type="number"
+                        min="0"
+                        title="Max delivery subsidy (UGX) — cut from your margin, never the rider's pay"
+                        placeholder="Max off delivery"
+                        disabled={freeDeliveryDrafts[item.product_id] ?? item.free_delivery ?? false}
+                        value={subsidyDrafts[item.product_id] ?? item.max_delivery_subsidy ?? ''}
+                        onChange={(e) => setSubsidyDrafts((prev) => ({ ...prev, [item.product_id]: e.target.value }))}
+                        className="w-24 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white disabled:opacity-40"
+                      />
                       <input
                         type="number"
                         value={draftValue}

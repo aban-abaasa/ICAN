@@ -29,27 +29,36 @@ export async function getDropshipStorefront(resellerBusinessProfileId) {
 }
 
 // List, re-price, or unlist (is_active=false) a product on the reseller's storefront.
-// freeDelivery: when true, the customer never owes a delivery fee for this item.
-export async function setDropshipListing(resellerBusinessProfileId, productId, listedPrice, isActive = true, freeDelivery = false) {
+// freeDelivery: when true, the reseller covers the real delivery fare in full
+// (up to their own margin on the order — see dropship_checkout). maxDeliverySubsidy:
+// short of full free delivery, the most the reseller lets be cut from their OWN
+// margin to shrink what the customer pays for delivery on this item.
+export async function setDropshipListing(resellerBusinessProfileId, productId, listedPrice, isActive = true, freeDelivery = false, maxDeliverySubsidy = 0) {
   const { data, error } = await supabase.rpc('dropship_set_listing', {
     p_reseller_business_profile_id: resellerBusinessProfileId,
     p_product_id: productId,
     p_listed_price: listedPrice,
     p_is_active: isActive,
     p_free_delivery: freeDelivery,
+    p_max_delivery_subsidy: maxDeliverySubsidy,
   });
   return { data, error };
 }
 
 // Atomic checkout: decrements real store stock, pays the store + reseller via
 // transfer_ican(), and returns both the customer and store receipt numbers.
-// deliveryFee is ignored (forced to 0) if every item in the cart is free_delivery.
+// The delivery fee is never a client-supplied number — dropship_checkout computes
+// it itself with BodaGoera's own real fare formula (distance + time-of-day
+// multiplier + the assigned rider's mode surcharge), then applies whatever
+// delivery subsidy the reseller offers (free_delivery / max_delivery_subsidy on
+// the listing), cut from the reseller's own margin, never the rider's pay.
 // deliveryLat/deliveryLng/maxDeliveryHours are required — checkout books a
 // real BodaGoera rider and holds every payout in escrow until they scan the
 // order out of the store, refundable from the rider if it misses the chosen
 // window. riderId is optional: pass one from findDeliveryRiders() to let the
-// customer pick a specific rider, or omit it to auto-match the nearest one.
-export async function dropshipCheckout(resellerBusinessProfileId, cart, { customerName, customerPhone, deliveryAddress, storeLocation, deliveryFee, deliveryLat, deliveryLng, maxDeliveryHours, riderId } = {}) {
+// customer pick a specific rider, or omit it to auto-match the nearest one
+// matching vehicleTypes (e.g. ['motorcycle'], ['car'], ['van'] — omit/null for any).
+export async function dropshipCheckout(resellerBusinessProfileId, cart, { customerName, customerPhone, deliveryAddress, storeLocation, deliveryLat, deliveryLng, maxDeliveryHours, riderId, vehicleTypes } = {}) {
   const { data, error } = await supabase.rpc('dropship_checkout', {
     p_reseller_business_profile_id: resellerBusinessProfileId,
     p_cart: cart,
@@ -57,19 +66,21 @@ export async function dropshipCheckout(resellerBusinessProfileId, cart, { custom
     p_customer_phone: customerPhone || null,
     p_delivery_address: deliveryAddress || null,
     p_store_location: storeLocation || null,
-    p_delivery_fee: deliveryFee || 0,
     p_delivery_lat: deliveryLat ?? null,
     p_delivery_lng: deliveryLng ?? null,
     p_max_delivery_hours: maxDeliveryHours ?? null,
     p_rider_id: riderId || null,
+    p_vehicle_types: vehicleTypes && vehicleTypes.length ? vehicleTypes : null,
   });
   return { data, error };
 }
 
-// Nearby available riders/drivers for a delivery, nearest first — same
-// mbg_find_available_riders RPC BodaGoera's own ride-request screen uses.
+// Nearby available riders/drivers for a delivery, nearest first, with their
+// real computed fare — same mbg_find_available_riders RPC BodaGoera's own
+// ride-request screen uses, including its p_vehicle_types filter (pass e.g.
+// ['motorcycle'], ['car'], ['van'] to narrow by what the customer asked for).
 // Lets the storefront show a real picker instead of a silent auto-assign.
-export async function findDeliveryRiders(storeLat, storeLng, deliveryLat, deliveryLng, limit = 8) {
+export async function findDeliveryRiders(storeLat, storeLng, deliveryLat, deliveryLng, { limit = 8, vehicleTypes } = {}) {
   if (storeLat == null || storeLng == null || deliveryLat == null || deliveryLng == null) {
     return { data: [], error: null };
   }
@@ -79,6 +90,7 @@ export async function findDeliveryRiders(storeLat, storeLng, deliveryLat, delive
     p_dropoff_lat: deliveryLat,
     p_dropoff_lng: deliveryLng,
     p_limit: limit,
+    p_vehicle_types: vehicleTypes && vehicleTypes.length ? vehicleTypes : null,
   });
   return { data: data || [], error };
 }

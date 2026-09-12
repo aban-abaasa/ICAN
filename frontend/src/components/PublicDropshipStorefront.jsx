@@ -18,6 +18,16 @@ const DELIVERY_WINDOW_OPTIONS = [
   { hours: 48, label: 'Within 2 days' },
 ];
 
+// mbg_riders.vehicle_type values dropship actually matches against — same
+// bike/car/van choice BodaGoera's own ride screen offers, filtered straight
+// through mbg_find_available_riders' existing p_vehicle_types.
+const VEHICLE_TYPE_OPTIONS = [
+  { value: null, label: 'Any' },
+  { value: 'motorcycle', label: '🏍️ Boda' },
+  { value: 'car', label: '🚗 Car' },
+  { value: 'van', label: '🚐 Van' },
+];
+
 const formatUGX = (amount) => `UGX ${Number(amount || 0).toLocaleString('en-UG', { maximumFractionDigits: 0 })}`;
 
 // Rendered instead of the normal authenticated app (see main.jsx) when the URL
@@ -38,7 +48,6 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
-  const [deliveryFee, setDeliveryFee] = useState('');
   const [placing, setPlacing] = useState(false);
   const [checkoutError, setCheckoutError] = useState(null);
   const [receipt, setReceipt] = useState(null);
@@ -52,6 +61,7 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
   const [riders, setRiders] = useState([]);
   const [ridersLoading, setRidersLoading] = useState(false);
   const [selectedRiderId, setSelectedRiderId] = useState(null); // null = auto-assign nearest
+  const [vehicleType, setVehicleType] = useState(null); // null = any bike/car/van
 
   useEffect(() => {
     let cancelled = false;
@@ -89,13 +99,16 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
       return;
     }
     setRidersLoading(true);
-    findDeliveryRiders(storeLat, storeLng, deliveryCoords.lat, deliveryCoords.lng).then(({ data }) => {
+    setSelectedRiderId(null);
+    findDeliveryRiders(storeLat, storeLng, deliveryCoords.lat, deliveryCoords.lng, {
+      vehicleTypes: vehicleType ? [vehicleType] : null,
+    }).then(({ data }) => {
       if (cancelled) return;
       setRiders(data || []);
       setRidersLoading(false);
     });
     return () => { cancelled = true; };
-  }, [user, storeLat, storeLng, deliveryCoords]);
+  }, [user, storeLat, storeLng, deliveryCoords, vehicleType]);
 
   const shareLocation = () => {
     if (!navigator.geolocation) {
@@ -127,8 +140,18 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
   const cartTotal = cartItems.reduce((sum, row) => sum + row.listing.listed_price * row.qty, 0);
   const cartCount = cartItems.reduce((sum, row) => sum + row.qty, 0);
   const allFreeDelivery = cartItems.length > 0 && cartItems.every((row) => row.listing.free_delivery);
-  const deliveryFeeAmount = allFreeDelivery ? 0 : (Number(deliveryFee) || 0);
-  const orderTotal = cartTotal + deliveryFeeAmount;
+  // Preview only — dropship_checkout always recomputes the REAL fare
+  // server-side (BodaGoera's own fare formula for whichever rider actually
+  // gets assigned) and applies the reseller's subsidy itself; this just
+  // mirrors that logic client-side using the picked/nearest rider's already-
+  // computed .fare so the customer isn't surprised at checkout.
+  const selectedRider = riders.find((r) => r.rider_id === selectedRiderId);
+  const estimatedFare = selectedRider?.fare ?? riders[0]?.fare ?? null;
+  const subsidyCap = allFreeDelivery
+    ? Infinity
+    : cartItems.reduce((min, row) => Math.min(min, Number(row.listing.max_delivery_subsidy) || 0), Infinity);
+  const deliveryFeeAmount = estimatedFare == null ? null : Math.max(estimatedFare - Math.min(subsidyCap, estimatedFare), 0);
+  const orderTotal = cartTotal + (deliveryFeeAmount || 0);
 
   const changeQty = (listingId, delta, maxStock) => {
     setCart((prev) => {
@@ -159,11 +182,11 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
         customerName: customerName.trim() || undefined,
         customerPhone: customerPhone.trim() || undefined,
         deliveryAddress: deliveryAddress.trim() || undefined,
-        deliveryFee: deliveryFeeAmount,
         deliveryLat: deliveryCoords.lat,
         deliveryLng: deliveryCoords.lng,
         maxDeliveryHours,
         riderId: selectedRiderId || undefined,
+        vehicleTypes: vehicleType ? [vehicleType] : undefined,
       });
       if (error || !data?.success) {
         throw new Error(error?.message || data?.error || 'Checkout failed');
@@ -209,6 +232,9 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
             <div className="flex justify-between text-sm"><span className="text-slate-400">Items</span><span className="text-white">{receipt.items_count}</span></div>
             {receipt.delivery_fee > 0 && (
               <div className="flex justify-between text-sm"><span className="text-slate-400">Delivery fee</span><span className="text-white">{formatUGX(receipt.delivery_fee)}</span></div>
+            )}
+            {receipt.reseller_transport_subsidy > 0 && (
+              <div className="flex justify-between text-sm"><span className="text-slate-400">Covered by seller</span><span className="text-emerald-400">-{formatUGX(receipt.reseller_transport_subsidy)}</span></div>
             )}
             <div className="flex justify-between text-base font-semibold border-t border-slate-800 pt-2 mt-2"><span className="text-slate-300">Total paid</span><span className="text-white">{formatUGX(receipt.customer_paid_total)}</span></div>
             {receipt.delivery_address && (
@@ -263,9 +289,11 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
               <div className="p-2.5 flex-1 flex flex-col">
                 <p className="text-sm text-white font-medium line-clamp-2 min-h-[2.5rem]">{listing.name}</p>
                 <p className="text-indigo-300 font-bold mt-1">{formatUGX(listing.listed_price)}</p>
-                {listing.free_delivery && (
+                {listing.free_delivery ? (
                   <p className="mt-0.5 flex items-center gap-1 text-[11px] text-emerald-400"><Truck className="w-3 h-3" />Free delivery</p>
-                )}
+                ) : listing.max_delivery_subsidy > 0 ? (
+                  <p className="mt-0.5 flex items-center gap-1 text-[11px] text-emerald-400"><Truck className="w-3 h-3" />Up to {formatUGX(listing.max_delivery_subsidy)} off delivery</p>
+                ) : null}
                 {!listing.in_stock ? (
                   <p className="mt-2 text-xs text-red-400">Out of stock</p>
                 ) : qty === 0 ? (
@@ -342,6 +370,21 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
 
                     {deliveryCoords && user && (
                       <div>
+                        <label className="flex items-center gap-1.5 text-xs text-slate-400 mb-1"><Bike className="w-3.5 h-3.5" />Vehicle</label>
+                        <div className="flex gap-1.5 mb-2">
+                          {VEHICLE_TYPE_OPTIONS.map((opt) => (
+                            <button
+                              key={opt.value ?? 'any'}
+                              type="button"
+                              onClick={() => setVehicleType(opt.value)}
+                              className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition ${
+                                vehicleType === opt.value ? 'border-indigo-500 bg-indigo-500/10 text-white' : 'border-slate-800 bg-slate-900 text-slate-400 hover:bg-slate-800'
+                              }`}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
                         <label className="flex items-center gap-1.5 text-xs text-slate-400 mb-1"><Bike className="w-3.5 h-3.5" />Rider / driver</label>
                         {ridersLoading ? (
                           <div className="flex items-center gap-2 text-xs text-slate-500 py-2"><Loader className="w-3.5 h-3.5 animate-spin" />Finding nearby riders…</div>
@@ -372,7 +415,7 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
                                   <span className="block text-white font-medium truncate">{r.full_name} · {r.vehicle_type}</span>
                                   <span className="flex items-center gap-1 text-slate-400"><Star className="w-3 h-3 text-amber-400" />{Number(r.rating || 0).toFixed(1)} · {Number(r.distance_to_pickup_km || 0).toFixed(1)}km away</span>
                                 </span>
-                                <span className="shrink-0 text-slate-500">~{r.estimated_arrival_min}min</span>
+                                <span className="shrink-0 text-slate-500 text-right">~{r.estimated_arrival_min}min<br />{formatUGX(r.fare)}</span>
                               </button>
                             ))}
                           </div>
@@ -381,18 +424,17 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
                     )}
 
                     {allFreeDelivery ? (
-                      <p className="flex items-center gap-1.5 text-xs text-emerald-400"><Truck className="w-3.5 h-3.5" />Free delivery on this order</p>
+                      <p className="flex items-center gap-1.5 text-xs text-emerald-400"><Truck className="w-3.5 h-3.5" />Free delivery on this order — covered by the seller</p>
                     ) : (
                       <div>
-                        <label className="flex items-center gap-1.5 text-xs text-slate-400 mb-1"><Truck className="w-3.5 h-3.5" />Delivery fee (paid to the BodaGoera rider on pickup)</label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={deliveryFee}
-                          onChange={(e) => setDeliveryFee(e.target.value)}
-                          placeholder="0"
-                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500"
-                        />
+                        <label className="flex items-center gap-1.5 text-xs text-slate-400 mb-1"><Truck className="w-3.5 h-3.5" />Delivery fee</label>
+                        <p className="text-sm text-white bg-slate-900 border border-slate-800 rounded-lg px-3 py-2">
+                          {deliveryFeeAmount == null ? 'Calculated once a rider is matched' : formatUGX(deliveryFeeAmount)}
+                          {isFinite(subsidyCap) && subsidyCap > 0 && deliveryFeeAmount != null && (
+                            <span className="text-emerald-400 text-xs ml-1">(seller covers part of the real fare)</span>
+                          )}
+                        </p>
+                        <p className="mt-1 text-[11px] text-slate-500">Real BodaGoera fare for the rider you pick — never a fee you set yourself.</p>
                       </div>
                     )}
                   </div>
