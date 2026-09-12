@@ -18,7 +18,7 @@ const ThemeSwitcher = () => {
         aria-label="Theme switcher"
       >
         <Palette className="w-5 h-5 text-yellow-400 group-hover:text-yellow-300 transition-colors" />
-        <span className="text-sm font-medium hidden md:inline max-w-20 truncate">
+        <span className="text-sm font-medium hidden xl:inline max-w-20 truncate">
           {currentTheme.name}
         </span>
         <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />

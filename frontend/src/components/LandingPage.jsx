@@ -95,6 +95,7 @@ const LandingPage = ({ onGetStarted }) => {
   const [contributorBalance, setContributorBalance] = useState(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [platformStats, setPlatformStats] = useState(null);
+  const [isNavMoreOpen, setIsNavMoreOpen] = useState(false);
 
   // Real posters shown individually (name + message count); every guest
   // post (no user_id) folds into one aggregate "Guests" entry instead of
@@ -877,34 +878,78 @@ const LandingPage = ({ onGetStarted }) => {
               <p className="text-xs 2xl:text-sm" style={{ color: isDarkTheme ? '#93c5fd' : '#1d4ed8' }}>Wealth Platform</p>
             </div>
           </div>
-          <div className="hidden md:flex items-center gap-3 2xl:gap-4">
+          {/* Small/medium PC widths (md-xl): squeeze the five tabs down to
+              just the one "Try It Live" CTA plus a compact "More" dropdown
+              for the rest, instead of five pills fighting the logo, theme
+              switcher, and auth buttons for the same row. Full pill row
+              only returns at xl+, where the whole row actually fits
+              without any of it wrapping. */}
+          <div className="hidden md:flex xl:hidden items-center gap-2">
+            <button
+              onClick={() => scrollToSection('live-explore')}
+              className={`px-3 py-2 ican-cove-tab border-2 text-sm font-bold whitespace-nowrap transition-all duration-300 ${isDarkTheme ? 'text-emerald-100 border-emerald-300/55 bg-emerald-900/25 hover:bg-emerald-800/35 hover:border-emerald-200/80' : 'text-emerald-900 border-emerald-400/55 bg-emerald-100 hover:bg-emerald-200/90 hover:border-emerald-500/75'}`}
+            >
+              Try It Live
+            </button>
+            <div className="relative">
+              <button
+                onClick={() => setIsNavMoreOpen((v) => !v)}
+                className={`inline-flex items-center gap-1 px-3 py-2 ican-cove-tab border-2 text-sm font-bold transition-all duration-300 ${isDarkTheme ? 'text-slate-100 border-slate-500/55 bg-slate-800/40 hover:bg-slate-700/50' : 'text-slate-800 border-slate-400/55 bg-slate-100 hover:bg-slate-200/90'}`}
+              >
+                More
+                <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${isNavMoreOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {isNavMoreOpen && (
+                <div className={`absolute left-0 mt-2 w-48 rounded-lg border shadow-2xl backdrop-blur-xl z-50 animate-fadeIn overflow-hidden ${isDarkTheme ? 'bg-slate-900/95 border-slate-600/50' : 'bg-white/95 border-slate-300/70'}`}>
+                  {[
+                    { label: 'Features', section: 'platforms' },
+                    { label: 'Platforms', section: 'platforms' },
+                    { label: 'Testimonials', section: 'testimonials' },
+                    { label: 'Community', section: 'community-board' }
+                  ].map((item) => (
+                    <button
+                      key={item.label}
+                      onClick={() => { scrollToSection(item.section); setIsNavMoreOpen(false); }}
+                      className={`w-full text-left px-4 py-2.5 text-sm font-semibold transition-colors ${isDarkTheme ? 'text-slate-200 hover:bg-slate-700/50' : 'text-slate-700 hover:bg-slate-100'}`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {isNavMoreOpen && (
+                <div className="fixed inset-0 z-40" onClick={() => setIsNavMoreOpen(false)} />
+              )}
+            </div>
+          </div>
+          <div className="hidden xl:flex items-center gap-2 2xl:gap-4">
             <button
               onClick={() => scrollToSection('platforms')}
-              className={`px-4 py-2 ican-cove-tab border-2 text-sm md:text-base 2xl:text-lg font-bold transition-all duration-300 ${isDarkTheme ? 'text-amber-100 border-amber-300/55 bg-amber-900/25 hover:bg-amber-800/35 hover:border-amber-200/80' : 'text-amber-900 border-amber-400/55 bg-amber-100 hover:bg-amber-200/90 hover:border-amber-500/75'}`}
+              className={`px-4 py-2 ican-cove-tab border-2 text-sm md:text-base 2xl:text-lg font-bold whitespace-nowrap transition-all duration-300 ${isDarkTheme ? 'text-amber-100 border-amber-300/55 bg-amber-900/25 hover:bg-amber-800/35 hover:border-amber-200/80' : 'text-amber-900 border-amber-400/55 bg-amber-100 hover:bg-amber-200/90 hover:border-amber-500/75'}`}
             >
               Features
             </button>
             <button
               onClick={() => scrollToSection('platforms')}
-              className={`px-4 py-2 ican-cove-tab border-2 text-sm md:text-base 2xl:text-lg font-bold transition-all duration-300 ${isDarkTheme ? 'text-cyan-100 border-cyan-300/55 bg-cyan-900/25 hover:bg-cyan-800/35 hover:border-cyan-200/80' : 'text-cyan-900 border-cyan-400/55 bg-cyan-100 hover:bg-cyan-200/90 hover:border-cyan-500/75'}`}
+              className={`px-4 py-2 ican-cove-tab border-2 text-sm md:text-base 2xl:text-lg font-bold whitespace-nowrap transition-all duration-300 ${isDarkTheme ? 'text-cyan-100 border-cyan-300/55 bg-cyan-900/25 hover:bg-cyan-800/35 hover:border-cyan-200/80' : 'text-cyan-900 border-cyan-400/55 bg-cyan-100 hover:bg-cyan-200/90 hover:border-cyan-500/75'}`}
             >
               Platforms
             </button>
             <button
               onClick={() => scrollToSection('testimonials')}
-              className={`px-4 py-2 ican-cove-tab border-2 text-sm md:text-base 2xl:text-lg font-bold transition-all duration-300 ${isDarkTheme ? 'text-rose-100 border-rose-300/55 bg-rose-900/25 hover:bg-rose-800/35 hover:border-rose-200/80' : 'text-rose-900 border-rose-400/55 bg-rose-100 hover:bg-rose-200/90 hover:border-rose-500/75'}`}
+              className={`px-4 py-2 ican-cove-tab border-2 text-sm md:text-base 2xl:text-lg font-bold whitespace-nowrap transition-all duration-300 ${isDarkTheme ? 'text-rose-100 border-rose-300/55 bg-rose-900/25 hover:bg-rose-800/35 hover:border-rose-200/80' : 'text-rose-900 border-rose-400/55 bg-rose-100 hover:bg-rose-200/90 hover:border-rose-500/75'}`}
             >
               Testimonials
             </button>
             <button
               onClick={() => scrollToSection('community-board')}
-              className={`px-4 py-2 ican-cove-tab border-2 text-sm md:text-base 2xl:text-lg font-bold transition-all duration-300 ${isDarkTheme ? 'text-teal-100 border-teal-300/55 bg-teal-900/25 hover:bg-teal-800/35 hover:border-teal-200/80' : 'text-teal-900 border-teal-400/55 bg-teal-100 hover:bg-teal-200/90 hover:border-teal-500/75'}`}
+              className={`px-4 py-2 ican-cove-tab border-2 text-sm md:text-base 2xl:text-lg font-bold whitespace-nowrap transition-all duration-300 ${isDarkTheme ? 'text-teal-100 border-teal-300/55 bg-teal-900/25 hover:bg-teal-800/35 hover:border-teal-200/80' : 'text-teal-900 border-teal-400/55 bg-teal-100 hover:bg-teal-200/90 hover:border-teal-500/75'}`}
             >
               Community
             </button>
             <button
               onClick={() => scrollToSection('live-explore')}
-              className={`px-4 py-2 ican-cove-tab border-2 text-sm md:text-base 2xl:text-lg font-bold transition-all duration-300 ${isDarkTheme ? 'text-emerald-100 border-emerald-300/55 bg-emerald-900/25 hover:bg-emerald-800/35 hover:border-emerald-200/80' : 'text-emerald-900 border-emerald-400/55 bg-emerald-100 hover:bg-emerald-200/90 hover:border-emerald-500/75'}`}
+              className={`px-4 py-2 ican-cove-tab border-2 text-sm md:text-base 2xl:text-lg font-bold whitespace-nowrap transition-all duration-300 ${isDarkTheme ? 'text-emerald-100 border-emerald-300/55 bg-emerald-900/25 hover:bg-emerald-800/35 hover:border-emerald-200/80' : 'text-emerald-900 border-emerald-400/55 bg-emerald-100 hover:bg-emerald-200/90 hover:border-emerald-500/75'}`}
             >
               Try It Live
             </button>
