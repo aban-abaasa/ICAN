@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Camera } from 'lucide-react';
+import { Camera, ArrowRight, Play } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { fetchPublicStatusStories } from '../../services/landingStatusService';
 import { fmtRelativeTime } from './relativeTime';
@@ -14,14 +14,32 @@ const CommunityStoriesCarousel = () => {
   const isDarkTheme = actualTheme === 'dark';
   const [stories, setStories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [playingIds, setPlayingIds] = useState(() => new Set());
+  const PAGE_SIZE = 12;
 
   useEffect(() => {
     let cancelled = false;
-    fetchPublicStatusStories(12)
-      .then((rows) => { if (!cancelled) setStories(rows); })
+    fetchPublicStatusStories(PAGE_SIZE, 0)
+      .then((rows) => {
+        if (cancelled) return;
+        setStories(rows);
+        setHasMore(rows.length >= PAGE_SIZE);
+      })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
+
+  const handleLoadMore = () => {
+    setLoadingMore(true);
+    fetchPublicStatusStories(PAGE_SIZE, stories.length)
+      .then((rows) => {
+        setStories((prev) => [...prev, ...rows]);
+        setHasMore(rows.length >= PAGE_SIZE);
+      })
+      .finally(() => setLoadingMore(false));
+  };
 
   if (!loading && stories.length === 0) return null;
 
@@ -45,7 +63,28 @@ const CommunityStoriesCarousel = () => {
             {stories.map((s) => (
               <div key={s.id} className={`relative w-32 h-56 shrink-0 snap-start rounded-xl overflow-hidden border ${isDarkTheme ? 'border-slate-700/40 bg-slate-900' : 'border-slate-200 bg-slate-100'}`}>
                 {s.media_type === 'video' ? (
-                  <video src={s.media_url} className="w-full h-full object-cover" muted playsInline preload="none" controls />
+                  <>
+                    {/* preload="metadata" (not "none") so the browser paints the
+                        first frame as a poster instead of a solid black box
+                        before the visitor presses play. */}
+                    <video
+                      src={`${s.media_url}#t=0.1`}
+                      className="w-full h-full object-cover"
+                      muted
+                      playsInline
+                      preload="metadata"
+                      controls
+                      onPlay={() => setPlayingIds((prev) => new Set(prev).add(s.id))}
+                      onPause={() => setPlayingIds((prev) => { const next = new Set(prev); next.delete(s.id); return next; })}
+                    />
+                    {!playingIds.has(s.id) && (
+                      <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <span className="w-8 h-8 rounded-full bg-black/50 flex items-center justify-center">
+                          <Play className="w-4 h-4 text-white fill-white" />
+                        </span>
+                      </span>
+                    )}
+                  </>
                 ) : (
                   <img src={s.media_url} alt={s.caption || 'Community story'} className="w-full h-full object-cover" loading="lazy" />
                 )}
@@ -62,6 +101,28 @@ const CommunityStoriesCarousel = () => {
                 )}
               </div>
             ))}
+
+            {/* "More" tile at the end of the row instead of a button below
+                a growing grid — keeps this a single scrollable row. */}
+            {hasMore && stories.length > 0 && (
+              <button
+                type="button"
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+                className={`flex flex-col items-center justify-center gap-2 w-20 h-56 shrink-0 snap-start rounded-xl border-2 border-dashed transition disabled:opacity-50 ${isDarkTheme ? 'border-slate-600/50 bg-white/5 text-slate-200 hover:bg-white/10 hover:border-rose-400/50' : 'border-slate-300 bg-slate-50 text-slate-700 hover:bg-slate-100 hover:border-rose-400/60'}`}
+              >
+                {loadingMore ? (
+                  <span className="text-xs font-bold">Loading…</span>
+                ) : (
+                  <>
+                    <span className={`flex items-center justify-center w-8 h-8 rounded-full ${isDarkTheme ? 'bg-rose-400/10' : 'bg-rose-100'}`}>
+                      <ArrowRight className="w-4 h-4 text-rose-500" />
+                    </span>
+                    <span className="text-xs font-bold">More</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
         )}
       </div>
