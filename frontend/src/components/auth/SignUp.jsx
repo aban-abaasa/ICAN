@@ -25,7 +25,6 @@ const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [regions] = useState(CountryService.getRegions());
   const [selectedRegion, setSelectedRegion] = useState('East Africa');
   const [showCountrySelector, setShowCountrySelector] = useState(false);
@@ -277,6 +276,19 @@ const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
         {error && (
           <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
             <p className="text-red-400 text-sm text-center">{error}</p>
+            {/* auth.users is shared across ICAN, mybodaguy and digital-city-era,
+                so this email may already have an account from any of them —
+                give a direct way in instead of a dead-end error. */}
+            {/already exists|already registered/i.test(error) && (
+              <button
+                type="button"
+                onClick={onSwitchToSignIn}
+                className="mt-3 w-full py-2 rounded-lg text-sm font-medium transition-colors"
+                style={{ backgroundColor: palette.link, color: '#fff' }}
+              >
+                Sign In Instead
+              </button>
+            )}
           </div>
         )}
 
@@ -464,27 +476,8 @@ const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
             </div>
           </div>
 
-          {/* Advanced Options Toggle */}
-          <button
-            type="button"
-            onClick={() => setShowAdvanced(!showAdvanced)}
-            className="flex items-center gap-2 text-sm transition-colors"
-            style={{ color: palette.link }}
-          >
-            <svg 
-              className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} 
-              fill="none" 
-              stroke="currentColor" 
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-            {showAdvanced ? 'Hide' : 'Show'} Blockchain Options
-          </button>
-
-          {/* Advanced/Blockchain Options */}
-          {showAdvanced && (
-            <div className="space-y-4 p-4 rounded-lg border" style={{ backgroundColor: palette.inputBg, borderColor: palette.inputBorder }}>
+          {/* Blockchain Options — shown inline, no longer behind a toggle */}
+          <div className="space-y-4 p-4 rounded-lg border" style={{ backgroundColor: palette.inputBg, borderColor: palette.inputBorder }}>
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-8 h-8 bg-gradient-to-r from-orange-500 to-yellow-500 rounded-lg flex items-center justify-center">
                   <span className="text-sm">⛓️</span>
@@ -545,7 +538,6 @@ const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
                 </select>
               </div>
             </div>
-          )}
 
           {/* Terms & Conditions */}
           <label className="flex items-start gap-3 cursor-pointer">
