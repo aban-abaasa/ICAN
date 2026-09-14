@@ -32,16 +32,19 @@ CREATE TABLE IF NOT EXISTS public.ican_transactions (
 ALTER TABLE public.ican_transactions ENABLE ROW LEVEL SECURITY;
 
 -- Step 3: Create policies for user access
+DROP POLICY IF EXISTS "Users can view their own transactions" ON public.ican_transactions;
 CREATE POLICY "Users can view their own transactions"
-    ON public.ican_transactions FOR SELECT 
+    ON public.ican_transactions FOR SELECT
     USING (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can insert their own transactions" ON public.ican_transactions;
 CREATE POLICY "Users can insert their own transactions"
-    ON public.ican_transactions FOR INSERT 
+    ON public.ican_transactions FOR INSERT
     WITH CHECK (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can update their own transactions" ON public.ican_transactions;
 CREATE POLICY "Users can update their own transactions"
-    ON public.ican_transactions FOR UPDATE 
+    ON public.ican_transactions FOR UPDATE
     USING (user_id = auth.uid());
 
 -- Step 4: Create indexes for performance

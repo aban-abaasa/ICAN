@@ -22,6 +22,8 @@ const accountRoutes = require('./routes/accountRoutes');
 const aiAnalysisRoutes = require('./routes/aiAnalysisRoutes');
 const taxRulesRoutes = require('./routes/taxRulesRoutes');
 const storageRoutes = require('./routes/storageRoutes');
+const { router: securityRoutes, trap: decoyTrap } = require('./routes/securityRoutes');
+const { ipReputationGate } = require('./middleware/canweShield');
 const cron = require('node-cron');
 const { refreshGlobalInflation } = require('./services/inflationRefreshService');
 const { processPendingPaydayAdvisories } = require('./services/cmmsPaydayAdvisoryService');
@@ -44,6 +46,30 @@ let emailRoutes;
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// Trust exactly one reverse-proxy hop (Vercel / nginx in front of this
+// process) so req.ip resolves the real client IP from X-Forwarded-For
+// instead of a value an attacker could spoof from further out.
+app.set('trust proxy', 1);
+
+// ==========================================
+// Canwe Shield — mounted before everything else so a flagged IP is
+// tarpitted/redirected before it reaches any real route, and before body
+// parsing does any work on its request.
+// ==========================================
+const { createClient } = require('@supabase/supabase-js');
+const canweSupabase =
+  process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+    ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+    : null;
+
+if (canweSupabase) {
+  app.use(ipReputationGate(canweSupabase));
+} else {
+  console.warn('[canwe] SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY missing — IP reputation gate disabled');
+}
 
 // ==========================================
 // Middleware
@@ -125,6 +151,13 @@ app.use('/api/tax-rules', taxRulesRoutes);
 
 // Storage Routes (Cloudflare R2 presigned URLs for video/image feeds)
 app.use('/api/storage', storageRoutes);
+
+// Honeytoken report intake + decoy admin/debug endpoints. Paths below must
+// match frontend/public/robots.txt Disallow entries and the hidden sr-only
+// links in LandingPage.jsx byte-for-byte — that mismatch is the whole trap.
+app.use('/api/security', securityRoutes);
+app.all('/admin/backup_wallet.json', decoyTrap);
+app.all('/api/v1/debug/keys', decoyTrap);
 
 // ==========================================
 // API Routes (ES6 modules - loaded dynamically)

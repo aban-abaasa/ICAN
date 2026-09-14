@@ -31,7 +31,7 @@ export default function TitheManager() {
   // ============================================================
   
   // Form state
-  const [formMode, setFormMode] = useState('add'); // 'add' | 'settle' | 'pay' | 'view' | 'analytics' | 'audit'
+  const [formMode, setFormMode] = useState('calculator'); // 'calculator' | 'add' | 'settle' | 'pay' | 'view' | 'analytics' | 'audit'
   const [form, setForm] = useState({
     amount: '',
     givingType: 'tithe',
@@ -39,7 +39,9 @@ export default function TitheManager() {
     givingDate: new Date().toISOString().split('T')[0],
     notes: '',
     isAnonymous: false,
-    incomeReference: ''
+    incomeReference: '',
+    paymentMethod: 'wallet', // 'wallet' | 'cash'
+    titheType: 'personal' // 'personal' | 'business' — who this freeform giving is for
   });
 
   // Data state
@@ -65,12 +67,20 @@ export default function TitheManager() {
   const [walletBalance, setWalletBalance] = useState(0);
 
   // 🙏 Tithe Calculator state
+  const [calcTab, setCalcTab]             = useState('personal'); // 'personal' | 'business'
   const [calcIncomeTx, setCalcIncomeTx]   = useState([]);
-  const [calcTitheMap, setCalcTitheMap]   = useState({}); // txId → [{amount, giving_type, date}]
-  const [calcSelected, setCalcSelected]   = useState(null); // selected transaction
-  const [calcForm, setCalcForm]           = useState({ amount: '', givingType: 'tithe', recipientType: 'church', isAnonymous: false });
+  const [calcTitheMap, setCalcTitheMap]   = useState({}); // sourceTransactionId → [{amount, giving_type, date}]
+  const [calcBizPaid, setCalcBizPaid]     = useState(0); // total already paid toward business tithe (all-time)
+  const [calcBizHistory, setCalcBizHistory] = useState([]); // [{amount, giving_type, date}] — business payments, most recent first
+  const [calcSelected, setCalcSelected]   = useState(null); // selected personal income transaction
+  const [calcForm, setCalcForm]           = useState({ amount: '', givingType: 'tithe', recipientType: 'church', isAnonymous: false, paymentMethod: 'wallet' });
+  const [calcBizForm, setCalcBizForm]     = useState({
+    amount: '', givingType: 'tithe', recipientType: 'church', isAnonymous: false,
+    paymentMethod: 'wallet', givingDate: new Date().toISOString().split('T')[0]
+  });
   const [calcLoading, setCalcLoading]     = useState(false);
   const [calcMsg, setCalcMsg]             = useState(null); // { type: 'ok'|'err', text }
+  const [calcBizMsg, setCalcBizMsg]       = useState(null);
 
   // ============================================================
   // INITIALIZATION
@@ -84,7 +94,8 @@ export default function TitheManager() {
         fetchSummary(),
         fetchWalletBalance(),
         fetchChainIntegrity(),
-        loadAlreadyTithedMap()
+        loadAlreadyTithedMap(),
+        fetchCalcData()
       ]);
     };
     init();
@@ -228,7 +239,7 @@ export default function TitheManager() {
       // Query tithes that haven't been marked as paid yet
       const { data, error } = await supabase
         .from('ican_tithe_records')
-        .select('id, tithe_id, amount, currency, giving_type, recipient_type, giving_date, created_at, is_anonymous')
+        .select('id, tithe_id, amount, currency, giving_type, recipient_type, giving_date, created_at, is_anonymous, tithe_type, payment_method')
         .neq('blockchain_status', 'removed')
         .eq('payment_status', 'pending')
         .order('created_at', { ascending: false })
@@ -238,7 +249,7 @@ export default function TitheManager() {
         // If column doesn't exist, try without payment_status filter
         const { data: fallbackData, error: fallbackError } = await supabase
           .from('ican_tithe_records')
-          .select('id, tithe_id, amount, currency, giving_type, recipient_type, giving_date, created_at, is_anonymous')
+          .select('id, tithe_id, amount, currency, giving_type, recipient_type, giving_date, created_at, is_anonymous, tithe_type, payment_method')
           .neq('blockchain_status', 'removed')
           .order('created_at', { ascending: false })
           .limit(100);
@@ -271,6 +282,7 @@ export default function TitheManager() {
       });
       const ids = new Set();
       (data || []).forEach(t => {
+        if (t.source_transaction_id) { ids.add(t.source_transaction_id); return; }
         const m = String(t.notes_encrypted || t.notes || '').match(/TX:([a-z0-9-]+)/i);
         if (m) ids.add(m[1]);
       });
@@ -296,8 +308,8 @@ export default function TitheManager() {
         throw new Error('Please enter a valid amount');
       }
 
-      if (amount > walletBalance) {
-        throw new Error(`Insufficient balance. You have ${walletBalance} UGX`);
+      if (form.paymentMethod === 'wallet' && amount > walletBalance) {
+        throw new Error(`Insufficient wallet balance. You have ${walletBalance} UGX. Choose Cash if you're giving this by hand.`);
       }
 
       const { data, error } = await supabase.rpc('fn_add_tithe', {
@@ -310,7 +322,9 @@ export default function TitheManager() {
         p_income_reference_amount: form.incomeReference ? parseFloat(form.incomeReference) : null,
         p_giving_date: form.givingDate,
         p_notes_encrypted: form.notes,
-        p_is_anonymous: form.isAnonymous
+        p_is_anonymous: form.isAnonymous,
+        p_payment_method: form.paymentMethod,
+        p_tithe_type: form.titheType
       });
 
       if (error) throw error;
@@ -328,7 +342,9 @@ export default function TitheManager() {
         givingDate: new Date().toISOString().split('T')[0],
         notes: '',
         isAnonymous: false,
-        incomeReference: ''
+        incomeReference: '',
+        paymentMethod: 'wallet',
+        titheType: 'personal'
       });
 
       // Refresh data
@@ -401,9 +417,10 @@ export default function TitheManager() {
       return;
     }
 
-    // ⛔ Blockchain double-tithe guard
-    if (alreadyTithedTxIds.has(selectedTransaction.id)) {
-      setError(`⛔ Double-tithe blocked. Blockchain record already exists for TX:${selectedTransaction.id.slice(0, 8)}… — this income was already tithed.`);
+    // ⛔ Double-tithe guard (client-side fast check; the database enforces this too)
+    const isPersonal = (selectedTransaction.transaction_type || 'personal') !== 'business';
+    if (isPersonal && alreadyTithedTxIds.has(selectedTransaction.id)) {
+      setError(`⛔ Double-tithe blocked. This income (TX:${selectedTransaction.id.slice(0, 8)}…) was already tithed — pick another income.`);
       return;
     }
 
@@ -426,7 +443,8 @@ export default function TitheManager() {
       // Blockchain-traceable note: TX:{source_id}|PAID|{timestamp}|{type}
       const blockchainNote = `TX:${selectedTransaction.id}|PAID|${new Date().toISOString()}|${form.givingType}`;
 
-      // Step 1 — Record tithe
+      // Step 1 — Record tithe (payment_method + tithe_type decide wallet impact
+      // and whether the database enforces "one tithe per income")
       const { data, error } = await supabase.rpc('fn_add_tithe', {
         p_giving_type: form.givingType,
         p_amount: amount,
@@ -437,64 +455,57 @@ export default function TitheManager() {
         p_income_reference_amount: selectedTransaction.amount,
         p_giving_date: form.givingDate,
         p_notes_encrypted: blockchainNote,
-        p_is_anonymous: form.isAnonymous
+        p_is_anonymous: form.isAnonymous,
+        p_payment_method: form.paymentMethod,
+        p_tithe_type: isPersonal ? 'personal' : 'business',
+        p_source_transaction_id: isPersonal ? selectedTransaction.id : null
       });
 
       if (error) throw error;
       const result = data?.[0];
       if (!result.success) throw new Error(result.message);
 
-      // Step 2 — Fetch the just-created tithe record by its blockchain note
-      const { data: titheRecord } = await supabase
+      // Step 2 — Immediately settle (mark as paid + cleared)
+      await supabase
         .from('ican_tithe_records')
-        .select('id, amount, currency, giving_type, recipient_type')
-        .ilike('notes_encrypted', `TX:${selectedTransaction.id}%`)
-        .neq('blockchain_status', 'removed')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+        .update({
+          blockchain_status: 'settled',
+          payment_status: 'paid',
+          settled_date: new Date().toISOString()
+        })
+        .eq('id', result.tithe_record_id);
 
-      if (titheRecord) {
-        // Step 3 — Immediately settle (mark as paid + cleared)
-        await supabase
-          .from('ican_tithe_records')
-          .update({
-            blockchain_status: 'settled',
-            payment_status: 'paid',
-            settled_date: new Date().toISOString()
-          })
-          .eq('id', titheRecord.id);
-
-        // Step 4 — Write to financial reports for tax/audit trail
-        const { data: { user } } = await supabase.auth.getUser();
-        await supabase
-          .from('ican_transactions')
-          .insert({
-            user_id: user?.id,
-            amount: titheRecord.amount,
-            currency: titheRecord.currency,
-            transaction_type: 'tithe',
-            description: `${titheRecord.giving_type.charAt(0).toUpperCase() + titheRecord.giving_type.slice(1)} to ${titheRecord.recipient_type}`,
-            status: 'completed',
-            metadata: {
-              payment_type: selectedTransaction.transaction_type || 'personal',
-              tithe_type: form.givingType,
-              entry_mode: 'tithe-pay-in',
-              recorded_date: new Date().toISOString(),
-              source_transaction_id: selectedTransaction.id,
-              blockchain_note: blockchainNote,
-              giving_type: form.givingType,
-              recipient_type: form.recipientType,
-              is_anonymous: form.isAnonymous,
-              record_category: 'tithe'
-            }
-          });
-      }
+      // Step 3 — Write to reports as an 'expense' (transaction_type:'tithe' hits a
+      // known broken trigger on this table — see MobileView's tithe-save comment)
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase
+        .from('ican_transactions')
+        .insert({
+          user_id: user?.id,
+          amount,
+          currency: selectedTransaction.currency,
+          transaction_type: 'expense',
+          description: `${form.givingType.charAt(0).toUpperCase() + form.givingType.slice(1)} to ${form.recipientType}`,
+          status: 'completed',
+          metadata: {
+            payment_type: isPersonal ? 'personal' : 'business',
+            tithe_type: isPersonal ? 'personal' : 'business',
+            payment_method: form.paymentMethod,
+            entry_mode: 'tithe-pay-in',
+            recorded_date: new Date().toISOString(),
+            source_transaction_id: selectedTransaction.id,
+            blockchain_note: blockchainNote,
+            giving_type: form.givingType,
+            recipient_type: form.recipientType,
+            is_anonymous: form.isAnonymous,
+            record_category: 'tithe'
+          }
+        });
 
       // Mark in local guard so UI immediately reflects no double-tithe
       setAlreadyTithedTxIds(prev => new Set([...prev, selectedTransaction.id]));
 
-      setSuccess(`✅ Tithe paid & cleared! Secured on blockchain as TX:${selectedTransaction.id.slice(0, 8)}…`);
+      setSuccess(`✅ Tithe paid & cleared${form.paymentMethod === 'cash' ? ' as cash' : ' from wallet'}! Secured on blockchain as TX:${selectedTransaction.id.slice(0, 8)}…`);
 
       setForm({
         amount: '',
@@ -503,7 +514,9 @@ export default function TitheManager() {
         givingDate: new Date().toISOString().split('T')[0],
         notes: '',
         isAnonymous: false,
-        incomeReference: ''
+        incomeReference: '',
+        paymentMethod: 'wallet',
+        titheType: 'personal'
       });
       setSelectedTransaction(null);
 
@@ -560,19 +573,21 @@ export default function TitheManager() {
 
         if (updateError) throw updateError;
 
-        // Create financial report entry
+        // Create financial report entry as an 'expense' (transaction_type:'tithe'
+        // hits a known broken trigger on this table — see MobileView's tithe-save comment)
         const { error: reportError } = await supabase
           .from('ican_transactions')
           .insert({
             user_id: (await supabase.auth.getUser()).data.user?.id,
             amount: tithe.amount,
             currency: tithe.currency,
-            transaction_type: 'tithe',
+            transaction_type: 'expense',
             description: `${tithe.giving_type.charAt(0).toUpperCase() + tithe.giving_type.slice(1)} to ${tithe.recipient_type}`,
             status: 'completed',
             metadata: {
-              payment_type: 'personal',
-              tithe_type: tithe.giving_type,
+              payment_type: tithe.tithe_type || 'personal',
+              tithe_type: tithe.tithe_type || 'personal',
+              payment_method: tithe.payment_method || 'wallet',
               entry_mode: 'tithe-pay-in',
               recorded_date: new Date().toISOString(),
               tithe_id: tithe.id,
@@ -631,22 +646,32 @@ export default function TitheManager() {
 
       setCalcIncomeTx(txData || []);
 
-      // 2. All tithe records — parse TX:{id} from notes to build the map
+      // 2. All tithe records — build the "paid against which income" map.
+      // Prefers the real source_transaction_id column; falls back to the old
+      // TX:{id} note marker for tithes recorded before that column existed.
       const { data: titheData } = await supabase.rpc('fn_get_user_tithes', {
         p_start_date: null, p_end_date: null, p_giving_type: null, p_limit: 500
       });
 
       const map = {};
+      let bizPaid = 0;
+      const bizHistory = [];
       (titheData || []).forEach(t => {
+        if (t.tithe_type === 'business') {
+          bizPaid += Number(t.amount) || 0;
+          bizHistory.push({ amount: t.amount, giving_type: t.giving_type, date: t.giving_date });
+          return;
+        }
         const notes = t.notes_encrypted || t.notes || '';
-        const m = String(notes).match(/TX:([a-z0-9\-]+)/i);
-        if (m) {
-          const id = m[1];
-          if (!map[id]) map[id] = [];
-          map[id].push({ amount: t.amount, giving_type: t.giving_type, date: t.giving_date });
+        const srcId = t.source_transaction_id || (String(notes).match(/TX:([a-z0-9\-]+)/i) || [])[1];
+        if (srcId) {
+          if (!map[srcId]) map[srcId] = [];
+          map[srcId].push({ amount: t.amount, giving_type: t.giving_type, date: t.giving_date });
         }
       });
       setCalcTitheMap(map);
+      setCalcBizPaid(bizPaid);
+      setCalcBizHistory(bizHistory.sort((a, b) => new Date(b.date) - new Date(a.date)));
     } catch (err) {
       console.error('Calc fetch error', err);
     } finally {
@@ -657,8 +682,14 @@ export default function TitheManager() {
   const handleCalcPayTithe = async () => {
     if (!calcSelected) return;
     const amount = parseFloat(calcForm.amount);
+    const due = Math.round(calcSelected.amount * 0.1);
+    const paidSoFar = (calcTitheMap[calcSelected.id] || []).reduce((s, r) => s + (r.amount || 0), 0);
+    const remaining = Math.max(0, due - paidSoFar);
+
     if (!amount || amount <= 0) { setCalcMsg({ type: 'err', text: 'Enter a valid amount' }); return; }
-    if (amount > calcSelected.amount) { setCalcMsg({ type: 'err', text: `Cannot exceed income amount (${calcSelected.amount?.toLocaleString()} UGX)` }); return; }
+    if (remaining <= 0) { setCalcMsg({ type: 'err', text: '⛔ This income is already fully tithed — no double-tithing allowed.' }); return; }
+    if (amount > remaining) { setCalcMsg({ type: 'err', text: `Only ${remaining.toLocaleString()} UGX remains owed on this income (already paid ${paidSoFar.toLocaleString()} of the ${due.toLocaleString()} due).` }); return; }
+    if (calcForm.paymentMethod === 'wallet' && amount > walletBalance) { setCalcMsg({ type: 'err', text: `Exceeds wallet balance (${walletBalance.toLocaleString()} UGX). Choose Cash instead.` }); return; }
 
     setCalcLoading(true);
     setCalcMsg(null);
@@ -672,9 +703,12 @@ export default function TitheManager() {
         p_tithe_percentage: parseFloat((amount / calcSelected.amount * 100).toFixed(1)),
         p_income_reference_amount: calcSelected.amount,
         p_giving_date: new Date(calcSelected.created_at).toISOString().split('T')[0],
-        // Store transaction ID silently in notes — blockchain picks it up
+        // Kept for backward-compatible note display; source_transaction_id is the real link now
         p_notes_encrypted: `TX:${calcSelected.id}|${calcSelected.description || ''}|${calcForm.givingType}`,
-        p_is_anonymous: calcForm.isAnonymous
+        p_is_anonymous: calcForm.isAnonymous,
+        p_payment_method: calcForm.paymentMethod,
+        p_tithe_type: 'personal',
+        p_source_transaction_id: calcSelected.id
       });
       if (error) throw error;
       const result = data?.[0];
@@ -686,11 +720,59 @@ export default function TitheManager() {
         return { ...prev, [calcSelected.id]: [...existing, { amount, giving_type: calcForm.givingType, date: new Date().toISOString() }] };
       });
 
-      setCalcMsg({ type: 'ok', text: `✅ ${(amount).toLocaleString()} UGX tithe recorded — blockchain secured` });
+      if (calcForm.paymentMethod === 'wallet') fetchWalletBalance();
+
+      setCalcMsg({ type: 'ok', text: `✅ ${(amount).toLocaleString()} UGX tithe recorded${calcForm.paymentMethod === 'cash' ? ' as cash' : ' from wallet'} — blockchain secured` });
       setCalcForm(f => ({ ...f, amount: '' }));
       setTimeout(() => { setCalcSelected(null); setCalcMsg(null); }, 2500);
     } catch (err) {
       setCalcMsg({ type: 'err', text: err.message || 'Payment failed' });
+    } finally {
+      setCalcLoading(false);
+    }
+  };
+
+  // 🏢 Business tithe — the owner chooses the amount and the date; not tied
+  // to any single transaction. Capped only by what's actually still owed so
+  // one period's tithe is never paid (or asked for) twice.
+  const handleCalcPayBusinessTithe = async (businessIncomeTotal) => {
+    const amount = parseFloat(calcBizForm.amount);
+
+    if (!amount || amount <= 0) { setCalcBizMsg({ type: 'err', text: 'Enter a valid amount' }); return; }
+    if (calcBizForm.paymentMethod === 'wallet' && amount > walletBalance) { setCalcBizMsg({ type: 'err', text: `Exceeds wallet balance (${walletBalance.toLocaleString()} UGX). Choose Cash instead.` }); return; }
+    // Business giving beyond what's currently owed is allowed (paying ahead,
+    // or simply giving more) — the UI warns about it inline but never blocks it.
+
+    setCalcLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('fn_add_tithe', {
+        p_giving_type: calcBizForm.givingType,
+        p_amount: amount,
+        p_currency: 'UGX',
+        p_recipient_type: calcBizForm.recipientType,
+        p_recipient_name_encrypted: null,
+        p_tithe_percentage: businessIncomeTotal > 0 ? parseFloat((amount / businessIncomeTotal * 100).toFixed(1)) : 10.0,
+        p_income_reference_amount: businessIncomeTotal,
+        p_giving_date: calcBizForm.givingDate,
+        p_notes_encrypted: `BIZ:${calcBizForm.givingDate}|${calcBizForm.givingType}`,
+        p_is_anonymous: calcBizForm.isAnonymous,
+        p_payment_method: calcBizForm.paymentMethod,
+        p_tithe_type: 'business',
+        p_source_transaction_id: null
+      });
+      if (error) throw error;
+      const result = data?.[0];
+      if (!result?.success) throw new Error(result?.message || 'Failed');
+
+      setCalcBizPaid(prev => prev + amount);
+      setCalcBizHistory(prev => [{ amount, giving_type: calcBizForm.givingType, date: calcBizForm.givingDate }, ...prev]);
+      if (calcBizForm.paymentMethod === 'wallet') fetchWalletBalance();
+
+      setCalcBizMsg({ type: 'ok', text: `✅ ${amount.toLocaleString()} UGX business tithe recorded${calcBizForm.paymentMethod === 'cash' ? ' as cash' : ' from wallet'} for ${new Date(calcBizForm.givingDate).toLocaleDateString()}` });
+      setCalcBizForm(f => ({ ...f, amount: '' }));
+      setTimeout(() => setCalcBizMsg(null), 3000);
+    } catch (err) {
+      setCalcBizMsg({ type: 'err', text: err.message || 'Payment failed' });
     } finally {
       setCalcLoading(false);
     }
@@ -975,6 +1057,33 @@ export default function TitheManager() {
               </select>
             </div>
 
+            {/* Payment Method: Cash or Wallet */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Paid With</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, paymentMethod: 'wallet' })}
+                  className={`flex-1 py-2 rounded-lg font-medium text-sm transition ${form.paymentMethod === 'wallet' ? 'bg-purple-600 text-white' : 'bg-slate-700/50 text-gray-300 border border-slate-600'}`}
+                >
+                  💳 Wallet Balance
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, paymentMethod: 'cash' })}
+                  className={`flex-1 py-2 rounded-lg font-medium text-sm transition ${form.paymentMethod === 'cash' ? 'bg-purple-600 text-white' : 'bg-slate-700/50 text-gray-300 border border-slate-600'}`}
+                >
+                  💵 Cash (given by hand)
+                </button>
+              </div>
+              {form.paymentMethod === 'wallet' && form.amount && Number(form.amount) > walletBalance && (
+                <p className="text-xs text-red-400 mt-1">Exceeds wallet balance ({walletBalance.toLocaleString()} UGX). Switch to Cash if you gave this directly.</p>
+              )}
+              {form.paymentMethod === 'cash' && (
+                <p className="text-xs text-gray-500 mt-1">Recorded as given — your wallet balance won't be touched.</p>
+              )}
+            </div>
+
             {/* Anonymous Checkbox */}
             <label className="flex items-center gap-2 text-gray-300 cursor-pointer">
               <input
@@ -996,7 +1105,7 @@ export default function TitheManager() {
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={loading || !form.amount}
+              disabled={loading || !form.amount || (form.paymentMethod === 'wallet' && Number(form.amount) > walletBalance)}
               className="w-full bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 disabled:from-gray-600 disabled:to-gray-600 text-white font-semibold py-3 rounded-lg transition"
             >
               {loading ? '⏳ Recording & Clearing...' : `✅ Pay & Clear Tithe — ${form.amount ? Number(form.amount).toLocaleString() : '0'} ${selectedTransaction?.currency || 'UGX'}`}
@@ -1009,12 +1118,36 @@ export default function TitheManager() {
 
   const renderAddForm = () => (
     <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-6 border border-purple-500/30 shadow-lg">
-      <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+      <h3 className="text-xl font-bold text-white mb-1 flex items-center gap-2">
         <Plus className="w-5 h-5 text-purple-400" />
         Add Tithe Payment
       </h3>
+      <p className="text-gray-400 text-xs mb-4">
+        Not tied to one transaction — use this for business giving on your own schedule, or any personal gift you want to log freely.
+      </p>
 
       <form onSubmit={handleAddTithe} className="space-y-4">
+        {/* Who this is for */}
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-1">This Giving Is For</label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setForm({ ...form, titheType: 'personal' })}
+              className={`flex-1 py-2 rounded-lg font-medium text-sm transition ${form.titheType === 'personal' ? 'bg-purple-600 text-white' : 'bg-slate-700/50 text-gray-300 border border-slate-600'}`}
+            >
+              👤 Personal
+            </button>
+            <button
+              type="button"
+              onClick={() => setForm({ ...form, titheType: 'business' })}
+              className={`flex-1 py-2 rounded-lg font-medium text-sm transition ${form.titheType === 'business' ? 'bg-purple-600 text-white' : 'bg-slate-700/50 text-gray-300 border border-slate-600'}`}
+            >
+              🏢 Business
+            </button>
+          </div>
+        </div>
+
         {/* Amount */}
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-1">Amount (UGX)</label>
@@ -1104,6 +1237,30 @@ export default function TitheManager() {
           />
         </div>
 
+        {/* Payment Method: Cash or Wallet */}
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-1">Paid With</label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setForm({ ...form, paymentMethod: 'wallet' })}
+              className={`flex-1 py-2 rounded-lg font-medium text-sm transition ${form.paymentMethod === 'wallet' ? 'bg-purple-600 text-white' : 'bg-slate-700/50 text-gray-300 border border-slate-600'}`}
+            >
+              💳 Wallet Balance
+            </button>
+            <button
+              type="button"
+              onClick={() => setForm({ ...form, paymentMethod: 'cash' })}
+              className={`flex-1 py-2 rounded-lg font-medium text-sm transition ${form.paymentMethod === 'cash' ? 'bg-purple-600 text-white' : 'bg-slate-700/50 text-gray-300 border border-slate-600'}`}
+            >
+              💵 Cash (given by hand)
+            </button>
+          </div>
+          {form.paymentMethod === 'cash' && (
+            <p className="text-xs text-gray-500 mt-1">Recorded as given — your wallet balance won't be touched.</p>
+          )}
+        </div>
+
         {/* Anonymous Checkbox */}
         <label className="flex items-center gap-2 text-gray-300 cursor-pointer">
           <input
@@ -1118,7 +1275,7 @@ export default function TitheManager() {
         {/* Submit Button */}
         <button
           type="submit"
-          disabled={loading || !form.amount}
+          disabled={loading || !form.amount || (form.paymentMethod === 'wallet' && Number(form.amount) > walletBalance)}
           className="w-full bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-700 hover:to-purple-600 disabled:from-gray-600 disabled:to-gray-600 text-white font-semibold py-2 rounded-lg transition"
         >
           {loading ? '⏳ Recording Tithe...' : '✅ Record Tithe'}
@@ -1300,20 +1457,47 @@ export default function TitheManager() {
   );
 
   const renderCalculator = () => {
-    const totalIncome  = calcIncomeTx.reduce((s, t) => s + (t.amount || 0), 0);
-    const titheOwed    = totalIncome * 0.1;
-    const tithePaid    = Object.values(calcTitheMap).flat().reduce((s, r) => s + (r.amount || 0), 0);
-    const titheRemains = Math.max(0, titheOwed - tithePaid);
-
     const fmtUGX = (n) => `UGX ${(n || 0).toLocaleString()}`;
 
-    // All tithe payment history
-    const history = Object.entries(calcTitheMap)
+    const personalTx = calcIncomeTx.filter(t => (t.record_category || t.metadata?.record_category) !== 'business');
+    const businessTx = calcIncomeTx.filter(t => (t.record_category || t.metadata?.record_category) === 'business');
+
+    const personalIncome  = personalTx.reduce((s, t) => s + (t.amount || 0), 0);
+    const personalOwed    = personalIncome * 0.1;
+    const personalPaid    = Object.values(calcTitheMap).flat().reduce((s, r) => s + (r.amount || 0), 0);
+    const personalRemains = Math.max(0, personalOwed - personalPaid);
+
+    const businessIncome  = businessTx.reduce((s, t) => s + (t.amount || 0), 0);
+    const businessOwed    = businessIncome * 0.1;
+    const businessRemains = Math.max(0, businessOwed - calcBizPaid);
+
+    // Personal payment history (each tied to a real income transaction)
+    const personalHistory = Object.entries(calcTitheMap)
       .flatMap(([txId, recs]) => recs.map(r => ({
         ...r,
         txDesc: calcIncomeTx.find(t => t.id === txId)?.description || 'Income'
       })))
       .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    const cardsFor = (income, owed, paid, remains, count) => [
+      { label: 'Total Income',  value: fmtUGX(income),  sub: `${count} record(s)`,                              color: 'text-green-300',  border: 'border-green-500/20',  bg: 'bg-green-500/5'  },
+      { label: '10% Tithe Due', value: fmtUGX(owed),     sub: 'based on all income',                             color: 'text-amber-300',  border: 'border-amber-500/20',  bg: 'bg-amber-500/5'  },
+      { label: 'Total Paid',    value: fmtUGX(paid),     sub: 'recorded so far',                                 color: 'text-purple-300', border: 'border-purple-500/20', bg: 'bg-purple-500/5' },
+      { label: 'Still Owed',    value: fmtUGX(remains),  sub: remains <= 0 ? '🎉 All clear!' : 'to give',        color: remains <= 0 ? 'text-green-400' : 'text-rose-300', border: remains <= 0 ? 'border-green-500/20' : 'border-rose-500/20', bg: remains <= 0 ? 'bg-green-500/5' : 'bg-rose-500/5' },
+    ];
+
+    const PaymentMethodToggle = ({ value, onChange }) => (
+      <div className="flex gap-2 mb-3">
+        <button type="button" onClick={() => onChange('wallet')}
+          className={`flex-1 py-2 rounded-xl text-xs font-bold border transition ${value === 'wallet' ? 'bg-amber-500/20 border-amber-500/40 text-amber-300' : 'bg-slate-800/60 border-slate-700/50 text-gray-400'}`}>
+          💳 Wallet
+        </button>
+        <button type="button" onClick={() => onChange('cash')}
+          className={`flex-1 py-2 rounded-xl text-xs font-bold border transition ${value === 'cash' ? 'bg-amber-500/20 border-amber-500/40 text-amber-300' : 'bg-slate-800/60 border-slate-700/50 text-gray-400'}`}>
+          💵 Cash
+        </button>
+      </div>
+    );
 
     return (
       <div className="space-y-5">
@@ -1327,174 +1511,333 @@ export default function TitheManager() {
           )}
         </div>
 
-        {/* ── 4 summary cards ── */}
-        <div className="grid grid-cols-2 gap-3">
-          {[
-            { label: 'Total Income',    value: fmtUGX(totalIncome),  sub: `${calcIncomeTx.length} records`,                 color: 'text-green-300',  border: 'border-green-500/20',  bg: 'bg-green-500/5'  },
-            { label: '10% Tithe Due',   value: fmtUGX(titheOwed),    sub: 'based on all income',                            color: 'text-amber-300',  border: 'border-amber-500/20',  bg: 'bg-amber-500/5'  },
-            { label: 'Total Paid',      value: fmtUGX(tithePaid),    sub: `${history.length} payment(s) recorded`,         color: 'text-purple-300', border: 'border-purple-500/20', bg: 'bg-purple-500/5' },
-            { label: 'Still Owed',      value: fmtUGX(titheRemains), sub: titheRemains <= 0 ? '🎉 All clear!' : 'to give', color: titheRemains <= 0 ? 'text-green-400' : 'text-rose-300', border: titheRemains <= 0 ? 'border-green-500/20' : 'border-rose-500/20', bg: titheRemains <= 0 ? 'bg-green-500/5' : 'bg-rose-500/5' },
-          ].map(c => (
-            <div key={c.label} className={`rounded-xl border p-4 ${c.bg} ${c.border}`}>
-              <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">{c.label}</p>
-              <p className={`text-base font-bold ${c.color}`}>{c.value}</p>
-              <p className="text-[10px] text-gray-600 mt-0.5">{c.sub}</p>
-            </div>
-          ))}
+        {/* ── Personal / Business switch ── */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setCalcTab('personal')}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition ${calcTab === 'personal' ? 'bg-purple-600 text-white' : 'bg-slate-800 text-gray-400 border border-slate-700'}`}
+          >
+            👤 Personal — per income
+          </button>
+          <button
+            onClick={() => setCalcTab('business')}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition ${calcTab === 'business' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-gray-400 border border-slate-700'}`}
+          >
+            🏢 Business — pay any time
+          </button>
         </div>
 
-        {/* ── Income transactions list ── */}
-        <div>
-          <h3 className="text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Income Transactions</h3>
+        {calcTab === 'personal' ? (
+          <>
+            <p className="text-xs text-gray-500 -mt-2">Each personal income is tithed on its own — pick one below to pay its 10%.</p>
 
-          {calcIncomeTx.length === 0 ? (
-            <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-6 text-center text-gray-500 text-sm">
-              No income transactions found.
-            </div>
-          ) : (
-            <div className="space-y-2 max-h-64 overflow-y-auto pr-0.5">
-              {calcIncomeTx.map(t => {
-                const paid     = calcTitheMap[t.id] || [];
-                const paidAmt  = paid.reduce((s, r) => s + (r.amount || 0), 0);
-                const due      = Math.round(t.amount * 0.1);
-                const isSel    = calcSelected?.id === t.id;
-                const isBiz    = (t.record_category || t.metadata?.record_category) === 'business';
-
-                return (
-                  <button
-                    key={t.id}
-                    onClick={() => {
-                      setCalcSelected(isSel ? null : t);
-                      setCalcForm(f => ({ ...f, amount: isSel ? '' : String(due) }));
-                      setCalcMsg(null);
-                    }}
-                    className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
-                      isSel
-                        ? 'border-amber-500/50 bg-amber-500/10'
-                        : 'border-slate-700/40 bg-slate-800/40 hover:border-amber-500/25'
-                    }`}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{
-                          background: isBiz ? 'rgba(59,130,246,0.15)' : 'rgba(168,85,247,0.15)',
-                          color: isBiz ? '#93c5fd' : '#d8b4fe'
-                        }}>
-                          {isBiz ? '🏢' : '👤'}
-                        </span>
-                        <p className="text-sm font-semibold text-white truncate">{t.description || 'Income'}</p>
-                      </div>
-                      <p className="text-[10px] text-gray-500 mt-0.5">
-                        {fmtUGX(t.amount)} · 10% = <span className="text-amber-400/80">{fmtUGX(due)}</span>
-                        {paidAmt > 0 && <span className="text-green-400 ml-1.5">· Paid {fmtUGX(paidAmt)}</span>}
-                      </p>
-                    </div>
-                    <span className={`text-[10px] font-bold px-2 py-1 rounded-lg flex-shrink-0 ${
-                      paidAmt >= due ? 'bg-green-500/15 text-green-400' : paidAmt > 0 ? 'bg-amber-500/15 text-amber-300' : 'bg-slate-700/60 text-gray-400'
-                    }`}>
-                      {paidAmt >= due ? '✓ Done' : paidAmt > 0 ? 'Partial' : 'Unpaid'}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* ── Pay form (inline, only when a transaction is selected) ── */}
-        {calcSelected && (
-          <div className="rounded-xl border border-amber-500/25 p-4" style={{ background: 'rgba(120,53,15,0.12)' }}>
-            <p className="text-xs font-semibold text-amber-400 mb-3">
-              Paying tithe from: <span className="text-white font-normal">{calcSelected.description || 'Income'} — {fmtUGX(calcSelected.amount)}</span>
-            </p>
-
-            {/* Amount + quick % buttons */}
-            <div className="flex gap-2 mb-3">
-              <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl border border-amber-500/25 bg-slate-900/60">
-                <span className="text-xs text-gray-500 flex-shrink-0">UGX</span>
-                <input
-                  type="number"
-                  value={calcForm.amount}
-                  onChange={e => setCalcForm(f => ({ ...f, amount: e.target.value }))}
-                  placeholder="Amount"
-                  inputMode="numeric"
-                  className="flex-1 bg-transparent text-sm text-white outline-none"
-                />
-              </div>
-              <button onClick={() => setCalcForm(f => ({ ...f, amount: String(Math.round(calcSelected.amount * 0.1)) }))}
-                className="px-3 py-2 rounded-xl bg-amber-500/15 text-amber-300 text-xs font-bold border border-amber-500/20 hover:bg-amber-500/25 transition">10%</button>
-              <button onClick={() => setCalcForm(f => ({ ...f, amount: String(Math.round(calcSelected.amount * 0.05)) }))}
-                className="px-3 py-2 rounded-xl bg-slate-700/60 text-gray-300 text-xs font-bold border border-slate-600/30 hover:bg-slate-700 transition">5%</button>
-            </div>
-
-            {/* Giving type + Recipient */}
-            <div className="flex gap-2 mb-3">
-              <select value={calcForm.givingType} onChange={e => setCalcForm(f => ({ ...f, givingType: e.target.value }))}
-                className="flex-1 bg-slate-800/80 border border-slate-700/50 rounded-xl px-3 py-2 text-xs text-white outline-none">
-                <option value="tithe">Tithe (10%)</option>
-                <option value="offering">Offering</option>
-                <option value="charity">Charity</option>
-                <option value="mission">Mission Fund</option>
-                <option value="building_fund">Building Fund</option>
-                <option value="alms">Alms / Zakat</option>
-              </select>
-              <select value={calcForm.recipientType} onChange={e => setCalcForm(f => ({ ...f, recipientType: e.target.value }))}
-                className="flex-1 bg-slate-800/80 border border-slate-700/50 rounded-xl px-3 py-2 text-xs text-white outline-none">
-                <option value="church">Church</option>
-                <option value="mosque">Mosque</option>
-                <option value="charity">Charity Org</option>
-                <option value="individual">Individual</option>
-              </select>
-            </div>
-
-            {/* Anonymous toggle */}
-            <label className="flex items-center gap-2 mb-3 cursor-pointer select-none">
-              <div
-                onClick={() => setCalcForm(f => ({ ...f, isAnonymous: !f.isAnonymous }))}
-                className={`w-9 h-5 rounded-full transition-all flex items-center px-0.5 flex-shrink-0 ${calcForm.isAnonymous ? 'bg-amber-500 justify-end' : 'bg-slate-700 justify-start'}`}
-              >
-                <div className="w-4 h-4 rounded-full bg-white shadow" />
-              </div>
-              <span className="text-xs text-gray-400">Give anonymously</span>
-            </label>
-
-            {/* Feedback */}
-            {calcMsg && (
-              <div className={`text-xs text-center py-2 px-3 rounded-lg mb-2 font-medium ${calcMsg.type === 'ok' ? 'bg-green-500/15 text-green-300' : 'bg-red-500/15 text-red-300'}`}>
-                {calcMsg.text}
-              </div>
-            )}
-
-            <button
-              onClick={handleCalcPayTithe}
-              disabled={calcLoading || !calcForm.amount}
-              className="w-full py-3 rounded-xl font-bold text-sm transition-all active:scale-95 disabled:opacity-50 text-white"
-              style={{ background: 'linear-gradient(135deg, #b45309 0%, #78350f 100%)' }}
-            >
-              {calcLoading ? '⏳ Recording on blockchain…' : `🙏 Pay ${calcForm.amount ? `UGX ${parseFloat(calcForm.amount || 0).toLocaleString()}` : 'Tithe'}`}
-            </button>
-          </div>
-        )}
-
-        {/* ── Payment history ── */}
-        {history.length > 0 && (
-          <div>
-            <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Payment History</h3>
-            <div className="space-y-1.5">
-              {history.map((r, i) => (
-                <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-800/40 border border-slate-700/30">
-                  <span className="text-base flex-shrink-0">🙏</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-white truncate">{r.txDesc}</p>
-                    <p className="text-[10px] text-gray-500 capitalize mt-0.5">
-                      {r.giving_type} · {new Date(r.date).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}
-                    </p>
-                  </div>
-                  <p className="text-sm font-bold text-amber-300 flex-shrink-0">{fmtUGX(r.amount)}</p>
+            {/* ── 4 summary cards (personal) ── */}
+            <div className="grid grid-cols-2 gap-3">
+              {cardsFor(personalIncome, personalOwed, personalPaid, personalRemains, personalTx.length).map(c => (
+                <div key={c.label} className={`rounded-xl border p-4 ${c.bg} ${c.border}`}>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">{c.label}</p>
+                  <p className={`text-base font-bold ${c.color}`}>{c.value}</p>
+                  <p className="text-[10px] text-gray-600 mt-0.5">{c.sub}</p>
                 </div>
               ))}
             </div>
-          </div>
+
+            {/* ── Personal income transactions list ── */}
+            <div>
+              <h3 className="text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Personal Income</h3>
+
+              {personalTx.length === 0 ? (
+                <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-6 text-center text-gray-500 text-sm">
+                  No personal income transactions found.
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-0.5">
+                  {personalTx.map(t => {
+                    const paid      = calcTitheMap[t.id] || [];
+                    const paidAmt   = paid.reduce((s, r) => s + (r.amount || 0), 0);
+                    const due       = Math.round(t.amount * 0.1);
+                    const remaining = Math.max(0, due - paidAmt);
+                    const fullyTithed = remaining <= 0;
+                    const isSel     = calcSelected?.id === t.id;
+
+                    return (
+                      <button
+                        key={t.id}
+                        disabled={fullyTithed}
+                        onClick={() => {
+                          if (fullyTithed) return;
+                          setCalcSelected(isSel ? null : t);
+                          // Default to what's actually still owed on this income —
+                          // never re-offer the full 10% once part of it is paid.
+                          setCalcForm(f => ({ ...f, amount: isSel ? '' : String(remaining) }));
+                          setCalcMsg(null);
+                        }}
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
+                          fullyTithed
+                            ? 'border-green-700/30 bg-green-900/10 cursor-not-allowed opacity-70'
+                            : isSel
+                              ? 'border-amber-500/50 bg-amber-500/10'
+                              : 'border-slate-700/40 bg-slate-800/40 hover:border-amber-500/25'
+                        }`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(168,85,247,0.15)', color: '#d8b4fe' }}>👤</span>
+                            <p className="text-sm font-semibold text-white truncate">{t.description || 'Income'}</p>
+                          </div>
+                          <p className="text-[10px] text-gray-500 mt-0.5">
+                            {fmtUGX(t.amount)} · 10% = <span className="text-amber-400/80">{fmtUGX(due)}</span>
+                            {paidAmt > 0 && <span className="text-green-400 ml-1.5">· Paid {fmtUGX(paidAmt)}</span>}
+                          </p>
+                        </div>
+                        <span className={`text-[10px] font-bold px-2 py-1 rounded-lg flex-shrink-0 ${
+                          fullyTithed ? 'bg-green-500/15 text-green-400' : paidAmt > 0 ? 'bg-amber-500/15 text-amber-300' : 'bg-slate-700/60 text-gray-400'
+                        }`}>
+                          {fullyTithed ? '✓ Fully Tithed' : paidAmt > 0 ? 'Partial' : 'Unpaid'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* ── Pay form (inline, only when an income is selected) ── */}
+            {calcSelected && (() => {
+              const due = Math.round(calcSelected.amount * 0.1);
+              const paidSoFar = (calcTitheMap[calcSelected.id] || []).reduce((s, r) => s + (r.amount || 0), 0);
+              const remaining = Math.max(0, due - paidSoFar);
+              return (
+              <div className="rounded-xl border border-amber-500/25 p-4" style={{ background: 'rgba(120,53,15,0.12)' }}>
+                <p className="text-xs font-semibold text-amber-400 mb-3">
+                  Paying tithe from: <span className="text-white font-normal">{calcSelected.description || 'Income'} — {fmtUGX(calcSelected.amount)}</span>
+                  {paidSoFar > 0 && <span className="block text-gray-500 font-normal mt-0.5">Remaining owed on this income: {fmtUGX(remaining)}</span>}
+                </p>
+
+                {/* Amount + quick buttons */}
+                <div className="flex gap-2 mb-3">
+                  <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl border border-amber-500/25 bg-slate-900/60">
+                    <span className="text-xs text-gray-500 flex-shrink-0">UGX</span>
+                    <input
+                      type="number"
+                      value={calcForm.amount}
+                      onChange={e => setCalcForm(f => ({ ...f, amount: e.target.value }))}
+                      placeholder="Amount"
+                      inputMode="numeric"
+                      max={remaining}
+                      className="flex-1 bg-transparent text-sm text-white outline-none"
+                    />
+                  </div>
+                  <button onClick={() => setCalcForm(f => ({ ...f, amount: String(remaining) }))}
+                    className="px-3 py-2 rounded-xl bg-amber-500/15 text-amber-300 text-xs font-bold border border-amber-500/20 hover:bg-amber-500/25 transition">
+                    {paidSoFar > 0 ? 'Remaining' : '10%'}
+                  </button>
+                </div>
+
+                {/* Giving type + Recipient */}
+                <div className="flex gap-2 mb-3">
+                  <select value={calcForm.givingType} onChange={e => setCalcForm(f => ({ ...f, givingType: e.target.value }))}
+                    className="flex-1 bg-slate-800/80 border border-slate-700/50 rounded-xl px-3 py-2 text-xs text-white outline-none">
+                    <option value="tithe">Tithe (10%)</option>
+                    <option value="offering">Offering</option>
+                    <option value="charity">Charity</option>
+                    <option value="mission">Mission Fund</option>
+                    <option value="building_fund">Building Fund</option>
+                    <option value="alms">Alms / Zakat</option>
+                  </select>
+                  <select value={calcForm.recipientType} onChange={e => setCalcForm(f => ({ ...f, recipientType: e.target.value }))}
+                    className="flex-1 bg-slate-800/80 border border-slate-700/50 rounded-xl px-3 py-2 text-xs text-white outline-none">
+                    <option value="church">Church</option>
+                    <option value="mosque">Mosque</option>
+                    <option value="charity">Charity Org</option>
+                    <option value="individual">Individual</option>
+                  </select>
+                </div>
+
+                {/* Cash / Wallet */}
+                <PaymentMethodToggle value={calcForm.paymentMethod} onChange={(v) => setCalcForm(f => ({ ...f, paymentMethod: v }))} />
+                {calcForm.paymentMethod === 'wallet' && Number(calcForm.amount) > walletBalance && (
+                  <p className="text-[10px] text-rose-400 -mt-2 mb-3">Exceeds wallet balance ({fmtUGX(walletBalance)}). Switch to Cash if given by hand.</p>
+                )}
+
+                {/* Anonymous toggle */}
+                <label className="flex items-center gap-2 mb-3 cursor-pointer select-none">
+                  <div
+                    onClick={() => setCalcForm(f => ({ ...f, isAnonymous: !f.isAnonymous }))}
+                    className={`w-9 h-5 rounded-full transition-all flex items-center px-0.5 flex-shrink-0 ${calcForm.isAnonymous ? 'bg-amber-500 justify-end' : 'bg-slate-700 justify-start'}`}
+                  >
+                    <div className="w-4 h-4 rounded-full bg-white shadow" />
+                  </div>
+                  <span className="text-xs text-gray-400">Give anonymously</span>
+                </label>
+
+                {/* Feedback */}
+                {calcMsg && (
+                  <div className={`text-xs text-center py-2 px-3 rounded-lg mb-2 font-medium ${calcMsg.type === 'ok' ? 'bg-green-500/15 text-green-300' : 'bg-red-500/15 text-red-300'}`}>
+                    {calcMsg.text}
+                  </div>
+                )}
+
+                <button
+                  onClick={handleCalcPayTithe}
+                  disabled={calcLoading || !calcForm.amount || Number(calcForm.amount) > remaining || (calcForm.paymentMethod === 'wallet' && Number(calcForm.amount) > walletBalance)}
+                  className="w-full py-3 rounded-xl font-bold text-sm transition-all active:scale-95 disabled:opacity-50 text-white"
+                  style={{ background: 'linear-gradient(135deg, #b45309 0%, #78350f 100%)' }}
+                >
+                  {calcLoading ? '⏳ Recording on blockchain…' : `🙏 Pay ${calcForm.amount ? `UGX ${parseFloat(calcForm.amount || 0).toLocaleString()}` : 'Tithe'}`}
+                </button>
+              </div>
+              );
+            })()}
+
+            {/* ── Personal payment history ── */}
+            {personalHistory.length > 0 && (
+              <div>
+                <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Payment History</h3>
+                <div className="space-y-1.5">
+                  {personalHistory.map((r, i) => (
+                    <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-800/40 border border-slate-700/30">
+                      <span className="text-base flex-shrink-0">🙏</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-white truncate">{r.txDesc}</p>
+                        <p className="text-[10px] text-gray-500 capitalize mt-0.5">
+                          {r.giving_type} · {new Date(r.date).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                      </div>
+                      <p className="text-sm font-bold text-amber-300 flex-shrink-0">{fmtUGX(r.amount)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="text-xs text-gray-500 -mt-2">
+              As the owner, you decide when to pay business tithe — weekly, monthly, or whenever suits you. It's not tied to any single sale.
+            </p>
+
+            {/* ── 4 summary cards (business) ── */}
+            <div className="grid grid-cols-2 gap-3">
+              {cardsFor(businessIncome, businessOwed, calcBizPaid, businessRemains, businessTx.length).map(c => (
+                <div key={c.label} className={`rounded-xl border p-4 ${c.bg} ${c.border}`}>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">{c.label}</p>
+                  <p className={`text-base font-bold ${c.color}`}>{c.value}</p>
+                  <p className="text-[10px] text-gray-600 mt-0.5">{c.sub}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* ── Freeform business pay panel ── */}
+            <div className="rounded-xl border border-blue-500/25 p-4" style={{ background: 'rgba(23,37,84,0.35)' }}>
+              <p className="text-xs font-semibold text-blue-300 mb-3">
+                Pay Business Tithe {businessRemains > 0 ? `— ${fmtUGX(businessRemains)} currently owed` : '— fully settled, give any extra you choose'}
+              </p>
+
+              <div className="flex gap-2 mb-3">
+                <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl border border-blue-500/25 bg-slate-900/60">
+                  <span className="text-xs text-gray-500 flex-shrink-0">UGX</span>
+                  <input
+                    type="number"
+                    value={calcBizForm.amount}
+                    onChange={e => setCalcBizForm(f => ({ ...f, amount: e.target.value }))}
+                    placeholder="Amount"
+                    inputMode="numeric"
+                    className="flex-1 bg-transparent text-sm text-white outline-none"
+                  />
+                </div>
+                <button onClick={() => setCalcBizForm(f => ({ ...f, amount: String(businessRemains || Math.round(businessIncome * 0.1)) }))}
+                  className="px-3 py-2 rounded-xl bg-blue-500/15 text-blue-300 text-xs font-bold border border-blue-500/20 hover:bg-blue-500/25 transition">Owed</button>
+              </div>
+              {Number(calcBizForm.amount) > businessRemains && businessRemains >= 0 && Number(calcBizForm.amount) > 0 && (
+                <p className="text-[10px] text-blue-300/80 -mt-2 mb-3">This is {fmtUGX(Number(calcBizForm.amount) - businessRemains)} more than currently owed — recorded as extra giving, not a duplicate tithe.</p>
+              )}
+
+              {/* Date — the owner's choice, any date */}
+              <div className="mb-3">
+                <label className="block text-[10px] text-gray-500 uppercase tracking-wider mb-1">Giving Date (you choose)</label>
+                <input
+                  type="date"
+                  value={calcBizForm.givingDate}
+                  onChange={e => setCalcBizForm(f => ({ ...f, givingDate: e.target.value }))}
+                  className="w-full bg-slate-800/80 border border-slate-700/50 rounded-xl px-3 py-2 text-xs text-white outline-none"
+                />
+              </div>
+
+              {/* Giving type + Recipient */}
+              <div className="flex gap-2 mb-3">
+                <select value={calcBizForm.givingType} onChange={e => setCalcBizForm(f => ({ ...f, givingType: e.target.value }))}
+                  className="flex-1 bg-slate-800/80 border border-slate-700/50 rounded-xl px-3 py-2 text-xs text-white outline-none">
+                  <option value="tithe">Tithe (10%)</option>
+                  <option value="offering">Offering</option>
+                  <option value="charity">Charity</option>
+                  <option value="mission">Mission Fund</option>
+                  <option value="building_fund">Building Fund</option>
+                  <option value="alms">Alms / Zakat</option>
+                </select>
+                <select value={calcBizForm.recipientType} onChange={e => setCalcBizForm(f => ({ ...f, recipientType: e.target.value }))}
+                  className="flex-1 bg-slate-800/80 border border-slate-700/50 rounded-xl px-3 py-2 text-xs text-white outline-none">
+                  <option value="church">Church</option>
+                  <option value="mosque">Mosque</option>
+                  <option value="charity">Charity Org</option>
+                  <option value="individual">Individual</option>
+                </select>
+              </div>
+
+              {/* Cash / Wallet */}
+              <PaymentMethodToggle value={calcBizForm.paymentMethod} onChange={(v) => setCalcBizForm(f => ({ ...f, paymentMethod: v }))} />
+              {calcBizForm.paymentMethod === 'wallet' && Number(calcBizForm.amount) > walletBalance && (
+                <p className="text-[10px] text-rose-400 -mt-2 mb-3">Exceeds wallet balance ({fmtUGX(walletBalance)}). Switch to Cash if given by hand.</p>
+              )}
+
+              {/* Anonymous toggle */}
+              <label className="flex items-center gap-2 mb-3 cursor-pointer select-none">
+                <div
+                  onClick={() => setCalcBizForm(f => ({ ...f, isAnonymous: !f.isAnonymous }))}
+                  className={`w-9 h-5 rounded-full transition-all flex items-center px-0.5 flex-shrink-0 ${calcBizForm.isAnonymous ? 'bg-blue-500 justify-end' : 'bg-slate-700 justify-start'}`}
+                >
+                  <div className="w-4 h-4 rounded-full bg-white shadow" />
+                </div>
+                <span className="text-xs text-gray-400">Give anonymously</span>
+              </label>
+
+              {calcBizMsg && (
+                <div className={`text-xs text-center py-2 px-3 rounded-lg mb-2 font-medium ${calcBizMsg.type === 'ok' ? 'bg-green-500/15 text-green-300' : 'bg-red-500/15 text-red-300'}`}>
+                  {calcBizMsg.text}
+                </div>
+              )}
+
+              <button
+                onClick={() => handleCalcPayBusinessTithe(businessIncome)}
+                disabled={calcLoading || !calcBizForm.amount || (calcBizForm.paymentMethod === 'wallet' && Number(calcBizForm.amount) > walletBalance)}
+                className="w-full py-3 rounded-xl font-bold text-sm transition-all active:scale-95 disabled:opacity-50 text-white"
+                style={{ background: 'linear-gradient(135deg, #1d4ed8 0%, #1e3a8a 100%)' }}
+              >
+                {calcLoading ? '⏳ Recording on blockchain…' : `🏢 Pay ${calcBizForm.amount ? `UGX ${parseFloat(calcBizForm.amount || 0).toLocaleString()}` : 'Business Tithe'}`}
+              </button>
+            </div>
+
+            {/* ── Business payment history ── */}
+            {calcBizHistory.length > 0 && (
+              <div>
+                <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Payment History</h3>
+                <div className="space-y-1.5">
+                  {calcBizHistory.map((r, i) => (
+                    <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-800/40 border border-slate-700/30">
+                      <span className="text-base flex-shrink-0">🏢</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-white truncate capitalize">{r.giving_type}</p>
+                        <p className="text-[10px] text-gray-500 mt-0.5">
+                          {new Date(r.date).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                      </div>
+                      <p className="text-sm font-bold text-blue-300 flex-shrink-0">{fmtUGX(r.amount)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     );
@@ -1534,6 +1877,7 @@ export default function TitheManager() {
         {/* Navigation Tabs */}
         <div className="flex gap-2 mb-6 flex-wrap">
           {[
+            { id: 'calculator', label: '🙏 Tithe Calculator', icon: Plus },
             { id: 'add', label: '➕ Add Tithe', icon: Plus },
             { id: 'settle', label: '💰 Settle Tithes', icon: Plus },
             { id: 'pay', label: '💳 Pay Tithe', icon: Plus },
@@ -1545,7 +1889,9 @@ export default function TitheManager() {
               key={tab.id}
               onClick={() => {
                 setFormMode(tab.id);
-                if (tab.id === 'pay') {
+                if (tab.id === 'calculator') {
+                  fetchCalcData();
+                } else if (tab.id === 'pay') {
                   fetchFilteredTransactions(transactionFilter);
                   loadAlreadyTithedMap();
                 } else if (tab.id === 'settle') {
@@ -1567,6 +1913,7 @@ export default function TitheManager() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Content */}
           <div className="lg:col-span-2">
+            {formMode === 'calculator' && renderCalculator()}
             {formMode === 'add' && renderAddForm()}
             {formMode === 'settle' && renderSettleTithes()}
             {formMode === 'pay' && renderPayTithe()}

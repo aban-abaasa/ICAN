@@ -5,7 +5,7 @@ import {
   Lock, Database, Hash, CreditCard, ToggleLeft, ToggleRight,
   CheckCircle, Copy, Activity, Layers, Clock, AlertTriangle,
   Network, Wallet, ArrowUp, ArrowDown, Eye, EyeOff, ShieldCheck,
-  MessageCircle, Globe, Trash2, Send, Mail, Phone, Video,
+  MessageCircle, Globe, Trash2, Send, Mail, Phone, Video, ChevronLeft,
 } from 'lucide-react';
 import { getSupabaseClient } from '../lib/supabase/client';
 import CallDock from './calls/CallDock';
@@ -117,12 +117,14 @@ const TABS = [
   { id: 'recovery',   label: 'Recovery',     Icon: AlertTriangle, color: '#ef4444' },
   { id: 'blockchain', label: 'Blockchain',   Icon: Lock,        color: '#ec4899' },
   { id: 'plans',      label: 'Plans',        Icon: Star,        color: '#eab308' },
+  { id: 'corporate',  label: 'Corporate',    Icon: CreditCard,  color: '#a855f7' },
   { id: 'board',      label: 'Public Board', Icon: MessageCircle, color: '#14b8a6' },
   { id: 'messages',   label: 'Messages',     Icon: Mail,          color: '#0ea5e9' },
+  { id: 'support',    label: 'Support Team', Icon: Shield,        color: '#22c55e' },
 ];
 
 // CSS variable themes
-const DARK_VARS = {
+export const DARK_VARS = {
   '--dp-bg':       'linear-gradient(160deg,#07091a 0%,#0d1124 50%,#07091a 100%)',
   '--dp-hdr':      'rgba(7,9,26,0.94)',
   '--dp-hdr-bd':   'rgba(255,255,255,0.07)',
@@ -282,7 +284,7 @@ const fmtChatTime = (d) => {
   return date.toLocaleDateString();
 };
 
-const MessagesTab = () => {
+export const MessagesTab = () => {
   const [conversations, setConversations] = useState([]);
   const [selectedId,    setSelectedId]    = useState(null);
   const [messages,      setMessages]      = useState([]);
@@ -355,7 +357,7 @@ const MessagesTab = () => {
 
   return (
     <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
-      <div className="rounded-2xl border overflow-hidden" style={{ background:'var(--dp-card)', borderColor:'var(--dp-card-bd)' }}>
+      <div className={`${selectedId ? 'hidden lg:block' : ''} rounded-2xl border overflow-hidden`} style={{ background:'var(--dp-card)', borderColor:'var(--dp-card-bd)' }}>
         <div className="px-4 py-3 border-b text-xs font-bold uppercase tracking-wider" style={{ color:'var(--dp-muted)', borderColor:'var(--dp-sep)' }}>
           Conversations ({conversations.length})
         </div>
@@ -383,7 +385,7 @@ const MessagesTab = () => {
         </div>
       </div>
 
-      <div className="relative flex flex-col overflow-hidden rounded-2xl border" style={{ background:'var(--dp-card)', borderColor:'var(--dp-card-bd)' }}>
+      <div className={`${selectedId ? 'flex fixed inset-0 z-40 lg:static lg:z-auto' : 'hidden lg:flex'} relative flex-col overflow-hidden lg:rounded-2xl lg:border`} style={{ background:'var(--dp-card)', borderColor:'var(--dp-card-bd)' }}>
         {!selected ? (
           <div className="flex flex-1 items-center justify-center text-sm" style={{ color:'var(--dp-muted)' }}>
             <div className="text-center">
@@ -394,9 +396,14 @@ const MessagesTab = () => {
         ) : (
           <>
             <div className="flex items-center justify-between gap-2 border-b px-4 py-3" style={{ borderColor:'var(--dp-sep)' }}>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold truncate" style={{ color:'var(--dp-txt)' }}>{selected.guest_name || 'Guest'}</p>
-                <p className="text-xs truncate" style={{ color:'var(--dp-muted)' }}>{selected.guest_email} · {selected.portal}</p>
+              <div className="flex min-w-0 items-center gap-2">
+                <button onClick={() => setSelectedId(null)} className="flex-shrink-0 rounded-full p-1 transition hover:opacity-70 lg:hidden" style={{ color:'var(--dp-sub)' }}>
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold truncate" style={{ color:'var(--dp-txt)' }}>{selected.guest_name || 'Guest'}</p>
+                  <p className="text-xs truncate" style={{ color:'var(--dp-muted)' }}>{selected.guest_email} · {selected.portal}</p>
+                </div>
               </div>
               {call.canCall && (
                 <div className="flex flex-shrink-0 items-center gap-1">
@@ -411,7 +418,7 @@ const MessagesTab = () => {
             </div>
             {showCallStage && <CallStage call={call} />}
             {!showCallStage && <CallDock call={call} />}
-            <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto px-4 py-3" style={{ maxHeight: '48vh' }}>
+            <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto px-4 py-3 lg:max-h-[48vh]">
               {messages.map(m => {
                 const fromDev = m.sender_role === 'dev';
                 return (
@@ -450,7 +457,399 @@ const MessagesTab = () => {
   );
 };
 
-const PublicBoardTab = () => {
+// =============================================================================
+// SUPPORT TEAM — admin management for the scoped /support-console page
+// (backend/SUPPORT_CONSOLE.sql): create a share link — either a password
+// you set, or a Gmail allowlist proven by an emailed code, same as CMMS
+// report sharing (CMMS_REPORT_SHARING_SYSTEM.sql) — and separately onboard
+// a real ICAN account as an IWOS contract worker.
+// =============================================================================
+const SupportTeamTab = () => {
+  const supabase = getSupabaseClient();
+  const [links,      setLinks]      = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [newLabel,   setNewLabel]   = useState('');
+  const [newVisibility, setNewVisibility] = useState('password');
+  const [newPassword, setNewPassword] = useState('');
+  const [newEmails,   setNewEmails]   = useState('');
+  const [newAllowedTabs, setNewAllowedTabs] = useState(['messages', 'board']);
+  const shareableTabs = TABS.filter(t => t.id !== 'support'); // never let a link grant the tab that manages links/PIN itself
+  const [creating,   setCreating]   = useState(false);
+  const [createError, setCreateError] = useState('');
+  const [justCreated, setJustCreated] = useState(null); // { token, label }
+  const [revokingId, setRevokingId] = useState(null);
+
+  const [onboardEmail,  setOnboardEmail]  = useState('');
+  const [onboardAmount, setOnboardAmount] = useState('');
+  const [onboardCurrency, setOnboardCurrency] = useState('UGX');
+  const [onboardFrequency, setOnboardFrequency] = useState('contract');
+  const [onboarding,    setOnboarding]    = useState(false);
+  const [onboardError,  setOnboardError]  = useState('');
+  const [onboardOk,     setOnboardOk]     = useState(false);
+
+  const [iwos, setIwos] = useState({ business_profile_id: null, members: [], compensation: [] });
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    const [{ data: linkData, error: linkErr }, { data: iwosData, error: iwosErr }] = await Promise.all([
+      supabase.rpc('ican_dev_list_support_links', { dev_token: DEV_TOKEN }),
+      supabase.rpc('ican_dev_get_iwos_overview', { dev_token: DEV_TOKEN }),
+    ]);
+    if (linkErr) console.warn('[Dev] ican_dev_list_support_links:', linkErr.message);
+    if (iwosErr) console.warn('[Dev] ican_dev_get_iwos_overview:', iwosErr.message);
+    setLinks(linkData || []);
+    setIwos(iwosData || { business_profile_id: null, members: [], compensation: [] });
+    setLoading(false);
+  }, [supabase]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const handleCreateLink = async (e) => {
+    e.preventDefault();
+    setCreateError(''); setJustCreated(null);
+    if (creating) return;
+    const allowedEmails = newVisibility === 'restricted'
+      ? newEmails.split(',').map(s => s.trim()).filter(Boolean)
+      : null;
+    if (newVisibility === 'password' && newPassword.trim().length < 4) {
+      setCreateError('Set a password of at least 4 characters.');
+      return;
+    }
+    if (newVisibility === 'restricted' && !allowedEmails?.length) {
+      setCreateError('Enter at least one Gmail address.');
+      return;
+    }
+    if (!newAllowedTabs.length) {
+      setCreateError('Pick at least one tab for this link to open.');
+      return;
+    }
+    setCreating(true);
+    try {
+      const { data, error } = await supabase.rpc('ican_dev_create_support_link', {
+        dev_token: DEV_TOKEN,
+        p_label: newLabel.trim() || null,
+        p_visibility: newVisibility,
+        p_password: newVisibility === 'password' ? newPassword.trim() : null,
+        p_allowed_emails: allowedEmails,
+        p_allowed_tabs: newAllowedTabs,
+      });
+      if (error || !data?.success) { setCreateError(data?.error || error?.message || 'Failed to create link.'); return; }
+      setJustCreated({ token: data.token, label: newLabel.trim() });
+      setNewLabel(''); setNewPassword(''); setNewEmails(''); setNewAllowedTabs(['messages', 'board']);
+      await refresh();
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const toggleNewTab = (id) => {
+    setNewAllowedTabs(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id]);
+  };
+  const newTabsAreRisky = newAllowedTabs.some(id => id !== 'messages' && id !== 'board');
+
+  const toggleRevoke = async (row) => {
+    setRevokingId(row.id);
+    try {
+      const fn = row.revoked_at ? 'ican_dev_reactivate_support_link' : 'ican_dev_revoke_support_link';
+      await supabase.rpc(fn, { dev_token: DEV_TOKEN, p_link_id: row.id });
+      await refresh();
+    } finally {
+      setRevokingId(null);
+    }
+  };
+
+  const [editingTabsId, setEditingTabsId] = useState(null);
+  const [editTabs, setEditTabs] = useState([]);
+  const [savingTabs, setSavingTabs] = useState(false);
+  const startEditTabs = (row) => { setEditingTabsId(row.id); setEditTabs(row.allowed_tabs?.length ? row.allowed_tabs : ['messages', 'board']); };
+  const cancelEditTabs = () => { setEditingTabsId(null); setEditTabs([]); };
+  const toggleEditTab = (id) => {
+    setEditTabs(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id]);
+  };
+  const saveEditTabs = async (row) => {
+    if (!editTabs.length || savingTabs) return;
+    setSavingTabs(true);
+    try {
+      const { data, error } = await supabase.rpc('ican_dev_update_support_link_tabs', {
+        dev_token: DEV_TOKEN, p_link_id: row.id, p_allowed_tabs: editTabs,
+      });
+      if (error || !data?.success) return; // link list re-renders unchanged; nothing else to surface here
+      cancelEditTabs();
+      await refresh();
+    } finally {
+      setSavingTabs(false);
+    }
+  };
+
+  const handleOnboard = async (e) => {
+    e.preventDefault();
+    setOnboardError(''); setOnboardOk(false);
+    const amount = parseFloat(onboardAmount);
+    if (!onboardEmail.trim() || !amount || amount <= 0 || onboarding) return;
+    setOnboarding(true);
+    try {
+      const { data, error } = await supabase.rpc('ican_dev_onboard_iwos_support_staff', {
+        dev_token: DEV_TOKEN,
+        p_target_email: onboardEmail.trim(),
+        p_base_pay_amount: amount,
+        p_currency: onboardCurrency.toUpperCase(),
+        p_pay_frequency: onboardFrequency,
+      });
+      if (error || !data?.success) { setOnboardError(data?.error || error?.message || 'Failed to onboard.'); return; }
+      setOnboardOk(true);
+      setOnboardEmail(''); setOnboardAmount('');
+      await refresh();
+    } finally {
+      setOnboarding(false);
+    }
+  };
+
+  const linkUrl = (token) => `${window.location.origin}/support-console?key=${token}`;
+
+  const [copiedToken, setCopiedToken] = useState(null);
+  const shareLink = async (row) => {
+    const url = linkUrl(row.token);
+    const text = row.label ? `IcanEra Support Console access for ${row.label}` : 'IcanEra Support Console access';
+    if (navigator.share) {
+      try { await navigator.share({ title: 'IcanEra Support Console', text, url }); return; } catch { /* user canceled — fall through to copy */ }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedToken(row.token);
+      setTimeout(() => setCopiedToken(prev => (prev === row.token ? null : prev)), 2000);
+    } catch { /* clipboard unavailable — link is still shown on screen to copy manually */ }
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <div className="flex items-center justify-between mb-3">
+          <Txt className="text-sm font-black">Support share links ({links.length})</Txt>
+          <button onClick={refresh} disabled={loading} className="rounded-lg p-1.5 border transition disabled:opacity-40"
+            style={{ background:'var(--dp-inner)', borderColor:'var(--dp-inner-bd)', color:'var(--dp-sub)' }}>
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''}/>
+          </button>
+        </div>
+
+        <form onSubmit={handleCreateLink} className="space-y-2 mb-4">
+          <div className="flex flex-wrap gap-2">
+            <input value={newLabel} onChange={e => setNewLabel(e.target.value)} type="text" placeholder="Who's this for? (optional)"
+              className="min-w-[160px] flex-1 rounded-xl border px-3 py-2 text-sm outline-none"
+              style={{ background:'var(--dp-input)', borderColor:'var(--dp-input-bd)', color:'var(--dp-txt)' }} />
+            <select value={newVisibility} onChange={e => setNewVisibility(e.target.value)}
+              className="rounded-xl border px-3 py-2 text-sm outline-none"
+              style={{ background:'var(--dp-input)', borderColor:'var(--dp-input-bd)', color:'var(--dp-txt)' }}>
+              <option value="password">Set a password</option>
+              <option value="restricted">Allowlist Gmail(s)</option>
+            </select>
+          </div>
+          {newVisibility === 'password' ? (
+            <input value={newPassword} onChange={e => setNewPassword(e.target.value)} type="text" placeholder="Password (4+ characters)"
+              className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
+              style={{ background:'var(--dp-input)', borderColor:'var(--dp-input-bd)', color:'var(--dp-txt)' }} />
+          ) : (
+            <input value={newEmails} onChange={e => setNewEmails(e.target.value)} type="text" placeholder="jane@gmail.com, john@gmail.com"
+              className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
+              style={{ background:'var(--dp-input)', borderColor:'var(--dp-input-bd)', color:'var(--dp-txt)' }} />
+          )}
+
+          <div className="rounded-xl border p-3" style={{ borderColor:'var(--dp-input-bd)' }}>
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-wider" style={{ color:'var(--dp-muted)' }}>Which tabs should this link open?</p>
+            <div className="flex flex-wrap gap-1.5">
+              {shareableTabs.map(t => {
+                const on = newAllowedTabs.includes(t.id);
+                return (
+                  <button key={t.id} type="button" onClick={() => toggleNewTab(t.id)}
+                    className="rounded-lg border px-2.5 py-1 text-[10px] font-bold transition"
+                    style={on
+                      ? { borderColor: t.color, background: `${t.color}22`, color: t.color }
+                      : { borderColor:'var(--dp-inner-bd)', background:'var(--dp-inner)', color:'var(--dp-muted)' }}>
+                    {t.label}
+                  </button>
+                );
+              })}
+            </div>
+            {newTabsAreRisky && (
+              <p className="mt-2 text-[10px] leading-snug" style={{ color:'#f59e0b' }}>
+                ⚠️ Every tab uses the same underlying access — anything beyond Messages/Public Board means whoever
+                opens this link effectively gets full dev-panel power (all user data, wallets, and account recovery),
+                not just the tabs shown. Only pick these for someone you'd trust with that.
+              </p>
+            )}
+          </div>
+
+          <button type="submit" disabled={creating}
+            className="rounded-xl px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
+            style={{ background:'linear-gradient(135deg,#14b8a6,#0f766e)' }}>
+            {creating ? 'Creating…' : 'Create link'}
+          </button>
+        </form>
+        {createError && <p className="mb-3 text-xs text-rose-400">{createError}</p>}
+
+        {justCreated && (
+          <div className="mb-4 rounded-xl border p-3" style={{ borderColor:'rgba(245,158,11,0.35)', background:'rgba(245,158,11,0.08)' }}>
+            <p className="mb-2 text-xs font-bold" style={{ color:'#f59e0b' }}>Share this link:</p>
+            <div className="flex items-center gap-2">
+              <p className="flex-1 text-xs break-all" style={{ color:'var(--dp-txt)' }}>{linkUrl(justCreated.token)}</p>
+              <button onClick={() => shareLink(justCreated)}
+                className="flex-shrink-0 rounded-lg px-2.5 py-1 text-[10px] font-bold text-white"
+                style={{ background:'#f59e0b', color:'#1e1300' }}>
+                {copiedToken === justCreated.token ? 'Copied!' : 'Share / Copy'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {loading && [1,2].map(i => <Skel key={i} h="h-14" cls="mb-2" />)}
+
+        <div className="space-y-2">
+          {links.map(row => {
+            const revoked = !!row.revoked_at;
+            const locked = row.locked_until && new Date(row.locked_until) > new Date();
+            const isEditingTabs = editingTabsId === row.id;
+            const editRisky = editTabs.some(id => id !== 'messages' && id !== 'board');
+            return (
+              <Inner key={row.id} className="p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold truncate" style={{ color:'var(--dp-txt)' }}>
+                      {row.label || 'Untitled link'}{revoked && <span className="ml-1.5 text-[10px] font-bold" style={{ color:'#f87171' }}>revoked</span>}
+                    </p>
+                    <p className="text-[10px] truncate" style={{ color:'var(--dp-muted)' }}>
+                      {row.visibility === 'password' ? 'Password' : `Gmail: ${(row.allowed_emails || []).join(', ')}`}
+                      {' · '}{row.view_count || 0} {row.view_count === 1 ? 'use' : 'uses'} · created {fmtDate(row.created_at)}
+                      {locked && ' · locked'}
+                    </p>
+                    {!isEditingTabs && (
+                      <p className="mt-0.5 text-[10px] truncate" style={{ color:'var(--dp-muted)' }}>
+                        Opens: {(row.allowed_tabs || ['messages', 'board']).map(id => TABS.find(t => t.id === id)?.label || id).join(', ')}
+                        {' '}
+                        <button onClick={() => startEditTabs(row)} className="underline" style={{ color:'var(--dp-sub)' }}>edit</button>
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-shrink-0 items-center gap-1.5">
+                    {!revoked && (
+                      <button onClick={() => shareLink(row)}
+                        className="rounded-lg border px-2.5 py-1 text-[10px] font-bold transition"
+                        style={{ borderColor:'rgba(245,158,11,0.3)', background:'rgba(245,158,11,0.1)', color:'#f59e0b' }}>
+                        {copiedToken === row.token ? 'Copied!' : 'Share / Copy'}
+                      </button>
+                    )}
+                    <button onClick={() => toggleRevoke(row)} disabled={revokingId === row.id}
+                      className="rounded-lg border px-2.5 py-1 text-[10px] font-bold transition disabled:opacity-40"
+                      style={!revoked
+                        ? { borderColor:'rgba(239,68,68,0.3)', background:'rgba(239,68,68,0.1)', color:'#f87171' }
+                        : { borderColor:'rgba(34,197,94,0.3)', background:'rgba(34,197,94,0.1)', color:'#4ade80' }}>
+                      {revokingId === row.id ? '…' : (revoked ? 'Reactivate' : 'Revoke')}
+                    </button>
+                  </div>
+                </div>
+
+                {isEditingTabs && (
+                  <div className="mt-2 rounded-xl border p-3" style={{ borderColor:'var(--dp-input-bd)' }}>
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wider" style={{ color:'var(--dp-muted)' }}>Which tabs should this link open?</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {shareableTabs.map(t => {
+                        const on = editTabs.includes(t.id);
+                        return (
+                          <button key={t.id} type="button" onClick={() => toggleEditTab(t.id)}
+                            className="rounded-lg border px-2.5 py-1 text-[10px] font-bold transition"
+                            style={on
+                              ? { borderColor: t.color, background: `${t.color}22`, color: t.color }
+                              : { borderColor:'var(--dp-inner-bd)', background:'var(--dp-inner)', color:'var(--dp-muted)' }}>
+                            {t.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {editRisky && (
+                      <p className="mt-2 text-[10px] leading-snug" style={{ color:'#f59e0b' }}>
+                        ⚠️ Anything beyond Messages/Public Board hands out full dev-panel power to whoever holds this link.
+                      </p>
+                    )}
+                    <div className="mt-2 flex items-center gap-2">
+                      <button onClick={() => saveEditTabs(row)} disabled={!editTabs.length || savingTabs}
+                        className="rounded-lg px-2.5 py-1 text-[10px] font-bold text-white disabled:opacity-40"
+                        style={{ background:'linear-gradient(135deg,#14b8a6,#0f766e)' }}>
+                        {savingTabs ? 'Saving…' : 'Save'}
+                      </button>
+                      <button onClick={cancelEditTabs} disabled={savingTabs}
+                        className="rounded-lg border px-2.5 py-1 text-[10px] font-bold transition"
+                        style={{ borderColor:'var(--dp-inner-bd)', background:'var(--dp-inner)', color:'var(--dp-muted)' }}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </Inner>
+            );
+          })}
+          {!loading && links.length === 0 && <EmptyState msg="No support links created yet." Icon={Users}/>}
+        </div>
+      </Card>
+
+      <Card>
+        <Txt className="text-sm font-black">Onboard as IWOS contractor</Txt>
+        <p className="mt-1 mb-3 text-xs" style={{ color:'var(--dp-muted)' }}>
+          Independent of the links above — this pays a real ICAN account out of IWOS's wallet, looked up by their account email.
+        </p>
+        <form onSubmit={handleOnboard} className="flex flex-wrap items-center gap-2">
+          <input value={onboardEmail} onChange={e => setOnboardEmail(e.target.value)} type="email" placeholder="their@icanaccount.email"
+            className="min-w-[180px] flex-1 rounded-lg border px-3 py-2 text-sm outline-none"
+            style={{ background:'var(--dp-input)', borderColor:'var(--dp-input-bd)', color:'var(--dp-txt)' }} />
+          <input value={onboardAmount} onChange={e => setOnboardAmount(e.target.value)} type="number" min="0" step="1" placeholder="Pay amount"
+            className="w-28 rounded-lg border px-2 py-2 text-sm outline-none"
+            style={{ background:'var(--dp-input)', borderColor:'var(--dp-input-bd)', color:'var(--dp-txt)' }} />
+          <select value={onboardCurrency} onChange={e => setOnboardCurrency(e.target.value)}
+            className="rounded-lg border px-2 py-2 text-sm outline-none"
+            style={{ background:'var(--dp-input)', borderColor:'var(--dp-input-bd)', color:'var(--dp-txt)' }}>
+            <option value="UGX">UGX</option>
+            <option value="USD">USD</option>
+            <option value="KES">KES</option>
+          </select>
+          <select value={onboardFrequency} onChange={e => setOnboardFrequency(e.target.value)}
+            className="rounded-lg border px-2 py-2 text-sm outline-none"
+            style={{ background:'var(--dp-input)', borderColor:'var(--dp-input-bd)', color:'var(--dp-txt)' }}>
+            <option value="contract">Per contract</option>
+            <option value="monthly">Monthly</option>
+            <option value="weekly">Weekly</option>
+            <option value="daily">Daily</option>
+            <option value="hourly">Hourly</option>
+          </select>
+          <button type="submit" disabled={onboarding || !onboardEmail.trim() || !(parseFloat(onboardAmount) > 0)}
+            className="rounded-lg px-3 py-2 text-xs font-bold text-white disabled:opacity-40"
+            style={{ background:'linear-gradient(135deg,#f59e0b,#d97706)' }}>
+            {onboarding ? 'Onboarding…' : 'Onboard'}
+          </button>
+        </form>
+        {onboardError && <p className="mt-2 text-xs text-rose-400">{onboardError}</p>}
+        {onboardOk && <p className="mt-2 text-xs text-emerald-400">Onboarded.</p>}
+      </Card>
+
+      <Card>
+        <Txt className="text-sm font-black">IWOS staff on the books ({iwos.members.length})</Txt>
+        <div className="mt-3 space-y-2">
+          {iwos.members.map(m => (
+            <Inner key={m.id} className="p-3 flex items-center justify-between">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold truncate" style={{ color:'var(--dp-txt)' }}>{m.job_title || 'Staff'}</p>
+                <p className="text-[10px]" style={{ color:'var(--dp-muted)' }}>{m.employment_status} · joined {fmtDate(m.joined_at)}</p>
+              </div>
+            </Inner>
+          ))}
+          {iwos.members.length === 0 && <EmptyState msg="No IWOS staff on the books yet." Icon={Building2}/>}
+        </div>
+      </Card>
+    </div>
+  );
+};
+
+// token/allowGrants let SupportConsole.jsx reuse this exact component under
+// a scoped support token instead of the master DEV_TOKEN, with the
+// IcanEra-granting (a financial admin action) hidden — everything else
+// (reply, mark correct answer, delete) stays identical either way.
+export const PublicBoardTab = ({ token = DEV_TOKEN, allowGrants = true } = {}) => {
   const [items,      setItems]      = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [deletingId, setDeletingId] = useState(null);
@@ -467,13 +866,13 @@ const PublicBoardTab = () => {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      setItems(await devListAllLandingMessages(DEV_TOKEN));
+      setItems(await devListAllLandingMessages(token));
     } catch (e) {
       console.warn('[PublicBoardTab] failed to load messages:', e);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [token]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -481,7 +880,7 @@ const PublicBoardTab = () => {
     if (deletingId) return;
     setDeletingId(id);
     try {
-      await devDeleteLandingMessage(DEV_TOKEN, id);
+      await devDeleteLandingMessage(token, id);
       if (expandedId === id) setExpandedId(null);
       await refresh();
     } catch (e) {
@@ -496,7 +895,7 @@ const PublicBoardTab = () => {
     if (!body || replying) return;
     setReplying(true);
     try {
-      await devReplyToLandingMessage(DEV_TOKEN, id, body, 'IcanEra Team');
+      await devReplyToLandingMessage(token, id, body, 'IcanEra Team');
       setReplyDraft('');
       await refresh();
     } catch (e) {
@@ -511,7 +910,7 @@ const PublicBoardTab = () => {
     setMarkingId(id);
     setMarkError('');
     try {
-      await devMarkCorrectAnswer(DEV_TOKEN, id);
+      await devMarkCorrectAnswer(token, id);
       await refresh();
     } catch (e) {
       console.warn('[PublicBoardTab] failed to mark correct answer:', e);
@@ -533,7 +932,7 @@ const PublicBoardTab = () => {
     setGrantingId(item.id);
     setGrantError('');
     try {
-      await devGrantLandingBonus(DEV_TOKEN, item.user_id, amt, 'Manual grant from Public Board');
+      await devGrantLandingBonus(token, item.user_id, amt, 'Manual grant from Public Board');
       setGrantTargetId(null);
       setGrantAmount('');
       await refresh();
@@ -597,7 +996,7 @@ const PublicBoardTab = () => {
 
             {isExpanded && (
               <div className="mt-3 space-y-2 border-l-2 pl-3" style={{ borderColor:'var(--dp-sep)' }}>
-                {m.user_id && (
+                {allowGrants && m.user_id && (
                   <div>
                     <button onClick={() => handleOpenGrant(m.id)}
                       className="inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[10px] font-semibold transition"
@@ -641,7 +1040,7 @@ const PublicBoardTab = () => {
                             <CheckCircle size={11}/> {markingId === r.id ? 'Marking…' : 'Mark correct answer (+1 IcanEra)'}
                           </button>
                         )}
-                        {r.sender_role !== 'dev' && r.user_id && (
+                        {allowGrants && r.sender_role !== 'dev' && r.user_id && (
                           <button onClick={() => handleOpenGrant(r.id)}
                             className="inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[10px] font-semibold transition"
                             style={{ borderColor:'rgba(245,158,11,0.3)', background:'rgba(245,158,11,0.1)', color:'#f59e0b' }}>
@@ -866,8 +1265,14 @@ const RecoveryTab = () => {
 // =============================================================================
 // DASHBOARD
 // =============================================================================
-const ICANDevDashboard = ({ onExit }) => {
-  const [tab, setTab]   = useState('overview');
+// visibleTabs restricts which nav tabs are shown (used by SupportConsole.jsx
+// for a link the admin scoped to specific tabs) — every tab still calls the
+// same DEV_TOKEN-gated RPCs underneath either way, so this is a UI-level
+// restriction, not a real security boundary; see the "Full access, with a
+// clear warning" note next to allowed_tabs in the Support Team tab below.
+export const ICANDevDashboard = ({ onExit, visibleTabs = null, headerExtra = null }) => {
+  const shownTabs = visibleTabs ? TABS.filter(t => visibleTabs.includes(t.id)) : TABS;
+  const [tab, setTab]   = useState(shownTabs[0]?.id || 'overview');
   const [loading, setL] = useState(true);
   const [search,  setQ] = useState('');
   const [ts,      setTs]= useState(null);
@@ -896,6 +1301,8 @@ const ICANDevDashboard = ({ onExit }) => {
   const [subsOk,    setSubsOk]    = useState(false);
   const [priceEng,  setPE]        = useState(null);
   const [globalFx,  setFx]        = useState([]);
+  const [corpSubs,      setCorpSubs]      = useState([]);
+  const [contractReqs,  setContractReqs]  = useState([]);
   const [fxRegion,  setFxRegion]  = useState('All');
   const [applying,  setApplying]  = useState(false);
 
@@ -911,7 +1318,7 @@ const ICANDevDashboard = ({ onExit }) => {
 
   const fetchAll = useCallback(async () => {
     setL(true);
-    const [uR, wR, cR, bR, gR, aR, tR, mR, pR, fxR] = await Promise.all([
+    const [uR, wR, cR, bR, gR, aR, tR, mR, pR, fxR, corpR, contractR] = await Promise.all([
       rpc('ican_dev_get_users'),
       rpc('ican_dev_get_wallets'),
       rpc('ican_dev_get_cmms_companies'),
@@ -922,10 +1329,13 @@ const ICANDevDashboard = ({ onExit }) => {
       rpc('ican_dev_get_market_price'),
       rpc('ican_compute_fair_price'),
       rpc('ican_dev_get_global_prices'),
+      rpc('ican_dev_get_corporate_subscriptions'),
+      rpc('ican_dev_list_contract_requests'),
     ]);
     setUsers(uR); setWallets(wR);
     const wm={}; wR.forEach(w=>{ wm[w.user_id]=w; }); setWMap(wm);
     setCompanies(cR); setBiz(bR); setGroups(Array.isArray(gR)?gR:[]); setAgents(aR); setTxs(tR); setMarket(mR[0]||null); setPE(pR[0]||null); setFx(fxR||[]);
+    setCorpSubs(corpR); setContractReqs(contractR);
     const { data:sd, error:se } = await supabase.from('ican_subscriptions').select('*').order('created_at',{ascending:false});
     if (!se) { setSubs(sd||[]); setSubsOk(true); }
     setTs(new Date()); setL(false);
@@ -989,6 +1399,49 @@ const ICANDevDashboard = ({ onExit }) => {
       setGrantingFloatId(null);
     }
   };
+  const [billingRunning, setBillingRunning] = useState(false);
+  const [billingResult, setBillingResult] = useState(null);
+  const runBillingCycle = async () => {
+    setBillingRunning(true);
+    setBillingResult(null);
+    const result = await rpc('ican_dev_run_corporate_billing_cycle');
+    setBillingResult(result);
+    await fetchAll();
+    setBillingRunning(false);
+  };
+  const resolveContractRequest = async (id, status) => {
+    await rpc('ican_dev_resolve_contract_request', { p_request_id: id, p_status: status });
+    await fetchAll();
+  };
+  const [provisionDrafts, setProvisionDrafts] = useState({}); // request_id -> { businessProfileId, priceIC, storageMB }
+  const [provisioningId, setProvisioningId] = useState(null);
+  const [provisionError, setProvisionError] = useState(null);
+  const provisionContract = async (request) => {
+    const draft = provisionDrafts[request.id] || {};
+    const businessProfileId = (draft.businessProfileId || request.business_profile_id || '').trim();
+    const priceIC = parseFloat(draft.priceIC);
+    const storageMB = parseInt(draft.storageMB, 10) || 15000;
+    if (!businessProfileId) { setProvisionError('Enter the business profile ID this contract belongs to.'); return; }
+    if (!priceIC || priceIC <= 0) { setProvisionError('Enter a negotiated monthly price greater than 0.'); return; }
+    setProvisioningId(request.id);
+    setProvisionError(null);
+    try {
+      const [result] = await rpc('ican_dev_provision_contract_subscription', {
+        p_business_profile_id: businessProfileId,
+        p_monthly_price_ic: priceIC,
+        p_employee_count: request.employee_count,
+        p_storage_mb: storageMB,
+        p_contract_request_id: request.id,
+      });
+      if (!result?.success) throw new Error(result?.message || 'Failed to provision contract');
+      setProvisionDrafts(prev => { const n = { ...prev }; delete n[request.id]; return n; });
+      await fetchAll();
+    } catch (e) {
+      setProvisionError(e.message || 'Failed to provision contract');
+    } finally {
+      setProvisioningId(null);
+    }
+  };
   const upsertSub = async (userId, plan, tt='user') => {
     if (!subsOk) return;
     const ex=subFor(userId); const now=new Date().toISOString();
@@ -1045,6 +1498,7 @@ const ICANDevDashboard = ({ onExit }) => {
 
           {/* actions */}
           <div className="flex items-center gap-2 flex-shrink-0">
+            {headerExtra}
             {ts && <span className="hidden sm:block text-[10px]" style={{ color:'var(--dp-muted)' }}>{ts.toLocaleTimeString()}</span>}
             <button onClick={fetchAll} disabled={loading}
               className="rounded-xl border p-2 transition disabled:opacity-40"
@@ -1072,7 +1526,7 @@ const ICANDevDashboard = ({ onExit }) => {
 
         {/* tabs */}
         <div className="flex overflow-x-auto px-5 scrollbar-none">
-          {TABS.map(t => (
+          {shownTabs.map(t => (
             <button key={t.id} onClick={()=>{ setTab(t.id); setQ(''); }}
               className="relative flex items-center gap-1.5 whitespace-nowrap px-3.5 py-2.5 text-[11px] font-bold transition-all duration-200 border-b-2"
               style={{
@@ -2083,9 +2537,117 @@ const ICANDevDashboard = ({ onExit }) => {
           </>)}
         </>)}
 
+        {/* ══ CORPORATE (subscriptions + contract requests) ══ */}
+        {tab==='corporate' && (<>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-black" style={{ color:'var(--dp-txt)' }}>Corporate subscriptions ({corpSubs.length})</p>
+              <p className="text-xs" style={{ color:'var(--dp-muted)' }}>Billed straight from each business's IcanEra Coin wallet — see CORPORATE_SUBSCRIPTION_TRIAL_AND_ICAN_BILLING.sql</p>
+            </div>
+            <button onClick={runBillingCycle} disabled={billingRunning}
+              className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold text-white transition disabled:opacity-40"
+              style={{ background:'linear-gradient(135deg,#a855f7,#7e22ce)' }}>
+              <RefreshCw size={12} className={billingRunning?'animate-spin':''}/> {billingRunning?'Running…':'Run billing cycle'}
+            </button>
+          </div>
+
+          {billingResult && (
+            <div className="rounded-xl border p-3 text-xs" style={{ background:'var(--dp-inner)', borderColor:'var(--dp-inner-bd)', color:'var(--dp-sub)' }}>
+              {billingResult.length===0 ? 'Nothing was due.' : billingResult.map((r,i)=>(
+                <div key={i}>{r.business_profile_id?.slice(0,8)}… → <strong>{r.outcome}</strong></div>
+              ))}
+            </div>
+          )}
+
+          {corpSubs.length===0 ? <EmptyState msg="No corporate subscriptions yet." Icon={CreditCard}/> : corpSubs.map(s=>{
+            const statusColor = s.status==='active'?'#22c55e':s.status==='trialing'?'#06b6d4':s.status==='past_due'?'#f59e0b':'#ef4444';
+            return (
+              <div key={s.id} className="rounded-2xl border p-4" style={{ background:'var(--dp-card)', borderColor:'var(--dp-card-bd)' }}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color:'var(--dp-txt)' }}>{s.business_name||'Unknown business'}</p>
+                    <p className="text-xs" style={{ color:'var(--dp-muted)' }}>
+                      {s.tier} · {s.monthly_price_ic} IC/mo · {s.employee_count} employees · wallet {fmtI(s.wallet_balance_ic||0)} IC
+                    </p>
+                  </div>
+                  <span className="rounded-full border px-2.5 py-1 text-[10px] font-bold capitalize"
+                    style={{ borderColor:`${statusColor}55`, background:`${statusColor}18`, color:statusColor }}>
+                    {s.status}
+                  </span>
+                </div>
+                <p className="mt-1.5 text-[10px]" style={{ color:'var(--dp-muted)' }}>
+                  {s.status==='trialing' ? `Trial ends ${fmtDate(s.trial_ends_at)}` : `Next billing ${fmtDate(s.next_billing_at)}`}
+                  {s.past_due_since ? ` · past due since ${fmtDate(s.past_due_since)}` : ''}
+                </p>
+              </div>
+            );
+          })}
+
+          <Sep className="my-2"/>
+
+          <div>
+            <p className="text-sm font-black" style={{ color:'var(--dp-txt)' }}>Contract requests ({contractReqs.filter(r=>r.status==='pending').length} pending)</p>
+            <p className="text-xs mb-3" style={{ color:'var(--dp-muted)' }}>Leads from /contract — 101+ employee teams wanting a negotiated price.</p>
+          </div>
+
+          {provisionError && <p className="text-xs text-rose-400">{provisionError}</p>}
+
+          {contractReqs.length===0 ? <EmptyState msg="No contract requests yet." Icon={Briefcase}/> : contractReqs.map(r=>(
+            <div key={r.id} className="rounded-2xl border p-4" style={{ background:'var(--dp-card)', borderColor:'var(--dp-card-bd)' }}>
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold" style={{ color:'var(--dp-txt)' }}>{r.company_name} <span style={{ color:'var(--dp-muted)' }}>· {r.employee_count} employees</span></p>
+                  <p className="text-xs" style={{ color:'var(--dp-sub)' }}>{r.contact_name} · {r.contact_email}{r.contact_phone?` · ${r.contact_phone}`:''}</p>
+                  {r.message && <p className="mt-1 text-xs italic" style={{ color:'var(--dp-muted)' }}>&ldquo;{r.message}&rdquo;</p>}
+                </div>
+                <span className="rounded-full border px-2.5 py-1 text-[10px] font-bold capitalize"
+                  style={{
+                    borderColor: r.status==='pending'?'rgba(245,158,11,0.3)':r.status==='closed'?'rgba(34,197,94,0.3)':r.status==='declined'?'rgba(239,68,68,0.3)':'rgba(148,163,184,0.3)',
+                    background:  r.status==='pending'?'rgba(245,158,11,0.1)':r.status==='closed'?'rgba(34,197,94,0.1)':r.status==='declined'?'rgba(239,68,68,0.1)':'rgba(148,163,184,0.1)',
+                    color:       r.status==='pending'?'#f59e0b':r.status==='closed'?'#22c55e':r.status==='declined'?'#ef4444':'#94a3b8',
+                  }}>
+                  {r.status}
+                </span>
+              </div>
+
+              {r.status==='pending' && (
+                <div className="mt-3 space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={()=>resolveContractRequest(r.id,'contacted')}
+                      className="rounded-lg border px-2.5 py-1 text-[10px] font-bold transition" style={{ borderColor:'var(--dp-inner-bd)', background:'var(--dp-inner)', color:'var(--dp-sub)' }}>
+                      Mark contacted
+                    </button>
+                    <button onClick={()=>resolveContractRequest(r.id,'declined')}
+                      className="rounded-lg border px-2.5 py-1 text-[10px] font-bold transition" style={{ borderColor:'rgba(239,68,68,0.3)', background:'rgba(239,68,68,0.1)', color:'#ef4444' }}>
+                      Decline
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <input placeholder="business_profile_id" value={provisionDrafts[r.id]?.businessProfileId||''}
+                      onChange={e=>setProvisionDrafts(prev=>({ ...prev, [r.id]:{ ...prev[r.id], businessProfileId:e.target.value } }))}
+                      className="w-52 rounded-lg border px-2 py-1.5 text-xs outline-none" style={{ background:'var(--dp-input)', borderColor:'var(--dp-input-bd)', color:'var(--dp-txt)' }}/>
+                    <input type="number" min="0.01" step="0.01" placeholder="Price (IC/mo)" value={provisionDrafts[r.id]?.priceIC||''}
+                      onChange={e=>setProvisionDrafts(prev=>({ ...prev, [r.id]:{ ...prev[r.id], priceIC:e.target.value } }))}
+                      className="w-32 rounded-lg border px-2 py-1.5 text-xs outline-none" style={{ background:'var(--dp-input)', borderColor:'var(--dp-input-bd)', color:'var(--dp-txt)' }}/>
+                    <input type="number" min="0" placeholder="Storage MB" value={provisionDrafts[r.id]?.storageMB||''}
+                      onChange={e=>setProvisionDrafts(prev=>({ ...prev, [r.id]:{ ...prev[r.id], storageMB:e.target.value } }))}
+                      className="w-28 rounded-lg border px-2 py-1.5 text-xs outline-none" style={{ background:'var(--dp-input)', borderColor:'var(--dp-input-bd)', color:'var(--dp-txt)' }}/>
+                    <button onClick={()=>provisionContract(r)} disabled={provisioningId===r.id}
+                      className="rounded-lg px-3 py-1.5 text-[10px] font-bold text-white transition disabled:opacity-40"
+                      style={{ background:'linear-gradient(135deg,#a855f7,#7e22ce)' }}>
+                      {provisioningId===r.id?'Provisioning…':'Provision plan'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </>)}
+
         {/* ══ PUBLIC BOARD ══ */}
         {tab==='board' && <PublicBoardTab/>}
         {tab==='messages' && <MessagesTab/>}
+        {tab==='support' && <SupportTeamTab/>}
         {tab==='recovery' && <RecoveryTab/>}
 
       </main>

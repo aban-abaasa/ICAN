@@ -3,6 +3,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { CountryService } from '../../services/countryService';
 import IcanEraLogo from '../../IcanEra.png';
+import CanweFields from '../security/CanweFields';
+import { checkCanweFields } from '../../utils/canweGuard';
 
 const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
   const { signUp, signInWithGoogle } = useAuth();
@@ -180,7 +182,16 @@ const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
+    if (checkCanweFields(e.target, 'sign-up')) {
+      setLoading(true);
+      setTimeout(() => {
+        setLoading(false);
+        setError('Failed to create account. Please try again.');
+      }, 900 + Math.random() * 400);
+      return;
+    }
+
     if (!validateForm()) return;
 
     setLoading(true);
@@ -293,6 +304,7 @@ const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
+          <CanweFields />
           {/* Full Name */}
           <div>
             <label className="block text-sm font-medium mb-2" style={{ color: palette.label }}>Full Name *</label>

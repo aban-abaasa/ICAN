@@ -65,13 +65,23 @@ class WalletTransactionService {
     try {
       const { amount, currency, phoneNumber, paymentMethod, transactionId, memoKey, mode } = params;
 
+      // amount is NOT NULL in ican_transactions — a bad/empty amount here
+      // parses to NaN, which JSON.stringify turns into null, and Postgres
+      // rejects that as a generic 400 with no indication it was this field.
+      // Fail loudly here instead, with the actual bad value in the message.
+      const parsedAmount = parseFloat(amount);
+      if (!Number.isFinite(parsedAmount)) {
+        console.error('❌ Refusing to save top-up with a non-numeric amount:', amount);
+        return { success: false, error: `Invalid top-up amount: ${amount}` };
+      }
+
       const { data, error } = await this.supabase
         .from('ican_transactions')
         .insert([
           {
             user_id: this.userId,
             transaction_type: 'top_up',
-            amount: parseFloat(amount),
+            amount: parsedAmount,
             currency: currency,
             description: `Top-up via ${paymentMethod} (${phoneNumber})`,
             status: 'completed',
@@ -122,13 +132,19 @@ class WalletTransactionService {
     try {
       const { amount, currency, recipientPhone, paymentMethod, transactionId, memoKey, mode, description } = params;
 
+      const parsedAmount = parseFloat(amount);
+      if (!Number.isFinite(parsedAmount)) {
+        console.error('❌ Refusing to save send with a non-numeric amount:', amount);
+        return { success: false, error: `Invalid send amount: ${amount}` };
+      }
+
       const { data, error } = await this.supabase
         .from('ican_transactions')
         .insert([
           {
             user_id: this.userId,
             transaction_type: 'transfer',
-            amount: -parseFloat(amount), // Negative for outgoing
+            amount: -parsedAmount, // Negative for outgoing
             currency: currency,
             description: description || `Transfer to ${recipientPhone} via ${paymentMethod}`,
             status: 'completed',
@@ -179,13 +195,19 @@ class WalletTransactionService {
     try {
       const { amount, currency, senderPhone, paymentMethod, transactionId, mode, description } = params;
 
+      const parsedAmount = parseFloat(amount);
+      if (!Number.isFinite(parsedAmount)) {
+        console.error('❌ Refusing to save receive with a non-numeric amount:', amount);
+        return { success: false, error: `Invalid receive amount: ${amount}` };
+      }
+
       const { data, error } = await this.supabase
         .from('ican_transactions')
         .insert([
           {
             user_id: this.userId,
             transaction_type: 'transfer',
-            amount: parseFloat(amount), // Positive for incoming
+            amount: parsedAmount, // Positive for incoming
             currency: currency,
             description: description || `Received from ${senderPhone} via ${paymentMethod}`,
             status: 'completed',

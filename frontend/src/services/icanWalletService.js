@@ -14,6 +14,25 @@ import { supabase } from '../lib/supabase/client';
 export const ICAN_TO_UGX = 5000;
 export const SOURCE_APP = 'ican';
 
+// supabase.functions.invoke() only throws a generic "Edge Function returned
+// a non-2xx status code" for HTTP error responses — the actual {success,
+// error} JSON body the function sent back (e.g. Flutterwave's real
+// rejection reason) is left on error.context (the raw fetch Response) and
+// has to be read out explicitly, or every functions.invoke() failure looks
+// identical and undebuggable from the client.
+async function functionErrorMessage(error, fallback) {
+  const body = error?.context;
+  if (body && typeof body.json === 'function') {
+    try {
+      const parsed = await body.clone().json();
+      if (parsed?.error) return parsed.error;
+    } catch {
+      // Response wasn't JSON — fall through to the generic message below.
+    }
+  }
+  return error?.message || fallback;
+}
+
 const BUSINESS_PAYMENT_HINTS = /\b(store|shop|market|supermarket|restaurant|cafe|business|supplier|vendor|school|hospital|hotel|fuel station)\b/i;
 
 function inferTransferContext(note, merchantName, counterpartyType, expenseClassification) {
@@ -295,9 +314,71 @@ export async function requestIcanPayout({
       source_app: SOURCE_APP,
     },
   });
-  if (error) throw error;
+  if (error) throw new Error(await functionErrorMessage(error, 'Payout failed'));
   if (!data?.success) throw new Error(data?.error ?? 'Payout failed');
   return data;
+}
+
+// ─── Send Out — fiat send to another person's mobile money ────────────────
+
+/**
+ * Send money from the caller's IcanEra fiat wallet balance (wallet_accounts —
+ * distinct from the ICAN coin balance) directly to someone else's mobile
+ * money account, via the Flutterwave Transfers API. Debits the wallet
+ * atomically server-side; the transfer itself settles asynchronously and is
+ * refunded automatically if Flutterwave rejects or fails it (see
+ * ICAN_FIAT_MOBILE_MONEY_SEND_MIGRATION.sql). Flutterwave has no
+ * pre-transfer name-verification for Uganda mobile money, so the caller
+ * should have the sender explicitly confirm the phone number + network
+ * before calling this — Flutterwave's own accept/reject plus the
+ * webhook-confirmed final outcome is the real verification available.
+ */
+export async function sendFiatToMobileMoney({
+  amount,
+  currency = 'UGX',
+  recipientPhone,
+  network, // 'MTN' | 'AIRTEL'
+  note = '',
+}) {
+  const { data, error } = await supabase.functions.invoke('flutterwave-momo-send', {
+    body: {
+      amount,
+      currency,
+      recipient_phone: recipientPhone,
+      recipient_network: network,
+      note,
+    },
+  });
+  if (error) throw new Error(await functionErrorMessage(error, 'Transfer failed'));
+  if (!data?.success) throw new Error(data?.error ?? 'Transfer failed');
+  return data;
+}
+
+// Uganda mobile number prefixes, so the sender doesn't have to manually pick
+// MTN vs Airtel every time (mirrors what Flutterwave itself uses to route
+// mobilemoneyuganda transfers) — see
+// https://en.wikipedia.org/wiki/Telephone_numbers_in_Uganda. Deliberately
+// narrow: an unrecognized prefix (071/072/073/other) returns null rather
+// than guessing, since a wrong network just fails the transfer at
+// Flutterwave (refunded automatically) rather than silently misrouting it,
+// but there's no reason to guess when we can just ask.
+const UGANDA_NETWORK_PREFIXES = {
+  MTN: ['77', '78', '76', '39'],
+  AIRTEL: ['70', '74', '75', '20'],
+};
+
+export function detectUgandaMobileNetwork(phoneNumber) {
+  const digits = String(phoneNumber || '').replace(/[^\d]/g, '');
+  let national;
+  if (digits.startsWith('256')) national = digits.slice(3);
+  else if (digits.startsWith('0')) national = digits.slice(1);
+  else national = digits;
+
+  const prefix = national.slice(0, 2);
+  for (const [network, prefixes] of Object.entries(UGANDA_NETWORK_PREFIXES)) {
+    if (prefixes.includes(prefix)) return network;
+  }
+  return null;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -331,6 +412,8 @@ export default {
   buyICAN,
   sellICAN,
   requestIcanPayout,
+  sendFiatToMobileMoney,
+  detectUgandaMobileNetwork,
   ugxToICAN,
   icanToUGX,
   formatICAN,

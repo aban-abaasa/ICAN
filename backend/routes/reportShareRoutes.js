@@ -194,4 +194,15 @@ router.post('/request-export-otp', otpRequestRateLimit, buildOtpRequestHandler({
   intro: 'Enter this code to view the shared written reports:'
 }));
 
+// Support Console share link, "restricted" (Gmail-typed) mode — see
+// backend/SUPPORT_CONSOLE.sql's ican_support_links table. Same factory,
+// just pointed at that table set instead of the CMMS report-share ones.
+router.post('/request-support-link-otp', otpRequestRateLimit, buildOtpRequestHandler({
+  sharesTable: 'ican_support_links',
+  otpsTable: 'ican_support_link_otps',
+  accessLogTable: 'ican_support_link_access_log',
+  subject: '🔐 Your IcanEra Support Console access code',
+  intro: 'Enter this code to open the IcanEra Support Console:'
+}));
+
 export default router;

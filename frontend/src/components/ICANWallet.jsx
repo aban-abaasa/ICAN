@@ -42,7 +42,7 @@ import paymentMethodDetector from '../services/paymentMethodDetector';
 import agentService from '../services/agentService';
 import { walletAccountService, hashPIN } from '../services/walletAccountService';
 import universalTransactionService from '../services/universalTransactionService';
-import { sendICAN as sendIcaneracoin, sendICANToBusiness } from '../services/icanWalletService';
+import { sendICAN as sendIcaneracoin, sendICANToBusiness, sendFiatToMobileMoney, detectUgandaMobileNetwork } from '../services/icanWalletService';
 import { payIcanRequest, parseIcanPayCode, getIcanPaymentRequest } from '../services/icanPaymentRequestService';
 import { getSupabaseClient } from '../lib/supabase/client';
 import { getBackendUrl } from '../lib/backendUrl';
@@ -94,6 +94,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   const [sendForm, setSendForm] = useState({ recipient: '', amount: '', description: '' });
   const [sendMethod, setSendMethod] = useState('ican'); // 'ican' | 'mobile' | 'icaneracoin' — explicit choice, replaces the old recipient-string heuristic
   const [recipientAccountKind, setRecipientAccountKind] = useState('ican'); // 'ican' | 'biz' — explicit choice, replaces relying on the sender remembering to type a "BIZ-" prefix themselves
+  const [sendNetwork, setSendNetwork] = useState(null); // 'MTN' | 'AIRTEL' | null — null means auto-detect from the phone number; only set explicitly when detection can't tell (see detectUgandaMobileNetwork)
   const [receiveForm, setReceiveForm] = useState({ amount: '', description: '' });
   const [topupForm, setTopupForm] = useState({ amount: '', paymentInput: '', method: null, detectedMethod: null });
   const [withdrawForm, setWithdrawForm] = useState({ method: '', phoneAccount: '', amount: '', bankName: '' });
@@ -1539,8 +1540,16 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
     try {
       if (sendMethod === 'mobile') {
-        // Explicit mobile money send — no more guessing from the string shape
-        await handleSendViaMOMO(sendForm.recipient, sendForm.amount, sendForm.description);
+        // Network is auto-detected from the phone number (see
+        // detectUgandaMobileNetwork) — sendNetwork only holds a value when
+        // detection failed and the fallback picker in the form set it.
+        const network = sendNetwork || detectUgandaMobileNetwork(sendForm.recipient);
+        if (!network) {
+          setTransactionResult({ type: 'send', success: false, message: 'Could not tell MTN from Airtel for this number — pick the network below.' });
+          setTransactionInProgress(false);
+          return;
+        }
+        await handleSendViaMOMO(sendForm.recipient, sendForm.amount, sendForm.description, network);
       } else if (sendMethod === 'icaneracoin') {
         // Send icaneracoin (ICAN coin) — separate balance from local currency
         const recipient = normalizeRecipientForKind(sendForm.recipient, recipientAccountKind);
@@ -1563,6 +1572,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     setSendForm({ recipient: '', amount: '', description: '' });
     setSendMethod('ican');
     setRecipientAccountKind('ican');
+    setSendNetwork(null);
     setTransactionInProgress(false);
 
     // Auto close after 3 seconds
@@ -1605,6 +1615,15 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           setTransactionResult({ type: 'send', success: false, message: 'Enter a valid IcanEra amount' });
           return;
         }
+
+        // Confirm the resolved, real registered business wallet before PIN —
+        // businessWallet came from resolve_ican_business_wallet(), a genuine
+        // registered PitchIn business, not just whatever the sender typed.
+        const businessConfirmed = window.confirm(
+          `Send ${parsedAmount.toFixed(4)} IcanEra to ${businessWallet.business_name || recipientIdentifier}?\n\n` +
+          `Verified business wallet: ${recipientIdentifier}`
+        );
+        if (!businessConfirmed) return;
 
         const businessPin = window.prompt('Enter your transaction PIN to send this IcanEra:');
         if (businessPin === null) return;
@@ -1771,6 +1790,15 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           return;
         }
 
+        // Confirm the resolved, real registered business wallet before PIN —
+        // businessWallet came from resolve_ican_business_wallet(), a genuine
+        // registered PitchIn business, not just whatever the sender typed.
+        const businessConfirmed = window.confirm(
+          `Send ${parsedAmount.toFixed(4)} IcanEra to ${businessWallet.business_name || recipientIdentifier}?\n\n` +
+          `Verified business wallet: ${recipientIdentifier}`
+        );
+        if (!businessConfirmed) return;
+
         const businessPin = window.prompt('Enter your transaction PIN to send this IcanEra:');
         if (businessPin === null) return;
         const businessPinCheck = await walletAccountService.verifyUserPIN(currentUserId, businessPin);
@@ -1843,6 +1871,15 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         setTransactionResult({ type: 'send', success: false, message: 'Enter a valid IcanEra amount' });
         return;
       }
+
+      // Confirm the resolved, real registered account before anything moves —
+      // recipientUser was looked up from user_accounts above, so this name is
+      // an actual verified account holder, not just whatever the sender typed.
+      const confirmed = window.confirm(
+        `Send ${parsedAmount.toFixed(4)} IcanEra to ${recipientUser.account_holder_name || recipientIdentifier}?\n\n` +
+        `Verified IcanEra account: ${recipientIdentifier}`
+      );
+      if (!confirmed) return;
 
       const pin = window.prompt('Enter your transaction PIN to send this IcanEra:');
       if (pin === null) return;
@@ -1926,12 +1963,35 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     }
   };
 
-  // 💳 Send via MOMO
-  const handleSendViaMOMO = async (phoneNumber, amount, description) => {
-    let debited = false;
+  // 💳 Send via MOMO — routed through the Flutterwave Transfers API
+  // (flutterwave-momo-send Edge Function), the same real-money-movement
+  // pattern already used for ICAN cash-out (see requestIcanPayout /
+  // flutterwave-payout). Network (MTN/Airtel) is auto-detected from the
+  // phone number by detectUgandaMobileNetwork so the sender doesn't have to
+  // pick it — same one-form-then-authorize feel as topup. Flutterwave has
+  // no pre-transfer name lookup for Uganda mobile money, so its own
+  // accept/reject plus the webhook-confirmed final outcome (with automatic
+  // refund on failure) is the real verification available for this rail.
+  const handleSendViaMOMO = async (phoneNumber, amount, description, network) => {
     try {
+      const trimmedPhone = String(phoneNumber || '').trim();
+      if (!trimmedPhone) {
+        setTransactionResult({ type: 'send', success: false, message: 'Enter a recipient phone number' });
+        return;
+      }
+      if (selectedCurrency !== 'UGX') {
+        setTransactionResult({ type: 'send', success: false, message: 'Mobile money sends currently only support UGX.' });
+        return;
+      }
+
+      const parsedAmount = parseFloat(amount);
+      if (!(parsedAmount > 0)) {
+        setTransactionResult({ type: 'send', success: false, message: 'Enter a valid amount' });
+        return;
+      }
+
       // Check sender's balance first
-      if (parseFloat(amount) > parseFloat(currentWallet.balance)) {
+      if (parsedAmount > parseFloat(currentWallet.balance)) {
         setTransactionResult({
           type: 'send',
           success: false,
@@ -1940,106 +2000,50 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         return;
       }
 
-      // Deduct from sender's wallet first
-      const supabase = getSupabaseClient();
-
-      // CRITICAL: Check authentication BEFORE querying wallet_accounts
-      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
-      if (authError || !authUser) {
-        throw new Error('User not authenticated');
-      }
-
-      // Atomic, row-locked debit keyed off auth.uid() server-side — a plain
-      // read-then-write here would race with any other concurrent balance
-      // change (see FIX_WALLET_ACCOUNTS_ATOMIC_BALANCE.sql).
-      const { data: deductResult, error: deductError } = await supabase.rpc(
-        'adjust_wallet_account_balance',
-        { p_delta: -parseFloat(amount) }
-      );
-
-      if (deductError) throw deductError;
-      if (!deductResult?.success) {
-        setTransactionResult({
-          type: 'send',
-          success: false,
-          message: deductResult?.error || 'Wallet account not found or insufficient balance'
-        });
+      // No separate confirm dialog — the phone number, amount, and detected
+      // network are already visible in the form the sender just filled in
+      // (mirrors topup: fill the form, then authorize). The PIN prompt below
+      // is the actual authorization gate, same as every other real-money
+      // send path in this component.
+      const pin = window.prompt(`Enter your transaction PIN to send ${parsedAmount} ${selectedCurrency} to ${trimmedPhone} (${network}):`);
+      if (pin === null) return;
+      const pinCheck = await walletAccountService.verifyUserPIN(currentUserId, pin);
+      if (!pinCheck?.success) {
+        setTransactionResult({ type: 'send', success: false, message: pinCheck?.error || 'Incorrect transaction PIN. Transfer cancelled.' });
         return;
       }
-      debited = true;
 
-      // Process MOMO payment
-      const result = await momoService.processTransfer({
-        amount: amount,
+      // flutterwave-momo-send debits the wallet atomically and submits the
+      // transfer to Flutterwave itself — no client-side debit/refund logic
+      // needed here, the Edge Function + webhook own that end-to-end.
+      const result = await sendFiatToMobileMoney({
+        amount: parsedAmount,
         currency: selectedCurrency,
-        recipientPhone: phoneNumber,
-        description: description || `Send to ${phoneNumber}`
+        recipientPhone: trimmedPhone,
+        network,
+        note: description || `Send to ${trimmedPhone}`,
       });
 
-      if (result.success) {
-        // Save transaction to Supabase
-        await walletTransactionService.initialize();
-        await walletTransactionService.saveSend({
-          amount: amount,
-          currency: selectedCurrency,
-          recipientPhone: phoneNumber,
-          paymentMethod: 'MOMO',
-          transactionId: result.transactionId,
-          memoKey: result.activeKey,
-          mode: result.mode,
-          description: description
-        });
-
-        // Refresh wallet balances
-        if (currentUserId) {
-          await loadWalletBalances(currentUserId);
-        }
-
-        setTransactionResult({
-          type: 'send',
-          success: true,
-          message: `✅ Successfully sent ${amount} ${selectedCurrency} to ${phoneNumber}`,
-          amount: amount,
-          recipient: phoneNumber,
-          transactionId: result.transactionId
-        });
-
-        console.log('💸 MOMO transfer completed:', result.transactionId);
-      } else {
-        // Refund to sender if MOMO failed — atomic credit-back, not a
-        // reset to a stale snapshot (see FIX_WALLET_ACCOUNTS_ATOMIC_BALANCE.sql).
-        await supabase.rpc('adjust_wallet_account_balance', { p_delta: parseFloat(amount) });
-
-        setTransactionResult({
-          type: 'send',
-          success: false,
-          message: result.message || 'MOMO transfer failed. Balance refunded.',
-          error: result.error
-        });
-      }
-    } catch (error) {
-      console.error('❌ MOMO transfer failed:', error);
-
-      // Refund on error, but only if the debit actually went through —
-      // the RPC call itself can be what threw, in which case nothing was
-      // ever debited and crediting back here would hand out free balance.
-      if (debited) {
-        try {
-          const supabase = getSupabaseClient();
-          await supabase.rpc('adjust_wallet_account_balance', { p_delta: parseFloat(amount) });
-          if (currentUserId) {
-            await loadWalletBalances(currentUserId);
-          }
-        } catch (e) {
-          console.warn('⚠️ Could not refund:', e);
-        }
+      if (currentUserId) {
+        await loadWalletBalances(currentUserId);
       }
 
       setTransactionResult({
         type: 'send',
+        success: true,
+        message: `✅ Submitted: ${parsedAmount} ${selectedCurrency} to ${trimmedPhone} via ${network}. Confirming with Flutterwave now — you'll be refunded automatically if it fails.`,
+        amount: parsedAmount,
+        recipient: trimmedPhone,
+        transactionId: result.reference
+      });
+
+      console.log('💸 Mobile money transfer submitted:', result.reference);
+    } catch (error) {
+      console.error('❌ Mobile money transfer failed:', error);
+      setTransactionResult({
+        type: 'send',
         success: false,
-        message: 'An error occurred during MOMO transfer.',
-        error: error.message
+        message: error.message || 'An error occurred during the mobile money transfer.',
       });
     }
   };
@@ -6235,12 +6239,46 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 />
                 <p className="text-xs text-gray-400 mt-1">
                   {sendMethod === 'mobile'
-                    ? 'Sent directly to this mobile money number'
+                    ? 'Sent directly to this mobile money number via Flutterwave — double-check it before confirming, this cannot be reversed once accepted'
                     : recipientAccountKind === 'biz'
                       ? "Enter the business's 16-digit wallet number (starts with 3)"
                       : 'Send to IcanEra account number, phone number, or email address'}
                 </p>
               </div>
+
+              {sendMethod === 'mobile' && sendForm.recipient.trim() && (
+                detectUgandaMobileNetwork(sendForm.recipient) ? (
+                  <p className="text-xs text-gray-400 -mt-2">
+                    📡 Detected network: <span className="text-white font-medium">{detectUgandaMobileNetwork(sendForm.recipient)}</span>
+                  </p>
+                ) : (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Mobile Money Network</label>
+                    <div className="flex gap-2">
+                      {[
+                        { key: 'MTN', label: 'MTN' },
+                        { key: 'AIRTEL', label: 'Airtel' },
+                      ].map((opt) => (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          onClick={() => setSendNetwork(opt.key)}
+                          className={`flex-1 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium border transition-all ${
+                            sendNetwork === opt.key
+                              ? 'bg-purple-600 border-purple-600 text-white'
+                              : 'bg-white/10 border-white/20 text-gray-300'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Couldn't tell the network from this number — pick which one it's on.
+                    </p>
+                  </div>
+                )
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -6280,6 +6318,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     setSendForm({ recipient: '', amount: '', description: '' });
                     setSendMethod('ican');
                     setRecipientAccountKind('ican');
+                    setSendNetwork(null);
                   }}
                   className="flex-1 px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-all"
                 >

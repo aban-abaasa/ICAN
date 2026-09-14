@@ -4,12 +4,17 @@ import { AuthPage } from './components/auth';
 import CountryCheckMiddleware from './components/auth/CountryCheckMiddleware';
 import ICANCapitalEngine from './components/ICAN_Capital_Engine';
 import LandingPage from './components/LandingPage';
+import PricingPage from './components/PricingPage';
+import ContractPage from './components/ContractPage';
+import BillingPage from './components/BillingPage';
 import MobileView from './components/MobileView';
 import ActionQueue from './components/ActionQueue';
 import { SplashScreen } from './components/SplashScreen';
 import ICANDevPanel, { SESSION_KEY as ICAN_DEV_KEY } from './components/ICANDevPanel';
 import ResetPinPage from './components/ResetPinPage';
 import ConfirmDeleteAccountPage from './components/ConfirmDeleteAccountPage';
+import DecoyPortal from './components/DecoyPortal';
+import SupportConsole from './components/SupportConsole';
 import ChatWidget from './components/ChatWidget';
 import { offlineManager } from './lib/offlineManager';
 import { Loader2, AlertCircle } from 'lucide-react';
@@ -70,6 +75,36 @@ const App = () => {
   const [isConfirmDeleteAccountPath, setIsConfirmDeleteAccountPath] = useState(() => {
     if (typeof window !== 'undefined') {
       return window.location.pathname === '/confirm-delete-account';
+    }
+    return false;
+  });
+  const [isDecoyPortalPath] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.location.pathname === '/decoy-portal';
+    }
+    return false;
+  });
+  const [isSupportConsolePath] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.location.pathname === '/support-console';
+    }
+    return false;
+  });
+  const [isPricingPath, setIsPricingPath] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.location.pathname === '/pricing';
+    }
+    return false;
+  });
+  const [isContractPath, setIsContractPath] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.location.pathname === '/contract';
+    }
+    return false;
+  });
+  const [isBillingPath, setIsBillingPath] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.location.pathname === '/billing';
     }
     return false;
   });
@@ -141,6 +176,9 @@ const App = () => {
       setIsResetPasswordPath(window.location.pathname === '/reset-password');
       setIsResetPinPath(window.location.pathname === '/reset-pin');
       setIsConfirmDeleteAccountPath(window.location.pathname === '/confirm-delete-account');
+      setIsPricingPath(window.location.pathname === '/pricing');
+      setIsContractPath(window.location.pathname === '/contract');
+      setIsBillingPath(window.location.pathname === '/billing');
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -231,6 +269,54 @@ const App = () => {
     setIsConfirmDeleteAccountPath(false);
   };
 
+  const handlePricingBack = () => {
+    window.history.pushState({}, '', '/');
+    setIsPricingPath(false);
+  };
+
+  const handlePricingGetStarted = (tierKey) => {
+    if (tierKey === 'contract') {
+      window.history.pushState({}, '', '/contract');
+      setIsPricingPath(false);
+      setIsContractPath(true);
+      return;
+    }
+    window.history.pushState({}, '', '/');
+    setIsPricingPath(false);
+    setShowSplash(true);
+    setTimeout(() => setShowLanding(false), 800);
+  };
+
+  const handleContractBack = () => {
+    window.history.pushState({}, '', '/pricing');
+    setIsContractPath(false);
+    setIsPricingPath(true);
+  };
+
+  const handleBillingBack = () => {
+    window.history.pushState({}, '', '/');
+    setIsBillingPath(false);
+  };
+
+  // Decoy portal — checked before anything else in this component, including
+  // the dev-panel intercept below. Renders a fully isolated, static fake
+  // dashboard with zero imports that reach Supabase or any real API; a
+  // flagged IP redirected here (see the reputation gate in
+  // backend/middleware/canweShield.js) must never brush against real auth
+  // state or a real network call.
+  if (isDecoyPortalPath) {
+    return <DecoyPortal />;
+  }
+
+  // Scoped support-team board — its own Gmail-allowlist/PIN gate (see
+  // SupportConsole.jsx + backend/SUPPORT_CONSOLE.sql), independent of the
+  // main app's dashboard/onboarding flow below even when `user` is set
+  // (e.g. a signed-in customer landing here should see "not authorized",
+  // not get dropped into their own ICAN dashboard).
+  if (isSupportConsolePath) {
+    return <SupportConsole />;
+  }
+
   // Developer panel — silent intercept, no auth session required
   if (sessionStorage.getItem(ICAN_DEV_KEY) === 'true') {
     return <ICANDevPanel onExit={() => window.location.reload()} />;
@@ -296,6 +382,33 @@ const App = () => {
       <ErrorBoundary>
         <SplashScreen show={showSplash} onHide={() => setShowSplash(false)} />
         <ConfirmDeleteAccountPage onDone={handleConfirmDeleteAccountDone} />
+      </ErrorBoundary>
+    );
+  }
+
+  if (isPricingPath) {
+    return (
+      <ErrorBoundary>
+        <SplashScreen show={showSplash} onHide={() => setShowSplash(false)} />
+        <PricingPage onBack={handlePricingBack} onGetStarted={handlePricingGetStarted} />
+      </ErrorBoundary>
+    );
+  }
+
+  if (isContractPath) {
+    return (
+      <ErrorBoundary>
+        <SplashScreen show={showSplash} onHide={() => setShowSplash(false)} />
+        <ContractPage onBack={handleContractBack} />
+      </ErrorBoundary>
+    );
+  }
+
+  if (isBillingPath) {
+    return (
+      <ErrorBoundary>
+        <SplashScreen show={showSplash} onHide={() => setShowSplash(false)} />
+        <BillingPage onBack={handleBillingBack} />
       </ErrorBoundary>
     );
   }

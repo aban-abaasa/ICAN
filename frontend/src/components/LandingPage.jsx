@@ -146,6 +146,13 @@ const LandingPage = ({ onGetStarted }) => {
     }
   };
 
+  // No router in this app — App.jsx tracks the path itself via popstate, so
+  // a programmatic nav needs to push the URL and fire that event manually.
+  const goToPricing = () => {
+    window.history.pushState({}, '', '/pricing');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  };
+
   const handleSignIn = () => {
     onGetStarted?.('signin');
   };
@@ -904,12 +911,13 @@ const LandingPage = ({ onGetStarted }) => {
                   {[
                     { label: 'Features', section: 'platforms' },
                     { label: 'Platforms', section: 'platforms' },
+                    { label: 'Pricing', section: null },
                     { label: 'Testimonials', section: 'testimonials' },
                     { label: 'Community', section: 'community-board' }
                   ].map((item) => (
                     <button
                       key={item.label}
-                      onClick={() => { scrollToSection(item.section); setIsNavMoreOpen(false); }}
+                      onClick={() => { item.section ? scrollToSection(item.section) : goToPricing(); setIsNavMoreOpen(false); }}
                       className={`w-full text-left px-4 py-2.5 text-sm font-semibold transition-colors ${isDarkTheme ? 'text-slate-200 hover:bg-slate-700/50' : 'text-slate-700 hover:bg-slate-100'}`}
                     >
                       {item.label}
@@ -934,6 +942,12 @@ const LandingPage = ({ onGetStarted }) => {
               className={`px-4 py-2 ican-cove-tab border-2 text-sm md:text-base 2xl:text-lg font-bold whitespace-nowrap transition-all duration-300 ${isDarkTheme ? 'text-cyan-100 border-cyan-300/55 bg-cyan-900/25 hover:bg-cyan-800/35 hover:border-cyan-200/80' : 'text-cyan-900 border-cyan-400/55 bg-cyan-100 hover:bg-cyan-200/90 hover:border-cyan-500/75'}`}
             >
               Platforms
+            </button>
+            <button
+              onClick={goToPricing}
+              className={`px-4 py-2 ican-cove-tab border-2 text-sm md:text-base 2xl:text-lg font-bold whitespace-nowrap transition-all duration-300 ${isDarkTheme ? 'text-purple-100 border-purple-300/55 bg-purple-900/25 hover:bg-purple-800/35 hover:border-purple-200/80' : 'text-purple-900 border-purple-400/55 bg-purple-100 hover:bg-purple-200/90 hover:border-purple-500/75'}`}
+            >
+              Pricing
             </button>
             <button
               onClick={() => scrollToSection('testimonials')}
@@ -2047,6 +2061,16 @@ const LandingPage = ({ onGetStarted }) => {
               <a href="#" className={`transition-all duration-300 flex items-center px-2.5 py-1.5 ican-cove-tab-sm border-2 ${isDarkTheme ? 'hover:text-white border-amber-300/55 bg-amber-900/20 hover:border-amber-200/80 hover:bg-amber-700/35' : 'text-amber-900 border-amber-400/55 bg-amber-100 hover:bg-amber-200/90 hover:border-amber-500/75'}`}>Discord</a>
             </div>
           </div>
+        </div>
+
+        {/* Not real links. No visible label, no tab stop, hidden from screen
+            readers -- a human never finds these. A scanner that crawls every
+            <a href> on the page will. Paths must match public/robots.txt's
+            Disallow entries and the decoy trap in backend/middleware/canweShield.js
+            / frontend/api/_lib/canweShield.js exactly. */}
+        <div aria-hidden="true" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)', left: '-9999px' }}>
+          <a href="/api/admin/backup_wallet.json" tabIndex={-1}>backup</a>
+          <a href="/api/v1/debug/keys" tabIndex={-1}>debug keys</a>
         </div>
       </footer>
 

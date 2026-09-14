@@ -1213,9 +1213,33 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [tithePaymentAmount, setTithePaymentAmount] = useState('');
   const [tithePaymentRecipient, setTithePaymentRecipient] = useState('');
   const [tithePaymentNotes, setTithePaymentNotes] = useState('');
+  const [tithePaymentMethod, setTithePaymentMethod] = useState('wallet'); // 'wallet' | 'cash'
+  const [tithePaymentDate, setTithePaymentDate] = useState(new Date().toISOString().split('T')[0]); // owner picks when this was given
+  const [tithePaySourceTxId, setTithePaySourceTxId] = useState(''); // optional: a specific personal income being tithed
+
+  // Which period the tithe calculator looks at — this is the giver's own choice,
+  // so it's remembered on this device (not reset back to "This Month" every visit).
+  const loadSavedTithePeriod = () => {
+    try { return JSON.parse(localStorage.getItem('ican_tithe_period_pref') || '{}'); } catch { return {}; }
+  };
+  const [tithePeriodPreset, setTithePeriodPreset] = useState(() => loadSavedTithePeriod().preset || 'this_month'); // 'this_month' | 'last_month' | 'this_quarter' | 'this_year' | 'custom'
+  const [tithePeriodCustomStart, setTithePeriodCustomStart] = useState(() => loadSavedTithePeriod().customStart || '');
+  const [tithePeriodCustomEnd, setTithePeriodCustomEnd] = useState(() => loadSavedTithePeriod().customEnd || '');
   const [isSubmittingTithe, setIsSubmittingTithe] = useState(false);
   const [tithePaymentSuccess, setTithePaymentSuccess] = useState(null);
   const [tithePaymentError, setTithePaymentError] = useState(null);
+
+  // Remember the giver's chosen tithe period on this device, so it's still
+  // theirs the next time they open the calculator — not reset to "This Month".
+  useEffect(() => {
+    try {
+      localStorage.setItem('ican_tithe_period_pref', JSON.stringify({
+        preset: tithePeriodPreset,
+        customStart: tithePeriodCustomStart,
+        customEnd: tithePeriodCustomEnd
+      }));
+    } catch {}
+  }, [tithePeriodPreset, tithePeriodCustomStart, tithePeriodCustomEnd]);
 
   // ========== MY PROFILE STATE FROM ProfilePage ==========
   const [isEditing, setIsEditing] = useState(false);
@@ -1944,13 +1968,61 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
       setIsLoadingReportMetrics(false);
     }
   };
-  // Calculate Tithing Metrics — driven by REAL transactions from the DB
-  const calculateTithingMetrics = () => {
-    // ── Calendar-month boundaries (resets on the 1st of each month) ──
+  // Resolve the giver's chosen tithe period into a concrete [start, end) range + label.
+  // Keeping this separate from calculateTithingMetrics means switching periods never
+  // touches how income/payments are categorized — only which date window counts.
+  const getTithePeriodRange = () => {
     const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1); // e.g. June 1 00:00:00
+    const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+    const endOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
 
-    const monthlyTx = transactions.filter(t => new Date(t.created_at) >= monthStart);
+    if (tithePeriodPreset === 'last_month') {
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999); // last day of prev month
+      return { start, end, label: start.toLocaleString('default', { month: 'long', year: 'numeric' }) };
+    }
+    if (tithePeriodPreset === 'this_quarter') {
+      const q = Math.floor(now.getMonth() / 3);
+      const start = new Date(now.getFullYear(), q * 3, 1);
+      const end = endOfDay(now);
+      return { start, end, label: `Q${q + 1} ${now.getFullYear()}` };
+    }
+    if (tithePeriodPreset === 'this_year') {
+      const start = new Date(now.getFullYear(), 0, 1);
+      const end = endOfDay(now);
+      return { start, end, label: String(now.getFullYear()) };
+    }
+    if (tithePeriodPreset === 'custom' && tithePeriodCustomStart && tithePeriodCustomEnd) {
+      const start = startOfDay(new Date(tithePeriodCustomStart));
+      const end = endOfDay(new Date(tithePeriodCustomEnd));
+      const fmt = (d) => d.toLocaleDateString('default', { day: 'numeric', month: 'short', year: 'numeric' });
+      return { start, end, label: `${fmt(start)} – ${fmt(end)}` };
+    }
+    // Default: this calendar month, to date
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = endOfDay(now);
+    return { start, end, label: start.toLocaleString('default', { month: 'long', year: 'numeric' }) };
+  };
+
+  // Keep the "Giving Date" on a payment inside whatever period is currently
+  // selected — otherwise a payment made today against, say, "Last Month"
+  // would land in this month's window instead and look like it was never paid.
+  const clampPaymentDateToSelectedPeriod = () => {
+    const { start, end } = getTithePeriodRange();
+    const today = new Date();
+    const target = (today >= start && today <= end) ? today : end;
+    setTithePaymentDate(target.toISOString().split('T')[0]);
+  };
+
+  // Calculate Tithing Metrics — driven by REAL transactions from the DB, for
+  // whichever period the giver has selected (defaults to the current month).
+  const calculateTithingMetrics = () => {
+    const { start: periodStart, end: periodEnd, label: periodLabelText } = getTithePeriodRange();
+
+    const monthlyTx = transactions.filter(t => {
+      const d = new Date(t.created_at);
+      return d >= periodStart && d <= periodEnd;
+    });
 
     // ── Monthly personal income (same category logic as VelocityEngine) ──
     // Inclusive: any income not explicitly tagged as business counts as personal
@@ -1994,7 +2066,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
     const businessTithe  = (businessProfit  * businessTithingRate) / 100;
     const combinedTithe  = personalTithe + businessTithe;
 
-    // ── Tithe PAID this calendar month only ──
+    // ── Tithe PAID within the selected period only ──
     const totalTithePaid = monthlyTx
       .filter(t => t.metadata?.record_category === 'tithe')
       .reduce((s, t) => s + (t.amount || 0), 0);
@@ -2022,7 +2094,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
       remainingCombined,
       totalTithePaid,
       hasRealData:      transactions.length > 0,
-      monthLabel:       now.toLocaleString('default', { month: 'long', year: 'numeric' }),
+      monthLabel:       periodLabelText,
     };
   };
 
@@ -2081,12 +2153,49 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
       }
 
       const amount = parseFloat(tithePaymentAmount);
-      const paymentDate = new Date().toISOString();
+      // The giver chooses the date — defaults to today, but can be backdated
+      // (e.g. recording cash given last week).
+      const paymentDate = new Date(`${tithePaymentDate}T${new Date().toTimeString().split(' ')[0]}`).toISOString();
+
+      // ⛔ Smart double-tithe guard: if this payment is tied to one specific
+      // personal income, refuse to record it twice against that same income.
+      if (tithePaymentType === 'personal' && tithePaySourceTxId) {
+        const { data: existingForTx } = await supabase
+          .from('ican_transactions')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('metadata->>source_transaction_id', tithePaySourceTxId)
+          .limit(1);
+        if (existingForTx && existingForTx.length > 0) {
+          setTithePaymentError('⛔ This income was already tithed. Pick a different income, or leave it unpicked to pay from your general personal tithe balance.');
+          setIsSubmittingTithe(false);
+          return;
+        }
+      }
+
+      // 🔧 Wallet balance — checked BEFORE recording anything, so a payment
+      // that can't actually be covered never gets recorded as if it happened.
+      // Cash given by hand skips this entirely: nothing in the wallet moves.
+      if (tithePaymentMethod === 'wallet') {
+        const { data: walletCheck } = await supabase
+          .from('user_wallets')
+          .select('balance')
+          .eq('user_id', user.id)
+          .eq('wallet_type', 'personal')
+          .single();
+        const currentBalance = walletCheck?.balance || 0;
+        if (currentBalance < amount) {
+          setTithePaymentError(`Insufficient wallet balance. You have UGX ${currentBalance.toLocaleString()}. Choose Cash if you're giving this by hand.`);
+          setIsSubmittingTithe(false);
+          return;
+        }
+      }
 
       console.log('🔧 TITHE PAYMENT: Starting payment recording', {
         userId: user.id,
         amount,
         paymentType: tithePaymentType,
+        paymentMethod: tithePaymentMethod,
         recipient: recipient,
         timestamp: paymentDate
       });
@@ -2109,6 +2218,8 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
             entry_type: 'manual',
             entry_mode: 'tithe-pay-in',
             payment_type: tithePaymentType,
+            payment_method: tithePaymentMethod,
+            source_transaction_id: tithePaymentType === 'personal' ? (tithePaySourceTxId || null) : null,
             recipient: recipient,
             notes: tithePaymentNotes,
             tithe_amount_personal: tithePaymentType === 'personal' ? amount : 0,
@@ -2156,34 +2267,38 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
         console.warn('⚠️ Tithe tracking update warning:', trackingErr);
       }
 
-      // 🔧 Deduct from user's wallet balance
-      try {
-        const { data: walletData } = await supabase
-          .from('user_wallets')
-          .select('balance')
-          .eq('user_id', user.id)
-          .eq('wallet_type', 'personal')
-          .single();
-
-        if (walletData) {
-          const newBalance = Math.max(0, (walletData.balance || 0) - amount);
-          const { error: walletError } = await supabase
+      // 🔧 Deduct from user's wallet balance — only when actually paid from the wallet.
+      // Already balance-checked above, so this can't go negative.
+      if (tithePaymentMethod === 'wallet') {
+        try {
+          const { data: walletData } = await supabase
             .from('user_wallets')
-            .update({ balance: newBalance, updated_at: paymentDate })
+            .select('balance')
             .eq('user_id', user.id)
-            .eq('wallet_type', 'personal');
+            .eq('wallet_type', 'personal')
+            .single();
 
-          if (walletError) {
-            console.warn('⚠️ Wallet deduction warning:', walletError);
-          } else {
-            console.log('✅ Wallet updated. New balance:', newBalance);
+          if (walletData) {
+            const newBalance = Math.max(0, (walletData.balance || 0) - amount);
+            const { error: walletError } = await supabase
+              .from('user_wallets')
+              .update({ balance: newBalance, updated_at: paymentDate })
+              .eq('user_id', user.id)
+              .eq('wallet_type', 'personal');
+
+            if (walletError) {
+              console.warn('⚠️ Wallet deduction warning:', walletError);
+            } else {
+              console.log('✅ Wallet updated. New balance:', newBalance);
+            }
           }
+        } catch (walletErr) {
+          console.warn('⚠️ Wallet operation error:', walletErr);
         }
-      } catch (walletErr) {
-        console.warn('⚠️ Wallet operation error:', walletErr);
       }
 
-      // 🔧 Update user's net_worth
+      // 🔧 Update user's net_worth — a cash gift leaves personal wealth just
+      // as a wallet payment does, so this always runs regardless of method.
       try {
         const { data: profileData } = await supabase
           .from('user_profiles')
@@ -2213,7 +2328,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
       await fetchActualTitheOwed(user.id);
 
       setTithePaymentSuccess(
-        `✅ UGX ${amount.toLocaleString(undefined, {maximumFractionDigits: 0})} tithe paid & cleared! 💳 Wallet deducted | 🙏 Blockchain-secured`
+        `✅ UGX ${amount.toLocaleString(undefined, {maximumFractionDigits: 0})} tithe paid & cleared! ${tithePaymentMethod === 'cash' ? '💵 Recorded as cash' : '💳 Wallet deducted'} | 🙏 Blockchain-secured`
       );
 
       setTimeout(() => {
@@ -2221,6 +2336,9 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
         setTithePaymentRecipient('');
         setTithePaymentNotes('');
         setTithePaymentType('combined');
+        setTithePaymentMethod('wallet');
+        setTithePaymentDate(new Date().toISOString().split('T')[0]);
+        setTithePaySourceTxId('');
         setTithePaymentSuccess(null);
       }, 3000);
 
@@ -4391,7 +4509,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     showWalletPanel ||
     showTrustPanel ||
     showCmmsPanel ||
-    showProfessionalsPanel;
+    showProfessionalsPanel ||
+    showTithingCalculator;
 
   const showDashboardHeader = isWebDashboard ? true : !isOverlayPanelOpen;
   const headerNavTabs = [
@@ -4591,7 +4710,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     else if (tabId === 'cmms')     { setShowCmmsPanel(true);              setActiveBottomTab('cmms'); }
     else if (tabId === 'professionals') { setShowProfessionalsPanel(true); setActiveBottomTab('professionals'); }
     else if (tabId === 'reports')  { setShowReportingSystem(true); }
-    else if (tabId === 'tithe')    { setShowTithingCalculator(true); }
+    else if (tabId === 'tithe')    { setShowTithingCalculator(true);      setActiveBottomTab('tithe'); }
     else if (tabId === 'security') { setShowSecurityPanel(true); }
     else if (tabId === 'loancalc') { setShowBusinessLoanCalculator(true); }
     else if (tabId === 'settings') { setShowSettingsPanel(true); }
@@ -7068,60 +7187,26 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           ? 'flex items-center justify-between py-3 px-4 sm:px-6 max-w-3xl mx-auto mb-4 rounded-2xl border border-green-400/30 bg-slate-900/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(36,18,58,0.45)]'
           : 'flex items-center justify-between px-2 py-3'
         }>
-          {/* Home */}
-          <button
-            onClick={() => navigateTo('dashboard')}
-            className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 transition ${
-              showPitchinPanel ? 'opacity-40' : 'opacity-100'
-            }`}
-          >
-            <Home className={`w-6 h-6 ${showPitchinPanel ? 'text-gray-400/60' : 'text-green-400'}`} />
-            <span className={`text-xs font-medium ${showPitchinPanel ? 'text-gray-400/60' : 'text-gray-300'}`}>Home</span>
-          </button>
-
-          {/* Pitchin */}
-          <button
-            onClick={() => navigateTo('pitchin')}
-            className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 transition ${
-              showPitchinPanel ? 'opacity-80' : 'opacity-100'
-            }`}
-          >
-            <Briefcase className={`w-6 h-6 ${showPitchinPanel ? 'text-green-400/80' : 'text-green-400'}`} />
-            <span className={`text-xs font-medium ${showPitchinPanel ? 'text-green-300/80' : 'text-gray-300'}`}>Pitchin</span>
-          </button>
-
-          {/* Wallet */}
-          <button
-            onClick={() => navigateTo('wallet')}
-            className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 transition ${
-              showPitchinPanel ? 'opacity-40' : 'opacity-100'
-            }`}
-          >
-            <Wallet className={`w-6 h-6 ${showPitchinPanel ? 'text-gray-400/60' : 'text-green-400'}`} />
-            <span className={`text-xs font-medium ${showPitchinPanel ? 'text-gray-400/60' : 'text-gray-300'}`}>Wallet</span>
-          </button>
-
-          {/* Trust */}
-          <button
-            onClick={() => navigateTo('trust')}
-            className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 transition ${
-              showPitchinPanel ? 'opacity-40' : 'opacity-100'
-            }`}
-          >
-            <Lock className={`w-6 h-6 ${showPitchinPanel ? 'text-gray-400/60' : 'text-green-400'}`} />
-            <span className={`text-xs font-medium ${showPitchinPanel ? 'text-gray-400/60' : 'text-gray-300'}`}>Trust</span>
-          </button>
-
-          {/* CMMS */}
-          <button
-            onClick={() => navigateTo('cmms')}
-            className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 transition ${
-              showPitchinPanel ? 'opacity-40' : 'opacity-100'
-            }`}
-          >
-            <Settings className={`w-6 h-6 ${showPitchinPanel ? 'text-gray-400/60' : 'text-green-400'}`} />
-            <span className={`text-xs font-medium ${showPitchinPanel ? 'text-gray-400/60' : 'text-gray-300'}`}>CMMS</span>
-          </button>
+          {[
+            { id: 'home',   label: 'Home',   icon: Home,      go: 'dashboard' },
+            { id: 'pitchin',label: 'Pitchin',icon: Briefcase, go: 'pitchin'   },
+            { id: 'wallet', label: 'Wallet', icon: Wallet,    go: 'wallet'    },
+            { id: 'trust',  label: 'Trust',  icon: Lock,      go: 'trust'     },
+            { id: 'cmms',   label: 'CMMS',   icon: Settings,  go: 'cmms'      },
+            { id: 'tithe',  label: 'Tithe',  icon: Heart,     go: 'tithe'     },
+          ].map(({ id, label, icon: Icon, go }) => {
+            const isActive = activeBottomTab === id;
+            return (
+              <button
+                key={id}
+                onClick={() => navigateTo(go)}
+                className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 transition ${isActive ? 'opacity-100' : 'opacity-60'}`}
+              >
+                <Icon className={`w-6 h-6 ${isActive ? 'text-green-400' : 'text-gray-400/60'}`} />
+                <span className={`text-xs font-medium ${isActive ? 'text-gray-300' : 'text-gray-400/60'}`}>{label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
       )}
@@ -8280,25 +8365,76 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         </div>
       )}
 
-      {/* ── Tithe Calculator Modal ─────────────────────────────────── */}
+      {/* ── Tithe Panel — full screen, like Pitchin/Trust/CMMS ─────────────── */}
       {showTithingCalculator && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-start justify-center p-3 overflow-y-auto" style={{scrollBehavior: 'smooth', paddingTop: '180px'}}>
-          <div className="bg-gradient-to-br from-yellow-50 to-amber-50 rounded-2xl w-full max-w-2xl shadow-2xl border border-amber-200/50" style={{minHeight: '400px'}}>
-            {/* Header */}
-            <div className="bg-gradient-to-r from-yellow-600 to-amber-500 rounded-t-2xl px-5 py-4 flex items-center justify-between sticky top-0 z-10">
-              <div>
-                <h2 className="text-xl font-bold text-white">🙏 Tithe Calculator</h2>
-                <p className="text-yellow-100 text-xs mt-0.5">Steward faithfully — Uganda giving tracker</p>
-              </div>
-              <button 
-                onClick={() => setShowTithingCalculator(false)} 
-                className="text-white/70 hover:text-white p-1 transition hover:bg-white/10 rounded"
-              >
-                <X className="w-6 h-6" />
-              </button>
+        <div
+          className={`fixed inset-x-0 flex flex-col bg-gradient-to-b from-amber-50 to-yellow-50 overflow-hidden ${isWebDashboard ? 'top-[132px] md:top-[146px] z-30' : 'top-0 z-[60]'}`}
+          style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
+        >
+          {/* Header */}
+          <div
+            className="flex-shrink-0 bg-gradient-to-r from-yellow-600 to-amber-500 px-4 pb-3 flex items-center gap-3"
+            style={{ paddingTop: isWebDashboard ? '0.75rem' : 'calc(env(safe-area-inset-top) + 0.75rem)' }}
+          >
+            <button
+              onClick={() => navigateTo('dashboard')}
+              className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/15 hover:bg-white/25 active:scale-90 transition-all flex-shrink-0"
+              aria-label="Go back"
+            >
+              <ChevronLeft className="w-5 h-5 text-white" />
+            </button>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-base font-bold text-white leading-tight">🙏 Tithe Calculator</h2>
+              <p className="text-yellow-100 text-[10px] mt-0.5">Steward faithfully — Uganda giving tracker</p>
             </div>
+          </div>
 
-            <div className="p-4 space-y-4">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {/* Period selector — which stretch of time this whole calculator looks at */}
+              <div className="bg-white rounded-xl p-3 shadow-sm">
+                <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Tithe Period</label>
+                <div className="flex gap-1.5 flex-wrap">
+                  {[
+                    { id: 'this_month',   label: 'This Month' },
+                    { id: 'last_month',   label: 'Last Month' },
+                    { id: 'this_quarter', label: 'This Quarter' },
+                    { id: 'this_year',    label: 'This Year' },
+                    { id: 'custom',       label: 'Custom' },
+                  ].map(p => (
+                    <button
+                      key={p.id}
+                      onClick={() => { setTithePeriodPreset(p.id); if (p.id !== 'custom') clampPaymentDateToSelectedPeriod(); }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${tithePeriodPreset === p.id ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+                {tithePeriodPreset === 'custom' && (
+                  <div className="flex gap-2 mt-2">
+                    <input
+                      type="date"
+                      value={tithePeriodCustomStart}
+                      max={tithePeriodCustomEnd || undefined}
+                      onChange={e => { setTithePeriodCustomStart(e.target.value); if (e.target.value && tithePeriodCustomEnd) clampPaymentDateToSelectedPeriod(); }}
+                      className="flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                    <span className="text-xs text-gray-400 self-center">to</span>
+                    <input
+                      type="date"
+                      value={tithePeriodCustomEnd}
+                      min={tithePeriodCustomStart || undefined}
+                      max={new Date().toISOString().split('T')[0]}
+                      onChange={e => { setTithePeriodCustomEnd(e.target.value); if (tithePeriodCustomStart && e.target.value) clampPaymentDateToSelectedPeriod(); }}
+                      className="flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                )}
+                {tithePeriodPreset === 'custom' && (!tithePeriodCustomStart || !tithePeriodCustomEnd) && (
+                  <p className="text-[10px] text-amber-600 mt-1.5">Pick both dates — showing "{tithingMetrics.monthLabel}" until then.</p>
+                )}
+              </div>
+
               {/* Tab switcher */}
               <div className="flex gap-2 bg-amber-100 rounded-xl p-1">
                 {['quick', 'business', 'personal', 'pay-in'].map(tab => (
@@ -8309,6 +8445,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       const due = Math.round(tithingMetrics.remainingCombined || 0);
                       if (due > 0) setTithePaymentAmount(String(due));
                       setTithePaymentType('combined');
+                      clampPaymentDateToSelectedPeriod();
                     }
                   }}
                     className={`flex-1 py-2 rounded-lg text-xs font-bold capitalize transition ${selectedTithingTab === tab ? 'bg-white text-amber-700 shadow' : 'text-amber-600 hover:text-amber-800'}`}>
@@ -8322,7 +8459,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   {/* Live data banner */}
                   <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold ${tithingMetrics.hasRealData ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-gray-50 text-gray-500 border border-gray-200'}`}>
                     <span>{tithingMetrics.hasRealData ? '🟢 Live' : '⚪ No data'}</span>
-                    <span>{tithingMetrics.hasRealData ? `${tithingMetrics.monthLabel} — based on this month's transactions` : 'No transactions loaded yet'}</span>
+                    <span>{tithingMetrics.hasRealData ? `${tithingMetrics.monthLabel} — based on this period's transactions` : 'No transactions loaded yet'}</span>
                   </div>
 
                   {/* 🔧 FIXED: Separate personal and business income display */}
@@ -8396,7 +8533,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   {/* Live data banner */}
                   <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold ${tithingMetrics.hasRealData ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-gray-50 text-gray-500 border border-gray-200'}`}>
                     <span>{tithingMetrics.hasRealData ? '🟢 Live' : '⚪ No data'}</span>
-                    <span>{tithingMetrics.hasRealData ? 'Business profit from real 30-day transactions' : 'No transactions loaded yet'}</span>
+                    <span>{tithingMetrics.hasRealData ? `Business profit for ${tithingMetrics.monthLabel}` : 'No transactions loaded yet'}</span>
                   </div>
                   <div className="bg-white rounded-xl p-4 shadow-sm">
                     <label className="block text-xs font-semibold text-gray-700 mb-1">Business Tithe Rate (%)</label>
@@ -8407,8 +8544,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   </div>
                   {/* 🔧 FIXED: Show only business income for business tithe */}
                   <div className="bg-white rounded-xl p-4 shadow-sm space-y-2">
-                    <div className="flex justify-between text-sm"><span className="text-gray-500">Business Sales (30d)</span><span className="font-semibold text-green-600">UGX {(tithingMetrics.businessIncome || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
-                    <div className="flex justify-between text-sm"><span className="text-gray-500">Business Expenses (30d)</span><span className="font-semibold text-red-500">UGX {(tithingMetrics.businessExpenses || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                    <div className="flex justify-between text-sm"><span className="text-gray-500">Business Sales ({tithingMetrics.monthLabel})</span><span className="font-semibold text-green-600">UGX {(tithingMetrics.businessIncome || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                    <div className="flex justify-between text-sm"><span className="text-gray-500">Business Expenses ({tithingMetrics.monthLabel})</span><span className="font-semibold text-red-500">UGX {(tithingMetrics.businessExpenses || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
                     <div className="flex justify-between text-sm border-t pt-2"><span className="text-gray-700 font-bold">Business Profit</span><span className={`font-bold ${(tithingMetrics.businessProfit || 0) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>UGX {(tithingMetrics.businessProfit || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
                     <div className="flex justify-between text-sm text-xs text-gray-500 mt-1"><span>Tithe Due {actualTitheOwed && actualTitheOwed.business !== undefined ? '(from database)' : '(calculated)'}</span><span className="font-bold text-amber-600 text-lg">UGX {(actualTitheOwed && actualTitheOwed.business !== undefined ? actualTitheOwed.business : (tithingMetrics.businessTithe || 0)).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
                   </div>
@@ -8423,7 +8560,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   {/* Live data banner */}
                   <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold ${tithingMetrics.hasRealData ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-gray-50 text-gray-500 border border-gray-200'}`}>
                     <span>{tithingMetrics.hasRealData ? '🟢 Live' : '⚪ No data'}</span>
-                    <span>{tithingMetrics.hasRealData ? 'Salary from real 30-day transactions' : 'No transactions loaded yet'}</span>
+                    <span>{tithingMetrics.hasRealData ? `Salary for ${tithingMetrics.monthLabel}` : 'No transactions loaded yet'}</span>
                   </div>
                   <div className="bg-white rounded-xl p-4 shadow-sm">
                     <label className="block text-xs font-semibold text-gray-700 mb-1">Personal Tithe Rate (%)</label>
@@ -8434,7 +8571,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   </div>
                   {/* 🔧 FIXED: Show only personal/salary income for personal tithe */}
                   <div className="bg-white rounded-xl p-4 shadow-sm space-y-2">
-                    <div className="flex justify-between text-sm"><span className="text-gray-500">Salary/Wages (30d)</span><span className="font-semibold text-green-600">UGX {(tithingMetrics.personalIncome || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+                    <div className="flex justify-between text-sm"><span className="text-gray-500">Salary/Wages ({tithingMetrics.monthLabel})</span><span className="font-semibold text-green-600">UGX {(tithingMetrics.personalIncome || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
                     <div className="flex justify-between text-sm border-t pt-2"><span className="text-gray-500">Tithe Due {actualTitheOwed && actualTitheOwed.personal !== undefined ? '(from database)' : '(calculated)'}</span><span className="font-bold text-green-600 text-lg">UGX {(actualTitheOwed && actualTitheOwed.personal !== undefined ? actualTitheOwed.personal : (tithingMetrics.personalTithe || 0)).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
                   </div>
                   <div className="bg-green-50 rounded-xl p-3 text-xs text-green-800 border border-green-200">
@@ -8499,15 +8636,89 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   {/* Payment type */}
                   <div className="bg-white rounded-xl p-4 shadow-sm">
                     <label className="block text-xs font-semibold text-gray-700 mb-2">Payment Type</label>
-                    <select 
+                    <select
                       value={tithePaymentType}
-                      onChange={e => setTithePaymentType(e.target.value)}
+                      onChange={e => { setTithePaymentType(e.target.value); if (e.target.value !== 'personal') setTithePaySourceTxId(''); }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                     >
                       <option value="combined">Combined Tithe</option>
-                      <option value="personal">Personal Tithe</option>
-                      <option value="business">Business Tithe</option>
+                      <option value="personal">Personal Tithe — per income</option>
+                      <option value="business">Business Tithe — pay any time</option>
                     </select>
+                    {tithePaymentType === 'business' && (
+                      <p className="text-xs text-gray-500 mt-2">You decide when to pay this — weekly, monthly, or whenever suits the business.</p>
+                    )}
+                  </div>
+
+                  {/* Personal: tie this payment to one specific income so it's tithed exactly once */}
+                  {tithePaymentType === 'personal' && (() => {
+                    const isBizTx = (t) => t.metadata?.record_category === 'business' || t.metadata?.reporting_bucket === 'sold_income' || t.metadata?.category === 'business';
+                    const personalIncomeTxs = transactions
+                      .filter(t => t.transaction_type === 'income' && !isBizTx(t))
+                      .slice(0, 30);
+                    const titheedSourceIds = new Set(
+                      transactions
+                        .filter(t => t.metadata?.record_category === 'tithe' && t.metadata?.source_transaction_id)
+                        .map(t => t.metadata.source_transaction_id)
+                    );
+                    return (
+                      <div className="bg-white rounded-xl p-4 shadow-sm">
+                        <label className="block text-xs font-semibold text-gray-700 mb-2">Which Income? (optional — ties this payment to one income)</label>
+                        <select
+                          value={tithePaySourceTxId}
+                          onChange={e => {
+                            const id = e.target.value;
+                            setTithePaySourceTxId(id);
+                            const tx = personalIncomeTxs.find(t => t.id === id);
+                            if (tx) setTithePaymentAmount(String(Math.round(tx.amount * 0.1)));
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        >
+                          <option value="">— General personal tithe (not tied to one income) —</option>
+                          {personalIncomeTxs.map(t => {
+                            const already = titheedSourceIds.has(t.id);
+                            return (
+                              <option key={t.id} value={t.id} disabled={already}>
+                                {already ? '✓ Already tithed — ' : ''}{t.description || 'Income'} · UGX {t.amount.toLocaleString()} (10% = {Math.round(t.amount * 0.1).toLocaleString()})
+                              </option>
+                            );
+                          })}
+                        </select>
+                        {tithePaySourceTxId && (
+                          <p className="text-xs text-green-600 mt-1">🔒 This payment will be locked to that income — it can't be tithed twice.</p>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Cash or Wallet */}
+                  <div className="bg-white rounded-xl p-4 shadow-sm">
+                    <label className="block text-xs font-semibold text-gray-700 mb-2">Paid With</label>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setTithePaymentMethod('wallet')}
+                        className={`flex-1 py-2 rounded-lg text-xs font-bold border transition ${tithePaymentMethod === 'wallet' ? 'bg-amber-500 text-white border-amber-500' : 'bg-gray-50 text-gray-600 border-gray-300'}`}>
+                        💳 Wallet
+                      </button>
+                      <button type="button" onClick={() => setTithePaymentMethod('cash')}
+                        className={`flex-1 py-2 rounded-lg text-xs font-bold border transition ${tithePaymentMethod === 'cash' ? 'bg-amber-500 text-white border-amber-500' : 'bg-gray-50 text-gray-600 border-gray-300'}`}>
+                        💵 Cash (given by hand)
+                      </button>
+                    </div>
+                    {tithePaymentMethod === 'cash' && (
+                      <p className="text-xs text-gray-500 mt-2">Recorded as given — your wallet balance won't be touched.</p>
+                    )}
+                  </div>
+
+                  {/* Giving date — the giver's own choice */}
+                  <div className="bg-white rounded-xl p-4 shadow-sm">
+                    <label className="block text-xs font-semibold text-gray-700 mb-2">Giving Date</label>
+                    <input
+                      type="date"
+                      value={tithePaymentDate}
+                      max={new Date().toISOString().split('T')[0]}
+                      onChange={e => setTithePaymentDate(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
                   </div>
 
                   {/* Payment recipient - OPTIONAL */}
@@ -8561,7 +8772,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         : 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600'
                     }`}
                   >
-                    {isSubmittingTithe ? 'Processing...' : '💳 Record Tithe Payment'}
+                    {isSubmittingTithe ? 'Processing...' : `${tithePaymentMethod === 'cash' ? '💵' : '💳'} Record Tithe Payment`}
                   </button>
 
                   <div className="bg-amber-50 rounded-xl p-3 text-xs text-amber-800 border border-amber-200">
@@ -8569,7 +8780,6 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   </div>
                 </div>
               )}
-            </div>
           </div>
         </div>
       )}

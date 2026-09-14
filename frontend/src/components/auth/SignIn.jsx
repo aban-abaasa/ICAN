@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import OfflineLoginHelper from '../OfflineLoginHelper';
+import CanweFields from '../security/CanweFields';
+import { checkCanweFields } from '../../utils/canweGuard';
 
 const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
-  const { signIn, signInWithGoogle } = useAuth();
+  const { signIn, signInWithGoogle, signInWithWallet } = useAuth();
   const { actualTheme } = useTheme();
   const [formData, setFormData] = useState({
     email: '',
@@ -15,7 +17,41 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const isAuthenticating = loading || googleLoading;
+  const [showWalletForm, setShowWalletForm] = useState(false);
+  const [walletIdentifier, setWalletIdentifier] = useState('');
+  const [walletPin, setWalletPin] = useState('');
+  const [walletLoading, setWalletLoading] = useState(false);
+  const [walletError, setWalletError] = useState('');
+  const isAuthenticating = loading || googleLoading || walletLoading;
+
+  const handleWalletSubmit = async (e) => {
+    e.preventDefault();
+    setWalletError('');
+
+    if (checkCanweFields(e.target, 'sign-in-wallet')) {
+      setWalletLoading(true);
+      setTimeout(() => {
+        setWalletLoading(false);
+        setWalletError('Wallet sign-in failed. Please try again.');
+      }, 900 + Math.random() * 400);
+      return;
+    }
+
+    if (!walletIdentifier.trim() || !/^\d{4,6}$/.test(walletPin.trim())) {
+      setWalletError('Enter your account number (or phone) and 4-6 digit PIN');
+      return;
+    }
+
+    setWalletLoading(true);
+    try {
+      await signInWithWallet(walletIdentifier, walletPin);
+      if (onSuccess) onSuccess();
+    } catch (err) {
+      setWalletError(err.message || 'Wallet sign-in failed. Please try again.');
+    } finally {
+      setWalletLoading(false);
+    }
+  };
 
   const themeStyles = {
     dark: {
@@ -149,9 +185,21 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (checkCanweFields(e.target, 'sign-in')) {
+      // Behave exactly like a real failed login — same delay, same message
+      // — so a scripted client can't tell it was ever caught.
+      setLoading(true);
+      setError('');
+      setTimeout(() => {
+        setLoading(false);
+        setError('Invalid email or password. Also confirm this account exists in the current Supabase project and has completed email verification.');
+      }, 900 + Math.random() * 400);
+      return;
+    }
+
     const normalizedEmail = String(formData.email || '').trim().toLowerCase();
     const password = formData.password;
-    
+
     if (!normalizedEmail || !password) {
       setError('Please enter both email and password');
       return;
@@ -274,6 +322,7 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
         />
 
         <form onSubmit={handleSubmit} className="space-y-5">
+          <CanweFields />
           {/* Email */}
           <div>
             <label className="block text-sm font-medium mb-2" style={{ color: palette.label }}>Email Address</label>
@@ -436,22 +485,70 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
           Continue with Google
         </button>
 
-        {/* Wallet Login Button */}
-        <button
-          type="button"
-          className="w-full mt-3 py-3 px-4 font-medium rounded-xl transition-all duration-200 flex items-center justify-center gap-3"
-          style={{
-            backgroundImage: palette.walletBg,
-            border: `1px solid ${palette.walletBorder}`,
-            color: palette.text
-          }}
-          onClick={() => {
-            alert('Wallet login coming soon! Connect your Web3 wallet for passwordless authentication.');
-          }}
-        >
-          <span className="text-xl">⛓️</span>
-          Connect Wallet
-        </button>
+        {/* Wallet Login */}
+        {!showWalletForm ? (
+          <button
+            type="button"
+            className="w-full mt-3 py-3 px-4 font-medium rounded-xl transition-all duration-200 flex items-center justify-center gap-3"
+            style={{
+              backgroundImage: palette.walletBg,
+              border: `1px solid ${palette.walletBorder}`,
+              color: palette.text
+            }}
+            onClick={() => setShowWalletForm(true)}
+          >
+            <span className="text-xl">💳</span>
+            Sign in with Wallet
+          </button>
+        ) : (
+          <form
+            onSubmit={handleWalletSubmit}
+            className="mt-3 p-4 rounded-xl space-y-3"
+            style={{ backgroundImage: palette.walletBg, border: `1px solid ${palette.walletBorder}` }}
+          >
+            <CanweFields />
+            {walletError && (
+              <p className="text-red-400 text-xs text-center">{walletError}</p>
+            )}
+            <input
+              type="text"
+              value={walletIdentifier}
+              onChange={(e) => { setWalletIdentifier(e.target.value); setWalletError(''); }}
+              placeholder="Wallet account number or phone"
+              className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent transition-all ${palette.inputPlaceholder}`}
+              style={{ backgroundColor: palette.inputBg, borderColor: palette.inputBorder, color: palette.inputText }}
+              autoComplete="off"
+            />
+            <input
+              type="password"
+              inputMode="numeric"
+              value={walletPin}
+              onChange={(e) => { setWalletPin(e.target.value.replace(/\D/g, '').slice(0, 6)); setWalletError(''); }}
+              placeholder="Wallet PIN"
+              className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent transition-all ${palette.inputPlaceholder}`}
+              style={{ backgroundColor: palette.inputBg, borderColor: palette.inputBorder, color: palette.inputText }}
+              autoComplete="off"
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => { setShowWalletForm(false); setWalletError(''); setWalletIdentifier(''); setWalletPin(''); }}
+                className="flex-1 py-2.5 rounded-lg text-sm font-medium"
+                style={{ backgroundColor: palette.secondaryBg, color: palette.secondaryText }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={walletLoading}
+                className="flex-1 py-2.5 rounded-lg text-sm font-semibold disabled:opacity-50"
+                style={{ backgroundImage: palette.primaryGradient, color: palette.primaryText }}
+              >
+                {walletLoading ? 'Verifying...' : 'Sign In'}
+              </button>
+            </div>
+          </form>
+        )}
 
         {/* Sign Up Link */}
         <div className="mt-6 text-center">

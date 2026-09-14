@@ -7,7 +7,7 @@
 -- or:
 --   ERROR: 23514: new row for relation "ican_coin_transactions" violates
 --   check constraint "ican_coin_transactions_transaction_type_check"
---
+--FIX_ICAN_COIN_TRANSACTIONS_LEGACY_TYPE_NOT_NULL
 -- (e.g. thrown from mbg_credit_ride_earning when a rider finishes a ride in
 -- mybodaguy, or from transfer_ican / credit_ican_earning elsewhere.)
 --

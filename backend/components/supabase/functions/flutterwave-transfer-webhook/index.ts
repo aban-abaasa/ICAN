@@ -3,7 +3,11 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 
 // Receives async transfer confirmations from Flutterwave and finalizes (or
-// refunds) the matching ican_payout_requests row via resolve_ican_payout().
+// refunds) the matching request row — either an ICAN cash-out
+// (ican_payout_requests, via resolve_ican_payout) or a fiat mobile-money
+// send to another person (ican_fiat_send_requests, via
+// resolve_fiat_momo_send), disambiguated by the reference prefix each of
+// those tables' request functions generates ("PAYOUT-" / "MOMOSEND-").
 // Configure this URL in Flutterwave Dashboard > Settings > Webhooks, and set
 // the same secret there and in FLUTTERWAVE_WEBHOOK_SECRET.
 //
@@ -72,17 +76,24 @@ serve(async (req) => {
     });
 
     const succeeded = status === "SUCCESSFUL";
+    const failureReason = succeeded ? null : (data?.complete_message || `Transfer status: ${status}`);
 
-    const { data: result, error } = await adminClient.rpc("resolve_ican_payout", {
+    // Route to the right resolver by reference prefix — the two request
+    // functions (request_ican_payout / request_fiat_momo_send) each stamp
+    // their own prefix, so this never has to guess or check both tables.
+    const isFiatSend = reference.startsWith("MOMOSEND-");
+    const rpcName = isFiatSend ? "resolve_fiat_momo_send" : "resolve_ican_payout";
+
+    const { data: result, error } = await adminClient.rpc(rpcName, {
       p_reference: reference,
       p_success: succeeded,
       p_flutterwave_transfer_id: data?.id ? String(data.id) : null,
-      p_failure_reason: succeeded ? null : (data?.complete_message || `Transfer status: ${status}`),
+      p_failure_reason: failureReason,
     });
 
     if (error) {
-      console.error("flutterwave-transfer-webhook: resolve_ican_payout error:", error);
-      return jsonResponse({ success: false, error: "Failed to resolve payout." }, 500);
+      console.error(`flutterwave-transfer-webhook: ${rpcName} error:`, error);
+      return jsonResponse({ success: false, error: "Failed to resolve transfer." }, 500);
     }
 
     // "already resolved" is expected on webhook retries — acknowledge either way.
