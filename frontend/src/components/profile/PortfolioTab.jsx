@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Link2, Copy, Eye, Plus, Trash2, Edit2, RefreshCw, Upload, ShieldCheck,
   Briefcase, Award, GraduationCap, FolderKanban, Rocket, FlaskConical, Presentation,
-  Loader2, Check, X as XIcon, Users, ExternalLink,
+  Loader2, Users, ExternalLink,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -11,7 +11,6 @@ import {
   getPortfolioReferences, addPortfolioReference, updatePortfolioReference, deletePortfolioReference,
   isCmmsMember, syncCmmsPortfolioItems,
   uploadVerificationDocument, getMyVerifications, deleteVerificationDocument,
-  getReviewableVerifications, reviewVerification,
 } from '../../services/portfolioService';
 import PortfolioMessagesInbox from './PortfolioMessagesInbox';
 import CertificateRequestsInbox from './CertificateRequestsInbox';
@@ -70,7 +69,6 @@ export default function PortfolioTab() {
   const [verifications, setVerifications] = useState([]);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
   const [removingVerificationId, setRemovingVerificationId] = useState(null);
-  const [reviewQueue, setReviewQueue] = useState([]);
 
   const [showPreview, setShowPreview] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -79,13 +77,12 @@ export default function PortfolioTab() {
     if (!user?.id) return;
     setIsLoading(true);
     try {
-      const [{ portfolio, handle: h }, portfolioItems, portfolioReferences, memberCheck, myDocs, reviewable] = await Promise.all([
+      const [{ portfolio, handle: h }, portfolioItems, portfolioReferences, memberCheck, myDocs] = await Promise.all([
         getMyPortfolio(user.id),
         getPortfolioItems(user.id),
         getPortfolioReferences(user.id),
         isCmmsMember(user.email),
         getMyVerifications(user.id),
-        getReviewableVerifications().catch(() => []),
       ]);
 
       setHandleState(h || '');
@@ -104,7 +101,6 @@ export default function PortfolioTab() {
       setReferences(portfolioReferences);
       setCmmsMember(memberCheck);
       setVerifications(myDocs);
-      setReviewQueue(reviewable);
 
       if (memberCheck) {
         syncCmmsPortfolioItems(user.id, user.email)
@@ -303,15 +299,6 @@ export default function PortfolioTab() {
     } finally {
       setIsUploadingDoc(false);
       e.target.value = '';
-    }
-  };
-
-  const decideReview = async (docId, approve) => {
-    try {
-      await reviewVerification(docId, approve);
-      setReviewQueue(await getReviewableVerifications());
-    } catch (err) {
-      console.error('Error reviewing document:', err);
     }
   };
 
@@ -522,27 +509,6 @@ export default function PortfolioTab() {
                 </div>
               </div>
             ))}
-          </div>
-        )}
-
-        {reviewQueue.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-slate-700/50">
-            <p className="text-xs font-semibold text-amber-300 mb-2">Pending verifications for your review</p>
-            <div className="space-y-2">
-              {reviewQueue.map((doc) => (
-                <div key={doc.id} className="flex items-center justify-between bg-slate-950/40 rounded-lg px-3 py-2">
-                  <span className="text-xs text-gray-300">{doc.profile?.full_name || doc.profile?.email}</span>
-                  <div className="flex gap-1.5">
-                    <button onClick={() => decideReview(doc.id, true)} className="p-1.5 bg-emerald-600/20 hover:bg-emerald-600/40 rounded text-emerald-400">
-                      <Check className="w-3.5 h-3.5" />
-                    </button>
-                    <button onClick={() => decideReview(doc.id, false)} className="p-1.5 bg-red-600/20 hover:bg-red-600/40 rounded text-red-400">
-                      <XIcon className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
         )}
       </div>
