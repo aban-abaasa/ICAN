@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   Plus, Trash2, Share2, Printer, Copy, Check, Loader, FileText, Download,
-  ChevronUp, ChevronDown, Sparkles, Power
+  ChevronUp, ChevronDown, Sparkles, Power, UserPlus
 } from 'lucide-react';
 import {
   listConsultationForms, saveConsultationForm, deleteConsultationForm, setConsultationFormShare,
@@ -506,6 +506,14 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
 
               {detailTab === 'builder' && (
                 <div className="space-y-3">
+                  <button
+                    type="button"
+                    onClick={() => { setDetailTab('submissions'); setRecording(true); }}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-500"
+                  >
+                    <UserPlus className="h-3.5 w-3.5" /> Manually enter a client's answers on this form
+                  </button>
+
                   <div className="flex flex-wrap gap-2">
                     <button type="button" onClick={addPresetFields} className="flex items-center gap-1.5 rounded-lg border border-cyan-400/30 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 hover:bg-cyan-400/20">
                       <Sparkles className="h-3.5 w-3.5" /> Add common clinical fields (bio, medical history, allergies, next of kin…)
