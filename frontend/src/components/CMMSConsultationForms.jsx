@@ -7,14 +7,15 @@ import {
 import {
   listConsultationForms, saveConsultationForm, deleteConsultationForm, setConsultationFormShare,
   listConsultationFields, saveConsultationField, deleteConsultationField, addCommonClinicalFields,
-  listConsultationSubmissions, recordConsultationSubmission
+  addPhysiotherapyConsultationFields, listConsultationSubmissions, recordConsultationSubmission
 } from '../services/cmmsConsultationFormService';
 import { downloadCmmsQrPdf } from '../utils/downloadCmmsQrPdf';
 import { downloadBlankConsultationFormPdf, downloadConsultationSubmissionPdf } from '../utils/generateConsultationFormPdf';
 
 const FIELD_TYPES = [
   ['text', 'Short text'], ['textarea', 'Long text'], ['date', 'Date'], ['number', 'Number'],
-  ['select', 'Single choice'], ['multiselect', 'Multiple choice'], ['checkbox', 'Yes / No']
+  ['select', 'Single choice'], ['multiselect', 'Multiple choice'], ['checkbox', 'Yes / No'],
+  ['section', 'Section header']
 ];
 const FIELD_TYPE_LABEL = Object.fromEntries(FIELD_TYPES);
 const NEEDS_OPTIONS = new Set(['select', 'multiselect']);
@@ -39,6 +40,8 @@ const openPrintWindow = (title, bodyHtml) => {
     .field .answer{font-size:13px;white-space:pre-wrap;border-bottom:1px solid #999;min-height:18px;padding-bottom:4px}
     .blank-line{border-bottom:1px solid #999;height:22px}
     .blank-lines .blank-line{margin-bottom:6px}
+    .section-heading{margin:26px 0 14px;font-size:14px;font-weight:bold;color:#111;border-bottom:2px solid #333;padding-bottom:4px;page-break-after:avoid}
+    .section-heading:first-of-type{margin-top:4px}
     .meta{color:#555;font-size:11px;margin-top:28px;border-top:1px solid #ddd;padding-top:10px}
     @media print{body{margin:18px}}
   </style></head><body>${bodyHtml}<script>window.onload=()=>window.print()</script></body></html>`);
@@ -47,22 +50,28 @@ const openPrintWindow = (title, bodyHtml) => {
 
 // A form's fields as they were AT SUBMISSION TIME may no longer match the
 // live template (a field can be renamed, retyped, or deleted since) — this
-// walks the submission's own `responses` first, using the live field
-// definition only for a nicer label/order when one still exists, so a
-// deleted field's historical answer is never silently dropped.
+// starts from the live template (so a still-current section header always
+// keeps its place in the layout) but only keeps a question if the
+// submission actually answered it, then appends any answered key that's no
+// longer on the template at all, so a deleted field's historical answer is
+// never silently dropped.
 const submissionEntries = (submission, fields) => {
   const responses = submission?.responses || {};
-  const byKey = new Map(fields.map((f) => [f.field_key, f]));
-  return Object.entries(responses).map(([key, value]) => {
-    const field = byKey.get(key);
+  const seenKeys = new Set();
+  const fromTemplate = fields.map((f) => {
+    seenKeys.add(f.field_key);
+    if (f.field_type === 'section') {
+      return { key: f.field_key, isSection: true, label: f.label, sortOrder: f.sort_order };
+    }
     return {
-      key,
-      label: field?.label || key.replace(/_/g, ' '),
-      fieldType: field?.field_type || null,
-      sortOrder: field ? field.sort_order : 9999,
-      value
+      key: f.field_key, isSection: false, label: f.label, fieldType: f.field_type,
+      sortOrder: f.sort_order, value: responses[f.field_key]
     };
-  }).sort((a, b) => a.sortOrder - b.sortOrder);
+  }).filter((e) => e.isSection || Object.prototype.hasOwnProperty.call(responses, e.key));
+  const orphaned = Object.entries(responses)
+    .filter(([key]) => !seenKeys.has(key))
+    .map(([key, value]) => ({ key, isSection: false, label: key.replace(/_/g, ' '), fieldType: null, sortOrder: 9999, value }));
+  return [...fromTemplate, ...orphaned].sort((a, b) => a.sortOrder - b.sortOrder);
 };
 
 const formatAnswer = (entry) => {
@@ -214,6 +223,12 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
     if (result.success) setFields(result.data);
   };
 
+  const addPhysiotherapyPreset = async () => {
+    if (!selectedForm) return;
+    const result = await addPhysiotherapyConsultationFields(selectedForm.id);
+    if (result.success) setFields(result.data); else setError(result.error);
+  };
+
   const submitField = async (e) => {
     e.preventDefault();
     if (!selectedForm || !fieldForm.label.trim()) return;
@@ -253,6 +268,9 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
   const printBlankForm = () => {
     if (!selectedForm) return;
     const fieldsHtml = fields.map((f) => {
+      if (f.field_type === 'section') {
+        return `<div class="section-heading">${escapeHtml(f.label)}</div>`;
+      }
       let answerHtml;
       if (f.field_type === 'select' || f.field_type === 'multiselect') {
         answerHtml = `<div class="answer">${(f.options || []).map((o) => escapeHtml(o)).join(' &nbsp;□&nbsp; ') || '&nbsp;'}</div>`;
@@ -276,9 +294,10 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
 
   const printSubmission = (submission) => {
     const entries = submissionEntries(submission, fields);
-    const fieldsHtml = entries.map((entry) => `
-      <div class="field"><div class="label">${escapeHtml(entry.label)}</div><div class="answer">${escapeHtml(formatAnswer(entry))}</div></div>
-    `).join('');
+    const fieldsHtml = entries.map((entry) => entry.isSection
+      ? `<div class="section-heading">${escapeHtml(entry.label)}</div>`
+      : `<div class="field"><div class="label">${escapeHtml(entry.label)}</div><div class="answer">${escapeHtml(formatAnswer(entry))}</div></div>`
+    ).join('');
     openPrintWindow(
       `${businessName || 'Clinic'} — ${submission.patient_name}`,
       `<h1>${escapeHtml(businessName || 'Clinic')}</h1>
@@ -487,33 +506,50 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
 
               {detailTab === 'builder' && (
                 <div className="space-y-3">
-                  <button type="button" onClick={addPresetFields} className="flex items-center gap-1.5 rounded-lg border border-cyan-400/30 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 hover:bg-cyan-400/20">
-                    <Sparkles className="h-3.5 w-3.5" /> Add common clinical fields (bio, medical history, allergies, next of kin…)
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={addPresetFields} className="flex items-center gap-1.5 rounded-lg border border-cyan-400/30 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 hover:bg-cyan-400/20">
+                      <Sparkles className="h-3.5 w-3.5" /> Add common clinical fields (bio, medical history, allergies, next of kin…)
+                    </button>
+                    <button type="button" onClick={addPhysiotherapyPreset} className="flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-400/20">
+                      <Sparkles className="h-3.5 w-3.5" /> Add physiotherapy initial consultation form
+                    </button>
+                  </div>
 
                   <div className="space-y-1.5">
                     {fields.length === 0 && (
                       <p className="rounded-xl border border-dashed border-white/15 p-4 text-center text-xs text-slate-400">
-                        No fields yet — use the preset above, or add your own below.
+                        No fields yet — use a preset above, or add your own below.
                       </p>
                     )}
                     {fields.map((f, index) => (
-                      <div key={f.id} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 p-3">
-                        <div className="flex flex-col">
-                          <button type="button" onClick={() => moveField(index, -1)} disabled={index === 0} className="text-slate-400 hover:text-white disabled:opacity-20"><ChevronUp className="h-3.5 w-3.5" /></button>
-                          <button type="button" onClick={() => moveField(index, 1)} disabled={index === fields.length - 1} className="text-slate-400 hover:text-white disabled:opacity-20"><ChevronDown className="h-3.5 w-3.5" /></button>
+                      f.field_type === 'section' ? (
+                        <div key={f.id} className="flex items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-400/5 px-3 py-2">
+                          <div className="flex flex-col">
+                            <button type="button" onClick={() => moveField(index, -1)} disabled={index === 0} className="text-slate-400 hover:text-white disabled:opacity-20"><ChevronUp className="h-3.5 w-3.5" /></button>
+                            <button type="button" onClick={() => moveField(index, 1)} disabled={index === fields.length - 1} className="text-slate-400 hover:text-white disabled:opacity-20"><ChevronDown className="h-3.5 w-3.5" /></button>
+                          </div>
+                          <p className="min-w-0 flex-1 truncate text-sm font-bold uppercase tracking-wide text-emerald-200">{f.label}</p>
+                          <span className="rounded-full bg-emerald-400/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">Section</span>
+                          <button type="button" onClick={() => removeField(f)} className="text-red-400 hover:text-red-300"><Trash2 className="h-4 w-4" /></button>
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-white">
-                            {f.label}{f.is_required && <span className="ml-1 text-red-400">*</span>}
-                          </p>
-                          <p className="text-xs text-slate-400">
-                            {FIELD_TYPE_LABEL[f.field_type] || f.field_type}
-                            {NEEDS_OPTIONS.has(f.field_type) && f.options?.length ? ` — ${f.options.join(', ')}` : ''}
-                          </p>
+                      ) : (
+                        <div key={f.id} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 p-3">
+                          <div className="flex flex-col">
+                            <button type="button" onClick={() => moveField(index, -1)} disabled={index === 0} className="text-slate-400 hover:text-white disabled:opacity-20"><ChevronUp className="h-3.5 w-3.5" /></button>
+                            <button type="button" onClick={() => moveField(index, 1)} disabled={index === fields.length - 1} className="text-slate-400 hover:text-white disabled:opacity-20"><ChevronDown className="h-3.5 w-3.5" /></button>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-white">
+                              {f.label}{f.is_required && <span className="ml-1 text-red-400">*</span>}
+                            </p>
+                            <p className="text-xs text-slate-400">
+                              {FIELD_TYPE_LABEL[f.field_type] || f.field_type}
+                              {NEEDS_OPTIONS.has(f.field_type) && f.options?.length ? ` — ${f.options.join(', ')}` : ''}
+                            </p>
+                          </div>
+                          <button type="button" onClick={() => removeField(f)} className="text-red-400 hover:text-red-300"><Trash2 className="h-4 w-4" /></button>
                         </div>
-                        <button type="button" onClick={() => removeField(f)} className="text-red-400 hover:text-red-300"><Trash2 className="h-4 w-4" /></button>
-                      </div>
+                      )
                     ))}
                   </div>
 
@@ -522,7 +558,8 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
                     <div className="grid gap-2 sm:grid-cols-2">
                       <input
                         required value={fieldForm.label} onChange={(e) => setFieldForm((f) => ({ ...f, label: e.target.value }))}
-                        placeholder="Field label, e.g. Blood pressure" className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-white"
+                        placeholder={fieldForm.fieldType === 'section' ? 'Section heading, e.g. Medical History' : 'Field label, e.g. Blood pressure'}
+                        className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-white"
                       />
                       <select value={fieldForm.fieldType} onChange={(e) => setFieldForm((f) => ({ ...f, fieldType: e.target.value }))} className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-white">
                         {FIELD_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -534,12 +571,14 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
                         placeholder="Choices, comma-separated (e.g. Mild, Moderate, Severe)" className="w-full rounded-lg bg-slate-900 px-3 py-2 text-sm text-white"
                       />
                     )}
-                    <label className="flex items-center gap-2 text-xs text-slate-300">
-                      <input type="checkbox" checked={fieldForm.isRequired} onChange={(e) => setFieldForm((f) => ({ ...f, isRequired: e.target.checked }))} />
-                      Required
-                    </label>
+                    {fieldForm.fieldType !== 'section' && (
+                      <label className="flex items-center gap-2 text-xs text-slate-300">
+                        <input type="checkbox" checked={fieldForm.isRequired} onChange={(e) => setFieldForm((f) => ({ ...f, isRequired: e.target.checked }))} />
+                        Required
+                      </label>
+                    )}
                     <button disabled={savingField || !fieldForm.label.trim()} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-                      {savingField ? 'Adding…' : 'Add field'}
+                      {savingField ? 'Adding…' : fieldForm.fieldType === 'section' ? 'Add section' : 'Add field'}
                     </button>
                   </form>
                 </div>
@@ -560,14 +599,18 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
                         <input value={walkIn.email} onChange={(e) => setWalkIn((w) => ({ ...w, email: e.target.value }))} placeholder="Email" className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-white" />
                       </div>
                       {fields.map((f) => (
-                        <div key={f.id}>
-                          <label className="mb-1 block text-xs text-slate-400">{f.label}{f.is_required && <span className="text-red-400"> *</span>}</label>
-                          <FieldInput
-                            field={f}
-                            value={walkIn.responses[f.field_key]}
-                            onChange={(value) => setWalkIn((w) => ({ ...w, responses: { ...w.responses, [f.field_key]: value } }))}
-                          />
-                        </div>
+                        f.field_type === 'section' ? (
+                          <p key={f.id} className="pt-2 text-xs font-bold uppercase tracking-wide text-cyan-300 border-t border-white/10 first:border-t-0 first:pt-0">{f.label}</p>
+                        ) : (
+                          <div key={f.id}>
+                            <label className="mb-1 block text-xs text-slate-400">{f.label}{f.is_required && <span className="text-red-400"> *</span>}</label>
+                            <FieldInput
+                              field={f}
+                              value={walkIn.responses[f.field_key]}
+                              onChange={(value) => setWalkIn((w) => ({ ...w, responses: { ...w.responses, [f.field_key]: value } }))}
+                            />
+                          </div>
+                        )
                       ))}
                       <div className="flex gap-2">
                         <button type="button" onClick={() => setRecording(false)} className="rounded-lg border border-white/15 px-4 py-2 text-sm text-slate-300">Cancel</button>
@@ -599,10 +642,14 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
                                 <p className="text-xs text-slate-400">{[s.patient_phone, s.patient_email].filter(Boolean).join(' · ')}</p>
                               )}
                               {submissionEntries(s, fields).map((entry) => (
-                                <div key={entry.key} className="text-sm">
-                                  <p className="text-xs text-slate-400">{entry.label}</p>
-                                  <p className="text-slate-100">{formatAnswer(entry)}</p>
-                                </div>
+                                entry.isSection ? (
+                                  <p key={entry.key} className="pt-2 text-xs font-bold uppercase tracking-wide text-cyan-300 first:pt-0">{entry.label}</p>
+                                ) : (
+                                  <div key={entry.key} className="text-sm">
+                                    <p className="text-xs text-slate-400">{entry.label}</p>
+                                    <p className="text-slate-100">{formatAnswer(entry)}</p>
+                                  </div>
+                                )
                               ))}
                               <div className="mt-1 flex gap-2">
                                 <button type="button" onClick={() => printSubmission(s)} className="flex items-center gap-1.5 rounded-lg border border-white/15 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/5">

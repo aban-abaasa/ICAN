@@ -14,9 +14,10 @@ const safeFilename = (value) => (value || 'form')
 const MARGIN = 18;
 const LINE_H = 5.5;
 
-// entries: [{ label, isRequired, text, ruleLines }] — a field with `text`
-// renders that as wrapped answer/option text; a field without `text`
-// renders `ruleLines` (default 1) blank underlines for someone to write on.
+// entries: [{ label, isRequired, text, ruleLines, isSection }] — a section
+// entry renders as a heading + rule (no answer); otherwise a field with
+// `text` renders that as wrapped answer/option text, and a field without
+// `text` renders `ruleLines` (default 1) blank underlines to write on.
 const renderConsultationPdf = ({ businessName, formName, subtitleLines, entries, footer }) => {
   const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
   const pageWidth = pdf.internal.pageSize.getWidth();
@@ -53,7 +54,23 @@ const renderConsultationPdf = ({ businessName, formName, subtitleLines, entries,
   pdf.line(MARGIN, y, pageWidth - MARGIN, y);
   y += 9;
 
-  entries.forEach(({ label, isRequired, text, ruleLines }) => {
+  entries.forEach(({ label, isRequired, text, ruleLines, isSection }) => {
+    if (isSection) {
+      ensureRoom(16);
+      y += 3;
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(11.5);
+      pdf.setTextColor(0);
+      pdf.text(label, MARGIN, y);
+      y += 3;
+      pdf.setDrawColor(60);
+      pdf.setLineWidth(0.6);
+      pdf.line(MARGIN, y, pageWidth - MARGIN, y);
+      pdf.setLineWidth(0.2);
+      y += 8;
+      return;
+    }
+
     ensureRoom(14);
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(10.5);
@@ -96,6 +113,9 @@ const renderConsultationPdf = ({ businessName, formName, subtitleLines, entries,
 // treatment as CMMSConsultationForms.jsx's printBlankForm().
 export const downloadBlankConsultationFormPdf = ({ businessName, form, fields }) => {
   const entries = fields.map((f) => {
+    if (f.field_type === 'section') {
+      return { label: f.label, isSection: true };
+    }
     const options = Array.isArray(f.options) ? f.options : [];
     if (f.field_type === 'checkbox') {
       return { label: f.label, isRequired: f.is_required, text: '☐ Yes      ☐ No' };
@@ -121,14 +141,16 @@ export const downloadBlankConsultationFormPdf = ({ businessName, form, fields })
 // on-screen/print views never disagree about labels or ordering.
 export const downloadConsultationSubmissionPdf = ({ businessName, formName, submission, entries }) => {
   const contactLine = [submission.patient_phone, submission.patient_email].filter(Boolean).join(' · ');
-  const pdfEntries = entries.map(({ label, fieldType, value }) => ({
-    label,
-    text: fieldType === 'checkbox'
-      ? (value ? 'Yes' : 'No')
-      : Array.isArray(value)
-        ? (value.length ? value.join(', ') : '—')
-        : ((value || value === 0) ? String(value) : '—')
-  }));
+  const pdfEntries = entries.map(({ label, fieldType, value, isSection }) => (
+    isSection ? { label, isSection: true } : {
+      label,
+      text: fieldType === 'checkbox'
+        ? (value ? 'Yes' : 'No')
+        : Array.isArray(value)
+          ? (value.length ? value.join(', ') : '—')
+          : ((value || value === 0) ? String(value) : '—')
+    }
+  ));
   const pdf = renderConsultationPdf({
     businessName,
     formName: submission.form_name_snapshot || formName || 'Consultation form',
@@ -150,6 +172,7 @@ export const downloadConsultationSubmissionPdf = ({ businessName, formName, subm
 export const downloadPublicConsultationSubmissionPdf = ({ form, patient, responses }) => {
   const contactLine = [patient.phone, patient.email].filter(Boolean).join(' · ');
   const entries = (form.fields || []).map((f) => {
+    if (f.fieldType === 'section') return { label: f.label, isSection: true };
     const value = responses[f.fieldKey];
     const text = f.fieldType === 'checkbox'
       ? (value ? 'Yes' : 'No')

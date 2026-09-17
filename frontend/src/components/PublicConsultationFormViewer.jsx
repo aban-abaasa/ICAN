@@ -64,6 +64,7 @@ const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ 
 // they just submitted.
 const printSubmittedAnswers = (form, patient, responses) => {
   const rows = (form.fields || []).map((f) => {
+    if (f.fieldType === 'section') return `<div class="section-heading">${escapeHtml(f.label)}</div>`;
     const value = responses[f.fieldKey];
     const text = f.fieldType === 'checkbox' ? (value ? 'Yes' : 'No') : Array.isArray(value) ? (value.join(', ') || '—') : (value || '—');
     return `<div class="field"><div class="label">${escapeHtml(f.label)}</div><div class="answer">${escapeHtml(text)}</div></div>`;
@@ -77,6 +78,8 @@ const printSubmittedAnswers = (form, patient, responses) => {
     .field{margin-bottom:14px;page-break-inside:avoid}
     .field .label{font-weight:bold;font-size:13px;margin-bottom:2px}
     .field .answer{font-size:13px;white-space:pre-wrap}
+    .section-heading{margin:22px 0 12px;font-size:14px;font-weight:bold;color:#111;border-bottom:2px solid #333;padding-bottom:4px;page-break-after:avoid}
+    .section-heading:first-of-type{margin-top:4px}
     @media print{body{margin:18px}}
   </style></head><body><h1>${escapeHtml(form.businessName || 'Clinic')}</h1>
   <div class="subtitle">${escapeHtml(form.formName)}<br>Patient: ${escapeHtml(patient.name)}${patient.phone ? ' · ' + escapeHtml(patient.phone) : ''}<br>Submitted: ${escapeHtml(new Date().toLocaleString())}</div>
@@ -92,7 +95,7 @@ const FieldControl = ({ field, value, onChange }) => {
   if (field.fieldType === 'checkbox') {
     return (
       <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} /> Yes
+        <input required={field.isRequired} type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} /> Yes
       </label>
     );
   }
@@ -252,16 +255,23 @@ const PublicConsultationFormViewer = ({ shareToken }) => {
           </div>
 
           {form.fields.map((field) => (
-            <div key={field.id}>
-              <label className="block text-xs font-semibold mb-1 cf-text-muted">
-                {field.label}{field.isRequired && <span style={{ color: 'var(--cf-maroon)' }}> *</span>}
-              </label>
-              <FieldControl
-                field={field}
-                value={responses[field.fieldKey]}
-                onChange={(value) => setResponses((r) => ({ ...r, [field.fieldKey]: value }))}
-              />
-            </div>
+            field.fieldType === 'section' ? (
+              <div key={field.id} className="pt-2 first:pt-0">
+                <p className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--cf-green)' }}>{field.label}</p>
+                <div className="mt-2 border-t" style={{ borderColor: 'var(--cf-border)' }} />
+              </div>
+            ) : (
+              <div key={field.id}>
+                <label className="block text-xs font-semibold mb-1 cf-text-muted">
+                  {field.label}{field.isRequired && <span style={{ color: 'var(--cf-maroon)' }}> *</span>}
+                </label>
+                <FieldControl
+                  field={field}
+                  value={responses[field.fieldKey]}
+                  onChange={(value) => setResponses((r) => ({ ...r, [field.fieldKey]: value }))}
+                />
+              </div>
+            )
           ))}
 
           {error && <p className="text-sm" style={{ color: 'var(--cf-maroon)' }}>{error}</p>}
