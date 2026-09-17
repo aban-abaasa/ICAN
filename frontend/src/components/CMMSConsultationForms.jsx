@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import {
-  Plus, Trash2, Share2, Printer, Copy, Check, Loader, FileText,
+  Plus, Trash2, Share2, Printer, Copy, Check, Loader, FileText, Download,
   ChevronUp, ChevronDown, Sparkles, Power
 } from 'lucide-react';
 import {
@@ -8,6 +9,8 @@ import {
   listConsultationFields, saveConsultationField, deleteConsultationField, addCommonClinicalFields,
   listConsultationSubmissions, recordConsultationSubmission
 } from '../services/cmmsConsultationFormService';
+import { downloadCmmsQrPdf } from '../utils/downloadCmmsQrPdf';
+import { downloadBlankConsultationFormPdf, downloadConsultationSubmissionPdf } from '../utils/generateConsultationFormPdf';
 
 const FIELD_TYPES = [
   ['text', 'Short text'], ['textarea', 'Long text'], ['date', 'Date'], ['number', 'Number'],
@@ -287,6 +290,44 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
     );
   };
 
+  const downloadBlankPdf = () => {
+    if (!selectedForm) return;
+    try {
+      downloadBlankConsultationFormPdf({ businessName, form: selectedForm, fields });
+    } catch (err) {
+      console.error('Unable to create blank form PDF:', err);
+      setError('Unable to create the PDF. Please try again.');
+    }
+  };
+
+  const downloadSubmissionPdf = (submission) => {
+    try {
+      downloadConsultationSubmissionPdf({
+        businessName, formName: selectedForm?.name, submission, entries: submissionEntries(submission, fields)
+      });
+    } catch (err) {
+      console.error('Unable to create submission PDF:', err);
+      setError('Unable to create the PDF. Please try again.');
+    }
+  };
+
+  const downloadShareQr = async () => {
+    if (!selectedForm) return;
+    try {
+      await downloadCmmsQrPdf({
+        type: 'consultation-form',
+        url: shareUrl(selectedForm.share_token),
+        location: selectedForm.description || 'Scan to fill out this form on your phone',
+        companyName: businessName,
+        title: selectedForm.name,
+        note: 'No ICAN account needed — anyone with this code can fill out and submit this form.'
+      });
+    } catch (err) {
+      console.error('Unable to create the share QR PDF:', err);
+      setError('Unable to create the QR code PDF. Please try again.');
+    }
+  };
+
   const submitWalkIn = async (e) => {
     e.preventDefault();
     if (!selectedForm || !walkIn.name.trim()) return;
@@ -383,6 +424,9 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
                   <button type="button" onClick={printBlankForm} className="flex items-center gap-1.5 rounded-lg border border-white/15 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/5">
                     <Printer className="h-3.5 w-3.5" /> Print blank form
                   </button>
+                  <button type="button" onClick={downloadBlankPdf} className="flex items-center gap-1.5 rounded-lg border border-white/15 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/5">
+                    <Download className="h-3.5 w-3.5" /> Download PDF
+                  </button>
                   <button type="button" onClick={() => removeForm(selectedForm)} className="flex items-center gap-1.5 rounded-lg border border-red-400/30 px-2.5 py-1.5 text-xs text-red-300 hover:bg-red-500/10">
                     <Trash2 className="h-3.5 w-3.5" /> Delete
                   </button>
@@ -404,13 +448,28 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
                   </button>
                 </div>
                 {selectedForm.share_enabled && (
-                  <div className="mt-3 flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2">
-                    <code className="min-w-0 flex-1 truncate text-xs text-cyan-300">{shareUrl(selectedForm.share_token)}</code>
-                    <button type="button" onClick={copyShareLink} className="flex items-center gap-1 rounded-lg bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/20">
-                      {copyState === 'copied' ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : <Copy className="h-3.5 w-3.5" />}
-                      {copyState === 'copied' ? 'Copied' : 'Copy'}
-                    </button>
-                  </div>
+                  <>
+                    <div className="mt-3 flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2">
+                      <code className="min-w-0 flex-1 truncate text-xs text-cyan-300">{shareUrl(selectedForm.share_token)}</code>
+                      <button type="button" onClick={copyShareLink} className="flex items-center gap-1 rounded-lg bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/20">
+                        {copyState === 'copied' ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : <Copy className="h-3.5 w-3.5" />}
+                        {copyState === 'copied' ? 'Copied' : 'Copy'}
+                      </button>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-4 rounded-lg border border-white/10 bg-slate-900/60 p-3">
+                      <div className="rounded-lg bg-white p-2">
+                        <QRCodeSVG value={shareUrl(selectedForm.share_token)} size={104} />
+                      </div>
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <p className="text-xs text-slate-400">
+                          Patients can scan this to open and fill out the form on their own phone — no link needed. Print it at reception or put it on a sign.
+                        </p>
+                        <button type="button" onClick={downloadShareQr} className="flex items-center gap-1.5 rounded-lg border border-white/15 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/5">
+                          <Download className="h-3.5 w-3.5" /> Download QR (PDF)
+                        </button>
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
 
@@ -545,9 +604,14 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
                                   <p className="text-slate-100">{formatAnswer(entry)}</p>
                                 </div>
                               ))}
-                              <button type="button" onClick={() => printSubmission(s)} className="mt-1 flex items-center gap-1.5 rounded-lg border border-white/15 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/5">
-                                <Printer className="h-3.5 w-3.5" /> Print
-                              </button>
+                              <div className="mt-1 flex gap-2">
+                                <button type="button" onClick={() => printSubmission(s)} className="flex items-center gap-1.5 rounded-lg border border-white/15 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/5">
+                                  <Printer className="h-3.5 w-3.5" /> Print
+                                </button>
+                                <button type="button" onClick={() => downloadSubmissionPdf(s)} className="flex items-center gap-1.5 rounded-lg border border-white/15 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/5">
+                                  <Download className="h-3.5 w-3.5" /> Download PDF
+                                </button>
+                              </div>
                             </div>
                           )}
                         </div>

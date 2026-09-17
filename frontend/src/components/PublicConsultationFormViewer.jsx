@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { CheckCircle2, FileWarning, Loader, Printer } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { CheckCircle2, Download, FileWarning, Loader, Printer } from 'lucide-react';
 import { getPublicConsultationForm, submitPublicConsultationForm } from '../services/cmmsConsultationFormService';
+import { downloadPublicConsultationSubmissionPdf } from '../utils/generateConsultationFormPdf';
 
 // Same scoped-palette technique as PublicReportExportViewer.jsx (see that
 // file for the full reasoning): this page has no ICAN session and no app
@@ -126,21 +127,43 @@ const FieldControl = ({ field, value, onChange }) => {
 // Anonymous, unauthenticated patient-facing consultation form — reached via
 // the public link a clinic toggles on in CMMSConsultationForms.jsx
 // (/consultation-forms/:shareToken, see main.jsx).
+// A patient filling this out unattended can get interrupted — a call, a
+// dropped connection, an accidental tab close — so progress is kept in
+// localStorage per share link (never sent anywhere) and offered back the
+// next time this same token loads, cleared the moment a submit succeeds.
+const draftStorageKey = (shareToken) => `icanera-consultation-draft-${shareToken}`;
+
 const PublicConsultationFormViewer = ({ shareToken }) => {
   const [status, setStatus] = useState('loading'); // loading | invalid | ready | submitting | submitted
   const [form, setForm] = useState(null);
   const [patient, setPatient] = useState({ name: '', phone: '', email: '' });
   const [responses, setResponses] = useState({});
   const [error, setError] = useState('');
+  const [draftRestored, setDraftRestored] = useState(false);
+  const draftLoadedRef = useRef(false);
 
   useEffect(() => {
     (async () => {
       const result = await getPublicConsultationForm(shareToken);
       if (!result.success || !result.data) { setStatus('invalid'); return; }
       setForm(result.data);
+      try {
+        const saved = JSON.parse(localStorage.getItem(draftStorageKey(shareToken)) || 'null');
+        if (saved && (saved.patient?.name || Object.keys(saved.responses || {}).length)) {
+          setPatient((p) => ({ ...p, ...saved.patient }));
+          setResponses(saved.responses || {});
+          setDraftRestored(true);
+        }
+      } catch { /* private-browsing / blocked storage — just start blank */ }
+      draftLoadedRef.current = true;
       setStatus('ready');
     })();
   }, [shareToken]);
+
+  useEffect(() => {
+    if (!draftLoadedRef.current || status === 'submitted') return;
+    try { localStorage.setItem(draftStorageKey(shareToken), JSON.stringify({ patient, responses })); } catch { /* ignore */ }
+  }, [shareToken, patient, responses, status]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -154,7 +177,16 @@ const PublicConsultationFormViewer = ({ shareToken }) => {
       setStatus('ready');
       return;
     }
+    try { localStorage.removeItem(draftStorageKey(shareToken)); } catch { /* ignore */ }
     setStatus('submitted');
+  };
+
+  const downloadOwnCopy = () => {
+    try {
+      downloadPublicConsultationSubmissionPdf({ form, patient, responses });
+    } catch (err) {
+      console.error('Unable to create the submission PDF:', err);
+    }
   };
 
   if (status === 'loading') {
@@ -177,9 +209,14 @@ const PublicConsultationFormViewer = ({ shareToken }) => {
   if (status === 'submitted') {
     return (
       <CenteredCard icon={CheckCircle2} title="Thank you" subtitle={`Your ${form.formName.toLowerCase()} has been submitted to ${form.businessName || 'the clinic'}.`}>
-        <button type="button" onClick={() => printSubmittedAnswers(form, patient, responses)} className="cf-btn w-full px-4 py-2 rounded-lg flex items-center justify-center gap-2">
-          <Printer size={16} /> Print a copy
-        </button>
+        <div className="space-y-2">
+          <button type="button" onClick={downloadOwnCopy} className="cf-btn w-full px-4 py-2 rounded-lg flex items-center justify-center gap-2">
+            <Download size={16} /> Download PDF copy
+          </button>
+          <button type="button" onClick={() => printSubmittedAnswers(form, patient, responses)} className="cf-input w-full px-4 py-2 rounded-lg flex items-center justify-center gap-2">
+            <Printer size={16} /> Print a copy
+          </button>
+        </div>
       </CenteredCard>
     );
   }
@@ -191,7 +228,12 @@ const PublicConsultationFormViewer = ({ shareToken }) => {
       <div className="max-w-xl mx-auto px-4 py-10">
         <p className="cf-text-faint text-xs uppercase tracking-wide mb-1">{form.businessName}</p>
         <h1 className="text-2xl font-bold mb-1">{form.formName}</h1>
-        {form.formDescription && <p className="cf-text-muted text-sm mb-8">{form.formDescription}</p>}
+        {form.formDescription && <p className="cf-text-muted text-sm mb-4">{form.formDescription}</p>}
+        {draftRestored && (
+          <p className="cf-text-muted text-xs mb-4 flex items-center gap-1.5">
+            <span style={{ color: 'var(--cf-green)' }}>●</span> Picked up where you left off — your answers were saved on this device.
+          </p>
+        )}
 
         <form onSubmit={handleSubmit} className="cf-surface rounded-2xl p-6 space-y-5">
           <div className="grid gap-3 sm:grid-cols-2">
