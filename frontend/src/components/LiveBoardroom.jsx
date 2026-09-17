@@ -7,30 +7,13 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext';
 import { getSupabaseClient } from '../lib/supabase/client';
 import { getAudioNotificationService } from '../services/audioNotificationService';
+import { ICE_SERVERS } from '../lib/webrtc/iceServers';
 import {
   X, Video, Mic, MicOff, VideoOff, Phone, Users, Monitor, Send,
   MessageCircle, Eye, Wifi, WifiOff, Circle, Volume2, VolumeX, MoreVertical, ThumbsUp
 } from 'lucide-react';
 
 const EMPTY_MEMBERS = [];
-
-// STUN alone only finds a direct path when both sides are on open/simply
-// NATed networks -- a candidate on mobile data and an interviewer behind a
-// corporate/CGNAT network (a very normal pairing for this feature) usually
-// can't punch through, so the offer/answer + ICE candidates all succeed
-// (presence shows the other person, ontrack just never fires) with no video
-// or audio ever flowing. useCommunityLive.js already carries a TURN relay
-// for the same reason -- this was the one real-time video path still
-// missing it. openrelay.metered.ca is free/rate-limited with no SLA; swap
-// in a paid TURN provider (Twilio Network Traversal, Cloudflare Calls,
-// metered.ca's paid tier, etc.) before this carries real production load.
-const ICE_SERVERS = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-  { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
-];
 
 const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context = 'trust', onClose = () => {}, autoStart = false }) => {
   const { user } = useAuth();

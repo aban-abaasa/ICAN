@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, Link2, Lock, Mail, Globe, Copy, Check, Trash2, Loader } from 'lucide-react';
+import { X, Link2, Lock, Mail, Globe, Copy, Check, Trash2, Loader, ListChecks, LayoutList } from 'lucide-react';
 import {
   createReportExportShare,
   listReportExportShares,
@@ -14,11 +14,16 @@ const VISIBILITY_OPTIONS = [
 
 const shareUrlFor = (token) => `https://icanera.space/report-exports/${token}`;
 
+const severityDot = { critical: 'bg-red-500', high: 'bg-orange-500', medium: 'bg-yellow-500', low: 'bg-blue-500' };
+
 // Opened from the "Export Reports" panel's Share button — shares the same
 // department-scoped "Written Reports" set that panel's Download/Print
 // buttons produce (see ReportsManager's reportDepartmentFilter /
 // reportScopeLabel in CMSSModule.jsx), as a public page instead of a file.
-const ShareExportModal = ({ companyId, departmentFilter, scopeLabel, reportCount, onClose }) => {
+// `reports` (the same filteredCompanyReports list already on screen) lets
+// the admin instead hand-pick exactly which individual reports go into the
+// link, rather than only ever sharing a whole department/employee's worth.
+const ShareExportModal = ({ companyId, departmentFilter, scopeLabel, reportCount, reports = [], onClose }) => {
   const [visibility, setVisibility] = useState('public');
   const [password, setPassword] = useState('');
   const [emailsText, setEmailsText] = useState('');
@@ -27,6 +32,21 @@ const ShareExportModal = ({ companyId, departmentFilter, scopeLabel, reportCount
   const [error, setError] = useState('');
   const [createdShare, setCreatedShare] = useState(null);
   const [copiedToken, setCopiedToken] = useState('');
+
+  // 'scope' = the existing department/employee-filtered set (default,
+  // unchanged behavior). 'pick' = a hand-picked subset of `reports`.
+  const [shareMode, setShareMode] = useState('scope');
+  const [selectedReportIds, setSelectedReportIds] = useState(() => new Set());
+
+  const toggleReportSelected = (id) => {
+    setSelectedReportIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const selectAllReports = () => setSelectedReportIds(new Set(reports.map((r) => r.id)));
+  const clearSelectedReports = () => setSelectedReportIds(new Set());
 
   const [shares, setShares] = useState([]);
   const [isLoadingShares, setIsLoadingShares] = useState(false);
@@ -61,14 +81,23 @@ const ShareExportModal = ({ companyId, departmentFilter, scopeLabel, reportCount
       return;
     }
 
+    if (shareMode === 'pick' && selectedReportIds.size === 0) {
+      setError('Select at least one report to share.');
+      return;
+    }
+
     setIsCreating(true);
     const result = await createReportExportShare(companyId, {
-      departmentFilter,
+      // Picking specific reports is a hard filter on top of the scope, so
+      // leave department/reporter at 'all' in that mode rather than also
+      // applying the on-screen department filter a second time.
+      departmentFilter: shareMode === 'pick' ? 'all' : departmentFilter,
       reporterFilter: 'all',
       visibility,
       password: visibility === 'password' ? password : null,
       allowedEmails: visibility === 'restricted' ? allowedEmails : null,
-      expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null
+      expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+      reportIds: shareMode === 'pick' ? Array.from(selectedReportIds) : null
     });
     setIsCreating(false);
 
@@ -102,7 +131,7 @@ const ShareExportModal = ({ companyId, departmentFilter, scopeLabel, reportCount
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[2000] p-4">
-      <div className="bg-slate-900 border border-slate-700 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto text-white">
+      <div className="bg-slate-900 border border-slate-700 rounded-lg shadow-xl w-full max-w-xl max-h-[90vh] overflow-y-auto text-white">
         <div className="flex items-center justify-between p-5 border-b border-slate-700">
           <div className="flex items-center gap-2">
             <Link2 size={20} className="text-cyan-400" />
@@ -114,9 +143,69 @@ const ShareExportModal = ({ companyId, departmentFilter, scopeLabel, reportCount
         </div>
 
         <div className="p-5 space-y-5">
-          <p className="text-sm text-gray-400">
-            Scope: <strong className="text-gray-200">{scopeLabel}</strong> — {reportCount} report{reportCount === 1 ? '' : 's'}
-          </p>
+          <div className="flex gap-1 rounded-lg bg-slate-800/60 p-1">
+            <button
+              type="button"
+              onClick={() => setShareMode('scope')}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${shareMode === 'scope' ? 'bg-cyan-600 text-white' : 'text-gray-300 hover:bg-white/10'}`}
+            >
+              <LayoutList size={14} />
+              Everything in scope
+            </button>
+            <button
+              type="button"
+              onClick={() => setShareMode('pick')}
+              disabled={reports.length === 0}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors disabled:opacity-40 ${shareMode === 'pick' ? 'bg-cyan-600 text-white' : 'text-gray-300 hover:bg-white/10'}`}
+            >
+              <ListChecks size={14} />
+              Choose specific reports
+            </button>
+          </div>
+
+          {shareMode === 'scope' ? (
+            <p className="text-sm text-gray-400">
+              Scope: <strong className="text-gray-200">{scopeLabel}</strong> — {reportCount} report{reportCount === 1 ? '' : 's'}
+            </p>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-gray-400">
+                  <strong className="text-gray-200">{selectedReportIds.size}</strong> of {reports.length} report{reports.length === 1 ? '' : 's'} selected
+                </p>
+                <div className="flex gap-2 text-xs">
+                  <button type="button" onClick={selectAllReports} className="text-cyan-400 hover:text-cyan-300">Select all</button>
+                  <button type="button" onClick={clearSelectedReports} className="text-gray-400 hover:text-gray-200">Clear</button>
+                </div>
+              </div>
+              <div className="max-h-56 overflow-y-auto space-y-1 rounded-lg border border-slate-700 p-2">
+                {reports.length === 0 ? (
+                  <p className="text-sm text-gray-500 p-2">No reports available to pick from.</p>
+                ) : (
+                  reports.map((report) => (
+                    <label
+                      key={report.id}
+                      className={`flex items-start gap-2 p-2 rounded-lg cursor-pointer transition ${selectedReportIds.has(report.id) ? 'bg-cyan-500/10' : 'hover:bg-white/5'}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedReportIds.has(report.id)}
+                        onChange={() => toggleReportSelected(report.id)}
+                        className="mt-1"
+                      />
+                      <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${severityDot[String(report.severity || 'medium').toLowerCase()] || severityDot.medium}`} />
+                      <span className="min-w-0">
+                        <span className="block text-sm text-gray-200 truncate">{report.report_title || 'Untitled report'}</span>
+                        <span className="block text-xs text-gray-500 truncate">
+                          {report.reporter_name || report.reporter_email || 'Member'} · {new Date(report.created_at).toLocaleDateString()}
+                        </span>
+                      </span>
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
 
           <form onSubmit={handleCreate} className="space-y-4">
             <div className="space-y-2">
@@ -178,7 +267,7 @@ const ShareExportModal = ({ companyId, departmentFilter, scopeLabel, reportCount
 
             <button
               type="submit"
-              disabled={isCreating}
+              disabled={isCreating || (shareMode === 'pick' && selectedReportIds.size === 0)}
               className="w-full bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg disabled:opacity-50 flex items-center justify-center gap-2 font-semibold"
             >
               {isCreating ? <Loader size={16} className="animate-spin" /> : <Link2 size={16} />}
@@ -223,7 +312,9 @@ const ShareExportModal = ({ companyId, departmentFilter, scopeLabel, reportCount
                           {!isRevoked && isExpired && <span className="ml-2 text-xs text-orange-400">Expired</span>}
                         </p>
                         <p className="text-xs text-gray-500 truncate">
-                          {share.department_filter === 'all' ? 'All Departments' : share.department_filter === 'unassigned' ? 'Unassigned' : 'One department'}
+                          {Array.isArray(share.report_ids) && share.report_ids.length > 0
+                            ? `${share.report_ids.length} selected report${share.report_ids.length === 1 ? '' : 's'}`
+                            : share.department_filter === 'all' ? 'All Departments' : share.department_filter === 'unassigned' ? 'Unassigned' : 'One department'}
                           {' · '}
                           {share.view_count} view{share.view_count === 1 ? '' : 's'} · created{' '}
                           {new Date(share.created_at).toLocaleDateString()}

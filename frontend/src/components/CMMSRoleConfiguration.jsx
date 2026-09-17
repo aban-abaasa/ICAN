@@ -14,7 +14,12 @@ export const CMMS_TOOL_OPTIONS = [
   // manual: manually check another staff member in or out.
   // days: credit (never reduce) a staff member's attendance day count.
   // print: export attendance records/summary to Excel or PDF.
-  { id: 'attendance', label: 'Staff attendance & QR check-in', permission: 'canManageAttendance', actions: ['view', 'manual', 'days', 'print'] },
+  // welfare: decide staff leave/probation/HR requests in the "Leave &
+  // Welfare" sub-tab -- deliberately its own checkbox (not reused from
+  // manual/days) so an admin can hand out attendance duties without also
+  // handing out HR approval power, or vice versa. See
+  // cmms_can_manage_welfare() in backend/CMMS_EMPLOYEE_WELFARE_SYSTEM.sql.
+  { id: 'attendance', label: 'Staff attendance & QR check-in', permission: 'canManageAttendance', actions: ['view', 'manual', 'days', 'print', 'welfare'] },
   { id: 'visitor-mgmt', label: 'Visitor management', permission: 'canManageVisitors', actions: ['view', 'create', 'edit', 'flag', 'approve'] },
   { id: 'payroll', label: 'Payroll', permission: 'canViewFinancials', actions: ['view', 'create', 'edit', 'approve'], scopes: true },
   { id: 'fees', label: 'School fees', permission: 'canManageFees', actions: ['view', 'create', 'edit', 'approve'], scopes: true },

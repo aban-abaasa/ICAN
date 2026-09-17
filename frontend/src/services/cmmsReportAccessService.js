@@ -11,6 +11,24 @@
 import { supabase } from '../lib/supabase/client';
 import { resolveMediaValues } from './r2StorageService';
 
+// Each report's `attachments` column is a JSONB array of {file_url, ...}
+// (see fn_get_filtered_reports / CMMS_REPORT_MULTI_FILE_ATTACHMENTS.sql).
+// file_url inside it may be an r2:// key same as photo_url -- resolveMediaValues
+// only resolves flat row fields, so attachments are flattened into one
+// batch resolve call here (one round trip for every report's files at once)
+// and then reassigned back onto each report in original order.
+const resolveReportAttachments = async (reports) => {
+  const flatAttachments = [];
+  reports.forEach((r) => (Array.isArray(r.attachments) ? r.attachments : []).forEach((a) => flatAttachments.push(a)));
+  if (flatAttachments.length === 0) return reports;
+  const resolved = await resolveMediaValues(flatAttachments, ['file_url']);
+  let i = 0;
+  return reports.map((r) => ({
+    ...r,
+    attachments: (Array.isArray(r.attachments) ? r.attachments : []).map(() => resolved[i++])
+  }));
+};
+
 // ============================================================
 // 1. GET FILTERED REPORTS (Based on user role)
 // ============================================================
@@ -35,7 +53,7 @@ export const getFilteredReports = async (companyId, dataScope = 'department') =>
 
     // photo_url may hold an r2:// key (new uploads) instead of a live URL --
     // resolve it here so every caller gets a fetchable link either way.
-    const resolved = await resolveMediaValues(data || [], ['photo_url']);
+    const resolved = await resolveReportAttachments(await resolveMediaValues(data || [], ['photo_url']));
 
     return {
       success: true,
@@ -475,6 +493,35 @@ export const exportReports = (reports, format = 'csv') => {
   }
 };
 
+// ============================================================
+// MULTI-FILE ATTACHMENTS -- any number of files per report, beyond the
+// single cover photo (photo_url/photo_path). Same access rule as the
+// report itself: admin (any), coordinator/supervisor (own department), or
+// the report's own author -- enforced server-side by fn_add_report_attachment
+// / fn_delete_report_attachment (CMMS_REPORT_MULTI_FILE_ATTACHMENTS.sql).
+// These attachments automatically flow through the existing "Share Written
+// Reports" link too (_fn_export_share_payload embeds them per report).
+// ============================================================
+
+export const addReportAttachment = async (reportId, { fileUrl, filePath, fileName, mimeType, fileSizeBytes }) => {
+  const { data, error } = await supabase.rpc('fn_add_report_attachment', {
+    p_report_id: reportId,
+    p_file_url: fileUrl,
+    p_file_path: filePath,
+    p_file_name: fileName || null,
+    p_mime_type: mimeType || null,
+    p_file_size_bytes: fileSizeBytes || null
+  });
+  if (error) return { success: false, error: error.message };
+  return { success: true, attachmentId: data };
+};
+
+export const removeReportAttachment = async (attachmentId) => {
+  const { error } = await supabase.rpc('fn_delete_report_attachment', { p_attachment_id: attachmentId });
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+};
+
 export default {
   getFilteredReports,
   createFilteredReport,
@@ -487,5 +534,7 @@ export default {
   sortReports,
   groupReportsByCategory,
   getUserReportAccessLevel,
-  exportReports
+  exportReports,
+  addReportAttachment,
+  removeReportAttachment
 };

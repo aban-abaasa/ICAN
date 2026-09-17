@@ -310,6 +310,19 @@ export const applyAttendanceToPayroll = async (periodId) => {
   return error ? { success: false, error: error.message } : { success: true, data: data || [] };
 };
 
+// Prorates a real deduction for approved UNPAID leave overlapping this draft
+// period (days / monthly_work_days * base salary) — see
+// backend/CMMS_EMPLOYEE_WELFARE_SYSTEM.sql. Paid leave needs no deduction
+// here: it already flows into "Calculate attendance" via the attendance
+// summary, and a daily-paid employee's paid leave gets its own draft entry
+// automatically the moment HR approves the leave request.
+export const applyLeavePayrollDeductions = async (periodId) => {
+  const sb = db();
+  if (!sb) return { success: false, error: 'Supabase is not configured.' };
+  const { data, error } = await sb.rpc('cmms_apply_leave_payroll_deductions', { p_payroll_period_id: periodId });
+  return error ? { success: false, error: error.message } : { success: true, data: data || [] };
+};
+
 export const recordPayrollPayment = async ({ entryId, paymentMethod, walletTransactionId = null }) => {
   const sb = db();
   if (!sb) return { success: false, error: 'Supabase is not configured.' };

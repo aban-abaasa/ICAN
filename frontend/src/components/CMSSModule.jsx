@@ -3076,6 +3076,15 @@ const CMMSModule = ({
     const [isUploadingReportPhoto, setIsUploadingReportPhoto] = useState(false);
     const [lightboxPhotoUrl, setLightboxPhotoUrl] = useState('');
     const [showExportShareModal, setShowExportShareModal] = useState(false);
+    // Any number of extra files (not just a photo) attached to a report --
+    // uploaded to the same R2 folder as the cover photo, one
+    // fn_add_report_attachment call each, once the report exists.
+    const [reportAttachmentFiles, setReportAttachmentFiles] = useState([]);
+    const [attachmentBusyReportId, setAttachmentBusyReportId] = useState(null);
+    // 'board' = the collapsible Department -> Employee accordion (unchanged
+    // default). 'consolidated' = every report in the current scope woven
+    // into one linear, executive-style document -- see renderConsolidatedReport.
+    const [reportsBoardView, setReportsBoardView] = useState('board');
 
     const companyReports = Array.isArray(cmmsData.reports) ? cmmsData.reports : [];
 
@@ -3155,6 +3164,34 @@ const CMMSModule = ({
       }
       return 'All Departments';
     })();
+
+    // Turns a flat list of reports into one executive-style read: counts by
+    // status/severity, and a "Priority Highlights" shortlist -- every still-
+    // open critical/high report, ranked worst-first regardless of which
+    // department or employee filed it, so whoever reads the consolidated
+    // report sees what actually needs attention before the full department
+    // breakdown. This is the "strategic" arrangement the flat department
+    // accordion doesn't give you: severity across the WHOLE scope, not
+    // buried one collapsible section at a time.
+    const SEVERITY_RANK = { critical: 3, high: 2, medium: 1, low: 0 };
+    const computeReportsSummary = (reports) => {
+      const byStatus = { open: 0, in_review: 0, resolved: 0, closed: 0 };
+      const bySeverity = { critical: 0, high: 0, medium: 0, low: 0 };
+      reports.forEach((r) => {
+        const status = String(r.status || 'open').toLowerCase();
+        const severity = String(r.severity || 'medium').toLowerCase();
+        if (status in byStatus) byStatus[status] += 1;
+        if (severity in bySeverity) bySeverity[severity] += 1;
+      });
+      const highlights = reports
+        .filter((r) => ['critical', 'high'].includes(String(r.severity || '').toLowerCase()) && !['resolved', 'closed'].includes(String(r.status || 'open').toLowerCase()))
+        .sort((a, b) => {
+          const rankDiff = (SEVERITY_RANK[b.severity] ?? 0) - (SEVERITY_RANK[a.severity] ?? 0);
+          if (rankDiff !== 0) return rankDiff;
+          return new Date(b.created_at) - new Date(a.created_at);
+        });
+      return { total: reports.length, byStatus, bySeverity, highlights };
+    };
 
     const toggleDeptCollapsed = (deptId) => {
       setCollapsedDeptKeys((prev) => {
@@ -3300,6 +3337,77 @@ const CMMSModule = ({
       return { photoUrl: result.url, photoPath: result.key };
     };
 
+    const MAX_REPORT_ATTACHMENT_BYTES = 15 * 1024 * 1024;
+
+    const handleReportAttachmentFilesSelect = (e) => {
+      const files = Array.from(e.target.files || []);
+      e.target.value = '';
+      if (files.length === 0) return;
+      const tooBig = files.find((f) => f.size > MAX_REPORT_ATTACHMENT_BYTES);
+      if (tooBig) {
+        alert(`⚠️ "${tooBig.name}" is too large. Each file must be under 15MB.`);
+        return;
+      }
+      setReportAttachmentFiles((prev) => [...prev, ...files]);
+    };
+
+    const removeQueuedAttachmentFile = (index) => {
+      setReportAttachmentFiles((prev) => prev.filter((_, i) => i !== index));
+    };
+
+    // Uploads one file to R2 (same 'cmms-reports' folder as the cover
+    // photo) then records it against the report via fn_add_report_attachment,
+    // which enforces the same admin/department/own-report rule as the
+    // report itself. Used both right after creating a report (queued files)
+    // and to add a file to an already-existing report from its card.
+    const uploadAndAttachReportFile = async (reportId, file) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Could not verify your session to upload the file.');
+      }
+      const uploaded = await uploadToR2({ file, folder: 'cmms-reports', accessToken: session.access_token });
+      if (!uploaded.success) {
+        throw new Error(uploaded.error || 'File upload failed');
+      }
+      const result = await cmmsReportService.addReportAttachment(reportId, {
+        fileUrl: uploaded.url,
+        filePath: uploaded.key,
+        fileName: file.name,
+        mimeType: file.type,
+        fileSizeBytes: file.size
+      });
+      if (!result.success) {
+        throw new Error(result.error || 'Could not attach the file to this report');
+      }
+    };
+
+    const handleAddAttachmentToExistingReport = async (reportId, file) => {
+      if (!file) return;
+      setAttachmentBusyReportId(reportId);
+      try {
+        await uploadAndAttachReportFile(reportId, file);
+        await refreshCompanyReports({ silent: true, force: true });
+      } catch (error) {
+        alert(`❌ Failed to add file: ${error.message || 'Unknown error'}`);
+      } finally {
+        setAttachmentBusyReportId(null);
+      }
+    };
+
+    const handleDeleteAttachment = async (reportId, attachmentId) => {
+      if (!window.confirm('Remove this file from the report?')) return;
+      setAttachmentBusyReportId(reportId);
+      try {
+        const result = await cmmsReportService.removeReportAttachment(attachmentId);
+        if (!result.success) throw new Error(result.error);
+        await refreshCompanyReports({ silent: true, force: true });
+      } catch (error) {
+        alert(`❌ Failed to remove file: ${error.message || 'Unknown error'}`);
+      } finally {
+        setAttachmentBusyReportId(null);
+      }
+    };
+
     const handleSubmitCompanyReport = async () => {
       if (!canCreateReports) {
         alert('Your role can view reports but cannot create a written report.');
@@ -3357,6 +3465,24 @@ const CMMSModule = ({
           return;
         }
 
+        // Any additional (non-photo) files queued for this report can only
+        // be attached once the report row exists, since fn_add_report_attachment
+        // needs a real report_id.
+        if (reportAttachmentFiles.length > 0) {
+          const failures = [];
+          for (const file of reportAttachmentFiles) {
+            try {
+              await uploadAndAttachReportFile(result.data.id, file);
+            } catch (attachError) {
+              failures.push(`${file.name}: ${attachError.message || 'Unknown error'}`);
+            }
+          }
+          if (failures.length > 0) {
+            alert(`⚠️ Report submitted, but some files could not be attached:\n${failures.join('\n')}`);
+          }
+          setReportAttachmentFiles([]);
+        }
+
         // Show success and refresh list
         alert('✅ Report submitted successfully!');
 
@@ -3377,6 +3503,7 @@ const CMMSModule = ({
           department_id: currentUserDeptId || ''
         });
         clearReportPhoto();
+        await refreshCompanyReports({ silent: true, force: true });
       } finally {
         setIsSubmittingCompanyReport(false);
       }
@@ -3394,16 +3521,24 @@ const CMMSModule = ({
       const photoHtml = report.photo_url
         ? `<img src="${safe(report.photo_url)}" alt="Report attachment" style="max-width:100%;margin-top:16px;border-radius:8px;border:1px solid #ddd" />`
         : '';
+      const attachmentsHtml = Array.isArray(report.attachments) && report.attachments.length > 0
+        ? `<div style="margin-top:16px"><strong>Attached files:</strong><ul>${report.attachments.map((f) => `<li><a href="${safe(f.file_url)}">${safe(f.file_name || 'Attached file')}</a></li>`).join('')}</ul></div>`
+        : '';
       const printWindow = window.open('', '_blank', 'noopener,noreferrer');
       if (!printWindow) { alert('Allow pop-ups to print or save this report as PDF.'); return; }
-      printWindow.document.write(`<!doctype html><html><head><title>${safe(report.report_title || 'CMMS Report')}</title><style>body{font-family:Arial,sans-serif;max-width:760px;margin:40px auto;color:#111;line-height:1.5}h1{margin-bottom:4px}.meta{color:#555;font-size:13px;border-bottom:1px solid #ddd;padding-bottom:16px;margin-bottom:20px}.body{white-space:pre-wrap}@media print{body{margin:20px}}</style></head><body><h1>${safe(report.report_title || 'CMMS Report')}</h1><div class="meta">Category: ${safe(report.report_category || 'general')} · Severity: ${safe(report.severity || 'medium')} · Status: ${safe(report.status || 'open')}<br>Written by: ${safe(report.reporter_name || report.reporter_email || 'Member')}<br>${safe(new Date(report.created_at).toLocaleString())}</div><div class="body">${safe(report.report_body)}</div>${photoHtml}<script>window.onload=()=>window.print()</script></body></html>`);
+      printWindow.document.write(`<!doctype html><html><head><title>${safe(report.report_title || 'CMMS Report')}</title><style>body{font-family:Arial,sans-serif;max-width:760px;margin:40px auto;color:#111;line-height:1.5}h1{margin-bottom:4px}.meta{color:#555;font-size:13px;border-bottom:1px solid #ddd;padding-bottom:16px;margin-bottom:20px}.body{white-space:pre-wrap}@media print{body{margin:20px}}</style></head><body><h1>${safe(report.report_title || 'CMMS Report')}</h1><div class="meta">Category: ${safe(report.report_category || 'general')} · Severity: ${safe(report.severity || 'medium')} · Status: ${safe(report.status || 'open')}<br>Written by: ${safe(report.reporter_name || report.reporter_email || 'Member')}<br>${safe(new Date(report.created_at).toLocaleString())}</div><div class="body">${safe(report.report_body)}</div>${photoHtml}${attachmentsHtml}<script>window.onload=()=>window.print()</script></body></html>`);
       printWindow.document.close();
     };
 
     // Builds one PDF organized as Department -> Employee -> their reports, so
     // an authorized reader can export the whole company, a single department,
     // or a single employee's written reports and get a well-structured file.
-    const downloadGroupedReportsPdf = async (reports, scopeLabel) => {
+    // { consolidated: true } (see downloadConsolidatedReportPdf below) prepends
+    // the same Executive Summary + Priority Highlights sections the on-screen
+    // Consolidated Report tab and printConsolidatedReport show, so all three
+    // "consolidated" surfaces (view, print, PDF) stay in lockstep from one
+    // computeReportsSummary call instead of three separately maintained copies.
+    const downloadGroupedReportsPdf = async (reports, scopeLabel, { consolidated = false } = {}) => {
       if (!canExportReports) {
         alert('Your role does not have permission to export reports.');
         return;
@@ -3470,9 +3605,26 @@ const CMMSModule = ({
       };
 
       addLine(cmmsData.companyProfile?.company_name || 'CMMS', 16, { bold: true });
-      addLine(`Written Employee Reports — ${scopeLabel}`, 12, { bold: true });
+      addLine(`${consolidated ? 'Consolidated Report' : 'Written Employee Reports'} — ${scopeLabel}`, 12, { bold: true });
       addLine(`Generated: ${new Date().toLocaleString()} · Reports included: ${reports.length}`);
       y += 3;
+
+      if (consolidated) {
+        const summary = computeReportsSummary(reports);
+        addLine('Executive Summary', 13, { bold: true });
+        addLine(`Total: ${summary.total}  ·  Open: ${summary.byStatus.open}  ·  In Review: ${summary.byStatus.in_review}  ·  Resolved: ${summary.byStatus.resolved}  ·  Closed: ${summary.byStatus.closed}`);
+        addLine(`Critical: ${summary.bySeverity.critical}  ·  High: ${summary.bySeverity.high}  ·  Medium: ${summary.bySeverity.medium}  ·  Low: ${summary.bySeverity.low}`);
+        y += 3;
+
+        if (summary.highlights.length > 0) {
+          addLine(`⚠ Priority Highlights (${summary.highlights.length} needing attention)`, 13, { bold: true });
+          summary.highlights.forEach((r) => {
+            const deptName = r.department_id ? (departmentsById[r.department_id] || 'Unknown Department') : 'Unassigned';
+            addLine(`[${String(r.severity || 'medium').toUpperCase()}] ${r.report_title || 'Untitled report'} — ${deptName} · ${r.reporter_name || r.reporter_email || 'Member'}`, 9.5, { indent: 20 });
+          });
+          y += 3;
+        }
+      }
 
       for (const dept of groupReportsByDeptAndReporter(reports)) {
         const deptCount = dept.reporters.reduce((n, r) => n + r.reports.length, 0);
@@ -3498,8 +3650,24 @@ const CMMSModule = ({
                 doc.addImage(photo.dataUrl, photo.format, 28, y, photo.drawWidth, photo.drawHeight);
                 y += photo.drawHeight + 4;
               } else {
-                addLine('[Photo attached — could not be embedded, view in app]', 8.5, { indent: 28 });
+                if (y > 274) { doc.addPage(); y = 18; }
+                doc.setFontSize(8.5);
+                doc.setTextColor(37, 99, 235);
+                doc.textWithLink('📷 Photo attached — could not be embedded, click to open/download', 28, y, { url: report.photo_url });
+                doc.setTextColor(0, 0, 0);
+                y += 4.5;
               }
+            }
+
+            if (Array.isArray(report.attachments) && report.attachments.length > 0) {
+              report.attachments.forEach((file) => {
+                if (y > 274) { doc.addPage(); y = 18; }
+                doc.setFontSize(8.5);
+                doc.setTextColor(37, 99, 235);
+                doc.textWithLink(`📎 ${file.file_name || 'Attached file'}`, 28, y, { url: file.file_url });
+                doc.setTextColor(0, 0, 0);
+                y += 4.5;
+              });
             }
             y += 3;
           }
@@ -3508,8 +3676,10 @@ const CMMSModule = ({
       }
 
       const scopeSlug = scopeLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'all';
-      doc.save(`CMMS_Reports_${scopeSlug}_${new Date().toISOString().slice(0, 10)}.pdf`);
+      doc.save(`CMMS_${consolidated ? 'Consolidated_Report' : 'Reports'}_${scopeSlug}_${new Date().toISOString().slice(0, 10)}.pdf`);
     };
+
+    const downloadConsolidatedReportPdf = (reports, scopeLabel) => downloadGroupedReportsPdf(reports, scopeLabel, { consolidated: true });
 
     // Same Department -> Employee grouping, opened as a print-ready window so
     // a manager can print directly or use the browser's "Save as PDF" option.
@@ -3539,6 +3709,7 @@ const CMMSModule = ({
                   <div class="meta">Category: ${safe(report.report_category || 'general')} · Severity: ${safe(report.severity || 'medium')} · Status: ${safe(report.status || 'open')}<br>${safe(new Date(report.created_at).toLocaleString())}</div>
                   <p class="body">${safe(report.report_body)}</p>
                   ${report.photo_url ? `<img class="photo" src="${safe(report.photo_url)}" alt="Report attachment" />` : ''}
+                  ${Array.isArray(report.attachments) && report.attachments.length > 0 ? `<div class="files">${report.attachments.map((f) => `<a href="${safe(f.file_url)}">📎 ${safe(f.file_name || 'Attached file')}</a>`).join('')}</div>` : ''}
                 </article>
               `).join('')}
             </div>
@@ -3562,9 +3733,120 @@ const CMMSModule = ({
         .meta{color:#666;font-size:11px;margin-bottom:4px}
         .body{white-space:pre-wrap;font-size:12.5px}
         .photo{max-width:260px;max-height:260px;display:block;margin-top:8px;border-radius:6px;border:1px solid #ddd}
+        .files{margin-top:6px;display:flex;flex-direction:column;gap:2px}
+        .files a{font-size:11.5px;color:#0369a1;text-decoration:none}
         .count{font-weight:normal;color:#666;font-size:12px}
         @media print{body{margin:18px}}
       </style></head><body><h1>${safe(cmmsData.companyProfile?.company_name || 'CMMS')}</h1><div class="subtitle">Written Employee Reports — ${safe(scopeLabel)}<br>Generated: ${safe(new Date().toLocaleString())} · Reports included: ${reports.length}</div>${sectionsHtml}<script>window.onload=()=>window.print()</script></body></html>`);
+      printWindow.document.close();
+    };
+
+    // The "Consolidated Report" -- everything in scope woven into ONE
+    // linear document instead of a per-department accordion: an executive
+    // summary up top, a ranked Priority Highlights shortlist, then the full
+    // Department -> Employee -> Reports narrative. Printed/saved the same
+    // way as printGroupedReports (browser print dialog -> Save as PDF).
+    const printConsolidatedReport = (reports, scopeLabel) => {
+      if (!canExportReports) {
+        alert('Your role does not have permission to print or export reports.');
+        return;
+      }
+      if (!reports.length) {
+        alert('No reports to include for this selection.');
+        return;
+      }
+
+      const safe = (value) => String(value || '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+      const summary = computeReportsSummary(reports);
+      const groups = groupReportsByDeptAndReporter(reports);
+
+      const statLabels = { open: 'Open', in_review: 'In Review', resolved: 'Resolved', closed: 'Closed' };
+      const severityLabels = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' };
+
+      const summaryHtml = `
+        <section class="summary">
+          <h2>Executive Summary</h2>
+          <div class="stat-grid">
+            <div class="stat"><span class="stat-num">${summary.total}</span><span class="stat-label">Total Reports</span></div>
+            ${Object.entries(statLabels).map(([key, label]) => `<div class="stat"><span class="stat-num">${summary.byStatus[key]}</span><span class="stat-label">${label}</span></div>`).join('')}
+          </div>
+          <div class="stat-grid">
+            ${Object.entries(severityLabels).map(([key, label]) => `<div class="stat sev-${key}"><span class="stat-num">${summary.bySeverity[key]}</span><span class="stat-label">${label} Severity</span></div>`).join('')}
+          </div>
+        </section>`;
+
+      const highlightsHtml = summary.highlights.length > 0 ? `
+        <section class="highlights">
+          <h2>⚠ Priority Highlights <span class="count">(${summary.highlights.length} needing attention)</span></h2>
+          ${summary.highlights.map((r) => `
+            <div class="highlight-item sev-${safe(String(r.severity || 'medium').toLowerCase())}">
+              <span class="badge">${safe(String(r.severity || 'medium').toUpperCase())}</span>
+              <strong>${safe(r.report_title || 'Untitled report')}</strong>
+              <span class="hl-meta">${safe(r.department_id ? (departmentsById[r.department_id] || 'Unknown Department') : 'Unassigned')} · ${safe(r.reporter_name || r.reporter_email || 'Member')} · ${safe(new Date(r.created_at).toLocaleDateString())}</span>
+            </div>
+          `).join('')}
+        </section>` : '';
+
+      const sectionsHtml = groups.map((dept) => {
+        const deptCount = dept.reporters.reduce((n, r) => n + r.reports.length, 0);
+        return `
+        <section class="dept">
+          <h2>${safe(dept.deptName)} <span class="count">(${deptCount} report${deptCount === 1 ? '' : 's'})</span></h2>
+          ${dept.reporters.map((rep) => `
+            <div class="reporter">
+              <h3>${safe(rep.reporterName)}${rep.reporterRole ? ' — ' + safe(rep.reporterRole) : ''} <span class="count">(${rep.reports.length})</span></h3>
+              ${rep.reports.map((report) => `
+                <article class="report">
+                  <h4>${safe(report.report_title || 'Untitled report')}</h4>
+                  <div class="meta">Category: ${safe(report.report_category || 'general')} · Severity: ${safe(report.severity || 'medium')} · Status: ${safe(report.status || 'open')}<br>${safe(new Date(report.created_at).toLocaleString())}</div>
+                  <p class="body">${safe(report.report_body)}</p>
+                  ${report.photo_url ? `<img class="photo" src="${safe(report.photo_url)}" alt="Report attachment" />` : ''}
+                  ${Array.isArray(report.attachments) && report.attachments.length > 0 ? `<div class="files">${report.attachments.map((f) => `<a href="${safe(f.file_url)}">📎 ${safe(f.file_name || 'Attached file')}</a>`).join('')}</div>` : ''}
+                </article>
+              `).join('')}
+            </div>
+          `).join('')}
+        </section>`;
+      }).join('');
+
+      const printWindow = window.open('', '_blank', 'noopener,noreferrer');
+      if (!printWindow) { alert('Allow pop-ups to print or save this report as PDF.'); return; }
+      printWindow.document.write(`<!doctype html><html><head><title>${safe(cmmsData.companyProfile?.company_name || 'CMMS')} — Consolidated Report</title><style>
+        body{font-family:Arial,sans-serif;max-width:820px;margin:32px auto;color:#111;line-height:1.5}
+        h1{margin-bottom:2px}
+        .subtitle{color:#555;font-size:13px;margin-bottom:20px;border-bottom:1px solid #ddd;padding-bottom:14px}
+        h2{font-size:17px}
+        .summary,.highlights{margin-bottom:24px;page-break-inside:avoid}
+        .stat-grid{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
+        .stat{flex:1;min-width:90px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;text-align:center}
+        .stat-num{display:block;font-size:20px;font-weight:bold;color:#0f172a}
+        .stat-label{display:block;font-size:10.5px;color:#64748b;text-transform:uppercase;margin-top:2px}
+        .stat.sev-critical .stat-num{color:#b91c1c}
+        .stat.sev-high .stat-num{color:#c2410c}
+        .stat.sev-medium .stat-num{color:#a16207}
+        .stat.sev-low .stat-num{color:#1d4ed8}
+        .highlight-item{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;border-left:4px solid #cbd5e1;background:#f8fafc;margin-top:6px;border-radius:0 6px 6px 0}
+        .highlight-item.sev-critical{border-color:#b91c1c}
+        .highlight-item.sev-high{border-color:#c2410c}
+        .highlight-item .badge{font-size:9.5px;font-weight:bold;padding:2px 6px;border-radius:4px;background:#e2e8f0;color:#334155}
+        .highlight-item.sev-critical .badge{background:#fee2e2;color:#b91c1c}
+        .highlight-item.sev-high .badge{background:#ffedd5;color:#c2410c}
+        .hl-meta{color:#666;font-size:11px;width:100%}
+        .dept{page-break-before:always;margin-top:24px}
+        .dept:first-of-type{page-break-before:auto;margin-top:0}
+        .dept > h2{background:#f1f5f9;padding:8px 12px;border-radius:6px}
+        .reporter{margin:14px 0 14px 12px;padding-left:12px;border-left:3px solid #cbd5e1}
+        .reporter > h3{font-size:14px;margin-bottom:6px;color:#334155}
+        .report{margin:10px 0 10px 8px;page-break-inside:avoid}
+        .report h4{margin-bottom:2px;font-size:13px}
+        .meta{color:#666;font-size:11px;margin-bottom:4px}
+        .body{white-space:pre-wrap;font-size:12.5px}
+        .photo{max-width:260px;max-height:260px;display:block;margin-top:8px;border-radius:6px;border:1px solid #ddd}
+        .files{margin-top:6px;display:flex;flex-direction:column;gap:2px}
+        .files a{font-size:11.5px;color:#0369a1;text-decoration:none}
+        .count{font-weight:normal;color:#666;font-size:12px}
+        @media print{body{margin:18px}}
+      </style></head><body><h1>${safe(cmmsData.companyProfile?.company_name || 'CMMS')}</h1><div class="subtitle">Consolidated Report — ${safe(scopeLabel)}<br>Generated: ${safe(new Date().toLocaleString())} · Reports included: ${reports.length}</div>${summaryHtml}${highlightsHtml}${sectionsHtml}<script>window.onload=()=>window.print()</script></body></html>`);
       printWindow.document.close();
     };
 
@@ -3634,6 +3916,41 @@ const CMMSModule = ({
                     className="max-h-40 rounded-lg border border-white border-opacity-10 hover:opacity-80 transition-opacity"
                   />
                 </button>
+              )}
+
+              {Array.isArray(report.attachments) && report.attachments.length > 0 && (
+                <div className="mt-3 space-y-1">
+                  {report.attachments.map((file) => (
+                    <div key={file.id} className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-xs">
+                      <a href={file.file_url} target="_blank" rel="noreferrer" className="truncate text-blue-300 hover:text-blue-200">
+                        📎 {file.file_name || 'Attached file'}
+                      </a>
+                      {(userRole === 'admin' || report.is_own_report) && (
+                        <button
+                          type="button"
+                          disabled={attachmentBusyReportId === report.id}
+                          onClick={() => handleDeleteAttachment(report.id, file.id)}
+                          className="text-red-300 hover:text-red-200 disabled:opacity-50 flex-shrink-0"
+                          title="Remove file"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {(userRole === 'admin' || report.is_own_report || ['coordinator', 'supervisor'].includes(userRole)) && (
+                <label className="mt-2 inline-flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-800 border border-dashed border-slate-600 text-gray-300 text-xs cursor-pointer hover:bg-slate-700">
+                  {attachmentBusyReportId === report.id ? 'Uploading…' : '📎 Add a file'}
+                  <input
+                    type="file"
+                    className="hidden"
+                    disabled={attachmentBusyReportId === report.id}
+                    onChange={(e) => { const file = e.target.files && e.target.files[0]; e.target.value = ''; if (file) handleAddAttachmentToExistingReport(report.id, file); }}
+                  />
+                </label>
               )}
 
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400">
@@ -3961,6 +4278,23 @@ const CMMSModule = ({
             )}
           </div>
 
+          <div className="mt-3">
+            <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800 border border-dashed border-slate-600 text-gray-300 text-xs cursor-pointer hover:bg-slate-700">
+              📎 Attach files (optional, any type)
+              <input type="file" multiple onChange={handleReportAttachmentFilesSelect} className="hidden" />
+            </label>
+            {reportAttachmentFiles.length > 0 && (
+              <div className="mt-2 space-y-1">
+                {reportAttachmentFiles.map((file, index) => (
+                  <div key={`${file.name}-${index}`} className="flex items-center justify-between gap-2 rounded-lg bg-slate-800/60 border border-slate-700 px-2 py-1 text-xs text-gray-300">
+                    <span className="truncate">{file.name}</span>
+                    <button type="button" onClick={() => removeQueuedAttachmentFile(index)} className="text-red-300 hover:text-red-200 flex-shrink-0">Remove</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="mt-3 flex items-center justify-between gap-2">
             <span className="text-xs text-gray-400">Writer role: <span className="text-blue-300 uppercase font-semibold">{userRole || 'member'}</span></span>
             <button
@@ -3975,7 +4309,26 @@ const CMMSModule = ({
 
         {canViewCompanyReports ? (
           <div className="glass-card p-4 md:p-6">
-            <h3 className="text-base md:text-lg font-bold text-white mb-3">Recent Company Reports</h3>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <h3 className="text-base md:text-lg font-bold text-white">Recent Company Reports</h3>
+              <div className="flex gap-1 rounded-lg bg-slate-800/60 p-1">
+                <button
+                  type="button"
+                  onClick={() => setReportsBoardView('board')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${reportsBoardView === 'board' ? 'bg-emerald-600 text-white' : 'text-gray-300 hover:bg-white/10'}`}
+                >
+                  Report Board
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReportsBoardView('consolidated')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${reportsBoardView === 'consolidated' ? 'bg-emerald-600 text-white' : 'text-gray-300 hover:bg-white/10'}`}
+                  title="Every report in the current scope woven into one document — executive summary, priority highlights, then the full breakdown"
+                >
+                  📋 Consolidated Report
+                </button>
+              </div>
+            </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
               <div className="bg-white bg-opacity-5 p-3 rounded-lg">
@@ -4024,12 +4377,35 @@ const CMMSModule = ({
 
             {canExportReports && companyReports.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-4">
-                <button type="button" onClick={() => downloadGroupedReportsPdf(filteredCompanyReports, reportScopeLabel)} className="rounded-lg bg-cyan-600 px-3 py-2 text-xs font-semibold text-white hover:bg-cyan-500">
-                  Export PDF — {reportScopeLabel} ({filteredCompanyReports.length})
-                </button>
-                <button type="button" onClick={() => printGroupedReports(filteredCompanyReports, reportScopeLabel)} className="rounded-lg border border-cyan-400/40 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/20">
-                  Print — {reportScopeLabel}
-                </button>
+                {reportsBoardView === 'consolidated' ? (
+                  <>
+                    <button type="button" onClick={() => downloadConsolidatedReportPdf(filteredCompanyReports, reportScopeLabel)} className="rounded-lg bg-cyan-600 px-3 py-2 text-xs font-semibold text-white hover:bg-cyan-500">
+                      Download PDF — {reportScopeLabel} ({filteredCompanyReports.length})
+                    </button>
+                    <button type="button" onClick={() => printConsolidatedReport(filteredCompanyReports, reportScopeLabel)} className="rounded-lg border border-cyan-400/40 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/20">
+                      🖨️ Print — {reportScopeLabel}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" onClick={() => downloadGroupedReportsPdf(filteredCompanyReports, reportScopeLabel)} className="rounded-lg bg-cyan-600 px-3 py-2 text-xs font-semibold text-white hover:bg-cyan-500">
+                      Export PDF — {reportScopeLabel} ({filteredCompanyReports.length})
+                    </button>
+                    <button type="button" onClick={() => printGroupedReports(filteredCompanyReports, reportScopeLabel)} className="rounded-lg border border-cyan-400/40 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/20">
+                      Print — {reportScopeLabel}
+                    </button>
+                  </>
+                )}
+                {userRole === 'admin' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowExportShareModal(true)}
+                    className="rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/20 flex items-center gap-1.5"
+                  >
+                    <Link2 size={13} />
+                    Share — {reportScopeLabel}
+                  </button>
+                )}
               </div>
             )}
 
@@ -4037,6 +4413,82 @@ const CMMSModule = ({
               <div className="text-center py-6 text-gray-400 text-sm">No reports yet. Be the first member to write one.</div>
             ) : filteredCompanyReports.length === 0 ? (
               <div className="text-center py-6 text-gray-400 text-sm">No reports match this department/employee selection.</div>
+            ) : reportsBoardView === 'consolidated' ? (
+              (() => {
+                const summary = computeReportsSummary(filteredCompanyReports);
+                const statLabels = { open: 'Open', in_review: 'In Review', resolved: 'Resolved', closed: 'Closed' };
+                const severityLabels = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' };
+                const severityStatStyles = { critical: 'text-red-300', high: 'text-orange-300', medium: 'text-yellow-300', low: 'text-blue-300' };
+                const severityBadgeStyles = { critical: 'bg-red-500/20 text-red-300 border-red-500/40', high: 'bg-orange-500/20 text-orange-300 border-orange-500/40' };
+                return (
+                  <div className="max-h-[32rem] overflow-y-auto pr-1 space-y-5">
+                    <div className="rounded-lg border border-white/10 bg-white/5 p-3 md:p-4">
+                      <h4 className="text-white font-semibold text-sm mb-2">Executive Summary</h4>
+                      <div className="grid grid-cols-3 md:grid-cols-5 gap-2 mb-2">
+                        <div className="bg-black/20 rounded-lg p-2 text-center">
+                          <div className="text-lg font-bold text-white">{summary.total}</div>
+                          <div className="text-[10px] uppercase text-gray-400">Total</div>
+                        </div>
+                        {Object.entries(statLabels).map(([key, label]) => (
+                          <div key={key} className="bg-black/20 rounded-lg p-2 text-center">
+                            <div className="text-lg font-bold text-white">{summary.byStatus[key]}</div>
+                            <div className="text-[10px] uppercase text-gray-400">{label}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-4 gap-2">
+                        {Object.entries(severityLabels).map(([key, label]) => (
+                          <div key={key} className="bg-black/20 rounded-lg p-2 text-center">
+                            <div className={`text-lg font-bold ${severityStatStyles[key]}`}>{summary.bySeverity[key]}</div>
+                            <div className="text-[10px] uppercase text-gray-400">{label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {summary.highlights.length > 0 && (
+                      <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3 md:p-4">
+                        <h4 className="text-white font-semibold text-sm mb-2">⚠ Priority Highlights <span className="text-xs font-normal text-gray-400">({summary.highlights.length} needing attention)</span></h4>
+                        <div className="space-y-1.5">
+                          {summary.highlights.map((r) => (
+                            <div key={r.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-black/20 px-2.5 py-1.5 text-xs">
+                              <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold uppercase flex-shrink-0 ${severityBadgeStyles[String(r.severity || '').toLowerCase()] || ''}`}>{r.severity}</span>
+                              <span className="text-white font-medium truncate">{r.report_title || 'Untitled report'}</span>
+                              <span className="text-gray-400 ml-auto flex-shrink-0">
+                                {r.department_id ? (departmentsById[r.department_id] || 'Unknown Dept') : 'Unassigned'} · {r.reporter_name || r.reporter_email || 'Member'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
+                      <h4 className="text-white font-semibold text-sm mb-2">Full Report — by Department &amp; Employee</h4>
+                      <div className="space-y-2">
+                        {reportGroups.map((dept) => (
+                          <div key={dept.deptId} className="border border-white/10 rounded-lg overflow-hidden">
+                            <div className="bg-white/10 px-3 py-2">
+                              <span className="text-white font-semibold text-sm">{dept.deptName}</span>
+                              <span className="text-xs text-gray-400 ml-2">({dept.reporters.reduce((n, r) => n + r.reports.length, 0)})</span>
+                            </div>
+                            <div className="p-2 space-y-2">
+                              {dept.reporters.map((rep) => (
+                                <div key={rep.reporterKey} className="border-l-2 border-white/10 pl-2">
+                                  <p className="text-xs text-purple-300 font-semibold mb-1">{rep.reporterName}{rep.reporterRole ? ` — ${rep.reporterRole}` : ''}</p>
+                                  <div className="space-y-1.5">
+                                    {rep.reports.map(renderReportCard)}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()
             ) : (
               <div className="space-y-3 max-h-[32rem] overflow-y-auto pr-1">
                 {reportGroups.map((dept) => {
@@ -4260,9 +4712,24 @@ const CMMSModule = ({
                 Share Written Reports — {reportScopeLabel}
               </button>
             )}
+            <button
+              onClick={() => downloadConsolidatedReportPdf(filteredCompanyReports, reportScopeLabel)}
+              disabled={filteredCompanyReports.length === 0}
+              className="px-3 md:px-4 py-2 bg-pink-500 bg-opacity-30 text-pink-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold text-xs md:text-sm disabled:opacity-40"
+              title="Every report in this scope woven into one document — executive summary, priority highlights, then the full department/employee breakdown"
+            >
+              📋 Download Consolidated Report (PDF) — {reportScopeLabel}
+            </button>
+            <button
+              onClick={() => printConsolidatedReport(filteredCompanyReports, reportScopeLabel)}
+              disabled={filteredCompanyReports.length === 0}
+              className="px-3 md:px-4 py-2 bg-pink-500 bg-opacity-20 border border-pink-400/40 text-pink-200 rounded-lg hover:bg-opacity-40 transition-all font-semibold text-xs md:text-sm disabled:opacity-40"
+            >
+              🖨️ Print Consolidated Report — {reportScopeLabel}
+            </button>
           </div>
           <p className="text-gray-400 text-[11px] md:text-xs mt-2">
-            Written reports are collected by department and employee — use the department picker above, or the filters in the Company Report Board further up the page, to narrow this export to one department or one person.
+            Written reports are collected by department and employee — use the department picker above, or the filters in the Company Report Board further up the page, to narrow this export to one department or one person. Consolidated Report merges everything in scope into a single executive-style document with a summary and priority highlights up top.
           </p>
         </div>
           </>
@@ -4274,6 +4741,7 @@ const CMMSModule = ({
             departmentFilter={reportDepartmentFilter}
             scopeLabel={reportScopeLabel}
             reportCount={filteredCompanyReports.length}
+            reports={filteredCompanyReports}
             onClose={() => setShowExportShareModal(false)}
           />
         )}
@@ -8056,6 +8524,7 @@ const CMMSModule = ({
               canCreate={hasToolAction('payroll', 'create')}
               canEdit={hasToolAction('payroll', 'edit')}
               canApprove={hasToolAction('payroll', 'approve')}
+              canView={hasToolAction('payroll', 'view')}
               attendancePayrollOnly={hasToolAction('attendance') && !hasToolAction('payroll')}
             />
         )}

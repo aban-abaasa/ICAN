@@ -28,25 +28,9 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getSupabaseClient } from '../lib/supabase/client';
+import { ICE_SERVERS } from '../lib/webrtc/iceServers';
 
 const supabase = getSupabaseClient();
-
-// STUN alone frequently can't punch a direct peer-to-peer path through
-// carrier-grade NAT on mobile data (and plenty of corporate/hotel wifi) —
-// that's the #1 cause of a phone broadcaster never connecting to a desktop
-// viewer, or the call dying the moment either side's network blips. TURN
-// relays the media through a server instead of relying on a direct path.
-// openrelay.metered.ca is a free, intentionally-public demo relay — fine for
-// getting real reliability today, but it's rate-limited with no SLA, so
-// swap in a paid TURN provider (Twilio Network Traversal, Cloudflare Calls,
-// metered.ca's paid tier, etc.) before this carries real production load.
-const ICE_SERVERS = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-  { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
-];
 
 // Static capability check (doesn't change at runtime) — Safari/iOS still
 // don't implement getDisplayMedia, so the share-screen control stays hidden

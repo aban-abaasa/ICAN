@@ -62,10 +62,13 @@ BEFORE INSERT ON public.cmms_requisitions FOR EACH ROW
 EXECUTE FUNCTION public.cmms_auto_create_bodago_transport_request();
 
 -- Developer monitor is authenticated and role-gated. No anonymous token access.
+-- DROP first: the RETURNS TABLE shape changed (added business_name), and
+-- CREATE OR REPLACE cannot alter an existing function's output row type.
+DROP FUNCTION IF EXISTS public.ican_dev_get_transport_orders();
 CREATE OR REPLACE FUNCTION public.ican_dev_get_transport_orders()
 RETURNS TABLE (
   request_id UUID, contract_id UUID, business_profile_id UUID,
-  contract_name TEXT, request_status TEXT, ride_count INTEGER,
+  contract_name TEXT, business_name TEXT, request_status TEXT, ride_count INTEGER,
   vehicle_type TEXT, pickup_location TEXT, dropoff_location TEXT,
   scheduled_for TIMESTAMPTZ, created_at TIMESTAMPTZ,
   cmms_requisition_id UUID, cmms_requisition_number TEXT, cmms_status TEXT
@@ -80,12 +83,14 @@ BEGIN
   END IF;
 
   RETURN QUERY
-  SELECT r.id, r.contract_id, r.business_profile_id, c.contract_name,
-         r.status, r.ride_count, r.requested_vehicle_type,
-         r.pickup_location, r.dropoff_location, r.scheduled_for, r.created_at,
-         q.id, q.requisition_number, q.status
+  SELECT r.id::UUID, r.contract_id::UUID, r.business_profile_id::UUID,
+         c.contract_name::TEXT, b.business_name::TEXT, r.status::TEXT, r.ride_count::INTEGER,
+         r.requested_vehicle_type::TEXT,
+         r.pickup_location::TEXT, r.dropoff_location::TEXT, r.scheduled_for::TIMESTAMPTZ, r.created_at::TIMESTAMPTZ,
+         q.id::UUID, q.requisition_number::TEXT, q.status::TEXT
   FROM public.mbg_corporate_ride_requests r
   JOIN public.mbg_corporate_transport_contracts c ON c.id = r.contract_id
+  LEFT JOIN public.business_profiles b ON b.id = r.business_profile_id
   LEFT JOIN public.cmms_requisitions q ON q.boda_transport_request_id = r.id
   ORDER BY r.created_at DESC LIMIT 250;
 END;

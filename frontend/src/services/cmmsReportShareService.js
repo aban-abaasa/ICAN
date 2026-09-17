@@ -138,7 +138,7 @@ export const verifyReportShareOtp = async (token, email, code) => {
 
 export const createReportExportShare = async (
   companyId,
-  { departmentFilter = 'all', reporterFilter = 'all', visibility, password, allowedEmails, expiresAt }
+  { departmentFilter = 'all', reporterFilter = 'all', visibility, password, allowedEmails, expiresAt, reportIds = null }
 ) => {
   try {
     const { data, error } = await supabase.rpc('fn_create_report_export_share', {
@@ -148,7 +148,11 @@ export const createReportExportShare = async (
       p_visibility: visibility,
       p_password: password || null,
       p_allowed_emails: allowedEmails && allowedEmails.length ? allowedEmails : null,
-      p_expires_at: expiresAt || null
+      p_expires_at: expiresAt || null,
+      // A hard-picked list of specific report ids -- when set, only these
+      // reports are included regardless of departmentFilter/reporterFilter
+      // (see CMMS_REPORT_EXPORT_SHARE_PICK_REPORTS.sql).
+      p_report_ids: reportIds && reportIds.length ? reportIds : null
     });
 
     if (error) return { success: false, error: error.message };

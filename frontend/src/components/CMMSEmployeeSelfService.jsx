@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Bus, CalendarDays, DollarSign, FileText, Loader, Star, Wallet } from 'lucide-react';
+import { Bus, CalendarDays, DollarSign, FileText, Loader, Star, Trash2, UploadCloud, Wallet } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 import { getEmployeeRewardPoints, getStaffVisitorRatings, getAttendanceCheckoutPayConfirmations, getMyTransportPlan, getMySalaryAdvances, requestSalaryAdvance, confirmSalaryAdvanceReceived, cancelSalaryAdvance, getMyCompanySalaryWalletTransactions } from '../services/businessManagementService';
 import cmmsEmploymentDocumentsService from '../services/cmmsEmploymentDocumentsService';
+import { EMPLOYEE_DOCUMENT_CATEGORIES, addEmployeeDocument, removeEmployeeDocument, getMyEmployeeDocuments, getApplicationDocumentsForEmployee, importApplicationDocument } from '../services/cmmsEmployeeDocumentsService';
 import CMMSDocumentSignModal from './CMMSDocumentSignModal';
+import CMMSEmployeeWelfare from './CMMSEmployeeWelfare.jsx';
 
 const money = (value, currency = 'UGX') => `${currency} ${Number(value || 0).toLocaleString()}`;
 
@@ -31,6 +33,12 @@ export default function CMMSEmployeeSelfService({ companyProfile, mode }) {
   const [documents, setDocuments] = useState([]);
   const [myUserId, setMyUserId] = useState(null);
   const [signingDocument, setSigningDocument] = useState(null);
+  const [myFiles, setMyFiles] = useState([]);
+  const [fileForm, setFileForm] = useState({ category: EMPLOYEE_DOCUMENT_CATEGORIES[0].id, label: '', file: null });
+  const [fileBusy, setFileBusy] = useState(false);
+  const [fileNotice, setFileNotice] = useState('');
+  const [fileError, setFileError] = useState('');
+  const [applicationDocs, setApplicationDocs] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -117,6 +125,10 @@ export default function CMMSEmployeeSelfService({ companyProfile, mode }) {
       setMyUserId(authData.user.id);
       const result = await cmmsEmploymentDocumentsService.getMyEmploymentDocuments(companyProfile.id);
       if (!cancelled && result.success) setDocuments(result.data);
+      const filesResult = await getMyEmployeeDocuments(companyProfile.id);
+      if (!cancelled && filesResult.success) setMyFiles(filesResult.data);
+      const applicationResult = await getApplicationDocumentsForEmployee(companyProfile.id, authData.user.id);
+      if (!cancelled && applicationResult.success) setApplicationDocs(applicationResult.data);
     })();
     return () => { cancelled = true; };
   }, [mode, companyProfile?.id]);
@@ -124,6 +136,42 @@ export default function CMMSEmployeeSelfService({ companyProfile, mode }) {
   const reloadDocuments = async () => {
     const result = await cmmsEmploymentDocumentsService.getMyEmploymentDocuments(companyProfile.id);
     if (result.success) setDocuments(result.data);
+  };
+
+  const reloadMyFiles = async () => {
+    const result = await getMyEmployeeDocuments(companyProfile.id);
+    if (result.success) setMyFiles(result.data);
+  };
+  const importMyApplicationDoc = async (jobApplicationId) => {
+    if (!myUserId) return;
+    setFileBusy(true); setFileNotice(''); setFileError('');
+    const result = await importApplicationDocument({ companyId: companyProfile.id, employeeUserId: myUserId, jobApplicationId });
+    if (result.success) { setFileNotice('CV imported from your job application.'); await reloadMyFiles(); }
+    else setFileError(result.error);
+    setFileBusy(false);
+  };
+  const uploadMyFile = async (e) => {
+    e.preventDefault();
+    if (!myUserId) return;
+    if (!fileForm.label.trim()) { setFileError('Give this document a label.'); setFileNotice(''); return; }
+    setFileBusy(true); setFileNotice(''); setFileError('');
+    const result = await addEmployeeDocument({
+      companyId: companyProfile.id, employeeUserId: myUserId,
+      category: fileForm.category, label: fileForm.label.trim(), file: fileForm.file,
+    });
+    if (result.success) {
+      setFileNotice('Document added.');
+      setFileForm({ category: EMPLOYEE_DOCUMENT_CATEGORIES[0].id, label: '', file: null });
+      await reloadMyFiles();
+    } else setFileError(result.error);
+    setFileBusy(false);
+  };
+  const removeMyFile = async (documentId) => {
+    setFileBusy(true); setFileNotice(''); setFileError('');
+    const result = await removeEmployeeDocument(documentId);
+    if (result.success) { setFileNotice('Document removed.'); await reloadMyFiles(); }
+    else setFileError(result.error);
+    setFileBusy(false);
   };
 
   const reloadAdvances = async () => { const refreshed = await getMySalaryAdvances(); setAdvances(refreshed.data || []); };
@@ -274,6 +322,48 @@ export default function CMMSEmployeeSelfService({ companyProfile, mode }) {
         <input value={advanceForm.reason} onChange={e => setAdvanceForm(v => ({ ...v, reason: e.target.value }))} placeholder="Reason (optional)" className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" />
         <button disabled={advanceBusy} className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">{advanceBusy ? 'Requesting…' : 'Request advance'}</button>
       </form>}
+    </section>
+    <CMMSEmployeeWelfare companyProfile={companyProfile} />
+    <section>
+      <h3 className="mb-2 flex items-center gap-2 font-semibold text-white"><UploadCloud className="h-4 w-4" /> My documents</h3>
+      <p className="mb-2 text-xs text-slate-500">Add your National ID, certificates, CV, bank details, tax PIN/NSSF certificates, or anything else HR needs on file for your payroll record. Only you and payroll staff can see these.</p>
+      {fileError && <p className="mb-2 rounded-lg border border-red-800/50 bg-red-900/20 p-2 text-sm text-red-300">{fileError}</p>}
+      {fileNotice && <p className="mb-2 rounded-lg border border-emerald-800/50 bg-emerald-900/20 p-2 text-sm text-emerald-300">{fileNotice}</p>}
+      {applicationDocs.filter((doc) => !myFiles.some((f) => f.source_job_application_id === doc.job_application_id)).length > 0 && (
+        <div className="mb-3 space-y-2 rounded-lg border border-sky-800/40 bg-sky-950/10 p-3">
+          <p className="text-xs text-sky-300">Already on file from your job application — no need to upload again:</p>
+          {applicationDocs.filter((doc) => !myFiles.some((f) => f.source_job_application_id === doc.job_application_id)).map((doc) => (
+            <div key={doc.job_application_id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <span className="text-slate-200">CV / Resume ({doc.reference_code})</span>
+              <button type="button" disabled={fileBusy} onClick={() => importMyApplicationDoc(doc.job_application_id)} className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">Use this document</button>
+            </div>
+          ))}
+        </div>
+      )}
+      <form onSubmit={uploadMyFile} className="grid gap-2 sm:grid-cols-4">
+        <select value={fileForm.category} onChange={(e) => setFileForm((v) => ({ ...v, category: e.target.value }))} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white">
+          {EMPLOYEE_DOCUMENT_CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+        </select>
+        <input required value={fileForm.label} onChange={(e) => setFileForm((v) => ({ ...v, label: e.target.value }))} placeholder="Label, e.g. Bachelor's degree" className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white sm:col-span-2" />
+        <input required type="file" onChange={(e) => setFileForm((v) => ({ ...v, file: e.target.files?.[0] || null }))} className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-300 file:mr-2 file:rounded file:border-0 file:bg-slate-700 file:px-2 file:py-1 file:text-xs file:text-white" />
+        <button disabled={fileBusy} className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50 sm:col-span-4">{fileBusy ? 'Uploading…' : 'Add document'}</button>
+      </form>
+      {myFiles.length > 0 && (
+        <div className="mt-3 space-y-2">
+          {myFiles.map((doc) => (
+            <div key={doc.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-sm">
+              <div>
+                <p className="font-semibold text-white">{doc.label}</p>
+                <p className="text-xs text-slate-400">{EMPLOYEE_DOCUMENT_CATEGORIES.find((c) => c.id === doc.category)?.label || doc.category}{doc.verified ? ' · Verified by HR' : ''}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                {doc.file_url && <a href={doc.file_url} target="_blank" rel="noreferrer" className="text-xs text-blue-300 hover:text-blue-200">View</a>}
+                <button type="button" disabled={fileBusy} onClick={() => removeMyFile(doc.id)} className="text-red-400 hover:text-red-300 disabled:opacity-50" title="Remove"><Trash2 className="h-4 w-4" /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
     {documents.length > 0 && (
       <section>

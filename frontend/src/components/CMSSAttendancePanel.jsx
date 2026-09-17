@@ -11,6 +11,7 @@ import {
   cancelRewardRedemption, payRewardRedemption
 } from '../services/businessManagementService';
 import { ICAN_TO_UGX, transferFromBusinessWallet } from '../services/icanWalletService';
+import CMMSWelfareAdminPanel from './CMMSWelfareAdminPanel.jsx';
 
 const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole, isCreator, hasToolAction }) => {
   const [attendanceRecords, setAttendanceRecords] = useState([]);
@@ -65,6 +66,17 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
   const canExport = isFullAdmin || Boolean(hasToolAction?.('attendance', 'print'));
   // QR code generation/administration is unchanged — still admin/creator-only.
   const canManage = isFullAdmin;
+  // Leave/probation/welfare decisions are their own admin-picked permission
+  // (Role and tool configuration → Staff attendance & QR check-in →
+  // "Welfare" checkbox) — deliberately not tied to Manual/Add-days, so
+  // granting one doesn't silently grant the other. Mirrors
+  // cmms_can_manage_welfare() in backend/CMMS_EMPLOYEE_WELFARE_SYSTEM.sql,
+  // which checks the identical "welfare" action server-side.
+  const canManageWelfare = isFullAdmin || Boolean(hasToolAction?.('attendance', 'welfare'));
+  // A role granted only "Welfare" (no "View") should still see the Leave &
+  // Welfare sub-tab -- it doesn't need staff-wide attendance visibility to
+  // decide HR requests.
+  const canSeeWelfareTab = canViewAll || canManageWelfare;
 
   useEffect(() => {
     loadData();
@@ -728,6 +740,18 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
         >
           Rewards
         </button>
+        {canSeeWelfareTab && (
+          <button
+            onClick={() => setActiveTab('welfare')}
+            className={`px-4 py-2 font-semibold ${
+              activeTab === 'welfare'
+                ? 'border-b-2 border-indigo-500 text-indigo-400'
+                : 'text-slate-400 hover:text-slate-300'
+            }`}
+          >
+            Leave &amp; Welfare
+          </button>
+        )}
       </div>
 
       {/* Check-In Summary Tab: one row per staff member (count), not one row per day */}
@@ -1511,6 +1535,10 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
             </div>
           </div>
         </div>
+      )}
+
+      {activeTab === 'welfare' && canSeeWelfareTab && (
+        <CMMSWelfareAdminPanel companyProfile={companyProfile} cmmsUsers={cmmsUsers} canManage={canManageWelfare} />
       )}
     </div>
   );

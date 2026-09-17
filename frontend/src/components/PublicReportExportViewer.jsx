@@ -125,6 +125,31 @@ const groupReports = (reports) => {
     });
 };
 
+// Same executive-summary computation as CMSSModule.jsx's computeReportsSummary
+// (this page is a separate, unauthenticated bundle with no session/app state
+// to import from, hence the small duplication) -- so a viewer following a
+// share link sees the same Priority Highlights an admin sees in the
+// Consolidated Report tab, not just a flat department dump.
+const SEVERITY_RANK = { critical: 3, high: 2, medium: 1, low: 0 };
+const computeSummary = (reports) => {
+  const byStatus = { open: 0, in_review: 0, resolved: 0, closed: 0 };
+  const bySeverity = { critical: 0, high: 0, medium: 0, low: 0 };
+  reports.forEach((r) => {
+    const status = String(r.status || 'open').toLowerCase();
+    const severity = String(r.severity || 'medium').toLowerCase();
+    if (status in byStatus) byStatus[status] += 1;
+    if (severity in bySeverity) bySeverity[severity] += 1;
+  });
+  const highlights = reports
+    .filter((r) => ['critical', 'high'].includes(String(r.severity || '').toLowerCase()) && !['resolved', 'closed'].includes(String(r.status || 'open').toLowerCase()))
+    .sort((a, b) => {
+      const rankDiff = (SEVERITY_RANK[b.severity] ?? 0) - (SEVERITY_RANK[a.severity] ?? 0);
+      if (rankDiff !== 0) return rankDiff;
+      return new Date(b.created_at) - new Date(a.created_at);
+    });
+  return { total: reports.length, byStatus, bySeverity, highlights };
+};
+
 const ReportCard = ({ report }) => {
   const [expanded, setExpanded] = useState(false);
   return (
@@ -153,6 +178,22 @@ const ReportCard = ({ report }) => {
           {report.photo_url && (
             <img src={report.photo_url} alt="Report attachment" className="mt-3 max-w-xs rounded-lg border" style={{ borderColor: 'var(--rs-border)' }} />
           )}
+          {Array.isArray(report.attachments) && report.attachments.length > 0 && (
+            <div className="mt-3 space-y-1">
+              {report.attachments.map((file, index) => (
+                <a
+                  key={index}
+                  href={file.file_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs"
+                  style={{ background: 'var(--rs-surface-alt)' }}
+                >
+                  📎 {file.file_name || 'Attached file'}
+                </a>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -172,10 +213,27 @@ const PublicReportExportViewer = ({ shareToken }) => {
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState('');
 
+  // Each report's `attachments` is a JSONB array of {file_url, ...} whose
+  // file_url may itself be an r2:// key -- resolveMediaValues only resolves
+  // flat row fields, so attachments are flattened into one batch resolve
+  // call and reassigned back in original order (same technique as
+  // cmmsReportAccessService.js's resolveReportAttachments).
+  const resolveAttachments = async (reports) => {
+    const flat = [];
+    reports.forEach((r) => (Array.isArray(r.attachments) ? r.attachments : []).forEach((a) => flat.push(a)));
+    if (flat.length === 0) return reports;
+    const resolved = await resolveMediaValues(flat, ['file_url']);
+    let i = 0;
+    return reports.map((r) => ({
+      ...r,
+      attachments: (Array.isArray(r.attachments) ? r.attachments : []).map(() => resolved[i++])
+    }));
+  };
+
   const applyOkResult = async (data) => {
     setCompanyName(data.company_name || '');
     setScopeLabel(data.scope_label || '');
-    const resolved = await resolveMediaValues(data.reports || [], ['photo_url']);
+    const resolved = await resolveAttachments(await resolveMediaValues(data.reports || [], ['photo_url']));
     setReports(resolved);
     setStatus('ok');
   };
@@ -319,6 +377,9 @@ const PublicReportExportViewer = ({ shareToken }) => {
 
   // status === 'ok'
   const groups = groupReports(reports);
+  const summary = computeSummary(reports);
+  const statLabels = { open: 'Open', in_review: 'In Review', resolved: 'Resolved', closed: 'Closed' };
+  const severityLabels = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' };
 
   return (
     <div className="icanera-rs min-h-screen">
@@ -327,6 +388,47 @@ const PublicReportExportViewer = ({ shareToken }) => {
         <p className="rs-text-faint text-xs uppercase tracking-wide mb-1">{companyName}</p>
         <h1 className="text-2xl font-bold mb-1">Written Employee Reports</h1>
         <p className="rs-text-muted text-sm mb-8">{scopeLabel} · {reports.length} report{reports.length === 1 ? '' : 's'}</p>
+
+        {reports.length > 0 && (
+          <div className="rs-surface rounded-2xl p-5 mb-6">
+            <h2 className="text-sm font-bold mb-3">Executive Summary</h2>
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mb-3">
+              <div className="rounded-lg p-2 text-center" style={{ background: 'var(--rs-surface-alt)' }}>
+                <div className="text-lg font-bold">{summary.total}</div>
+                <div className="text-[10px] uppercase rs-text-faint">Total</div>
+              </div>
+              {Object.entries(statLabels).map(([key, label]) => (
+                <div key={key} className="rounded-lg p-2 text-center" style={{ background: 'var(--rs-surface-alt)' }}>
+                  <div className="text-lg font-bold">{summary.byStatus[key]}</div>
+                  <div className="text-[10px] uppercase rs-text-faint">{label}</div>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {Object.entries(severityLabels).map(([key, label]) => (
+                <div key={key} className="rounded-lg p-2 text-center" style={{ background: 'var(--rs-surface-alt)' }}>
+                  <div className="text-lg font-bold" style={key === 'critical' || key === 'high' ? { color: 'var(--rs-maroon)' } : undefined}>{summary.bySeverity[key]}</div>
+                  <div className="text-[10px] uppercase rs-text-faint">{label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {summary.highlights.length > 0 && (
+          <div className="rs-surface rounded-2xl p-5 mb-6" style={{ borderColor: 'var(--rs-maroon-soft-bg)' }}>
+            <h2 className="text-sm font-bold mb-3">⚠ Priority Highlights <span className="font-normal rs-text-faint">({summary.highlights.length} needing attention)</span></h2>
+            <div className="space-y-1.5">
+              {summary.highlights.map((r, index) => (
+                <div key={index} className="flex flex-wrap items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs" style={{ background: 'var(--rs-surface-alt)' }}>
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase" style={SEVERITY_STYLE[r.severity] || SEVERITY_STYLE.medium}>{r.severity}</span>
+                  <span className="font-medium truncate">{r.report_title || 'Untitled report'}</span>
+                  <span className="rs-text-faint ml-auto">{r.department_name || (r.department_id ? 'Department' : 'Unassigned')} · {r.reporter_name || 'Member'}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {groups.length === 0 ? (
           <div className="rs-surface rounded-2xl p-8 text-center rs-text-muted">No reports in this scope.</div>
