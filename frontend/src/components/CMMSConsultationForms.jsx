@@ -366,7 +366,7 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
   const viewingSubmission = useMemo(() => submissions.find((s) => s.id === viewingSubmissionId) || null, [submissions, viewingSubmissionId]);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 overflow-x-hidden">
       <div>
         <h2 className="text-2xl font-bold text-white">Consultation Forms</h2>
         <p className="mt-1 text-sm text-slate-400">
@@ -377,9 +377,9 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
 
       {error && <p className="rounded-lg bg-red-500/10 p-3 text-sm text-red-200">{error}</p>}
 
-      <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
+      <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
         {/* ── Forms list ─────────────────────────────────────────── */}
-        <div className="space-y-3">
+        <div className="min-w-0 space-y-3">
           <form onSubmit={createForm} className="flex gap-2">
             <input
               value={newFormName} onChange={(e) => setNewFormName(e.target.value)}
@@ -424,7 +424,7 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
         </div>
 
         {/* ── Selected form detail ───────────────────────────────── */}
-        <div>
+        <div className="min-w-0">
           {!selectedForm ? (
             <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-white/15 p-10 text-center text-sm text-slate-400">
               <div><FileText className="mx-auto mb-2 h-7 w-7" />Pick or create a form to start customizing it.</div>
