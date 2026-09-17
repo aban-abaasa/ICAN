@@ -72,6 +72,12 @@ const reportShareMatch = window.location.pathname.match(/^\/reports\/([^/]+)/);
 // Employee -> Reports view the Export Reports panel's Download/Print
 // buttons produce, rather than a single report.
 const reportExportShareMatch = window.location.pathname.match(/^\/report-exports\/([^/]+)/);
+// A CMMS Clinical Operations consultation form's public share link (e.g.
+// https://icanera.space/consultation-forms/<token>) -- same no-login
+// share-link reasoning as the links above: a patient fills this out and
+// submits with no ICAN account (CMMS_CLINICAL_CONSULTATION_FORMS.sql gates
+// it by share_token + share_enabled instead of business membership).
+const consultationFormShareMatch = window.location.pathname.match(/^\/consultation-forms\/([^/]+)/);
 // A stale service-worker/browser cache can leave a phone holding an
 // index.html that points at a JS chunk hash the last deploy removed from the
 // server — the chunk 404s, the dynamic import() rejects, and with no retry
@@ -115,6 +121,7 @@ const PublicDropshipStorefront = lazyWithReloadOnChunkFailure(() => import('./co
 const PublicCompanyNoticeBoard = lazyWithReloadOnChunkFailure(() => import('./components/PublicCompanyNoticeBoard'));
 const PublicReportViewer = lazyWithReloadOnChunkFailure(() => import('./components/PublicReportViewer'));
 const PublicReportExportViewer = lazyWithReloadOnChunkFailure(() => import('./components/PublicReportExportViewer'));
+const PublicConsultationFormViewer = lazyWithReloadOnChunkFailure(() => import('./components/PublicConsultationFormViewer'));
 const CandidateTestRunner = lazyWithReloadOnChunkFailure(() => import('./components/CandidateTestRunner'));
 const CandidateInterviewRoom = lazyWithReloadOnChunkFailure(() => import('./components/CandidateInterviewRoom'));
 const CandidateDocumentViewer = lazyWithReloadOnChunkFailure(() => import('./components/CandidateDocumentViewer'));
@@ -159,6 +166,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           : isServiceProviderContractPath ? <PublicServiceProviderContract />
           : reportShareMatch ? <PublicReportViewer shareToken={reportShareMatch[1]} />
           : reportExportShareMatch ? <PublicReportExportViewer shareToken={reportExportShareMatch[1]} />
+          : consultationFormShareMatch ? <PublicConsultationFormViewer shareToken={consultationFormShareMatch[1]} />
           : cmmsNoticeBoardMatch ? (
             <AuthProvider>
               <PublicCompanyNoticeBoard companyId={cmmsNoticeBoardMatch[1]} />

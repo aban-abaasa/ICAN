@@ -59,6 +59,7 @@ import BusinessCategorySelector from './BusinessCategorySelector';
 import CMMSRoleConfiguration, { CMMS_TOOL_OPTIONS } from './CMMSRoleConfiguration.jsx';
 import CMMSFeesPanel from './CMMSFeesPanel.jsx';
 import CMMSOperationsPanel from './CMMSOperationsPanel.jsx';
+import CMMSClinicalOperationsPanel from './CMMSClinicalOperationsPanel.jsx';
 import CMSSAttendancePanel from './CMSSAttendancePanel.jsx';
 import CMSSVisitorManagementPanel from './CMSSVisitorManagementPanel.jsx';
 import CMMSEmployeeSelfService from './CMMSEmployeeSelfService.jsx';
@@ -8501,7 +8502,8 @@ const CMMSModule = ({
           />
         )}
         {activeTab === 'fees' && getTabs().includes('fees') && <CMMSFeesPanel companyId={companyIdToUse} businessProfileId={cmmsData.companyProfile?.pichin_business_profile_id} cmmsUsers={cmmsData.users} studentView={isActiveStudent} />}
-        {['production', 'quality', 'clinical', 'pharmacy'].includes(activeTab) && getTabs().includes(activeTab) && <CMMSOperationsPanel companyId={companyIdToUse} businessProfileId={cmmsData.companyProfile?.pichin_business_profile_id} mode={activeTab} />}
+        {['production', 'quality', 'pharmacy'].includes(activeTab) && getTabs().includes(activeTab) && <CMMSOperationsPanel companyId={companyIdToUse} businessProfileId={cmmsData.companyProfile?.pichin_business_profile_id} mode={activeTab} />}
+        {activeTab === 'clinical' && getTabs().includes('clinical') && <CMMSClinicalOperationsPanel businessProfileId={cmmsData.companyProfile?.pichin_business_profile_id} businessName={cmmsData.companyProfile?.company_name} />}
         {activeTab === 'payroll' && getTabs().includes('payroll') && (
           getToolScope('payroll') === 'own' ? (
             <CMMSMySalaryPanel
