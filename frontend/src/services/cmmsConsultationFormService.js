@@ -110,6 +110,19 @@ export const listConsultationSubmissions = async (formId) => {
   return { success: true, data: data || [] };
 };
 
+// Every submission across every consultation form for this business, in
+// one place — the "Records" tab (CMMSClinicalRecords.jsx), as opposed to
+// the per-form submissions list above.
+export const listAllConsultationSubmissions = async (businessProfileId) => {
+  const { data, error } = await supabase
+    .from('cmms_consultation_submissions')
+    .select('*')
+    .eq('business_profile_id', businessProfileId)
+    .order('created_at', { ascending: false });
+  if (error) return { success: false, error: error.message };
+  return { success: true, data: data || [] };
+};
+
 export const recordConsultationSubmission = async ({ formId, patientName, patientPhone, patientEmail, responses }) => {
   const { data, error } = await supabase.rpc('cmms_record_consultation_submission', {
     p_form_id: formId,
@@ -156,6 +169,7 @@ export default {
   addCommonClinicalFields,
   addPhysiotherapyConsultationFields,
   listConsultationSubmissions,
+  listAllConsultationSubmissions,
   recordConsultationSubmission,
   getPublicConsultationForm,
   submitPublicConsultationForm

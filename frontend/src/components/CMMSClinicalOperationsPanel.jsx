@@ -1,18 +1,21 @@
 import React, { useState } from 'react';
-import { Briefcase, ClipboardList } from 'lucide-react';
+import { Briefcase, ClipboardList, FileText } from 'lucide-react';
 import CMMSOperationsPanel from './CMMSOperationsPanel';
 import CMMSConsultationForms from './CMMSConsultationForms';
+import CMMSClinicalRecords from './CMMSClinicalRecords';
 
 // Clinical Operations used to be just CMMSOperationsPanel's generic
 // activity log (handovers, incidents, equipment checks) rendered directly
-// under the 'clinical' tab. This wraps it with a second sub-tab —
-// Consultation Forms — so both live together under one Clinical Operations
-// module instead of the form builder being a disconnected feature bolted
-// on elsewhere. The activity log's own businessProfileId/mode plumbing is
-// untouched; this only adds a tab around it.
+// under the 'clinical' tab. This wraps it with two more sub-tabs —
+// Consultation Forms (the form builder + per-form submissions) and Records
+// (every submission across every form, in one searchable place) — so all
+// three live together under one Clinical Operations module instead of
+// being disconnected features bolted on elsewhere. The activity log's own
+// businessProfileId/mode plumbing is untouched; this only adds tabs around it.
 const TABS = [
   { id: 'log', label: 'Activity Log', icon: ClipboardList },
-  { id: 'forms', label: 'Consultation Forms', icon: Briefcase }
+  { id: 'forms', label: 'Consultation Forms', icon: Briefcase },
+  { id: 'records', label: 'Records', icon: FileText }
 ];
 
 export default function CMMSClinicalOperationsPanel({ businessProfileId, businessName }) {
@@ -37,6 +40,7 @@ export default function CMMSClinicalOperationsPanel({ businessProfileId, busines
 
       {tab === 'log' && <CMMSOperationsPanel businessProfileId={businessProfileId} mode="clinical" />}
       {tab === 'forms' && <CMMSConsultationForms businessProfileId={businessProfileId} businessName={businessName} />}
+      {tab === 'records' && <CMMSClinicalRecords businessProfileId={businessProfileId} businessName={businessName} />}
     </div>
   );
 }

@@ -11,6 +11,7 @@ import {
 } from '../services/cmmsConsultationFormService';
 import { downloadCmmsQrPdf } from '../utils/downloadCmmsQrPdf';
 import { downloadBlankConsultationFormPdf, downloadConsultationSubmissionPdf } from '../utils/generateConsultationFormPdf';
+import { submissionEntries, formatAnswer } from '../utils/consultationSubmissionUtils';
 
 const FIELD_TYPES = [
   ['text', 'Short text'], ['textarea', 'Long text'], ['date', 'Date'], ['number', 'Number'],
@@ -46,38 +47,6 @@ const openPrintWindow = (title, bodyHtml) => {
     @media print{body{margin:18px}}
   </style></head><body>${bodyHtml}<script>window.onload=()=>window.print()</script></body></html>`);
   printWindow.document.close();
-};
-
-// A form's fields as they were AT SUBMISSION TIME may no longer match the
-// live template (a field can be renamed, retyped, or deleted since) — this
-// starts from the live template (so a still-current section header always
-// keeps its place in the layout) but only keeps a question if the
-// submission actually answered it, then appends any answered key that's no
-// longer on the template at all, so a deleted field's historical answer is
-// never silently dropped.
-const submissionEntries = (submission, fields) => {
-  const responses = submission?.responses || {};
-  const seenKeys = new Set();
-  const fromTemplate = fields.map((f) => {
-    seenKeys.add(f.field_key);
-    if (f.field_type === 'section') {
-      return { key: f.field_key, isSection: true, label: f.label, sortOrder: f.sort_order };
-    }
-    return {
-      key: f.field_key, isSection: false, label: f.label, fieldType: f.field_type,
-      sortOrder: f.sort_order, value: responses[f.field_key]
-    };
-  }).filter((e) => e.isSection || Object.prototype.hasOwnProperty.call(responses, e.key));
-  const orphaned = Object.entries(responses)
-    .filter(([key]) => !seenKeys.has(key))
-    .map(([key, value]) => ({ key, isSection: false, label: key.replace(/_/g, ' '), fieldType: null, sortOrder: 9999, value }));
-  return [...fromTemplate, ...orphaned].sort((a, b) => a.sortOrder - b.sortOrder);
-};
-
-const formatAnswer = (entry) => {
-  if (entry.fieldType === 'checkbox') return entry.value ? 'Yes' : 'No';
-  if (Array.isArray(entry.value)) return entry.value.length ? entry.value.join(', ') : '—';
-  return entry.value || entry.value === 0 ? String(entry.value) : '—';
 };
 
 // Renders one editable input for a field definition — shared by the
