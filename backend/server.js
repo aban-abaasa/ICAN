@@ -26,6 +26,7 @@ const { router: securityRoutes, trap: decoyTrap } = require('./routes/securityRo
 const { ipReputationGate } = require('./middleware/canweShield');
 const cron = require('node-cron');
 const { refreshGlobalInflation } = require('./services/inflationRefreshService');
+const { refreshLiveFxRates } = require('./services/fxRateRefreshService');
 const { processPendingPaydayAdvisories } = require('./services/cmmsPaydayAdvisoryService');
 
 // ES6 module imports for email routes
@@ -244,6 +245,18 @@ loadRoutesAndStartServer();
 refreshGlobalInflation().catch(err => console.error('[inflation] Initial refresh failed:', err.message));
 cron.schedule('0 3 * * *', () => {
   refreshGlobalInflation().catch(err => console.error('[inflation] Scheduled refresh failed:', err.message));
+});
+
+// ==========================================
+// Live FX Rate Refresh
+// Runs once at startup, then daily at 03:05 — keeps ican_currency_rates.
+// rate_to_ugx current for every currency so the USD-anchored price engine's
+// FX shield (and each currency's own appreciation vs its launch rate) tracks
+// real exchange-rate movement instead of the one-time seed values.
+// ==========================================
+refreshLiveFxRates().catch(err => console.error('[fx-rates] Initial refresh failed:', err.message));
+cron.schedule('5 3 * * *', () => {
+  refreshLiveFxRates().catch(err => console.error('[fx-rates] Scheduled refresh failed:', err.message));
 });
 
 // ==========================================
