@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { MessageCircle, X, Send, Headphones, Globe, ThumbsUp, Briefcase, Shield, ArrowLeft, Radio, Expand, Minimize, GripVertical, Mic, Square, Trash2, Loader2, Phone, Video } from 'lucide-react';
+import { MessageCircle, X, Send, Headphones, Globe, ThumbsUp, Briefcase, Shield, ArrowLeft, Radio, Expand, Minimize, GripVertical, Mic, Square, Trash2, Loader2, Phone, Video, Image as ImageIcon } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import VoiceNotePlayer from './voice/VoiceNotePlayer';
 import VoiceNoteRetentionPrompt from './voice/VoiceNoteRetentionPrompt';
@@ -17,6 +17,7 @@ import { uploadVoiceNote, linkVoiceNoteMessages } from '../services/voiceNoteSer
 import { getAudioNotificationService } from '../services/audioNotificationService';
 import { getCustomRingtone, setCustomRingtone } from '../services/ringtoneService';
 import { Linkify } from '../utils/linkify';
+import { uploadChatImage } from '../services/chatAttachmentService';
 import {
   resolveChatIdentity,
   isDeveloperSession,
@@ -132,6 +133,10 @@ const ChatWidget = ({ hasBottomNav = false }) => {
   const [channel, setChannel] = useState('support'); // 'support' | 'community' | 'cmms'
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [pendingAttachment, setPendingAttachment] = useState(null);
+  const [attachmentUploading, setAttachmentUploading] = useState(false);
+  const [attachmentError, setAttachmentError] = useState('');
+  const fileInputRef = useRef(null);
   const [dragging, setDragging] = useState(false);
 
   const [supportConvId, setSupportConvId] = useState(null);
@@ -754,11 +759,11 @@ const ChatWidget = ({ hasBottomNav = false }) => {
   // typed in the normal Community tab or in the live-stream chat drawer
   // (CommunityLiveStage) — one board, reused everywhere instead of the live
   // stage growing its own separate chat storage.
-  const postCommunityMessage = async (body, who, parentId) => {
+  const postCommunityMessage = async (body, who, parentId, attachment = null) => {
     const senderAuthId = who.isGuest ? null : who.authId;
     const created = parentId
-      ? await replyToLandingMessage({ parentId, name: who.name, email: who.email, authId: senderAuthId, message: body })
-      : await createLandingMessage({ name: who.name, email: who.email, authId: senderAuthId, message: body, isPublic: true });
+      ? await replyToLandingMessage({ parentId, name: who.name, email: who.email, authId: senderAuthId, message: body, attachment })
+      : await createLandingMessage({ name: who.name, email: who.email, authId: senderAuthId, message: body, isPublic: true, attachment });
     setCommunityThreads(await fetchPublicThreads(50, { authId: senderAuthId, guestKey: guestLikeKey }));
     return created;
   };
@@ -787,7 +792,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
   // Shared per-channel routing for both a typed message and a recorded voice
   // note (sent as VOICE_NOTE_PREFIX + url) — the two compose paths differ
   // only in how `body` is produced.
-  const deliverMessage = async (body, who) => {
+  const deliverMessage = async (body, who, attachment = null) => {
       if (channel === 'cmms') {
         if (!cmmsActiveContactId) {
           setCmmsComposeError('Choose someone to message first.');
@@ -831,7 +836,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
         setTrustMessages(oldestFirst(messages || []));
         return result.data?.id ? [{ table: 'group_messages', id: result.data.id }] : [];
       } else if (channel === 'community') {
-        const created = await postCommunityMessage(body, who, selectedThreadId);
+        const created = await postCommunityMessage(body, who, selectedThreadId, attachment);
         return created?.id ? [{ table: 'landing_messages', id: created.id }] : [];
       } else {
         const key = who.isGuest ? 'guest' : `user_${who.userId}`;
@@ -850,23 +855,48 @@ const ChatWidget = ({ hasBottomNav = false }) => {
           setSupportConvId(convId);
         }
         const senderRole = who.isGuest ? 'guest' : (who.role || 'guest');
-        const msg = await sendMessage(convId, { senderRole, senderName: who.name, body });
+        const msg = await sendMessage(convId, { senderRole, senderName: who.name, body, attachment });
         setSupportMessages((prev) => dedupe(prev, msg));
         return msg?.id ? [{ table: 'chat_messages', id: msg.id }] : [];
       }
   };
 
+  // Attachments only exist on chat_messages/landing_messages — cmms/trust
+  // messaging has its own separate tables with no attachment column, so the
+  // picker is only shown for the support/community channels (see composer
+  // JSX below); deliverMessage's attachment argument is simply unused for
+  // those two branches.
+  const canAttachImage = channel === 'support' || channel === 'community';
+
+  const handlePickImage = () => fileInputRef.current?.click();
+
+  const handleImageSelected = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setAttachmentError('');
+    setAttachmentUploading(true);
+    try {
+      setPendingAttachment(await uploadChatImage(file));
+    } catch (err) {
+      setAttachmentError(err.message || 'Could not upload image');
+    } finally {
+      setAttachmentUploading(false);
+    }
+  };
+
   const handleSend = async () => {
     const body = draft.trim();
-    if (!body || sending) return;
+    if ((!body && !(canAttachImage && pendingAttachment)) || sending || attachmentUploading) return;
 
     const who = ensureIdentity();
     if (!who) return;
 
     setSending(true);
     try {
-      await deliverMessage(body, who);
+      await deliverMessage(body, who, canAttachImage ? pendingAttachment : null);
       setDraft('');
+      setPendingAttachment(null);
     } catch (err) {
       console.error('[ChatWidget] send failed:', err);
       if (channel === 'cmms') setCmmsComposeError(err.message || 'Unable to send CMMS message.');
@@ -1323,7 +1353,10 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                     <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-400">
                       {selectedThread.name || 'Website visitor'}
                     </p>
-                    <MessageBody text={selectedThread.message} className="whitespace-pre-wrap break-words" tint="cyan" />
+                    {selectedThread.attachment_url && (
+                      <img src={selectedThread.attachment_url} alt="" className="mb-1.5 max-h-52 rounded-lg object-cover" />
+                    )}
+                    {selectedThread.message && <MessageBody text={selectedThread.message} className="whitespace-pre-wrap break-words" tint="cyan" />}
                     <button
                       onClick={() => handleLike(selectedThread.id)}
                       disabled={selectedThread.likedByMe}
@@ -1374,7 +1407,10 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                         {r.sender_role === 'dev' ? 'IcanEra Team' : (r.name || 'Website visitor')}
                         {r.reward_reason && ' · 🪙'}
                       </p>
-                      <MessageBody text={r.message} className="whitespace-pre-wrap break-words" tint={r.sender_role === 'dev' ? 'white' : 'cyan'} />
+                      {r.attachment_url && (
+                        <img src={r.attachment_url} alt="" className="mb-1.5 max-h-52 rounded-lg object-cover" />
+                      )}
+                      {r.message && <MessageBody text={r.message} className="whitespace-pre-wrap break-words" tint={r.sender_role === 'dev' ? 'white' : 'cyan'} />}
                       <button
                         onClick={() => handleLike(r.id)}
                         disabled={r.likedByMe}
@@ -1408,11 +1444,16 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-400">
                       {t.name || 'Website visitor'}
                     </p>
-                    <p className="mt-0.5 line-clamp-2 whitespace-pre-wrap break-words">
-                      {isVoiceNoteBody(t.message) ? (
-                        <span className="inline-flex items-center gap-1 text-cyan-400"><Mic className="h-3 w-3" /> Voice message</span>
-                      ) : t.message}
-                    </p>
+                    <div className="mt-0.5 flex items-start gap-2">
+                      {t.attachment_url && (
+                        <img src={t.attachment_url} alt="" className="h-8 w-8 flex-shrink-0 rounded object-cover" />
+                      )}
+                      <p className="line-clamp-2 whitespace-pre-wrap break-words">
+                        {isVoiceNoteBody(t.message) ? (
+                          <span className="inline-flex items-center gap-1 text-cyan-400"><Mic className="h-3 w-3" /> Voice message</span>
+                        ) : (t.message || (t.attachment_url ? 'Photo' : ''))}
+                      </p>
+                    </div>
                     {(t.replies.length > 0 || earlier.length > 0) && (
                       <p className={`mt-1 text-[10px] ${dark ? 'text-slate-500' : 'text-slate-400'}`}>
                         {[
@@ -1447,7 +1488,10 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                         }`}
                       >
                         {!isMe && <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-400">Team</p>}
-                        <MessageBody text={m.body} className="whitespace-pre-wrap break-words" tint={isMe ? 'white' : 'cyan'} />
+                        {m.attachment_url && (
+                          <img src={m.attachment_url} alt="" className="mb-1.5 max-h-52 rounded-lg object-cover" />
+                        )}
+                        {m.body && <MessageBody text={m.body} className="whitespace-pre-wrap break-words" tint={isMe ? 'white' : 'cyan'} />}
                       </div>
                     </div>
                   );
@@ -1496,7 +1540,39 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                   <button onClick={() => setSelectedThreadId(null)} className="flex-shrink-0 underline">Cancel</button>
                 </div>
               )}
+              {canAttachImage && (pendingAttachment || attachmentUploading) && (
+                <div className={`mb-2 flex items-center gap-2 rounded-lg border px-2 py-1.5 ${dark ? 'border-slate-700/50 bg-white/5' : 'border-slate-200 bg-slate-50'}`}>
+                  {attachmentUploading ? (
+                    <>
+                      <Loader2 className={`h-8 w-8 flex-shrink-0 animate-spin p-1.5 ${dark ? 'text-slate-500' : 'text-slate-400'}`} />
+                      <span className={`text-xs ${dark ? 'text-slate-400' : 'text-slate-500'}`}>Uploading…</span>
+                    </>
+                  ) : (
+                    <>
+                      <img src={pendingAttachment.url} alt="" className="h-8 w-8 flex-shrink-0 rounded object-cover" />
+                      <span className={`flex-1 truncate text-xs ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{pendingAttachment.name}</span>
+                      <button onClick={() => setPendingAttachment(null)} className={dark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-400 hover:text-slate-600'} title="Remove image">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+              {attachmentError && <p className="mb-2 text-[11px] text-red-400">{attachmentError}</p>}
               <div className="flex items-center gap-1.5">
+                {canAttachImage && voicePhase === 'idle' && (
+                  <>
+                    <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageSelected} className="hidden" />
+                    <button
+                      onClick={handlePickImage}
+                      disabled={attachmentUploading}
+                      className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl transition disabled:opacity-40 ${dark ? 'text-slate-500 hover:bg-white/10 hover:text-indigo-400' : 'text-slate-400 hover:bg-slate-100 hover:text-indigo-600'}`}
+                      title="Attach an image"
+                    >
+                      <ImageIcon className="h-4 w-4" />
+                    </button>
+                  </>
+                )}
                 {voicePhase === 'recording' ? (
                   <div className={`flex min-w-0 flex-1 items-center gap-1.5 rounded-xl border px-2.5 py-2 ${dark ? 'border-red-500/30 bg-red-500/10' : 'border-red-300 bg-red-50'}`}>
                     <span className="h-2 w-2 flex-shrink-0 animate-pulse rounded-full bg-red-500" />
@@ -1566,10 +1642,10 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                   <button disabled className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white opacity-60 shadow-lg">
                     <Loader2 className="h-4 w-4 animate-spin" />
                   </button>
-                ) : draft.trim() ? (
+                ) : (draft.trim() || (canAttachImage && pendingAttachment)) ? (
                   <button
                     onClick={handleSend}
-                    disabled={sending}
+                    disabled={sending || attachmentUploading}
                     className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-white shadow-lg transition disabled:opacity-40 bg-gradient-to-br ${channel === 'trust' ? 'from-amber-500 to-orange-600' : 'from-indigo-500 to-purple-600'}`}
                   >
                     <Send className="h-4 w-4" />

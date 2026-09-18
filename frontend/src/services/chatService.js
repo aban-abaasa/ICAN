@@ -64,7 +64,7 @@ export const fetchMessages = async (conversationId) => {
   return data || [];
 };
 
-export const sendMessage = async (conversationId, { senderRole, senderName, body }) => {
+export const sendMessage = async (conversationId, { senderRole, senderName, body, attachment }) => {
   const { data, error } = await supabase
     .from('chat_messages')
     .insert({
@@ -72,6 +72,9 @@ export const sendMessage = async (conversationId, { senderRole, senderName, body
       sender_role: senderRole,
       sender_name: senderName || null,
       body,
+      attachment_url: attachment?.url || null,
+      attachment_type: attachment?.type || null,
+      attachment_name: attachment?.name || null,
     })
     .select()
     .single();
