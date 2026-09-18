@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { CheckCircle2, Download, FileWarning, Loader, Printer } from 'lucide-react';
+import { CheckCircle2, Download, FileWarning, Loader, Moon, Printer, Sun } from 'lucide-react';
 import { getPublicConsultationForm, submitPublicConsultationForm } from '../services/cmmsConsultationFormService';
 import { downloadPublicConsultationSubmissionPdf } from '../utils/generateConsultationFormPdf';
 import { sectionDisplayLabel } from '../utils/consultationSubmissionUtils';
@@ -16,15 +16,27 @@ const CF_STYLES = `
   --cf-border: #dbe6de; --cf-green: #166534; --cf-green-hover: #114f28;
   --cf-maroon: #7a1f2b;
 }
+/* System preference applies only when the visitor hasn't explicitly
+   picked a mode with the toggle button below; an explicit choice
+   ([data-theme]) always wins, in both directions. */
 @media (prefers-color-scheme: dark) {
-  .icanera-cf {
+  .icanera-cf:not([data-theme="light"]) {
     --cf-bg: #0f1613; --cf-surface: #17211c; --cf-surface-alt: #202b24;
     --cf-text: #eef4f0; --cf-text-muted: #a9baaf; --cf-text-faint: #7c8d82;
     --cf-border: #2b3830; --cf-green: #4ade80; --cf-green-hover: #22c55e;
     --cf-maroon: #e5828d;
   }
 }
+.icanera-cf[data-theme="dark"] {
+  --cf-bg: #0f1613; --cf-surface: #17211c; --cf-surface-alt: #202b24;
+  --cf-text: #eef4f0; --cf-text-muted: #a9baaf; --cf-text-faint: #7c8d82;
+  --cf-border: #2b3830; --cf-green: #4ade80; --cf-green-hover: #22c55e;
+  --cf-maroon: #e5828d;
+}
 .icanera-cf { background: var(--cf-bg); color: var(--cf-text); }
+.icanera-cf, .cf-surface, .cf-input, .cf-btn, .cf-theme-toggle {
+  transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+}
 .cf-surface { background: var(--cf-surface); border: 1px solid var(--cf-border); }
 .cf-text-muted { color: var(--cf-text-muted); }
 .cf-text-faint { color: var(--cf-text-faint); }
@@ -33,6 +45,10 @@ const CF_STYLES = `
 .cf-btn:hover { background: var(--cf-green-hover); }
 .cf-wordmark-a { color: var(--cf-green); }
 .cf-wordmark-b { color: var(--cf-text); }
+.cf-theme-toggle { background: var(--cf-surface-alt); border: 1px solid var(--cf-border); color: var(--cf-text-muted); }
+.cf-theme-toggle:hover { color: var(--cf-text); }
+@keyframes cf-fade-in-up { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+.cf-business-name { animation: cf-fade-in-up 0.55s cubic-bezier(0.16, 1, 0.3, 1) both; }
 `;
 
 const IcanEraWordmark = () => (
@@ -41,9 +57,19 @@ const IcanEraWordmark = () => (
   </span>
 );
 
-const CenteredCard = ({ icon: Icon, title, subtitle, children }) => (
-  <div className="icanera-cf min-h-screen flex items-center justify-center p-6">
+const ThemeToggle = ({ theme, onToggle, className = '' }) => (
+  <button
+    type="button" onClick={onToggle} aria-label="Toggle light/dark mode"
+    className={`cf-theme-toggle flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${className}`}
+  >
+    {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+  </button>
+);
+
+const CenteredCard = ({ icon: Icon, title, subtitle, theme, onToggleTheme, children }) => (
+  <div className="icanera-cf relative min-h-screen flex items-center justify-center p-6" data-theme={theme}>
     <style>{CF_STYLES}</style>
+    {onToggleTheme && <ThemeToggle theme={theme} onToggle={onToggleTheme} className="absolute top-4 right-4" />}
     <div className="cf-surface rounded-2xl shadow-sm p-8 w-full max-w-md text-center">
       {Icon && (
         <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: 'var(--cf-surface-alt)' }}>
@@ -146,6 +172,24 @@ const PublicConsultationFormViewer = ({ shareToken }) => {
   const [draftRestored, setDraftRestored] = useState(false);
   const draftLoadedRef = useRef(false);
 
+  // Resolved once at mount from a saved choice or the device's own
+  // light/dark setting, then explicit from then on — the toggle button
+  // below just flips it, no three-way "system" state to reason about.
+  const [theme, setTheme] = useState(() => {
+    try {
+      const saved = localStorage.getItem('icanera-cf-theme');
+      if (saved === 'light' || saved === 'dark') return saved;
+    } catch { /* ignore */ }
+    return (typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  });
+  const toggleTheme = () => {
+    setTheme((current) => {
+      const next = current === 'dark' ? 'light' : 'dark';
+      try { localStorage.setItem('icanera-cf-theme', next); } catch { /* ignore */ }
+      return next;
+    });
+  };
+
   useEffect(() => {
     (async () => {
       const result = await getPublicConsultationForm(shareToken);
@@ -195,7 +239,7 @@ const PublicConsultationFormViewer = ({ shareToken }) => {
 
   if (status === 'loading') {
     return (
-      <div className="icanera-cf min-h-screen flex items-center justify-center">
+      <div className="icanera-cf min-h-screen flex items-center justify-center" data-theme={theme}>
         <style>{CF_STYLES}</style>
         <Loader className="w-8 h-8 animate-spin" style={{ color: 'var(--cf-green)' }} />
       </div>
@@ -204,7 +248,7 @@ const PublicConsultationFormViewer = ({ shareToken }) => {
 
   if (status === 'invalid') {
     return (
-      <CenteredCard icon={FileWarning} title="This link is invalid or no longer available">
+      <CenteredCard icon={FileWarning} title="This link is invalid or no longer available" theme={theme} onToggleTheme={toggleTheme}>
         <p className="cf-text-muted text-sm">Ask the clinic for a new link.</p>
       </CenteredCard>
     );
@@ -212,7 +256,7 @@ const PublicConsultationFormViewer = ({ shareToken }) => {
 
   if (status === 'submitted') {
     return (
-      <CenteredCard icon={CheckCircle2} title="Thank you" subtitle={`Your ${form.formName.toLowerCase()} has been submitted to ${form.businessName || 'the clinic'}.`}>
+      <CenteredCard icon={CheckCircle2} title="Thank you" subtitle={`Your ${form.formName.toLowerCase()} has been submitted to ${form.businessName || 'the clinic'}.`} theme={theme} onToggleTheme={toggleTheme}>
         <div className="space-y-2">
           <button type="button" onClick={downloadOwnCopy} className="cf-btn w-full px-4 py-2 rounded-lg flex items-center justify-center gap-2">
             <Download size={16} /> Download PDF copy
@@ -229,11 +273,14 @@ const PublicConsultationFormViewer = ({ shareToken }) => {
   const leadingSection = form.fields[0]?.fieldType === 'section' ? form.fields[0] : null;
   const remainingFields = leadingSection ? form.fields.slice(1) : form.fields;
   return (
-    <div className="icanera-cf min-h-screen">
+    <div className="icanera-cf min-h-screen" data-theme={theme}>
       <style>{CF_STYLES}</style>
       <div className="max-w-xl mx-auto px-4 py-10">
-        <p className="cf-text-faint text-xs uppercase tracking-wide mb-1">{form.businessName}</p>
-        <h1 className="text-2xl font-bold mb-1">{form.formName}</h1>
+        <div className="flex items-start justify-between gap-3 mb-1">
+          <p className="cf-business-name text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight">{form.businessName}</p>
+          <ThemeToggle theme={theme} onToggle={toggleTheme} className="mt-1" />
+        </div>
+        <h1 className="text-base sm:text-lg font-semibold cf-text-muted mb-1">{form.formName}</h1>
         {form.formDescription && <p className="cf-text-muted text-sm mb-4">{form.formDescription}</p>}
         {draftRestored && (
           <p className="cf-text-muted text-xs mb-4 flex items-center gap-1.5">
