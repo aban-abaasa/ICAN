@@ -3683,6 +3683,13 @@ const CMMSModule = ({
 
     const downloadConsolidatedReportPdf = (reports, scopeLabel) => downloadGroupedReportsPdf(reports, scopeLabel, { consolidated: true });
 
+    // One-click PDF file for a single selected report -- the department/
+    // employee/company scopes below already get a direct download button
+    // next to their "Print" button; a single report only had Print, so
+    // "Save as PDF" required the browser dialog. This closes that gap by
+    // reusing the same grouped-PDF renderer with a one-report array.
+    const downloadWrittenReportPdf = (report) => downloadGroupedReportsPdf([report], report.report_title || 'Report');
+
     // Same Department -> Employee grouping, opened as a print-ready window so
     // a manager can print directly or use the browser's "Save as PDF" option.
     const printGroupedReports = (reports, scopeLabel) => {
@@ -3963,9 +3970,14 @@ const CMMSModule = ({
                 <span>{new Date(report.created_at).toLocaleString()}</span>
               </div>
               {canExportReports && (
-                <button type="button" onClick={() => printWrittenReport(report)} className="mt-3 rounded-lg border border-cyan-400/40 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/20">
-                  Print / Save PDF
-                </button>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" onClick={() => downloadWrittenReportPdf(report)} className="rounded-lg bg-cyan-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-cyan-500">
+                    Download PDF
+                  </button>
+                  <button type="button" onClick={() => printWrittenReport(report)} className="rounded-lg border border-cyan-400/40 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/20">
+                    Print / Save PDF
+                  </button>
+                </div>
               )}
             </div>
           )}
