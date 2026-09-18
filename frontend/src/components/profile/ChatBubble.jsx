@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Loader2, FileText, Pin, PinOff, Download } from 'lucide-react';
 import { resolveAttachmentUrl } from '../../services/portfolioChatService';
 import { resolveDownloadUrl } from '../../services/r2StorageService';
+import { Linkify } from '../../utils/linkify';
 
 // Shared bubble for portfolio direct-message threads — used by both the
 // visitor-facing PortfolioChatPanel (public page) and the owner's Messages
@@ -83,7 +84,7 @@ export default function ChatBubble({ message, isMine, canManage = false, onToggl
             </button>
           )
         )}
-        {message.body && <p className="whitespace-pre-wrap break-words">{message.body}</p>}
+        {message.body && <p className="whitespace-pre-wrap break-words"><Linkify text={message.body} /></p>}
 
         {canManage && (
           <button

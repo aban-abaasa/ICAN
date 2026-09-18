@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Send, MessageSquare, Briefcase, Users, X, Plus, CheckCircle, Clock } from 'lucide-react';
 import cmmsMessagingService from '../services/cmmsMessagingService';
+import { Linkify } from '../utils/linkify';
 
 /**
  * Report Messaging & Job Assignment Panel
@@ -248,7 +249,7 @@ const ReportMessagingPanel = ({
                   {msg.recipient_name && (
                     <p className="text-xs text-gray-400">→ {msg.recipient_name}</p>
                   )}
-                  <p className="text-sm text-gray-300 mt-1 break-words">{msg.message_text}</p>
+                  <p className="text-sm text-gray-300 mt-1 break-words"><Linkify text={msg.message_text} /></p>
                   <div className="flex justify-between items-center mt-2">
                     <span className="text-xs text-gray-500">
                       {new Date(msg.created_at).toLocaleString()}

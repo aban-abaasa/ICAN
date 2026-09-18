@@ -16,6 +16,7 @@ import {
   getGroupMessages,
   sendGroupMessage
 } from '../services/trustService';
+import { Linkify } from '../utils/linkify';
 
 const GroupChatRoom = ({ groupId, groupName }) => {
   const { user } = useAuth();
@@ -122,7 +123,7 @@ const GroupChatRoom = ({ groupId, groupName }) => {
                   {!isOwn && (
                     <p className="text-xs font-semibold text-gray-300 mb-1">{msg.user_email}</p>
                   )}
-                  <p className="text-sm break-words">{msg.message}</p>
+                  <p className="text-sm break-words"><Linkify text={msg.message} /></p>
                   <p className="text-xs opacity-70 mt-1 flex items-center gap-1">
                     <Clock className="w-3 h-3" />
                     {new Date(msg.created_at).toLocaleTimeString([], {

@@ -11,6 +11,7 @@ import { getSupabaseClient } from '../lib/supabase/client';
 import CallDock from './calls/CallDock';
 import CallStage from './calls/CallStage';
 import { useDirectCall } from '../hooks/useDirectCall';
+import { Linkify } from '../utils/linkify';
 import {
   devListAllLandingMessages,
   devDeleteLandingMessage,
@@ -432,7 +433,7 @@ export const MessagesTab = () => {
                           {m.sender_name || selected.role}
                         </p>
                       )}
-                      <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                      <p className="whitespace-pre-wrap break-words"><Linkify text={m.body} /></p>
                     </div>
                   </div>
                 );
@@ -1031,7 +1032,7 @@ export const PublicBoardTab = ({ token = DEV_TOKEN, allowGrants = true } = {}) =
                         {r.reward_reason && <Badge label="🪙 Correct answer" cls="bg-amber-500/10 text-amber-400 border-amber-500/20"/>}
                         <span className="text-[10px]" style={{ color:'var(--dp-muted)' }}>{fmtTime(r.created_at)}</span>
                       </div>
-                      <p className="mt-0.5 whitespace-pre-wrap break-words text-sm" style={{ color:'var(--dp-sub)' }}>{r.message}</p>
+                      <p className="mt-0.5 whitespace-pre-wrap break-words text-sm" style={{ color:'var(--dp-sub)' }}><Linkify text={r.message} /></p>
                       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                         {r.sender_role !== 'dev' && r.user_id && !r.rewarded_at && (
                           <button onClick={() => handleMarkCorrect(r.id)} disabled={markingId === r.id}

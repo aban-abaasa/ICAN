@@ -16,6 +16,7 @@ import { useBoardroomPresence } from '../hooks/useBoardroomPresence';
 import { uploadVoiceNote, linkVoiceNoteMessages } from '../services/voiceNoteService';
 import { getAudioNotificationService } from '../services/audioNotificationService';
 import { getCustomRingtone, setCustomRingtone } from '../services/ringtoneService';
+import { Linkify } from '../utils/linkify';
 import {
   resolveChatIdentity,
   isDeveloperSession,
@@ -85,7 +86,7 @@ const formatVoiceDuration = (seconds) => {
 const MessageBody = ({ text, className = '', tint = 'cyan' }) => (
   isVoiceNoteBody(text)
     ? <VoiceNotePlayer url={voiceNoteUrlFromBody(text)} tint={tint} />
-    : <p className={className}>{text}</p>
+    : <p className={className}><Linkify text={text} /></p>
 );
 
 const AVATAR_HUES = ['bg-blue-500', 'bg-purple-500', 'bg-pink-500', 'bg-emerald-500', 'bg-amber-500', 'bg-cyan-500'];

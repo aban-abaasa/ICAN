@@ -47,6 +47,7 @@ import cmmsReportService from '../services/cmmsReportAccessService';
 import ShareExportModal from './ShareExportModal';
 import cmmsMessagingService from '../services/cmmsMessagingService';
 import NotificationsPanel from './NotificationsPanel';
+import { Linkify } from '../utils/linkify';
 import RequisitionWorkspace from './CMMS/RequisitionWorkspace.jsx';
 import RequisitionApprovalsTab from './CMMS/RequisitionApprovalsTab.jsx';
 import CMMSPayrollPanel from './CMMSPayrollPanel.jsx';
@@ -2277,7 +2278,7 @@ const CMMSModule = ({
                 </div>
               )}
               {/* Message text */}
-              <div className="text-xs md:text-sm break-words">{message.message_text}</div>
+              <div className="text-xs md:text-sm break-words"><Linkify text={message.message_text} /></div>
               {/* Timestamp */}
               <div className={`text-xs mt-1 text-right opacity-80 ${
                 isOwnMessage ? 'text-green-100' : 'text-gray-400'

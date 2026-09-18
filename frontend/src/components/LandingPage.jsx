@@ -24,6 +24,7 @@ import {
   replyToLandingMessage,
   subscribeToPublicLandingMessages,
 } from '../services/landingMessagesService';
+import { Linkify } from '../utils/linkify';
 
 // ICAN has no shared guest-identity helper (unlike digital-city-era's chatService) — a
 // one-time name/email capture for anonymous repliers is persisted locally instead.
@@ -1592,7 +1593,7 @@ const LandingPage = ({ onGetStarted }) => {
                         </span>
                         <span className={`text-[10px] ${isDarkTheme ? 'text-slate-500' : 'text-slate-400'}`}>{fmtBoardTime(m.created_at)}</span>
                       </div>
-                      <p className={`mt-2 text-sm leading-6 ${isDarkTheme ? 'text-slate-200' : 'text-slate-700'}`}>{m.message}</p>
+                      <p className={`mt-2 text-sm leading-6 ${isDarkTheme ? 'text-slate-200' : 'text-slate-700'}`}><Linkify text={m.message} /></p>
                     </div>
                   ))}
                 </div>
@@ -1630,7 +1631,7 @@ const LandingPage = ({ onGetStarted }) => {
                         </span>
                       )}
                     </div>
-                    <p className={`mt-3 text-sm leading-6 ${isDarkTheme ? 'text-slate-300' : 'text-slate-600'}`}>{m.message}</p>
+                    <p className={`mt-3 text-sm leading-6 ${isDarkTheme ? 'text-slate-300' : 'text-slate-600'}`}><Linkify text={m.message} /></p>
                   </div>
 
                   <button
@@ -1672,7 +1673,7 @@ const LandingPage = ({ onGetStarted }) => {
                               <span className={`text-[10px] ${isDarkTheme ? 'text-slate-500' : 'text-slate-400'}`}>{fmtBoardTime(r.created_at)}</span>
                             </div>
                           </div>
-                          <p className={`mt-1 text-sm leading-6 ${isDarkTheme ? 'text-slate-300' : 'text-slate-600'}`}>{r.message}</p>
+                          <p className={`mt-1 text-sm leading-6 ${isDarkTheme ? 'text-slate-300' : 'text-slate-600'}`}><Linkify text={r.message} /></p>
                           <button
                             type="button"
                             onClick={() => handleLike(r.id)}

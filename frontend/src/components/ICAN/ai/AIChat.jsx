@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bot, X, User, Send, Paperclip, File } from 'lucide-react';
 import { generateSpendingAdvice, generateSavingsAdvice, generateGoalAdvice, generateGeneralAdvice, generateWealthStatusReport, analyzeContract, analyzeDocument, performSecurityCheck, uploadAndAnalyzeDocument } from '../../../services/simpleAIAdviceService';
+import { Linkify } from '../../../utils/linkify';
 
 /**
  * Simple & Precise ICAN AI Assistant - Now powered by OpenAI with no limits
@@ -386,7 +387,7 @@ For ${stage?.name} stage:
                   : 'bg-white bg-opacity-10 text-gray-100'
               }`}>
                 <div className="whitespace-pre-line leading-relaxed">
-                  {message.content}
+                  <Linkify text={message.content} />
                 </div>
               </div>
 

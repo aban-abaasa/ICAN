@@ -5,6 +5,7 @@ import { AuthPage } from './auth';
 import { getStatusById, incrementStatusView } from '../services/statusService';
 import { getStatusMessages, sendStatusMessage, subscribeToStatusMessages } from '../services/statusMessagesService';
 import StatusCaptionText from './status/StatusCaptionText';
+import { Linkify } from '../utils/linkify';
 
 const timeAgo = (timestamp) => {
   if (!timestamp) return 'Now';
@@ -281,7 +282,7 @@ const PublicStatusViewer = ({ statusId }) => {
                             )}
                             <div className="flex-1 min-w-0">
                               <p className="text-xs font-semibold text-white">{isOwn ? 'You' : senderName}</p>
-                              <p className="text-xs text-white/90 break-words leading-relaxed">{msg.message_text}</p>
+                              <p className="text-xs text-white/90 break-words leading-relaxed"><Linkify text={msg.message_text} /></p>
                             </div>
                           </div>
                         </div>
