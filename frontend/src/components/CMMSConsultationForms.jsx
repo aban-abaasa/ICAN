@@ -114,6 +114,9 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
   const [fieldForm, setFieldForm] = useState({ label: '', fieldType: 'text', isRequired: false, optionsText: '' });
   const [savingField, setSavingField] = useState(false);
 
+  const [sectionLabel, setSectionLabel] = useState('');
+  const [savingSection, setSavingSection] = useState(false);
+
   const [viewingSubmissionId, setViewingSubmissionId] = useState(null);
   const [recording, setRecording] = useState(false);
   const [walkIn, setWalkIn] = useState({ name: '', phone: '', email: '', responses: {} });
@@ -231,6 +234,26 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
     if (result.success) {
       setFields((current) => [...current, result.data]);
       setFieldForm({ label: '', fieldType: 'text', isRequired: false, optionsText: '' });
+    } else setError(result.error);
+  };
+
+  // A dedicated quick-add for section headers, separate from "Add a custom
+  // field" below — the field-type dropdown there also offers "Section
+  // header" as one of eight options, but that buries the one action most
+  // people reach for right after a preset: breaking the form up into named
+  // parts. This is the same saveConsultationField call, just pre-set to
+  // fieldType 'section' with no type/options/required choices to make.
+  const submitSection = async (e) => {
+    e.preventDefault();
+    if (!selectedForm || !sectionLabel.trim()) return;
+    setSavingSection(true);
+    const result = await saveConsultationField({
+      formId: selectedForm.id, label: sectionLabel.trim(), fieldType: 'section', sortOrder: fields.length
+    });
+    setSavingSection(false);
+    if (result.success) {
+      setFields((current) => [...current, result.data]);
+      setSectionLabel('');
     } else setError(result.error);
   };
 
@@ -515,6 +538,17 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
                       <Sparkles className="h-3.5 w-3.5" /> Add patient assessment information form
                     </button>
                   </div>
+
+                  <form onSubmit={submitSection} className="flex gap-2 rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-3">
+                    <input
+                      value={sectionLabel} onChange={(e) => setSectionLabel(e.target.value)}
+                      placeholder="Add a section heading, e.g. Medical History"
+                      className="min-w-0 flex-1 rounded-lg bg-slate-900 px-3 py-2 text-sm text-white"
+                    />
+                    <button disabled={savingSection || !sectionLabel.trim()} className="flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50 hover:bg-emerald-500">
+                      {savingSection ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Add section
+                    </button>
+                  </form>
 
                   <div className="space-y-1.5">
                     {fields.length === 0 && (
