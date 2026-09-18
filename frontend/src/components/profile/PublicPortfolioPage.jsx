@@ -14,6 +14,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useDirectCall } from '../../hooks/useDirectCall';
 import CallDock from '../calls/CallDock';
 import RatingWidget from './RatingWidget';
+import ImageLightbox from '../common/ImageLightbox';
 
 const ITEM_ICONS = {
   experience: Briefcase,
@@ -65,9 +66,10 @@ function DescriptionBlock({ text }) {
 }
 
 // One read-only "Update" card on the public resume page — the owner's own
-// active (non-expired, public-visibility) status posts only. Never
-// interactive/click-to-open here; visitors just see what's currently live.
-function StatusCard({ status }) {
+// active (non-expired, public-visibility) status posts only. Tapping an
+// image opens it fullscreen via ImageLightbox (see onOpenImage); video
+// keeps its own native controls instead.
+function StatusCard({ status, onOpenImage }) {
   const hasMedia = Boolean(status.media_url && String(status.media_url).trim());
   const kind = !hasMedia ? 'text' : status.media_type === 'video' ? 'video' : 'image';
 
@@ -77,7 +79,13 @@ function StatusCard({ status }) {
         <video src={status.media_url} className="w-full h-full object-cover" muted playsInline preload="none" controls />
       )}
       {kind === 'image' && (
-        <img src={status.media_url} alt={status.caption || 'Update'} className="w-full h-full object-cover" loading="lazy" />
+        <img
+          src={status.media_url}
+          alt={status.caption || 'Update'}
+          className="w-full h-full object-cover cursor-pointer"
+          loading="lazy"
+          onClick={() => onOpenImage?.(status.media_url, status.caption || 'Update')}
+        />
       )}
       {kind === 'text' && (
         <div
@@ -126,6 +134,7 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
   const [isLoading, setIsLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [guestName, setGuestName] = useState('');
+  const [lightbox, setLightbox] = useState(null);
 
   const handle = handleProp || window.location.pathname.replace(/^\/portfolio\//, '').replace(/\/$/, '');
 
@@ -257,7 +266,8 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
                   <img
                     src={data.profile.avatar_url}
                     alt={data.profile.full_name}
-                    className="w-24 h-24 rounded-full object-cover ring-2 ring-slate-700"
+                    className="w-24 h-24 rounded-full object-cover ring-2 ring-slate-700 cursor-pointer"
+                    onClick={() => setLightbox({ src: data.profile.avatar_url, alt: data.profile.full_name })}
                   />
                 ) : (
                   <div className="w-24 h-24 rounded-full bg-gradient-to-br from-slate-700 to-indigo-700 flex items-center justify-center text-3xl font-bold text-white ring-2 ring-slate-700">
@@ -348,7 +358,7 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
                     <SectionHeading>Recent Updates</SectionHeading>
                     <div className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory">
                       {data.statuses.map((status) => (
-                        <StatusCard key={status.id} status={status} />
+                        <StatusCard key={status.id} status={status} onOpenImage={(src, alt) => setLightbox({ src, alt })} />
                       ))}
                     </div>
                   </div>
@@ -573,6 +583,7 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
           </>
         )}
       </div>
+      {lightbox && <ImageLightbox src={lightbox.src} alt={lightbox.alt} onClose={() => setLightbox(null)} />}
     </div>
   );
 

@@ -20,6 +20,7 @@ import { getAudioNotificationService } from '../services/audioNotificationServic
 import { getCustomRingtone, setCustomRingtone } from '../services/ringtoneService';
 import { Linkify } from '../utils/linkify';
 import { uploadChatImage } from '../services/chatAttachmentService';
+import ImageLightbox from './common/ImageLightbox';
 import { isR2Key, resolveMediaValue } from '../services/r2StorageService';
 import {
   resolveChatIdentity,
@@ -204,6 +205,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
   const [voiceElapsed, setVoiceElapsed] = useState(0);
   const [voiceError, setVoiceError] = useState('');
   const [voicePreviewUrl, setVoicePreviewUrl] = useState(null);
+  const [lightboxSrc, setLightboxSrc] = useState(null);
 
   const [ringtoneName, setRingtoneName] = useState('');
 
@@ -1153,6 +1155,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
           />
         </div>
       )}
+      {lightboxSrc && <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
     <div className="fixed z-[999]" style={fullScreen ? undefined : { left: position.left, top: position.top }}>
       {open && (
         <div
@@ -1459,7 +1462,12 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                         {selectedThread.name || 'Website visitor'}
                       </p>
                       {selectedThread.attachment_url && (
-                        <img src={selectedThread.attachment_url} alt="" className="mb-1.5 max-h-52 rounded-lg object-cover" />
+                        <img
+                          src={selectedThread.attachment_url}
+                          alt=""
+                          className="mb-1.5 max-h-52 cursor-pointer rounded-lg object-cover"
+                          onClick={() => setLightboxSrc(selectedThread.attachment_url)}
+                        />
                       )}
                       {selectedThread.message && <MessageBody text={selectedThread.message} className="whitespace-pre-wrap break-words" tint="cyan" />}
                       <button
@@ -1515,7 +1523,12 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                           {r.reward_reason && ' · 🪙'}
                         </p>
                         {r.attachment_url && (
-                          <img src={r.attachment_url} alt="" className="mb-1.5 max-h-52 rounded-lg object-cover" />
+                          <img
+                            src={r.attachment_url}
+                            alt=""
+                            className="mb-1.5 max-h-52 cursor-pointer rounded-lg object-cover"
+                            onClick={() => setLightboxSrc(r.attachment_url)}
+                          />
                         )}
                         {r.message && <MessageBody text={r.message} className="whitespace-pre-wrap break-words" tint={r.sender_role === 'dev' ? 'white' : 'cyan'} />}
                         <button
@@ -1603,7 +1616,12 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                       >
                         {!isMe && <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-400">Team</p>}
                         {m.attachment_url && (
-                          <img src={m.attachment_url} alt="" className="mb-1.5 max-h-52 rounded-lg object-cover" />
+                          <img
+                            src={m.attachment_url}
+                            alt=""
+                            className="mb-1.5 max-h-52 cursor-pointer rounded-lg object-cover"
+                            onClick={() => setLightboxSrc(m.attachment_url)}
+                          />
                         )}
                         {m.body && <MessageBody text={m.body} className="whitespace-pre-wrap break-words" tint={isMe ? 'white' : 'cyan'} />}
                         {m.pendingSync && (

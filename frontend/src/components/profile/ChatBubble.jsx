@@ -3,6 +3,7 @@ import { Loader2, FileText, Pin, PinOff, Download } from 'lucide-react';
 import { resolveAttachmentUrl } from '../../services/portfolioChatService';
 import { resolveDownloadUrl } from '../../services/r2StorageService';
 import { Linkify } from '../../utils/linkify';
+import ImageLightbox from '../common/ImageLightbox';
 
 // Shared bubble for portfolio direct-message threads — used by both the
 // visitor-facing PortfolioChatPanel (public page) and the owner's Messages
@@ -16,6 +17,7 @@ import { Linkify } from '../../utils/linkify';
 export default function ChatBubble({ message, isMine, canManage = false, onToggleKeep }) {
   const [attachmentUrl, setAttachmentUrl] = useState(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,7 +59,12 @@ export default function ChatBubble({ message, isMine, canManage = false, onToggl
           message.attachment_type === 'image' ? (
             attachmentUrl ? (
               <div className="relative mb-1.5 group/img">
-                <img src={attachmentUrl} alt={message.attachment_name || 'Attachment'} className="rounded-lg max-h-52 object-cover" />
+                <img
+                  src={attachmentUrl}
+                  alt={message.attachment_name || 'Attachment'}
+                  className="rounded-lg max-h-52 object-cover cursor-pointer"
+                  onClick={() => setLightboxOpen(true)}
+                />
                 <button
                   onClick={handleDownload}
                   disabled={isDownloading}
@@ -97,6 +104,9 @@ export default function ChatBubble({ message, isMine, canManage = false, onToggl
           </button>
         )}
       </div>
+      {lightboxOpen && attachmentUrl && (
+        <ImageLightbox src={attachmentUrl} alt={message.attachment_name || 'Attachment'} onClose={() => setLightboxOpen(false)} />
+      )}
     </div>
   );
 }
