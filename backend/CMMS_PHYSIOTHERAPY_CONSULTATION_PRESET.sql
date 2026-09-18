@@ -5,12 +5,17 @@
 -- Two additions on top of CMMS_CLINICAL_CONSULTATION_FORMS.sql:
 --
 --   1. A new field_type value, 'section' — a display-only heading with no
---      input, used to lay a form out in named sections (e.g. "1. Personal
---      Details", "2. Chief Complaint & Pain Assessment") the way a printed
+--      input, used to lay a form out in named sections (e.g. "Personal
+--      Details", "Chief Complaint & Pain Assessment") the way a printed
 --      clinical intake form is normally organised. It carries no options,
 --      is never required, and is never part of a submission's `responses`
 --      — the builder, public form, print view and PDF export all treat it
---      as a heading/divider, not a question.
+--      as a heading/divider, not a question. Section labels are stored
+--      bare (no "1. " prefix) — the frontend numbers sections 1, 2, 3...
+--      fresh from their live order every time they're displayed
+--      (sectionDisplayLabel in consultationSubmissionUtils.js), so
+--      reordering/adding/deleting a section never leaves a stale number
+--      behind and there is nothing to keep in sync here.
 --
 --   2. cmms_add_physiotherapy_consultation_fields() — a second one-click
 --      preset alongside cmms_add_common_clinical_fields(), matching a
@@ -123,14 +128,14 @@ BEGIN
 
   FOR v_preset IN
     SELECT * FROM (VALUES
-      ('section_personal_details', '1. Personal Details', 'section', NULL::jsonb, false),
+      ('section_personal_details', 'Personal Details', 'section', NULL::jsonb, false),
       ('date_of_birth', 'Date of birth', 'date', NULL::jsonb, false),
       ('gender', 'Gender', 'select', '["Male","Female","Other"]'::jsonb, false),
       ('emergency_contact', 'Emergency contact (name & relationship)', 'text', NULL::jsonb, false),
       ('emergency_phone', 'Emergency phone', 'text', NULL::jsonb, false),
       ('occupation', 'Occupation', 'text', NULL::jsonb, false),
 
-      ('section_chief_complaint', '2. Chief Complaint & Pain Assessment', 'section', NULL::jsonb, false),
+      ('section_chief_complaint', 'Chief Complaint & Pain Assessment', 'section', NULL::jsonb, false),
       ('primary_reason_for_visit', 'Primary reason for visit', 'textarea', NULL::jsonb, true),
       ('symptom_onset', 'When did the symptoms begin?', 'text', NULL::jsonb, false),
       ('how_issue_occurred', 'How did the issue occur? (e.g. sudden injury, gradual onset, surgery, posture)', 'textarea', NULL::jsonb, false),
@@ -141,18 +146,18 @@ BEGIN
       ('pain_better', 'What makes the pain better?', 'textarea', NULL::jsonb, false),
       ('pain_worse', 'What makes the pain worse?', 'textarea', NULL::jsonb, false),
 
-      ('section_medical_history', '3. Medical History & Screening', 'section', NULL::jsonb, false),
+      ('section_medical_history', 'Medical History & Screening', 'section', NULL::jsonb, false),
       ('had_physio_before', 'Have you had physiotherapy before?', 'checkbox', NULL::jsonb, false),
       ('recent_imaging', 'Recent X-rays, MRIs, or CT scans for this issue?', 'checkbox', NULL::jsonb, false),
       ('medical_screening', 'Do you currently have or have a history of any of the following?', 'multiselect', '["High / Low Blood Pressure","Diabetes","Heart Condition","Osteoporosis / Osteopenia","Recent Surgeries or Fractures","Cancer / Tumors","Dizziness or Balance Issues","Pregnancy (if applicable)"]'::jsonb, false),
       ('current_medications_supplements', 'Current medications / supplements', 'textarea', NULL::jsonb, false),
 
-      ('section_lifestyle_goals', '4. Daily Lifestyle & Goals', 'section', NULL::jsonb, false),
+      ('section_lifestyle_goals', 'Daily Lifestyle & Goals', 'section', NULL::jsonb, false),
       ('activity_level', 'Physical activity level', 'select', '["Sedentary","Light","Moderate","Highly Active"]'::jsonb, false),
       ('sleep_quality', 'Sleep quality', 'select', '["Good","Moderate","Disturbed by pain"]'::jsonb, false),
       ('treatment_goals', 'What are your primary goals for treatment? (e.g. pain relief, return to sport, better mobility, daily function)', 'textarea', NULL::jsonb, false),
 
-      ('section_consent', '5. Consent & Acknowledgment', 'section', NULL::jsonb, false),
+      ('section_consent', 'Consent & Acknowledgment', 'section', NULL::jsonb, false),
       ('consent_acknowledgment', 'I understand that physical therapy involves an initial evaluation and ongoing treatment techniques (e.g. manual therapy, exercise prescription, electrotherapy). I consent to evaluation and treatment as recommended by my physiotherapist.', 'checkbox', NULL::jsonb, true),
       ('client_signature', 'Client signature (type full name to sign)', 'text', NULL::jsonb, true)
     ) AS presets(key, label, ftype, opts, required)

@@ -1,8 +1,31 @@
-// Shared between CMMSConsultationForms.jsx (a single form's submissions)
-// and CMMSClinicalRecords.jsx (every submission across every form, in one
-// place) so a submission's answers are interpreted identically wherever
-// they're shown — same section-header handling, same fallback for a field
-// that's since been renamed/retyped/deleted from its live template.
+// Shared between CMMSConsultationForms.jsx (a single form's submissions),
+// CMMSClinicalRecords.jsx (every submission across every form, in one
+// place), and PublicConsultationFormViewer.jsx/generateConsultationFormPdf.js
+// (the live/blank form itself) so a section header's number and a
+// submission's answers are interpreted identically wherever they're shown.
+
+// Section numbering is always computed fresh from current order — never
+// stored — so adding, deleting, or reordering a section keeps every number
+// correct everywhere with nothing to manually renumber. This strips any
+// number a preset (or an older version of one) baked into the label
+// itself, so re-numbering never doubles up ("1. 1. Personal Information").
+const SECTION_NUMBER_PREFIX = /^\d+\.\s*/;
+export const bareSectionLabel = (label) => String(label || '').replace(SECTION_NUMBER_PREFIX, '');
+
+// One field from `fields`/`form.fields`, numbered against its position
+// among sections in that same array — works for both field shapes CMMS
+// uses: the staff-side field_type/label rows and the public share-link
+// RPC's fieldType/label rows. Non-section fields come back unchanged.
+export const sectionDisplayLabel = (fields, field) => {
+  const isSection = (f) => f.field_type === 'section' || f.fieldType === 'section';
+  if (!isSection(field)) return field.label;
+  let n = 0;
+  for (const f of fields || []) {
+    if (isSection(f)) n += 1;
+    if (f === field || (f.id && field.id && f.id === field.id)) break;
+  }
+  return `${n}. ${bareSectionLabel(field.label)}`;
+};
 
 // A form's fields as they were AT SUBMISSION TIME may no longer match the
 // live template — this starts from the live template (so a still-current
@@ -26,7 +49,13 @@ export const submissionEntries = (submission, fields) => {
   const orphaned = Object.entries(responses)
     .filter(([key]) => !seenKeys.has(key))
     .map(([key, value]) => ({ key, isSection: false, label: key.replace(/_/g, ' '), fieldType: null, sortOrder: 9999, value }));
-  return [...fromTemplate, ...orphaned].sort((a, b) => a.sortOrder - b.sortOrder);
+  const ordered = [...fromTemplate, ...orphaned].sort((a, b) => a.sortOrder - b.sortOrder);
+  let n = 0;
+  return ordered.map((entry) => {
+    if (!entry.isSection) return entry;
+    n += 1;
+    return { ...entry, label: `${n}. ${bareSectionLabel(entry.label)}` };
+  });
 };
 
 export const formatAnswer = (entry) => {

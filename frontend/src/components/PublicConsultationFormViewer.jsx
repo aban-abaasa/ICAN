@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Download, FileWarning, Loader, Printer } from 'lucide-react';
 import { getPublicConsultationForm, submitPublicConsultationForm } from '../services/cmmsConsultationFormService';
 import { downloadPublicConsultationSubmissionPdf } from '../utils/generateConsultationFormPdf';
+import { sectionDisplayLabel } from '../utils/consultationSubmissionUtils';
 
 // Same scoped-palette technique as PublicReportExportViewer.jsx (see that
 // file for the full reasoning): this page has no ICAN session and no app
@@ -64,7 +65,7 @@ const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ 
 // they just submitted.
 const printSubmittedAnswers = (form, patient, responses) => {
   const rows = (form.fields || []).map((f) => {
-    if (f.fieldType === 'section') return `<div class="section-heading">${escapeHtml(f.label)}</div>`;
+    if (f.fieldType === 'section') return `<div class="section-heading">${escapeHtml(sectionDisplayLabel(form.fields, f))}</div>`;
     const value = responses[f.fieldKey];
     const text = f.fieldType === 'checkbox' ? (value ? 'Yes' : 'No') : Array.isArray(value) ? (value.join(', ') || '—') : (value || '—');
     return `<div class="field"><div class="label">${escapeHtml(f.label)}</div><div class="answer">${escapeHtml(text)}</div></div>`;
@@ -257,7 +258,7 @@ const PublicConsultationFormViewer = ({ shareToken }) => {
           {form.fields.map((field) => (
             field.fieldType === 'section' ? (
               <div key={field.id} className="pt-2 first:pt-0">
-                <p className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--cf-green)' }}>{field.label}</p>
+                <p className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--cf-green)' }}>{sectionDisplayLabel(form.fields, field)}</p>
                 <div className="mt-2 border-t" style={{ borderColor: 'var(--cf-border)' }} />
               </div>
             ) : (

@@ -1,4 +1,5 @@
 import { jsPDF } from 'jspdf';
+import { sectionDisplayLabel } from './consultationSubmissionUtils';
 
 // Real "Download PDF" for CMMS consultation forms — a proper jsPDF
 // document (paginated, no popup) rather than the window.print() dialog
@@ -114,7 +115,7 @@ const renderConsultationPdf = ({ businessName, formName, subtitleLines, entries,
 export const downloadBlankConsultationFormPdf = ({ businessName, form, fields }) => {
   const entries = fields.map((f) => {
     if (f.field_type === 'section') {
-      return { label: f.label, isSection: true };
+      return { label: sectionDisplayLabel(fields, f), isSection: true };
     }
     const options = Array.isArray(f.options) ? f.options : [];
     if (f.field_type === 'checkbox') {
@@ -172,7 +173,7 @@ export const downloadConsultationSubmissionPdf = ({ businessName, formName, subm
 export const downloadPublicConsultationSubmissionPdf = ({ form, patient, responses }) => {
   const contactLine = [patient.phone, patient.email].filter(Boolean).join(' · ');
   const entries = (form.fields || []).map((f) => {
-    if (f.fieldType === 'section') return { label: f.label, isSection: true };
+    if (f.fieldType === 'section') return { label: sectionDisplayLabel(form.fields, f), isSection: true };
     const value = responses[f.fieldKey];
     const text = f.fieldType === 'checkbox'
       ? (value ? 'Yes' : 'No')

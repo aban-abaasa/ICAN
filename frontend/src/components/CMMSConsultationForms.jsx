@@ -11,7 +11,7 @@ import {
 } from '../services/cmmsConsultationFormService';
 import { downloadCmmsQrPdf } from '../utils/downloadCmmsQrPdf';
 import { downloadBlankConsultationFormPdf, downloadConsultationSubmissionPdf } from '../utils/generateConsultationFormPdf';
-import { submissionEntries, formatAnswer } from '../utils/consultationSubmissionUtils';
+import { submissionEntries, formatAnswer, sectionDisplayLabel } from '../utils/consultationSubmissionUtils';
 
 const FIELD_TYPES = [
   ['text', 'Short text'], ['textarea', 'Long text'], ['date', 'Date'], ['number', 'Number'],
@@ -279,7 +279,7 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
     if (!selectedForm) return;
     const fieldsHtml = fields.map((f) => {
       if (f.field_type === 'section') {
-        return `<div class="section-heading">${escapeHtml(f.label)}</div>`;
+        return `<div class="section-heading">${escapeHtml(sectionDisplayLabel(fields, f))}</div>`;
       }
       let answerHtml;
       if (f.field_type === 'select' || f.field_type === 'multiselect') {
@@ -563,7 +563,7 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
                             <button type="button" onClick={() => moveField(index, -1)} disabled={index === 0} className="text-slate-400 hover:text-white disabled:opacity-20"><ChevronUp className="h-3.5 w-3.5" /></button>
                             <button type="button" onClick={() => moveField(index, 1)} disabled={index === fields.length - 1} className="text-slate-400 hover:text-white disabled:opacity-20"><ChevronDown className="h-3.5 w-3.5" /></button>
                           </div>
-                          <p className="min-w-0 flex-1 truncate text-sm font-bold uppercase tracking-wide text-emerald-200">{f.label}</p>
+                          <p className="min-w-0 flex-1 truncate text-sm font-bold uppercase tracking-wide text-emerald-200">{sectionDisplayLabel(fields, f)}</p>
                           <span className="rounded-full bg-emerald-400/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">Section</span>
                           <button type="button" onClick={() => removeField(f)} className="text-red-400 hover:text-red-300"><Trash2 className="h-4 w-4" /></button>
                         </div>
@@ -635,7 +635,7 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
                       </div>
                       {fields.map((f) => (
                         f.field_type === 'section' ? (
-                          <p key={f.id} className="pt-2 text-xs font-bold uppercase tracking-wide text-cyan-300 border-t border-white/10 first:border-t-0 first:pt-0">{f.label}</p>
+                          <p key={f.id} className="pt-2 text-xs font-bold uppercase tracking-wide text-cyan-300 border-t border-white/10 first:border-t-0 first:pt-0">{sectionDisplayLabel(fields, f)}</p>
                         ) : (
                           <div key={f.id}>
                             <label className="mb-1 block text-xs text-slate-400">{f.label}{f.is_required && <span className="text-red-400"> *</span>}</label>

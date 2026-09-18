@@ -13,12 +13,16 @@
 -- list is regrouped into five named sections (Personal Information,
 -- Lifestyle & Habits, Health Background, Assessment & Goals, Consent &
 -- Acknowledgment) using the 'section' field type from
--- CMMS_PHYSIOTHERAPY_CONSULTATION_PRESET.sql. Like the other presets,
--- every field it adds becomes an ordinary editable/reorderable/deletable
--- row afterward, and it never duplicates a field_key already on the form.
--- Full name / phone / email are left out: the public form and staff
--- walk-in form already collect those as the submission's own
--- patient_name/patient_phone/patient_email columns.
+-- CMMS_PHYSIOTHERAPY_CONSULTATION_PRESET.sql. Section labels are stored
+-- bare, with no "1. " prefix — the frontend numbers sections 1, 2, 3...
+-- fresh from their live order every time they're displayed
+-- (sectionDisplayLabel in consultationSubmissionUtils.js), so
+-- reordering/adding/deleting a section never leaves a stale number behind.
+-- Like the other presets, every field it adds becomes an ordinary
+-- editable/reorderable/deletable row afterward, and it never duplicates a
+-- field_key already on the form. Full name / phone / email are left out:
+-- the public form and staff walk-in form already collect those as the
+-- submission's own patient_name/patient_phone/patient_email columns.
 --
 -- Run after: CMMS_CLINICAL_CONSULTATION_FORMS.sql. Includes its own copy
 -- of the 'section' field_type widening (safe/idempotent) so it does not
@@ -61,7 +65,7 @@ BEGIN
 
   FOR v_preset IN
     SELECT * FROM (VALUES
-      ('section_personal_info', '1. Personal Information', 'section', NULL::jsonb, false),
+      ('section_personal_info', 'Personal Information', 'section', NULL::jsonb, false),
       ('age', 'Age', 'number', NULL::jsonb, false),
       ('gender', 'Gender', 'select', '["Male","Female","Other"]'::jsonb, false),
       ('marital_status', 'Marital status', 'select', '["Single","Married","Divorced","Widowed"]'::jsonb, false),
@@ -70,23 +74,23 @@ BEGIN
       ('emergency_contact', 'Emergency contact (name & phone)', 'text', NULL::jsonb, false),
       ('preferred_communication', 'Preferred method of communication', 'select', '["Phone","Email","In-person"]'::jsonb, false),
 
-      ('section_lifestyle', '2. Lifestyle & Habits', 'section', NULL::jsonb, false),
+      ('section_lifestyle', 'Lifestyle & Habits', 'section', NULL::jsonb, false),
       ('smokes', 'Do you smoke?', 'checkbox', NULL::jsonb, false),
       ('uses_alcohol', 'Do you use alcohol?', 'checkbox', NULL::jsonb, false),
       ('uses_recreational_drugs', 'Do you use recreational drugs?', 'checkbox', NULL::jsonb, false),
       ('exercise_frequency', 'Exercise frequency', 'select', '["Daily","Weekly","Rarely","Never"]'::jsonb, false),
       ('diet_nutrition_notes', 'Diet / nutrition notes', 'textarea', NULL::jsonb, false),
 
-      ('section_health_background', '3. Health Background', 'section', NULL::jsonb, false),
+      ('section_health_background', 'Health Background', 'section', NULL::jsonb, false),
       ('health_background', 'Primary health concern, current diagnosis, past medical conditions, current medications, allergies, previous surgeries/hospitalizations', 'textarea', NULL::jsonb, true),
 
-      ('section_assessment_goals', '4. Assessment & Goals', 'section', NULL::jsonb, false),
+      ('section_assessment_goals', 'Assessment & Goals', 'section', NULL::jsonb, false),
       ('recommendations_treatments', 'Recommendations and treatments', 'textarea', NULL::jsonb, false),
       ('services_seeking', 'What services are you seeking?', 'textarea', NULL::jsonb, false),
       ('short_term_goals', 'What are your short-term goals?', 'textarea', NULL::jsonb, false),
       ('long_term_goals', 'What are your long-term goals?', 'textarea', NULL::jsonb, false),
 
-      ('section_consent', '5. Consent & Acknowledgment', 'section', NULL::jsonb, false),
+      ('section_consent', 'Consent & Acknowledgment', 'section', NULL::jsonb, false),
       ('consent_acknowledgment', 'I hereby consent to assessment and treatment services provided by this practice. I understand that my information will be kept confidential in accordance with applicable laws.', 'checkbox', NULL::jsonb, true),
       ('client_signature', 'Client signature (type full name to sign)', 'text', NULL::jsonb, true)
     ) AS presets(key, label, ftype, opts, required)
