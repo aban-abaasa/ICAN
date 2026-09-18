@@ -26,9 +26,11 @@
 --      it adds becomes an ordinary row afterward — fully editable,
 --      reorderable and deletable, same as a hand-built form — and it never
 --      duplicates a field_key already on the form. Full name / phone /
---      email are deliberately left out: the public form and staff
---      walk-in form already collect those as the submission's own
---      patient_name/patient_phone/patient_email columns.
+--      email / address / date of birth are deliberately left out: the
+--      public form and staff walk-in form already collect those as the
+--      submission's own patient_name/patient_phone/patient_email/
+--      patient_address/patient_dob columns (see
+--      CMMS_CONSULTATION_ADDRESS_DOB.sql for the latter two).
 --
 -- Run after: CMMS_CLINICAL_CONSULTATION_FORMS.sql.
 -- Safe to run more than once.
@@ -129,7 +131,6 @@ BEGIN
   FOR v_preset IN
     SELECT * FROM (VALUES
       ('section_personal_details', 'Personal Details', 'section', NULL::jsonb, false),
-      ('date_of_birth', 'Date of birth', 'date', NULL::jsonb, false),
       ('gender', 'Gender', 'select', '["Male","Female","Other"]'::jsonb, false),
       ('emergency_contact', 'Emergency contact (name & relationship)', 'text', NULL::jsonb, false),
       ('emergency_phone', 'Emergency phone', 'text', NULL::jsonb, false),

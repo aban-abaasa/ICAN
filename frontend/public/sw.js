@@ -7,7 +7,7 @@
 // JS chunk hashes the server no longer has) can outlive the deploy that
 // replaced them — the classic "works on a fresh browser, blank screen on a
 // phone that visited before the last deploy" PWA bug.
-const CACHE_NAME = 'ican-era-v2';
+const CACHE_NAME = 'ican-era-v3';
 const CACHE_URLS = [
   '/',
   '/index.html',
@@ -123,9 +123,17 @@ self.addEventListener('fetch', (event) => {
     return event.respondWith(cacheFirstStrategy(event.request));
   }
 
-  // Strategy 3: HTML pages - Network first for app shell
-  if (pathname.endsWith('.html') || pathname === '/') {
-    return event.respondWith(networkFirstStrategy(event.request));
+  // Strategy 3: Page navigations (app shell, HTML, or any client-side route
+  // like /wallet, /cmms, /pricing) - network first, but fall back to the
+  // cached app shell rather than a raw error. This is a single-page app: the
+  // route itself lives in JS, not on the server, so the ONE html document we
+  // cache is the right offline answer for every path here, not just '/'.
+  // Without this, opening a deep link (or reloading one) while offline fell
+  // through to the generic strategy below, which tried to cache-match that
+  // exact pathname -- never cached, since only '/' is precached -- and
+  // returned a JSON error blob instead of the app.
+  if (event.request.mode === 'navigate' || pathname.endsWith('.html') || pathname === '/') {
+    return event.respondWith(appShellStrategy(event.request));
   }
 
   // Default: Network first
@@ -166,6 +174,49 @@ async function networkFirstStrategy(request) {
         headers: { 'Content-Type': 'application/json' }
       }
     );
+  }
+}
+
+async function appShellStrategy(request) {
+  try {
+    const response = await fetch(request);
+    // Cache under this exact request, NOT the shared '/' key. A few paths
+    // (see vercel.json: /pitchin/:id, /status/:id, /store/:id) rewrite to a
+    // distinct share-preview document with OG meta tags, not the SPA shell
+    // -- overwriting '/' with that response would replace the real app
+    // shell everyone else relies on offline.
+    if (response.ok) {
+      const cache = await caches.open(CACHE_NAME);
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch (error) {
+    console.log('[SW] Navigation failed offline, serving cached content for:', pathnameOf(request));
+    const cached = await caches.match(request, { ignoreSearch: true });
+    if (cached) {
+      return cached;
+    }
+    // No cached response for this exact route (e.g. a deep link never
+    // opened before). This is a single-page app, so the cached root shell
+    // runs the same client bundle and lets in-app routing take it from
+    // there -- a far better offline result than a raw error for every path
+    // that isn't '/' itself.
+    const shell = await caches.match('/', { ignoreSearch: true });
+    if (shell) {
+      return shell;
+    }
+    return new Response(
+      '<!doctype html><title>Offline</title><p>You are offline and this page has not been cached yet. Reconnect once to load it, then it will work offline too.</p>',
+      { status: 200, headers: { 'Content-Type': 'text/html' } }
+    );
+  }
+}
+
+function pathnameOf(request) {
+  try {
+    return new URL(request.url).pathname;
+  } catch {
+    return request.url;
   }
 }
 

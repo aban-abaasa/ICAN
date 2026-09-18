@@ -141,7 +141,7 @@ export const downloadBlankConsultationFormPdf = ({ businessName, form, fields })
 // output ({ label, fieldType, value }[]), reused as-is so the PDF and the
 // on-screen/print views never disagree about labels or ordering.
 export const downloadConsultationSubmissionPdf = ({ businessName, formName, submission, entries }) => {
-  const contactLine = [submission.patient_phone, submission.patient_email].filter(Boolean).join(' · ');
+  const contactLine = [submission.patient_phone, submission.patient_email, submission.patient_dob ? `DOB ${submission.patient_dob}` : null].filter(Boolean).join(' · ');
   const pdfEntries = entries.map(({ label, fieldType, value, isSection }) => (
     isSection ? { label, isSection: true } : {
       label,
@@ -157,6 +157,7 @@ export const downloadConsultationSubmissionPdf = ({ businessName, formName, subm
     formName: submission.form_name_snapshot || formName || 'Consultation form',
     subtitleLines: [
       `Patient: ${submission.patient_name}${contactLine ? ' · ' + contactLine : ''}`,
+      submission.patient_address ? `Address: ${submission.patient_address}` : null,
       `Submitted: ${new Date(submission.created_at).toLocaleString()} (${submission.submitted_via === 'public_link' ? 'via public link' : 'recorded by staff'})`
     ],
     entries: pdfEntries,
@@ -171,7 +172,7 @@ export const downloadConsultationSubmissionPdf = ({ businessName, formName, subm
 // list (fieldKey/fieldType/isRequired) and freshly-typed responses instead
 // of a saved submission row.
 export const downloadPublicConsultationSubmissionPdf = ({ form, patient, responses }) => {
-  const contactLine = [patient.phone, patient.email].filter(Boolean).join(' · ');
+  const contactLine = [patient.phone, patient.email, patient.dob ? `DOB ${patient.dob}` : null].filter(Boolean).join(' · ');
   const entries = (form.fields || []).map((f) => {
     if (f.fieldType === 'section') return { label: sectionDisplayLabel(form.fields, f), isSection: true };
     const value = responses[f.fieldKey];
@@ -185,7 +186,7 @@ export const downloadPublicConsultationSubmissionPdf = ({ form, patient, respons
   const pdf = renderConsultationPdf({
     businessName: form.businessName,
     formName: form.formName,
-    subtitleLines: [`Patient: ${patient.name}${contactLine ? ' · ' + contactLine : ''}`, `Submitted: ${new Date().toLocaleString()}`],
+    subtitleLines: [`Patient: ${patient.name}${contactLine ? ' · ' + contactLine : ''}`, patient.address ? `Address: ${patient.address}` : null, `Submitted: ${new Date().toLocaleString()}`],
     entries,
     footer: 'Powered by IcanEra'
   });

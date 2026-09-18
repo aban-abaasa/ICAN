@@ -20,9 +20,11 @@
 -- reordering/adding/deleting a section never leaves a stale number behind.
 -- Like the other presets, every field it adds becomes an ordinary
 -- editable/reorderable/deletable row afterward, and it never duplicates a
--- field_key already on the form. Full name / phone / email are left out:
--- the public form and staff walk-in form already collect those as the
--- submission's own patient_name/patient_phone/patient_email columns.
+-- field_key already on the form. Full name / phone / email / address /
+-- date of birth are left out: the public form and staff walk-in form
+-- already collect those as the submission's own patient_name/
+-- patient_phone/patient_email/patient_address/patient_dob columns (see
+-- CMMS_CONSULTATION_ADDRESS_DOB.sql for the latter two).
 --
 -- Run after: CMMS_CLINICAL_CONSULTATION_FORMS.sql. Includes its own copy
 -- of the 'section' field_type widening (safe/idempotent) so it does not
@@ -70,7 +72,6 @@ BEGIN
       ('gender', 'Gender', 'select', '["Male","Female","Other"]'::jsonb, false),
       ('marital_status', 'Marital status', 'select', '["Single","Married","Divorced","Widowed"]'::jsonb, false),
       ('occupation', 'Occupation', 'text', NULL::jsonb, false),
-      ('address', 'Address', 'textarea', NULL::jsonb, false),
       ('emergency_contact', 'Emergency contact (name & phone)', 'text', NULL::jsonb, false),
       ('preferred_communication', 'Preferred method of communication', 'select', '["Phone","Email","In-person"]'::jsonb, false),
 
@@ -82,7 +83,7 @@ BEGIN
       ('diet_nutrition_notes', 'Diet / nutrition notes', 'textarea', NULL::jsonb, false),
 
       ('section_health_background', 'Health Background', 'section', NULL::jsonb, false),
-      ('health_background', 'Primary health concern, current diagnosis, past medical conditions, current medications, allergies, previous surgeries/hospitalizations', 'textarea', NULL::jsonb, true),
+      ('health_background', 'Primary health concern, current diagnosis, past medical conditions, current medications, allergies, previous surgeries/hospitalizations, genetic conditions', 'textarea', NULL::jsonb, true),
 
       ('section_assessment_goals', 'Assessment & Goals', 'section', NULL::jsonb, false),
       ('recommendations_treatments', 'Recommendations and treatments', 'textarea', NULL::jsonb, false),

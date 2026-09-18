@@ -2,16 +2,18 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   Plus, Trash2, Share2, Printer, Copy, Check, Loader, FileText, Download,
-  ChevronUp, ChevronDown, Sparkles, Power, UserPlus
+  ChevronUp, ChevronDown, Sparkles, Power, UserPlus, Pencil
 } from 'lucide-react';
 import {
   listConsultationForms, saveConsultationForm, deleteConsultationForm, setConsultationFormShare,
   listConsultationFields, saveConsultationField, deleteConsultationField, addCommonClinicalFields,
   addPhysiotherapyConsultationFields, addPatientAssessmentFields, listConsultationSubmissions, recordConsultationSubmission
 } from '../services/cmmsConsultationFormService';
+import { useAuth } from '../context/AuthContext';
+import { syncManager } from '../lib/syncManager';
 import { downloadCmmsQrPdf } from '../utils/downloadCmmsQrPdf';
 import { downloadBlankConsultationFormPdf, downloadConsultationSubmissionPdf } from '../utils/generateConsultationFormPdf';
-import { submissionEntries, formatAnswer, sectionDisplayLabel } from '../utils/consultationSubmissionUtils';
+import { submissionEntries, formatAnswer, sectionDisplayLabel, bareSectionLabel } from '../utils/consultationSubmissionUtils';
 
 const FIELD_TYPES = [
   ['text', 'Short text'], ['textarea', 'Long text'], ['date', 'Date'], ['number', 'Number'],
@@ -99,6 +101,7 @@ const FieldInput = ({ field, value, onChange }) => {
 // existing activity-log sub-tab in CMMSClinicalOperationsPanel.jsx).
 // businessName is purely cosmetic (print header / public page heading).
 export default function CMMSConsultationForms({ businessProfileId, businessName }) {
+  const { queueAction } = useAuth();
   const [forms, setForms] = useState([]);
   const [loadingForms, setLoadingForms] = useState(true);
   const [selectedFormId, setSelectedFormId] = useState(null);
@@ -117,9 +120,13 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
   const [sectionLabel, setSectionLabel] = useState('');
   const [savingSection, setSavingSection] = useState(false);
 
+  const [editingFieldId, setEditingFieldId] = useState(null);
+  const [editDraft, setEditDraft] = useState({ label: '', fieldType: 'text', isRequired: false, optionsText: '' });
+  const [savingEdit, setSavingEdit] = useState(false);
+
   const [viewingSubmissionId, setViewingSubmissionId] = useState(null);
   const [recording, setRecording] = useState(false);
-  const [walkIn, setWalkIn] = useState({ name: '', phone: '', email: '', responses: {} });
+  const [walkIn, setWalkIn] = useState({ name: '', phone: '', email: '', address: '', dob: '', responses: {} });
   const [savingWalkIn, setSavingWalkIn] = useState(false);
 
   const selectedForm = forms.find((f) => f.id === selectedFormId) || null;
@@ -142,6 +149,19 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
     listConsultationSubmissions(selectedFormId).then((r) => r.success && setSubmissions(r.data));
     setViewingSubmissionId(null);
     setRecording(false);
+  }, [selectedFormId]);
+
+  // A walk-in recorded offline (see submitWalkIn below) is queued and shown
+  // right away as a local pendingSync placeholder. Once syncManager actually
+  // runs the RPC, refetch this form's submissions so the placeholder is
+  // replaced by the real, server-assigned record.
+  useEffect(() => {
+    if (!selectedFormId) return;
+    return syncManager.onSyncStateChange((state) => {
+      if (state.status === 'synced' && state.syncedCount > 0) {
+        listConsultationSubmissions(selectedFormId).then((r) => r.success && setSubmissions(r.data));
+      }
+    });
   }, [selectedFormId]);
 
   const createForm = async (e) => {
@@ -257,6 +277,42 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
     } else setError(result.error);
   };
 
+  // A field's label/type/options/required were previously only settable at
+  // creation — fixing a typo, or a wording change like this preset's
+  // "...previous surgeries/hospitalizations" growing a trailing "genetic
+  // conditions", meant deleting the field and re-adding it, which drops its
+  // field_key and orphans any past answers under it. This reuses the same
+  // saveConsultationField(id, ...) update path moveField already relies on.
+  const startEditField = (f) => {
+    setEditingFieldId(f.id);
+    setEditDraft({
+      label: f.field_type === 'section' ? bareSectionLabel(f.label) : f.label,
+      fieldType: f.field_type,
+      isRequired: !!f.is_required,
+      optionsText: (f.options || []).join(', ')
+    });
+  };
+
+  const cancelEditField = () => setEditingFieldId(null);
+
+  const submitEditField = async (e, f) => {
+    e.preventDefault();
+    if (!editDraft.label.trim()) return;
+    setSavingEdit(true);
+    const options = NEEDS_OPTIONS.has(editDraft.fieldType)
+      ? editDraft.optionsText.split(',').map((o) => o.trim()).filter(Boolean)
+      : null;
+    const result = await saveConsultationField({
+      id: f.id, label: editDraft.label.trim(), fieldType: editDraft.fieldType,
+      options, isRequired: editDraft.isRequired, sortOrder: f.sort_order
+    });
+    setSavingEdit(false);
+    if (result.success) {
+      setFields((current) => current.map((item) => (item.id === f.id ? result.data : item)));
+      setEditingFieldId(null);
+    } else setError(result.error);
+  };
+
   const removeField = async (field) => {
     const result = await deleteConsultationField(field.id);
     if (result.success) setFields((current) => current.filter((f) => f.id !== field.id));
@@ -312,7 +368,7 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
       `${businessName || 'Clinic'} — ${submission.patient_name}`,
       `<h1>${escapeHtml(businessName || 'Clinic')}</h1>
        <div class="subtitle">${escapeHtml(submission.form_name_snapshot || selectedForm?.name || 'Consultation form')}<br>
-       Patient: ${escapeHtml(submission.patient_name)}${submission.patient_phone ? ' · ' + escapeHtml(submission.patient_phone) : ''}${submission.patient_email ? ' · ' + escapeHtml(submission.patient_email) : ''}<br>
+       Patient: ${escapeHtml(submission.patient_name)}${submission.patient_phone ? ' · ' + escapeHtml(submission.patient_phone) : ''}${submission.patient_email ? ' · ' + escapeHtml(submission.patient_email) : ''}${submission.patient_dob ? ' · DOB ' + escapeHtml(submission.patient_dob) : ''}${submission.patient_address ? '<br>Address: ' + escapeHtml(submission.patient_address) : ''}<br>
        Submitted: ${escapeHtml(new Date(submission.created_at).toLocaleString())} (${submission.submitted_via === 'public_link' ? 'via public link' : 'recorded by staff'})</div>
        ${fieldsHtml}
        <div class="meta">Printed ${escapeHtml(new Date().toLocaleString())} · Powered by IcanEra</div>`
@@ -362,14 +418,48 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
     if (!selectedForm || !walkIn.name.trim()) return;
     setSavingWalkIn(true);
     setError('');
-    const result = await recordConsultationSubmission({
+
+    const payload = {
       formId: selectedForm.id, patientName: walkIn.name.trim(), patientPhone: walkIn.phone, patientEmail: walkIn.email,
-      responses: walkIn.responses
-    });
+      patientAddress: walkIn.address, patientDob: walkIn.dob || null, responses: walkIn.responses
+    };
+
+    // WhatsApp-style offline recording: a clinic filling this in with no
+    // connection (the whole point of a "walk-in" form) still gets an
+    // instant local record, queued through the same offline-action queue
+    // ICAN's transactions already use (see AuthContext.queueAction /
+    // syncManager.js) and synced automatically once back online.
+    if (!navigator.onLine) {
+      try {
+        await queueAction('consultation_form_submission', payload);
+        setSubmissions((current) => [{
+          id: `pending_${Date.now()}`,
+          form_id: selectedForm.id,
+          business_profile_id: businessProfileId,
+          patient_name: payload.patientName,
+          patient_phone: payload.patientPhone || null,
+          patient_email: payload.patientEmail || null,
+          patient_address: payload.patientAddress || null,
+          patient_dob: payload.patientDob || null,
+          responses: payload.responses,
+          submitted_via: 'staff',
+          created_at: new Date().toISOString(),
+          pendingSync: true,
+        }, ...current]);
+        setWalkIn({ name: '', phone: '', email: '', address: '', dob: '', responses: {} });
+        setRecording(false);
+      } catch (err) {
+        setError(err.message || 'Could not save this submission offline.');
+      }
+      setSavingWalkIn(false);
+      return;
+    }
+
+    const result = await recordConsultationSubmission(payload);
     setSavingWalkIn(false);
     if (!result.success) { setError(result.error); return; }
     setSubmissions((current) => [result.data, ...current]);
-    setWalkIn({ name: '', phone: '', email: '', responses: {} });
+    setWalkIn({ name: '', phone: '', email: '', address: '', dob: '', responses: {} });
     setRecording(false);
   };
 
@@ -556,8 +646,43 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
                         No fields yet — use a preset above, or add your own below.
                       </p>
                     )}
-                    {fields.map((f, index) => (
-                      f.field_type === 'section' ? (
+                    {fields.map((f, index) => {
+                      if (editingFieldId === f.id) {
+                        return (
+                          <form key={f.id} onSubmit={(e) => submitEditField(e, f)} className="space-y-2 rounded-xl border border-cyan-400/30 bg-cyan-400/10 p-3">
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              <input
+                                autoFocus required value={editDraft.label} onChange={(e) => setEditDraft((d) => ({ ...d, label: e.target.value }))}
+                                className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-white"
+                              />
+                              {editDraft.fieldType !== 'section' && (
+                                <select value={editDraft.fieldType} onChange={(e) => setEditDraft((d) => ({ ...d, fieldType: e.target.value }))} className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-white">
+                                  {FIELD_TYPES.filter(([v]) => v !== 'section').map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                                </select>
+                              )}
+                            </div>
+                            {NEEDS_OPTIONS.has(editDraft.fieldType) && (
+                              <input
+                                value={editDraft.optionsText} onChange={(e) => setEditDraft((d) => ({ ...d, optionsText: e.target.value }))}
+                                placeholder="Choices, comma-separated" className="w-full rounded-lg bg-slate-900 px-3 py-2 text-sm text-white"
+                              />
+                            )}
+                            {editDraft.fieldType !== 'section' && (
+                              <label className="flex items-center gap-2 text-xs text-slate-300">
+                                <input type="checkbox" checked={editDraft.isRequired} onChange={(e) => setEditDraft((d) => ({ ...d, isRequired: e.target.checked }))} />
+                                Required
+                              </label>
+                            )}
+                            <div className="flex gap-2">
+                              <button disabled={savingEdit || !editDraft.label.trim()} className="rounded-lg bg-cyan-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">
+                                {savingEdit ? 'Saving…' : 'Save'}
+                              </button>
+                              <button type="button" onClick={cancelEditField} className="rounded-lg border border-white/15 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/5">Cancel</button>
+                            </div>
+                          </form>
+                        );
+                      }
+                      return f.field_type === 'section' ? (
                         <div key={f.id} className="flex items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-400/5 px-3 py-2">
                           <div className="flex flex-col">
                             <button type="button" onClick={() => moveField(index, -1)} disabled={index === 0} className="text-slate-400 hover:text-white disabled:opacity-20"><ChevronUp className="h-3.5 w-3.5" /></button>
@@ -565,6 +690,7 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
                           </div>
                           <p className="min-w-0 flex-1 truncate text-sm font-bold uppercase tracking-wide text-emerald-200">{sectionDisplayLabel(fields, f)}</p>
                           <span className="rounded-full bg-emerald-400/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">Section</span>
+                          <button type="button" onClick={() => startEditField(f)} className="text-slate-300 hover:text-white"><Pencil className="h-3.5 w-3.5" /></button>
                           <button type="button" onClick={() => removeField(f)} className="text-red-400 hover:text-red-300"><Trash2 className="h-4 w-4" /></button>
                         </div>
                       ) : (
@@ -582,10 +708,11 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
                               {NEEDS_OPTIONS.has(f.field_type) && f.options?.length ? ` — ${f.options.join(', ')}` : ''}
                             </p>
                           </div>
+                          <button type="button" onClick={() => startEditField(f)} className="text-slate-300 hover:text-white"><Pencil className="h-3.5 w-3.5" /></button>
                           <button type="button" onClick={() => removeField(f)} className="text-red-400 hover:text-red-300"><Trash2 className="h-4 w-4" /></button>
                         </div>
-                      )
-                    ))}
+                      );
+                    })}
                   </div>
 
                   <form onSubmit={submitField} className="space-y-2 rounded-xl border border-white/10 bg-white/5 p-4">
@@ -636,6 +763,16 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
                         <input value={walkIn.phone} onChange={(e) => setWalkIn((w) => ({ ...w, phone: e.target.value }))} placeholder="Phone" className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-white" />
                         <input value={walkIn.email} onChange={(e) => setWalkIn((w) => ({ ...w, email: e.target.value }))} placeholder="Email" className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-white" />
                       </div>
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        <div>
+                          <label className="mb-1 block text-xs text-slate-400">Date of birth</label>
+                          <input type="date" value={walkIn.dob} onChange={(e) => setWalkIn((w) => ({ ...w, dob: e.target.value }))} className="w-full rounded-lg bg-slate-900 px-3 py-2 text-sm text-white" />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="mb-1 block text-xs text-slate-400">Address</label>
+                          <input value={walkIn.address} onChange={(e) => setWalkIn((w) => ({ ...w, address: e.target.value }))} className="w-full rounded-lg bg-slate-900 px-3 py-2 text-sm text-white" />
+                        </div>
+                      </div>
                       {(fields[0]?.field_type === 'section' ? fields.slice(1) : fields).map((f) => (
                         f.field_type === 'section' ? (
                           <p key={f.id} className="pt-2 text-xs font-bold uppercase tracking-wide text-cyan-300 border-t border-white/10">{sectionDisplayLabel(fields, f)}</p>
@@ -670,14 +807,19 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
                           <button type="button" onClick={() => setViewingSubmissionId(viewingSubmissionId === s.id ? null : s.id)} className="flex w-full items-center justify-between gap-3 text-left">
                             <div className="min-w-0">
                               <p className="truncate text-sm font-semibold text-white">{s.patient_name}</p>
-                              <p className="text-xs text-slate-400">{new Date(s.created_at).toLocaleString()} · {s.submitted_via === 'public_link' ? 'Public link' : 'Recorded by staff'}</p>
+                              <p className="text-xs text-slate-400">
+                                {new Date(s.created_at).toLocaleString()} · {s.submitted_via === 'public_link' ? 'Public link' : 'Recorded by staff'}
+                                {s.pendingSync && <span className="ml-1.5 text-amber-400">· Pending sync</span>}
+                              </p>
                             </div>
                             {viewingSubmissionId === s.id ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
                           </button>
                           {viewingSubmissionId === s.id && (
                             <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
-                              {(s.patient_phone || s.patient_email) && (
-                                <p className="text-xs text-slate-400">{[s.patient_phone, s.patient_email].filter(Boolean).join(' · ')}</p>
+                              {(s.patient_phone || s.patient_email || s.patient_dob || s.patient_address) && (
+                                <p className="text-xs text-slate-400">
+                                  {[s.patient_phone, s.patient_email, s.patient_dob ? `DOB ${s.patient_dob}` : null, s.patient_address].filter(Boolean).join(' · ')}
+                                </p>
                               )}
                               {submissionEntries(s, fields).map((entry) => (
                                 entry.isSection ? (

@@ -129,12 +129,14 @@ export const listAllConsultationSubmissions = async (businessProfileId) => {
   return { success: true, data: data || [] };
 };
 
-export const recordConsultationSubmission = async ({ formId, patientName, patientPhone, patientEmail, responses }) => {
+export const recordConsultationSubmission = async ({ formId, patientName, patientPhone, patientEmail, patientAddress, patientDob, responses }) => {
   const { data, error } = await supabase.rpc('cmms_record_consultation_submission', {
     p_form_id: formId,
     p_patient_name: patientName,
     p_patient_phone: patientPhone || null,
     p_patient_email: patientEmail || null,
+    p_patient_address: patientAddress || null,
+    p_patient_dob: patientDob || null,
     p_responses: responses || {}
   });
   if (error) return { success: false, error: error.message };
@@ -151,12 +153,14 @@ export const getPublicConsultationForm = async (shareToken) => {
   return { success: true, data: data || null };
 };
 
-export const submitPublicConsultationForm = async (shareToken, { patientName, patientPhone, patientEmail, responses }) => {
+export const submitPublicConsultationForm = async (shareToken, { patientName, patientPhone, patientEmail, patientAddress, patientDob, responses }) => {
   const { data, error } = await supabase.rpc('cmms_submit_public_consultation_form', {
     p_share_token: shareToken,
     p_patient_name: patientName,
     p_patient_phone: patientPhone || null,
     p_patient_email: patientEmail || null,
+    p_patient_address: patientAddress || null,
+    p_patient_dob: patientDob || null,
     p_responses: responses || {}
   });
   if (error) return { success: false, error: error.message };

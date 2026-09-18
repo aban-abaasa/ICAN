@@ -64,13 +64,14 @@ export const fetchMessages = async (conversationId) => {
   return data || [];
 };
 
-export const sendMessage = async (conversationId, { senderRole, senderName, body, attachment }) => {
+export const sendMessage = async (conversationId, { senderRole, senderName, senderAvatarUrl, body, attachment }) => {
   const { data, error } = await supabase
     .from('chat_messages')
     .insert({
       conversation_id: conversationId,
       sender_role: senderRole,
       sender_name: senderName || null,
+      sender_avatar_url: senderAvatarUrl || null,
       body,
       attachment_url: attachment?.url || null,
       attachment_type: attachment?.type || null,
@@ -161,7 +162,7 @@ export const resolveChatIdentity = async () => {
 
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id, full_name, email')
+      .select('id, full_name, email, avatar_url')
       .eq('id', user.id)
       .maybeSingle();
 
@@ -173,6 +174,10 @@ export const resolveChatIdentity = async () => {
       name: profile.full_name || profile.email || 'User',
       email: profile.email || user.email || '',
       role: 'user',
+      // Stored as-is — often an r2:// key (see r2StorageService.js), which
+      // other apps can't render directly and this app must resolve on the
+      // read side (resolveMediaValues) before use, never here at the source.
+      avatarUrl: profile.avatar_url || null,
     };
   } catch {
     return null;

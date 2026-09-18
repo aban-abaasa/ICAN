@@ -89,6 +89,19 @@ const consultationFormShareMatch = window.location.pathname.match(/^\/consultati
 const lazyWithReloadOnChunkFailure = (importer) => React.lazy(() =>
   importer().catch(async (error) => {
     const reloadedKey = 'ican-chunk-reload-attempted';
+    // Offline, this chunk failure means the file simply was never cached
+    // (e.g. a deploy shipped a new hashed chunk name between the service
+    // worker activating and this device's next *online* visit) — a network
+    // fetch can't succeed either way. Unregistering the service worker and
+    // wiping every cache, as the online path below does, would destroy the
+    // one thing still letting the app open offline at all: turning "one
+    // chunk missing" into "nothing works offline, ever, until back online."
+    // Reloading into that state is exactly what produces Chrome's own
+    // "No internet" page instead of the app shell. Let it surface as a
+    // normal render error instead and leave the cache/service worker alone.
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      throw error;
+    }
     if (sessionStorage.getItem(reloadedKey)) {
       throw error; // Already retried once this session — a real error, not a stale cache.
     }

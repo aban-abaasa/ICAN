@@ -12,7 +12,7 @@ export const ORIGIN_APP = 'ican';
 
 // authId = auth.uid(), obtained via supabase.auth.getUser() -> data.user.id.
 // NOT any local profiles.id — landing_messages.user_id references auth.users(id) directly.
-export const createLandingMessage = async ({ name, email, company, message, authId, isPublic, attachment }) => {
+export const createLandingMessage = async ({ name, email, company, message, authId, isPublic, attachment, senderAvatarUrl }) => {
   const { data, error } = await supabase.from('landing_messages').insert({
     name: name || null,
     email: email || null,
@@ -25,12 +25,13 @@ export const createLandingMessage = async ({ name, email, company, message, auth
     attachment_url: attachment?.url || null,
     attachment_type: attachment?.type || null,
     attachment_name: attachment?.name || null,
+    sender_avatar_url: senderAvatarUrl || null,
   }).select().single();
   if (error) throw error;
   return data;
 };
 
-export const replyToLandingMessage = async ({ parentId, name, email, authId, message, attachment }) => {
+export const replyToLandingMessage = async ({ parentId, name, email, authId, message, attachment, senderAvatarUrl }) => {
   const { data, error } = await supabase.from('landing_messages').insert({
     parent_id: parentId,
     name: name || null,
@@ -43,6 +44,7 @@ export const replyToLandingMessage = async ({ parentId, name, email, authId, mes
     attachment_url: attachment?.url || null,
     attachment_type: attachment?.type || null,
     attachment_name: attachment?.name || null,
+    sender_avatar_url: senderAvatarUrl || null,
   }).select().single();
   if (error) throw error;
   return data;

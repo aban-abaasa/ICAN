@@ -109,7 +109,7 @@ const printSubmittedAnswers = (form, patient, responses) => {
     .section-heading:first-of-type{margin-top:4px}
     @media print{body{margin:18px}}
   </style></head><body><h1>${escapeHtml(form.businessName || 'Clinic')}</h1>
-  <div class="subtitle">${escapeHtml(form.formName)}<br>Patient: ${escapeHtml(patient.name)}${patient.phone ? ' · ' + escapeHtml(patient.phone) : ''}<br>Submitted: ${escapeHtml(new Date().toLocaleString())}</div>
+  <div class="subtitle">${escapeHtml(form.formName)}<br>Patient: ${escapeHtml(patient.name)}${patient.phone ? ' · ' + escapeHtml(patient.phone) : ''}${patient.dob ? ' · DOB ' + escapeHtml(patient.dob) : ''}${patient.address ? '<br>Address: ' + escapeHtml(patient.address) : ''}<br>Submitted: ${escapeHtml(new Date().toLocaleString())}</div>
   ${rows}<script>window.onload=()=>window.print()</script></body></html>`);
   printWindow.document.close();
 };
@@ -166,7 +166,7 @@ const draftStorageKey = (shareToken) => `icanera-consultation-draft-${shareToken
 const PublicConsultationFormViewer = ({ shareToken }) => {
   const [status, setStatus] = useState('loading'); // loading | invalid | ready | submitting | submitted
   const [form, setForm] = useState(null);
-  const [patient, setPatient] = useState({ name: '', phone: '', email: '' });
+  const [patient, setPatient] = useState({ name: '', phone: '', email: '', address: '', dob: '' });
   const [responses, setResponses] = useState({});
   const [error, setError] = useState('');
   const [draftRestored, setDraftRestored] = useState(false);
@@ -218,7 +218,8 @@ const PublicConsultationFormViewer = ({ shareToken }) => {
     setError('');
     setStatus('submitting');
     const result = await submitPublicConsultationForm(shareToken, {
-      patientName: patient.name, patientPhone: patient.phone, patientEmail: patient.email, responses
+      patientName: patient.name, patientPhone: patient.phone, patientEmail: patient.email,
+      patientAddress: patient.address, patientDob: patient.dob, responses
     });
     if (!result.success) {
       setError(result.error || 'Could not submit this form. Please try again.');
@@ -313,6 +314,14 @@ const PublicConsultationFormViewer = ({ shareToken }) => {
             <div>
               <label className="block text-xs font-semibold mb-1 cf-text-muted">Email</label>
               <input type="email" value={patient.email} onChange={(e) => setPatient((p) => ({ ...p, email: e.target.value }))} className="cf-input w-full rounded-xl px-4 py-2.5 focus:outline-none" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-1 cf-text-muted">Date of birth</label>
+              <input type="date" value={patient.dob} onChange={(e) => setPatient((p) => ({ ...p, dob: e.target.value }))} className="cf-input w-full rounded-xl px-4 py-2.5 focus:outline-none" />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold mb-1 cf-text-muted">Address</label>
+              <input value={patient.address} onChange={(e) => setPatient((p) => ({ ...p, address: e.target.value }))} className="cf-input w-full rounded-xl px-4 py-2.5 focus:outline-none" />
             </div>
           </div>
 

@@ -61,7 +61,7 @@ export default function CMMSClinicalRecords({ businessProfileId, businessName })
     return records.filter((r) => {
       if (formFilter !== 'all' && r.form_id !== formFilter) return false;
       if (!q) return true;
-      return [r.patient_name, r.patient_phone, r.patient_email, r.form_name_snapshot]
+      return [r.patient_name, r.patient_phone, r.patient_email, r.patient_address, r.form_name_snapshot]
         .some((v) => (v || '').toLowerCase().includes(q));
     });
   }, [records, search, formFilter]);
@@ -89,7 +89,7 @@ export default function CMMSClinicalRecords({ businessProfileId, businessName })
       `${businessName || 'Clinic'} — ${record.patient_name}`,
       `<h1>${escapeHtml(businessName || 'Clinic')}</h1>
        <div class="subtitle">${escapeHtml(record.form_name_snapshot || 'Consultation form')}<br>
-       Patient: ${escapeHtml(record.patient_name)}${record.patient_phone ? ' · ' + escapeHtml(record.patient_phone) : ''}${record.patient_email ? ' · ' + escapeHtml(record.patient_email) : ''}<br>
+       Patient: ${escapeHtml(record.patient_name)}${record.patient_phone ? ' · ' + escapeHtml(record.patient_phone) : ''}${record.patient_email ? ' · ' + escapeHtml(record.patient_email) : ''}${record.patient_dob ? ' · DOB ' + escapeHtml(record.patient_dob) : ''}${record.patient_address ? '<br>Address: ' + escapeHtml(record.patient_address) : ''}<br>
        Submitted: ${escapeHtml(new Date(record.created_at).toLocaleString())} (${record.submitted_via === 'public_link' ? 'via public link' : 'recorded by staff'})</div>
        ${fieldsHtml}
        <div class="meta">Printed ${escapeHtml(new Date().toLocaleString())} · Powered by IcanEra</div>`
@@ -161,8 +161,10 @@ export default function CMMSClinicalRecords({ businessProfileId, businessName })
 
               {expandedId === record.id && (
                 <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
-                  {(record.patient_phone || record.patient_email) && (
-                    <p className="text-xs text-slate-400">{[record.patient_phone, record.patient_email].filter(Boolean).join(' · ')}</p>
+                  {(record.patient_phone || record.patient_email || record.patient_dob || record.patient_address) && (
+                    <p className="text-xs text-slate-400">
+                      {[record.patient_phone, record.patient_email, record.patient_dob ? `DOB ${record.patient_dob}` : null, record.patient_address].filter(Boolean).join(' · ')}
+                    </p>
                   )}
                   {loadingFieldsFor === record.form_id ? (
                     <div className="flex items-center gap-2 text-sm text-slate-400"><Loader className="h-4 w-4 animate-spin" /> Loading answers…</div>

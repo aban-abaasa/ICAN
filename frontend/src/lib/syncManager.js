@@ -237,6 +237,10 @@ export class SyncManager {
           return await this.syncProfileUpdate(action, supabase);
         case 'inventory':
           return await this.syncInventory(action, supabase);
+        case 'consultation_form_submission':
+          return await this.syncConsultationFormSubmission(action, supabase);
+        case 'chat_message':
+          return await this.syncChatMessage(action, supabase);
         default:
           console.warn('[SyncManager] Unknown action type:', action.type);
           return false;
@@ -396,6 +400,62 @@ export class SyncManager {
 
     if (error) {
       console.error('[SyncManager] Inventory sync error:', error);
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Sync a CMMS Clinical Operations consultation form recorded offline (a
+   * walk-in patient filled/answered while there was no connection). Goes
+   * through the same RPC the online "record a walk-in submission" path uses
+   * (cmms_record_consultation_submission — membership-checked server-side),
+   * not a raw table insert, so offline submissions get identical validation
+   * and RLS treatment as online ones.
+   */
+  async syncConsultationFormSubmission(action, supabase) {
+    const d = action.data;
+    const { data, error } = await supabase.rpc('cmms_record_consultation_submission', {
+      p_form_id: d.formId,
+      p_patient_name: d.patientName,
+      p_patient_phone: d.patientPhone || null,
+      p_patient_email: d.patientEmail || null,
+      p_patient_address: d.patientAddress || null,
+      p_patient_dob: d.patientDob || null,
+      p_responses: d.responses || {}
+    });
+
+    if (error) {
+      console.error('[SyncManager] Consultation form submission sync error:', error.message);
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Sync a chat message typed while offline (support channel only — see
+   * ChatWidget.jsx's deliverMessage). Same insert shape as
+   * chatService.sendMessage's online path.
+   */
+  async syncChatMessage(action, supabase) {
+    const d = action.data;
+    const { error } = await supabase
+      .from('chat_messages')
+      .insert({
+        conversation_id: d.conversationId,
+        sender_role: d.senderRole,
+        sender_name: d.senderName || null,
+        sender_avatar_url: d.senderAvatarUrl || null,
+        body: d.body,
+        attachment_url: d.attachment?.url || null,
+        attachment_type: d.attachment?.type || null,
+        attachment_name: d.attachment?.name || null,
+      });
+
+    if (error) {
+      console.error('[SyncManager] Chat message sync error:', error.message);
       return false;
     }
 

@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MessageCircle, X, Send, Headphones, Globe, ThumbsUp, Briefcase, Shield, ArrowLeft, Radio, Expand, Minimize, GripVertical, Mic, Square, Trash2, Loader2, Phone, Video, Image as ImageIcon } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
+import { syncManager } from '../lib/syncManager';
 import VoiceNotePlayer from './voice/VoiceNotePlayer';
 import VoiceNoteRetentionPrompt from './voice/VoiceNoteRetentionPrompt';
 import CallDock from './calls/CallDock';
@@ -18,6 +20,7 @@ import { getAudioNotificationService } from '../services/audioNotificationServic
 import { getCustomRingtone, setCustomRingtone } from '../services/ringtoneService';
 import { Linkify } from '../utils/linkify';
 import { uploadChatImage } from '../services/chatAttachmentService';
+import { isR2Key, resolveMediaValue } from '../services/r2StorageService';
 import {
   resolveChatIdentity,
   isDeveloperSession,
@@ -103,11 +106,33 @@ const initialsFor = (name) => {
   const parts = clean.split(/\s+/).filter(Boolean);
   return parts.length === 1 ? parts[0].slice(0, 2).toUpperCase() : (parts[0][0] + parts[1][0]).toUpperCase();
 };
-const ContactAvatar = ({ id, name, broadcast = false, size = 'h-8 w-8 text-xs' }) => (
-  <div className={`${size} ${broadcast ? 'bg-gradient-to-br from-indigo-500 to-purple-600' : hueForId(id)} flex flex-shrink-0 items-center justify-center rounded-full font-bold text-white`}>
-    {broadcast ? <Radio className="h-3.5 w-3.5" /> : initialsFor(name)}
-  </div>
-);
+// `url` is the sender's raw stored avatar — a plain public URL (renders
+// as-is), an r2:// key (this app resolves it; another app can't, so it
+// falls back to initials there instead of breaking), or absent entirely
+// (guest). onError also falls back to initials, so a deleted/broken image
+// never leaves a blank hole in the message list.
+const ContactAvatar = ({ id, name, url, broadcast = false, size = 'h-8 w-8 text-xs' }) => {
+  const [resolvedUrl, setResolvedUrl] = useState(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+    if (!url) { setResolvedUrl(null); return; }
+    if (!isR2Key(url)) { setResolvedUrl(url); return; }
+    let cancelled = false;
+    resolveMediaValue(url).then((resolved) => { if (!cancelled) setResolvedUrl(resolved); });
+    return () => { cancelled = true; };
+  }, [url]);
+
+  if (!broadcast && resolvedUrl && !failed) {
+    return <img src={resolvedUrl} alt="" onError={() => setFailed(true)} className={`${size} flex-shrink-0 rounded-full object-cover`} />;
+  }
+  return (
+    <div className={`${size} ${broadcast ? 'bg-gradient-to-br from-indigo-500 to-purple-600' : hueForId(id)} flex flex-shrink-0 items-center justify-center rounded-full font-bold text-white`}>
+      {broadcast ? <Radio className="h-3.5 w-3.5" /> : initialsFor(name)}
+    </div>
+  );
+};
 
 const getSavedPosition = (hasBottomNav) => {
   try {
@@ -120,6 +145,7 @@ const getSavedPosition = (hasBottomNav) => {
 const ChatWidget = ({ hasBottomNav = false }) => {
   const { actualTheme } = useTheme();
   const dark = actualTheme === 'dark';
+  const { queueAction } = useAuth();
 
   const [identity, setIdentity] = useState(null);
   const [identityReady, setIdentityReady] = useState(false);
@@ -155,6 +181,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
   const [cmmsConversation, setCmmsConversation] = useState([]);
   const [cmmsConversationLoading, setCmmsConversationLoading] = useState(false);
   const [cmmsComposeError, setCmmsComposeError] = useState('');
+  const [supportComposeError, setSupportComposeError] = useState('');
 
   // Group ("call all members") calling opens the same full-mesh boardroom
   // engine as TrustSystem's "Boardroom" button (see LiveBoardroom.jsx),
@@ -427,6 +454,22 @@ const ChatWidget = ({ hasBottomNav = false }) => {
     return () => { cancelled = true; unsubMessages(); unsubConversation(); };
   }, [supportConvId]);
 
+  // A message typed offline is queued (see the 'support' branch of
+  // deliverMessage below) and shown immediately as a local pendingSync
+  // placeholder. Once syncManager actually inserts it, refetch instead of
+  // trying to patch the placeholder in place -- simplest way to both drop
+  // the fake id and pick up the real row in one step, and it doesn't depend
+  // on the realtime subscription above reconnecting promptly after a spell
+  // offline.
+  useEffect(() => {
+    if (!supportConvId) return;
+    return syncManager.onSyncStateChange((state) => {
+      if (state.status === 'synced' && state.syncedCount > 0) {
+        fetchMessages(supportConvId).then(setSupportMessages);
+      }
+    });
+  }, [supportConvId]);
+
   useEffect(() => {
     if (hidden) return;
     let cancelled = false;
@@ -672,8 +715,29 @@ const ChatWidget = ({ hasBottomNav = false }) => {
     }
   }, [open, channel, communityLive.liveStreams, communityLive.role]);
 
+  // Smart auto-scroll: jump to the newest message the moment the widget
+  // opens or you switch channel/thread/contact (you always want to land on
+  // the latest message there), but once you've scrolled up to read older
+  // messages, a new one arriving shouldn't yank you back down — only
+  // re-pin to the bottom if you were already near it. isNearBottomRef is
+  // updated by the onScroll handler below, not by this effect, since it
+  // needs to reflect where you were BEFORE the new content was appended.
+  const isNearBottomRef = useRef(true);
+  const handleListScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  };
+
   useEffect(() => {
     if (open && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      isNearBottomRef.current = true;
+    }
+  }, [open, channel, selectedThreadId, cmmsActiveContactId, trustActiveContactId]);
+
+  useEffect(() => {
+    if (open && scrollRef.current && isNearBottomRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
     // communityLive.liveStreams: the live card(s) now render at the bottom
@@ -681,7 +745,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
     // CommunityLiveBanner) — scroll down to reveal one the instant it
     // appears (or disappears) instead of leaving it below the fold until
     // the visitor happens to scroll.
-  }, [supportMessages, communityThreads, selectedThreadId, cmmsConversation, cmmsActiveContactId, trustMessages, trustActiveContactId, open, channel, communityLive.liveStreams]);
+  }, [supportMessages, communityThreads, cmmsConversation, trustMessages, communityLive.liveStreams]);
 
   const markChannelRead = (ch) => {
     if (ch === 'support') {
@@ -761,9 +825,10 @@ const ChatWidget = ({ hasBottomNav = false }) => {
   // stage growing its own separate chat storage.
   const postCommunityMessage = async (body, who, parentId, attachment = null) => {
     const senderAuthId = who.isGuest ? null : who.authId;
+    const senderAvatarUrl = who.isGuest ? null : (who.avatarUrl || null);
     const created = parentId
-      ? await replyToLandingMessage({ parentId, name: who.name, email: who.email, authId: senderAuthId, message: body, attachment })
-      : await createLandingMessage({ name: who.name, email: who.email, authId: senderAuthId, message: body, isPublic: true, attachment });
+      ? await replyToLandingMessage({ parentId, name: who.name, email: who.email, authId: senderAuthId, message: body, attachment, senderAvatarUrl })
+      : await createLandingMessage({ name: who.name, email: who.email, authId: senderAuthId, message: body, isPublic: true, attachment, senderAvatarUrl });
     setCommunityThreads(await fetchPublicThreads(50, { authId: senderAuthId, guestKey: guestLikeKey }));
     return created;
   };
@@ -842,6 +907,14 @@ const ChatWidget = ({ hasBottomNav = false }) => {
         const key = who.isGuest ? 'guest' : `user_${who.userId}`;
         let convId = supportConvId;
         if (!convId) {
+          // Starting a brand-new conversation needs a server-generated id --
+          // there's nothing to queue offline for a conversation that doesn't
+          // exist yet. Once the first message has gone through online,
+          // convId is cached (storeConversationId) and every later reply
+          // can be typed and queued offline like any other message below.
+          if (!navigator.onLine) {
+            throw new Error("Connect to the internet to start a new support conversation. After that, you can reply offline and it'll send automatically.");
+          }
           const conv = await createConversation({
             name: who.name,
             email: who.email,
@@ -855,7 +928,33 @@ const ChatWidget = ({ hasBottomNav = false }) => {
           setSupportConvId(convId);
         }
         const senderRole = who.isGuest ? 'guest' : (who.role || 'guest');
-        const msg = await sendMessage(convId, { senderRole, senderName: who.name, body, attachment });
+        const senderAvatarUrl = who.isGuest ? null : (who.avatarUrl || null);
+
+        if (!navigator.onLine) {
+          // WhatsApp-style offline send: queue the real insert for
+          // syncManager (see 'chat_message' in syncManager.js) and show the
+          // message immediately, marked pending, exactly like queued
+          // transactions elsewhere in the app.
+          const pendingId = `pending_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+          const pendingMsg = {
+            id: pendingId,
+            conversation_id: convId,
+            sender_role: senderRole,
+            sender_name: who.name || null,
+            sender_avatar_url: senderAvatarUrl,
+            body,
+            attachment_url: attachment?.url || null,
+            attachment_type: attachment?.type || null,
+            attachment_name: attachment?.name || null,
+            created_at: new Date().toISOString(),
+            pendingSync: true,
+          };
+          await queueAction('chat_message', { conversationId: convId, senderRole, senderName: who.name, senderAvatarUrl, body, attachment });
+          setSupportMessages((prev) => dedupe(prev, pendingMsg));
+          return [{ table: 'chat_messages', id: pendingId, pending: true }];
+        }
+
+        const msg = await sendMessage(convId, { senderRole, senderName: who.name, senderAvatarUrl, body, attachment });
         setSupportMessages((prev) => dedupe(prev, msg));
         return msg?.id ? [{ table: 'chat_messages', id: msg.id }] : [];
       }
@@ -893,14 +992,17 @@ const ChatWidget = ({ hasBottomNav = false }) => {
     if (!who) return;
 
     setSending(true);
+    isNearBottomRef.current = true;
     try {
       await deliverMessage(body, who, canAttachImage ? pendingAttachment : null);
       setDraft('');
       setPendingAttachment(null);
+      setSupportComposeError('');
     } catch (err) {
       console.error('[ChatWidget] send failed:', err);
       if (channel === 'cmms') setCmmsComposeError(err.message || 'Unable to send CMMS message.');
       if (channel === 'trust') setTrustComposeError(err.message || 'Unable to send Trust & SACCO message.');
+      if (channel === 'support') setSupportComposeError(err.message || 'Unable to send message.');
     } finally {
       setSending(false);
     }
@@ -992,6 +1094,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
     if (!who) return;
 
     setVoicePhase('uploading');
+    isNearBottomRef.current = true;
     const result = await uploadVoiceNote(blob);
     if (result.success) {
       try {
@@ -1144,7 +1247,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
             )}
           </div>
 
-          <div ref={scrollRef} className={`flex-1 space-y-2 overflow-y-auto px-3 py-3 ${dark ? 'bg-slate-950' : 'bg-slate-50'}`}>
+          <div ref={scrollRef} onScroll={handleListScroll} className={`flex-1 space-y-2 overflow-y-auto px-3 py-3 ${dark ? 'bg-slate-950' : 'bg-slate-50'}`}>
             {channel === 'cmms' ? (
               cmmsLoading && cmmsMessages.length === 0 && cmmsTasks.length === 0 && cmmsRecipients.length === 0 ? (
                 <p className={`mt-6 text-center text-xs ${dark ? 'text-slate-500' : 'text-slate-400'}`}>Loading your CMMS work feed...</p>
@@ -1349,23 +1452,26 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                       ← Back to Community
                     </button>
                   </div>
-                  <div className={`rounded-xl px-3 py-2 text-sm ${dark ? 'bg-white/5 text-slate-100' : 'bg-white text-slate-800 border border-slate-200'}`}>
-                    <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-400">
-                      {selectedThread.name || 'Website visitor'}
-                    </p>
-                    {selectedThread.attachment_url && (
-                      <img src={selectedThread.attachment_url} alt="" className="mb-1.5 max-h-52 rounded-lg object-cover" />
-                    )}
-                    {selectedThread.message && <MessageBody text={selectedThread.message} className="whitespace-pre-wrap break-words" tint="cyan" />}
-                    <button
-                      onClick={() => handleLike(selectedThread.id)}
-                      disabled={selectedThread.likedByMe}
-                      className={`mt-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                        selectedThread.likedByMe ? 'text-indigo-400' : 'opacity-70 hover:opacity-100'
-                      }`}
-                    >
-                      <ThumbsUp className="h-3 w-3" /> {selectedThread.likeCount || 0}
-                    </button>
+                  <div className="flex items-start gap-2">
+                    <ContactAvatar id={selectedThread.user_id || selectedThread.email || selectedThread.name} name={selectedThread.name} url={selectedThread.sender_avatar_url} size="mt-0.5 h-7 w-7 text-[10px]" />
+                    <div className={`min-w-0 flex-1 rounded-xl px-3 py-2 text-sm ${dark ? 'bg-white/5 text-slate-100' : 'bg-white text-slate-800 border border-slate-200'}`}>
+                      <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-400">
+                        {selectedThread.name || 'Website visitor'}
+                      </p>
+                      {selectedThread.attachment_url && (
+                        <img src={selectedThread.attachment_url} alt="" className="mb-1.5 max-h-52 rounded-lg object-cover" />
+                      )}
+                      {selectedThread.message && <MessageBody text={selectedThread.message} className="whitespace-pre-wrap break-words" tint="cyan" />}
+                      <button
+                        onClick={() => handleLike(selectedThread.id)}
+                        disabled={selectedThread.likedByMe}
+                        className={`mt-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                          selectedThread.likedByMe ? 'text-indigo-400' : 'opacity-70 hover:opacity-100'
+                        }`}
+                      >
+                        <ThumbsUp className="h-3 w-3" /> {selectedThread.likeCount || 0}
+                      </button>
+                    </div>
                   </div>
                   {selectedAuthorEarlierMessages.length > 0 && (
                     <div className="mt-2">
@@ -1395,31 +1501,33 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                     </div>
                   )}
                   {selectedThread.replies.map((r) => (
-                    <div
-                      key={r.id}
-                      className={`ml-4 mt-2 rounded-xl px-3 py-2 text-sm ${
-                        r.sender_role === 'dev'
-                          ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white'
-                          : dark ? 'bg-white/5 text-slate-100' : 'bg-white text-slate-800 border border-slate-200'
-                      }`}
-                    >
-                      <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide opacity-80">
-                        {r.sender_role === 'dev' ? 'IcanEra Team' : (r.name || 'Website visitor')}
-                        {r.reward_reason && ' · 🪙'}
-                      </p>
-                      {r.attachment_url && (
-                        <img src={r.attachment_url} alt="" className="mb-1.5 max-h-52 rounded-lg object-cover" />
-                      )}
-                      {r.message && <MessageBody text={r.message} className="whitespace-pre-wrap break-words" tint={r.sender_role === 'dev' ? 'white' : 'cyan'} />}
-                      <button
-                        onClick={() => handleLike(r.id)}
-                        disabled={r.likedByMe}
-                        className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                          r.likedByMe ? 'text-indigo-300' : 'opacity-70 hover:opacity-100'
+                    <div key={r.id} className="ml-4 mt-2 flex items-start gap-2">
+                      <ContactAvatar id={r.user_id || r.email || r.name} name={r.sender_role === 'dev' ? 'IcanEra Team' : r.name} url={r.sender_avatar_url} size="mt-0.5 h-6 w-6 text-[9px]" />
+                      <div
+                        className={`min-w-0 flex-1 rounded-xl px-3 py-2 text-sm ${
+                          r.sender_role === 'dev'
+                            ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white'
+                            : dark ? 'bg-white/5 text-slate-100' : 'bg-white text-slate-800 border border-slate-200'
                         }`}
                       >
-                        <ThumbsUp className="h-3 w-3" /> {r.likeCount || 0}
-                      </button>
+                        <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide opacity-80">
+                          {r.sender_role === 'dev' ? 'IcanEra Team' : (r.name || 'Website visitor')}
+                          {r.reward_reason && ' · 🪙'}
+                        </p>
+                        {r.attachment_url && (
+                          <img src={r.attachment_url} alt="" className="mb-1.5 max-h-52 rounded-lg object-cover" />
+                        )}
+                        {r.message && <MessageBody text={r.message} className="whitespace-pre-wrap break-words" tint={r.sender_role === 'dev' ? 'white' : 'cyan'} />}
+                        <button
+                          onClick={() => handleLike(r.id)}
+                          disabled={r.likedByMe}
+                          className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                            r.likedByMe ? 'text-indigo-300' : 'opacity-70 hover:opacity-100'
+                          }`}
+                        >
+                          <ThumbsUp className="h-3 w-3" /> {r.likeCount || 0}
+                        </button>
+                      </div>
                     </div>
                   ))}
                   {selectedThread.replies.length === 0 && (
@@ -1441,18 +1549,23 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                       dark ? 'border-slate-700/50 bg-white/5 hover:bg-white/10 text-slate-100' : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-800'
                     }`}
                   >
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-400">
-                      {t.name || 'Website visitor'}
-                    </p>
-                    <div className="mt-0.5 flex items-start gap-2">
-                      {t.attachment_url && (
-                        <img src={t.attachment_url} alt="" className="h-8 w-8 flex-shrink-0 rounded object-cover" />
-                      )}
-                      <p className="line-clamp-2 whitespace-pre-wrap break-words">
-                        {isVoiceNoteBody(t.message) ? (
-                          <span className="inline-flex items-center gap-1 text-cyan-400"><Mic className="h-3 w-3" /> Voice message</span>
-                        ) : (t.message || (t.attachment_url ? 'Photo' : ''))}
-                      </p>
+                    <div className="flex items-start gap-2">
+                      <ContactAvatar id={t.user_id || t.email || t.name} name={t.name} url={t.sender_avatar_url} size="mt-0.5 h-7 w-7 text-[10px]" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-400">
+                          {t.name || 'Website visitor'}
+                        </p>
+                        <div className="mt-0.5 flex items-start gap-2">
+                          {t.attachment_url && (
+                            <img src={t.attachment_url} alt="" className="h-8 w-8 flex-shrink-0 rounded object-cover" />
+                          )}
+                          <p className="line-clamp-2 whitespace-pre-wrap break-words">
+                            {isVoiceNoteBody(t.message) ? (
+                              <span className="inline-flex items-center gap-1 text-cyan-400"><Mic className="h-3 w-3" /> Voice message</span>
+                            ) : (t.message || (t.attachment_url ? 'Photo' : ''))}
+                          </p>
+                        </div>
+                      </div>
                     </div>
                     {(t.replies.length > 0 || earlier.length > 0) && (
                       <p className={`mt-1 text-[10px] ${dark ? 'text-slate-500' : 'text-slate-400'}`}>
@@ -1479,7 +1592,8 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                 {supportMessages.map((m) => {
                   const isMe = m.sender_role !== 'dev';
                   return (
-                    <div key={m.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                    <div key={m.id} className={`flex items-end gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                      {!isMe && <ContactAvatar id="team" name="Team" url={m.sender_avatar_url} size="h-6 w-6 text-[9px]" />}
                       <div
                         className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
                           isMe
@@ -1492,6 +1606,11 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                           <img src={m.attachment_url} alt="" className="mb-1.5 max-h-52 rounded-lg object-cover" />
                         )}
                         {m.body && <MessageBody text={m.body} className="whitespace-pre-wrap break-words" tint={isMe ? 'white' : 'cyan'} />}
+                        {m.pendingSync && (
+                          <p className={`mt-1 text-[10px] ${isMe ? 'text-white/70' : dark ? 'text-slate-400' : 'text-slate-500'}`}>
+                            Sending… waiting for connection
+                          </p>
+                        )}
                       </div>
                     </div>
                   );
@@ -1533,6 +1652,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
             <div className={`border-t px-3 py-3 ${dark ? 'border-slate-700/50' : 'border-slate-200'}`}>
               {(cmmsComposeError && channel === 'cmms') && <p className="mb-2 text-[11px] text-red-400">{cmmsComposeError}</p>}
               {(trustComposeError && channel === 'trust') && <p className="mb-2 text-[11px] text-red-400">{trustComposeError}</p>}
+              {(supportComposeError && channel === 'support') && <p className="mb-2 text-[11px] text-red-400">{supportComposeError}</p>}
               {voiceError && <p className="mb-2 text-[11px] text-red-400">{voiceError}</p>}
               {channel === 'community' && selectedThread && (
                 <div className={`mb-2 flex items-center justify-between gap-2 text-[11px] ${dark ? 'text-indigo-400' : 'text-indigo-600'}`}>
