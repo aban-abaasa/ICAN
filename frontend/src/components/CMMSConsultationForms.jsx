@@ -628,14 +628,17 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
                   ) : (
                     <form onSubmit={submitWalkIn} className="space-y-3 rounded-xl border border-white/10 bg-white/5 p-4">
                       <p className="text-sm font-semibold text-white">Record this consultation for a patient in front of you</p>
+                      {fields[0]?.field_type === 'section' && (
+                        <p className="text-xs font-bold uppercase tracking-wide text-cyan-300">{sectionDisplayLabel(fields, fields[0])}</p>
+                      )}
                       <div className="grid gap-2 sm:grid-cols-3">
                         <input required value={walkIn.name} onChange={(e) => setWalkIn((w) => ({ ...w, name: e.target.value }))} placeholder="Patient name *" className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-white" />
                         <input value={walkIn.phone} onChange={(e) => setWalkIn((w) => ({ ...w, phone: e.target.value }))} placeholder="Phone" className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-white" />
                         <input value={walkIn.email} onChange={(e) => setWalkIn((w) => ({ ...w, email: e.target.value }))} placeholder="Email" className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-white" />
                       </div>
-                      {fields.map((f) => (
+                      {(fields[0]?.field_type === 'section' ? fields.slice(1) : fields).map((f) => (
                         f.field_type === 'section' ? (
-                          <p key={f.id} className="pt-2 text-xs font-bold uppercase tracking-wide text-cyan-300 border-t border-white/10 first:border-t-0 first:pt-0">{sectionDisplayLabel(fields, f)}</p>
+                          <p key={f.id} className="pt-2 text-xs font-bold uppercase tracking-wide text-cyan-300 border-t border-white/10">{sectionDisplayLabel(fields, f)}</p>
                         ) : (
                           <div key={f.id}>
                             <label className="mb-1 block text-xs text-slate-400">{f.label}{f.is_required && <span className="text-red-400"> *</span>}</label>

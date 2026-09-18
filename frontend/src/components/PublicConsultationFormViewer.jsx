@@ -226,6 +226,8 @@ const PublicConsultationFormViewer = ({ shareToken }) => {
   }
 
   // status === 'ready' | 'submitting'
+  const leadingSection = form.fields[0]?.fieldType === 'section' ? form.fields[0] : null;
+  const remainingFields = leadingSection ? form.fields.slice(1) : form.fields;
   return (
     <div className="icanera-cf min-h-screen">
       <style>{CF_STYLES}</style>
@@ -240,6 +242,18 @@ const PublicConsultationFormViewer = ({ shareToken }) => {
         )}
 
         <form onSubmit={handleSubmit} className="cf-surface rounded-2xl p-6 space-y-5">
+          {/* Full name/phone/email are always collected (they're the
+              submission's own patient_name/phone/email columns, not a
+              custom field) — when the form's very first field is a section
+              header, that heading is shown here, above them, so it reads as
+              the umbrella for the whole top block (name through whatever
+              else that section covers) instead of floating apart from it. */}
+          {leadingSection && (
+            <div>
+              <p className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--cf-green)' }}>{sectionDisplayLabel(form.fields, leadingSection)}</p>
+              <div className="mt-2 border-t" style={{ borderColor: 'var(--cf-border)' }} />
+            </div>
+          )}
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label className="block text-xs font-semibold mb-1 cf-text-muted">Full name *</label>
@@ -255,7 +269,7 @@ const PublicConsultationFormViewer = ({ shareToken }) => {
             </div>
           </div>
 
-          {form.fields.map((field) => (
+          {remainingFields.map((field) => (
             field.fieldType === 'section' ? (
               <div key={field.id} className="pt-2 first:pt-0">
                 <p className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--cf-green)' }}>{sectionDisplayLabel(form.fields, field)}</p>
