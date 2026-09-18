@@ -7,7 +7,7 @@ import {
 import {
   listConsultationForms, saveConsultationForm, deleteConsultationForm, setConsultationFormShare,
   listConsultationFields, saveConsultationField, deleteConsultationField, addCommonClinicalFields,
-  addPhysiotherapyConsultationFields, listConsultationSubmissions, recordConsultationSubmission
+  addPhysiotherapyConsultationFields, addPatientAssessmentFields, listConsultationSubmissions, recordConsultationSubmission
 } from '../services/cmmsConsultationFormService';
 import { downloadCmmsQrPdf } from '../utils/downloadCmmsQrPdf';
 import { downloadBlankConsultationFormPdf, downloadConsultationSubmissionPdf } from '../utils/generateConsultationFormPdf';
@@ -186,6 +186,18 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
     }
   };
 
+  // Native OS share sheet (WhatsApp, SMS, email, AirDrop…) where supported
+  // — same navigator.share + clipboard-fallback pattern already used for
+  // sharing links elsewhere in CMMS (see CMMSServiceProviderContractPanel.jsx).
+  const shareLink = async () => {
+    if (!selectedForm) return;
+    const url = shareUrl(selectedForm.share_token);
+    if (navigator.share) {
+      try { await navigator.share({ title: `${businessName ? businessName + ' — ' : ''}${selectedForm.name}`, text: 'Please fill out this form:', url }); return; } catch { return; }
+    }
+    copyShareLink();
+  };
+
   const addPresetFields = async () => {
     if (!selectedForm) return;
     const result = await addCommonClinicalFields(selectedForm.id);
@@ -195,6 +207,12 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
   const addPhysiotherapyPreset = async () => {
     if (!selectedForm) return;
     const result = await addPhysiotherapyConsultationFields(selectedForm.id);
+    if (result.success) setFields(result.data); else setError(result.error);
+  };
+
+  const addPatientAssessmentPreset = async () => {
+    if (!selectedForm) return;
+    const result = await addPatientAssessmentFields(selectedForm.id);
     if (result.success) setFields(result.data); else setError(result.error);
   };
 
@@ -443,6 +461,9 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
                         {copyState === 'copied' ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : <Copy className="h-3.5 w-3.5" />}
                         {copyState === 'copied' ? 'Copied' : 'Copy'}
                       </button>
+                      <button type="button" onClick={shareLink} className="flex items-center gap-1 rounded-lg bg-cyan-600 px-2 py-1 text-xs text-white hover:bg-cyan-500">
+                        <Share2 className="h-3.5 w-3.5" /> Share
+                      </button>
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-4 rounded-lg border border-white/10 bg-slate-900/60 p-3">
                       <div className="rounded-lg bg-white p-2">
@@ -489,6 +510,9 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
                     </button>
                     <button type="button" onClick={addPhysiotherapyPreset} className="flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-400/20">
                       <Sparkles className="h-3.5 w-3.5" /> Add physiotherapy initial consultation form
+                    </button>
+                    <button type="button" onClick={addPatientAssessmentPreset} className="flex items-center gap-1.5 rounded-lg border border-violet-400/30 bg-violet-400/10 px-3 py-1.5 text-xs font-semibold text-violet-200 hover:bg-violet-400/20">
+                      <Sparkles className="h-3.5 w-3.5" /> Add patient assessment information form
                     </button>
                   </div>
 

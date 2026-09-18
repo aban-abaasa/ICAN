@@ -96,6 +96,12 @@ export const addPhysiotherapyConsultationFields = async (formId) => {
   return { success: true, data: data || [] };
 };
 
+export const addPatientAssessmentFields = async (formId) => {
+  const { data, error } = await supabase.rpc('cmms_add_patient_assessment_fields', { p_form_id: formId });
+  if (error) return { success: false, error: error.message };
+  return { success: true, data: data || [] };
+};
+
 // ============================================================
 // STAFF: submissions
 // ============================================================
@@ -168,6 +174,7 @@ export default {
   deleteConsultationField,
   addCommonClinicalFields,
   addPhysiotherapyConsultationFields,
+  addPatientAssessmentFields,
   listConsultationSubmissions,
   listAllConsultationSubmissions,
   recordConsultationSubmission,
