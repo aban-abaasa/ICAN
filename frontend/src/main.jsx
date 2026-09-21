@@ -3,6 +3,12 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+// Dependency-free on purpose (no Supabase import) — see referralCapture.js.
+import { captureReferralFromUrl } from './services/referralCapture';
+
+// A shared referral link (/?ref=CODE) can land on any page, signed in or not:
+// remember the code now, App redeems it once the visitor has an account.
+captureReferralFromUrl();
 
 // Keep QR attendance separate from the ICAN application bundle. A scanned
 // code renders only the small verification/check-in page and never mounts the

@@ -10,6 +10,7 @@ import {
 import { getSupabaseClient } from '../lib/supabase/client';
 import CallDock from './calls/CallDock';
 import CallStage from './calls/CallStage';
+import ICANReferralsDevTab from './ICANReferralsDevTab';
 import { useDirectCall } from '../hooks/useDirectCall';
 import { Linkify } from '../utils/linkify';
 import {
@@ -119,7 +120,8 @@ const TABS = [
   { id: 'blockchain', label: 'Blockchain',   Icon: Lock,        color: '#ec4899' },
   { id: 'plans',      label: 'Plans',        Icon: Star,        color: '#eab308' },
   { id: 'corporate',  label: 'Corporate',    Icon: CreditCard,  color: '#a855f7' },
-  { id: 'board',      label: 'Public Board', Icon: MessageCircle, color: '#14b8a6' },
+  { id: 'referrals',  label: 'Referrals',    Icon: Gift,        color: '#84cc16' },
+  { id: 'board',     label: 'Public Board', Icon: MessageCircle, color: '#14b8a6' },
   { id: 'messages',   label: 'Messages',     Icon: Mail,          color: '#0ea5e9' },
   { id: 'support',    label: 'Support Team', Icon: Shield,        color: '#22c55e' },
 ];
@@ -2537,6 +2539,9 @@ export const ICANDevDashboard = ({ onExit, visibleTabs = null, headerExtra = nul
             })}
           </>)}
         </>)}
+
+        {/* ══ REFERRALS (ICANera + BodaGoEra — the one place they're managed) ══ */}
+        {tab==='referrals' && <ICANReferralsDevTab devToken={DEV_TOKEN}/>}
 
         {/* ══ CORPORATE (subscriptions + contract requests) ══ */}
         {tab==='corporate' && (<>

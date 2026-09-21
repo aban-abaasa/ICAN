@@ -57,6 +57,7 @@ import AgentDashboard from './AgentDashboard';
 import UnifiedApprovalModal from './UnifiedApprovalModal';
 import CandlestickChart from './CandlestickChart';
 import BuyIcan from './ICAN/BuyIcan';
+import ReferralCard from './ReferralCard';
 import SellIcan from './ICAN/SellIcan';
 import icanOrderService from '../services/icanOrderService';
 import icanCoinService from '../services/icanCoinService';
@@ -4700,6 +4701,13 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
             </button>
           </div>
         </div>
+
+        {/* 🎁 Refer friends — earn a % of a friend's first deposit, in ICAN */}
+        <ReferralCard
+          cardStyle={walletUi.accountCardUnique}
+          innerStyle={walletUi.accountNumberContainer}
+          buttonStyle={walletUi.copyButton}
+        />
 
         {/* 🎯 ACCOUNT INFO CARD - OR CREATE ACCOUNT PROMPT */}
         <div className="space-y-4">

@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import OfflineLoginHelper from '../OfflineLoginHelper';
 import CanweFields from '../security/CanweFields';
+import ReferralCodeField from './ReferralCodeField';
 import { checkCanweFields } from '../../utils/canweGuard';
 
 const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
@@ -404,6 +405,9 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
             />
             <span className="text-sm" style={{ color: palette.muted }}>Remember me for 30 days</span>
           </label>
+
+          {/* Optional referral code — saved before submit AND before "Continue with Google" */}
+          <ReferralCodeField palette={palette} />
 
           {/* Submit Button */}
           <button

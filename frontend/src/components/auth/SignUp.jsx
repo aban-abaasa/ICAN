@@ -4,6 +4,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { CountryService } from '../../services/countryService';
 import IcanEraLogo from '../../IcanEra.png';
 import CanweFields from '../security/CanweFields';
+import ReferralCodeField from './ReferralCodeField';
 import { checkCanweFields } from '../../utils/canweGuard';
 
 const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
@@ -569,6 +570,9 @@ const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
               <a href="/privacy" style={{ color: palette.link }}>Privacy Policy</a>
             </span>
           </label>
+
+          {/* Optional referral code — saved before submit AND before "Continue with Google" */}
+          <ReferralCodeField palette={palette} />
 
           {/* Submit Button */}
           <button

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from './context/AuthContext';
+import { consumePendingReferralCode } from './services/referralService';
 import { AuthPage } from './components/auth';
 import CountryCheckMiddleware from './components/auth/CountryCheckMiddleware';
 import ICANCapitalEngine from './components/ICAN_Capital_Engine';
@@ -135,6 +136,21 @@ const App = () => {
       window.history.replaceState({}, '', window.location.pathname + (rest ? `?${rest}` : '') + window.location.hash);
     } catch (_) { /* URL not available */ }
   }, [wantsSignup]);
+
+  // Redeem a referral code picked up from a shared ?ref= link (see main.jsx).
+  // A no-op unless one is pending. The server decides eligibility (must be
+  // before the account's first deposit) and pays the referrer later, when
+  // that deposit happens — there's nothing to show the friend here.
+  useEffect(() => {
+    if (!user?.id) return;
+    consumePendingReferralCode()
+      .then((res) => {
+        if (res.applied) console.info(`[Referral] Joined through ${res.referrerName}'s invite`);
+        else if (res.message) console.info('[Referral]', res.message);
+      })
+      .catch((e) => console.warn('[Referral] Redeem failed (will retry next load):', e));
+  }, [user?.id]);
+
   const isRestoringAppHistoryRef = useRef(false);
   const lastPublicViewRef = useRef(null);
 
