@@ -5461,17 +5461,29 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
       {/* ====== RECORD EVERY TRANSACTION SECTION ====== */}
       <div className="mx-4 mt-4 mb-2">
-        <h2
-          className="text-lg font-extrabold mb-3 tracking-tight"
+        {/* Heading now gets its own independent container too, matching
+            the boxed-header pattern used for Dropship / the cash-flow
+            chart — theme-aware surface (not the fixed dark cards) so it
+            still reacts to the dark/light/purple/green/ocean picker. */}
+        <div
+          className="mb-3 px-4 py-3 rounded-xl border"
           style={{
-            backgroundImage: modePalette.heading,
-            WebkitBackgroundClip: 'text',
-            backgroundClip: 'text',
-            color: 'transparent'
+            background: 'var(--color-bgSecondary)',
+            borderColor: 'var(--color-border)'
           }}
         >
-          Record Every Transaction
-        </h2>
+          <h2
+            className="text-lg font-extrabold tracking-tight"
+            style={{
+              backgroundImage: modePalette.heading,
+              WebkitBackgroundClip: 'text',
+              backgroundClip: 'text',
+              color: 'transparent'
+            }}
+          >
+            Record Every Transaction
+          </h2>
+        </div>
 
         {/* ── Three unique containers: Business card, Personal card, then
             the input strip below. Business/Personal are grid-cols-2 --
