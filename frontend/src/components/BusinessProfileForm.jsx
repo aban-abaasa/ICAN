@@ -392,8 +392,22 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
 
   // Business logo/avatar -- separate from the owner's personal profile photo
   // (which Pitchin falls back to when this isn't set). Instant local preview
-  // via a blob URL so the picture shows immediately; the r2:// key returned
-  // by the upload is what actually gets saved on submit.
+  // via a blob URL so the picture shows immediately.
+  //
+  // When editing an EXISTING profile, the upload is also written straight to
+  // business_profiles.avatar_url right here, not just staged in
+  // businessData -- this form is a 7-step wizard (business -> owners ->
+  // documents -> wallet -> approvals -> notifications -> review) and nothing
+  // else persists until Submit on the final "review" step, so someone who
+  // uploads a logo on this first step and then refreshes/leaves before
+  // reaching the end previously lost it with no save ever having happened
+  // (reported as "the logo isn't saving"). This is the same trust level the
+  // rest of the form's own direct-update submit already operates at (no
+  // co-owner approval gate on this form's own edits -- that's a separate
+  // "review someone else's proposed edit" flow, see the 'approvals' step).
+  // On a brand-new profile (no editingProfile.id yet), there is no row to
+  // update yet -- avatarUrl stays staged in businessData and is written as
+  // part of the initial insert on first Submit, same as before.
   const handleAvatarSelect = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = ''; // allow re-selecting the same file later
@@ -424,6 +438,16 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
         return;
       }
       handleBusinessChange('avatarUrl', result.url);
+
+      if (editingProfile?.id) {
+        const saveResult = await updateBusinessProfile(editingProfile.id, { avatar_url: result.url });
+        if (!saveResult.success) {
+          // The upload itself succeeded and still shows in the preview/will
+          // still save on final Submit -- this only means the "save right
+          // now" shortcut failed, not that the logo is gone.
+          alert('Logo uploaded, but saving it immediately failed (it will still save when you Submit): ' + (saveResult.error || 'Unknown error'));
+        }
+      }
     } catch (error) {
       console.error('Logo upload error:', error);
       alert('Failed to upload logo: ' + error.message);
@@ -757,6 +781,9 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                   <label className="text-slate-300 text-sm block mb-2">Business Logo</label>
                   <p className="text-slate-400 text-xs mb-2">
                     Shown as the Pitcher avatar in the video feed. Leave unset to use your own personal photo instead.
+                    {' '}{editingProfile?.id
+                      ? 'Saves immediately.'
+                      : "Saved once you finish creating this profile (Submit on the last step) -- it isn't stored yet."}
                   </p>
                   <div className="flex items-center gap-3">
                     {avatarPreviewUrl ? (
@@ -783,7 +810,20 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                     {avatarPreviewUrl && !uploadingAvatar && (
                       <button
                         type="button"
-                        onClick={() => { setAvatarPreviewUrl(''); handleBusinessChange('avatarUrl', ''); }}
+                        onClick={async () => {
+                          setAvatarPreviewUrl('');
+                          handleBusinessChange('avatarUrl', '');
+                          // Same immediate-save reasoning as handleAvatarSelect
+                          // above -- otherwise "Remove" only looks like it
+                          // worked until Submit/refresh brings the old logo
+                          // straight back.
+                          if (editingProfile?.id) {
+                            const saveResult = await updateBusinessProfile(editingProfile.id, { avatar_url: null });
+                            if (!saveResult.success) {
+                              alert('Removed here, but saving that failed (it will still remove when you Submit): ' + (saveResult.error || 'Unknown error'));
+                            }
+                          }
+                        }}
                         className="text-slate-400 hover:text-red-400 text-sm font-medium transition"
                       >
                         Remove
