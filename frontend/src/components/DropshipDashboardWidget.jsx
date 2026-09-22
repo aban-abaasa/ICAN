@@ -64,63 +64,68 @@ const DropshipDashboardWidget = ({ userId, userEmail }) => {
     // Classic teal -- trade & commerce, distinct from CMMS's indigo, the
     // share-trend card's burgundy, and the ledger's navy. Same flat
     // dark-panel system as the rest of the dashboard's stat cards.
-    <div className="bg-slate-900 border border-slate-800 rounded-lg shadow-sm">
-      <div className="flex items-center gap-2 px-4 pt-3.5 pb-3 border-b border-slate-800">
+    //
+    // Every section here is its OWN independent bordered container --
+    // header, storefront/tab picker, and (inside DropshipResellerDashboard)
+    // the storefront card / tabs / listing rows -- siblings stacked with
+    // spacing, not nested inside one shared outer box. That's what let the
+    // "My listings" row overflow before: everything crammed inside a
+    // single wrapper instead of standing on its own.
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 px-4 py-3 rounded-lg border border-slate-800 bg-slate-900 shadow-sm">
         <ShoppingBag className="w-4 h-4 text-teal-400" />
         <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Dropship</p>
       </div>
 
-      <div className="px-4 py-4">
-        {profiles.length === 0 ? (
-          <div className="space-y-3">
-            <DropshipBrowse />
+      {profiles.length === 0 ? (
+        <div className="rounded-lg border border-slate-800 bg-slate-900 shadow-sm p-4 space-y-3">
+          <DropshipBrowse />
 
-            <div className="border-t border-slate-800 pt-3">
-              {showStartForm ? (
-                <div className="space-y-2">
-                  <p className="text-xs text-slate-400 px-1">Resell any store's products at your own price. Free to start.</p>
-                  <div className="flex gap-2">
-                    <input
-                      value={newName}
-                      onChange={(e) => setNewName(e.target.value)}
-                      placeholder="Your dropshipping business name"
-                      className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500"
-                    />
-                    <button
-                      onClick={handleCreate}
-                      disabled={!newName.trim() || creating}
-                      className="px-4 py-2 rounded-md bg-teal-700 hover:bg-teal-600 active:scale-95 text-white text-sm font-semibold disabled:opacity-40 whitespace-nowrap transition"
-                    >
-                      {creating ? 'Creating…' : 'Start'}
-                    </button>
-                  </div>
-                  {createError && <p className="text-xs text-red-400 px-1">{createError}</p>}
+          <div className="border-t border-slate-800 pt-3">
+            {showStartForm ? (
+              <div className="space-y-2">
+                <p className="text-xs text-slate-400 px-1">Resell any store's products at your own price. Free to start.</p>
+                <div className="flex gap-2">
+                  <input
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="Your dropshipping business name"
+                    className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500"
+                  />
+                  <button
+                    onClick={handleCreate}
+                    disabled={!newName.trim() || creating}
+                    className="px-4 py-2 rounded-md bg-teal-700 hover:bg-teal-600 active:scale-95 text-white text-sm font-semibold disabled:opacity-40 whitespace-nowrap transition"
+                  >
+                    {creating ? 'Creating…' : 'Start'}
+                  </button>
                 </div>
-              ) : (
-                <button
-                  onClick={() => setShowStartForm(true)}
-                  className="w-full text-xs text-teal-400 hover:text-teal-300 font-medium px-1 py-1 text-left"
-                >
-                  Want to resell these products yourself? Start a free dropshipping business →
-                </button>
-              )}
-            </div>
-          </div>
-        ) : (
-          <>
-            {profiles.length > 1 && (
-              <select
-                value={activeId || ''}
-                onChange={(e) => setSelectedId(e.target.value)}
-                className="mb-3 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
+                {createError && <p className="text-xs text-red-400 px-1">{createError}</p>}
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowStartForm(true)}
+                className="w-full text-xs text-teal-400 hover:text-teal-300 font-medium px-1 py-1 text-left"
               >
-                {profiles.map((p) => <option key={p.id} value={p.id}>{p.business_name}</option>)}
-              </select>
+                Want to resell these products yourself? Start a free dropshipping business →
+              </button>
             )}
-            <DropshipResellerDashboard businessProfileId={activeId} />
-          </>
-        )}
-      </div>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {profiles.length > 1 && (
+            <select
+              value={activeId || ''}
+              onChange={(e) => setSelectedId(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white shadow-sm"
+            >
+              {profiles.map((p) => <option key={p.id} value={p.id}>{p.business_name}</option>)}
+            </select>
+          )}
+          <DropshipResellerDashboard businessProfileId={activeId} />
+        </div>
+      )}
     </div>
   );
 };
