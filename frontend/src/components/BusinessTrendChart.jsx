@@ -2,11 +2,18 @@ import React, { useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp, TrendingDown, Minus, LineChart as LineChartIcon, ShieldCheck } from 'lucide-react';
 
+// Same clean-abbreviation rule as the CMMS activity widget: K/M/B/T, no
+// trailing ".0" on round values, never CSS-truncated.
 const fmtUgx = (n) => {
   const v = Math.abs(n || 0);
-  if (v >= 1_000_000) return `${n < 0 ? '-' : ''}${(v / 1_000_000).toFixed(2)}M`;
-  if (v >= 1_000) return `${n < 0 ? '-' : ''}${(v / 1_000).toFixed(1)}K`;
-  return `${n < 0 ? '-' : ''}${v.toFixed(0)}`;
+  const sign = n < 0 ? '-' : '';
+  const round1 = (x) => Math.round(x * 10) / 10;
+  const clean = (x) => (Number.isInteger(x) ? x.toFixed(0) : x.toFixed(1));
+  if (v >= 1_000_000_000_000) return `${sign}${clean(round1(v / 1_000_000_000_000))}T`;
+  if (v >= 1_000_000_000) return `${sign}${clean(round1(v / 1_000_000_000))}B`;
+  if (v >= 1_000_000) return `${sign}${clean(round1(v / 1_000_000))}M`;
+  if (v >= 1_000) return `${sign}${clean(round1(v / 1_000))}K`;
+  return `${sign}${v.toFixed(0)}`;
 };
 
 const fmtDay = (isoDate) => new Date(isoDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
@@ -15,9 +22,9 @@ const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   const price = payload[0]?.value || 0;
   return (
-    <div className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 shadow-xl text-xs">
-      <p className="text-gray-300 font-semibold mb-1">{fmtDay(label)}</p>
-      <p className="text-purple-300">Share price: UGX {fmtUgx(price)}</p>
+    <div className="bg-slate-800 border border-slate-700 rounded-md px-3 py-2 shadow-lg text-xs">
+      <p className="text-slate-400 font-semibold mb-1">{fmtDay(label)}</p>
+      <p className="text-rose-300">Share price: UGX {fmtUgx(price)}</p>
     </div>
   );
 };
@@ -27,6 +34,9 @@ const CustomTooltip = ({ active, payload, label }) => {
  * pitchin_share_value_snapshots via getSharePriceHistory() — one point per
  * day the business's live valuation was actually computed. Never fabricated:
  * shows an honest empty state until snapshots exist for this business.
+ * Wine/burgundy accent -- ownership & equity, distinct from CMMS's indigo
+ * and the ledger chart's navy, on the same flat dark-panel design used
+ * across the dashboard's stat cards.
  */
 export default function BusinessTrendChart({ data = [], loading = false, businessName = 'Business' }) {
   const { latest, changePct, verified, hasData } = useMemo(() => {
@@ -46,66 +56,68 @@ export default function BusinessTrendChart({ data = [], loading = false, busines
   );
 
   return (
-    <div className="bg-slate-800/50 border border-slate-700/50 rounded-2xl p-4">
-      <div className="flex items-center justify-between mb-3">
+    <div className="bg-slate-900 border border-slate-800 rounded-lg shadow-sm">
+      <div className="flex items-center justify-between gap-2 px-4 pt-3.5 pb-3 border-b border-slate-800">
         <div className="flex items-center gap-2 min-w-0">
-          <LineChartIcon className="w-4 h-4 text-purple-400" />
-          <h3 className="text-sm font-bold text-white truncate">{businessName} — Share Trend</h3>
+          <LineChartIcon className="w-4 h-4 text-rose-400 flex-shrink-0" />
+          <h3 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide truncate">{businessName} — Share Trend</h3>
         </div>
         {hasData && (
-          <div className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full flex-shrink-0 ${
-            changePct > 0 ? 'bg-emerald-500/15 text-emerald-400' : changePct < 0 ? 'bg-red-500/15 text-red-400' : 'bg-gray-500/15 text-gray-400'
+          <span className={`flex items-center gap-1 text-[11px] font-semibold px-1.5 py-0.5 rounded border flex-shrink-0 ${
+            changePct > 0 ? 'text-emerald-400 border-emerald-500/30' : changePct < 0 ? 'text-red-400 border-red-500/30' : 'text-slate-400 border-slate-600'
           }`}>
             {changePct > 0 ? <TrendingUp className="w-3 h-3" /> : changePct < 0 ? <TrendingDown className="w-3 h-3" /> : <Minus className="w-3 h-3" />}
             {changePct > 0 ? '+' : ''}{changePct.toFixed(1)}%
-          </div>
+          </span>
         )}
       </div>
 
-      {loading ? (
-        <div className="h-40 flex items-center justify-center text-gray-500 text-xs">Loading valuation history…</div>
-      ) : !hasData ? (
-        <div className="h-40 flex flex-col items-center justify-center gap-2 text-center px-4">
-          <LineChartIcon className="w-8 h-8 text-gray-600" />
-          <p className="text-xs text-gray-500">No daily valuation snapshots yet for this business — the trend will appear once Pitchin computes its first live share value.</p>
-        </div>
-      ) : (
-        <>
-          <div className="flex items-baseline gap-2 mb-2">
-            <span className="text-xl font-bold text-white">UGX {fmtUgx(latest)}</span>
-            <span className="text-xs text-gray-500">per share</span>
-            {verified && (
-              <span className="ml-auto flex items-center gap-1 text-[10px] text-emerald-400">
-                <ShieldCheck className="w-3 h-3" /> Verified
-              </span>
-            )}
+      <div className="px-4 py-4">
+        {loading ? (
+          <div className="h-40 flex items-center justify-center text-slate-500 text-xs">Loading valuation history…</div>
+        ) : !hasData ? (
+          <div className="h-40 flex flex-col items-center justify-center gap-2 text-center px-4">
+            <LineChartIcon className="w-8 h-8 text-slate-700" />
+            <p className="text-xs text-slate-500">No daily valuation snapshots yet for this business — the trend will appear once Pitchin computes its first live share value.</p>
           </div>
-          <div className="h-32">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="businessTrendFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#a855f7" stopOpacity={0.35} />
-                    <stop offset="100%" stopColor="#a855f7" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
-                <XAxis
-                  dataKey="date"
-                  tickFormatter={fmtDay}
-                  interval={Math.max(0, Math.floor(chartData.length / 5) - 1)}
-                  tick={{ fill: '#9ca3af', fontSize: 10 }}
-                  axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
-                  tickLine={false}
-                />
-                <YAxis tickFormatter={fmtUgx} tick={{ fill: '#9ca3af', fontSize: 10 }} axisLine={false} tickLine={false} width={44} domain={['auto', 'auto']} />
-                <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.15)' }} />
-                <Area type="monotone" dataKey="price" stroke="#a855f7" strokeWidth={2} fill="url(#businessTrendFill)" dot={false} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </>
-      )}
+        ) : (
+          <>
+            <div className="flex items-baseline gap-2 mb-2 min-w-0">
+              <span className="text-xl font-bold text-white leading-none tabular-nums whitespace-nowrap">UGX {fmtUgx(latest)}</span>
+              <span className="text-[11px] text-slate-400">per share</span>
+              {verified && (
+                <span className="ml-auto flex items-center gap-1 text-[10px] text-emerald-400 flex-shrink-0">
+                  <ShieldCheck className="w-3 h-3" /> Verified
+                </span>
+              )}
+            </div>
+            <div className="h-32">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="businessTrendFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#e11d48" stopOpacity={0.35} />
+                      <stop offset="100%" stopColor="#e11d48" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={fmtDay}
+                    interval={Math.max(0, Math.floor(chartData.length / 5) - 1)}
+                    tick={{ fill: '#64748b', fontSize: 10 }}
+                    axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                    tickLine={false}
+                  />
+                  <YAxis tickFormatter={fmtUgx} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} width={44} domain={['auto', 'auto']} />
+                  <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.15)' }} />
+                  <Area type="monotone" dataKey="price" stroke="#e11d48" strokeWidth={2} fill="url(#businessTrendFill)" dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { ShoppingBag } from 'lucide-react';
 import { getAllAccessibleBusinessProfiles } from '../services/pitchingService';
 import { createBusinessProfileFromCategory } from '../services/businessManagementService';
 import DropshipResellerDashboard from './DropshipResellerDashboard';
@@ -53,68 +54,73 @@ const DropshipDashboardWidget = ({ userId, userEmail }) => {
 
   if (loading) {
     return (
-      <div className="rounded-2xl border border-slate-700/50 bg-slate-900/40 p-4">
+      <div className="bg-slate-900 border border-slate-800 rounded-lg shadow-sm p-4">
         <div className="h-4 w-24 bg-slate-800 rounded animate-pulse" />
       </div>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-cyan-500/20 bg-slate-900/40 p-3">
-      <div className="flex items-center gap-2 mb-3 px-1">
-        <span className="text-lg">🛍️</span>
-        <p className="text-sm font-semibold text-white">Dropship</p>
+    // Classic teal -- trade & commerce, distinct from CMMS's indigo, the
+    // share-trend card's burgundy, and the ledger's navy. Same flat
+    // dark-panel system as the rest of the dashboard's stat cards.
+    <div className="bg-slate-900 border border-slate-800 rounded-lg shadow-sm">
+      <div className="flex items-center gap-2 px-4 pt-3.5 pb-3 border-b border-slate-800">
+        <ShoppingBag className="w-4 h-4 text-teal-400" />
+        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Dropship</p>
       </div>
 
-      {profiles.length === 0 ? (
-        <div className="space-y-3">
-          <DropshipBrowse />
+      <div className="px-4 py-4">
+        {profiles.length === 0 ? (
+          <div className="space-y-3">
+            <DropshipBrowse />
 
-          <div className="border-t border-slate-800 pt-3">
-            {showStartForm ? (
-              <div className="space-y-2">
-                <p className="text-xs text-slate-400 px-1">Resell any store's products at your own price. Free to start.</p>
-                <div className="flex gap-2">
-                  <input
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    placeholder="Your dropshipping business name"
-                    className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500"
-                  />
-                  <button
-                    onClick={handleCreate}
-                    disabled={!newName.trim() || creating}
-                    className="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-teal-600 text-white text-sm font-semibold disabled:opacity-40 whitespace-nowrap"
-                  >
-                    {creating ? 'Creating…' : 'Start'}
-                  </button>
+            <div className="border-t border-slate-800 pt-3">
+              {showStartForm ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-slate-400 px-1">Resell any store's products at your own price. Free to start.</p>
+                  <div className="flex gap-2">
+                    <input
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      placeholder="Your dropshipping business name"
+                      className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500"
+                    />
+                    <button
+                      onClick={handleCreate}
+                      disabled={!newName.trim() || creating}
+                      className="px-4 py-2 rounded-md bg-teal-700 hover:bg-teal-600 active:scale-95 text-white text-sm font-semibold disabled:opacity-40 whitespace-nowrap transition"
+                    >
+                      {creating ? 'Creating…' : 'Start'}
+                    </button>
+                  </div>
+                  {createError && <p className="text-xs text-red-400 px-1">{createError}</p>}
                 </div>
-                {createError && <p className="text-xs text-red-400 px-1">{createError}</p>}
-              </div>
-            ) : (
-              <button
-                onClick={() => setShowStartForm(true)}
-                className="w-full text-xs text-cyan-400 hover:text-cyan-300 font-medium px-1 py-1 text-left"
-              >
-                Want to resell these products yourself? Start a free dropshipping business →
-              </button>
-            )}
+              ) : (
+                <button
+                  onClick={() => setShowStartForm(true)}
+                  className="w-full text-xs text-teal-400 hover:text-teal-300 font-medium px-1 py-1 text-left"
+                >
+                  Want to resell these products yourself? Start a free dropshipping business →
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-      ) : (
-        <>
-          {profiles.length > 1 && (
-            <select
-              value={activeId || ''}
-              onChange={(e) => setSelectedId(e.target.value)}
-              className="mb-3 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
-            >
-              {profiles.map((p) => <option key={p.id} value={p.id}>{p.business_name}</option>)}
-            </select>
-          )}
-          <DropshipResellerDashboard businessProfileId={activeId} />
-        </>
-      )}
+        ) : (
+          <>
+            {profiles.length > 1 && (
+              <select
+                value={activeId || ''}
+                onChange={(e) => setSelectedId(e.target.value)}
+                className="mb-3 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
+              >
+                {profiles.map((p) => <option key={p.id} value={p.id}>{p.business_name}</option>)}
+              </select>
+            )}
+            <DropshipResellerDashboard businessProfileId={activeId} />
+          </>
+        )}
+      </div>
     </div>
   );
 };

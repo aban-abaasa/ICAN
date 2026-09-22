@@ -88,18 +88,22 @@ const IcanPriceChartWidget = () => {
   const changePct = latestClose != null && firstOpen ? ((latestClose - firstOpen) / firstOpen) * 100 : null;
 
   return (
-    <div className="rounded-2xl border border-slate-700/50 bg-slate-900/40 p-3">
+    // Classic gold -- currency & coin, distinct from CMMS's indigo, the
+    // share-trend card's burgundy, the ledger's navy, and Dropship's teal.
+    // CandlestickChart itself is left untouched -- its gesture math and
+    // trading colors are functional, not decorative.
+    <div className="bg-slate-900 border border-slate-800 rounded-lg shadow-sm">
       <button
         type="button"
         onClick={() => setIsExpanded(prev => !prev)}
-        className="w-full flex items-center gap-2 px-1 hover:opacity-90 transition-opacity"
+        className="w-full flex items-center gap-2 px-4 py-3 hover:bg-white/[0.03] transition-colors"
       >
-        <LineChartIcon className="w-4 h-4 text-sky-400 shrink-0" />
-        <p className="text-sm font-semibold text-white">ICANera price</p>
-        <span className="text-[10px] text-slate-500 uppercase tracking-wide">Live</span>
+        <LineChartIcon className="w-4 h-4 text-amber-400 shrink-0" />
+        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">ICANera price</p>
+        <span className="text-[10px] font-semibold text-amber-400 border border-amber-500/30 rounded px-1.5 py-0.5">Live</span>
         <span className="ml-auto flex items-center gap-2">
           {latestClose != null && (
-            <span className="text-xs font-semibold text-white">
+            <span className="text-xs font-semibold text-white tabular-nums whitespace-nowrap">
               {latestClose.toLocaleString(undefined, { maximumFractionDigits: 2 })}
               {changePct != null && (
                 <span className={`ml-1 ${changePct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -112,7 +116,7 @@ const IcanPriceChartWidget = () => {
         </span>
       </button>
       {isExpanded && (
-        <div className="mt-2">
+        <div className="px-3 pb-3">
           <CandlestickChart candleData={candleData} loading={loading} showLivePrice orderPlacementEnabled={false} />
         </div>
       )}
