@@ -21,7 +21,14 @@ const formatUGX = (amount) => `UGX ${Number(amount || 0).toLocaleString('en-UG',
 // not rendered) when the business hasn't filled that field in, rather than
 // ever producing a dead/blank link.
 const buildTelLink = (phone) => (phone?.trim() ? `tel:${phone.replace(/[^\d+]/g, '')}` : null);
-const buildMailLink = (email) => (email?.trim() ? `mailto:${email.trim()}` : null);
+// mailto: only works when the visitor's OS/browser has a default mail app
+// registered -- on most desktop browsers there isn't one, so the click
+// silently does nothing. Gmail's own compose-in-browser URL (documented,
+// no API key needed) always opens something real: it lands straight on a
+// pre-addressed compose window for a signed-in visitor, or prompts sign-in
+// first for one who isn't -- either way, unlike mailto:, it never just goes
+// nowhere.
+const buildGmailComposeLink = (email) => (email?.trim() ? `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email.trim())}` : null);
 const buildWhatsAppLink = (whatsapp) => {
   const digits = whatsapp?.replace(/[^\d]/g, '');
   return digits ? `https://wa.me/${digits}` : null;
@@ -901,16 +908,18 @@ const SocialRow = ({ company, className = '' }) => {
 // primary/secondary hierarchy a real landing page's CTA row uses instead of
 // a flat row of identical buttons.
 const ContactActions = ({ company, onShare, size = 'default' }) => {
-  // tel:/mailto: work great on a phone (the dialer/mail app just opens) but
-  // silently do nothing on a lot of desktop browsers with no default handler
+  // Call: tel: works great on a phone (the dialer just opens) but silently
+  // does nothing on a lot of desktop browsers with no default handler
   // registered -- the click looks like it worked and nothing happens, no
-  // error to react to. Rather than guess which desktop mail/phone app a
-  // visitor has, Call and Email also copy the raw number/address to the
-  // clipboard on click, so even when the OS has nothing to hand off to, the
-  // visitor still walks away with the number/email ready to paste into
-  // whatever they actually use (Gmail in a browser tab, Skype, WhatsApp
-  // Desktop, ...). Harmless on mobile -- the native app still opens on top
-  // and the copy just goes unnoticed.
+  // error to react to. Email: same problem, but with a real fix -- Gmail's
+  // compose-in-browser link (buildGmailComposeLink) always opens something,
+  // on desktop or mobile, signed in or not, so Email no longer depends on a
+  // mailto: handler existing at all. Call still copies the raw number to the
+  // clipboard alongside dialing, since there's no browser-based equivalent
+  // of Gmail compose for phone calls -- the visitor still walks away with
+  // the number ready to paste into Skype/WhatsApp Desktop/etc. when the OS
+  // has nothing to hand off to. Harmless on mobile -- the native dialer
+  // still opens on top and the copy just goes unnoticed.
   const [copiedKey, setCopiedKey] = useState(null);
   const copyValue = (key, value) => {
     if (!value) return;
@@ -924,7 +933,7 @@ const ContactActions = ({ company, onShare, size = 'default' }) => {
     company.whatsapp && { key: 'whatsapp', label: 'WhatsApp', icon: MessageCircle, href: buildWhatsAppLink(company.whatsapp), primary: true },
     !company.whatsapp && company.phone && { key: 'call', label: 'Call', icon: Phone, href: buildTelLink(company.phone), primary: true, copyValue: company.phone.trim() },
     company.whatsapp && company.phone && { key: 'call', label: 'Call', icon: Phone, href: buildTelLink(company.phone), copyValue: company.phone.trim() },
-    company.email && { key: 'email', label: 'Email', icon: Mail, href: buildMailLink(company.email), copyValue: company.email.trim() },
+    company.email && { key: 'email', label: 'Email', icon: Mail, href: buildGmailComposeLink(company.email), external: true },
     (company.location || company.google_maps_url) && { key: 'directions', label: 'Directions', icon: Navigation, href: resolveLocationTarget(company).directionsHref },
     company.website && { key: 'website', label: 'Website', icon: Globe, href: normalizeExternalUrl(company.website) },
   ].filter(Boolean);
@@ -934,12 +943,13 @@ const ContactActions = ({ company, onShare, size = 'default' }) => {
     <div className="flex flex-wrap items-center gap-2">
       {actions.map((action) => {
         const copied = copiedKey === action.key;
+        const opensNewTab = action.external || action.key === 'website';
         return (
           <a
             key={action.key}
             href={action.href}
-            target={action.key === 'website' ? '_blank' : undefined}
-            rel={action.key === 'website' ? 'noreferrer' : undefined}
+            target={opensNewTab ? '_blank' : undefined}
+            rel={opensNewTab ? 'noreferrer' : undefined}
             onClick={action.copyValue ? () => copyValue(action.key, action.copyValue) : undefined}
             title={action.copyValue ? `${action.copyValue} -- also copied to your clipboard` : undefined}
             className={`rounded-full font-semibold flex items-center gap-1.5 transition-all hover:scale-[1.03] active:scale-[0.98] shadow-sm ${pad} ${copied ? 'nb-copied' : action.primary ? 'nb-btn-primary' : 'nb-action-btn'}`}
@@ -1135,7 +1145,7 @@ const BusinessInfoSidebar = ({ company, className = '' }) => {
         <InfoRow icon={Clock} label="Hours" value={company.hours_text} />
         <InfoRow icon={Phone} label="Phone" value={company.phone} href={buildTelLink(company.phone)} />
         <InfoRow icon={MessageCircle} label="WhatsApp" value={company.whatsapp} href={buildWhatsAppLink(company.whatsapp)} external />
-        <InfoRow icon={Mail} label="Email" value={company.email} href={buildMailLink(company.email)} />
+        <InfoRow icon={Mail} label="Email" value={company.email} href={buildGmailComposeLink(company.email)} external />
         <InfoRow icon={Globe} label="Website" value={company.website} href={normalizeExternalUrl(company.website)} external />
       </div>
       <SocialRow company={company} className="mt-3 pt-3 border-t nb-border" />
