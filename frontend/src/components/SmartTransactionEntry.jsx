@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Check, DollarSign, Briefcase, Loader, Mic, MicOff } from 'lucide-react';
+import { Send, Check, DollarSign, Briefcase, Loader, Mic, MicOff, Calendar } from 'lucide-react';
 import { analyzeTransactionWithAI } from '../services/accountingAIService';
 import { getAllAccessibleBusinessProfiles } from '../services/pitchingService';
 import { supabase } from '../lib/supabase/client';
@@ -36,6 +36,12 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
 
   // ── Quick Entry Tab state ──
   const [quickMode, setQuickMode] = useState('free'); // 'free' | 'sold' | 'bought'
+
+  // ── Backdating — lets the user record a transaction under a past date
+  // instead of always "now", so manual entries can match when the money
+  // actually moved (e.g. catching up on last week's sales) ──
+  const todayStr = () => new Date().toISOString().split('T')[0];
+  const [transactionDate, setTransactionDate] = useState(todayStr());
 
   const startVoiceRecognition = () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -656,6 +662,7 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
       voiceTranscriptRef.current = '';
       setQuickMode('free');
       setSelectedBusinessProfileId('');
+      setTransactionDate(todayStr());
     }
     // Update selectedMode if transactionType prop changes
     if (transactionType && transactionType !== selectedMode) {
@@ -716,6 +723,11 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
       
       try {
         // Get AI analysis if in business mode
+        // Compose the timestamp from the picked date + current time-of-day, so a
+        // backdated entry lands on the chosen day but still records a real time.
+        const [dy, dm, dd] = transactionDate.split('-').map(Number);
+        const now = new Date();
+        const composedDate = new Date(dy, (dm || 1) - 1, dd || 1, now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
         let finalTransaction = {
           type: 'smart_entry',
           amount: parsedData.amount,
@@ -724,7 +736,7 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
           isIncome: parsedData.isIncome,
           source: parsedData.source,
           action: parsedData.action,
-          timestamp: new Date().toISOString(),
+          timestamp: composedDate.toISOString(),
           rawInput: textInput,
           accountingType: parsedData.accountingType,
           category: parsedData.detectedCategory,
@@ -949,6 +961,27 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
               </select>
             )
           )}
+
+          {/* Transaction date — defaults to today, editable to backdate an entry */}
+          <div className="flex items-center gap-2">
+            <div className={`flex-1 flex items-center gap-2 border-2 rounded-lg px-3 py-2 ${
+              selectedMode === 'business' ? 'border-blue-200 bg-white' : 'border-gray-200 bg-white'
+            }`}>
+              <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />
+              <input
+                type="date"
+                value={transactionDate}
+                max={todayStr()}
+                onChange={(e) => setTransactionDate(e.target.value || todayStr())}
+                className="flex-1 min-w-0 text-sm text-gray-800 bg-transparent focus:outline-none"
+              />
+            </div>
+            {transactionDate !== todayStr() && (
+              <span className="flex-shrink-0 text-[10px] font-bold text-amber-700 bg-amber-100 border border-amber-300 rounded-full px-2 py-1">
+                Backdated
+              </span>
+            )}
+          </div>
 
           {/* Quick Entry Tabs — pre-fill "Sold " or "Bought " into the input */}
           <div className="flex gap-1.5">

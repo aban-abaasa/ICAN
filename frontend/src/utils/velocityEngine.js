@@ -101,6 +101,10 @@ export class VelocityEngine {
             status: 'completed',
             // Tag to a PitchIn business when provided — feeds live share valuation
             business_profile_id: transactionData.business_profile_id || null,
+            // Respect a caller-supplied date (manual backdating, Excel import) instead
+            // of always defaulting to now — mirrors syncManager.js's offline path,
+            // which already sets this correctly.
+            created_at: transactionData.date || new Date().toISOString(),
             metadata: {
               category: transactionData.category,
               source: transactionData.source,

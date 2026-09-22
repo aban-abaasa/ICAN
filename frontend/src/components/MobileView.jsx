@@ -796,6 +796,8 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [expFiltersExpanded, setExpFiltersExpanded] = useState(false); // collapse/expand filters (mobile only)
   const [expMoreMenuOpen, setExpMoreMenuOpen] = useState(false); // 3-dot menu for export/share
   const [expSearch, setExpSearch] = useState(''); // search filter for the full transactions panel
+  const [importingExcel, setImportingExcel] = useState(false); // bulk Excel import in progress
+  const importFileInputRef = useRef(null);
   
   // Detect if we're on mobile or desktop for different UX
   const [isMobileView, setIsMobileView] = useState(window.innerWidth < 768);
@@ -3663,6 +3665,122 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     URL.revokeObjectURL(url);
   };
 
+  // Download transactions as a real .xlsx workbook (not CSV) — same column
+  // layout the Excel importer below reads, so an exported file can be edited
+  // and re-imported without reshaping it.
+  const handleDownloadExcel = (filtered, period) => {
+    const rows = filtered.map(t => ({
+      Date: new Date(t.created_at).toLocaleDateString(),
+      Type: (t.record_category || t.metadata?.record_category) === 'business' ? 'Business' : 'Personal',
+      Flow: t.transaction_type === 'income' ? 'Income' : 'Expense',
+      Category: t.metadata?.category || t.metadata?.categoryName || '',
+      Description: t.description || '',
+      'Amount (UGX)': Math.abs(t.amount || 0),
+      'Chain Hash': (txChainHashes[t.id] || t.data_hash || '').slice(0, 20)
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ Info: 'No transactions in this period' }]);
+    ws['!cols'] = [{ wch: 14 }, { wch: 10 }, { wch: 10 }, { wch: 18 }, { wch: 32 }, { wch: 14 }, { wch: 22 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Transactions');
+    XLSX.writeFile(wb, `IcanEra-Transactions-${period}-${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  // Bulk-import transactions from an uploaded Excel file. Expects columns
+  // (case-insensitive; a few common aliases accepted): Date, Type
+  // (Business/Personal), Flow (Income/Expense), Category, Description,
+  // Amount, and Business Name (only needed when Type=Business and the user
+  // owns more than one business). Each row is saved through the exact same
+  // persistTransaction() path as manual entry, so it counts toward reports
+  // and PitchIn valuation identically — and the row's own Date backdates it.
+  const handleImportExcelFile = async (file) => {
+    if (!file) return;
+    setImportingExcel(true);
+    try {
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+      if (!rows.length) {
+        alert('No rows found in that file.');
+        return;
+      }
+
+      // Resolve the user's businesses once, to match a "Business Name" column
+      // to a business_profile_id — required for the row to feed PitchIn valuation.
+      const { data: { user } } = await supabase.auth.getUser();
+      let bizProfiles = [];
+      try {
+        bizProfiles = (await getAllAccessibleBusinessProfiles(user?.id, user?.email)) || [];
+      } catch (err) {
+        console.warn('Could not load business profiles for import:', err);
+      }
+      const bizByName = new Map(bizProfiles.map(p => [String(p.business_name || '').trim().toLowerCase(), p.id]));
+
+      const getCol = (row, ...names) => {
+        for (const key of Object.keys(row)) {
+          if (names.includes(key.trim().toLowerCase())) return row[key];
+        }
+        return undefined;
+      };
+
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
+
+      let ok = 0;
+      const errors = [];
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const rawAmount = getCol(row, 'amount', 'amount (ugx)');
+        const amount = Math.abs(parseFloat(String(rawAmount ?? '').replace(/,/g, '')) || 0);
+        if (!amount) { errors.push(`Row ${i + 2}: missing or invalid amount`); continue; }
+
+        const rawDate = getCol(row, 'date', 'transaction date');
+        let dateObj = rawDate instanceof Date ? rawDate : new Date(rawDate);
+        if (Number.isNaN(dateObj.getTime())) dateObj = new Date();
+        if (dateObj > todayEnd) dateObj = todayEnd; // no future-dated imports
+
+        const rawType = String(getCol(row, 'type', 'account type') || 'personal').trim().toLowerCase();
+        const accountingType = rawType === 'business' ? 'business' : 'personal';
+
+        const rawBusinessName = getCol(row, 'business', 'business name', 'company');
+        let businessProfileId = null;
+        if (accountingType === 'business') {
+          if (rawBusinessName) businessProfileId = bizByName.get(String(rawBusinessName).trim().toLowerCase()) || null;
+          else if (bizProfiles.length === 1) businessProfileId = bizProfiles[0].id;
+        }
+
+        const rawFlow = String(getCol(row, 'flow', 'income/expense', 'direction') || 'expense').trim().toLowerCase();
+        const description = String(getCol(row, 'description', 'details', 'note') || 'Imported transaction');
+
+        const result = await persistTransaction({
+          amount,
+          description,
+          isIncome: rawFlow === 'income',
+          accountingType,
+          businessProfileId,
+          category: String(getCol(row, 'category') || 'imported'),
+          timestamp: dateObj.toISOString(),
+          originalText: `Imported from Excel: ${description}`
+        }, { source: 'excel_import' });
+
+        if (result?.success) ok++;
+        else errors.push(`Row ${i + 2}: ${result?.error?.message || 'save failed'}`);
+      }
+
+      alert(
+        `Import complete: ${ok} of ${rows.length} transactions saved.` +
+        (errors.length ? `\n\n${errors.slice(0, 8).join('\n')}${errors.length > 8 ? `\n…and ${errors.length - 8} more` : ''}` : '')
+      );
+    } catch (err) {
+      console.error('Excel import failed:', err);
+      alert('Could not read that file. Please upload a valid .xlsx/.xls/.csv exported from this app (or matching its column layout).');
+    } finally {
+      setImportingExcel(false);
+      if (importFileInputRef.current) importFileInputRef.current.value = '';
+    }
+  };
+
   // Download transactions as a branded PDF
   const handleDownloadPDF = (filtered, period) => {
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
@@ -4790,6 +4908,160 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       setVoicePrefill(text.trim());
       setRecordTypeChoice('');
       setShowRecordTypeModal(true);
+    }
+  };
+
+  // Save a transaction (manual entry or Excel import) to Supabase, or queue it
+  // offline. Shared by the Smart Transaction Entry modal and the bulk Excel
+  // importer so both go through the exact same save path — including
+  // `transaction.timestamp`, which lets either one backdate the entry.
+  // Returns { success, transaction? , error? } so bulk import can tally results.
+  const persistTransaction = async (transaction, { source = 'smart_entry' } = {}) => {
+    // Add timestamp if not present
+    if (!transaction.timestamp) {
+      transaction.timestamp = new Date().toISOString();
+    }
+
+    // Resolve business-or-personal from the submitted transaction
+    const resolvedCategory = transaction.accountingType || transactionType || 'personal';
+
+    // Store transaction locally with proper format
+    const formattedTransaction = {
+      id: transaction.id || `temp_${Date.now()}`,
+      amount: transaction.amount || 0,
+      transaction_type: transaction.isIncome ? 'income' : 'expense',
+      description: transaction.description || 'Transaction',
+      created_at: transaction.timestamp || new Date().toISOString(),
+      user_id: userProfile?.id,
+      currency: 'UGX',
+      status: 'completed',
+      record_category: resolvedCategory,
+      business_profile_id: transaction.businessProfileId || null,
+      metadata: {
+        category: transaction.category || 'other',
+        source,
+        record_category: resolvedCategory,
+        accounting_type: transaction.businessAccountingType || null,
+        reporting_bucket: transaction.reportingBucket || null,
+        product_name: transaction.productName || null,
+        product_action: transaction.productAction || null,
+        ledger_side: transaction.ledgerSide || null,
+        raw_entry_text: transaction.originalText || transaction.rawInput || null,
+        entry_mode: resolvedCategory === 'business' ? 'professional_business' : 'personal_quick'
+      }
+    };
+    setTransactions(prev => [formattedTransaction, ...prev]);
+
+    // Update balance if valid amount
+    if (transaction.amount) {
+      if (transaction.isIncome) {
+        setCurrentBalance(prev => {
+          const num = parseInt(prev.replace(/,/g, '')) + transaction.amount;
+          return num.toLocaleString();
+        });
+      } else {
+        setCurrentBalance(prev => {
+          const num = parseInt(prev.replace(/,/g, '')) - transaction.amount;
+          return num.toLocaleString();
+        });
+      }
+    }
+
+    // Persist transaction to Supabase via VelocityEngine OR queue if offline
+    try {
+      // Get user ID from Supabase auth (same as web view) — never fall
+      // back to a fake id; that would silently save under a user that
+      // doesn't exist instead of surfacing the real auth problem.
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = authContextUser?.id || user?.id || userProfile?.id;
+      const userEmail = user?.email || authContextUser?.email;
+
+      if (!userId) {
+        console.error('❌ No authenticated user — cannot save transaction to Supabase');
+        setTransactions(prev => prev.filter(t => t.id !== formattedTransaction.id));
+        return { success: false, error: new Error('You appear to be signed out. Please sign in again and retry.') };
+      }
+
+      // 📴 CHECK IF OFFLINE — Queue instead of saving directly
+      if (!navigator.onLine || isOfflineMode) {
+        // Queue business/personal transactions for sync when online
+        if (resolvedCategory === 'business' || resolvedCategory === 'personal') {
+          await queueAction('transaction', {
+            amount: transaction.amount || 0,
+            type: transaction.isIncome ? 'income' : 'expense',
+            description: transaction.description || 'Transaction',
+            category: transaction.category || 'other',
+            date: transaction.timestamp || new Date().toISOString(),
+            source,
+            currency: 'UGX',
+            record_category: resolvedCategory,
+            accounting_type: transaction.businessAccountingType || null,
+            reporting_bucket: transaction.reportingBucket || null,
+            product_name: transaction.productName || null,
+            product_action: transaction.productAction || null,
+            ledger_side: transaction.ledgerSide || null,
+            raw_entry_text: transaction.originalText || transaction.rawInput || null,
+            entry_mode: resolvedCategory === 'business' ? 'professional_business' : 'personal_quick',
+            business_profile_id: transaction.businessProfileId || null,
+            userEmail: userEmail,
+            userId: userId
+          });
+          console.log('📴 Transaction queued for offline sync:', transaction.description);
+          return { success: true, queued: true };
+        } else if (resolvedCategory === 'wallet') {
+          // Wallet transactions require live server (involve real money)
+          console.error('❌ Wallet transactions require internet connection');
+          setTransactions(prev => prev.filter(t => t.id !== formattedTransaction.id));
+          return { success: false, error: new Error('🌐 Wallet operations require an internet connection') };
+        }
+      }
+
+      // Save transaction using VelocityEngine (online path)
+      const engine = new VelocityEngine(userId);
+      const result = await engine.addTransaction({
+        amount: transaction.amount || 0,
+        type: transaction.isIncome ? 'income' : 'expense',
+        description: transaction.description || 'Transaction',
+        category: transaction.category || 'other',
+        date: transaction.timestamp || new Date().toISOString(),
+        source,
+        currency: 'UGX',
+        record_category: resolvedCategory,
+        accounting_type: transaction.businessAccountingType || null,
+        reporting_bucket: transaction.reportingBucket || null,
+        product_name: transaction.productName || null,
+        product_action: transaction.productAction || null,
+        ledger_side: transaction.ledgerSide || null,
+        raw_entry_text: transaction.originalText || transaction.rawInput || null,
+        entry_mode: resolvedCategory === 'business' ? 'professional_business' : 'personal_quick',
+        // Pass selected business profile so this transaction feeds PitchIn share valuation
+        business_profile_id: transaction.businessProfileId || null
+      });
+
+      if (result.success) {
+        console.log(` Mobile: Saved transaction for user ${userId}`, result.transaction);
+        // Update with real transaction data
+        setTransactions(prev => [
+          result.transaction,
+          ...prev.filter(t => t.id !== formattedTransaction.id)
+        ]);
+
+        // Reload metrics from VelocityEngine
+        const loadResult = await engine.loadAllTransactions();
+        if (loadResult.success) {
+          const metrics = engine.calculateMetrics();
+          setVelocityMetrics(metrics);
+        }
+        return { success: true, transaction: result.transaction };
+      } else {
+        console.error('Failed to save transaction:', result.error);
+        setTransactions(prev => prev.filter(t => t.id !== formattedTransaction.id));
+        return { success: false, error: result.error };
+      }
+    } catch (error) {
+      console.error('Error saving transaction to database:', error);
+      setTransactions(prev => prev.filter(t => t.id !== formattedTransaction.id));
+      return { success: false, error };
     }
   };
 
@@ -7408,6 +7680,23 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       <span className="text-[10px] font-bold text-green-300">CSV</span>
                     </button>
                     <button
+                      onClick={() => handleDownloadExcel(expFiltered, periodLabel)}
+                      className="w-8 h-8 rounded-lg flex items-center justify-center bg-emerald-900/40 hover:bg-emerald-800/50 active:scale-90 transition-all flex-shrink-0 border border-emerald-700/30"
+                      title="Download Excel"
+                    >
+                      <span className="text-[9px] font-bold text-emerald-300">XLS</span>
+                    </button>
+                    <button
+                      onClick={() => importFileInputRef.current?.click()}
+                      disabled={importingExcel}
+                      className="w-8 h-8 rounded-lg flex items-center justify-center bg-amber-900/40 hover:bg-amber-800/50 active:scale-90 transition-all flex-shrink-0 border border-amber-700/30 disabled:opacity-50"
+                      title="Import from Excel"
+                    >
+                      {importingExcel
+                        ? <Loader2 className="w-3.5 h-3.5 text-amber-300 animate-spin" />
+                        : <Upload className="w-3.5 h-3.5 text-amber-300" />}
+                    </button>
+                    <button
                       onClick={() => handleShareTransactions(expFiltered, periodLabel)}
                       className="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-900/40 hover:bg-blue-800/50 active:scale-90 transition-all flex-shrink-0 border border-blue-700/30"
                       title="Share"
@@ -7417,6 +7706,15 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   </>
                 )}
               </div>
+
+              {/* Hidden input backing both the desktop and mobile "Import from Excel" buttons */}
+              <input
+                ref={importFileInputRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                className="hidden"
+                onChange={(e) => handleImportExcelFile(e.target.files?.[0])}
+              />
 
               {/* ── Dropdown Menu (Mobile Only) ── */}
               {isMobileView && expMoreMenuOpen && (
@@ -7467,7 +7765,38 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         <p className="text-[10px] text-gray-500">Spreadsheet data</p>
                       </div>
                     </button>
-                    
+
+                    {/* Excel Export */}
+                    <button
+                      onClick={() => { handleDownloadExcel(expFiltered, periodLabel); setExpMoreMenuOpen(false); }}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800 active:bg-slate-700 transition-colors"
+                    >
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-emerald-900/40 border border-emerald-700/30">
+                        <span className="text-[9px] font-bold text-emerald-300">XLS</span>
+                      </div>
+                      <div className="flex-1 text-left">
+                        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Export as Excel</p>
+                        <p className="text-[10px] text-gray-500">.xlsx workbook</p>
+                      </div>
+                    </button>
+
+                    {/* Excel Import */}
+                    <button
+                      onClick={() => { importFileInputRef.current?.click(); setExpMoreMenuOpen(false); }}
+                      disabled={importingExcel}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800 active:bg-slate-700 transition-colors disabled:opacity-50"
+                    >
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-amber-900/40 border border-amber-700/30">
+                        {importingExcel
+                          ? <Loader2 className="w-4 h-4 text-amber-300 animate-spin" />
+                          : <Upload className="w-4 h-4 text-amber-300" />}
+                      </div>
+                      <div className="flex-1 text-left">
+                        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{importingExcel ? 'Importing…' : 'Import from Excel'}</p>
+                        <p className="text-[10px] text-gray-500">Bulk-add transactions</p>
+                      </div>
+                    </button>
+
                     {/* Share */}
                     <button
                       onClick={() => { handleShareTransactions(expFiltered, periodLabel); setExpMoreMenuOpen(false); }}
@@ -9721,158 +10050,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           setPreselectedBusinessProfileId(null);
           setVoicePrefill('');
         }}
-        onSubmit={(transaction) => {
-          // Add timestamp if not present
-          if (!transaction.timestamp) {
-            transaction.timestamp = new Date().toISOString();
-          }
-
-          // Resolve business-or-personal from the submitted transaction
-          const resolvedCategory = transaction.accountingType || transactionType || 'personal';
-
-          // Store transaction locally with proper format
-          const formattedTransaction = {
-            id: transaction.id || `temp_${Date.now()}`,
-            amount: transaction.amount || 0,
-            transaction_type: transaction.isIncome ? 'income' : 'expense',
-            description: transaction.description || 'Transaction',
-            created_at: transaction.timestamp || new Date().toISOString(),
-            user_id: userProfile?.id,
-            currency: 'UGX',
-            status: 'completed',
-            record_category: resolvedCategory,
-            business_profile_id: transaction.businessProfileId || null,
-            metadata: {
-              category: transaction.category || 'other',
-              source: 'smart_entry',
-              record_category: resolvedCategory,
-              accounting_type: transaction.businessAccountingType || null,
-              reporting_bucket: transaction.reportingBucket || null,
-              product_name: transaction.productName || null,
-              product_action: transaction.productAction || null,
-              ledger_side: transaction.ledgerSide || null,
-              raw_entry_text: transaction.originalText || transaction.rawInput || null,
-              entry_mode: resolvedCategory === 'business' ? 'professional_business' : 'personal_quick'
-            }
-          };
-          setTransactions(prev => [formattedTransaction, ...prev]);
-
-          // Persist transaction to Supabase via VelocityEngine OR queue if offline
-          const saveAndRefresh = async () => {
-            try {
-              // Get user ID from Supabase auth (same as web view) — never fall
-              // back to a fake id; that would silently save under a user that
-              // doesn't exist instead of surfacing the real auth problem.
-              const { data: { user } } = await supabase.auth.getUser();
-              const userId = authContextUser?.id || user?.id || userProfile?.id;
-              const userEmail = user?.email || authContextUser?.email;
-              
-              if (userId) {
-                // 📴 CHECK IF OFFLINE — Queue instead of saving directly
-                if (!navigator.onLine || isOfflineMode) {
-                  // Queue business/personal transactions for sync when online
-                  if (resolvedCategory === 'business' || resolvedCategory === 'personal') {
-                    await queueAction('transaction', {
-                      amount: transaction.amount || 0,
-                      type: transaction.isIncome ? 'income' : 'expense',
-                      description: transaction.description || 'Transaction',
-                      category: transaction.category || 'other',
-                      date: transaction.timestamp || new Date().toISOString(),
-                      source: 'smart_entry',
-                      currency: 'UGX',
-                      record_category: resolvedCategory,
-                      accounting_type: transaction.businessAccountingType || null,
-                      reporting_bucket: transaction.reportingBucket || null,
-                      product_name: transaction.productName || null,
-                      product_action: transaction.productAction || null,
-                      ledger_side: transaction.ledgerSide || null,
-                      raw_entry_text: transaction.originalText || transaction.rawInput || null,
-                      entry_mode: resolvedCategory === 'business' ? 'professional_business' : 'personal_quick',
-                      business_profile_id: transaction.businessProfileId || null,
-                      userEmail: userEmail,
-                      userId: userId
-                    });
-                    console.log('📴 Transaction queued for offline sync:', transaction.description);
-                    return; // Don't try to save to Supabase
-                  } else if (resolvedCategory === 'wallet') {
-                    // Wallet transactions require live server (involve real money)
-                    console.error('❌ Wallet transactions require internet connection');
-                    setTransactions(prev => prev.filter(t => t.id !== formattedTransaction.id));
-                    alert('🌐 Wallet operations require an internet connection');
-                    return;
-                  }
-                }
-                
-                // Save transaction using VelocityEngine (online path)
-                const engine = new VelocityEngine(userId);
-                const result = await engine.addTransaction({
-                  amount: transaction.amount || 0,
-                  type: transaction.isIncome ? 'income' : 'expense',
-                  description: transaction.description || 'Transaction',
-                  category: transaction.category || 'other',
-                  date: transaction.timestamp || new Date().toISOString(),
-                  source: 'smart_entry',
-                  currency: 'UGX',
-                  record_category: resolvedCategory,
-                  accounting_type: transaction.businessAccountingType || null,
-                  reporting_bucket: transaction.reportingBucket || null,
-                  product_name: transaction.productName || null,
-                  product_action: transaction.productAction || null,
-                  ledger_side: transaction.ledgerSide || null,
-                  raw_entry_text: transaction.originalText || transaction.rawInput || null,
-                  entry_mode: resolvedCategory === 'business' ? 'professional_business' : 'personal_quick',
-                  // Pass selected business profile so this transaction feeds PitchIn share valuation
-                  business_profile_id: transaction.businessProfileId || null
-                });
-
-                if (result.success) {
-                  console.log(` Mobile: Saved transaction for user ${userId}`, result.transaction);
-                  // Update with real transaction data
-                  setTransactions(prev => [
-                    result.transaction,
-                    ...prev.filter(t => t.id !== formattedTransaction.id)
-                  ]);
-                  
-                  // Reload metrics from VelocityEngine
-                  const loadResult = await engine.loadAllTransactions();
-                  if (loadResult.success) {
-                    const metrics = engine.calculateMetrics();
-                    console.log(' Updated VelocityEngine Metrics:', metrics);
-                    setVelocityMetrics(metrics);
-                  }
-                } else {
-                  console.error('Failed to save transaction:', result.error);
-                  // Remove failed transaction
-                  setTransactions(prev => prev.filter(t => t.id !== formattedTransaction.id));
-                }
-              } else {
-                console.error('❌ No authenticated user — cannot save transaction to Supabase');
-                setTransactions(prev => prev.filter(t => t.id !== formattedTransaction.id));
-                alert('You appear to be signed out. Please sign in again and retry.');
-              }
-            } catch (error) {
-              console.error('Error saving transaction to database:', error);
-              // Remove failed transaction
-              setTransactions(prev => prev.filter(t => t.id !== formattedTransaction.id));
-            }
-          };
-          saveAndRefresh();
-
-          // Update balance if valid amount
-          if (transaction.amount) {
-            if (transaction.isIncome) {
-              setCurrentBalance(prev => {
-                const num = parseInt(prev.replace(/,/g, '')) + transaction.amount;
-                return num.toLocaleString();
-              });
-            } else {
-              setCurrentBalance(prev => {
-                const num = parseInt(prev.replace(/,/g, '')) - transaction.amount;
-                return num.toLocaleString();
-              });
-            }
-          }
-
+        onSubmit={async (transaction) => {
+          const result = await persistTransaction(transaction, { source: 'smart_entry' });
+          if (!result.success && result.error) alert(result.error.message || 'Failed to save transaction. Please try again.');
           console.log(' Transaction recorded:', transaction);
         }}
       />
