@@ -35,7 +35,10 @@ import {
   DollarSign,
   Car,
   Megaphone,
-  Link2
+  Link2,
+  Check,
+  MapPin,
+  Globe
 } from 'lucide-react';
 
 // Import Supabase CMMS service
@@ -4773,6 +4776,7 @@ const CMMSModule = ({
     const [isSavingDepartment, setIsSavingDepartment] = useState(false);
     const [profileError, setProfileError] = useState('');
     const [departmentError, setDepartmentError] = useState('');
+    const [copiedGoogleDetails, setCopiedGoogleDetails] = useState(false);
 
     // Open create-company form whenever the header icon triggers it
     useEffect(() => {
@@ -5027,13 +5031,41 @@ const CMMSModule = ({
       }
     };
 
+    // Google doesn't publish any URL parameters that prefill its own "Add
+    // your Business Profile" signup form (unlike Google Maps' own search/
+    // directions links, which do document real query params) -- so there is
+    // no honest way to build a link that arrives with these fields already
+    // filled in. The next best thing: put the exact text the owner needs
+    // one tap away, so registering is "open the link, paste, done" instead
+    // of re-typing everything from memory on Google's own site.
+    const copyGoogleBusinessDetails = async () => {
+      const profile = cmmsData.companyProfile;
+      if (!profile) return;
+      const lines = [
+        profile.company_name && `Business name: ${profile.company_name}`,
+        profile.location && `Address: ${profile.location}`,
+        profile.phone && `Phone: ${profile.phone}`,
+        profile.industry && `Category: ${profile.industry}`,
+        profile.website && `Website: ${profile.website}`,
+      ].filter(Boolean).join('\n');
+      try {
+        await navigator.clipboard.writeText(lines);
+        setCopiedGoogleDetails(true);
+        setTimeout(() => setCopiedGoogleDetails(false), 2500);
+      } catch {
+        window.prompt('Copy these details:', lines);
+      }
+    };
+
     const profile = cmmsData.companyProfile;
     const displayProfile = {
       companyName: profile?.company_name || profile?.companyName || '',
       companyRegistration: profile?.company_registration || profile?.companyRegistration || '',
       location: profile?.location || '',
       email: profile?.email || '',
-      phone: profile?.phone || ''
+      phone: profile?.phone || '',
+      industry: profile?.industry || '',
+      website: profile?.website || ''
     };
 
     const departments = cmmsData.departments || [];
@@ -5122,6 +5154,21 @@ const CMMSModule = ({
                   placeholder="contact@company.com"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-500 text-sm focus:border-blue-500 focus:border-opacity-50 outline-none"
+                />
+              </div>
+
+              {/* Website -- updateCompanyProfile has always written this column,
+                  but no input for it existed anywhere in this form, so it could
+                  only ever be set by falling back to a linked Pitchin business
+                  profile's own website (CMMS_PUBLIC_BOARD_WEBSITE_FALLBACK.sql). */}
+              <div className="space-y-1.5">
+                <label className="block text-gray-300 text-sm font-semibold">Website</label>
+                <input
+                  type="text"
+                  placeholder="example.com"
+                  value={formData.website}
+                  onChange={(e) => setFormData({ ...formData, website: e.target.value })}
                   className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-500 text-sm focus:border-blue-500 focus:border-opacity-50 outline-none"
                 />
               </div>
@@ -5264,6 +5311,14 @@ const CMMSModule = ({
                 <div className="text-gray-400 text-xs md:text-sm">Email</div>
                 <div className="text-white font-bold text-sm md:text-base break-all">{displayProfile.email}</div>
               </div>
+              <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded">
+                <div className="text-gray-400 text-xs md:text-sm">Phone</div>
+                <div className="text-white font-bold text-sm md:text-base">{displayProfile.phone || '—'}</div>
+              </div>
+              <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded">
+                <div className="text-gray-400 text-xs md:text-sm">Website</div>
+                <div className="text-white font-bold text-sm md:text-base break-all">{displayProfile.website || '—'}</div>
+              </div>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-2">
@@ -5287,7 +5342,7 @@ const CMMSModule = ({
                   setShowProfileForm(true);
                   setIsEditingProfile(false);
                   setIsHeaderCreateFlow(true);
-                  setFormData({ companyName: '', companyRegistration: '', location: '', phone: '', email: '', industry: 'Manufacturing' });
+                  setFormData({ companyName: '', companyRegistration: '', location: '', phone: '', email: '', industry: 'Manufacturing', website: '' });
                   setDepartmentForm({ department_name: '', description: '', location: '' });
                   setSelectedDepartments([]);
                   setProfileError('');
@@ -5298,6 +5353,38 @@ const CMMSModule = ({
                 ➕ Create Another Company
               </button>
             </div>
+
+            {/* Google publishes no way to prefill its own signup form via
+                URL, so this is the honest version of "one-click register":
+                open the real page, and put the exact text to paste into it
+                one tap away. Only shown once the basics Google actually asks
+                for exist, so the copied block is never mostly blank lines. */}
+            {(displayProfile.companyName && displayProfile.phone) && (
+              <div className="mt-4 pt-4 border-t border-white border-opacity-20">
+                <h4 className="text-sm font-bold text-gray-300 mb-1 flex items-center gap-1.5">
+                  <MapPin className="w-4 h-4 text-blue-400" /> Get found on Google Maps
+                </h4>
+                <p className="text-gray-400 text-xs mb-3">
+                  Register this business as a Google Business Profile so customers can find it on Google Search and Maps. Google's signup form can't be pre-filled from here, so copy your details first, then paste them in once you're on Google's page.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    onClick={copyGoogleBusinessDetails}
+                    className="flex-1 px-4 py-2 bg-white bg-opacity-10 hover:bg-opacity-20 text-white rounded-lg font-semibold transition-all text-sm flex items-center justify-center gap-2"
+                  >
+                    {copiedGoogleDetails ? <><Check className="w-4 h-4 text-green-400" /> Copied — paste it on Google's page</> : <><Clipboard className="w-4 h-4" /> Copy business details</>}
+                  </button>
+                  <a
+                    href="https://www.google.com/business/"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex-1 px-4 py-2 bg-blue-500 bg-opacity-30 hover:bg-opacity-40 text-blue-200 rounded-lg font-semibold transition-all text-sm flex items-center justify-center gap-2"
+                  >
+                    <Globe className="w-4 h-4" /> Register on Google
+                  </a>
+                </div>
+              </div>
+            )}
 
             {/* View Departments */}
             {departments.length > 0 && (
