@@ -5,7 +5,7 @@ import {
   Video, Copy, Award, QrCode, Sparkles, Clock, MessageCircle
 } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
-import { uploadToR2 } from '../services/r2StorageService';
+import { uploadToR2, resolveMediaValue } from '../services/r2StorageService';
 import { downloadCmmsQrPdf } from '../utils/downloadCmmsQrPdf';
 import cmmsAnnouncementsService from '../services/cmmsAnnouncementsService';
 import { getAccessibleBusinesses } from '../services/businessManagementService';
@@ -163,7 +163,11 @@ const CMMSAnnouncementsPanel = ({
         };
         setWebsiteDraft(website);
         setSavedWebsiteProfile(website);
-        setExistingCoverImageUrl(data?.cover_image_url || '');
+        // cover_image_url is stored as the raw "r2://<key>" marker (private
+        // bucket -- see r2StorageService.js), never usable directly as an
+        // <img src>. Resolve it to a real presigned URL before it reaches
+        // the preview box below.
+        resolveMediaValue(data?.cover_image_url).then(setExistingCoverImageUrl);
       });
     cmmsAnnouncementsService.getRolesForAutofill(companyId).then((result) => { if (result.success) setRoles(result.data); });
     supabase.from('cmms_users').select('id, full_name, user_name, email').eq('cmms_company_id', companyId).eq('is_active', true)
@@ -240,7 +244,11 @@ const CMMSAnnouncementsPanel = ({
       if (!result.success) throw new Error(result.error);
       setSavedWebsiteProfile(websiteDraft);
       if (coverUpload) {
-        setExistingCoverImageUrl(coverUpload.url);
+        // coverUpload.url is the raw "r2://<key>" marker uploadToR2 returns
+        // (see the note on the load effect above) -- resolve it to a real
+        // presigned URL before swapping the preview over to it, same as on
+        // load, so the box never tries to <img src="r2://...">.
+        setExistingCoverImageUrl(await resolveMediaValue(coverUpload.url));
         if (coverImagePreview) URL.revokeObjectURL(coverImagePreview);
         setCoverImageFile(null);
         setCoverImagePreview('');
