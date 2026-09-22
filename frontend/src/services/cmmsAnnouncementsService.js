@@ -92,6 +92,46 @@ export const updateCompanyAbout = async (companyId, about) => {
   return { success: true, data };
 };
 
+// The "real website" fields shown on the public board's hero/contact bar
+// (see PublicCompanyNoticeBoard.jsx) -- tagline, cover photo, WhatsApp,
+// hours and socials. Same plain-column-update pattern as updateCompanyAbout
+// (CMMS_PUBLIC_BUSINESS_WEBSITE_PROFILE.sql adds no new RLS policy because
+// these fields are exactly as public as `about`/`phone`/`website` already
+// are). `fields` is a sparse patch -- only the keys the caller passes are
+// written, so the "About" and "Products & services" cards can keep saving
+// independently of this one.
+const PUBLIC_PROFILE_FIELD_MAP = {
+  tagline: 'tagline',
+  coverImageUrl: 'cover_image_url',
+  coverImagePath: 'cover_image_path',
+  whatsapp: 'whatsapp',
+  hoursText: 'hours_text',
+  facebookUrl: 'facebook_url',
+  instagramUrl: 'instagram_url',
+  twitterUrl: 'twitter_url',
+  linkedinUrl: 'linkedin_url',
+  tiktokUrl: 'tiktok_url',
+};
+
+export const updateCompanyPublicProfile = async (companyId, fields) => {
+  if (!companyId) return { success: false, error: 'companyId is required' };
+  const patch = { updated_at: new Date().toISOString() };
+  Object.entries(fields || {}).forEach(([key, value]) => {
+    const column = PUBLIC_PROFILE_FIELD_MAP[key];
+    if (!column) return;
+    const trimmed = typeof value === 'string' ? value.trim() : value;
+    patch[column] = trimmed === '' ? null : trimmed ?? null;
+  });
+  const { data, error } = await supabase
+    .from('cmms_company_profiles')
+    .update(patch)
+    .eq('id', companyId)
+    .select(Object.values(PUBLIC_PROFILE_FIELD_MAP).join(', '))
+    .single();
+  if (error) return { success: false, error: error.message };
+  return { success: true, data };
+};
+
 // The only sanctioned way to link/unlink this company's public board to one
 // of the caller's own ICANera business_profiles -- see
 // fn_set_cmms_company_business_profile in CMMS_NOTICE_BOARD_PRODUCTS.sql for
@@ -165,6 +205,7 @@ export const getPublicCompanyHeader = async (companyId) => {
   if (error || !data?.length) return { success: false, error: error?.message, data: null };
   const row = { ...data[0] };
   row.logo_url = await resolveMediaValue(row.logo_url);
+  row.cover_image_url = await resolveMediaValue(row.cover_image_url);
   return { success: true, data: row };
 };
 
@@ -396,6 +437,7 @@ export default {
   updateAnnouncement,
   deleteAnnouncement,
   updateCompanyAbout,
+  updateCompanyPublicProfile,
   setCompanyBusinessProfileLink,
   getRolesForAutofill,
   getJobApplications,

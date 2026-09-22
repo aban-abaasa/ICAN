@@ -3,7 +3,8 @@ import {
   Megaphone, Briefcase, MapPin, Calendar, Users, FileText, X, Loader,
   AlertCircle, CheckCircle2, Search, Building2, ArrowLeft, Upload, Share2,
   Check, ChevronRight, Clock, ShoppingBag, ShoppingCart, Plus, Minus,
-  Trash2, Truck, Store, Award
+  Trash2, Truck, Store, Award, Phone, Mail, Navigation, MessageCircle,
+  Facebook, Instagram, Twitter, Linkedin, Music2, BadgeCheck, Globe
 } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 import cmmsAnnouncementsService from '../services/cmmsAnnouncementsService';
@@ -13,6 +14,150 @@ import { useAuth } from '../context/AuthContext';
 import { AuthPage } from './auth';
 
 const formatUGX = (amount) => `UGX ${Number(amount || 0).toLocaleString('en-UG', { maximumFractionDigits: 0 })}`;
+
+// Contact-bar link builders -- every one degrades to `null` (and is simply
+// not rendered) when the business hasn't filled that field in, rather than
+// ever producing a dead/blank link.
+const buildTelLink = (phone) => (phone?.trim() ? `tel:${phone.replace(/[^\d+]/g, '')}` : null);
+const buildMailLink = (email) => (email?.trim() ? `mailto:${email.trim()}` : null);
+const buildWhatsAppLink = (whatsapp) => {
+  const digits = whatsapp?.replace(/[^\d]/g, '');
+  return digits ? `https://wa.me/${digits}` : null;
+};
+const buildDirectionsLink = (location, companyName) => {
+  const query = [companyName, location].filter(Boolean).join(', ');
+  return query ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}` : null;
+};
+// Businesses type their website as "example.com" as often as
+// "https://example.com" -- a bare domain as an <a href> just reloads the
+// current page instead of navigating out, so this normalizes it once here
+// rather than trusting every admin to type the scheme.
+const normalizeExternalUrl = (url) => {
+  const trimmed = url?.trim();
+  if (!trimmed) return null;
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+};
+
+const SOCIAL_LINKS = [
+  { key: 'facebook_url', label: 'Facebook', icon: Facebook },
+  { key: 'instagram_url', label: 'Instagram', icon: Instagram },
+  { key: 'twitter_url', label: 'X (Twitter)', icon: Twitter },
+  { key: 'linkedin_url', label: 'LinkedIn', icon: Linkedin },
+  { key: 'tiktok_url', label: 'TikTok', icon: Music2 },
+];
+
+// Sets this specific business's title/meta/canonical/Open Graph tags and a
+// schema.org LocalBusiness JSON-LD block on the shared <head> -- the page
+// (index.html) ships generic "IcanEra" tags for the whole SPA, so without
+// this every business's page would look identical to Google/AI crawlers
+// that execute JS. (The initial HTML payload for crawlers that DON'T
+// execute JS -- most link-unfurlers and several AI crawlers -- is instead
+// patched server-side per business by api/share-preview.js; this effect is
+// the client-side half of the same "let this business actually be found"
+// goal, and keeps the tab title correct for a human visitor too.)
+const useBusinessSeo = (company, companyId) => {
+  useEffect(() => {
+    if (!company) return;
+    const previousTitle = document.title;
+    const siteName = 'IcanEra';
+    const title = company.tagline
+      ? `${company.company_name} — ${company.tagline} | ${siteName}`
+      : `${company.company_name}${company.industry ? ` — ${company.industry}` : ''} | ${siteName}`;
+    document.title = title;
+
+    const canonicalUrl = `${window.location.origin}/notices/${companyId}`;
+    const description = (
+      company.about?.trim()
+      || company.tagline?.trim()
+      || `${company.company_name} on IcanEra — announcements, careers, products and contact details.`
+    ).slice(0, 300);
+    const image = company.cover_image_url || company.logo_url || `${window.location.origin}/icons/icon-512x512.png`;
+
+    const createdNodes = [];
+    const upsertMeta = (selector, build) => {
+      let el = document.head.querySelector(selector);
+      if (!el) {
+        el = build();
+        document.head.appendChild(el);
+        createdNodes.push(el);
+      }
+      return el;
+    };
+
+    upsertMeta('meta[name="description"]', () => {
+      const el = document.createElement('meta');
+      el.setAttribute('name', 'description');
+      return el;
+    }).setAttribute('content', description);
+
+    upsertMeta('link[rel="canonical"]', () => {
+      const el = document.createElement('link');
+      el.setAttribute('rel', 'canonical');
+      return el;
+    }).setAttribute('href', canonicalUrl);
+
+    const ogTags = {
+      'og:type': 'business.business',
+      'og:site_name': siteName,
+      'og:url': canonicalUrl,
+      'og:title': title,
+      'og:description': description,
+      'og:image': image,
+      'twitter:card': 'summary_large_image',
+      'twitter:title': title,
+      'twitter:description': description,
+      'twitter:image': image,
+    };
+    Object.entries(ogTags).forEach(([property, content]) => {
+      const isTwitter = property.startsWith('twitter:');
+      const attr = isTwitter ? 'name' : 'property';
+      upsertMeta(`meta[${attr}="${property}"]`, () => {
+        const el = document.createElement('meta');
+        el.setAttribute(attr, property);
+        return el;
+      }).setAttribute('content', content);
+    });
+
+    // Structured data -- this is what lets Google show a real business
+    // card (and lets AI answer engines cite real facts: name, phone,
+    // address, socials) instead of treating the page as an anonymous blob
+    // of text.
+    const sameAs = [company.website, ...SOCIAL_LINKS.map((s) => company[s.key])]
+      .map(normalizeExternalUrl)
+      .filter(Boolean);
+    const jsonLd = {
+      '@context': 'https://schema.org',
+      '@type': 'LocalBusiness',
+      name: company.company_name,
+      description,
+      image,
+      url: canonicalUrl,
+      ...(company.logo_url && { logo: company.logo_url }),
+      ...(company.phone && { telephone: company.phone }),
+      ...(company.email && { email: company.email }),
+      ...(company.location && { address: { '@type': 'PostalAddress', addressLocality: company.location } }),
+      ...(company.hours_text && { openingHours: company.hours_text }),
+      ...(company.industry && { knowsAbout: company.industry }),
+      ...(sameAs.length > 0 && { sameAs }),
+    };
+    let script = document.getElementById('icanera-business-ld-json');
+    let createdScript = false;
+    if (!script) {
+      script = document.createElement('script');
+      script.type = 'application/ld+json';
+      script.id = 'icanera-business-ld-json';
+      document.head.appendChild(script);
+      createdScript = true;
+    }
+    script.textContent = JSON.stringify(jsonLd);
+
+    return () => {
+      document.title = previousTitle;
+      createdNodes.forEach((node) => node.remove());
+      if (createdScript) script.remove();
+    };
+  }, [company, companyId]);
+};
 
 const EMPLOYMENT_LABELS = {
   full_time: 'Full-time',
@@ -149,6 +294,15 @@ const NB_STYLES = `
 .nb-qty-pill { background: var(--nb-surface-alt); }
 .nb-price { color: var(--nb-green); }
 .nb-out-of-stock { color: var(--nb-maroon); }
+.nb-hero-cover { background: linear-gradient(135deg, var(--nb-green) 0%, var(--nb-maroon) 100%); }
+.nb-hero-overlay { background: linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.55) 100%); }
+.nb-hero-avatar { background: var(--nb-surface); border: 3px solid var(--nb-surface); box-shadow: 0 2px 10px rgba(0,0,0,0.18); }
+.nb-action-btn { background: var(--nb-surface); color: var(--nb-text); border: 1px solid var(--nb-border-strong); }
+.nb-action-btn:hover { border-color: var(--nb-green); color: var(--nb-green); }
+.nb-social-btn { background: var(--nb-surface-alt); color: var(--nb-text-muted); }
+.nb-social-btn:hover { background: var(--nb-green-soft-bg); color: var(--nb-green-soft-text); }
+.nb-verified-badge { background: var(--nb-green-soft-bg); color: var(--nb-green-soft-text); }
+.nb-strip { background: var(--nb-surface); border-bottom: 1px solid var(--nb-border); }
 `;
 
 /**
@@ -257,6 +411,8 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
     if (companyId) load();
     return () => { cancelled = true; };
   }, [companyId]);
+
+  useBusinessSeo(company, companyId);
 
   useEffect(() => {
     let cancelled = false;
@@ -445,6 +601,8 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
         </nav>
       </header>
 
+      {section === 'notices' ? <BusinessHero company={company} /> : <ContactStrip company={company} />}
+
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-7">
         <div key={section} className="animate-fadeInUp" style={{ animationDuration: '0.35s' }}>
           {section === 'notices' && (
@@ -475,11 +633,14 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
         </div>
       </main>
 
-      <footer className="text-center text-xs nb-text-faint pb-8 pt-2">
-        Powered by{' '}
-        <button onClick={goToApp} className="align-middle hover:opacity-80 transition-opacity">
-          <IcanEraWordmark />
-        </button>
+      <footer className="text-center text-xs nb-text-faint pb-8 pt-6">
+        <SocialRow company={company} className="justify-center mb-4" />
+        <p>
+          {company.company_name} · Powered by{' '}
+          <button onClick={goToApp} className="align-middle hover:opacity-80 transition-opacity">
+            <IcanEraWordmark />
+          </button>
+        </p>
       </footer>
 
       {selectedNotice && <NoticeDetailModal notice={selectedNotice} onClose={() => setSelectedNotice(null)} onShare={handleShare} />}
@@ -507,6 +668,155 @@ const IcanEraWordmark = () => (
   </span>
 );
 
+// One row of circular icon links out to whichever social profiles this
+// business filled in (CMMSAnnouncementsPanel's "Website & contact" card) --
+// renders nothing at all when none are set, rather than a row of dead icons.
+const SocialRow = ({ company, className = '' }) => {
+  const links = SOCIAL_LINKS
+    .map((social) => ({ ...social, href: normalizeExternalUrl(company[social.key]) }))
+    .filter((social) => social.href);
+  if (links.length === 0) return null;
+  return (
+    <div className={`flex items-center gap-2 ${className}`}>
+      {links.map((social) => (
+        <a
+          key={social.key}
+          href={social.href}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={social.label}
+          title={social.label}
+          className="nb-social-btn w-9 h-9 rounded-full flex items-center justify-center transition-colors"
+        >
+          <social.icon className="w-4 h-4" />
+        </a>
+      ))}
+    </div>
+  );
+};
+
+// The row of "actually do something" buttons -- call, WhatsApp, email,
+// directions, visit their real website, share this page -- built from
+// whatever contact fields the business filled in. This, more than the
+// notices feed itself, is what makes the page read as the business's own
+// site rather than a job board bolted onto ICANEra.
+const ContactActions = ({ company, onShare, size = 'default' }) => {
+  const actions = [
+    company.phone && { key: 'call', label: 'Call', icon: Phone, href: buildTelLink(company.phone) },
+    company.whatsapp && { key: 'whatsapp', label: 'WhatsApp', icon: MessageCircle, href: buildWhatsAppLink(company.whatsapp) },
+    company.email && { key: 'email', label: 'Email', icon: Mail, href: buildMailLink(company.email) },
+    company.location && { key: 'directions', label: 'Directions', icon: Navigation, href: buildDirectionsLink(company.location, company.company_name) },
+    company.website && { key: 'website', label: 'Website', icon: Globe, href: normalizeExternalUrl(company.website) },
+  ].filter(Boolean);
+
+  const pad = size === 'compact' ? 'px-3 py-1.5 text-xs' : 'px-3.5 py-2 text-sm';
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {actions.map((action) => (
+        <a
+          key={action.key}
+          href={action.href}
+          target={action.key === 'website' ? '_blank' : undefined}
+          rel={action.key === 'website' ? 'noreferrer' : undefined}
+          className={`nb-action-btn rounded-full font-semibold flex items-center gap-1.5 transition-colors ${pad}`}
+        >
+          <action.icon className="w-3.5 h-3.5" /> {action.label}
+        </a>
+      ))}
+      {onShare && (
+        <button onClick={onShare} className={`nb-btn-secondary rounded-full font-semibold flex items-center gap-1.5 transition-colors ${pad}`}>
+          <Share2 className="w-3.5 h-3.5" /> Share
+        </button>
+      )}
+    </div>
+  );
+};
+
+// The homepage hero -- shown only on the "Notices" (front page) tab, same
+// place a real business's own website would put its cover photo, logo and
+// tagline above the fold.
+const BusinessHero = ({ company }) => {
+  const [linkCopied, setLinkCopied] = useState(false);
+  const shareBoard = async () => {
+    const link = window.location.href.split('?')[0];
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: company.company_name, text: company.tagline || company.about || company.company_name, url: link });
+        return;
+      }
+    } catch (err) {
+      if (err?.name === 'AbortError') return;
+    }
+    try {
+      await navigator.clipboard.writeText(link);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      window.prompt('Copy this link:', link);
+    }
+  };
+
+  return (
+    <div className="animate-fadeInDown">
+      <div className="relative h-36 sm:h-52 w-full overflow-hidden">
+        {company.cover_image_url ? (
+          <img src={company.cover_image_url} alt="" className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full nb-hero-cover" />
+        )}
+        <div className="absolute inset-0 nb-hero-overlay" />
+      </div>
+      <div className="max-w-5xl mx-auto px-4 sm:px-6">
+        <div className="flex items-end gap-4 -mt-10 sm:-mt-12 relative z-10">
+          {company.logo_url ? (
+            <img src={company.logo_url} alt={company.company_name} className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover nb-hero-avatar flex-shrink-0" />
+          ) : (
+            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl nb-btn-primary nb-hero-avatar flex items-center justify-center font-bold text-3xl flex-shrink-0">
+              {company.company_name?.charAt(0)?.toUpperCase() || <Building2 className="w-9 h-9" />}
+            </div>
+          )}
+          <div className="flex-1 min-w-0 pb-1 sm:pb-2">
+            <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight nb-text flex items-center gap-1.5 flex-wrap">
+              {company.company_name}
+              <BadgeCheck className="w-5 h-5 nb-link flex-shrink-0" aria-label="Verified IcanEra business" />
+            </h1>
+          </div>
+        </div>
+
+        <div className="mt-3 sm:mt-4">
+          {company.tagline && <p className="nb-text font-medium">{company.tagline}</p>}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-xs nb-text-faint">
+            {company.industry && <span className="inline-flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> {company.industry}</span>}
+            {company.location && <span className="inline-flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {company.location}</span>}
+            {company.hours_text && <span className="inline-flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {company.hours_text}</span>}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 mt-4">
+            <ContactActions company={company} onShare={shareBoard} />
+            <SocialRow company={company} />
+          </div>
+          {linkCopied && <p className="nb-copied inline-block text-xs font-semibold px-2.5 py-1 rounded-full mt-2">Link copied</p>}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// A compact, single-line version of the same contact info, kept visible on
+// every other tab (Careers, Products & Services, ...) so a visitor doesn't
+// have to hop back to "Notices" just to find a phone number.
+const ContactStrip = ({ company }) => {
+  const hasContact = company.phone || company.whatsapp || company.email || company.location || company.website;
+  if (!hasContact) return null;
+  return (
+    <div className="nb-strip animate-fadeInDown">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-2.5 overflow-x-auto">
+        <ContactActions company={company} size="compact" />
+      </div>
+    </div>
+  );
+};
+
 const EmptyState = ({ icon: Icon, text }) => (
   <div className="text-center py-20 animate-fadeIn">
     <div className="w-14 h-14 rounded-2xl nb-empty-icon flex items-center justify-center mx-auto mb-4">
@@ -524,12 +834,6 @@ const AboutCard = ({ company }) => (
   <div className="nb-card rounded-2xl shadow-sm p-5 mb-5 animate-fadeInUp">
     <h2 className="text-sm font-bold nb-text uppercase tracking-wide mb-2">About {company.company_name}</h2>
     <p className="nb-text-muted whitespace-pre-wrap leading-relaxed text-sm">{company.about}</p>
-    {(company.website || company.phone) && (
-      <div className="flex flex-wrap gap-3 mt-3 text-xs nb-text-faint">
-        {company.website && <span>🌐 {company.website}</span>}
-        {company.phone && <span>📞 {company.phone}</span>}
-      </div>
-    )}
   </div>
 );
 
