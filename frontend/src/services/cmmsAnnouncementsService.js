@@ -102,6 +102,8 @@ export const updateCompanyAbout = async (companyId, about) => {
 // independently of this one.
 const PUBLIC_PROFILE_FIELD_MAP = {
   tagline: 'tagline',
+  logoUrl: 'logo_url',
+  logoPath: 'logo_path',
   coverImageUrl: 'cover_image_url',
   coverImagePath: 'cover_image_path',
   whatsapp: 'whatsapp',

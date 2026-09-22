@@ -137,13 +137,21 @@ const CMMSAnnouncementsPanel = ({
   const [coverImagePreview, setCoverImagePreview] = useState('');
   const [existingCoverImageUrl, setExistingCoverImageUrl] = useState('');
   const [uploadingCover, setUploadingCover] = useState(false);
+  // The board's OWN logo -- separate from (and always wins over) the
+  // fallback to the linked Pitchin business profile's logo
+  // (business_profiles.avatar_url, see CMMS_PUBLIC_BOARD_PITCHIN_FALLBACKS.sql).
+  // Setting it here doesn't depend on that other form's own Submit button.
+  const [logoFile, setLogoFile] = useState(null);
+  const [logoPreview, setLogoPreview] = useState('');
+  const [existingLogoUrl, setExistingLogoUrl] = useState('');
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [boardQrDownloading, setBoardQrDownloading] = useState(false);
   const [boardLinkCopied, setBoardLinkCopied] = useState(false);
 
   useEffect(() => {
     if (!companyId) return;
     supabase.from('cmms_company_profiles')
-      .select('about, business_profile_id, company_name, tagline, whatsapp, hours_text, cover_image_url, facebook_url, instagram_url, twitter_url, linkedin_url, tiktok_url')
+      .select('about, business_profile_id, company_name, tagline, whatsapp, hours_text, logo_url, cover_image_url, facebook_url, instagram_url, twitter_url, linkedin_url, tiktok_url')
       .eq('id', companyId).maybeSingle()
       .then(({ data }) => {
         setAboutDraft(data?.about || '');
@@ -163,11 +171,12 @@ const CMMSAnnouncementsPanel = ({
         };
         setWebsiteDraft(website);
         setSavedWebsiteProfile(website);
-        // cover_image_url is stored as the raw "r2://<key>" marker (private
-        // bucket -- see r2StorageService.js), never usable directly as an
-        // <img src>. Resolve it to a real presigned URL before it reaches
-        // the preview box below.
+        // cover_image_url/logo_url are stored as the raw "r2://<key>" marker
+        // (private bucket -- see r2StorageService.js), never usable directly
+        // as an <img src>. Resolve both to real presigned URLs before they
+        // reach the preview boxes below.
         resolveMediaValue(data?.cover_image_url).then(setExistingCoverImageUrl);
+        resolveMediaValue(data?.logo_url).then(setExistingLogoUrl);
       });
     cmmsAnnouncementsService.getRolesForAutofill(companyId).then((result) => { if (result.success) setRoles(result.data); });
     supabase.from('cmms_users').select('id, full_name, user_name, email').eq('cmms_company_id', companyId).eq('is_active', true)
@@ -196,68 +205,106 @@ const CMMSAnnouncementsPanel = ({
     setSavedBusinessProfileId(businessProfileId);
   };
 
-  const websiteProfileDirty = JSON.stringify(websiteDraft) !== JSON.stringify(savedWebsiteProfile) || !!coverImageFile;
+  const websiteProfileDirty = JSON.stringify(websiteDraft) !== JSON.stringify(savedWebsiteProfile) || !!coverImageFile || !!logoFile;
+
+  const validateImageFile = (file, label) => {
+    if (!file.type.startsWith('image/')) {
+      alert(`Please choose an image file (PNG, JPG, or WEBP) for the ${label}.`);
+      return false;
+    }
+    if (file.size > MAX_POSTER_BYTES) {
+      alert(`${label[0].toUpperCase()}${label.slice(1)} is too large. Please use an image under 6MB.`);
+      return false;
+    }
+    return true;
+  };
 
   const handleCoverImageSelect = (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      alert('Please choose an image file (PNG, JPG, or WEBP) for the cover photo.');
-      return;
-    }
-    if (file.size > MAX_POSTER_BYTES) {
-      alert('Cover photo is too large. Please use an image under 6MB.');
-      return;
-    }
+    if (!file || !validateImageFile(file, 'cover photo')) return;
     if (coverImagePreview) URL.revokeObjectURL(coverImagePreview);
     setCoverImageFile(file);
     setCoverImagePreview(URL.createObjectURL(file));
   };
 
-  // Saves the whole "real website" card in one call -- cover photo upload
-  // (if a new one was picked) plus every text field, mirroring saveDraft's
-  // "upload first, then write the row" order below.
+  const handleLogoSelect = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !validateImageFile(file, 'logo')) return;
+    if (logoPreview) URL.revokeObjectURL(logoPreview);
+    setLogoFile(file);
+    setLogoPreview(URL.createObjectURL(file));
+  };
+
+  // Uploads one picked image (cover or logo) and returns its { url, key } --
+  // shared by saveWebsiteProfile below so cover and logo upload identically.
+  const uploadWebsiteImage = async (file, accessToken) => {
+    // 'cmms-company-profile' isn't in api/storage/[action].js's
+    // ALLOWED_FOLDERS allowlist -- reuse 'cmms-announcements', the same
+    // folder this panel's poster/document uploads above already use.
+    const result = await uploadToR2({ file, folder: 'cmms-announcements', accessToken });
+    if (!result.success) throw new Error(result.error || 'Image upload failed');
+    return { url: result.url, key: result.key };
+  };
+
+  // Saves the whole "real website" card in one call -- cover photo/logo
+  // upload (for whichever were newly picked) plus every text field,
+  // mirroring saveDraft's "upload first, then write the row" order below.
   const saveWebsiteProfile = async () => {
     setSavingWebsiteProfile(true);
     try {
       let coverUpload = null;
-      if (coverImageFile) {
+      let logoUpload = null;
+      if (coverImageFile || logoFile) {
         const { data: { session } } = await supabase.auth.getSession();
         const accessToken = session?.access_token;
-        if (!accessToken) throw new Error('Could not verify your session to upload the cover photo.');
-        setUploadingCover(true);
-        // 'cmms-company-profile' isn't in api/storage/[action].js's
-        // ALLOWED_FOLDERS allowlist -- reuse 'cmms-announcements', the same
-        // folder this panel's poster/document uploads above already use.
-        const result = await uploadToR2({ file: coverImageFile, folder: 'cmms-announcements', accessToken });
-        setUploadingCover(false);
-        if (!result.success) throw new Error(result.error || 'Cover photo upload failed');
-        coverUpload = { url: result.url, key: result.key };
+        if (!accessToken) throw new Error('Could not verify your session to upload images.');
+        if (coverImageFile) {
+          setUploadingCover(true);
+          coverUpload = await uploadWebsiteImage(coverImageFile, accessToken);
+          setUploadingCover(false);
+        }
+        if (logoFile) {
+          setUploadingLogo(true);
+          logoUpload = await uploadWebsiteImage(logoFile, accessToken);
+          setUploadingLogo(false);
+        }
       }
       const patch = { ...websiteDraft };
       if (coverUpload) {
         patch.coverImageUrl = coverUpload.url;
         patch.coverImagePath = coverUpload.key;
       }
+      if (logoUpload) {
+        patch.logoUrl = logoUpload.url;
+        patch.logoPath = logoUpload.key;
+      }
       const result = await cmmsAnnouncementsService.updateCompanyPublicProfile(companyId, patch);
       if (!result.success) throw new Error(result.error);
       setSavedWebsiteProfile(websiteDraft);
+      // Both *Upload.url values are raw "r2://<key>" markers uploadToR2
+      // returns (see the note on the load effect above) -- resolve each to
+      // a real presigned URL before swapping the preview over to it, same
+      // as on load, so neither box ever tries to <img src="r2://...">.
       if (coverUpload) {
-        // coverUpload.url is the raw "r2://<key>" marker uploadToR2 returns
-        // (see the note on the load effect above) -- resolve it to a real
-        // presigned URL before swapping the preview over to it, same as on
-        // load, so the box never tries to <img src="r2://...">.
         setExistingCoverImageUrl(await resolveMediaValue(coverUpload.url));
         if (coverImagePreview) URL.revokeObjectURL(coverImagePreview);
         setCoverImageFile(null);
         setCoverImagePreview('');
+      }
+      if (logoUpload) {
+        setExistingLogoUrl(await resolveMediaValue(logoUpload.url));
+        if (logoPreview) URL.revokeObjectURL(logoPreview);
+        setLogoFile(null);
+        setLogoPreview('');
       }
     } catch (err) {
       alert(`❌ ${err.message}`);
     } finally {
       setSavingWebsiteProfile(false);
       setUploadingCover(false);
+      setUploadingLogo(false);
     }
   };
 
@@ -672,23 +719,47 @@ const CMMSAnnouncementsPanel = ({
               A cover photo, a one-line tagline, and real contact details are what turn this into a page customers actually recognize as your business — not just a notice feed.
             </p>
 
-            <label className="block text-xs font-semibold text-gray-400 mb-1">Cover photo</label>
-            <div
-              className="relative w-full h-32 sm:h-40 rounded-xl border border-dashed border-white/20 bg-white/5 overflow-hidden mb-4 flex items-center justify-center cursor-pointer group"
-              onClick={() => document.getElementById('cmms-cover-upload')?.click()}
-            >
-              {(coverImagePreview || existingCoverImageUrl) ? (
-                <img src={coverImagePreview || existingCoverImageUrl} alt="Cover preview" className="w-full h-full object-cover" />
-              ) : (
-                <div className="text-center text-gray-500">
-                  <ImageIcon className="w-6 h-6 mx-auto mb-1" />
-                  <span className="text-xs">Add a cover photo (storefront, team, product — under 6MB)</span>
+            <label className="block text-xs font-semibold text-gray-400 mb-1">Cover photo &amp; logo</label>
+            {/* Logo sits overlapping the cover's bottom-left corner, same
+                layout the public page's hero actually uses -- so this is a
+                rough live preview of the real thing, not just two unrelated
+                upload boxes. This logo is the board's OWN, and always wins
+                over the fallback to a linked Pitchin business profile's logo
+                (see CMMS_PUBLIC_BOARD_PITCHIN_FALLBACKS.sql) -- set it here
+                and it doesn't depend on that other form's own Submit. */}
+            <div className="relative w-full h-32 sm:h-40 mb-10">
+              <div
+                className="absolute inset-0 rounded-xl border border-dashed border-white/20 bg-white/5 overflow-hidden flex items-center justify-center cursor-pointer group"
+                onClick={() => document.getElementById('cmms-cover-upload')?.click()}
+              >
+                {(coverImagePreview || existingCoverImageUrl) ? (
+                  <img src={coverImagePreview || existingCoverImageUrl} alt="Cover preview" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="text-center text-gray-500">
+                    <ImageIcon className="w-6 h-6 mx-auto mb-1" />
+                    <span className="text-xs">Add a cover photo (storefront, team, product — under 6MB)</span>
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold">
+                  {uploadingCover ? <Loader className="w-5 h-5 animate-spin" /> : 'Change cover photo'}
                 </div>
-              )}
-              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold">
-                {uploadingCover ? <Loader className="w-5 h-5 animate-spin" /> : 'Change cover photo'}
+                <input id="cmms-cover-upload" type="file" accept="image/*" onChange={handleCoverImageSelect} className="hidden" />
               </div>
-              <input id="cmms-cover-upload" type="file" accept="image/*" onChange={handleCoverImageSelect} className="hidden" />
+              <div
+                className="absolute -bottom-8 left-3 w-16 h-16 rounded-xl border-2 border-[#0b0f1a] bg-slate-800 overflow-hidden flex items-center justify-center cursor-pointer group shadow-lg"
+                onClick={() => document.getElementById('cmms-logo-upload')?.click()}
+                title="Company logo"
+              >
+                {(logoPreview || existingLogoUrl) ? (
+                  <img src={logoPreview || existingLogoUrl} alt="Logo preview" className="w-full h-full object-cover" />
+                ) : (
+                  <ImageIcon className="w-5 h-5 text-gray-500" />
+                )}
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  {uploadingLogo ? <Loader className="w-4 h-4 text-white animate-spin" /> : <span className="text-[9px] text-white font-semibold text-center px-0.5">Change logo</span>}
+                </div>
+                <input id="cmms-logo-upload" type="file" accept="image/*" onChange={handleLogoSelect} className="hidden" />
+              </div>
             </div>
 
             <label className="block text-xs font-semibold text-gray-400 mb-1">Tagline</label>
