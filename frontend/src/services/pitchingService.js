@@ -481,6 +481,41 @@ export const getPitchById = async (pitchId) => {
   }
 };
 
+/**
+ * Fetch a business's own pitches, for the public CMMS notice board's
+ * "Pitches" tab (PublicCompanyNoticeBoard.jsx) -- same public/no-auth
+ * `pitches` table and video/photo resolution as getAllPitches/getPitchById,
+ * just scoped to one business_profile_id instead of the whole feed or one
+ * pitch id. Mirrors getAllPitches' own choice not to filter by `status`
+ * (that column tracks the pitch's funding workflow, not visibility -- the
+ * main feed shows every pitch with a real video regardless of status).
+ */
+export const getPitchesByBusinessProfileId = async (businessProfileId, limit = 12) => {
+  try {
+    const sb = getSupabase();
+    if (!sb || !businessProfileId) return [];
+
+    const { data, error } = await sb
+      .from('pitches')
+      .select(PITCH_WITH_BUSINESS_SELECT)
+      .eq('business_profile_id', businessProfileId)
+      .not('video_url', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    if (!data || data.length === 0) return [];
+
+    const resolved = (await resolveMediaValues(data, ['video_url', 'thumbnail_url']))
+      .filter((pitch) => pitch.video_url && !pitch.video_url.startsWith('blob:'));
+    await enrichPitchesWithProfilePhotos(sb, resolved);
+    return resolved;
+  } catch (error) {
+    console.error('Error fetching pitches by business profile id:', error);
+    return [];
+  }
+};
+
 // Fetch all published pitches
 export const getAllPitches = async (limit = 20, offset = 0) => {
   try {

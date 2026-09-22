@@ -4,12 +4,14 @@ import {
   AlertCircle, CheckCircle2, Search, Building2, ArrowLeft, Upload, Share2,
   Check, ChevronRight, Clock, ShoppingBag, ShoppingCart, Plus, Minus,
   Trash2, Truck, Store, Award, Phone, Mail, Navigation, MessageCircle,
-  Facebook, Instagram, Twitter, Linkedin, Music2, BadgeCheck, Globe
+  Facebook, Instagram, Twitter, Linkedin, Music2, BadgeCheck, Globe,
+  Video, Play, Eye, Heart
 } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 import cmmsAnnouncementsService from '../services/cmmsAnnouncementsService';
 import cmmsBusinessOpportunitiesService from '../services/cmmsBusinessOpportunitiesService';
 import { getDropshipStorefront, dropshipCheckout } from '../services/dropshipService';
+import { getPitchesByBusinessProfileId } from '../services/pitchingService';
 import { useAuth } from '../context/AuthContext';
 import { AuthPage } from './auth';
 
@@ -257,6 +259,13 @@ const NB_STYLES = `
 .nb-border { border-color: var(--nb-border); }
 .nb-border-strong { border-color: var(--nb-border-strong); }
 .nb-header { background: color-mix(in srgb, var(--nb-surface) 92%, transparent); border-color: var(--nb-border); }
+.nb-header-elevated { box-shadow: 0 2px 12px rgba(15, 23, 18, 0.08); }
+/* Fades the tab row's trailing edge where it overflows into horizontal
+   scroll on mobile -- a plain hard-cropped edge reads as "the page is
+   broken", a soft fade reads as "there's more, swipe" the same way iOS
+   scroll views and app tab bars signal overflow. Only the trailing edge
+   fades (the leading edge is always real, visible content at rest). */
+.nb-tab-nav { -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 24px), transparent 100%); mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 24px), transparent 100%); }
 .nb-card { background: var(--nb-surface); border: 1px solid var(--nb-border); }
 .nb-card:hover { border-color: var(--nb-green); }
 .nb-tab { color: var(--nb-text-muted); border-color: transparent; }
@@ -406,6 +415,36 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   const [productsLoading, setProductsLoading] = useState(false);
   const [cart, setCart] = useState({}); // { [listing_id]: quantity }
 
+  // Same "linked business_profile" as Products & Services above, just
+  // surfacing that business's Pitchin videos instead of its storefront --
+  // a visitor who lands on the board from a shared pitch, or vice versa,
+  // should be able to find the rest of what this business has put up in
+  // either place.
+  const [pitches, setPitches] = useState([]);
+  const [pitchesLoading, setPitchesLoading] = useState(false);
+
+  // Drives two scroll-linked header touches: `scrolled` lifts the sticky
+  // header off the page with a faint shadow once there's actually content
+  // behind it (rather than always/never), and `heroPassed` is what fixes the
+  // "two logos on screen at once" bug -- on the Notices tab BusinessHero's
+  // big avatar already covers the identity, so the header's compact
+  // logo+name only fades in once that hero has scrolled out of view (the
+  // "small brand anchor while scrolling" the comment below always intended,
+  // just never actually wired to scroll position before).
+  const [scrollState, setScrollState] = useState({ scrolled: false, heroPassed: false });
+  useEffect(() => {
+    const HERO_PASSED_Y = 220; // just past BusinessHero's cover + avatar overlap
+    const onScroll = () => {
+      const y = window.scrollY;
+      setScrollState((prev) => (prev.scrolled === y > 4 && prev.heroPassed === y > HERO_PASSED_Y)
+        ? prev
+        : { scrolled: y > 4, heroPassed: y > HERO_PASSED_Y });
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -441,6 +480,18 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
       if (cancelled) return;
       setProducts(data || []);
       setProductsLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [company?.business_profile_id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!company?.business_profile_id) { setPitches([]); return; }
+    setPitchesLoading(true);
+    getPitchesByBusinessProfileId(company.business_profile_id).then((data) => {
+      if (cancelled) return;
+      setPitches(data || []);
+      setPitchesLoading(false);
     });
     return () => { cancelled = true; };
   }, [company?.business_profile_id]);
@@ -580,27 +631,31 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   return (
     <div className="icanera-nb min-h-screen">
       <style>{NB_STYLES}</style>
-      <header className="border-b nb-header backdrop-blur sticky top-0 z-20 animate-fadeInDown">
+      <header className={`border-b nb-header backdrop-blur sticky top-0 z-20 animate-fadeInDown transition-shadow duration-300 ${scrollState.scrolled ? 'nb-header-elevated' : ''}`}>
         <div className="h-1 nb-accent-top" />
         {/* On the front page (Notices), BusinessHero right below already
-            shows the logo/name/tagline in full, so this bar stays a small
-            brand anchor for while the visitor scrolls the hero out of view
-            (rather than repeating the whole identity block again). Every
-            other tab has no hero, so it expands to the full version there. */}
+            shows the logo/name/tagline in full -- showing this compact row
+            too, always, used to put two logos on screen at once. It now
+            only fades in once heroPassed is true, i.e. once that big avatar
+            has actually scrolled out of view, so it reads as one identity
+            handing off to the other rather than a duplicate. Every other
+            tab has no hero, so it expands to the full version unconditionally. */}
         {section === 'notices' ? (
-          <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-2.5 pb-1.5 flex items-center gap-2">
-            {company.logo_url ? (
-              <img src={company.logo_url} alt="" className="w-6 h-6 rounded-md object-cover flex-shrink-0" />
-            ) : (
-              <div className="w-6 h-6 rounded-md nb-btn-primary flex items-center justify-center font-bold text-[11px] flex-shrink-0">
-                {company.company_name?.charAt(0)?.toUpperCase() || <Building2 className="w-3.5 h-3.5" />}
-              </div>
-            )}
-            <span className="text-sm font-bold nb-text truncate">{company.company_name}</span>
-            <span className="text-[11px] nb-text-faint ml-auto hidden sm:block flex-shrink-0">
-              via <IcanEraWordmark />
-            </span>
-          </div>
+          scrollState.heroPassed && (
+            <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-2.5 pb-1.5 flex items-center gap-2 animate-fadeInDown" style={{ animationDuration: '0.25s' }}>
+              {company.logo_url ? (
+                <img src={company.logo_url} alt="" className="w-6 h-6 rounded-md object-cover flex-shrink-0" />
+              ) : (
+                <div className="w-6 h-6 rounded-md nb-btn-primary flex items-center justify-center font-bold text-[11px] flex-shrink-0">
+                  {company.company_name?.charAt(0)?.toUpperCase() || <Building2 className="w-3.5 h-3.5" />}
+                </div>
+              )}
+              <span className="text-sm font-bold nb-text truncate">{company.company_name}</span>
+              <span className="text-[11px] nb-text-faint ml-auto hidden sm:block flex-shrink-0">
+                via <IcanEraWordmark />
+              </span>
+            </div>
+          )
         ) : (
           <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-4 pb-2 flex items-center gap-3.5">
             {company.logo_url ? (
@@ -621,10 +676,11 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
             </span>
           </div>
         )}
-        <nav className="max-w-5xl mx-auto px-4 sm:px-6 flex flex-nowrap gap-1 overflow-x-auto">
+        <nav className="nb-tab-nav max-w-5xl mx-auto px-4 sm:px-6 flex flex-nowrap gap-1 overflow-x-auto">
           {[
             { id: 'notices', label: 'Notices', icon: Megaphone },
             ...(products.length > 0 ? [{ id: 'shop', label: 'Products & Services', icon: ShoppingBag }] : []),
+            ...(pitches.length > 0 ? [{ id: 'pitchin', label: 'Pitches', icon: Video }] : []),
             { id: 'careers', label: 'Careers', icon: Briefcase },
             ...(opportunities.length > 0 ? [{ id: 'opportunities', label: 'Opportunities', icon: Award }] : []),
             { id: 'track', label: 'Track my application', icon: Search },
@@ -646,7 +702,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
           rough "there's activity here" count, not meant as an exact "still
           accepting applications" figure. */}
       {section === 'notices'
-        ? <BusinessHero company={company} noticeCount={notices.length} jobCount={jobs.length} />
+        ? <BusinessHero company={company} noticeCount={notices.length} jobCount={jobs.length} pitchCount={pitches.length} />
         : <ContactStrip company={company} />}
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-7">
@@ -675,6 +731,9 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
               user={user}
               authLoading={authLoading}
             />
+          )}
+          {section === 'pitchin' && (
+            <PitchinSection pitches={pitches} loading={pitchesLoading} />
           )}
           {section === 'careers' && (
             <JobList jobs={jobs} onSelect={(job) => openDetail(job, setSelectedJob)} />
@@ -807,10 +866,11 @@ const deriveHeroSubtitle = (company) => {
 // from a real, active business read as more trustworthy than the tagline
 // alone, the same "this place is actually alive" signal a Google Business
 // listing's review count gives at a glance.
-const HeroStats = ({ noticeCount, jobCount }) => {
+const HeroStats = ({ noticeCount, jobCount, pitchCount = 0 }) => {
   const stats = [
     jobCount > 0 && { label: `${jobCount} open job${jobCount === 1 ? '' : 's'}` },
     noticeCount > 0 && { label: `${noticeCount} update${noticeCount === 1 ? '' : 's'}` },
+    pitchCount > 0 && { label: `${pitchCount} pitch video${pitchCount === 1 ? '' : 's'}` },
   ].filter(Boolean);
   if (stats.length === 0) return null;
   return (
@@ -825,7 +885,7 @@ const HeroStats = ({ noticeCount, jobCount }) => {
 // The homepage hero -- shown only on the "Notices" (front page) tab, same
 // place a real business's own website would put its cover photo, logo and
 // tagline above the fold.
-const BusinessHero = ({ company, noticeCount = 0, jobCount = 0 }) => {
+const BusinessHero = ({ company, noticeCount = 0, jobCount = 0, pitchCount = 0 }) => {
   const [linkCopied, setLinkCopied] = useState(false);
   const shareBoard = async () => {
     const link = window.location.href.split('?')[0];
@@ -885,7 +945,7 @@ const BusinessHero = ({ company, noticeCount = 0, jobCount = 0 }) => {
             {company.location && <span className="inline-flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {company.location}</span>}
             {company.hours_text && <span className="inline-flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {company.hours_text}</span>}
           </div>
-          <HeroStats noticeCount={noticeCount} jobCount={jobCount} />
+          <HeroStats noticeCount={noticeCount} jobCount={jobCount} pitchCount={pitchCount} />
 
           <div className="flex flex-wrap items-center justify-between gap-3 mt-4">
             <ContactActions company={company} onShare={shareBoard} />
@@ -1014,6 +1074,82 @@ const NoticeList = ({ notices, onSelect }) => {
           </div>
         </button>
       ))}
+    </div>
+  );
+};
+
+// One Pitchin video card -- same rounded-card/aspect-video idiom as
+// NoticeList's cards, so the Pitches tab reads as this same page rather than
+// an embedded widget from a different app. Links out to the pitch's own
+// public /pitchin/:id view (PublicPitchViewer, already a no-login shared-link
+// route) for the full watch/like/comment experience instead of reimplementing
+// it here; a plain <a> is deliberate -- this page's own "back to app" action
+// (goToApp, above) already does a hard navigation rather than a client-side
+// route push, so cross-page links here follow the same pattern.
+const PitchCard = ({ pitch, index = 0 }) => (
+  <a
+    href={`/pitchin/${pitch.id}`}
+    style={{ animationDelay: `${Math.min(index, 8) * 60}ms`, animationFillMode: 'backwards' }}
+    className="group block nb-card rounded-2xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 animate-fadeInUp"
+  >
+    <div className="relative aspect-video w-full overflow-hidden nb-surface-alt">
+      {pitch.video_url ? (
+        <video
+          src={pitch.video_url}
+          poster={pitch.thumbnail_url || undefined}
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          className="w-full h-full object-cover"
+          onMouseEnter={(e) => e.currentTarget.play().catch(() => {})}
+          onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0; }}
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center">
+          <Video className="w-8 h-8 nb-icon-muted" />
+        </div>
+      )}
+      <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/10 transition-colors">
+        <span className="w-11 h-11 rounded-full bg-white/90 flex items-center justify-center shadow-md scale-90 group-hover:scale-100 transition-transform">
+          <Play className="w-5 h-5 text-black ml-0.5" fill="currentColor" />
+        </span>
+      </div>
+    </div>
+    <div className="p-4">
+      <h3 className="font-bold nb-text line-clamp-2">{pitch.title}</h3>
+      {pitch.category && <p className="text-xs nb-text-faint mt-1">{pitch.category}</p>}
+      {pitch.description && <p className="text-sm nb-text-muted mt-1.5 line-clamp-2">{pitch.description}</p>}
+      <div className="flex items-center gap-3 mt-3 text-xs nb-text-faint">
+        <span className="inline-flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> {pitch.views_count || 0}</span>
+        <span className="inline-flex items-center gap-1"><Heart className="w-3.5 h-3.5" /> {pitch.likes_count || 0}</span>
+      </div>
+    </div>
+  </a>
+);
+
+const PitchinSection = ({ pitches, loading }) => {
+  if (loading && pitches.length === 0) {
+    return (
+      <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="nb-card rounded-2xl overflow-hidden animate-pulse">
+            <div className="aspect-video nb-surface-alt" />
+            <div className="p-4 space-y-2">
+              <div className="h-4 w-3/4 rounded nb-surface-alt" />
+              <div className="h-3 w-1/2 rounded nb-surface-alt" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (pitches.length === 0) {
+    return <EmptyState icon={Video} text="No pitch videos yet." />;
+  }
+  return (
+    <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
+      {pitches.map((pitch, i) => <PitchCard key={pitch.id} pitch={pitch} index={i} />)}
     </div>
   );
 };
