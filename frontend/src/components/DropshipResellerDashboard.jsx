@@ -192,8 +192,8 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
                       onClick={() => setExpandedBrowseId(isOpen ? null : product.product_id)}
                       className="w-full flex items-center gap-3 p-3 text-left"
                     >
-                      <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center overflow-hidden shrink-0">
-                        {product.images?.[0] ? <img src={product.images[0]} alt="" className="w-full h-full object-cover" /> : <Store className="w-4 h-4 text-slate-600" />}
+                      <div className={`rounded-lg bg-slate-800 flex items-center justify-center overflow-hidden shrink-0 transition-all duration-200 ${isOpen ? 'w-16 h-16' : 'w-10 h-10'}`}>
+                        {product.images?.[0] ? <img src={product.images[0]} alt="" className="w-full h-full object-cover" /> : <Store className={`text-slate-600 ${isOpen ? 'w-6 h-6' : 'w-4 h-4'}`} />}
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-sm text-white truncate">{product.name}</p>
@@ -274,8 +274,8 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
                       onClick={() => setExpandedListingId(isOpen ? null : item.listing_id)}
                       className="w-full flex items-center gap-3 p-3 text-left"
                     >
-                      <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center overflow-hidden shrink-0">
-                        {item.images?.[0] ? <img src={item.images[0]} alt="" className="w-full h-full object-cover" /> : <Store className="w-4 h-4 text-slate-600" />}
+                      <div className={`rounded-lg bg-slate-800 flex items-center justify-center overflow-hidden shrink-0 transition-all duration-200 ${isOpen ? 'w-16 h-16' : 'w-10 h-10'}`}>
+                        {item.images?.[0] ? <img src={item.images[0]} alt="" className="w-full h-full object-cover" /> : <Store className={`text-slate-600 ${isOpen ? 'w-6 h-6' : 'w-4 h-4'}`} />}
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-sm text-white truncate">{item.name}</p>
