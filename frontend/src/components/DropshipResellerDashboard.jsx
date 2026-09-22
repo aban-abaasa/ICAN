@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Search, Copy, Check, Loader, Store, TrendingUp, Package, ExternalLink, ClipboardList, Truck } from 'lucide-react';
+import { Search, Copy, Check, Loader, Store, TrendingUp, Package, ExternalLink, ClipboardList, Truck, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getDropshippableProducts, setDropshipListing, getResellerDropshipSales, getDropshipStorefront } from '../services/dropshipService';
 
@@ -26,6 +26,10 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
   const [myListings, setMyListings] = useState([]);
   const [loadingMyListings, setLoadingMyListings] = useState(false);
   const [copied, setCopied] = useState(false);
+  // Each row is collapsed to a plain list item by default -- only one
+  // open at a time per list, so it reads as a real list, not a form.
+  const [expandedBrowseId, setExpandedBrowseId] = useState(null);
+  const [expandedListingId, setExpandedListingId] = useState(null);
 
   const storefrontUrl = `${window.location.origin}/store/${businessProfileId}`;
 
@@ -176,60 +180,73 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
               {products.map((product) => {
                 const draftValue = priceDrafts[product.product_id] ?? (product.already_listed ? product.listed_price : suggestPrice(product.selling_price));
                 const invalid = Number(draftValue) < Number(product.selling_price);
+                const isOpen = expandedBrowseId === product.product_id;
                 return (
-                  // Two stacked rows, not one crammed horizontal line — the
-                  // controls row wraps (flex-wrap) instead of being clipped
-                  // off the edge of narrower phones.
-                  <div key={product.product_id} className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-                    <div className="flex items-center gap-3 mb-2.5">
-                      <div className="w-12 h-12 rounded-lg bg-slate-800 flex items-center justify-center overflow-hidden shrink-0">
-                        {product.images?.[0] ? <img src={product.images[0]} alt="" className="w-full h-full object-cover" /> : <Store className="w-5 h-5 text-slate-600" />}
+                  // Collapsed to a plain list row by default -- tap to open
+                  // the listing controls. Keeps the list itself simple and
+                  // guarantees nothing can overflow a narrow phone, since
+                  // only one row's controls are ever on screen at once.
+                  <div key={product.product_id} className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedBrowseId(isOpen ? null : product.product_id)}
+                      className="w-full flex items-center gap-3 p-3 text-left"
+                    >
+                      <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center overflow-hidden shrink-0">
+                        {product.images?.[0] ? <img src={product.images[0]} alt="" className="w-full h-full object-cover" /> : <Store className="w-4 h-4 text-slate-600" />}
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-sm text-white truncate">{product.name}</p>
-                        <p className="text-xs text-slate-500 truncate">{product.supermarket_name} · store price {formatUGX(product.selling_price)} · stock {product.available_stock}</p>
+                        <p className="text-xs text-slate-500 truncate">
+                          {product.supermarket_name} · {formatUGX(product.selling_price)}
+                          {product.already_listed && <span className="text-teal-400"> · Listed</span>}
+                        </p>
                       </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <label className="flex items-center gap-1 text-xs text-slate-400 cursor-pointer" title="Free delivery — you cover the real fare in full (up to your margin on the order)">
+                      <ChevronDown className={`w-4 h-4 text-slate-500 flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {isOpen && (
+                      <div className="flex flex-wrap items-center gap-2 px-3 pb-3 pt-3 border-t border-slate-800">
+                        <label className="flex items-center gap-1 text-xs text-slate-400 cursor-pointer" title="Free delivery — you cover the real fare in full (up to your margin on the order)">
+                          <input
+                            type="checkbox"
+                            checked={freeDeliveryDrafts[product.product_id] ?? product.free_delivery ?? false}
+                            onChange={(e) => setFreeDeliveryDrafts((prev) => ({ ...prev, [product.product_id]: e.target.checked }))}
+                            className="accent-teal-500"
+                          />
+                          <Truck className="w-3.5 h-3.5" />
+                        </label>
                         <input
-                          type="checkbox"
-                          checked={freeDeliveryDrafts[product.product_id] ?? product.free_delivery ?? false}
-                          onChange={(e) => setFreeDeliveryDrafts((prev) => ({ ...prev, [product.product_id]: e.target.checked }))}
-                          className="accent-teal-500"
+                          type="number"
+                          min="0"
+                          title="Max delivery subsidy (UGX) — cut from your margin, never the rider's pay"
+                          placeholder="Max off delivery"
+                          disabled={freeDeliveryDrafts[product.product_id] ?? product.free_delivery ?? false}
+                          value={subsidyDrafts[product.product_id] ?? product.max_delivery_subsidy ?? ''}
+                          onChange={(e) => setSubsidyDrafts((prev) => ({ ...prev, [product.product_id]: e.target.value }))}
+                          className="w-24 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white disabled:opacity-40"
                         />
-                        <Truck className="w-3.5 h-3.5" />
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        title="Max delivery subsidy (UGX) — cut from your margin, never the rider's pay"
-                        placeholder="Max off delivery"
-                        disabled={freeDeliveryDrafts[product.product_id] ?? product.free_delivery ?? false}
-                        value={subsidyDrafts[product.product_id] ?? product.max_delivery_subsidy ?? ''}
-                        onChange={(e) => setSubsidyDrafts((prev) => ({ ...prev, [product.product_id]: e.target.value }))}
-                        className="w-24 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white disabled:opacity-40"
-                      />
-                      <input
-                        type="number"
-                        min={product.selling_price}
-                        value={draftValue}
-                        onChange={(e) => setPriceDrafts((prev) => ({ ...prev, [product.product_id]: e.target.value }))}
-                        className={`w-24 bg-slate-800 border rounded-lg px-2 py-1.5 text-sm text-white ${invalid ? 'border-red-500' : 'border-slate-700'}`}
-                      />
-                      {product.already_listed ? (
-                        <button onClick={() => handleUnlist(product)} disabled={savingId === product.product_id} className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition">
-                          Unlist
+                        <input
+                          type="number"
+                          min={product.selling_price}
+                          value={draftValue}
+                          onChange={(e) => setPriceDrafts((prev) => ({ ...prev, [product.product_id]: e.target.value }))}
+                          className={`w-24 bg-slate-800 border rounded-lg px-2 py-1.5 text-sm text-white ${invalid ? 'border-red-500' : 'border-slate-700'}`}
+                        />
+                        {product.already_listed ? (
+                          <button onClick={() => handleUnlist(product)} disabled={savingId === product.product_id} className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition">
+                            Unlist
+                          </button>
+                        ) : null}
+                        <button
+                          onClick={() => handleList(product)}
+                          disabled={invalid || savingId === product.product_id}
+                          className="px-3 py-1.5 rounded-lg bg-teal-700 hover:bg-teal-600 disabled:opacity-40 text-white text-xs font-semibold transition"
+                        >
+                          {product.already_listed ? 'Update' : 'List'}
                         </button>
-                      ) : null}
-                      <button
-                        onClick={() => handleList(product)}
-                        disabled={invalid || savingId === product.product_id}
-                        className="px-3 py-1.5 rounded-lg bg-teal-700 hover:bg-teal-600 disabled:opacity-40 text-white text-xs font-semibold transition"
-                      >
-                        {product.already_listed ? 'Update' : 'List'}
-                      </button>
-                    </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -248,52 +265,60 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
             <div className="space-y-2">
               {myListings.map((item) => {
                 const draftValue = priceDrafts[item.product_id] ?? item.listed_price;
+                const isOpen = expandedListingId === item.listing_id;
                 return (
-                  // Same two-row layout as Browse products -- info on top,
-                  // controls wrap below instead of overflowing the card.
-                  <div key={item.listing_id} className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-                    <div className="flex items-center gap-3 mb-2.5">
-                      <div className="w-12 h-12 rounded-lg bg-slate-800 flex items-center justify-center overflow-hidden shrink-0">
-                        {item.images?.[0] ? <img src={item.images[0]} alt="" className="w-full h-full object-cover" /> : <Store className="w-5 h-5 text-slate-600" />}
+                  // Same collapsed-list-row pattern as Browse products.
+                  <div key={item.listing_id} className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedListingId(isOpen ? null : item.listing_id)}
+                      className="w-full flex items-center gap-3 p-3 text-left"
+                    >
+                      <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center overflow-hidden shrink-0">
+                        {item.images?.[0] ? <img src={item.images[0]} alt="" className="w-full h-full object-cover" /> : <Store className="w-4 h-4 text-slate-600" />}
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-sm text-white truncate">{item.name}</p>
-                        <p className="text-xs text-slate-500 truncate">{item.in_stock ? `In stock · ${item.available_stock}` : 'Out of stock'}</p>
+                        <p className="text-xs text-slate-500 truncate">{item.in_stock ? `In stock · ${item.available_stock}` : 'Out of stock'} · {formatUGX(item.listed_price)}</p>
                       </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <label className="flex items-center gap-1 text-xs text-slate-400 cursor-pointer" title="Free delivery — you cover the real fare in full (up to your margin on the order)">
+                      <ChevronDown className={`w-4 h-4 text-slate-500 flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {isOpen && (
+                      <div className="flex flex-wrap items-center gap-2 px-3 pb-3 pt-3 border-t border-slate-800">
+                        <label className="flex items-center gap-1 text-xs text-slate-400 cursor-pointer" title="Free delivery — you cover the real fare in full (up to your margin on the order)">
+                          <input
+                            type="checkbox"
+                            checked={freeDeliveryDrafts[item.product_id] ?? item.free_delivery ?? false}
+                            onChange={(e) => setFreeDeliveryDrafts((prev) => ({ ...prev, [item.product_id]: e.target.checked }))}
+                            className="accent-teal-500"
+                          />
+                          <Truck className="w-3.5 h-3.5" />
+                        </label>
                         <input
-                          type="checkbox"
-                          checked={freeDeliveryDrafts[item.product_id] ?? item.free_delivery ?? false}
-                          onChange={(e) => setFreeDeliveryDrafts((prev) => ({ ...prev, [item.product_id]: e.target.checked }))}
-                          className="accent-teal-500"
+                          type="number"
+                          min="0"
+                          title="Max delivery subsidy (UGX) — cut from your margin, never the rider's pay"
+                          placeholder="Max off delivery"
+                          disabled={freeDeliveryDrafts[item.product_id] ?? item.free_delivery ?? false}
+                          value={subsidyDrafts[item.product_id] ?? item.max_delivery_subsidy ?? ''}
+                          onChange={(e) => setSubsidyDrafts((prev) => ({ ...prev, [item.product_id]: e.target.value }))}
+                          className="w-24 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white disabled:opacity-40"
                         />
-                        <Truck className="w-3.5 h-3.5" />
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        title="Max delivery subsidy (UGX) — cut from your margin, never the rider's pay"
-                        placeholder="Max off delivery"
-                        disabled={freeDeliveryDrafts[item.product_id] ?? item.free_delivery ?? false}
-                        value={subsidyDrafts[item.product_id] ?? item.max_delivery_subsidy ?? ''}
-                        onChange={(e) => setSubsidyDrafts((prev) => ({ ...prev, [item.product_id]: e.target.value }))}
-                        className="w-24 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white disabled:opacity-40"
-                      />
-                      <input
-                        type="number"
-                        value={draftValue}
-                        onChange={(e) => setPriceDrafts((prev) => ({ ...prev, [item.product_id]: e.target.value }))}
-                        className="w-24 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white"
-                      />
-                      <button onClick={() => handleUnlistMyListing(item)} disabled={savingId === item.product_id} className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition">
-                        Unlist
-                      </button>
-                      <button onClick={() => handleUpdateMyListing(item)} disabled={savingId === item.product_id} className="px-3 py-1.5 rounded-lg bg-teal-700 hover:bg-teal-600 disabled:opacity-40 text-white text-xs font-semibold transition">
-                        Update
-                      </button>
-                    </div>
+                        <input
+                          type="number"
+                          value={draftValue}
+                          onChange={(e) => setPriceDrafts((prev) => ({ ...prev, [item.product_id]: e.target.value }))}
+                          className="w-24 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white"
+                        />
+                        <button onClick={() => handleUnlistMyListing(item)} disabled={savingId === item.product_id} className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition">
+                          Unlist
+                        </button>
+                        <button onClick={() => handleUpdateMyListing(item)} disabled={savingId === item.product_id} className="px-3 py-1.5 rounded-lg bg-teal-700 hover:bg-teal-600 disabled:opacity-40 text-white text-xs font-semibold transition">
+                          Update
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
