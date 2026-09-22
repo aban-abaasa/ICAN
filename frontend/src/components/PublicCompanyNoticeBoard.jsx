@@ -36,6 +36,41 @@ const buildDirectionsLink = (location, companyName) => {
   const query = [companyName, location].filter(Boolean).join(', ');
   return query ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(query)}` : null;
 };
+// A business that's already registered its Google Maps listing (see the
+// "Get found on Google Maps" card in CMSSModule.jsx) can paste that exact
+// link back in -- google_maps_url -- so this board points visitors at the
+// real, verified pin instead of guessing one from a free-text address. Full
+// (non-shortened) Google Maps URLs encode the pin's exact coordinates as
+// either `!3d<lat>!4d<lng>` (the marker itself) or `@<lat>,<lng>,<zoom>z`
+// (the map's viewport center, close enough when no marker coords are
+// present) -- extracting them lets both the embedded map and Directions use
+// the precise location. A shortened maps.app.goo.gl link can't be parsed
+// client-side (no coordinates in the URL itself), so it's used as-is.
+const extractLatLngFromGoogleMapsUrl = (url) => {
+  if (!url) return null;
+  const pin = url.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
+  if (pin) return { lat: pin[1], lng: pin[2] };
+  const viewport = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (viewport) return { lat: viewport[1], lng: viewport[2] };
+  const q = url.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (q) return { lat: q[1], lng: q[2] };
+  return null;
+};
+// Resolves the one "where is this business" target used by both the
+// Directions button and the embedded map: a saved Google Maps link's exact
+// coordinates when available, that same link as-is when it can't be parsed,
+// and only falling back to geocoding "business name, location" text when
+// the business hasn't registered/linked a Google Maps listing at all.
+const resolveLocationTarget = (company) => {
+  const coords = extractLatLngFromGoogleMapsUrl(company.google_maps_url);
+  const textQuery = [company.company_name, company.location].filter(Boolean).join(', ');
+  return {
+    directionsHref: coords
+      ? `https://www.google.com/maps/dir/?api=1&destination=${coords.lat},${coords.lng}`
+      : company.google_maps_url || buildDirectionsLink(company.location, company.company_name),
+    mapQuery: coords ? `${coords.lat},${coords.lng}` : (textQuery || null),
+  };
+};
 // Businesses type their website as "example.com" as often as
 // "https://example.com" -- a bare domain as an <a href> just reloads the
 // current page instead of navigating out, so this normalizes it once here
@@ -848,7 +883,7 @@ const ContactActions = ({ company, onShare, size = 'default' }) => {
     !company.whatsapp && company.phone && { key: 'call', label: 'Call', icon: Phone, href: buildTelLink(company.phone), primary: true },
     company.whatsapp && company.phone && { key: 'call', label: 'Call', icon: Phone, href: buildTelLink(company.phone) },
     company.email && { key: 'email', label: 'Email', icon: Mail, href: buildMailLink(company.email) },
-    company.location && { key: 'directions', label: 'Directions', icon: Navigation, href: buildDirectionsLink(company.location, company.company_name) },
+    (company.location || company.google_maps_url) && { key: 'directions', label: 'Directions', icon: Navigation, href: resolveLocationTarget(company).directionsHref },
     company.website && { key: 'website', label: 'Website', icon: Globe, href: normalizeExternalUrl(company.website) },
   ].filter(Boolean);
 
@@ -1035,14 +1070,13 @@ const LocationMap = ({ query, className = '' }) => (
 const BusinessInfoSidebar = ({ company, className = '' }) => {
   const hasAnyInfo = company.location || company.hours_text || company.phone || company.whatsapp || company.email || company.website;
   if (!hasAnyInfo) return null;
+  const { directionsHref, mapQuery } = resolveLocationTarget(company);
   return (
     <aside className={`nb-card rounded-2xl shadow-sm p-5 lg:sticky lg:top-24 ${className}`}>
       <h2 className="text-sm font-bold nb-text uppercase tracking-wide mb-1">Business info</h2>
-      {company.location && (
-        <LocationMap query={[company.company_name, company.location].filter(Boolean).join(', ')} className="my-3" />
-      )}
+      {mapQuery && <LocationMap query={mapQuery} className="my-3" />}
       <div className="divide-y nb-border">
-        <InfoRow icon={MapPin} label="Location" value={company.location} href={buildDirectionsLink(company.location, company.company_name)} external />
+        <InfoRow icon={MapPin} label="Location" value={company.location} href={directionsHref} external />
         <InfoRow icon={Clock} label="Hours" value={company.hours_text} />
         <InfoRow icon={Phone} label="Phone" value={company.phone} href={buildTelLink(company.phone)} />
         <InfoRow icon={MessageCircle} label="WhatsApp" value={company.whatsapp} href={buildWhatsAppLink(company.whatsapp)} external />
@@ -1059,14 +1093,14 @@ const BusinessInfoSidebar = ({ company, className = '' }) => {
 // visitor to trust a link before clicking it. Placed in the main column, not
 // the sidebar, so it actually renders below lg.
 const LocationCard = ({ company, className = '' }) => {
-  if (!company.location) return null;
-  const directionsHref = buildDirectionsLink(company.location, company.company_name);
+  if (!company.location && !company.google_maps_url) return null;
+  const { directionsHref, mapQuery } = resolveLocationTarget(company);
   return (
     <div className={`nb-card rounded-2xl shadow-sm p-5 mb-5 animate-fadeInUp ${className}`}>
       <h2 className="text-sm font-bold nb-text uppercase tracking-wide mb-3">Find us</h2>
-      <LocationMap query={[company.company_name, company.location].filter(Boolean).join(', ')} />
+      {mapQuery && <LocationMap query={mapQuery} />}
       <div className="flex items-center justify-between gap-3 mt-3">
-        <p className="text-sm nb-text-muted flex items-center gap-1.5 min-w-0"><MapPin className="w-4 h-4 flex-shrink-0 nb-icon-muted" /><span className="truncate">{company.location}</span></p>
+        <p className="text-sm nb-text-muted flex items-center gap-1.5 min-w-0"><MapPin className="w-4 h-4 flex-shrink-0 nb-icon-muted" /><span className="truncate">{company.location || 'View on Google Maps'}</span></p>
         {directionsHref && (
           <a href={directionsHref} target="_blank" rel="noreferrer" className="flex-shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full nb-btn-primary transition-all hover:scale-[1.03] active:scale-[0.98]">
             <Navigation className="w-3.5 h-3.5" /> Directions

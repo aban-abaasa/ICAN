@@ -4777,6 +4777,10 @@ const CMMSModule = ({
     const [profileError, setProfileError] = useState('');
     const [departmentError, setDepartmentError] = useState('');
     const [copiedGoogleDetails, setCopiedGoogleDetails] = useState(false);
+    const [copiedBoardLink, setCopiedBoardLink] = useState(false);
+    const [googleMapsUrlDraft, setGoogleMapsUrlDraft] = useState(cmmsData.companyProfile?.google_maps_url || '');
+    const [savingGoogleMapsUrl, setSavingGoogleMapsUrl] = useState(false);
+    const [googleMapsUrlError, setGoogleMapsUrlError] = useState('');
 
     // Open create-company form whenever the header icon triggers it
     useEffect(() => {
@@ -4859,7 +4863,31 @@ const CMMSModule = ({
       setFormData(mapProfileToForm(cmmsData.companyProfile));
       setSelectedDepartments([]);
       setDepartmentForm({ department_name: '', description: '', location: '' });
+      setGoogleMapsUrlDraft(cmmsData.companyProfile?.google_maps_url || '');
     }, [cmmsData.companyProfile]);
+
+    // Saved independently of the full Edit Profile form -- this is a single
+    // follow-up step right after registering (or for a business that
+    // already has a Maps listing), so it shouldn't require opening the
+    // bigger form and re-typing every other field just to add one link.
+    const saveGoogleMapsUrl = async () => {
+      const trimmed = googleMapsUrlDraft.trim();
+      if (trimmed && !/^https?:\/\/.+google\.com\/maps|^https?:\/\/maps\.app\.goo\.gl\//i.test(trimmed)) {
+        setGoogleMapsUrlError('That doesn\'t look like a Google Maps link -- copy it from the Share button on your business\'s Google Maps listing.');
+        return;
+      }
+      setGoogleMapsUrlError('');
+      setSavingGoogleMapsUrl(true);
+      try {
+        const { data, error } = await cmmsService.updateCompanyProfile(cmmsData.companyProfile.id, { googleMapsUrl: trimmed || null });
+        if (error) throw error;
+        setCmmsData((prev) => ({ ...prev, companyProfile: { ...prev.companyProfile, google_maps_url: data.google_maps_url } }));
+      } catch (err) {
+        setGoogleMapsUrlError(err.message || 'Failed to save this link. Please try again.');
+      } finally {
+        setSavingGoogleMapsUrl(false);
+      }
+    };
 
     // Non-admin users can only register a new company from the overlay (no view/edit access)
     const canEditCompany = hasPermission('canEditCompany');
@@ -5054,6 +5082,22 @@ const CMMSModule = ({
         setTimeout(() => setCopiedGoogleDetails(false), 2500);
       } catch {
         window.prompt('Copy these details:', lines);
+      }
+    };
+
+    // A business without its own separate website still has a real, public
+    // page here -- its own notice board (jobs, announcements, products).
+    // Google's signup asks for a website either way, so this is what to
+    // hand it when there's nothing else to give.
+    const boardLink = cmmsData.companyProfile?.id ? `${window.location.origin}/notices/${cmmsData.companyProfile.id}` : '';
+    const copyBoardLink = async () => {
+      if (!boardLink) return;
+      try {
+        await navigator.clipboard.writeText(boardLink);
+        setCopiedBoardLink(true);
+        setTimeout(() => setCopiedBoardLink(false), 2500);
+      } catch {
+        window.prompt('Copy this link:', boardLink);
       }
     };
 
@@ -5382,6 +5426,47 @@ const CMMSModule = ({
                   >
                     <Globe className="w-4 h-4" /> Register on Google
                   </a>
+                </div>
+
+                {!displayProfile.website && (
+                  <div className="mt-3 bg-white bg-opacity-5 rounded-lg p-3">
+                    <p className="text-gray-400 text-xs mb-2">
+                      Google's form also asks for a website. Don't have one? Your notice board already is one — it shows your jobs and announcements to anyone who visits. Copy its link and use it there.
+                    </p>
+                    <button
+                      onClick={copyBoardLink}
+                      disabled={!boardLink}
+                      className="w-full px-3 py-1.5 bg-white bg-opacity-10 hover:bg-opacity-20 disabled:opacity-40 text-white rounded-lg font-semibold transition-all text-xs flex items-center justify-center gap-1.5"
+                    >
+                      {copiedBoardLink ? <><Check className="w-3.5 h-3.5 text-green-400" /> Copied</> : <><Clipboard className="w-3.5 h-3.5" /> Copy my board's link (jobs &amp; announcements)</>}
+                    </button>
+                  </div>
+                )}
+
+                <div className="mt-3 pt-3 border-t border-white border-opacity-10">
+                  <label className="block text-xs font-semibold text-gray-400 mb-1">
+                    Already registered? Paste your Google Maps link here so your board's Directions button and map always point customers to it
+                  </label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      placeholder="https://maps.app.goo.gl/... or a google.com/maps/place/... link"
+                      value={googleMapsUrlDraft}
+                      onChange={(e) => { setGoogleMapsUrlDraft(e.target.value); setGoogleMapsUrlError(''); }}
+                      className="flex-1 px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-500 text-xs focus:border-blue-500 focus:border-opacity-50 outline-none"
+                    />
+                    <button
+                      onClick={saveGoogleMapsUrl}
+                      disabled={savingGoogleMapsUrl || googleMapsUrlDraft.trim() === (cmmsData.companyProfile?.google_maps_url || '')}
+                      className="px-4 py-2 bg-green-500 bg-opacity-30 hover:bg-opacity-40 disabled:opacity-40 text-green-300 rounded-lg font-semibold transition-all text-xs flex items-center justify-center gap-1.5 whitespace-nowrap"
+                    >
+                      {savingGoogleMapsUrl ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} Save
+                    </button>
+                  </div>
+                  {googleMapsUrlError && <p className="text-red-400 text-xs mt-1.5">{googleMapsUrlError}</p>}
+                  {cmmsData.companyProfile?.google_maps_url && !googleMapsUrlError && (
+                    <p className="text-green-400 text-xs mt-1.5 flex items-center gap-1"><Check className="w-3 h-3" /> Saved — this exact location now powers Directions and the map on your board.</p>
+                  )}
                 </div>
               </div>
             )}

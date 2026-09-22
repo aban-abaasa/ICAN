@@ -317,6 +317,7 @@ export const updateCompanyProfile = async (companyId, updates) => {
         email: updates.email,
         industry: updates.industry,
         website: updates.website,
+        google_maps_url: updates.googleMapsUrl,
         updated_at: new Date().toISOString()
       })
       .eq('id', companyId)
