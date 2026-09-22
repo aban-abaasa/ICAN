@@ -895,11 +895,30 @@ const SocialRow = ({ company, className = '' }) => {
 // primary/secondary hierarchy a real landing page's CTA row uses instead of
 // a flat row of identical buttons.
 const ContactActions = ({ company, onShare, size = 'default' }) => {
+  // tel:/mailto: work great on a phone (the dialer/mail app just opens) but
+  // silently do nothing on a lot of desktop browsers with no default handler
+  // registered -- the click looks like it worked and nothing happens, no
+  // error to react to. Rather than guess which desktop mail/phone app a
+  // visitor has, Call and Email also copy the raw number/address to the
+  // clipboard on click, so even when the OS has nothing to hand off to, the
+  // visitor still walks away with the number/email ready to paste into
+  // whatever they actually use (Gmail in a browser tab, Skype, WhatsApp
+  // Desktop, ...). Harmless on mobile -- the native app still opens on top
+  // and the copy just goes unnoticed.
+  const [copiedKey, setCopiedKey] = useState(null);
+  const copyValue = (key, value) => {
+    if (!value) return;
+    navigator.clipboard?.writeText(value).then(() => {
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey((current) => (current === key ? null : current)), 2000);
+    }).catch(() => {});
+  };
+
   const actions = [
     company.whatsapp && { key: 'whatsapp', label: 'WhatsApp', icon: MessageCircle, href: buildWhatsAppLink(company.whatsapp), primary: true },
-    !company.whatsapp && company.phone && { key: 'call', label: 'Call', icon: Phone, href: buildTelLink(company.phone), primary: true },
-    company.whatsapp && company.phone && { key: 'call', label: 'Call', icon: Phone, href: buildTelLink(company.phone) },
-    company.email && { key: 'email', label: 'Email', icon: Mail, href: buildMailLink(company.email) },
+    !company.whatsapp && company.phone && { key: 'call', label: 'Call', icon: Phone, href: buildTelLink(company.phone), primary: true, copyValue: company.phone.trim() },
+    company.whatsapp && company.phone && { key: 'call', label: 'Call', icon: Phone, href: buildTelLink(company.phone), copyValue: company.phone.trim() },
+    company.email && { key: 'email', label: 'Email', icon: Mail, href: buildMailLink(company.email), copyValue: company.email.trim() },
     (company.location || company.google_maps_url) && { key: 'directions', label: 'Directions', icon: Navigation, href: resolveLocationTarget(company).directionsHref },
     company.website && { key: 'website', label: 'Website', icon: Globe, href: normalizeExternalUrl(company.website) },
   ].filter(Boolean);
@@ -907,17 +926,22 @@ const ContactActions = ({ company, onShare, size = 'default' }) => {
   const pad = size === 'compact' ? 'px-3 py-1.5 text-xs' : 'px-3.5 py-2 text-sm';
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {actions.map((action) => (
-        <a
-          key={action.key}
-          href={action.href}
-          target={action.key === 'website' ? '_blank' : undefined}
-          rel={action.key === 'website' ? 'noreferrer' : undefined}
-          className={`rounded-full font-semibold flex items-center gap-1.5 transition-all hover:scale-[1.03] active:scale-[0.98] shadow-sm ${pad} ${action.primary ? 'nb-btn-primary' : 'nb-action-btn'}`}
-        >
-          <action.icon className="w-3.5 h-3.5" /> {action.label}
-        </a>
-      ))}
+      {actions.map((action) => {
+        const copied = copiedKey === action.key;
+        return (
+          <a
+            key={action.key}
+            href={action.href}
+            target={action.key === 'website' ? '_blank' : undefined}
+            rel={action.key === 'website' ? 'noreferrer' : undefined}
+            onClick={action.copyValue ? () => copyValue(action.key, action.copyValue) : undefined}
+            title={action.copyValue ? `${action.copyValue} -- also copied to your clipboard` : undefined}
+            className={`rounded-full font-semibold flex items-center gap-1.5 transition-all hover:scale-[1.03] active:scale-[0.98] shadow-sm ${pad} ${copied ? 'nb-copied' : action.primary ? 'nb-btn-primary' : 'nb-action-btn'}`}
+          >
+            {copied ? <><Check className="w-3.5 h-3.5" /> Copied</> : <><action.icon className="w-3.5 h-3.5" /> {action.label}</>}
+          </a>
+        );
+      })}
       {onShare && (
         <button onClick={onShare} className={`nb-btn-secondary rounded-full font-semibold flex items-center gap-1.5 transition-all hover:scale-[1.03] active:scale-[0.98] ${pad}`}>
           <Share2 className="w-3.5 h-3.5" /> Share
