@@ -77,6 +77,50 @@ const recordCmmsInventoryLedgerEntry = async (companyId, { itemName, category, a
   }
 };
 
+// Best-effort write to the company-wide activity feed that powers the
+// home-screen "Business Activity" widget (see CMMS_ACTIVITY_DASHBOARD.sql).
+// Never blocks or fails the action it's called from.
+const logCmmsActivity = async (companyId, {
+  actorUserId = null,
+  actorName = null,
+  activityType,
+  description,
+  icon = '📋',
+  entityType = null,
+  entityId = null
+}) => {
+  if (!companyId || !description) return;
+  try {
+    // Caller didn't already know the acting cmms_users.id/name (e.g. it
+    // wasn't part of the function's own params) — resolve it from the
+    // logged-in auth user, same lookup createRequisition/updateRequisitionStatus use.
+    if (!actorUserId || !actorName) {
+      try {
+        const { data: authData } = await supabase.auth.getUser();
+        const email = authData?.user?.email || null;
+        actorName = actorName || authData?.user?.user_metadata?.full_name || email || 'Someone';
+        if (!actorUserId && email) {
+          actorUserId = await resolveCmmsUserIdByEmail(companyId, email);
+        }
+      } catch (_) { /* best-effort */ }
+    }
+
+    const { error } = await supabase.from('cmms_activity_log').insert([{
+      cmms_company_id: companyId,
+      actor_user_id: actorUserId,
+      actor_name: actorName,
+      activity_type: activityType,
+      description,
+      icon,
+      entity_type: entityType,
+      entity_id: entityId
+    }]);
+    if (error) console.warn('⚠️ Could not log CMMS activity:', error.message);
+  } catch (err) {
+    console.warn('⚠️ CMMS activity logging failed:', err.message);
+  }
+};
+
 const normalizeCmmsRoleKey = (rawRole) => {
   if (!rawRole) return '';
 
@@ -542,6 +586,17 @@ export const assignUserRole = async (cmmsCompanyId, cmmsUserId, cmmsRoleId) => {
       .single();
 
     if (error) throw error;
+
+    supabase.from('cmms_users').select('full_name, user_name, email').eq('id', cmmsUserId).maybeSingle()
+      .then(({ data: targetUser }) => {
+        logCmmsActivity(cmmsCompanyId, {
+          activityType: 'role_assigned',
+          description: `${targetUser?.full_name || targetUser?.user_name || targetUser?.email || 'A team member'} was assigned a new CMMS role`,
+          icon: '👤',
+          entityType: 'cmms_user',
+          entityId: cmmsUserId
+        });
+      });
 
     return { data, error: null };
   } catch (error) {
@@ -1085,6 +1140,14 @@ export const addInventoryItem = async (companyId, itemData) => {
       amount: mappedItem.quantity_in_stock * unitPrice
     });
 
+    logCmmsActivity(companyId, {
+      activityType: 'inventory_item_added',
+      description: `Added "${mappedItem.item_name}" to inventory (${mappedItem.quantity_in_stock} ${mappedItem.unit_of_measure})`,
+      icon: '📦',
+      entityType: 'inventory_item',
+      entityId: mappedItem.id
+    });
+
     return { data: mappedItem, error: null };
   } catch (error) {
     console.error('âŒ Error adding inventory item:', error);
@@ -1234,6 +1297,18 @@ export const updateInventoryQuantity = async (itemId, newQuantity, reason = 'Qua
         category: existingItem.category,
         amount: restockedQty * (parseFloat(existingItem.unit_price) || 0),
         note: 'restock'
+      });
+    }
+
+    if (existingItem?.cmms_company_id) {
+      logCmmsActivity(existingItem.cmms_company_id, {
+        actorUserId: cmmsUserId,
+        actorName: user?.user_metadata?.full_name || user?.email || 'Someone',
+        activityType: restockedQty > 0 ? 'inventory_restocked' : 'inventory_adjusted',
+        description: `${restockedQty > 0 ? 'Restocked' : 'Adjusted'} "${existingItem.item_name}" to ${newQuantity} units`,
+        icon: '🔄',
+        entityType: 'inventory_item',
+        entityId: itemId
       });
     }
 
@@ -1680,6 +1755,17 @@ export const createRequisition = async (companyId, departmentId, requisitionData
     }
 
     console.log('Requisition created successfully');
+
+    logCmmsActivity(companyId, {
+      actorUserId: cmmsUserId,
+      actorName: requisitionData.requesterName || 'Someone',
+      activityType: 'requisition_created',
+      description: `${requisitionData.requesterName || 'Someone'} submitted a requisition for ${requisitionData.purpose || 'supplies'}`,
+      icon: '🧾',
+      entityType: 'requisition',
+      entityId: createdRequisition?.id || null
+    });
+
     return { data: createdRequisition, error: null };
   } catch (error) {
     console.error('Exception creating requisition:', error);
@@ -1770,6 +1856,16 @@ export const updateRequisitionStatus = async (requisitionId, newStatus, approver
             console.warn('Decision saved but approval history insert failed:', approvalInsertError);
           }
         }
+
+        logCmmsActivity(requisitionRow.cmms_company_id, {
+          actorUserId: approverId,
+          actorName: approverName,
+          activityType: decision === 'rejected' ? 'requisition_rejected' : 'requisition_approved',
+          description: `${approverName} ${decision} a requisition`,
+          icon: decision === 'rejected' ? '❌' : '✅',
+          entityType: 'requisition',
+          entityId: requisitionId
+        });
       }
     } catch (approvalHistoryError) {
       console.warn('Decision saved but approval history logging failed:', approvalHistoryError);

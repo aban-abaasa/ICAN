@@ -78,6 +78,7 @@ import ThemeSwitcher from './ThemeSwitcher';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useCountry } from '../hooks/useCountry';
+import { useCmmsAccess } from '../hooks/useCmmsAccess';
 import { BusinessLoanCalculator } from './BusinessLoanCalculator';
 import { jsPDF } from 'jspdf';
 import * as XLSX from 'xlsx';
@@ -97,6 +98,7 @@ import IcanPriceChartWidget from './IcanPriceChartWidget';
 import DropshipDashboardWidget from './DropshipDashboardWidget';
 import DashboardUpdatesCard from './DashboardUpdatesCard';
 import BusinessTrendChart from './BusinessTrendChart';
+import CmmsActivityWidget from './CmmsActivityWidget';
 import { supabase } from '../lib/supabase/client';
 import { deleteTransaction } from '../services/supabaseTransactions';
 import { analyzeTransactionWithAI } from '../services/accountingAIService';
@@ -771,6 +773,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const { actualTheme } = useTheme();
   const { isOfflineMode, queueAction, user: authContextUser, getAvatarUrl, getDisplayName } = useAuth();
   const { country: userSignupCountry } = useCountry();
+  const { hasCmmsAccess, cmmsCompanyId, cmmsIsAdmin } = useCmmsAccess();
   const [authUser, setAuthUser] = useState(null);
   
   // Get the actual Supabase auth user
@@ -5442,6 +5445,19 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         </div>
       </div>
       )}
+
+      {/* ====== CMMS / SUPERMARKETA ACTIVITY WIDGET ====== */}
+      <CmmsActivityWidget
+        hasCmmsAccess={hasCmmsAccess}
+        cmmsCompanyId={cmmsCompanyId}
+        cmmsIsAdmin={cmmsIsAdmin}
+        onOpenCmms={(innerTab) => {
+          openFeaturePanel('cmms');
+          if (innerTab) {
+            setCmmsOpenRequest({ tab: innerTab, requestId: `dashboard-widget:${Date.now()}` });
+          }
+        }}
+      />
 
       {/* ====== RECORD EVERY TRANSACTION SECTION ====== */}
       <div className="mx-4 mt-4 mb-2">
