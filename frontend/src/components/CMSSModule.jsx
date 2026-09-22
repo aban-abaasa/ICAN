@@ -4872,6 +4872,10 @@ const CMMSModule = ({
     // bigger form and re-typing every other field just to add one link.
     const saveGoogleMapsUrl = async () => {
       const trimmed = googleMapsUrlDraft.trim();
+      if (trimmed && /^https?:\/\/business\.google\.com\//i.test(trimmed)) {
+        setGoogleMapsUrlError('That\'s the private setup link Google showed you -- it needs your own Google sign-in and won\'t work for customers. Search for your business on Google Maps itself, open its listing, then tap Share > Copy link.');
+        return;
+      }
       if (trimmed && !/^https?:\/\/.+google\.com\/maps|^https?:\/\/maps\.app\.goo\.gl\//i.test(trimmed)) {
         setGoogleMapsUrlError('That doesn\'t look like a Google Maps link -- copy it from the Share button on your business\'s Google Maps listing.');
         return;
@@ -5447,6 +5451,28 @@ const CMMSModule = ({
                   <label className="block text-xs font-semibold text-gray-400 mb-1">
                     Already registered? Paste your Google Maps link here so your board's Directions button and map always point customers to it
                   </label>
+                  {/* Telling a business owner to "go search Google Maps
+                      yourself" is still a few steps of friction -- this
+                      button does the one part that's actually the same every
+                      time (opening Maps with the right search already typed
+                      in), using Google's own documented search-action URL
+                      (maps/search/?api=1&query=...), a real supported link
+                      unlike a prefilled registration form. They still have to
+                      tap their listing, Share, Copy link themselves -- Google
+                      gives no way to skip that part -- but they never have to
+                      type their own business name into Maps to find it. */}
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([displayProfile.companyName, displayProfile.location].filter(Boolean).join(', '))}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full bg-white bg-opacity-10 hover:bg-opacity-20 text-white transition-all mb-2"
+                  >
+                    <MapPin className="w-3.5 h-3.5" /> Find my business on Google Maps
+                  </a>
+                  <p className="text-gray-500 text-[11px] mb-2 leading-relaxed">
+                    Opens Maps already searching for "{displayProfile.companyName}". Tap your listing when you see it, then <span className="text-gray-300 font-medium">Share</span> → <span className="text-gray-300 font-medium">Copy link</span>, and paste it below.
+                    {' '}Don't use the setup link Google showed you right after registering — that one needs your own sign-in and won't work for customers.
+                  </p>
                   <div className="flex flex-col sm:flex-row gap-2">
                     <input
                       type="text"
