@@ -223,7 +223,10 @@ const CMMSAnnouncementsPanel = ({
         const accessToken = session?.access_token;
         if (!accessToken) throw new Error('Could not verify your session to upload the cover photo.');
         setUploadingCover(true);
-        const result = await uploadToR2({ file: coverImageFile, folder: 'cmms-company-profile', accessToken });
+        // 'cmms-company-profile' isn't in api/storage/[action].js's
+        // ALLOWED_FOLDERS allowlist -- reuse 'cmms-announcements', the same
+        // folder this panel's poster/document uploads above already use.
+        const result = await uploadToR2({ file: coverImageFile, folder: 'cmms-announcements', accessToken });
         setUploadingCover(false);
         if (!result.success) throw new Error(result.error || 'Cover photo upload failed');
         coverUpload = { url: result.url, key: result.key };
