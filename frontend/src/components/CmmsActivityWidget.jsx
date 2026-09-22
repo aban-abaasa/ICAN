@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { BarChart, Bar, XAxis, ResponsiveContainer, Tooltip, Cell } from 'recharts';
 import {
   Building2, Users, Package, ClipboardList, AlertTriangle,
-  TrendingUp, TrendingDown, Minus, ShoppingCart, Activity, ChevronRight, ChevronLeft
+  TrendingUp, TrendingDown, Minus, ShoppingCart, Activity, ChevronRight, ChevronLeft,
+  Wallet, UserCheck, DoorOpen, Briefcase, CheckSquare, FileText, ArrowLeftRight
 } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 
@@ -178,6 +179,159 @@ const CmmsActivityWidget = ({ hasCmmsAccess, cmmsCompanyId, cmmsIsAdmin, onOpenC
                   Approve now <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               )}
+            </div>
+          )
+        });
+      }
+
+      if ((cmmsSummary.salary_paid_today_ugx || 0) + (cmmsSummary.salary_owed_ugx || 0) > 0) {
+        out.push({
+          key: 'cmms-payroll',
+          render: () => (
+            <div>
+              <SectionLabel icon={Wallet}>Payroll</SectionLabel>
+              <div className="flex gap-6">
+                <div className="min-w-0">
+                  <span className="block text-xl font-bold text-emerald-400 leading-none tabular-nums whitespace-nowrap">UGX {fmtShort(cmmsSummary.salary_paid_today_ugx)}</span>
+                  <p className="text-[11px] text-slate-400 mt-1 truncate">Paid today</p>
+                </div>
+                <div className="min-w-0">
+                  <span className="block text-xl font-bold text-amber-400 leading-none tabular-nums whitespace-nowrap">UGX {fmtShort(cmmsSummary.salary_owed_ugx)}</span>
+                  <p className="text-[11px] text-slate-400 mt-1 truncate">
+                    Still owed{cmmsSummary.salary_owed_count > 0 ? ` (${fmtShort(cmmsSummary.salary_owed_count)})` : ''}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )
+        });
+      }
+
+      if ((cmmsSummary.staff_checked_in_today || 0) + (cmmsSummary.staff_checked_out_today || 0) > 0) {
+        out.push({
+          key: 'cmms-staff-attendance',
+          render: () => (
+            <div>
+              <SectionLabel icon={UserCheck}>Staff attendance today</SectionLabel>
+              <div className="flex gap-6">
+                <div className="min-w-0">
+                  <span className="block text-2xl font-bold text-white leading-none tabular-nums whitespace-nowrap">{fmtShort(cmmsSummary.staff_checked_in_today)}</span>
+                  <p className="text-[11px] text-slate-400 mt-1 truncate">Checked in</p>
+                </div>
+                <div className="min-w-0">
+                  <span className="block text-2xl font-bold text-white leading-none tabular-nums whitespace-nowrap">{fmtShort(cmmsSummary.staff_checked_out_today)}</span>
+                  <p className="text-[11px] text-slate-400 mt-1 truncate">Checked out</p>
+                </div>
+                <div className="min-w-0">
+                  <span className="block text-2xl font-bold text-emerald-400 leading-none tabular-nums whitespace-nowrap">{fmtShort(cmmsSummary.staff_currently_on_site)}</span>
+                  <p className="text-[11px] text-slate-400 mt-1 truncate">On site now</p>
+                </div>
+              </div>
+            </div>
+          )
+        });
+      }
+
+      if (cmmsSummary.visitors_checked_in_today > 0) {
+        out.push({
+          key: 'cmms-visitors',
+          render: () => (
+            <div>
+              <SectionLabel icon={DoorOpen}>Visitors today</SectionLabel>
+              <span className="block text-3xl font-bold text-white leading-none tabular-nums">{fmtShort(cmmsSummary.visitors_checked_in_today)}</span>
+              <p className="text-[11px] text-slate-400 mt-1">Checked in at the front desk</p>
+            </div>
+          )
+        });
+      }
+
+      if (cmmsSummary.open_job_postings > 0) {
+        out.push({
+          key: 'cmms-jobs',
+          render: () => (
+            <div>
+              <SectionLabel icon={Briefcase}>
+                {fmtShort(cmmsSummary.open_job_postings)} open job posting{cmmsSummary.open_job_postings === 1 ? '' : 's'}
+              </SectionLabel>
+              <div className="flex gap-6">
+                <div className="min-w-0">
+                  <span className="block text-2xl font-bold text-white leading-none tabular-nums whitespace-nowrap">{fmtShort(cmmsSummary.job_posting_views)}</span>
+                  <p className="text-[11px] text-slate-400 mt-1 truncate">Views</p>
+                </div>
+                <div className="min-w-0">
+                  <span className="block text-2xl font-bold text-white leading-none tabular-nums whitespace-nowrap">{fmtShort(cmmsSummary.job_applications_total)}</span>
+                  <p className="text-[11px] text-slate-400 mt-1 truncate">Applicants</p>
+                </div>
+                {cmmsSummary.job_applications_today > 0 && (
+                  <div className="min-w-0">
+                    <span className="block text-2xl font-bold text-emerald-400 leading-none tabular-nums whitespace-nowrap">{fmtShort(cmmsSummary.job_applications_today)}</span>
+                    <p className="text-[11px] text-slate-400 mt-1 truncate">New today</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        });
+      }
+
+      if ((cmmsSummary.tasks_assigned_today || 0) + (cmmsSummary.tasks_completed_today || 0) + (cmmsSummary.tasks_open || 0) > 0) {
+        out.push({
+          key: 'cmms-tasks',
+          render: () => (
+            <div>
+              <SectionLabel icon={CheckSquare}>Tasks</SectionLabel>
+              <div className="flex gap-6">
+                <div className="min-w-0">
+                  <span className="block text-2xl font-bold text-white leading-none tabular-nums whitespace-nowrap">{fmtShort(cmmsSummary.tasks_assigned_today)}</span>
+                  <p className="text-[11px] text-slate-400 mt-1 truncate">Assigned today</p>
+                </div>
+                <div className="min-w-0">
+                  <span className="block text-2xl font-bold text-emerald-400 leading-none tabular-nums whitespace-nowrap">{fmtShort(cmmsSummary.tasks_completed_today)}</span>
+                  <p className="text-[11px] text-slate-400 mt-1 truncate">Completed today</p>
+                </div>
+                <div className="min-w-0">
+                  <span className="block text-2xl font-bold text-slate-300 leading-none tabular-nums whitespace-nowrap">{fmtShort(cmmsSummary.tasks_open)}</span>
+                  <p className="text-[11px] text-slate-400 mt-1 truncate">Still open</p>
+                </div>
+              </div>
+            </div>
+          )
+        });
+      }
+
+      if (cmmsSummary.reports_submitted_today > 0) {
+        out.push({
+          key: 'cmms-reports',
+          render: () => (
+            <div>
+              <SectionLabel icon={FileText}>Reports submitted today</SectionLabel>
+              <div className="flex gap-6">
+                <div className="min-w-0">
+                  <span className="block text-3xl font-bold text-white leading-none tabular-nums">{fmtShort(cmmsSummary.reports_submitted_today)}</span>
+                  <p className="text-[11px] text-slate-400 mt-1 truncate">Submitted today</p>
+                </div>
+                {cmmsSummary.reports_open > 0 && (
+                  <div className="min-w-0">
+                    <span className="block text-3xl font-bold text-amber-400 leading-none tabular-nums">{fmtShort(cmmsSummary.reports_open)}</span>
+                    <p className="text-[11px] text-slate-400 mt-1 truncate">Still open</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        });
+      }
+
+      if (cmmsSummary.transactions_today_count > 0) {
+        out.push({
+          key: 'cmms-transactions',
+          render: () => (
+            <div>
+              <SectionLabel icon={ArrowLeftRight}>Transactions today</SectionLabel>
+              <div className="flex items-baseline gap-2 min-w-0">
+                <span className="text-2xl font-bold text-white leading-none tabular-nums whitespace-nowrap">UGX {fmtShort(cmmsSummary.transactions_today_ugx)}</span>
+                <span className="text-[11px] text-slate-400 truncate flex-shrink">{fmtShort(cmmsSummary.transactions_today_count)} transaction{cmmsSummary.transactions_today_count === 1 ? '' : 's'}</span>
+              </div>
             </div>
           )
         });
