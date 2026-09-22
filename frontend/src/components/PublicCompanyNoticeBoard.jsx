@@ -26,9 +26,15 @@ const buildWhatsAppLink = (whatsapp) => {
   const digits = whatsapp?.replace(/[^\d]/g, '');
   return digits ? `https://wa.me/${digits}` : null;
 };
+// /maps/search/ (the old endpoint here) only ever opens a place search --
+// tapping it never actually starts turn-by-turn navigation. /maps/dir/ with
+// a destination is the real "get directions" intent: Google geocodes the
+// same "business name, location" text and routes there from wherever the
+// visitor already is, the same link a real Google Business Profile's own
+// Directions button produces.
 const buildDirectionsLink = (location, companyName) => {
   const query = [companyName, location].filter(Boolean).join(', ');
-  return query ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}` : null;
+  return query ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(query)}` : null;
 };
 // Businesses type their website as "example.com" as often as
 // "https://example.com" -- a bare domain as an <a href> just reloads the
@@ -733,6 +739,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
             <div className="lg:grid lg:grid-cols-[1fr_300px] lg:gap-6 lg:items-start">
               <div className="min-w-0">
                 {company.about && <AboutCard company={company} />}
+                <LocationCard company={company} className="lg:hidden" />
                 <NoticeList notices={notices} onSelect={(notice) => openDetail(notice, setSelectedNotice)} />
               </div>
               <BusinessInfoSidebar company={company} className="hidden lg:block" />
@@ -997,18 +1004,43 @@ const InfoRow = ({ icon: Icon, label, value, href, external }) => {
   );
 };
 
+// A real, visible pin -- not just a text link the visitor has to click and
+// hope -- using the same "business name, location" text the Directions
+// button already sends. No Google Maps API key needed: this is the
+// well-established keyless `maps?q=...&output=embed` iframe, so it works the
+// moment a business fills in a location, no billing/API setup on ICANEra's
+// side. Google's own geocoder resolves it, so whenever this business is a
+// real, findable place on Google Maps the pin centers on it; otherwise it
+// falls back to the general area, same as the Directions link would.
+const LocationMap = ({ query, className = '' }) => (
+  <div className={`rounded-xl overflow-hidden border nb-border ${className}`}>
+    <iframe
+      title="Map"
+      src={`https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed`}
+      className="w-full h-40 sm:h-48 block"
+      style={{ border: 0 }}
+      loading="lazy"
+      referrerPolicy="no-referrer-when-downgrade"
+    />
+  </div>
+);
+
 // The desktop-only sidebar (a real business page's "Info" panel -- think
 // Google Business/Yelp) that turns the wide, mostly-empty right margin a
 // single centered column leaves on a large screen into somewhere useful.
 // Deliberately not shown on mobile: everything here is already reachable
-// from the hero's action buttons, and duplicating a full info card below
-// the fold on a phone would just be scroll-padding, not value.
+// from the hero's action buttons (and LocationCard below covers the map),
+// and duplicating a full info card below the fold on a phone would just be
+// scroll-padding, not value.
 const BusinessInfoSidebar = ({ company, className = '' }) => {
   const hasAnyInfo = company.location || company.hours_text || company.phone || company.whatsapp || company.email || company.website;
   if (!hasAnyInfo) return null;
   return (
     <aside className={`nb-card rounded-2xl shadow-sm p-5 lg:sticky lg:top-24 ${className}`}>
       <h2 className="text-sm font-bold nb-text uppercase tracking-wide mb-1">Business info</h2>
+      {company.location && (
+        <LocationMap query={[company.company_name, company.location].filter(Boolean).join(', ')} className="my-3" />
+      )}
       <div className="divide-y nb-border">
         <InfoRow icon={MapPin} label="Location" value={company.location} href={buildDirectionsLink(company.location, company.company_name)} external />
         <InfoRow icon={Clock} label="Hours" value={company.hours_text} />
@@ -1019,6 +1051,29 @@ const BusinessInfoSidebar = ({ company, className = '' }) => {
       </div>
       <SocialRow company={company} className="mt-3 pt-3 border-t nb-border" />
     </aside>
+  );
+};
+
+// The same pin, surfaced for mobile/tablet too -- BusinessInfoSidebar above
+// is desktop-only (lg:block), and a text-only Directions button asks a
+// visitor to trust a link before clicking it. Placed in the main column, not
+// the sidebar, so it actually renders below lg.
+const LocationCard = ({ company, className = '' }) => {
+  if (!company.location) return null;
+  const directionsHref = buildDirectionsLink(company.location, company.company_name);
+  return (
+    <div className={`nb-card rounded-2xl shadow-sm p-5 mb-5 animate-fadeInUp ${className}`}>
+      <h2 className="text-sm font-bold nb-text uppercase tracking-wide mb-3">Find us</h2>
+      <LocationMap query={[company.company_name, company.location].filter(Boolean).join(', ')} />
+      <div className="flex items-center justify-between gap-3 mt-3">
+        <p className="text-sm nb-text-muted flex items-center gap-1.5 min-w-0"><MapPin className="w-4 h-4 flex-shrink-0 nb-icon-muted" /><span className="truncate">{company.location}</span></p>
+        {directionsHref && (
+          <a href={directionsHref} target="_blank" rel="noreferrer" className="flex-shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full nb-btn-primary transition-all hover:scale-[1.03] active:scale-[0.98]">
+            <Navigation className="w-3.5 h-3.5" /> Directions
+          </a>
+        )}
+      </div>
+    </div>
   );
 };
 
