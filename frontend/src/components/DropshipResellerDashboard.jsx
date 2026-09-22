@@ -111,15 +111,21 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const tabs = [
+    { id: 'browse', label: 'Browse products', icon: Package },
+    { id: 'listings', label: 'My listings', icon: ClipboardList },
+    { id: 'sales', label: 'Your sales', icon: TrendingUp },
+  ];
+
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-indigo-400/30 bg-indigo-500/10 p-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
+      <div className="rounded-2xl border border-teal-400/30 bg-teal-500/10 p-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
         <div className="min-w-0">
-          <p className="text-xs uppercase tracking-wide text-indigo-300 font-semibold">Your storefront</p>
+          <p className="text-xs uppercase tracking-wide text-teal-300 font-semibold">Your storefront</p>
           <p className="text-white font-medium truncate">{businessName || 'Dropshipping business'}</p>
         </div>
         <div className="flex items-center gap-2 min-w-0">
-          <code className="text-xs text-indigo-200 bg-black/30 rounded-lg px-2.5 py-1.5 truncate max-w-[220px]">{storefrontUrl}</code>
+          <code className="text-xs text-teal-200 bg-black/30 rounded-lg px-2.5 py-1.5 truncate max-w-[160px] sm:max-w-[220px]">{storefrontUrl}</code>
           <button onClick={copyLink} className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white shrink-0" title="Copy link">
             {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
           </button>
@@ -129,16 +135,24 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
         </div>
       </div>
 
-      <div className="flex gap-2 border-b border-slate-800">
-        <button onClick={() => setTab('browse')} className={`px-3 py-2 text-sm font-medium border-b-2 transition ${tab === 'browse' ? 'border-indigo-400 text-white' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
-          <Package className="w-4 h-4 inline mr-1.5 -mt-0.5" />Browse products
-        </button>
-        <button onClick={() => setTab('listings')} className={`px-3 py-2 text-sm font-medium border-b-2 transition ${tab === 'listings' ? 'border-indigo-400 text-white' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
-          <ClipboardList className="w-4 h-4 inline mr-1.5 -mt-0.5" />My listings
-        </button>
-        <button onClick={() => setTab('sales')} className={`px-3 py-2 text-sm font-medium border-b-2 transition ${tab === 'sales' ? 'border-indigo-400 text-white' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
-          <TrendingUp className="w-4 h-4 inline mr-1.5 -mt-0.5" />Your sales
-        </button>
+      {/* Three independent tab containers -- each its own bordered card,
+          not a shared underline bar, so they read (and behave) as
+          separate, self-contained buttons. */}
+      <div className="grid grid-cols-3 gap-2">
+        {tabs.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            className={`flex flex-col items-center gap-1 rounded-xl border px-2 py-2.5 text-center transition min-w-0 ${
+              tab === id
+                ? 'border-teal-400/50 bg-teal-500/15 text-white'
+                : 'border-slate-800 bg-slate-900/60 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+            }`}
+          >
+            <Icon className={`w-4 h-4 ${tab === id ? 'text-teal-400' : ''}`} />
+            <span className="text-[11px] font-semibold truncate w-full">{label}</span>
+          </button>
+        ))}
       </div>
 
       {tab === 'browse' && (
@@ -163,21 +177,26 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
                 const draftValue = priceDrafts[product.product_id] ?? (product.already_listed ? product.listed_price : suggestPrice(product.selling_price));
                 const invalid = Number(draftValue) < Number(product.selling_price);
                 return (
-                  <div key={product.product_id} className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-                    <div className="w-12 h-12 rounded-lg bg-slate-800 flex items-center justify-center overflow-hidden shrink-0">
-                      {product.images?.[0] ? <img src={product.images[0]} alt="" className="w-full h-full object-cover" /> : <Store className="w-5 h-5 text-slate-600" />}
+                  // Two stacked rows, not one crammed horizontal line — the
+                  // controls row wraps (flex-wrap) instead of being clipped
+                  // off the edge of narrower phones.
+                  <div key={product.product_id} className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                    <div className="flex items-center gap-3 mb-2.5">
+                      <div className="w-12 h-12 rounded-lg bg-slate-800 flex items-center justify-center overflow-hidden shrink-0">
+                        {product.images?.[0] ? <img src={product.images[0]} alt="" className="w-full h-full object-cover" /> : <Store className="w-5 h-5 text-slate-600" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-white truncate">{product.name}</p>
+                        <p className="text-xs text-slate-500 truncate">{product.supermarket_name} · store price {formatUGX(product.selling_price)} · stock {product.available_stock}</p>
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm text-white truncate">{product.name}</p>
-                      <p className="text-xs text-slate-500 truncate">{product.supermarket_name} · store price {formatUGX(product.selling_price)} · stock {product.available_stock}</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex flex-wrap items-center gap-2">
                       <label className="flex items-center gap-1 text-xs text-slate-400 cursor-pointer" title="Free delivery — you cover the real fare in full (up to your margin on the order)">
                         <input
                           type="checkbox"
                           checked={freeDeliveryDrafts[product.product_id] ?? product.free_delivery ?? false}
                           onChange={(e) => setFreeDeliveryDrafts((prev) => ({ ...prev, [product.product_id]: e.target.checked }))}
-                          className="accent-indigo-500"
+                          className="accent-teal-500"
                         />
                         <Truck className="w-3.5 h-3.5" />
                       </label>
@@ -206,7 +225,7 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
                       <button
                         onClick={() => handleList(product)}
                         disabled={invalid || savingId === product.product_id}
-                        className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-xs font-semibold transition"
+                        className="px-3 py-1.5 rounded-lg bg-teal-700 hover:bg-teal-600 disabled:opacity-40 text-white text-xs font-semibold transition"
                       >
                         {product.already_listed ? 'Update' : 'List'}
                       </button>
@@ -230,21 +249,25 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
               {myListings.map((item) => {
                 const draftValue = priceDrafts[item.product_id] ?? item.listed_price;
                 return (
-                  <div key={item.listing_id} className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-                    <div className="w-12 h-12 rounded-lg bg-slate-800 flex items-center justify-center overflow-hidden shrink-0">
-                      {item.images?.[0] ? <img src={item.images[0]} alt="" className="w-full h-full object-cover" /> : <Store className="w-5 h-5 text-slate-600" />}
+                  // Same two-row layout as Browse products -- info on top,
+                  // controls wrap below instead of overflowing the card.
+                  <div key={item.listing_id} className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                    <div className="flex items-center gap-3 mb-2.5">
+                      <div className="w-12 h-12 rounded-lg bg-slate-800 flex items-center justify-center overflow-hidden shrink-0">
+                        {item.images?.[0] ? <img src={item.images[0]} alt="" className="w-full h-full object-cover" /> : <Store className="w-5 h-5 text-slate-600" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-white truncate">{item.name}</p>
+                        <p className="text-xs text-slate-500 truncate">{item.in_stock ? `In stock · ${item.available_stock}` : 'Out of stock'}</p>
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm text-white truncate">{item.name}</p>
-                      <p className="text-xs text-slate-500 truncate">{item.in_stock ? `In stock · ${item.available_stock}` : 'Out of stock'}</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex flex-wrap items-center gap-2">
                       <label className="flex items-center gap-1 text-xs text-slate-400 cursor-pointer" title="Free delivery — you cover the real fare in full (up to your margin on the order)">
                         <input
                           type="checkbox"
                           checked={freeDeliveryDrafts[item.product_id] ?? item.free_delivery ?? false}
                           onChange={(e) => setFreeDeliveryDrafts((prev) => ({ ...prev, [item.product_id]: e.target.checked }))}
-                          className="accent-indigo-500"
+                          className="accent-teal-500"
                         />
                         <Truck className="w-3.5 h-3.5" />
                       </label>
@@ -267,7 +290,7 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
                       <button onClick={() => handleUnlistMyListing(item)} disabled={savingId === item.product_id} className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition">
                         Unlist
                       </button>
-                      <button onClick={() => handleUpdateMyListing(item)} disabled={savingId === item.product_id} className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-xs font-semibold transition">
+                      <button onClick={() => handleUpdateMyListing(item)} disabled={savingId === item.product_id} className="px-3 py-1.5 rounded-lg bg-teal-700 hover:bg-teal-600 disabled:opacity-40 text-white text-xs font-semibold transition">
                         Update
                       </button>
                     </div>
