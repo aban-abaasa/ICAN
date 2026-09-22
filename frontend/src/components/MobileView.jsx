@@ -5478,12 +5478,12 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           {/* Business record shortcut */}
           <button
             onClick={() => { setRecordTypeChoice('business'); setShowRecordTypeModal(true); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border active:scale-95 transition-all text-xs font-semibold"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border active:scale-95 transition-all text-xs font-semibold shadow-sm"
             style={{
               background: modePalette.businessChip,
               borderColor: 'var(--color-primary)',
               color: 'var(--color-text)',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.12)'
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.10), 0 1px 3px rgba(0,0,0,0.15)'
             }}
           >
             <span>💼</span> Business
@@ -5491,12 +5491,12 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           {/* Personal record shortcut — no business to pick, so skip straight to entry */}
           <button
             onClick={() => { setTransactionType('personal'); setPreselectedBusinessProfileId(null); setShowTransactionEntry(true); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border active:scale-95 transition-all text-xs font-semibold"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border active:scale-95 transition-all text-xs font-semibold shadow-sm"
             style={{
               background: modePalette.personalChip,
               borderColor: 'var(--color-secondary)',
               color: 'var(--color-text)',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.12)'
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.10), 0 1px 3px rgba(0,0,0,0.15)'
             }}
           >
             <span>👤</span> Personal
@@ -5514,7 +5514,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   handleRecordSubmit(recordInputText.trim());
                 }
               }}
-              className={`w-full flex items-center gap-3 rounded-full px-4 py-3 sm:py-4 shadow-lg transition-all ${
+              className={`w-full flex items-center gap-3 rounded-full px-4 py-3 sm:py-4 shadow-md transition-all ${
                 isListening
                   ? 'border'
                   : loanDetected

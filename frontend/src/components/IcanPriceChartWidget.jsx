@@ -3,6 +3,21 @@ import { LineChart as LineChartIcon, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import CandlestickChart from './CandlestickChart';
 
+// Same clean K/M/B/T rule as every other stat card on the dashboard —
+// matches BusinessTrendChart's fmtUgx for this same "price" concept, so
+// the ICAN ticker doesn't stand out as the one raw, unabbreviated number.
+const fmtShort = (n) => {
+  const v = Math.abs(n || 0);
+  const sign = n < 0 ? '-' : '';
+  const round1 = (x) => Math.round(x * 10) / 10;
+  const clean = (x) => (Number.isInteger(x) ? x.toFixed(0) : x.toFixed(1));
+  if (v >= 1_000_000_000_000) return `${sign}${clean(round1(v / 1_000_000_000_000))}T`;
+  if (v >= 1_000_000_000) return `${sign}${clean(round1(v / 1_000_000_000))}B`;
+  if (v >= 1_000_000) return `${sign}${clean(round1(v / 1_000_000))}M`;
+  if (v >= 1_000) return `${sign}${clean(round1(v / 1_000))}K`;
+  return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+};
+
 // Format a raw ican_price_ohlc row into the shape CandlestickChart expects.
 // Mirrors formatCandleRow in ICANWallet.jsx's Trade > Chart tab.
 const formatCandleRow = (candle) => ({
@@ -104,7 +119,7 @@ const IcanPriceChartWidget = () => {
         <span className="ml-auto flex items-center gap-2">
           {latestClose != null && (
             <span className="text-xs font-semibold text-white tabular-nums whitespace-nowrap">
-              {latestClose.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              {fmtShort(latestClose)}
               {changePct != null && (
                 <span className={`ml-1 ${changePct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                   {changePct >= 0 ? '+' : ''}{changePct.toFixed(2)}%
