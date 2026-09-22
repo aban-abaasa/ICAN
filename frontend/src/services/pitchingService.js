@@ -412,15 +412,29 @@ const PITCH_WITH_BUSINESS_SELECT = `
  * shared link.
  */
 const enrichPitchesWithProfilePhotos = async (sb, pitches) => {
+  // business_profiles RLS only allows the owner/co-owners to read a row
+  // directly (FIX_BUSINESS_PROFILES_RLS_FOR_SHAREHOLDERS.sql dropped the old
+  // "Public read access" policy) -- so PITCH_WITH_BUSINESS_SELECT's nested
+  // business_profiles(...) embed above comes back null for every viewer
+  // except the business's own owner/co-owner, i.e. almost everyone browsing
+  // someone else's pitch. That silently blanked out the saved logo/name/
+  // founded-year/total-capital on the public feed, shared pitch links and
+  // the Business Details modal for them. fn_get_public_business_profiles is
+  // SECURITY DEFINER and returns only the fields this page already shows
+  // publicly, so this refetches them here regardless of what the embed
+  // returned (backend/PITCHIN_PUBLIC_BUSINESS_PROFILE_INFO_RPC.sql).
   try {
-    const bizProfiles = pitches.map(p => p.business_profiles).filter(Boolean);
-    const resolvedBizProfiles = await resolveMediaValues(bizProfiles, ['avatar_url']);
-    const resolvedById = new Map(resolvedBizProfiles.map(bp => [bp.id, bp.avatar_url]));
-    pitches.forEach(pitch => {
-      if (pitch.business_profiles) {
-        pitch.business_profiles.avatar_url = resolvedById.get(pitch.business_profiles.id) || null;
-      }
-    });
+    const businessIds = [...new Set(pitches.map(p => p.business_profile_id).filter(Boolean))];
+    if (businessIds.length > 0) {
+      const { data: bizProfiles, error: bizError } = await sb.rpc('fn_get_public_business_profiles', { p_business_profile_ids: businessIds });
+      if (bizError) throw bizError;
+      const resolvedBizProfiles = await resolveMediaValues(bizProfiles || [], ['avatar_url']);
+      const bizById = new Map(resolvedBizProfiles.map(bp => [bp.id, bp]));
+      pitches.forEach(pitch => {
+        const biz = pitch.business_profile_id ? bizById.get(pitch.business_profile_id) : null;
+        if (biz) pitch.business_profiles = { ...pitch.business_profiles, ...biz };
+      });
+    }
   } catch (bizAvatarError) {
     console.warn('Could not resolve business logo URLs:', bizAvatarError?.message);
   }

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Megaphone, Briefcase, MapPin, Calendar, Users, FileText, X, Loader,
   AlertCircle, CheckCircle2, Search, Building2, ArrowLeft, Upload, Share2,
@@ -407,6 +407,20 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   const [selectedNotice, setSelectedNotice] = useState(null);
   const [selectedOpportunity, setSelectedOpportunity] = useState(null);
 
+  // Two small things every tab needs to actually feel like its own page
+  // rather than a swapped-in div: landing at its top (not wherever the
+  // previous tab happened to be scrolled to), and -- since the tab bar
+  // itself scrolls horizontally on a phone -- bringing the tab you just
+  // tapped into view instead of leaving it hidden off to the side while its
+  // content changes underneath.
+  const tabNavRef = useRef(null);
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    tabNavRef.current
+      ?.querySelector(`[data-tab-id="${section}"]`)
+      ?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  }, [section]);
+
   // The company's Dropship storefront, when it has linked one (see "Board
   // profile" in CMMSAnnouncementsPanel.jsx / fn_set_cmms_company_business_
   // profile). Loaded separately from notices/jobs since it depends on
@@ -676,7 +690,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
             </span>
           </div>
         )}
-        <nav className="nb-tab-nav max-w-5xl mx-auto px-4 sm:px-6 flex flex-nowrap gap-1 overflow-x-auto">
+        <nav ref={tabNavRef} role="tablist" className="nb-tab-nav max-w-5xl mx-auto px-4 sm:px-6 flex flex-nowrap gap-1 overflow-x-auto">
           {[
             { id: 'notices', label: 'Notices', icon: Megaphone },
             ...(products.length > 0 ? [{ id: 'shop', label: 'Products & Services', icon: ShoppingBag }] : []),
@@ -688,6 +702,9 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
           ].map((tab) => (
             <button
               key={tab.id}
+              data-tab-id={tab.id}
+              role="tab"
+              aria-selected={section === tab.id}
               onClick={() => setSection(tab.id)}
               className={`flex-shrink-0 px-3.5 sm:px-4 py-2.5 text-sm font-semibold flex items-center gap-1.5 border-b-2 whitespace-nowrap transition-colors ${section === tab.id ? 'nb-tab-active' : 'nb-tab'}`}
             >
@@ -2237,16 +2254,39 @@ const Modal = ({ onClose, children }) => {
     return () => cancelAnimationFrame(id);
   }, []);
 
+  // Escape-to-close and a locked background scroll are the two things every
+  // visitor already expects from a modal (native <dialog>, every mainstream
+  // site) -- their absence is what makes a custom-built modal read as janky.
+  // Restoring the previous overflow value (not always '') matters because
+  // this board can itself be opened inside another scroll-locked context.
+  useEffect(() => {
+    const onKeyDown = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [onClose]);
+
   return (
-    <div className={`icanera-nb fixed inset-0 nb-modal-backdrop backdrop-blur-sm z-50 overflow-y-auto transition-opacity duration-200 ${visible ? 'opacity-100' : 'opacity-0'}`}>
+    <div
+      role="presentation"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className={`icanera-nb fixed inset-0 nb-modal-backdrop backdrop-blur-sm z-50 overflow-y-auto transition-opacity duration-200 ${visible ? 'opacity-100' : 'opacity-0'}`}
+    >
       <div
         className="min-h-screen flex items-start justify-center p-4"
         style={{ paddingBottom: 'max(4rem, calc(env(safe-area-inset-bottom) + 2rem))' }}
+        onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       >
         <div
+          role="dialog"
+          aria-modal="true"
           className={`nb-surface w-full max-w-lg p-6 my-8 rounded-2xl shadow-2xl border nb-border relative transition-all duration-200 ${visible ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-2'}`}
         >
-          <button onClick={onClose} className="absolute top-4 right-4 nb-text-faint hover:opacity-80 transition-colors p-1 rounded-full nb-share-btn">
+          <button onClick={onClose} aria-label="Close" className="absolute top-4 right-4 nb-text-faint hover:opacity-80 transition-colors p-1 rounded-full nb-share-btn">
             <X className="w-5 h-5" />
           </button>
           {children}
