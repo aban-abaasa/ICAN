@@ -295,8 +295,13 @@ const NB_STYLES = `
 .nb-price { color: var(--nb-green); }
 .nb-out-of-stock { color: var(--nb-maroon); }
 .nb-hero-cover { background: linear-gradient(135deg, var(--nb-green) 0%, var(--nb-maroon) 100%); }
-.nb-hero-overlay { background: linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.55) 100%); }
-.nb-hero-avatar { background: var(--nb-surface); border: 3px solid var(--nb-surface); box-shadow: 0 2px 10px rgba(0,0,0,0.18); }
+.nb-hero-overlay { background: linear-gradient(180deg, rgba(0,0,0,0) 35%, rgba(0,0,0,0.6) 100%); }
+/* Fixed white ring (not theme-linked) so the logo always pops off both the
+   cover photo behind it and the page background beneath it, in light or
+   dark mode -- the same "always-white" avatar ring real business/creator
+   pages (Facebook Pages, Instagram) use regardless of the page's own theme. */
+.nb-hero-avatar { background: #ffffff; border: 4px solid #ffffff; box-shadow: 0 4px 16px rgba(0,0,0,0.28); }
+.nb-verified-mark { background: #ffffff; color: var(--nb-green); border: 2px solid #ffffff; box-shadow: 0 1px 6px rgba(0,0,0,0.25); }
 .nb-action-btn { background: var(--nb-surface); color: var(--nb-text); border: 1px solid var(--nb-border-strong); }
 .nb-action-btn:hover { border-color: var(--nb-green); color: var(--nb-green); }
 .nb-social-btn { background: var(--nb-surface-alt); color: var(--nb-text-muted); }
@@ -563,24 +568,45 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
       <style>{NB_STYLES}</style>
       <header className="border-b nb-header backdrop-blur sticky top-0 z-20 animate-fadeInDown">
         <div className="h-1 nb-accent-top" />
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-4 pb-2 flex items-center gap-3.5">
-          {company.logo_url ? (
-            <img src={company.logo_url} alt={company.company_name} className="w-12 h-12 rounded-xl object-cover border nb-border shadow-sm flex-shrink-0" />
-          ) : (
-            <div className="w-12 h-12 rounded-xl nb-btn-primary flex items-center justify-center font-bold text-lg shadow-sm flex-shrink-0">
-              {company.company_name?.charAt(0)?.toUpperCase() || <Building2 className="w-6 h-6" />}
-            </div>
-          )}
-          <div className="flex-1 min-w-0">
-            <h1 className="text-lg font-extrabold tracking-tight nb-text truncate">{company.company_name}</h1>
-            <p className="text-xs nb-text-faint truncate">
-              {[company.industry, company.location].filter(Boolean).join(' · ') || 'Notice board'}
-            </p>
+        {/* On the front page (Notices), BusinessHero right below already
+            shows the logo/name/tagline in full, so this bar stays a small
+            brand anchor for while the visitor scrolls the hero out of view
+            (rather than repeating the whole identity block again). Every
+            other tab has no hero, so it expands to the full version there. */}
+        {section === 'notices' ? (
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-2.5 pb-1.5 flex items-center gap-2">
+            {company.logo_url ? (
+              <img src={company.logo_url} alt="" className="w-6 h-6 rounded-md object-cover flex-shrink-0" />
+            ) : (
+              <div className="w-6 h-6 rounded-md nb-btn-primary flex items-center justify-center font-bold text-[11px] flex-shrink-0">
+                {company.company_name?.charAt(0)?.toUpperCase() || <Building2 className="w-3.5 h-3.5" />}
+              </div>
+            )}
+            <span className="text-sm font-bold nb-text truncate">{company.company_name}</span>
+            <span className="text-[11px] nb-text-faint ml-auto hidden sm:block flex-shrink-0">
+              via <IcanEraWordmark />
+            </span>
           </div>
-          <span className="text-[11px] nb-text-faint nb-surface-alt px-2.5 py-1 rounded-full hidden sm:block flex-shrink-0">
-            via <IcanEraWordmark />
-          </span>
-        </div>
+        ) : (
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-4 pb-2 flex items-center gap-3.5">
+            {company.logo_url ? (
+              <img src={company.logo_url} alt={company.company_name} className="w-12 h-12 rounded-xl object-cover border nb-border shadow-sm flex-shrink-0" />
+            ) : (
+              <div className="w-12 h-12 rounded-xl nb-btn-primary flex items-center justify-center font-bold text-lg shadow-sm flex-shrink-0">
+                {company.company_name?.charAt(0)?.toUpperCase() || <Building2 className="w-6 h-6" />}
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <h1 className="text-lg font-extrabold tracking-tight nb-text truncate">{company.company_name}</h1>
+              <p className="text-xs nb-text-faint truncate">
+                {[company.industry, company.location].filter(Boolean).join(' · ') || 'Notice board'}
+              </p>
+            </div>
+            <span className="text-[11px] nb-text-faint nb-surface-alt px-2.5 py-1 rounded-full hidden sm:block flex-shrink-0">
+              via <IcanEraWordmark />
+            </span>
+          </div>
+        )}
         <nav className="max-w-5xl mx-auto px-4 sm:px-6 flex flex-nowrap gap-1 overflow-x-auto">
           {[
             { id: 'notices', label: 'Notices', icon: Megaphone },
@@ -601,7 +627,13 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
         </nav>
       </header>
 
-      {section === 'notices' ? <BusinessHero company={company} /> : <ContactStrip company={company} />}
+      {/* jobs/notices here are the list RPC's rows, which (unlike the
+          single-notice detail fetch) don't compute is_open -- fine for a
+          rough "there's activity here" count, not meant as an exact "still
+          accepting applications" figure. */}
+      {section === 'notices'
+        ? <BusinessHero company={company} noticeCount={notices.length} jobCount={jobs.length} />
+        : <ContactStrip company={company} />}
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-7">
         <div key={section} className="animate-fadeInUp" style={{ animationDuration: '0.35s' }}>
@@ -700,10 +732,16 @@ const SocialRow = ({ company, className = '' }) => {
 // whatever contact fields the business filled in. This, more than the
 // notices feed itself, is what makes the page read as the business's own
 // site rather than a job board bolted onto ICANEra.
+// Call/WhatsApp (whichever exists) leads as a filled, brand-colored button --
+// the one action most visitors actually came to take -- everything else
+// (Email, Directions, Website) trails as a lighter outline pill, the same
+// primary/secondary hierarchy a real landing page's CTA row uses instead of
+// a flat row of identical buttons.
 const ContactActions = ({ company, onShare, size = 'default' }) => {
   const actions = [
-    company.phone && { key: 'call', label: 'Call', icon: Phone, href: buildTelLink(company.phone) },
-    company.whatsapp && { key: 'whatsapp', label: 'WhatsApp', icon: MessageCircle, href: buildWhatsAppLink(company.whatsapp) },
+    company.whatsapp && { key: 'whatsapp', label: 'WhatsApp', icon: MessageCircle, href: buildWhatsAppLink(company.whatsapp), primary: true },
+    !company.whatsapp && company.phone && { key: 'call', label: 'Call', icon: Phone, href: buildTelLink(company.phone), primary: true },
+    company.whatsapp && company.phone && { key: 'call', label: 'Call', icon: Phone, href: buildTelLink(company.phone) },
     company.email && { key: 'email', label: 'Email', icon: Mail, href: buildMailLink(company.email) },
     company.location && { key: 'directions', label: 'Directions', icon: Navigation, href: buildDirectionsLink(company.location, company.company_name) },
     company.website && { key: 'website', label: 'Website', icon: Globe, href: normalizeExternalUrl(company.website) },
@@ -718,13 +756,13 @@ const ContactActions = ({ company, onShare, size = 'default' }) => {
           href={action.href}
           target={action.key === 'website' ? '_blank' : undefined}
           rel={action.key === 'website' ? 'noreferrer' : undefined}
-          className={`nb-action-btn rounded-full font-semibold flex items-center gap-1.5 transition-colors ${pad}`}
+          className={`rounded-full font-semibold flex items-center gap-1.5 transition-all hover:scale-[1.03] active:scale-[0.98] shadow-sm ${pad} ${action.primary ? 'nb-btn-primary' : 'nb-action-btn'}`}
         >
           <action.icon className="w-3.5 h-3.5" /> {action.label}
         </a>
       ))}
       {onShare && (
-        <button onClick={onShare} className={`nb-btn-secondary rounded-full font-semibold flex items-center gap-1.5 transition-colors ${pad}`}>
+        <button onClick={onShare} className={`nb-btn-secondary rounded-full font-semibold flex items-center gap-1.5 transition-all hover:scale-[1.03] active:scale-[0.98] ${pad}`}>
           <Share2 className="w-3.5 h-3.5" /> Share
         </button>
       )}
@@ -732,10 +770,40 @@ const ContactActions = ({ company, onShare, size = 'default' }) => {
   );
 };
 
+// A short "what this business does" line for the hero when no tagline has
+// been set -- the first sentence of About, so the hero never sits with a
+// dead gap between the name and the industry/location chips.
+const deriveHeroSubtitle = (company) => {
+  if (company.tagline?.trim()) return company.tagline.trim();
+  const about = company.about?.trim();
+  if (!about) return null;
+  const firstSentence = about.split(/(?<=[.!?])\s/)[0] || about;
+  return firstSentence.length > 140 ? `${firstSentence.slice(0, 137)}…` : firstSentence;
+};
+
+// Small social-proof pills ("6 open jobs", "12 updates") -- real numbers
+// from a real, active business read as more trustworthy than the tagline
+// alone, the same "this place is actually alive" signal a Google Business
+// listing's review count gives at a glance.
+const HeroStats = ({ noticeCount, jobCount }) => {
+  const stats = [
+    jobCount > 0 && { label: `${jobCount} open job${jobCount === 1 ? '' : 's'}` },
+    noticeCount > 0 && { label: `${noticeCount} update${noticeCount === 1 ? '' : 's'}` },
+  ].filter(Boolean);
+  if (stats.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2 mt-2.5">
+      {stats.map((stat) => (
+        <span key={stat.label} className="nb-chip-green text-[11px] font-bold px-2.5 py-1 rounded-full">{stat.label}</span>
+      ))}
+    </div>
+  );
+};
+
 // The homepage hero -- shown only on the "Notices" (front page) tab, same
 // place a real business's own website would put its cover photo, logo and
 // tagline above the fold.
-const BusinessHero = ({ company }) => {
+const BusinessHero = ({ company, noticeCount = 0, jobCount = 0 }) => {
   const [linkCopied, setLinkCopied] = useState(false);
   const shareBoard = async () => {
     const link = window.location.href.split('?')[0];
@@ -755,10 +823,11 @@ const BusinessHero = ({ company }) => {
       window.prompt('Copy this link:', link);
     }
   };
+  const subtitle = deriveHeroSubtitle(company);
 
   return (
     <div className="animate-fadeInDown">
-      <div className="relative h-36 sm:h-52 w-full overflow-hidden">
+      <div className="relative h-40 sm:h-64 w-full overflow-hidden">
         {company.cover_image_url ? (
           <img src={company.cover_image_url} alt="" className="w-full h-full object-cover" />
         ) : (
@@ -767,29 +836,34 @@ const BusinessHero = ({ company }) => {
         <div className="absolute inset-0 nb-hero-overlay" />
       </div>
       <div className="max-w-5xl mx-auto px-4 sm:px-6">
-        <div className="flex items-end gap-4 -mt-10 sm:-mt-12 relative z-10">
-          {company.logo_url ? (
-            <img src={company.logo_url} alt={company.company_name} className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover nb-hero-avatar flex-shrink-0" />
-          ) : (
-            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl nb-btn-primary nb-hero-avatar flex items-center justify-center font-bold text-3xl flex-shrink-0">
-              {company.company_name?.charAt(0)?.toUpperCase() || <Building2 className="w-9 h-9" />}
-            </div>
-          )}
+        <div className="flex items-end gap-4 -mt-12 sm:-mt-14 relative z-10">
+          <div className="relative flex-shrink-0">
+            {company.logo_url ? (
+              <img src={company.logo_url} alt={company.company_name} className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover nb-hero-avatar" />
+            ) : (
+              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl nb-btn-primary nb-hero-avatar flex items-center justify-center font-bold text-3xl sm:text-4xl">
+                {company.company_name?.charAt(0)?.toUpperCase() || <Building2 className="w-9 h-9" />}
+              </div>
+            )}
+            <span className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full nb-verified-mark flex items-center justify-center" title="Verified IcanEra business" aria-label="Verified IcanEra business">
+              <BadgeCheck className="w-[18px] h-[18px]" />
+            </span>
+          </div>
           <div className="flex-1 min-w-0 pb-1 sm:pb-2">
-            <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight nb-text flex items-center gap-1.5 flex-wrap">
+            <h1 className="text-xl sm:text-3xl font-extrabold tracking-tight nb-text drop-shadow-sm truncate">
               {company.company_name}
-              <BadgeCheck className="w-5 h-5 nb-link flex-shrink-0" aria-label="Verified IcanEra business" />
             </h1>
           </div>
         </div>
 
-        <div className="mt-3 sm:mt-4">
-          {company.tagline && <p className="nb-text font-medium">{company.tagline}</p>}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-xs nb-text-faint">
+        <div className="mt-4 sm:mt-5">
+          {subtitle && <p className="nb-text font-medium leading-snug max-w-2xl">{subtitle}</p>}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs nb-text-faint">
             {company.industry && <span className="inline-flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> {company.industry}</span>}
             {company.location && <span className="inline-flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {company.location}</span>}
             {company.hours_text && <span className="inline-flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {company.hours_text}</span>}
           </div>
+          <HeroStats noticeCount={noticeCount} jobCount={jobCount} />
 
           <div className="flex flex-wrap items-center justify-between gap-3 mt-4">
             <ContactActions company={company} onShare={shareBoard} />
