@@ -128,8 +128,12 @@ export default function DailyTrackingChart({
     // of the dashboard -- distinct from CMMS's indigo and the share-trend
     // card's burgundy. Income/expense/net keep their existing semantic
     // colors (green/gold/icy-blue) since those are meaningful, not decor.
-    <div className="bg-slate-900 border border-slate-800 rounded-lg shadow-sm">
-      <div className="flex items-center justify-between gap-2 px-4 pt-3.5 pb-3 border-b border-slate-800">
+    //
+    // Four independent containers -- header, presets, chart, totals --
+    // stacked as siblings rather than nested inside one shared card, same
+    // pattern used for the Dropship section.
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2 px-4 py-3 rounded-lg border border-slate-800 bg-slate-900 shadow-sm">
         <div className="flex items-center gap-2 min-w-0">
           {canGoBack && (
             <button
@@ -154,10 +158,10 @@ export default function DailyTrackingChart({
         )}
       </div>
 
-      <div className="px-4 py-4">
-        {/* Range presets — years of history, one tap away */}
-        {onPresetChange && (
-          <div className="flex items-center gap-1.5 mb-3">
+      {/* Range presets — years of history, one tap away */}
+      {onPresetChange && (
+        <div className="rounded-lg border border-slate-800 bg-slate-900 shadow-sm p-3">
+          <div className="flex items-center gap-1.5">
             <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-lg p-0.5 flex-1">
               {PRESETS.map((p) => (
                 <button
@@ -183,15 +187,17 @@ export default function DailyTrackingChart({
               </button>
             )}
           </div>
-        )}
 
-        {rangeLabel && (
-          <p className="text-[10px] text-slate-500 mb-2 -mt-1">
-            {rangeLabel}
-            {drillable && ' · tap a point to zoom in'}
-          </p>
-        )}
+          {rangeLabel && (
+            <p className="text-[10px] text-slate-500 mt-2">
+              {rangeLabel}
+              {drillable && ' · tap a point to zoom in'}
+            </p>
+          )}
+        </div>
+      )}
 
+      <div className="rounded-lg border border-slate-800 bg-slate-900 shadow-sm p-4">
         {loading ? (
           <div className="h-48 flex items-center justify-center text-slate-500 text-xs">Loading activity…</div>
         ) : !hasActivity ? (
@@ -200,56 +206,56 @@ export default function DailyTrackingChart({
             <p className="text-xs text-slate-500">No transactions recorded in this period yet.</p>
           </div>
         ) : (
-          <>
-            <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={data}
-                  margin={{ top: 4, right: 4, left: -16, bottom: 0 }}
-                  onClick={handleChartClick}
-                  style={drillable ? { cursor: 'pointer' } : undefined}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
-                  <XAxis
-                    dataKey="date"
-                    tickFormatter={(key) => fmtLabel(key, granularity)}
-                    interval={Math.max(0, Math.floor(data.length / 6) - 1)}
-                    tick={{ fill: '#64748b', fontSize: 10 }}
-                    axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
-                    tickLine={false}
-                  />
-                  <YAxis tickFormatter={fmtShort} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} width={40} />
-                  <Tooltip content={<CustomTooltip granularity={granularity} />} cursor={{ stroke: 'rgba(255,255,255,0.15)' }} />
-                  <Legend
-                    wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
-                    formatter={(value) => <span className="text-slate-300">{value}</span>}
-                  />
-                  <Line type="monotone" dataKey="income" name="Income" stroke={CHART_COLORS.income} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
-                  <Line type="monotone" dataKey="expense" name="Expense" stroke={CHART_COLORS.expense} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
-                  <Line type="monotone" dataKey="net" name="Net" stroke={CHART_COLORS.net} strokeWidth={2} dot={<DiamondDot />} activeDot={{ r: 5 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-slate-800">
-              <div className="text-center min-w-0">
-                <p className="font-bold text-sm tabular-nums whitespace-nowrap" style={{ color: CHART_COLORS.income }}>{fmtShort(totalIncome)}</p>
-                <p className="text-[10px] text-slate-500">Income</p>
-              </div>
-              <div className="text-center min-w-0">
-                <p className="font-bold text-sm tabular-nums whitespace-nowrap" style={{ color: CHART_COLORS.expense }}>{fmtShort(totalExpense)}</p>
-                <p className="text-[10px] text-slate-500">Expense</p>
-              </div>
-              <div className="text-center min-w-0">
-                <p className="font-bold text-sm tabular-nums whitespace-nowrap" style={{ color: CHART_COLORS.net }}>
-                  {totalNet >= 0 ? '+' : ''}{fmtShort(totalNet)}
-                </p>
-                <p className="text-[10px] text-slate-500">Net</p>
-              </div>
-            </div>
-          </>
+          <div className="h-48">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={data}
+                margin={{ top: 4, right: 4, left: -16, bottom: 0 }}
+                onClick={handleChartClick}
+                style={drillable ? { cursor: 'pointer' } : undefined}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+                <XAxis
+                  dataKey="date"
+                  tickFormatter={(key) => fmtLabel(key, granularity)}
+                  interval={Math.max(0, Math.floor(data.length / 6) - 1)}
+                  tick={{ fill: '#64748b', fontSize: 10 }}
+                  axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                  tickLine={false}
+                />
+                <YAxis tickFormatter={fmtShort} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} width={40} />
+                <Tooltip content={<CustomTooltip granularity={granularity} />} cursor={{ stroke: 'rgba(255,255,255,0.15)' }} />
+                <Legend
+                  wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+                  formatter={(value) => <span className="text-slate-300">{value}</span>}
+                />
+                <Line type="monotone" dataKey="income" name="Income" stroke={CHART_COLORS.income} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                <Line type="monotone" dataKey="expense" name="Expense" stroke={CHART_COLORS.expense} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                <Line type="monotone" dataKey="net" name="Net" stroke={CHART_COLORS.net} strokeWidth={2} dot={<DiamondDot />} activeDot={{ r: 5 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
         )}
       </div>
+
+      {hasActivity && !loading && (
+        <div className="grid grid-cols-3 gap-2 rounded-lg border border-slate-800 bg-slate-900 shadow-sm p-3">
+          <div className="text-center min-w-0">
+            <p className="font-bold text-sm tabular-nums whitespace-nowrap" style={{ color: CHART_COLORS.income }}>{fmtShort(totalIncome)}</p>
+            <p className="text-[10px] text-slate-500">Income</p>
+          </div>
+          <div className="text-center min-w-0">
+            <p className="font-bold text-sm tabular-nums whitespace-nowrap" style={{ color: CHART_COLORS.expense }}>{fmtShort(totalExpense)}</p>
+            <p className="text-[10px] text-slate-500">Expense</p>
+          </div>
+          <div className="text-center min-w-0">
+            <p className="font-bold text-sm tabular-nums whitespace-nowrap" style={{ color: CHART_COLORS.net }}>
+              {totalNet >= 0 ? '+' : ''}{fmtShort(totalNet)}
+            </p>
+            <p className="text-[10px] text-slate-500">Net</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
