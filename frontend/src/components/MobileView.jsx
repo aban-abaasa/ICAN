@@ -5460,7 +5460,19 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       />
 
       {/* ====== RECORD EVERY TRANSACTION SECTION ====== */}
-      <div className="mx-4 mt-4 mb-2">
+      {/* One unified card -- heading, chips, and the input strip all live
+          inside the same bordered container instead of floating separately
+          on the page background. The container uses the base theme surface
+          (var(--color-bgSecondary)/--color-border) so the input strip's own
+          modePalette.sectionBg still reads as a distinct, elevated pill
+          inside it, rather than blending into an identical background. */}
+      <div
+        className="mx-4 mt-4 mb-2 rounded-2xl border p-4"
+        style={{
+          background: 'var(--color-bgSecondary)',
+          borderColor: 'var(--color-border)'
+        }}
+      >
         <h2
           className="text-lg font-extrabold mb-3 tracking-tight"
           style={{
@@ -5473,12 +5485,12 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           Record Every Transaction
         </h2>
 
-        {/* ── Quick shortcut chips ── */}
-        <div className="flex gap-2 mb-3 flex-wrap">
+        {/* ── Quick shortcut chips -- always one row, never wraps ── */}
+        <div className="flex gap-2 mb-3 flex-nowrap overflow-x-auto scrollbar-hide">
           {/* Business record shortcut */}
           <button
             onClick={() => { setRecordTypeChoice('business'); setShowRecordTypeModal(true); }}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border active:scale-95 transition-all text-xs font-semibold shadow-sm"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border active:scale-95 transition-all text-xs font-semibold shadow-sm flex-shrink-0"
             style={{
               background: modePalette.businessChip,
               borderColor: 'var(--color-primary)',
@@ -5491,7 +5503,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           {/* Personal record shortcut — no business to pick, so skip straight to entry */}
           <button
             onClick={() => { setTransactionType('personal'); setPreselectedBusinessProfileId(null); setShowTransactionEntry(true); }}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border active:scale-95 transition-all text-xs font-semibold shadow-sm"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border active:scale-95 transition-all text-xs font-semibold shadow-sm flex-shrink-0"
             style={{
               background: modePalette.personalChip,
               borderColor: 'var(--color-secondary)',
