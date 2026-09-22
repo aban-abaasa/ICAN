@@ -5460,19 +5460,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       />
 
       {/* ====== RECORD EVERY TRANSACTION SECTION ====== */}
-      {/* One unified card -- heading, chips, and the input strip all live
-          inside the same bordered container instead of floating separately
-          on the page background. The container uses the base theme surface
-          (var(--color-bgSecondary)/--color-border) so the input strip's own
-          modePalette.sectionBg still reads as a distinct, elevated pill
-          inside it, rather than blending into an identical background. */}
-      <div
-        className="mx-4 mt-4 mb-2 rounded-2xl border p-4"
-        style={{
-          background: 'var(--color-bgSecondary)',
-          borderColor: 'var(--color-border)'
-        }}
-      >
+      <div className="mx-4 mt-4 mb-2">
         <h2
           className="text-lg font-extrabold mb-3 tracking-tight"
           style={{
@@ -5485,12 +5473,15 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           Record Every Transaction
         </h2>
 
-        {/* ── Quick shortcut chips -- always one row, never wraps ── */}
-        <div className="flex gap-2 mb-3 flex-nowrap overflow-x-auto scrollbar-hide">
+        {/* ── Three unique containers: Business card, Personal card, then
+            the input strip below. Business/Personal are grid-cols-2 --
+            each fills exactly half the row, so they can never overflow or
+            wrap to a second line the way auto-width pills could. ── */}
+        <div className="grid grid-cols-2 gap-2 mb-3">
           {/* Business record shortcut */}
           <button
             onClick={() => { setRecordTypeChoice('business'); setShowRecordTypeModal(true); }}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border active:scale-95 transition-all text-xs font-semibold shadow-sm flex-shrink-0"
+            className="flex items-center gap-2 px-3 py-2.5 rounded-2xl border active:scale-95 transition-all text-xs font-semibold shadow-sm min-w-0"
             style={{
               background: modePalette.businessChip,
               borderColor: 'var(--color-primary)',
@@ -5498,12 +5489,13 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.10), 0 1px 3px rgba(0,0,0,0.15)'
             }}
           >
-            <span>💼</span> Business
+            <span className="text-base flex-shrink-0">💼</span>
+            <span className="truncate">Business</span>
           </button>
           {/* Personal record shortcut — no business to pick, so skip straight to entry */}
           <button
             onClick={() => { setTransactionType('personal'); setPreselectedBusinessProfileId(null); setShowTransactionEntry(true); }}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border active:scale-95 transition-all text-xs font-semibold shadow-sm flex-shrink-0"
+            className="flex items-center gap-2 px-3 py-2.5 rounded-2xl border active:scale-95 transition-all text-xs font-semibold shadow-sm min-w-0"
             style={{
               background: modePalette.personalChip,
               borderColor: 'var(--color-secondary)',
@@ -5511,7 +5503,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.10), 0 1px 3px rgba(0,0,0,0.15)'
             }}
           >
-            <span>👤</span> Personal
+            <span className="text-base flex-shrink-0">👤</span>
+            <span className="truncate">Personal</span>
           </button>
         </div>
 
