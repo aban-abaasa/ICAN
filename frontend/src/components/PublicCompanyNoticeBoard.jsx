@@ -295,19 +295,33 @@ const NB_STYLES = `
 .nb-price { color: var(--nb-green); }
 .nb-out-of-stock { color: var(--nb-maroon); }
 .nb-hero-cover { background: linear-gradient(135deg, var(--nb-green) 0%, var(--nb-maroon) 100%); }
-.nb-hero-overlay { background: linear-gradient(180deg, rgba(0,0,0,0) 35%, rgba(0,0,0,0.6) 100%); }
+.nb-hero-overlay { background: linear-gradient(180deg, rgba(0,0,0,0) 30%, rgba(0,0,0,0.62) 100%); }
 /* Fixed white ring (not theme-linked) so the logo always pops off both the
    cover photo behind it and the page background beneath it, in light or
    dark mode -- the same "always-white" avatar ring real business/creator
-   pages (Facebook Pages, Instagram) use regardless of the page's own theme. */
-.nb-hero-avatar { background: #ffffff; border: 4px solid #ffffff; box-shadow: 0 4px 16px rgba(0,0,0,0.28); }
-.nb-verified-mark { background: #ffffff; color: var(--nb-green); border: 2px solid #ffffff; box-shadow: 0 1px 6px rgba(0,0,0,0.25); }
+   pages (Facebook Pages, Instagram) use regardless of the page's own theme.
+   A faint dark contour (the first box-shadow layer) keeps that white ring
+   readable even against a light/cream cover photo, where a pure white ring
+   on a pure white-ish background would otherwise nearly disappear.
+   Kept background-free on purpose -- see nb-hero-avatar-photo below for why
+   the white fill isn't part of this class. */
+.nb-hero-avatar { border: 4px solid #ffffff; box-shadow: 0 0 0 1px rgba(0,0,0,0.08), 0 6px 20px rgba(0,0,0,0.32); }
+/* The white "matte" behind an actual logo image (so a transparent-background
+   PNG logo doesn't show the cover photo through it) -- applied ONLY to the
+   <img>, never to the letter-fallback div, which needs to keep its own
+   nb-btn-primary brand-green fill. Both used to share one .nb-hero-avatar
+   class with background:#ffffff baked in, which silently painted the
+   fallback's white initial onto a white square (invisible) whenever a
+   business had no logo set. */
+.nb-hero-avatar-photo { background: #ffffff; }
+.nb-verified-mark { background: #ffffff; color: var(--nb-green); border: 2px solid #ffffff; box-shadow: 0 0 0 1px rgba(0,0,0,0.08), 0 1px 6px rgba(0,0,0,0.25); }
 .nb-action-btn { background: var(--nb-surface); color: var(--nb-text); border: 1px solid var(--nb-border-strong); }
 .nb-action-btn:hover { border-color: var(--nb-green); color: var(--nb-green); }
 .nb-social-btn { background: var(--nb-surface-alt); color: var(--nb-text-muted); }
 .nb-social-btn:hover { background: var(--nb-green-soft-bg); color: var(--nb-green-soft-text); }
 .nb-verified-badge { background: var(--nb-green-soft-bg); color: var(--nb-green-soft-text); }
 .nb-strip { background: var(--nb-surface); border-bottom: 1px solid var(--nb-border); }
+.nb-info-row:hover { background: var(--nb-surface-alt); }
 `;
 
 /**
@@ -638,10 +652,18 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-7">
         <div key={section} className="animate-fadeInUp" style={{ animationDuration: '0.35s' }}>
           {section === 'notices' && (
-            <>
-              {company.about && <AboutCard company={company} />}
-              <NoticeList notices={notices} onSelect={(notice) => openDetail(notice, setSelectedNotice)} />
-            </>
+            // A wide screen leaves a single centered column mostly empty on
+            // either side -- give it a real second column (Google Business/
+            // Yelp-style info panel) instead. Sidebar is lg+ only; on
+            // mobile/tablet everything in it is already reachable from the
+            // hero's own action buttons above.
+            <div className="lg:grid lg:grid-cols-[1fr_300px] lg:gap-6 lg:items-start">
+              <div className="min-w-0">
+                {company.about && <AboutCard company={company} />}
+                <NoticeList notices={notices} onSelect={(notice) => openDetail(notice, setSelectedNotice)} />
+              </div>
+              <BusinessInfoSidebar company={company} className="hidden lg:block" />
+            </div>
           )}
           {section === 'shop' && (
             <ShopSection
@@ -839,7 +861,7 @@ const BusinessHero = ({ company, noticeCount = 0, jobCount = 0 }) => {
         <div className="flex items-end gap-4 -mt-12 sm:-mt-14 relative z-10">
           <div className="relative flex-shrink-0">
             {company.logo_url ? (
-              <img src={company.logo_url} alt={company.company_name} className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover nb-hero-avatar" />
+              <img src={company.logo_url} alt={company.company_name} className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover nb-hero-avatar nb-hero-avatar-photo" />
             ) : (
               <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl nb-btn-primary nb-hero-avatar flex items-center justify-center font-bold text-3xl sm:text-4xl">
                 {company.company_name?.charAt(0)?.toUpperCase() || <Building2 className="w-9 h-9" />}
@@ -850,7 +872,7 @@ const BusinessHero = ({ company, noticeCount = 0, jobCount = 0 }) => {
             </span>
           </div>
           <div className="flex-1 min-w-0 pb-1 sm:pb-2">
-            <h1 className="text-xl sm:text-3xl font-extrabold tracking-tight nb-text drop-shadow-sm truncate">
+            <h1 className="text-xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight nb-text drop-shadow-sm truncate">
               {company.company_name}
             </h1>
           </div>
@@ -873,6 +895,53 @@ const BusinessHero = ({ company, noticeCount = 0, jobCount = 0 }) => {
         </div>
       </div>
     </div>
+  );
+};
+
+// One vertical "business info" row -- icon, label, and either plain text or
+// a link -- shared by every row in BusinessInfoSidebar below so they read
+// as one consistent list instead of several different hand-built rows.
+const InfoRow = ({ icon: Icon, label, value, href, external }) => {
+  if (!value) return null;
+  const content = (
+    <>
+      <Icon className="w-4 h-4 nb-icon-muted flex-shrink-0 mt-0.5" />
+      <span className="min-w-0">
+        <span className="block text-[11px] uppercase tracking-wide nb-text-faint">{label}</span>
+        <span className="block text-sm nb-text break-words">{value}</span>
+      </span>
+    </>
+  );
+  if (!href) return <div className="flex items-start gap-2.5 py-2">{content}</div>;
+  return (
+    <a href={href} target={external ? '_blank' : undefined} rel={external ? 'noreferrer' : undefined} className="nb-info-row flex items-start gap-2.5 py-2 -mx-2 px-2 rounded-lg transition-colors">
+      {content}
+    </a>
+  );
+};
+
+// The desktop-only sidebar (a real business page's "Info" panel -- think
+// Google Business/Yelp) that turns the wide, mostly-empty right margin a
+// single centered column leaves on a large screen into somewhere useful.
+// Deliberately not shown on mobile: everything here is already reachable
+// from the hero's action buttons, and duplicating a full info card below
+// the fold on a phone would just be scroll-padding, not value.
+const BusinessInfoSidebar = ({ company, className = '' }) => {
+  const hasAnyInfo = company.location || company.hours_text || company.phone || company.whatsapp || company.email || company.website;
+  if (!hasAnyInfo) return null;
+  return (
+    <aside className={`nb-card rounded-2xl shadow-sm p-5 lg:sticky lg:top-24 ${className}`}>
+      <h2 className="text-sm font-bold nb-text uppercase tracking-wide mb-1">Business info</h2>
+      <div className="divide-y nb-border">
+        <InfoRow icon={MapPin} label="Location" value={company.location} href={buildDirectionsLink(company.location, company.company_name)} external />
+        <InfoRow icon={Clock} label="Hours" value={company.hours_text} />
+        <InfoRow icon={Phone} label="Phone" value={company.phone} href={buildTelLink(company.phone)} />
+        <InfoRow icon={MessageCircle} label="WhatsApp" value={company.whatsapp} href={buildWhatsAppLink(company.whatsapp)} external />
+        <InfoRow icon={Mail} label="Email" value={company.email} href={buildMailLink(company.email)} />
+        <InfoRow icon={Globe} label="Website" value={company.website} href={normalizeExternalUrl(company.website)} external />
+      </div>
+      <SocialRow company={company} className="mt-3 pt-3 border-t nb-border" />
+    </aside>
   );
 };
 
@@ -905,9 +974,9 @@ const EmptyState = ({ icon: Icon, text }) => (
 // the board read as the business's own site rather than just a job/notice
 // feed bolted onto ICANEra.
 const AboutCard = ({ company }) => (
-  <div className="nb-card rounded-2xl shadow-sm p-5 mb-5 animate-fadeInUp">
+  <div className="nb-card rounded-2xl shadow-sm p-5 lg:p-6 mb-5 animate-fadeInUp">
     <h2 className="text-sm font-bold nb-text uppercase tracking-wide mb-2">About {company.company_name}</h2>
-    <p className="nb-text-muted whitespace-pre-wrap leading-relaxed text-sm">{company.about}</p>
+    <p className="nb-text-muted whitespace-pre-wrap leading-relaxed text-sm lg:text-[15px]">{company.about}</p>
   </div>
 );
 
@@ -915,8 +984,11 @@ const NoticeList = ({ notices, onSelect }) => {
   if (notices.length === 0) {
     return <EmptyState icon={Megaphone} text="No public notices right now. Check back later." />;
   }
+  // xl (not lg) for the 3rd column -- on the Notices tab this grid shares
+  // its row with BusinessInfoSidebar from lg upward, so 3 columns would
+  // otherwise start cramping right where the sidebar appears.
   return (
-    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+    <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
       {notices.map((notice, i) => (
         <button
           key={notice.id}
