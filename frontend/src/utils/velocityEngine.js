@@ -116,7 +116,9 @@ export class VelocityEngine {
               product_action: transactionData.product_action || null,
               ledger_side: transactionData.ledger_side || null,
               raw_entry_text: transactionData.raw_entry_text || null,
-              entry_mode: transactionData.entry_mode || null
+              entry_mode: transactionData.entry_mode || null,
+              quantity: transactionData.quantity || null,
+              unit_price: transactionData.unit_price || null
             }
           }
         ])

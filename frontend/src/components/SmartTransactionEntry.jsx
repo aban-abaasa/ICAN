@@ -306,8 +306,6 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
     },
   };
 
-  const amountTokenRegex = /(\d[\d,]*\.?\d*)\s*(million|m\b|k\b|thousand)?/i;
-
   const sanitizeProductName = (value) => {
     if (!value) return '';
     return value
@@ -339,14 +337,35 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
 
     const text = input.toLowerCase();
 
-    // Extract amount — supports "500k", "1.5m", "500,000", plain numbers
-    const amountMatch = text.match(amountTokenRegex);
+    // Extract amount — supports "500k", "1.5m", "500,000", plain numbers.
+    // When TWO numbers appear ("soda 3 5k") the first is read as a quantity
+    // and the second as the unit price, so the recorded amount is qty × price
+    // rather than just the first digit typed.
+    const numberTokenRegex = /(\d[\d,]*\.?\d*)\s*(million|thousand|m\b|k\b)?/gi;
+    const numberTokens = [];
+    let numMatch;
+    while ((numMatch = numberTokenRegex.exec(text)) !== null) {
+      if (!numMatch[0].trim()) { numberTokenRegex.lastIndex++; continue; }
+      let value = parseFloat(numMatch[1].replace(/,/g, ''));
+      const mult = (numMatch[2] || '').toLowerCase();
+      if (mult === 'k' || mult === 'thousand') value *= 1000;
+      else if (mult === 'm' || mult === 'million') value *= 1000000;
+      numberTokens.push({ text: numMatch[0], raw: numMatch[1], hasMultiplier: !!mult, value });
+    }
+
+    // A "quantity" token is a small whole number with no k/m suffix and no
+    // decimal/comma — e.g. the "3" in "soda 3 5k", not a price on its own.
+    const looksLikeQuantity = (tok) => tok && !tok.hasMultiplier && !tok.raw.includes('.') && !tok.raw.includes(',') && tok.value >= 1 && tok.value <= 9999;
+
     let amount = 0;
-    if (amountMatch) {
-      amount = parseFloat(amountMatch[1].replace(/,/g, ''));
-      const mult = (amountMatch[2] || '').toLowerCase();
-      if (mult === 'k' || mult === 'thousand') amount *= 1000;
-      else if (mult === 'm' || mult === 'million') amount *= 1000000;
+    let quantity = null;
+    let unitPrice = null;
+    if (numberTokens.length >= 2 && looksLikeQuantity(numberTokens[0])) {
+      quantity = numberTokens[0].value;
+      unitPrice = numberTokens[1].value;
+      amount = Math.round(quantity * unitPrice);
+    } else if (numberTokens.length >= 1) {
+      amount = numberTokens[0].value;
     }
 
     let isIncome = false;
@@ -587,11 +606,21 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
       else if (detectedCategory === 'dividend_payout') reportingBucket = 'dividend_payout';
     }
 
-    // Clean up description
-    let description = input.replace(/(\d[\d,]*\.?\d*)\s*(million|m\b|k\b|thousand)?/gi, '').trim();
-    if (source) description = description.replace(new RegExp(`(?:from|at|bought|sold)\\s+${source}`, 'i'), '').trim();
-    description = description.replace(/\s+/g, ' ').trim();
-    description = description.charAt(0).toUpperCase() + description.slice(1);
+    // Clean up description. When a quantity + product were both detected
+    // ("Sold 3 Soda"), build it directly from those instead of running it
+    // through the generic number/source stripping below — that logic reads
+    // "sold <product>" as "sold to <customer>" and erases the product name.
+    let description;
+    if (quantity && productName && (action === 'sold' || action === 'bought')) {
+      const verb = action === 'sold' ? 'Sold' : 'Bought';
+      const titledProduct = productName.charAt(0).toUpperCase() + productName.slice(1);
+      description = `${verb} ${quantity} ${titledProduct}`;
+    } else {
+      description = input.replace(/(\d[\d,]*\.?\d*)\s*(million|m\b|k\b|thousand)?/gi, '').trim();
+      if (source) description = description.replace(new RegExp(`(?:from|at|bought|sold)\\s+${source}`, 'i'), '').trim();
+      description = description.replace(/\s+/g, ' ').trim();
+      description = description.charAt(0).toUpperCase() + description.slice(1);
+    }
     if (!description || description.length < 2) {
       if (detectedType === 'income' && detectedCategory === 'sales') description = source ? `Sale to ${source}` : 'Sales Revenue';
       else if (detectedType === 'income') description = 'Income received';
@@ -604,6 +633,8 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
 
     return {
       amount: Math.round(amount),
+      quantity,
+      unitPrice: unitPrice !== null ? Math.round(unitPrice) : null,
       description,
       type: detectedType,
       isIncome,
@@ -731,6 +762,8 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
         let finalTransaction = {
           type: 'smart_entry',
           amount: parsedData.amount,
+          quantity: parsedData.quantity,
+          unitPrice: parsedData.unitPrice,
           description: parsedData.description,
           entryType: parsedData.type,
           isIncome: parsedData.isIncome,
@@ -1014,7 +1047,7 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
                   isListening
                     ? '🎙 Listening...'
                     : selectedMode === 'business'
-                      ? '"Sold goods 800k" • "Bought stock 500k" • "Paid tax 200k"'
+                      ? '"Sold soda 3 5k" • "Bought stock 500k" • "Paid tax 200k"'
                       : '"Lunch 15k" • "Salary 800k" • "Bought shoes 120k"'
                 }
                 value={isListening ? voiceInterim : textInput}
@@ -1126,6 +1159,11 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
                         {!parsedData.action && '📌'} {parsedData.source}
                       </div>
                     )}
+                    {parsedData.quantity && (
+                      <div className="text-xs text-gray-600 mt-1">
+                        🔢 {parsedData.quantity} × {parsedData.unitPrice.toLocaleString()} = {parsedData.amount.toLocaleString()}
+                      </div>
+                    )}
                     {selectedMode === 'business' && acctLabel && (
                       <div className="text-xs text-gray-500 mt-1 font-mono">📊 {acctLabel}</div>
                     )}
@@ -1174,7 +1212,7 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
           {!textInput && !isListening && (
             <p className="text-xs text-gray-500 text-center">
               {selectedMode === 'business'
-                ? '💵 "Sold maize 800k" • 📦 "Bought stock 2m" • 🏛️ "Paid tax 300k" • 💸 "Paid salary 1.5m"'
+                ? '💵 "Sold soda 3 5k" (qty × price) • 📦 "Bought stock 2m" • 🏛️ "Paid tax 300k"'
                 : '💡 "Lunch 15k" • "Salary 800k" • "Saved 100k" • "Transport 5k"'}
             </p>
           )}

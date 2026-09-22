@@ -283,6 +283,10 @@ export class SyncManager {
         currency: txData.currency || 'UGX',
         status: 'completed',
         created_at: txData.date || txData.created_at || new Date().toISOString(),
+        // Tag to a PitchIn business when queued with one — otherwise a
+        // business transaction recorded offline never feeds share valuation
+        // once it syncs.
+        business_profile_id: txData.business_profile_id || null,
         metadata: {
           category: txData.category || 'other',
           source: txData.source || 'offline_sync',
@@ -294,6 +298,8 @@ export class SyncManager {
           ledger_side: txData.ledger_side || null,
           raw_entry_text: txData.raw_entry_text || null,
           entry_mode: txData.entry_mode || null,
+          quantity: txData.quantity || null,
+          unit_price: txData.unit_price || null,
           synced_from_offline: true,
           sync_timestamp: new Date().toISOString()
         }

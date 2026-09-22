@@ -3643,7 +3643,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
   // Download filtered transactions as CSV
   // Download transactions as CSV
   const handleDownloadTransactions = (filtered, period) => {
-    const rows = [['Date', 'Type', 'Category', 'Description', 'Amount (UGX)', 'Chain Hash']];
+    const rows = [['Date', 'Type', 'Category', 'Description', 'Quantity', 'Unit Price (UGX)', 'Amount (UGX)', 'Chain Hash']];
     filtered.forEach(t => {
       const hash = txChainHashes[t.id] || t.data_hash || '';
       rows.push([
@@ -3651,6 +3651,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         t.transaction_type || '',
         t.record_category || t.metadata?.record_category || '',
         (t.description || '').replace(/"/g, '""'),
+        t.metadata?.quantity ?? '',
+        t.metadata?.unit_price ?? '',
         Math.abs(t.amount || 0),
         hash.slice(0, 20) || ''
       ]);
@@ -3675,11 +3677,13 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       Flow: t.transaction_type === 'income' ? 'Income' : 'Expense',
       Category: t.metadata?.category || t.metadata?.categoryName || '',
       Description: t.description || '',
+      Quantity: t.metadata?.quantity ?? '',
+      'Unit Price (UGX)': t.metadata?.unit_price ?? '',
       'Amount (UGX)': Math.abs(t.amount || 0),
       'Chain Hash': (txChainHashes[t.id] || t.data_hash || '').slice(0, 20)
     }));
     const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ Info: 'No transactions in this period' }]);
-    ws['!cols'] = [{ wch: 14 }, { wch: 10 }, { wch: 10 }, { wch: 18 }, { wch: 32 }, { wch: 14 }, { wch: 22 }];
+    ws['!cols'] = [{ wch: 14 }, { wch: 10 }, { wch: 10 }, { wch: 18 }, { wch: 32 }, { wch: 10 }, { wch: 16 }, { wch: 14 }, { wch: 22 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Transactions');
     XLSX.writeFile(wb, `IcanEra-Transactions-${period}-${new Date().toISOString().split('T')[0]}.xlsx`);
@@ -3688,10 +3692,14 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
   // Bulk-import transactions from an uploaded Excel file. Expects columns
   // (case-insensitive; a few common aliases accepted): Date, Type
   // (Business/Personal), Flow (Income/Expense), Category, Description,
-  // Amount, and Business Name (only needed when Type=Business and the user
-  // owns more than one business). Each row is saved through the exact same
-  // persistTransaction() path as manual entry, so it counts toward reports
-  // and PitchIn valuation identically — and the row's own Date backdates it.
+  // Quantity, Unit Price, Amount, and Business Name (only needed when
+  // Type=Business and the user owns more than one business). When both
+  // Quantity and Unit Price are given, the amount is computed as their
+  // product (qty × price) — same rule as typing "soda 3 5k" manually —
+  // otherwise the Amount column is used as-is. Each row is saved through
+  // the exact same persistTransaction() path as manual entry, so it counts
+  // toward reports and PitchIn valuation identically — and the row's own
+  // Date backdates it.
   const handleImportExcelFile = async (file) => {
     if (!file) return;
     setImportingExcel(true);
@@ -3731,8 +3739,16 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       const errors = [];
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
+        // Quantity × Unit Price wins when both are given — same rule as typing
+        // "soda 3 5k" manually — otherwise fall back to the Amount column.
+        const rawQuantity = getCol(row, 'quantity', 'qty');
+        const rawUnitPrice = getCol(row, 'unit price', 'unit price (ugx)', 'price');
+        const quantity = parseFloat(String(rawQuantity ?? '').replace(/,/g, '')) || null;
+        const unitPrice = parseFloat(String(rawUnitPrice ?? '').replace(/,/g, '')) || null;
         const rawAmount = getCol(row, 'amount', 'amount (ugx)');
-        const amount = Math.abs(parseFloat(String(rawAmount ?? '').replace(/,/g, '')) || 0);
+        const amount = (quantity && unitPrice)
+          ? Math.round(quantity * unitPrice)
+          : Math.abs(parseFloat(String(rawAmount ?? '').replace(/,/g, '')) || 0);
         if (!amount) { errors.push(`Row ${i + 2}: missing or invalid amount`); continue; }
 
         const rawDate = getCol(row, 'date', 'transaction date');
@@ -3755,6 +3771,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
         const result = await persistTransaction({
           amount,
+          quantity,
+          unitPrice,
           description,
           isIncome: rawFlow === 'income',
           accountingType,
@@ -3846,10 +3864,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       { label: '#',           w: 8  },
       { label: 'Date / Time', w: 32 },
       { label: 'Type',        w: 16 },
-      { label: 'Category',    w: 18 },
-      { label: 'Description', w: 62 },
+      { label: 'Category',    w: 14 },
+      { label: 'Qty',         w: 10 },
+      { label: 'Description', w: 54 },
       { label: 'Amount (UGX)',w: 30 },
-      { label: 'Chain',       w: 22 },
+      { label: 'Chain',       w: 18 },
     ];
     doc.setFillColor(220, 252, 231);  // green-100
     doc.rect(14, y, pageW - 28, 7, 'F');
@@ -3876,14 +3895,15 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         String(idx + 1),
         new Date(t.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
         isBiz ? 'Biz' : 'Pers',
-        (t.metadata?.category || t.metadata?.categoryName || '').slice(0, 12),
-        (t.description || '').slice(0, 45),
+        (t.metadata?.category || t.metadata?.categoryName || '').slice(0, 10),
+        t.metadata?.quantity ? `${t.metadata.quantity}×` : '',
+        (t.description || '').slice(0, 40),
         `${isIncome ? '+' : '-'}${Math.abs(t.amount||0).toLocaleString()}`,
-        hash ? hash.slice(0, 10) + '…' : '',
+        hash ? hash.slice(0, 8) + '…' : '',
       ];
       cx = 14;
       cells.forEach((cell, ci) => {
-        if (ci === 5) {
+        if (ci === 6) {
           doc.setTextColor(isIncome ? 22 : 185, isIncome ? 163 : 28, isIncome ? 74 : 26);
           doc.setFont('helvetica', 'bold');
         } else {
@@ -3983,9 +4003,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           ['IcanEra Transaction Report'],
           [`Period: ${period}`, `Generated: ${new Date().toLocaleDateString()}`],
           [],
-          ['#', 'Date', 'Time', 'Type', 'Category', 'Description', 'Amount (UGX)', 'Blockchain Hash']
+          ['#', 'Date', 'Time', 'Type', 'Category', 'Description', 'Quantity', 'Unit Price (UGX)', 'Amount (UGX)', 'Blockchain Hash']
         ];
-        
+
         filtered.forEach((t, idx) => {
           const isBiz = (t.record_category || t.metadata?.record_category) === 'business';
           const hash = txChainHashes[t.id] || t.data_hash || '';
@@ -3997,6 +4017,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             isBiz ? 'Business' : 'Personal',
             t.metadata?.category || t.metadata?.categoryName || '',
             t.description || '',
+            t.metadata?.quantity ?? '',
+            t.metadata?.unit_price ?? '',
             t.transaction_type === 'income' ? t.amount : -t.amount,
             hash
           ]);
@@ -4947,7 +4969,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         product_action: transaction.productAction || null,
         ledger_side: transaction.ledgerSide || null,
         raw_entry_text: transaction.originalText || transaction.rawInput || null,
-        entry_mode: resolvedCategory === 'business' ? 'professional_business' : 'personal_quick'
+        entry_mode: resolvedCategory === 'business' ? 'professional_business' : 'personal_quick',
+        quantity: transaction.quantity || null,
+        unit_price: transaction.unitPrice || null
       }
     };
     setTransactions(prev => [formattedTransaction, ...prev]);
@@ -5003,6 +5027,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             raw_entry_text: transaction.originalText || transaction.rawInput || null,
             entry_mode: resolvedCategory === 'business' ? 'professional_business' : 'personal_quick',
             business_profile_id: transaction.businessProfileId || null,
+            quantity: transaction.quantity || null,
+            unit_price: transaction.unitPrice || null,
             userEmail: userEmail,
             userId: userId
           });
@@ -5035,7 +5061,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         raw_entry_text: transaction.originalText || transaction.rawInput || null,
         entry_mode: resolvedCategory === 'business' ? 'professional_business' : 'personal_quick',
         // Pass selected business profile so this transaction feeds PitchIn share valuation
-        business_profile_id: transaction.businessProfileId || null
+        business_profile_id: transaction.businessProfileId || null,
+        quantity: transaction.quantity || null,
+        unit_price: transaction.unitPrice || null
       });
 
       if (result.success) {
