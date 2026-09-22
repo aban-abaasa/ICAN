@@ -39,36 +39,53 @@ const buildDirectionsLink = (location, companyName) => {
 // A business that's already registered its Google Maps listing (see the
 // "Get found on Google Maps" card in CMSSModule.jsx) can paste that exact
 // link back in -- google_maps_url -- so this board points visitors at the
-// real, verified pin instead of guessing one from a free-text address. Full
-// (non-shortened) Google Maps URLs encode the pin's exact coordinates as
-// either `!3d<lat>!4d<lng>` (the marker itself) or `@<lat>,<lng>,<zoom>z`
-// (the map's viewport center, close enough when no marker coords are
-// present) -- extracting them lets both the embedded map and Directions use
-// the precise location. A shortened maps.app.goo.gl link can't be parsed
-// client-side (no coordinates in the URL itself), so it's used as-is.
-const extractLatLngFromGoogleMapsUrl = (url) => {
+// real, verified pin instead of guessing one from a free-text address.
+// Three link shapes are worth recognizing:
+//  - A full (non-shortened) Google Maps URL encodes the pin's exact
+//    coordinates as either `!3d<lat>!4d<lng>` (the marker itself) or
+//    `@<lat>,<lng>,<zoom>z` (the map's viewport center, close enough when no
+//    marker coords are present).
+//  - A `?cid=<id>` link -- the CID (aka "ludocid") is Google's own permanent
+//    id for a Business Profile listing, the same number Google's own
+//    business.google.com dashboard shows for it (its "View on Maps" link is
+//    exactly this). google.com/maps?cid=<id> always resolves to that exact
+//    listing, with or without lat/lng in the URL.
+//  - A shortened maps.app.goo.gl link can't be parsed client-side at all (no
+//    coordinates or cid in the URL itself), so it's used as-is.
+const parseGoogleMapsUrl = (url) => {
   if (!url) return null;
   const pin = url.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
-  if (pin) return { lat: pin[1], lng: pin[2] };
+  if (pin) return { type: 'latlng', lat: pin[1], lng: pin[2] };
   const viewport = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
-  if (viewport) return { lat: viewport[1], lng: viewport[2] };
+  if (viewport) return { type: 'latlng', lat: viewport[1], lng: viewport[2] };
   const q = url.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/);
-  if (q) return { lat: q[1], lng: q[2] };
+  if (q) return { type: 'latlng', lat: q[1], lng: q[2] };
+  const cid = url.match(/[?&]cid=(\d+)/);
+  if (cid) return { type: 'cid', cid: cid[1] };
   return null;
 };
 // Resolves the one "where is this business" target used by both the
 // Directions button and the embedded map: a saved Google Maps link's exact
-// coordinates when available, that same link as-is when it can't be parsed,
-// and only falling back to geocoding "business name, location" text when
-// the business hasn't registered/linked a Google Maps listing at all.
+// coordinates or listing id when available, that same link as-is when it
+// can't be parsed, and only falling back to geocoding "business name,
+// location" text when the business hasn't registered/linked a listing at all.
 const resolveLocationTarget = (company) => {
-  const coords = extractLatLngFromGoogleMapsUrl(company.google_maps_url);
+  const parsed = parseGoogleMapsUrl(company.google_maps_url);
   const textQuery = [company.company_name, company.location].filter(Boolean).join(', ');
+  if (parsed?.type === 'latlng') {
+    const latlng = `${parsed.lat},${parsed.lng}`;
+    return { directionsHref: `https://www.google.com/maps/dir/?api=1&destination=${latlng}`, mapQuery: latlng };
+  }
+  if (parsed?.type === 'cid') {
+    // Directions needs a real destination, which a bare cid link doesn't
+    // encode -- open the verified listing itself and let the visitor tap
+    // Directions from there. The map embed, however, DOES support cid
+    // directly (see LocationMap below), so that gets the exact pin.
+    return { directionsHref: company.google_maps_url, mapQuery: `cid:${parsed.cid}` };
+  }
   return {
-    directionsHref: coords
-      ? `https://www.google.com/maps/dir/?api=1&destination=${coords.lat},${coords.lng}`
-      : company.google_maps_url || buildDirectionsLink(company.location, company.company_name),
-    mapQuery: coords ? `${coords.lat},${coords.lng}` : (textQuery || null),
+    directionsHref: company.google_maps_url || buildDirectionsLink(company.location, company.company_name),
+    mapQuery: textQuery || null,
   };
 };
 // Businesses type their website as "example.com" as often as
@@ -1047,18 +1064,26 @@ const InfoRow = ({ icon: Icon, label, value, href, external }) => {
 // side. Google's own geocoder resolves it, so whenever this business is a
 // real, findable place on Google Maps the pin centers on it; otherwise it
 // falls back to the general area, same as the Directions link would.
-const LocationMap = ({ query, className = '' }) => (
-  <div className={`rounded-xl overflow-hidden border nb-border ${className}`}>
-    <iframe
-      title="Map"
-      src={`https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed`}
-      className="w-full h-40 sm:h-48 block"
-      style={{ border: 0 }}
-      loading="lazy"
-      referrerPolicy="no-referrer-when-downgrade"
-    />
-  </div>
-);
+const LocationMap = ({ query, className = '' }) => {
+  // A `cid:<id>` marker (see resolveLocationTarget) needs its own query
+  // param -- Google's embed only resolves a listing id via `cid=`, not `q=`.
+  const isCid = query.startsWith('cid:');
+  const src = isCid
+    ? `https://www.google.com/maps?cid=${query.slice(4)}&output=embed`
+    : `https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed`;
+  return (
+    <div className={`rounded-xl overflow-hidden border nb-border ${className}`}>
+      <iframe
+        title="Map"
+        src={src}
+        className="w-full h-40 sm:h-48 block"
+        style={{ border: 0 }}
+        loading="lazy"
+        referrerPolicy="no-referrer-when-downgrade"
+      />
+    </div>
+  );
+};
 
 // The desktop-only sidebar (a real business page's "Info" panel -- think
 // Google Business/Yelp) that turns the wide, mostly-empty right margin a
