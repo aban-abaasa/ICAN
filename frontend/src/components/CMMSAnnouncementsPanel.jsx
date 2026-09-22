@@ -2,10 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   Megaphone, Briefcase, Plus, Edit2, Trash2, X, Save, Image as ImageIcon,
   FileText, Check, Users, Globe, Lock, Loader, Share2, Radio, ClipboardList,
-  Video, Copy, Award
+  Video, Copy, Award, QrCode, Sparkles, Clock, MessageCircle
 } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
-import { uploadToR2 } from '../services/r2StorageService';
+import { uploadToR2, resolveMediaValue } from '../services/r2StorageService';
+import { downloadCmmsQrPdf } from '../utils/downloadCmmsQrPdf';
 import cmmsAnnouncementsService from '../services/cmmsAnnouncementsService';
 import { getAccessibleBusinesses } from '../services/businessManagementService';
 import cmmsWrittenTestService from '../services/cmmsWrittenTestService';
@@ -123,15 +124,50 @@ const CMMSAnnouncementsPanel = ({
   const [myBusinessProfiles, setMyBusinessProfiles] = useState([]);
   const [savingStorefront, setSavingStorefront] = useState(false);
 
+  // The "real website" fields (tagline, cover photo, WhatsApp, hours,
+  // socials) that turn the public board's header into an actual business
+  // homepage -- see AboutCard's hero in PublicCompanyNoticeBoard.jsx. Same
+  // "draft vs saved" pattern as About above, all saved together through
+  // updateCompanyPublicProfile.
+  const emptyWebsiteProfile = { tagline: '', whatsapp: '', hoursText: '', facebookUrl: '', instagramUrl: '', twitterUrl: '', linkedinUrl: '', tiktokUrl: '' };
+  const [websiteDraft, setWebsiteDraft] = useState(emptyWebsiteProfile);
+  const [savedWebsiteProfile, setSavedWebsiteProfile] = useState(emptyWebsiteProfile);
+  const [savingWebsiteProfile, setSavingWebsiteProfile] = useState(false);
+  const [coverImageFile, setCoverImageFile] = useState(null);
+  const [coverImagePreview, setCoverImagePreview] = useState('');
+  const [existingCoverImageUrl, setExistingCoverImageUrl] = useState('');
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [boardQrDownloading, setBoardQrDownloading] = useState(false);
+  const [boardLinkCopied, setBoardLinkCopied] = useState(false);
+
   useEffect(() => {
     if (!companyId) return;
-    supabase.from('cmms_company_profiles').select('about, business_profile_id, company_name').eq('id', companyId).maybeSingle()
+    supabase.from('cmms_company_profiles')
+      .select('about, business_profile_id, company_name, tagline, whatsapp, hours_text, cover_image_url, facebook_url, instagram_url, twitter_url, linkedin_url, tiktok_url')
+      .eq('id', companyId).maybeSingle()
       .then(({ data }) => {
         setAboutDraft(data?.about || '');
         setSavedAbout(data?.about || '');
         setBusinessProfileId(data?.business_profile_id || '');
         setSavedBusinessProfileId(data?.business_profile_id || '');
         setCompanyName(data?.company_name || '');
+        const website = {
+          tagline: data?.tagline || '',
+          whatsapp: data?.whatsapp || '',
+          hoursText: data?.hours_text || '',
+          facebookUrl: data?.facebook_url || '',
+          instagramUrl: data?.instagram_url || '',
+          twitterUrl: data?.twitter_url || '',
+          linkedinUrl: data?.linkedin_url || '',
+          tiktokUrl: data?.tiktok_url || '',
+        };
+        setWebsiteDraft(website);
+        setSavedWebsiteProfile(website);
+        // cover_image_url is stored as the raw "r2://<key>" marker (private
+        // bucket -- see r2StorageService.js), never usable directly as an
+        // <img src>. Resolve it to a real presigned URL before it reaches
+        // the preview box below.
+        resolveMediaValue(data?.cover_image_url).then(setExistingCoverImageUrl);
       });
     cmmsAnnouncementsService.getRolesForAutofill(companyId).then((result) => { if (result.success) setRoles(result.data); });
     supabase.from('cmms_users').select('id, full_name, user_name, email').eq('cmms_company_id', companyId).eq('is_active', true)
@@ -158,6 +194,104 @@ const CMMSAnnouncementsPanel = ({
     setSavingStorefront(false);
     if (!result.success) { alert(`❌ ${result.error}`); return; }
     setSavedBusinessProfileId(businessProfileId);
+  };
+
+  const websiteProfileDirty = JSON.stringify(websiteDraft) !== JSON.stringify(savedWebsiteProfile) || !!coverImageFile;
+
+  const handleCoverImageSelect = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Please choose an image file (PNG, JPG, or WEBP) for the cover photo.');
+      return;
+    }
+    if (file.size > MAX_POSTER_BYTES) {
+      alert('Cover photo is too large. Please use an image under 6MB.');
+      return;
+    }
+    if (coverImagePreview) URL.revokeObjectURL(coverImagePreview);
+    setCoverImageFile(file);
+    setCoverImagePreview(URL.createObjectURL(file));
+  };
+
+  // Saves the whole "real website" card in one call -- cover photo upload
+  // (if a new one was picked) plus every text field, mirroring saveDraft's
+  // "upload first, then write the row" order below.
+  const saveWebsiteProfile = async () => {
+    setSavingWebsiteProfile(true);
+    try {
+      let coverUpload = null;
+      if (coverImageFile) {
+        const { data: { session } } = await supabase.auth.getSession();
+        const accessToken = session?.access_token;
+        if (!accessToken) throw new Error('Could not verify your session to upload the cover photo.');
+        setUploadingCover(true);
+        // 'cmms-company-profile' isn't in api/storage/[action].js's
+        // ALLOWED_FOLDERS allowlist -- reuse 'cmms-announcements', the same
+        // folder this panel's poster/document uploads above already use.
+        const result = await uploadToR2({ file: coverImageFile, folder: 'cmms-announcements', accessToken });
+        setUploadingCover(false);
+        if (!result.success) throw new Error(result.error || 'Cover photo upload failed');
+        coverUpload = { url: result.url, key: result.key };
+      }
+      const patch = { ...websiteDraft };
+      if (coverUpload) {
+        patch.coverImageUrl = coverUpload.url;
+        patch.coverImagePath = coverUpload.key;
+      }
+      const result = await cmmsAnnouncementsService.updateCompanyPublicProfile(companyId, patch);
+      if (!result.success) throw new Error(result.error);
+      setSavedWebsiteProfile(websiteDraft);
+      if (coverUpload) {
+        // coverUpload.url is the raw "r2://<key>" marker uploadToR2 returns
+        // (see the note on the load effect above) -- resolve it to a real
+        // presigned URL before swapping the preview over to it, same as on
+        // load, so the box never tries to <img src="r2://...">.
+        setExistingCoverImageUrl(await resolveMediaValue(coverUpload.url));
+        if (coverImagePreview) URL.revokeObjectURL(coverImagePreview);
+        setCoverImageFile(null);
+        setCoverImagePreview('');
+      }
+    } catch (err) {
+      alert(`❌ ${err.message}`);
+    } finally {
+      setSavingWebsiteProfile(false);
+      setUploadingCover(false);
+    }
+  };
+
+  // The board's own shareable link + printable QR flyer -- same
+  // download-a-PDF pattern as the staff/visitor attendance QR codes
+  // (downloadCmmsQrPdf), so an admin can put this on a storefront window,
+  // a flyer or a business card exactly like those.
+  const copyBoardLink = async () => {
+    const link = boardLink(companyId);
+    try {
+      await navigator.clipboard.writeText(link);
+      setBoardLinkCopied(true);
+      setTimeout(() => setBoardLinkCopied(false), 2000);
+    } catch {
+      window.prompt('Copy this link:', link);
+    }
+  };
+
+  const downloadBoardQr = async () => {
+    setBoardQrDownloading(true);
+    try {
+      await downloadCmmsQrPdf({
+        type: 'board',
+        url: boardLink(companyId),
+        location: companyName || 'Our business',
+        companyName: companyName || 'IcanEra',
+        title: 'Visit Us Online',
+        instructions: 'Scan to see our announcements, open jobs, products and more.',
+        note: 'No app or account needed -- just scan and browse.',
+        filename: `${(companyName || 'business').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-public-page-qr.pdf`,
+      });
+    } finally {
+      setBoardQrDownloading(false);
+    }
   };
 
   const loadPosts = async () => {
@@ -480,9 +614,22 @@ const CMMSAnnouncementsPanel = ({
               <Megaphone className="w-5 h-5 text-purple-300" /> Announcements &amp; Job Postings
             </h2>
             <p className="text-sm text-gray-400 mt-1">
-              Post public posters and job vacancies visible with no login at{' '}
-              <span className="text-purple-300 font-mono text-xs break-all">{boardLink(companyId)}</span>, or share internal-only notices with your signed-in staff.
+              Your business now has a real public page, live with no login at{' '}
+              <span className="text-purple-300 font-mono text-xs break-all">{boardLink(companyId)}</span> -- announcements, jobs, products, contact details, all in one place customers can find and search.
             </p>
+            {canEdit && (
+              <div className="flex flex-wrap gap-2 mt-2.5">
+                <button onClick={copyBoardLink} className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-gray-200 text-xs font-semibold flex items-center gap-1.5">
+                  {boardLinkCopied ? <><Check className="w-3.5 h-3.5 text-emerald-400" /> Copied</> : <><Copy className="w-3.5 h-3.5" /> Copy link</>}
+                </button>
+                <button onClick={downloadBoardQr} disabled={boardQrDownloading} className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 disabled:opacity-50 text-gray-200 text-xs font-semibold flex items-center gap-1.5">
+                  {boardQrDownloading ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <QrCode className="w-3.5 h-3.5" />} Download QR flyer
+                </button>
+                <a href={boardLink(companyId)} target="_blank" rel="noreferrer" className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-gray-200 text-xs font-semibold flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5" /> Preview page
+                </a>
+              </div>
+            )}
           </div>
           {canCreate && (
             <div className="flex gap-2">
@@ -519,6 +666,92 @@ const CMMSAnnouncementsPanel = ({
 
       {subTab === 'profile' && canEdit && (
         <div className="space-y-4">
+          <div className="glass-card p-5 border border-white/10">
+            <h3 className="text-white font-semibold mb-1 flex items-center gap-2"><Sparkles className="w-4 h-4 text-purple-300" /> Make it look like your website</h3>
+            <p className="text-sm text-gray-400 mb-4">
+              A cover photo, a one-line tagline, and real contact details are what turn this into a page customers actually recognize as your business — not just a notice feed.
+            </p>
+
+            <label className="block text-xs font-semibold text-gray-400 mb-1">Cover photo</label>
+            <div
+              className="relative w-full h-32 sm:h-40 rounded-xl border border-dashed border-white/20 bg-white/5 overflow-hidden mb-4 flex items-center justify-center cursor-pointer group"
+              onClick={() => document.getElementById('cmms-cover-upload')?.click()}
+            >
+              {(coverImagePreview || existingCoverImageUrl) ? (
+                <img src={coverImagePreview || existingCoverImageUrl} alt="Cover preview" className="w-full h-full object-cover" />
+              ) : (
+                <div className="text-center text-gray-500">
+                  <ImageIcon className="w-6 h-6 mx-auto mb-1" />
+                  <span className="text-xs">Add a cover photo (storefront, team, product — under 6MB)</span>
+                </div>
+              )}
+              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold">
+                {uploadingCover ? <Loader className="w-5 h-5 animate-spin" /> : 'Change cover photo'}
+              </div>
+              <input id="cmms-cover-upload" type="file" accept="image/*" onChange={handleCoverImageSelect} className="hidden" />
+            </div>
+
+            <label className="block text-xs font-semibold text-gray-400 mb-1">Tagline</label>
+            <input
+              value={websiteDraft.tagline}
+              onChange={(e) => setWebsiteDraft((d) => ({ ...d, tagline: e.target.value }))}
+              placeholder="e.g. Quality construction, on time, every time"
+              maxLength={160}
+              className="w-full px-3 py-2 rounded bg-white/10 text-white border border-white/20 mb-4"
+            />
+
+            <div className="grid sm:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 mb-1 flex items-center gap-1.5"><MessageCircle className="w-3.5 h-3.5" /> WhatsApp number</label>
+                <input
+                  value={websiteDraft.whatsapp}
+                  onChange={(e) => setWebsiteDraft((d) => ({ ...d, whatsapp: e.target.value }))}
+                  placeholder="e.g. +256700000000"
+                  className="w-full px-3 py-2 rounded bg-white/10 text-white border border-white/20"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 mb-1 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> Opening hours</label>
+                <input
+                  value={websiteDraft.hoursText}
+                  onChange={(e) => setWebsiteDraft((d) => ({ ...d, hoursText: e.target.value }))}
+                  placeholder="e.g. Mon–Sat, 8:00am–6:00pm"
+                  maxLength={300}
+                  className="w-full px-3 py-2 rounded bg-white/10 text-white border border-white/20"
+                />
+              </div>
+            </div>
+
+            <label className="block text-xs font-semibold text-gray-400 mb-1">Social links</label>
+            <div className="grid sm:grid-cols-2 gap-3 mb-2">
+              {[
+                { key: 'facebookUrl', label: 'Facebook', placeholder: 'https://facebook.com/yourbusiness' },
+                { key: 'instagramUrl', label: 'Instagram', placeholder: 'https://instagram.com/yourbusiness' },
+                { key: 'twitterUrl', label: 'X / Twitter', placeholder: 'https://x.com/yourbusiness' },
+                { key: 'linkedinUrl', label: 'LinkedIn', placeholder: 'https://linkedin.com/company/yourbusiness' },
+                { key: 'tiktokUrl', label: 'TikTok', placeholder: 'https://tiktok.com/@yourbusiness' },
+              ].map((social) => (
+                <input
+                  key={social.key}
+                  value={websiteDraft[social.key]}
+                  onChange={(e) => setWebsiteDraft((d) => ({ ...d, [social.key]: e.target.value }))}
+                  placeholder={social.placeholder}
+                  className="w-full px-3 py-2 rounded bg-white/10 text-white border border-white/20 text-sm"
+                />
+              ))}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 mt-3">
+              <button
+                disabled={savingWebsiteProfile || !websiteProfileDirty}
+                onClick={saveWebsiteProfile}
+                className="px-4 py-2 rounded bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white text-sm font-semibold flex items-center gap-2"
+              >
+                {savingWebsiteProfile ? <><Loader className="w-4 h-4 animate-spin" /> Saving…</> : <><Save className="w-4 h-4" /> Save website details</>}
+              </button>
+            </div>
+          </div>
+
           <div className="glass-card p-5 border border-white/10">
             <h3 className="text-white font-semibold mb-1">About this business</h3>
             <p className="text-sm text-gray-400 mb-3">Shown at the top of your public board — in your visitors' own words, what does this business actually do?</p>

@@ -1,15 +1,27 @@
 /**
  * Serves the real app shell (frontend/dist/index.html + JS bundle, untouched)
- * for shared /status/:id and /pitchin/:id links, but with the <head> patched
- * to carry the actual update/pitch's title, caption/description and a
- * resolved, directly-loadable media URL as the Open Graph / Twitter Card
- * preview -- so pasting a share link into WhatsApp/Telegram/iMessage/X shows
- * a real rich preview instead of the generic "IcanEra" app card, and the
- * preview image is already resolved (no click needed to "load" it).
+ * for shared /status/:id, /pitchin/:id, /store/:id and /notices/:id links,
+ * but with the <head> patched to carry that specific update/pitch/store/
+ * business's real title, description and a resolved, directly-loadable
+ * image as the Open Graph / Twitter Card preview -- so pasting a share link
+ * into WhatsApp/Telegram/iMessage/X shows a real rich preview instead of the
+ * generic "IcanEra" app card, and the preview image is already resolved (no
+ * click needed to "load" it).
+ *
+ * The /notices/:id (CMMS business public page) branch additionally injects
+ * a schema.org LocalBusiness JSON-LD block -- this is the piece that lets a
+ * business actually be *found*, not just look good when shared: Google's
+ * rich-result/Business indexing and most AI-answer-engine crawlers read the
+ * initial HTML response directly and never execute this SPA's JS, so
+ * whatever facts (name, phone, address, socials) aren't in *this* patched
+ * HTML are invisible to them, no matter how good PublicCompanyNoticeBoard's
+ * own client-side SEO effect (useBusinessSeo) is.
  *
  * Wired up via the rewrites in /vercel.json:
  *   /status/:id  -> /api/share-preview?type=status&id=:id
  *   /pitchin/:id -> /api/share-preview?type=pitch&id=:id
+ *   /store/:id   -> /api/share-preview?type=store&id=:id
+ *   /notices/:id -> /api/share-preview?type=notices&id=:id
  *
  * Every other route still falls through to the plain SPA rewrite ("/(.*)"
  * -> "/"), which restores the deep-link fallback that /status and /pitchin
@@ -19,18 +31,22 @@
  *
  * Same HTML is served to bots and real visitors: it's the identical index.html
  * plus a patched <head>, so main.jsx still boots the same PublicStatusViewer /
- * PublicPitchViewer (path-matched from window.location.pathname) for a human,
- * while a crawler that never runs the JS still gets the correct preview tags.
+ * PublicPitchViewer / PublicDropshipStorefront / PublicCompanyNoticeBoard
+ * (path-matched from window.location.pathname) for a human, while a crawler
+ * that never runs the JS still gets the correct preview tags and facts.
  *
- * Route: GET /api/share-preview?type=status|pitch|store&id=<uuid>
+ * Route: GET /api/share-preview?type=status|pitch|store|notices&id=<uuid>
  * Env vars: SUPABASE_URL, SUPABASE_ANON_KEY (or VITE_SUPABASE_ANON_KEY) --
- * reads are anon-key only, relying on the same public RLS the app itself
- * depends on (ican_statuses: visibility public/followers; pitches: USING (true)
- * -- see statusService.getStatusById / pitchingService.getPitchById). The
- * store branch reads business_profiles + dropship_listings/products, which
- * are readable by anon the same way get_dropship_storefront is (that RPC is
- * itself granted to anon for the storefront page -- see
- * DROPSHIP_BUSINESS_WALLET_AND_DELIVERY.sql).
+ * reads are anon-key only, relying on the same public RLS/RPC grants the app
+ * itself depends on (ican_statuses: visibility public/followers; pitches:
+ * USING (true) -- see statusService.getStatusById / pitchingService.
+ * getPitchById). The store branch reads business_profiles + dropship_
+ * listings/products via get_dropship_storefront, granted to anon the same
+ * way PublicDropshipStorefront itself relies on it (see
+ * DROPSHIP_BUSINESS_WALLET_AND_DELIVERY.sql). The notices branch reads
+ * cmms_company_profiles via fn_get_public_cmms_company_header, granted to
+ * anon the same way PublicCompanyNoticeBoard itself relies on it (see
+ * CMMS_PUBLIC_BUSINESS_WEBSITE_PROFILE.sql).
  */
 import { getDownloadUrl } from './_lib/r2Client.js';
 
@@ -205,12 +221,79 @@ const buildStoreMeta = async ({ url, anonKey, id }) => {
   };
 };
 
+const SOCIAL_URL_FIELDS = ['website', 'facebook_url', 'instagram_url', 'twitter_url', 'linkedin_url', 'tiktok_url'];
+const normalizeExternalUrl = (url) => {
+  const trimmed = typeof url === 'string' ? url.trim() : '';
+  if (!trimmed) return null;
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+};
+
+// The one branch that builds real structured data, not just an OG preview --
+// see the module doc comment for why. Reads the exact same anon-granted RPC
+// (fn_get_public_cmms_company_header) PublicCompanyNoticeBoard.jsx itself
+// calls, so this can never show a business fact the live page wouldn't.
+const buildNoticeMeta = async ({ url, anonKey, id }) => {
+  let company;
+  try {
+    const res = await fetch(`${url}/rest/v1/rpc/fn_get_public_cmms_company_header`, {
+      method: 'POST',
+      headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_company_id: id })
+    });
+    const rows = res.ok ? await res.json() : null;
+    company = Array.isArray(rows) ? rows[0] : null;
+  } catch {
+    company = null;
+  }
+  if (!company) return null;
+
+  const canonicalPath = `/notices/${id}`;
+  const title = company.tagline
+    ? `${company.company_name} — ${company.tagline} | IcanEra`
+    : `${company.company_name}${company.industry ? ` — ${company.industry}` : ''} | IcanEra`;
+  const description = (
+    company.about?.trim()
+    || company.tagline?.trim()
+    || `${company.company_name} on IcanEra — announcements, careers, products and contact details.`
+  ).slice(0, 300);
+
+  const [resolvedCover, resolvedLogo] = await Promise.all([
+    resolveMediaUrl(company.cover_image_url, { url, anonKey, defaultBucket: 'cmms-company-profile' }),
+    resolveMediaUrl(company.logo_url, { url, anonKey, defaultBucket: 'cmms-company-profile' }),
+  ]);
+  const image = resolvedCover || resolvedLogo || DEFAULT_IMAGE;
+
+  const sameAs = SOCIAL_URL_FIELDS.map((field) => normalizeExternalUrl(company[field])).filter(Boolean);
+  const structuredData = {
+    '@context': 'https://schema.org',
+    '@type': 'LocalBusiness',
+    name: company.company_name,
+    description,
+    image,
+    url: `${SITE_URL}${canonicalPath}`,
+    ...(resolvedLogo && { logo: resolvedLogo }),
+    ...(company.phone && { telephone: company.phone }),
+    ...(company.email && { email: company.email }),
+    ...(company.location && { address: { '@type': 'PostalAddress', addressLocality: company.location } }),
+    ...(company.hours_text && { openingHours: company.hours_text }),
+    ...(company.industry && { knowsAbout: company.industry }),
+    ...(sameAs.length > 0 && { sameAs }),
+  };
+
+  return { title, description, image, path: canonicalPath, video: null, ogType: 'business.business', structuredData };
+};
+
+// JSON-LD's only unsafe character inside a <script> body is a literal
+// "</" (which could early-close the script tag) -- escaping just the slash
+// keeps the JSON itself valid while making that sequence inert.
+const escapeJsonLd = (value) => JSON.stringify(value).replace(/</g, '\\u003c');
+
 const patchHead = (html, meta, canonicalUrl) => {
   const tags = [
     `<title>${escapeHtml(meta.title)}</title>`,
     `<meta name="description" content="${escapeAttr(meta.description)}">`,
     `<link rel="canonical" href="${escapeAttr(canonicalUrl)}">`,
-    `<meta property="og:type" content="website">`,
+    `<meta property="og:type" content="${meta.ogType || 'website'}">`,
     `<meta property="og:site_name" content="IcanEra">`,
     `<meta property="og:url" content="${escapeAttr(canonicalUrl)}">`,
     `<meta property="og:title" content="${escapeAttr(meta.title)}">`,
@@ -221,7 +304,11 @@ const patchHead = (html, meta, canonicalUrl) => {
     `<meta name="twitter:card" content="${meta.video ? 'player' : 'summary_large_image'}">`,
     `<meta name="twitter:title" content="${escapeAttr(meta.title)}">`,
     `<meta name="twitter:description" content="${escapeAttr(meta.description)}">`,
-    `<meta name="twitter:image" content="${escapeAttr(meta.image)}">`
+    `<meta name="twitter:image" content="${escapeAttr(meta.image)}">`,
+    // Read by search/AI crawlers that never execute this SPA's JS -- see
+    // the module doc comment above for why this can't just live in
+    // PublicCompanyNoticeBoard's client-side useBusinessSeo effect alone.
+    meta.structuredData ? `<script type="application/ld+json">${escapeJsonLd(meta.structuredData)}</script>` : ''
   ].filter(Boolean).join('\n  ');
 
   let patched = html
@@ -236,21 +323,24 @@ export default async function handler(req, res) {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
-  // Falls back to the real /status/:id, /pitchin/:id or /store/:id route
-  // (never the rewritten /api/share-preview?... URL) so a resolution failure
-  // below still redirects/canonicalizes somewhere a visitor can actually
-  // land on.
+  // Falls back to the real /status/:id, /pitchin/:id, /store/:id or
+  // /notices/:id route (never the rewritten /api/share-preview?... URL) so a
+  // resolution failure below still redirects/canonicalizes somewhere a
+  // visitor can actually land on.
   const fallbackPath = type === 'status' ? `/status/${id || ''}`
     : type === 'pitch' ? `/pitchin/${id || ''}`
     : type === 'store' ? `/store/${id || ''}`
+    : type === 'notices' ? `/notices/${id || ''}`
     : '/';
   let meta = { title: DEFAULT_TITLE, description: DEFAULT_DESCRIPTION, image: DEFAULT_IMAGE, path: fallbackPath, video: null };
 
-  if (url && anonKey && id && (type === 'status' || type === 'pitch' || type === 'store')) {
+  const VALID_TYPES = ['status', 'pitch', 'store', 'notices'];
+  if (url && anonKey && id && VALID_TYPES.includes(type)) {
     try {
       const resolved = type === 'status' ? await buildStatusMeta({ url, anonKey, id })
         : type === 'pitch' ? await buildPitchMeta({ url, anonKey, id })
-        : await buildStoreMeta({ url, anonKey, id });
+        : type === 'store' ? await buildStoreMeta({ url, anonKey, id })
+        : await buildNoticeMeta({ url, anonKey, id });
       if (resolved) meta = resolved;
     } catch (err) {
       console.error(`share-preview: failed to resolve ${type} ${id}:`, err);
