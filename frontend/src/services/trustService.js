@@ -4,6 +4,7 @@
  */
 
 import { getSupabase } from './pitchingService';
+import { resolveMediaValues } from './r2StorageService';
 
 // =============================================
 // DEBUG FUNCTION - Get all trust data for user
@@ -683,6 +684,33 @@ export const getTrustGroupDetails = async (groupId, currentUserId = null) => {
     } else {
       console.warn('⚠️ membersData is not an array:', membersData);
       members = [];
+    }
+
+    // Attach each member's display name + avatar from their profile so the UI
+    // can show who actually contributed instead of just "Member #N".
+    if (members.length > 0) {
+      const memberUserIds = [...new Set(members.map(m => m.user_id).filter(Boolean))];
+      if (memberUserIds.length > 0) {
+        const { data: profilesData, error: profilesError } = await sb
+          .from('profiles')
+          .select('id, full_name, avatar_url')
+          .in('id', memberUserIds);
+
+        if (profilesError) {
+          console.warn('⚠️ Error fetching member profiles:', profilesError);
+        } else if (Array.isArray(profilesData)) {
+          const resolvedProfiles = await resolveMediaValues(profilesData, ['avatar_url']);
+          const profileByUserId = new Map(resolvedProfiles.map(p => [p.id, p]));
+          members = members.map(m => {
+            const profile = profileByUserId.get(m.user_id);
+            return {
+              ...m,
+              full_name: profile?.full_name || null,
+              avatar_url: profile?.avatar_url || null
+            };
+          });
+        }
+      }
     }
 
     // Fetch current user's available ICAN balance if currentUserId provided

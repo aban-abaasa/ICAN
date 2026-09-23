@@ -39,6 +39,7 @@ const PublicPitchViewer = ({ pitchId }) => {
   const [selectedForInvestment, setSelectedForInvestment] = useState(null);
   const [investLoading, setInvestLoading] = useState(false);
   const videoRef = useRef(null);
+  const autoInvestTriggered = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -184,6 +185,19 @@ const PublicPitchViewer = ({ pitchId }) => {
       setInvestLoading(false);
     }
   };
+
+  // Lets a link like /pitchin/:id?invest=1 (used by the public business
+  // board's "Invest Now" button) land the visitor straight into the real
+  // invest flow instead of requiring a second click here -- fires the same
+  // handleInvest a manual click would, exactly once.
+  useEffect(() => {
+    if (autoInvestTriggered.current) return;
+    if (authLoading || !pitch) return;
+    if (new URLSearchParams(window.location.search).get('invest') !== '1') return;
+    autoInvestTriggered.current = true;
+    handleInvest();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pitch, authLoading]);
 
   const goToApp = () => {
     window.history.replaceState({}, '', '/');

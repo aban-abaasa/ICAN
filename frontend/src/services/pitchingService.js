@@ -1486,6 +1486,10 @@ export const getAllAccessibleBusinessProfiles = async (userId, userEmail) => {
 
     const profilesWithWallets = await Promise.all(allProfiles.map(async (profile) => {
       if (profile.ican_wallet) return profile;
+      // Team members only ever get transaction-only access -- the wallet RPC's
+      // shareholder check (owner/co-owner) always rejects them, so skip the
+      // call entirely instead of firing a guaranteed-to-fail request on every load.
+      if (profile.isTeamMember) return profile;
       try {
         const { data: wallet, error: walletError } = await sb.rpc(
           'get_or_create_pitchin_business_wallet',

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Lock, Clock, CheckCircle, XCircle, AlertCircle, Mail } from 'lucide-react';
 import { getSupabaseClient } from '../lib/supabase/client';
 
@@ -180,7 +181,7 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
     }
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[2000] p-4">
       <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6">
         {/* Header */}
@@ -433,7 +434,8 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

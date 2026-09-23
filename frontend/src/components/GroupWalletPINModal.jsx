@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Lock, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react';
 import groupWalletAccountService from '../services/groupWalletAccountService';
 import { getSupabaseClient } from '../lib/supabase/client';
@@ -215,8 +216,8 @@ const GroupWalletPINModal = ({
     </div>
   );
 
-  return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[70] p-4">
+  return createPortal(
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[100] p-4">
       <div className="bg-slate-800 rounded-xl max-w-md w-full border border-slate-700 shadow-2xl">
         {/* Header */}
         <div className="p-6 border-b border-slate-700">
@@ -393,7 +394,8 @@ const GroupWalletPINModal = ({
           groupName={groupName}
         />
       )}
-    </div>
+    </div>,
+    document.body
   );
 };
 

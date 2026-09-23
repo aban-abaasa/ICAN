@@ -24,6 +24,12 @@ const isVisitorQrPath = window.location.pathname === '/visitor-check-in';
 // above) so a viewer can sign in in place to like/comment/invest, and the
 // same component just becomes fully interactive once they do.
 const pitchShareMatch = window.location.pathname.match(/^\/pitchin\/([^/]+)/);
+// A private, PIN-locked, time-limited pitch invite for one named investor
+// (backend/PITCHIN_PRIVATE_INVESTOR_INVITES.sql) at /invite/<token> -- unlike
+// pitchShareMatch above, this page shows nothing real until the PIN is
+// verified server-side, but otherwise needs the same no-forced-login,
+// sign-in-in-place treatment to invest, so it's wrapped the same way.
+const privateInviteMatch = window.location.pathname.match(/^\/invite\/([^/]+)/);
 const statusShareMatch = window.location.pathname.match(/^\/status\/([^/]+)/);
 // A resume/portfolio share link (e.g. https://icanera.space/portfolio/<handle>)
 // must be viewable by anyone, signed in or not -- same reasoning as the
@@ -134,6 +140,7 @@ const App = lazyWithReloadOnChunkFailure(() => import('./App'));
 const PublicStaffAttendanceCheckIn = lazyWithReloadOnChunkFailure(() => import('./components/PublicStaffAttendanceCheckIn'));
 const PublicVisitorCheckIn = lazyWithReloadOnChunkFailure(() => import('./components/PublicVisitorCheckIn'));
 const PublicPitchViewer = lazyWithReloadOnChunkFailure(() => import('./components/PublicPitchViewer'));
+const PrivatePitchInviteViewer = lazyWithReloadOnChunkFailure(() => import('./components/PrivatePitchInviteViewer'));
 const PublicStatusViewer = lazyWithReloadOnChunkFailure(() => import('./components/PublicStatusViewer'));
 const PublicPortfolioPage = lazyWithReloadOnChunkFailure(() => import('./components/profile/PublicPortfolioPage'));
 const PublicDropshipStorefront = lazyWithReloadOnChunkFailure(() => import('./components/PublicDropshipStorefront'));
@@ -206,6 +213,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <ThemeProvider>
               <AuthProvider>
                 {pitchShareMatch ? <PublicPitchViewer pitchId={pitchShareMatch[1]} />
+                  : privateInviteMatch ? <PrivatePitchInviteViewer token={privateInviteMatch[1]} />
                   : statusShareMatch ? <PublicStatusViewer statusId={statusShareMatch[1]} />
                   : dropshipStoreMatch ? <PublicDropshipStorefront businessProfileId={dropshipStoreMatch[1]} />
                   : portfolioShareMatch ? <PublicPortfolioPage handle={portfolioShareMatch[1]} />

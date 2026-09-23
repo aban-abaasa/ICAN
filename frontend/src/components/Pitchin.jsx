@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { ThumbsUp, MessageCircle, Share2, Clock, Users, FileText, Zap, AlertCircle, Building2, Loader, Plus, Trash2, Lock, Unlock, X, Send, Copy, Check, Play, Home, BookMarked, Heart, Briefcase, Bell, Search, ShoppingBag, Download } from 'lucide-react';
+import { ThumbsUp, MessageCircle, Share2, Clock, Users, FileText, Zap, AlertCircle, Building2, Loader, Plus, Trash2, Lock, Unlock, X, Send, Copy, Check, Play, Home, BookMarked, Heart, Briefcase, Bell, Search, ShoppingBag, Download, Gem } from 'lucide-react';
 import DiamondLoader from './DiamondLoader';
 import PitchVideoRecorder from './PitchVideoRecorder';
 import SmartContractGenerator from './SmartContractGenerator';
+import PrivatePitchInviteModal from './PrivatePitchInviteModal';
 import ShareSigningFlow from './ShareSigningFlow';
 import InvestmentProgressView from './InvestmentProgressView';
 import BusinessProfileForm from './BusinessProfileForm';
@@ -58,6 +59,61 @@ export const LIVE_OFFER_BLOCKED_MESSAGE = {
   'no-live-price': 'This business has no live share value yet — its recorded transactions do not add up to a positive value.',
   'issued-shares-unreadable': 'Could not confirm how many shares are still unsold. Please try again in a moment.',
   default: 'Live share value is unavailable for this business right now. Please try again in a moment.'
+};
+
+// The premium "gallery vitrine" treatment shown while pitches load or when
+// the feed is empty — an atelier/auction-house feel (obsidian ground, hairline
+// gold framing, one gem under a spotlight) replacing the old neon-blob +
+// floating-emoji loading screen. Shared by both the desktop feed frame and
+// the mobile full-screen feed so the two stay visually identical.
+const PITCHIN_LOADING_CAPTIONS = [
+  'Curating pitches for you',
+  'Vetting founders',
+  'Polishing the stage',
+  'Loading today’s opportunities',
+];
+const PITCHIN_CAPTION_LOOP_SECONDS = 9.6;
+
+let pitchinStageStylesInjected = false;
+const injectPitchinStageStyles = () => {
+  if (pitchinStageStylesInjected || typeof document === 'undefined') return;
+  pitchinStageStylesInjected = true;
+  const style = document.createElement('style');
+  style.setAttribute('data-pitchin-stage', 'true');
+  style.textContent = `
+    @keyframes pitchin-stage-caption {
+      0%, 4% { opacity: 0; transform: translateY(4px); }
+      10%, 84% { opacity: 1; transform: translateY(0); }
+      90%, 100% { opacity: 0; transform: translateY(-4px); }
+    }
+    .pitchin-stage-caption {
+      animation-name: pitchin-stage-caption;
+      animation-timing-function: ease-in-out;
+      animation-iteration-count: infinite;
+    }
+    @keyframes pitchin-stage-halo {
+      0%, 100% { opacity: 0.5; transform: scale(0.92); }
+      50% { opacity: 1; transform: scale(1.08); }
+    }
+    .pitchin-stage-halo {
+      animation: pitchin-stage-halo 3.2s ease-in-out infinite;
+    }
+    @keyframes pitchin-stage-bar {
+      0% { transform: translateX(-120%); }
+      100% { transform: translateX(220%); }
+    }
+    .pitchin-stage-bar {
+      animation: pitchin-stage-bar 2.4s ease-in-out infinite;
+    }
+    @keyframes pitchin-stage-rise {
+      0% { opacity: 0; transform: translateY(10px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+    .pitchin-stage-rise {
+      animation: pitchin-stage-rise 0.9s ease-out both;
+    }
+  `;
+  document.head.appendChild(style);
 };
 
 const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusinessProfile = false, onBusinessProfileRequestConsumed = null, navRef = null, onTabChange = null }) => {
@@ -122,6 +178,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
   const [businessDetailsPitch, setBusinessDetailsPitch] = useState(null); // pitch whose business details modal is open (Pitcher icon tap)
   const [businessOwnerProfile, setBusinessOwnerProfile] = useState(null); // { full_name, avatar_url } for businessDetailsPitch's owner
   const [businessLiveOffer, setBusinessLiveOffer] = useState(null); // live getLiveShareOffer() result for businessDetailsPitch
+  const [invitePitch, setInvitePitch] = useState(null); // pitch whose "Invite investor" modal (PrivatePitchInviteModal) is open
   const [businessLiveOfferLoading, setBusinessLiveOfferLoading] = useState(false);
   const [showComments, setShowComments] = useState(null); // pitch id for comments modal
   const [comments, setComments] = useState({});
@@ -138,6 +195,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
   );
   const [mutedVideos, setMutedVideos] = useState(new Set()); // track which videos are unmuted (all start muted)
   const [currentVisiblePitch, setCurrentVisiblePitch] = useState(null); // track currently visible pitch for web bottom nav
+  const [desktopActivePitchId, setDesktopActivePitchId] = useState(null); // which pitch plays in the desktop "theater" player
   const isRestoringPitchinHistoryRef = useRef(false);
   const hasHydratedPitchinHistoryRef = useRef(false);
   const videoRefs = useRef({}); // refs to video elements for controlling sound
@@ -596,6 +654,18 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
       return () => scrollContainer.removeEventListener('scroll', handleScroll);
     }
   }, [filteredPitches, currentVisiblePitch]);
+
+  // Keep the desktop theater player pointed at a pitch that's still in the
+  // current (possibly filtered/searched) list, defaulting to the first one.
+  useEffect(() => {
+    if (filteredPitches.length === 0) {
+      if (desktopActivePitchId !== null) setDesktopActivePitchId(null);
+      return;
+    }
+    if (!filteredPitches.some(p => p.id === desktopActivePitchId)) {
+      setDesktopActivePitchId(filteredPitches[0].id);
+    }
+  }, [filteredPitches, desktopActivePitchId]);
 
   const handleCreatePitch = async (pitchData) => {
     try {
@@ -1421,240 +1491,305 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
     return date.toLocaleDateString();
   };
 
-  const renderPitchVideoFeed = (desktopMode = false) => {
-    const feedOuterClass = desktopMode
-      ? 'h-[calc(100vh-10.5rem)] w-full px-4 sm:px-6 lg:px-8 pb-6'
-      : 'h-full w-full flex items-center justify-center';
-    const feedFrameClass = desktopMode
-      ? 'mx-auto h-full w-full max-w-[460px] rounded-[28px] border border-white/10 bg-black/80 shadow-[0_0_40px_rgba(0,0,0,0.45)] overflow-hidden'
-      : 'w-full h-full';
-    const pitchSectionClass = desktopMode
-      ? 'relative w-full h-full min-h-full snap-start bg-black'
-      : 'relative w-full h-full min-h-screen snap-start bg-black';
+  // Full-screen "vitrine" shown while the feed loads — one gem under a
+  // spotlight instead of a wall of bouncing icons. See injectPitchinStageStyles.
+  const renderPitchinLoadingStage = (fixed = false) => {
+    injectPitchinStageStyles();
+    return (
+      <div className={`${fixed ? 'fixed' : 'absolute'} inset-0 z-[60] bg-[#07060b] flex items-center justify-center overflow-hidden`}>
+        {/* Ground: obsidian with a soft warm spotlight from above, a faint
+            violet undertone at the base — no cartoon gradient blobs. */}
+        <div className="absolute inset-0">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_45%_at_50%_32%,rgba(212,175,120,0.14),transparent_70%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_120%_70%_at_50%_130%,rgba(88,28,135,0.22),transparent_60%)]" />
+        </div>
+
+        {/* Hairline vitrine corners, like a fine jewelry case */}
+        <div className="absolute inset-8 sm:inset-12 pointer-events-none">
+          <span className="absolute top-0 left-0 w-6 h-6 border-t border-l border-amber-200/25" />
+          <span className="absolute top-0 right-0 w-6 h-6 border-t border-r border-amber-200/25" />
+          <span className="absolute bottom-0 left-0 w-6 h-6 border-b border-l border-amber-200/25" />
+          <span className="absolute bottom-0 right-0 w-6 h-6 border-b border-r border-amber-200/25" />
+        </div>
+
+        <div className="pitchin-stage-rise relative z-10 flex flex-col items-center px-6 text-center">
+          <p className="text-[11px] tracking-[0.5em] text-amber-200/70 uppercase mb-2">IcanEra</p>
+          <div className="w-10 h-px bg-gradient-to-r from-transparent via-amber-200/50 to-transparent mb-8" />
+
+          <div className="relative inline-block">
+            <div className="pitchin-stage-halo absolute -inset-6 rounded-full bg-purple-400/20 blur-2xl -z-10" />
+            <DiamondLoader size={132} />
+          </div>
+
+          <div className="mt-8 h-5 relative w-72 max-w-[80vw] overflow-hidden">
+            {PITCHIN_LOADING_CAPTIONS.map((caption, i) => (
+              <span
+                key={caption}
+                className="pitchin-stage-caption absolute inset-0 text-sm text-white/60 font-light tracking-wide"
+                style={{
+                  animationDuration: `${PITCHIN_CAPTION_LOOP_SECONDS}s`,
+                  animationDelay: `${i * (PITCHIN_CAPTION_LOOP_SECONDS / PITCHIN_LOADING_CAPTIONS.length)}s`,
+                }}
+              >
+                {caption}
+              </span>
+            ))}
+          </div>
+
+          <div className="mt-6 w-40 h-px bg-white/10 overflow-hidden rounded-full relative">
+            <div className="pitchin-stage-bar absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-amber-200/80 to-transparent" />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Empty feed — a quiet, intentional moment rather than a bare "no data"
+  // notice, in the same gallery language as the loading stage above.
+  const renderPitchinEmptyStage = () => (
+    <div className="relative w-full h-full min-h-[420px] flex flex-col items-center justify-center text-center px-8 py-16">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_45%_at_50%_38%,rgba(212,175,120,0.08),transparent_70%)] pointer-events-none" />
+      <div className="relative w-16 h-16 mb-6 rounded-full border border-amber-200/25 flex items-center justify-center">
+        <Gem className="w-6 h-6 text-amber-200/70" />
+      </div>
+      <p className="text-white/80 text-base font-light tracking-wide mb-1.5">The stage is quiet, for now</p>
+      <p className="text-white/40 text-sm max-w-xs mb-6">No pitches to show yet. Be the first to bring an idea to the floor.</p>
+      <button
+        onClick={handleCreatePitchClick}
+        className="icon-btn-transparent px-5 py-2 rounded-full border border-amber-200/40 text-amber-100 text-sm tracking-wide hover:bg-amber-200/10 transition-colors"
+      >
+        Record Your Pitch
+      </button>
+    </div>
+  );
+
+  // Desktop "theater" layout — a large player with a channel/action row and
+  // description underneath, plus a clickable "More Pitches" sidebar, the way
+  // YouTube works on a computer. The old approach reused the mobile
+  // full-bleed-vertical-video-with-floating-icons treatment at desktop sizes,
+  // which produced a very tall card whose overlaid icon column spread out
+  // across mostly-empty letterboxing instead of sitting near the video.
+  // Only ever used for the desktop view — mobile keeps its own dedicated
+  // TikTok-style snap-scroll feed below.
+  const renderDesktopPitchFeed = () => {
+    const activePitch = filteredPitches.find(p => p.id === desktopActivePitchId) || filteredPitches[0] || null;
+
+    const pillButtonClass = 'icon-btn-transparent flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-colors';
 
     return (
-      <div className={feedOuterClass}>
-        <div className={feedFrameClass}>
-          <div className="relative w-full h-full overflow-y-auto snap-y snap-mandatory scroll-smooth" ref={videoScrollRef}>
-            {loading ? (
-              <div className={`${desktopMode ? 'absolute' : 'fixed'} inset-0 z-[60] bg-black flex items-center justify-center overflow-hidden`}>
-                <div className="absolute inset-0 w-full h-full">
-                  <div className="w-full h-full bg-gradient-to-br from-purple-900 via-black to-pink-900">
-                    <div className="absolute top-0 left-0 w-96 h-96 bg-purple-500/30 rounded-full blur-3xl animate-blob"></div>
-                    <div className="absolute top-0 right-0 w-96 h-96 bg-pink-500/30 rounded-full blur-3xl animate-blob animation-delay-2000"></div>
-                    <div className="absolute bottom-0 left-1/2 w-96 h-96 bg-orange-500/30 rounded-full blur-3xl animate-blob animation-delay-4000"></div>
-                  </div>
-                  <div className="absolute inset-0 bg-black/40"></div>
+      <div className="h-[calc(100vh-10.5rem)] w-full px-4 sm:px-6 lg:px-8 pb-6">
+        {loading ? (
+          <div className="relative h-full w-full rounded-2xl overflow-hidden">
+            {renderPitchinLoadingStage(false)}
+          </div>
+        ) : filteredPitches.length === 0 || !activePitch ? (
+          renderPitchinEmptyStage()
+        ) : (
+          <div className="h-full w-full flex gap-6">
+            {/* Theater column — a wide player that actually fills the available
+                width (cropped to fill via object-cover, not letterboxed in a
+                narrow portrait box), with the channel/action/description panel
+                underneath it. */}
+            <div className="flex-1 min-w-0 h-full overflow-y-auto pr-1">
+              <div
+                className="relative w-full bg-black rounded-2xl overflow-hidden shadow-[0_0_40px_rgba(0,0,0,0.45)] border border-white/10"
+                style={{ height: 'min(70vh, 760px)' }}
+              >
+                {!activePitch.video_url || videoErrors[activePitch.id] ? (
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-600 to-pink-600">
+                      <AlertCircle className="w-12 h-12 text-white/70" />
+                    </div>
+                  ) : (
+                    <video
+                      key={activePitch.id}
+                      ref={el => { if (el) videoRefs.current[activePitch.id] = el; }}
+                      src={activePitch.video_url}
+                      className="w-full h-full object-cover bg-black"
+                      crossOrigin="anonymous"
+                      autoPlay
+                      muted
+                      loop
+                      playsInline
+                      onError={(event) => handleVideoError(activePitch.id, event)}
+                      onLoadedMetadata={(event) => handleVideoLoadedMetadata(activePitch.id, event)}
+                      onLoadStart={() => markVideoBuffering(activePitch.id)}
+                      onWaiting={() => markVideoBuffering(activePitch.id)}
+                      onPlaying={() => clearVideoBuffering(activePitch.id)}
+                      onCanPlay={() => clearVideoBuffering(activePitch.id)}
+                    />
+                  )}
+                  {bufferingPitches.has(activePitch.id) && !videoErrors[activePitch.id] && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none bg-black/20">
+                      <DiamondLoader size={56} />
+                    </div>
+                  )}
+                  <button
+                    onClick={() => toggleVideoSound(activePitch.id)}
+                    className="icon-btn-transparent group absolute inset-0 flex items-center justify-center"
+                  >
+                    <div className="px-4 py-2 rounded-full bg-black/40 backdrop-blur-sm flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {mutedVideos.has(activePitch.id) ? (
+                        <>
+                          <span className="text-lg">🔊</span>
+                          <span className="text-white text-sm font-semibold">Sound ON</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-lg">🔇</span>
+                          <span className="text-white text-sm font-semibold">Tap for sound</span>
+                        </>
+                      )}
+                    </div>
+                  </button>
                 </div>
 
-                <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                  <div className="absolute top-20 left-10 animate-float" style={{ animationDelay: '0s' }}>
-                    <Briefcase className="w-16 h-16 text-white/20 drop-shadow-lg" />
-                  </div>
-                  <div className="absolute top-40 right-20 animate-float" style={{ animationDelay: '0.5s' }}>
-                    <Users className="w-20 h-20 text-white/20 drop-shadow-lg" />
-                  </div>
-                  <div className="absolute bottom-32 left-20 animate-float" style={{ animationDelay: '1s' }}>
-                    <Zap className="w-14 h-14 text-white/20 drop-shadow-lg" />
-                  </div>
-                  <div className="absolute bottom-20 right-32 animate-float" style={{ animationDelay: '1.5s' }}>
-                    <Share2 className="w-12 h-12 text-white/20 drop-shadow-lg" />
-                  </div>
-                  <div className="absolute top-1/3 left-1/4 animate-float" style={{ animationDelay: '2s' }}>
-                    <Heart className="w-18 h-18 text-white/20 drop-shadow-lg" />
-                  </div>
-                  <div className="absolute top-1/2 right-1/4 animate-float" style={{ animationDelay: '2.5s' }}>
-                    <Play className="w-16 h-16 text-white/20 drop-shadow-lg" />
-                  </div>
-                </div>
+                <div className="mt-4">
+                  <h2 className="text-white text-xl font-bold leading-snug">{activePitch.title}</h2>
+                  <p className="text-slate-500 text-xs mt-1">
+                    {activePitch.category || 'Pitch'} · {formatDate(activePitch.created_at)}
+                  </p>
 
-                <div className="relative z-10 text-center px-4">
-                  <div className="relative inline-block">
-                    <DiamondLoader size={168} />
-                    <div className="absolute inset-0 bg-purple-500/50 blur-3xl animate-pulse -z-10"></div>
-                  </div>
-                </div>
-
-                <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black to-transparent"></div>
-              </div>
-            ) : filteredPitches.length === 0 ? (
-              <div className="col-span-full text-center py-12">
-                <Zap className="w-12 h-12 text-slate-500 mx-auto mb-4" />
-                <p className="text-slate-400">No pitches available yet</p>
-              </div>
-            ) : (
-              filteredPitches.map((pitch) => (
-                <div key={pitch.id} className={pitchSectionClass}>
-                  <div className="absolute inset-0 w-full h-full bg-gradient-to-br from-purple-600 to-pink-600">
-                    {!pitch.video_url || videoErrors[pitch.id] ? (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <AlertCircle className="w-12 h-12 text-slate-500" />
-                      </div>
-                    ) : (
-                      <video
-                        ref={el => { if (el) videoRefs.current[pitch.id] = el; }}
-                        src={pitch.video_url}
-                        className={desktopMode ? 'w-full h-full object-contain bg-black' : 'w-full h-full object-cover'}
-                        crossOrigin="anonymous"
-                        autoPlay
-                        muted
-                        loop
-                        playsInline
-                        onError={(event) => handleVideoError(pitch.id, event)}
-                        onLoadedMetadata={(event) => handleVideoLoadedMetadata(pitch.id, event)}
-                        onLoadStart={() => markVideoBuffering(pitch.id)}
-                        onWaiting={() => markVideoBuffering(pitch.id)}
-                        onPlaying={() => clearVideoBuffering(pitch.id)}
-                        onCanPlay={() => clearVideoBuffering(pitch.id)}
-                      />
-                    )}
-                    {bufferingPitches.has(pitch.id) && !videoErrors[pitch.id] && (
-                      <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none bg-black/20">
-                        <DiamondLoader size={52} />
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="absolute inset-0 z-20 pointer-events-none">
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                     <button
-                      onClick={() => toggleVideoSound(pitch.id)}
-                      className="icon-btn-transparent absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-auto"
+                      onClick={() => setBusinessDetailsPitch(activePitch)}
+                      className="icon-btn-transparent flex items-center gap-3 group"
+                      title="View business details"
                     >
-                      <div className="px-4 py-2 rounded-full bg-transparent flex items-center gap-2 transition-all">
-                        {mutedVideos.has(pitch.id) ? (
-                          <>
-                            <span className="text-2xl drop-shadow-lg">🔊</span>
-                            <span className="text-white text-sm font-semibold drop-shadow-lg">Sound ON</span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="text-2xl drop-shadow-lg">🔇</span>
-                            <span className="text-white text-sm font-semibold drop-shadow-lg">Tap for sound</span>
-                          </>
-                        )}
+                      {(activePitch.business_profiles?.avatar_url || activePitch.business_profiles?.owner_avatar_url) ? (
+                        <img
+                          src={activePitch.business_profiles.avatar_url || activePitch.business_profiles.owner_avatar_url}
+                          alt={activePitch.business_profiles?.business_name || 'Pitcher'}
+                          className="w-10 h-10 rounded-full object-cover border border-white/20"
+                          onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                        />
+                      ) : null}
+                      <div
+                        className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-500 to-orange-400 items-center justify-center text-white font-bold text-sm border border-white/20"
+                        style={{ display: (activePitch.business_profiles?.avatar_url || activePitch.business_profiles?.owner_avatar_url) ? 'none' : 'flex' }}
+                      >
+                        {(activePitch.business_profiles?.business_name || activePitch.business_profiles?.name || 'P').charAt(0).toUpperCase()}
+                      </div>
+                      <div className="text-left">
+                        <p className="text-white text-sm font-semibold group-hover:text-pink-400 transition-colors">
+                          {activePitch.business_profiles?.business_name || 'Business'}
+                        </p>
+                        <p className="text-slate-500 text-xs">View business</p>
                       </div>
                     </button>
 
-                    <div className="absolute right-2 bottom-20 flex flex-col gap-2 pointer-events-auto">
-                      <button
-                        onClick={() => handleLike(pitch.id)}
-                        className="icon-btn-transparent flex flex-col items-center gap-0.5"
-                        title="Like"
-                      >
-                        <div className="w-9 h-9 flex items-center justify-center transition-all">
-                          <Heart className={`w-4 h-4 drop-shadow-lg ${likedPitches.has(pitch.id) ? 'text-red-500 fill-red-500' : 'text-white'}`} />
-                        </div>
-                        <span className="text-white text-[9px] font-bold drop-shadow-lg">{pitch.likes_count || 0}</span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button onClick={() => handleLike(activePitch.id)} className={pillButtonClass} title="Like">
+                        <Heart className={`w-4 h-4 ${likedPitches.has(activePitch.id) ? 'text-red-500 fill-red-500' : 'text-white'}`} />
+                        <span className="text-white text-xs font-semibold">{activePitch.likes_count || 0}</span>
                       </button>
-
-                      <button
-                        onClick={() => handleOpenComments(pitch.id)}
-                        className="icon-btn-transparent flex flex-col items-center gap-0.5"
-                        title="Comment"
-                      >
-                        <div className="w-9 h-9 flex items-center justify-center transition-all">
-                          <MessageCircle className="w-4 h-4 text-white drop-shadow-lg" />
-                        </div>
-                        <span className="text-white text-[9px] font-bold drop-shadow-lg">{pitch.comments_count || 0}</span>
+                      <button onClick={() => handleOpenComments(activePitch.id)} className={pillButtonClass} title="Comment">
+                        <MessageCircle className="w-4 h-4 text-white" />
+                        <span className="text-white text-xs font-semibold">{activePitch.comments_count || 0}</span>
                       </button>
-
-                      <button
-                        onClick={() => handleShare(pitch.id)}
-                        className="icon-btn-transparent flex flex-col items-center gap-0.5"
-                        title="Share"
-                      >
-                        <div className="w-9 h-9 flex items-center justify-center transition-all">
-                          <Share2 className="w-4 h-4 text-white drop-shadow-lg" />
-                        </div>
-                        <span className="text-white text-[9px] font-bold drop-shadow-lg">{pitch.shares_count || 0}</span>
+                      <button onClick={() => handleShare(activePitch.id)} className={pillButtonClass} title="Share">
+                        {copiedPitchId === activePitch.id ? (
+                          <>
+                            <Check className="w-4 h-4 text-green-400" />
+                            <span className="text-green-300 text-xs font-semibold">Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Share2 className="w-4 h-4 text-white" />
+                            <span className="text-white text-xs font-semibold">{activePitch.shares_count || 0}</span>
+                          </>
+                        )}
                       </button>
-
                       <button
-                        onClick={() => handleDownloadVideo(pitch)}
-                        disabled={downloadingPitchId === pitch.id}
-                        className="icon-btn-transparent flex flex-col items-center gap-0.5"
+                        onClick={() => handleDownloadVideo(activePitch)}
+                        disabled={downloadingPitchId === activePitch.id}
+                        className={pillButtonClass}
                         title="Download"
                       >
-                        <div className="w-9 h-9 flex items-center justify-center transition-all">
-                          {downloadingPitchId === pitch.id ? (
-                            <DiamondLoader size={18} />
-                          ) : (
-                            <Download className="w-4 h-4 text-white drop-shadow-lg" />
-                          )}
-                        </div>
+                        {downloadingPitchId === activePitch.id ? (
+                          <DiamondLoader size={16} />
+                        ) : (
+                          <Download className="w-4 h-4 text-white" />
+                        )}
                       </button>
-
-                      {storefrontsByBusiness.has(pitch.business_profile_id) && (
+                      {storefrontsByBusiness.has(activePitch.business_profile_id) && (
                         <button
-                          onClick={() => { window.location.href = `/store/${pitch.business_profile_id}`; }}
-                          className="icon-btn-transparent flex flex-col items-center gap-0.5"
+                          onClick={() => { window.location.href = `/store/${activePitch.business_profile_id}`; }}
+                          className="icon-btn-transparent flex items-center gap-1.5 px-3 py-2 rounded-full bg-emerald-500/90 hover:bg-emerald-500 transition-colors"
                           title="Buy Now"
                         >
-                          <div className="w-9 h-9 flex items-center justify-center rounded-full bg-emerald-500/90 transition-all">
-                            <ShoppingBag className="w-4 h-4 text-white drop-shadow-lg" />
-                          </div>
-                          <span className="text-white text-[9px] font-bold drop-shadow-lg">Buy Now</span>
+                          <ShoppingBag className="w-4 h-4 text-white" />
+                          <span className="text-white text-xs font-semibold">Buy Now</span>
                         </button>
                       )}
-
                       <button
-                        onClick={() => handleSmartContractClick(pitch)}
-                        className="icon-btn-transparent flex flex-col items-center gap-0.5"
+                        onClick={() => handleSmartContractClick(activePitch)}
+                        className="icon-btn-transparent flex items-center gap-1.5 px-4 py-2 rounded-full bg-pink-500 hover:bg-pink-600 transition-colors"
                         title="Invest"
                       >
-                        <div className="w-9 h-9 flex items-center justify-center transition-all">
-                          <Briefcase className={`w-4 h-4 drop-shadow-lg ${
-                            investedPitches.has(pitch.id) ? 'text-green-400' : 'text-white'
-                          }`} />
-                        </div>
-                        <span className={`text-[9px] font-bold drop-shadow-lg ${
-                          investedPitches.has(pitch.id) ? 'text-green-300' : 'text-white'
-                        }`}>
-                          {pitch.invests_count || 0}
-                        </span>
-                        <span className="text-white text-[7px] font-medium drop-shadow-lg">Invest</span>
-                      </button>
-
-                      <button
-                        onClick={handleCreatePitchClick}
-                        className="icon-btn-transparent flex flex-col items-center gap-0.5"
-                        title="Create"
-                      >
-                        <div className="w-9 h-9 flex items-center justify-center transition-all">
-                          <Plus className="w-4 h-4 text-pink-400 drop-shadow-lg" />
-                        </div>
-                        <span className="text-pink-300 text-[9px] font-bold drop-shadow-lg">Create</span>
-                      </button>
-
-                      {/* Pitcher Avatar — tap to view this business's details */}
-                      <button
-                        onClick={() => setBusinessDetailsPitch(pitch)}
-                        className="icon-btn-transparent flex flex-col items-center gap-0.5"
-                        title="View business details"
-                      >
-                        {(pitch.business_profiles?.avatar_url || pitch.business_profiles?.owner_avatar_url) ? (
-                          <img
-                            src={pitch.business_profiles.avatar_url || pitch.business_profiles.owner_avatar_url}
-                            alt={pitch.business_profiles?.business_name || 'Pitcher'}
-                            className="w-9 h-9 rounded-full object-cover border border-white/30 transition-all hover:scale-110"
-                            onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
-                          />
-                        ) : null}
-                        <div
-                          className="w-9 h-9 rounded-full bg-gradient-to-br from-pink-500 to-orange-400 items-center justify-center text-white font-bold text-sm border border-white/30 transition-all hover:scale-110"
-                          style={{ display: (pitch.business_profiles?.avatar_url || pitch.business_profiles?.owner_avatar_url) ? 'none' : 'flex' }}
-                        >
-                          {(pitch.business_profiles?.business_name || pitch.business_profiles?.name || 'P').charAt(0).toUpperCase()}
-                        </div>
-                        <span className="text-pink-300 text-[9px] font-bold drop-shadow-lg">Pitcher</span>
+                        <Briefcase className={`w-4 h-4 ${investedPitches.has(activePitch.id) ? 'text-green-300' : 'text-white'}`} />
+                        <span className="text-white text-xs font-semibold">Invest · {activePitch.invests_count || 0}</span>
                       </button>
                     </div>
                   </div>
+
+                  <div className="mt-4 bg-white/5 border border-white/10 rounded-xl p-4">
+                    <div className="grid grid-cols-3 gap-3 mb-3 pb-3 border-b border-white/10">
+                      <div className="text-center">
+                        <p className="text-[11px] text-slate-500 uppercase tracking-wide">Raised</p>
+                        <p className="text-sm font-bold text-white">{formatCurrency(activePitch.raised_amount)}</p>
+                      </div>
+                      <div className="text-center border-x border-white/10">
+                        <p className="text-[11px] text-slate-500 uppercase tracking-wide">Goal</p>
+                        <p className="text-sm font-bold text-white">{formatCurrency(activePitch.target_funding)}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[11px] text-slate-500 uppercase tracking-wide">Equity</p>
+                        <p className="text-sm font-bold text-white">{activePitch.equity_offering || 0}%</p>
+                      </div>
+                    </div>
+                    <p className="text-slate-300 text-sm whitespace-pre-wrap">
+                      {activePitch.description || 'No description provided.'}
+                    </p>
+                  </div>
                 </div>
-              ))
-            )}
+            </div>
+
+            {/* "More Pitches" sidebar — click to switch the theater player */}
+            <div className="hidden xl:flex flex-col w-[340px] flex-shrink-0 h-full overflow-y-auto">
+              <p className="text-white/50 text-xs font-semibold tracking-widest uppercase mb-3 px-1">More Pitches</p>
+              <div className="flex flex-col gap-1.5">
+                {filteredPitches.map((pitch) => {
+                  const isActive = pitch.id === activePitch.id;
+                  return (
+                    <button
+                      key={pitch.id}
+                      onClick={() => setDesktopActivePitchId(pitch.id)}
+                      className={`icon-btn-transparent flex items-center gap-3 p-2 rounded-xl text-left transition-colors ${
+                        isActive ? 'bg-white/10 ring-1 ring-pink-500/60' : 'hover:bg-white/5'
+                      }`}
+                    >
+                      <div className="relative w-16 h-24 flex-shrink-0 rounded-lg overflow-hidden bg-gradient-to-br from-purple-600 to-pink-600">
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <Play className="w-5 h-5 text-white/70" />
+                        </div>
+                        {isActive && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                            <span className="text-[9px] text-pink-300 font-bold uppercase tracking-wide">Now Playing</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-white text-sm font-medium line-clamp-2">{pitch.title}</p>
+                        <p className="text-slate-500 text-xs mt-0.5 truncate">{pitch.business_profiles?.business_name || 'Business'}</p>
+                        <p className="text-slate-600 text-[11px] mt-0.5">{pitch.likes_count || 0} likes</p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     );
   };
@@ -2039,70 +2174,15 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
       {/* Main Content — Feed Page (the recorder branch is handled above via portal) */}
       {!showRecorder && (
         <div className={isDesktopView ? "w-full" : "fixed inset-0 w-screen h-screen bg-gradient-to-br from-slate-900 via-purple-900/30 to-slate-900 overflow-hidden"}>
-            {isDesktopView ? renderPitchVideoFeed(true) : (
+            {isDesktopView ? renderDesktopPitchFeed() : (
               <>
                 {/* Pitch Feed - Full-Screen TikTok-Style with Snap Scroll */}
                 <div className="h-full w-full flex items-center justify-center">
                   <div className="relative w-full h-full overflow-y-auto snap-y snap-mandatory scroll-smooth" ref={videoScrollRef}>
               {loading ? (
-                // Creative Full-Screen Loading Experience with Video Preview
-                <div className="fixed inset-0 z-[60] bg-black flex items-center justify-center overflow-hidden">
-                  {/* Full-Screen Video Background */}
-                  <div className="absolute inset-0 w-full h-full">
-                    {/* Fallback animated gradient pattern - shows by default */}
-                    <div className="w-full h-full bg-gradient-to-br from-purple-900 via-black to-pink-900">
-                      <div className="absolute top-0 left-0 w-96 h-96 bg-purple-500/30 rounded-full blur-3xl animate-blob"></div>
-                      <div className="absolute top-0 right-0 w-96 h-96 bg-pink-500/30 rounded-full blur-3xl animate-blob animation-delay-2000"></div>
-                      <div className="absolute bottom-0 left-1/2 w-96 h-96 bg-orange-500/30 rounded-full blur-3xl animate-blob animation-delay-4000"></div>
-                    </div>
-                    {/* Dark overlay for better text visibility */}
-                    <div className="absolute inset-0 bg-black/40"></div>
-                  </div>
-
-                  {/* Floating Transparent Icons */}
-                  <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                    {/* Icon 1 - Briefcase */}
-                    <div className="absolute top-20 left-10 animate-float" style={{ animationDelay: '0s' }}>
-                      <Briefcase className="w-16 h-16 text-white/20 drop-shadow-lg" />
-                    </div>
-                    {/* Icon 2 - Users */}
-                    <div className="absolute top-40 right-20 animate-float" style={{ animationDelay: '0.5s' }}>
-                      <Users className="w-20 h-20 text-white/20 drop-shadow-lg" />
-                    </div>
-                    {/* Icon 3 - Zap */}
-                    <div className="absolute bottom-32 left-20 animate-float" style={{ animationDelay: '1s' }}>
-                      <Zap className="w-14 h-14 text-white/20 drop-shadow-lg" />
-                    </div>
-                    {/* Icon 4 - Share */}
-                    <div className="absolute bottom-20 right-32 animate-float" style={{ animationDelay: '1.5s' }}>
-                      <Share2 className="w-12 h-12 text-white/20 drop-shadow-lg" />
-                    </div>
-                    {/* Icon 5 - Heart */}
-                    <div className="absolute top-1/3 left-1/4 animate-float" style={{ animationDelay: '2s' }}>
-                      <Heart className="w-18 h-18 text-white/20 drop-shadow-lg" />
-                    </div>
-                    {/* Icon 6 - Play */}
-                    <div className="absolute top-1/2 right-1/4 animate-float" style={{ animationDelay: '2.5s' }}>
-                      <Play className="w-16 h-16 text-white/20 drop-shadow-lg" />
-                    </div>
-                  </div>
-
-                  {/* Center Content */}
-                  <div className="relative z-10 text-center px-4">
-                    <div className="relative inline-block">
-                      <DiamondLoader size={168} />
-                      <div className="absolute inset-0 bg-purple-500/50 blur-3xl animate-pulse -z-10"></div>
-                    </div>
-                  </div>
-
-                  {/* Bottom Wave Effect */}
-                  <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black to-transparent"></div>
-                </div>
+                renderPitchinLoadingStage(true)
               ) : filteredPitches.length === 0 ? (
-                <div className="col-span-full text-center py-12">
-                  <Zap className="w-12 h-12 text-slate-500 mx-auto mb-4" />
-                  <p className="text-slate-400">No pitches available yet</p>
-                </div>
+                renderPitchinEmptyStage()
               ) : (
                 filteredPitches.map((pitch) => (
                   <div
@@ -3072,6 +3152,18 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
                           <span className={investedPitches.has(pitch.id) ? 'text-green-300' : 'text-white'}>{pitch.invests_count || 0}</span>
                         </button>
                       </div>
+
+                      {/* Invite investor — a private, PIN-locked, time-limited
+                          link for one named investor, separate from this
+                          pitch's public engagement above. */}
+                      <button
+                        onClick={() => setInvitePitch(pitch)}
+                        className="mt-2 w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 transition-all"
+                        title="Create a private invite for one investor"
+                      >
+                        <Lock className="w-3.5 h-3.5" />
+                        Invite investor privately
+                      </button>
                     </div>
                   </div>
                 ))
@@ -3079,6 +3171,10 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
             </div>
           </div>
         </div>
+      )}
+
+      {invitePitch && (
+        <PrivatePitchInviteModal pitch={invitePitch} onClose={() => setInvitePitch(null)} />
       )}
 
       {/* Business Details Modal — opened by tapping a pitch's Pitcher icon */}

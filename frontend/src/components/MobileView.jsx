@@ -1168,6 +1168,13 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const pitchinNavRef = useRef(null);
   const cmssNavRef    = useRef(null);
 
+  // Measured height of the fixed web-dashboard header (branding row + nav tabs row).
+  // Full-screen panels (Trust, Wallet, CMMS, ...) offset themselves below this so the
+  // header never overlaps their content — a hardcoded px value drifts out of sync
+  // whenever the header wraps or gains/loses a row (e.g. narrower viewports, a pending badge).
+  const dashboardHeaderRef = useRef(null);
+  const [dashboardHeaderHeight, setDashboardHeaderHeight] = useState(146);
+
   // Called by panels when their internal tab changes — records sub-page to history
   const handlePanelTabChange = (panelId, prevTab) => {
     setNavHistory(prev => [...prev, { panel: panelId, tab: prevTab }]);
@@ -4684,6 +4691,21 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     'dashboard';
   const overlayPanelBottomInset = 'calc(5.5rem + env(safe-area-inset-bottom))';
 
+  // Keep dashboardHeaderHeight in sync with the actual rendered header so panels
+  // never render underneath (or leave a gap below) the fixed nav bar.
+  useEffect(() => {
+    if (!isWebDashboard || !showDashboardHeader) return undefined;
+    const el = dashboardHeaderRef.current;
+    if (!el) return undefined;
+
+    const updateHeight = () => setDashboardHeaderHeight(el.offsetHeight);
+    updateHeight();
+
+    const resizeObserver = new ResizeObserver(updateHeight);
+    resizeObserver.observe(el);
+    return () => resizeObserver.disconnect();
+  }, [isWebDashboard, showDashboardHeader]);
+
   const closeHeaderPanels = () => {
     setShowProfilePanel(false);
     setShowPitchinPanel(false);
@@ -5168,14 +5190,19 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
   };
 
   return (
-    <div className={`min-h-screen text-white overflow-x-hidden ${
-      isWebDashboard
-        ? `bg-gradient-to-br from-slate-950 via-violet-950 to-slate-950 pb-32 ${showDashboardHeader ? 'pt-[132px] md:pt-[146px]' : ''}`
-        : 'bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 pb-28'
-    }`}>
+    <div
+      className={`min-h-screen text-white overflow-x-hidden ${
+        isWebDashboard
+          ? 'bg-gradient-to-br from-slate-950 via-violet-950 to-slate-950 pb-32'
+          : 'bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 pb-28'
+      }`}
+      style={isWebDashboard && showDashboardHeader ? { paddingTop: dashboardHeaderHeight } : undefined}
+    >
       {/* ====== HEADER ====== */}
       {showDashboardHeader && (
-      <div className={`${isWebDashboard ? 'fixed top-0 left-0 right-0 z-[70]' : 'sticky top-0 z-40'} border-b ${
+      <div
+        ref={dashboardHeaderRef}
+        className={`${isWebDashboard ? 'fixed top-0 left-0 right-0 z-[70]' : 'sticky top-0 z-40'} border-b ${
         isWebDashboard
           ? 'bg-gradient-to-r from-slate-950/92 via-slate-900/88 to-slate-950/92 backdrop-blur-xl border-slate-700/60 shadow-[0_10px_30px_rgba(2,6,23,0.45)]'
           : 'bg-gradient-to-b from-slate-950/95 to-purple-950/80 backdrop-blur-md border-purple-500/20'
@@ -7546,8 +7573,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* Pitchin Panel - Full Screen Video */}
       {showPitchinPanel && (
         <div
-          className={`fixed inset-x-0 z-30 bg-black overflow-hidden ${isWebDashboard ? 'top-[132px] md:top-[146px]' : 'top-0'}`}
-          style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
+          className={`fixed inset-x-0 z-30 bg-black overflow-hidden ${isWebDashboard ? '' : 'top-0'}`}
+          style={{ top: isWebDashboard ? dashboardHeaderHeight : 0, bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
           <Pitchin
             openBusinessProfile={openPitchinBusinessProfile}
@@ -7561,8 +7588,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* Trust Panel - Full Web Trust System UI */}
       {showTrustPanel && (
         <div
-          className={`fixed inset-x-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto ${isWebDashboard ? 'top-[132px] md:top-[146px]' : 'top-0'}`}
-          style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
+          className={`fixed inset-x-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto ${isWebDashboard ? '' : 'top-0'}`}
+          style={{ top: isWebDashboard ? dashboardHeaderHeight : 0, bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
           <div className="pt-2 px-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
             <TrustSystem
@@ -7579,8 +7606,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* Wallet Panel - Full Web Wallet UI */}
       {showWalletPanel && (
         <div
-          className={`fixed inset-x-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto ${isWebDashboard ? 'top-[132px] md:top-[146px]' : 'top-0'}`}
-          style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
+          className={`fixed inset-x-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto ${isWebDashboard ? '' : 'top-0'}`}
+          style={{ top: isWebDashboard ? dashboardHeaderHeight : 0, bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
           <div className="pt-2 px-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
             <ICANWallet navRef={walletNavRef} onTabChange={(prev) => handlePanelTabChange('wallet', prev)} />
@@ -7685,8 +7712,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
         return (
           <div
-            className={`fixed inset-x-0 flex flex-col bg-gradient-to-b from-slate-950 to-black overflow-hidden ${isWebDashboard ? 'top-[132px] md:top-[146px] z-30' : 'top-0 z-[60]'}`}
-            style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
+            className={`fixed inset-x-0 flex flex-col bg-gradient-to-b from-slate-950 to-black overflow-hidden ${isWebDashboard ? 'z-30' : 'top-0 z-[60]'}`}
+            style={{ top: isWebDashboard ? dashboardHeaderHeight : 0, bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
           >
             {/* ── Compact header with 3-dot menu ── */}
             <div
@@ -8351,8 +8378,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
         return (
           <div
-            className={`fixed inset-x-0 flex flex-col z-[70] ${isWebDashboard ? 'top-[132px] md:top-[146px]' : 'top-0'}`}
-            style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset, background: 'linear-gradient(160deg, #0f172a 0%, #1a0a2e 100%)' }}
+            className={`fixed inset-x-0 flex flex-col z-[70] ${isWebDashboard ? '' : 'top-0'}`}
+            style={{ top: isWebDashboard ? dashboardHeaderHeight : 0, bottom: isWebDashboard ? '0' : overlayPanelBottomInset, background: 'linear-gradient(160deg, #0f172a 0%, #1a0a2e 100%)' }}
           >
             {/* ── Header ── */}
             <div
@@ -8519,8 +8546,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* CMMS Panel - Full Web CMSS UI */}
       {showCmmsPanel && (
         <div
-          className={`fixed inset-x-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto ${isWebDashboard ? 'top-[132px] md:top-[146px]' : 'top-0'}`}
-          style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
+          className={`fixed inset-x-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto ${isWebDashboard ? '' : 'top-0'}`}
+          style={{ top: isWebDashboard ? dashboardHeaderHeight : 0, bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
           <div className="pt-2 px-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
             <CMMSModule
@@ -8538,8 +8565,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* Professionals Directory Panel */}
       {showProfessionalsPanel && (
         <div
-          className={`fixed inset-x-0 z-30 bg-gradient-to-b from-[#241511] to-slate-950 overflow-y-auto ${isWebDashboard ? 'top-[132px] md:top-[146px]' : 'top-0'}`}
-          style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
+          className={`fixed inset-x-0 z-30 bg-gradient-to-b from-[#241511] to-slate-950 overflow-y-auto ${isWebDashboard ? '' : 'top-0'}`}
+          style={{ top: isWebDashboard ? dashboardHeaderHeight : 0, bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
           <ProfessionalsDirectory />
         </div>
@@ -8757,8 +8784,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* ── Tithe Panel — full screen, like Pitchin/Trust/CMMS ─────────────── */}
       {showTithingCalculator && (
         <div
-          className={`fixed inset-x-0 flex flex-col bg-gradient-to-b from-amber-50 to-yellow-50 overflow-hidden ${isWebDashboard ? 'top-[132px] md:top-[146px] z-30' : 'top-0 z-[60]'}`}
-          style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
+          className={`fixed inset-x-0 flex flex-col bg-gradient-to-b from-amber-50 to-yellow-50 overflow-hidden ${isWebDashboard ? 'z-30' : 'top-0 z-[60]'}`}
+          style={{ top: isWebDashboard ? dashboardHeaderHeight : 0, bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
           {/* Header */}
           <div
@@ -9389,8 +9416,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* Reports Panel - always a real full page, same placement as Wallet/Trust/Pitchin */}
       {showReportingSystem && (
         <div
-          className={`fixed inset-x-0 z-30 bg-gradient-to-b from-slate-900 to-indigo-950 overflow-y-auto ${isWebDashboard ? 'top-[132px] md:top-[146px]' : 'top-0'}`}
-          style={{ bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
+          className={`fixed inset-x-0 z-30 bg-gradient-to-b from-slate-900 to-indigo-950 overflow-y-auto ${isWebDashboard ? '' : 'top-0'}`}
+          style={{ top: isWebDashboard ? dashboardHeaderHeight : 0, bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
           <div className="flex flex-col min-h-full">
             {/* Header */}

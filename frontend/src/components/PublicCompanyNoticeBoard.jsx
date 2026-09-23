@@ -5,13 +5,14 @@ import {
   Check, ChevronRight, Clock, ShoppingBag, ShoppingCart, Plus, Minus,
   Trash2, Truck, Store, Award, Phone, Mail, Navigation, MessageCircle,
   Facebook, Instagram, Twitter, Linkedin, Music2, BadgeCheck, Globe,
-  Video, Play, Eye, Heart, Bike, Star, Sun, Moon
+  Video, Play, Eye, Heart, Bike, Star, Sun, Moon, TrendingUp
 } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 import cmmsAnnouncementsService from '../services/cmmsAnnouncementsService';
 import cmmsBusinessOpportunitiesService from '../services/cmmsBusinessOpportunitiesService';
 import { getDropshipStorefront, dropshipCheckout, findDeliveryRiders } from '../services/dropshipService';
-import { getPitchesByBusinessProfileId } from '../services/pitchingService';
+import { getPitchesByBusinessProfileId, getPitchById } from '../services/pitchingService';
+import { getLiveShareOffer } from '../services/pitchinValuationService';
 import { useAuth } from '../context/AuthContext';
 import { AuthPage } from './auth';
 
@@ -602,6 +603,16 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   // either place.
   const [pitches, setPitches] = useState([]);
   const [pitchesLoading, setPitchesLoading] = useState(false);
+  const [selectedPitch, setSelectedPitch] = useState(null);
+
+  // One live share offer per business (not per pitch -- every pitch video
+  // this business has posted sells the SAME underlying shares, see
+  // pitchinValuationService.getLiveShareOffer), so this is fetched once per
+  // board load rather than once per pitch card. Mirrors exactly what
+  // PublicPitchViewer.handleInvest computes before opening ShareSigningFlow,
+  // just surfaced here as a read-only preview (price, shares left, funding
+  // progress) instead of gating an action.
+  const [liveOffer, setLiveOffer] = useState(null);
 
   // Drives two scroll-linked header touches: `scrolled` lifts the sticky
   // header off the page with a faint shadow once there's actually content
@@ -676,6 +687,17 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
     return () => { cancelled = true; };
   }, [company?.business_profile_id]);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!company?.business_profile_id || pitches.length === 0) { setLiveOffer(null); return undefined; }
+    const businessOwnerUserId = pitches[0]?.business_profiles?.user_id;
+    getLiveShareOffer(company.business_profile_id, businessOwnerUserId)
+      .then((offer) => { if (!cancelled) setLiveOffer(offer); })
+      .catch(() => { if (!cancelled) setLiveOffer(null); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [company?.business_profile_id, pitches.length]);
+
   // A shared post link (?post=<id>) should open straight to that specific
   // announcement/job, not just the board's front page -- the whole point
   // of "Share" below is that the recipient lands exactly where the sharer
@@ -685,6 +707,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
     const params = new URLSearchParams(window.location.search);
     const postId = params.get('post');
     const opportunityId = params.get('opp');
+    const pitchId = params.get('pitch');
     if (postId) {
       cmmsAnnouncementsService.getPublicNotice(postId).then((result) => {
         if (!result.success || !result.data) return;
@@ -701,6 +724,12 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
         if (!result.success || !result.data) return;
         setSection('opportunities');
         setSelectedOpportunity(result.data);
+      });
+    } else if (pitchId) {
+      getPitchById(pitchId).then((data) => {
+        if (!data) return;
+        setSection('pitchin');
+        setSelectedPitch(data);
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -937,7 +966,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
             />
           )}
           {section === 'pitchin' && (
-            <PitchinSection pitches={pitches} loading={pitchesLoading} />
+            <PitchinSection pitches={pitches} loading={pitchesLoading} liveOffer={liveOffer} onSelect={setSelectedPitch} />
           )}
           {section === 'careers' && (
             <JobList jobs={jobs} onSelect={(job) => openDetail(job, setSelectedJob)} />
@@ -969,6 +998,14 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
           onShare={(item, onCopied) => handleShare(item, onCopied, cmmsBusinessOpportunitiesService.buildPublicOpportunityLink)}
           viewerUser={user}
           onWantAccount={requestAccountCreation}
+        />
+      )}
+      {selectedPitch && (
+        <PitchDetailModal
+          pitch={selectedPitch}
+          offer={liveOffer}
+          onClose={() => setSelectedPitch(null)}
+          onShare={(item, onCopied) => handleShare(item, onCopied, (cId, pitchId) => `${window.location.origin}/notices/${cId}?pitch=${pitchId}`)}
         />
       )}
     </div>
@@ -1421,15 +1458,22 @@ const NoticeList = ({ notices, onSelect }) => {
 // NoticeList's cards, so the Pitches tab reads as this same page rather than
 // an embedded widget from a different app. Links out to the pitch's own
 // public /pitchin/:id view (PublicPitchViewer, already a no-login shared-link
-// route) for the full watch/like/comment experience instead of reimplementing
-// it here; a plain <a> is deliberate -- this page's own "back to app" action
-// (goToApp, above) already does a hard navigation rather than a client-side
-// route push, so cross-page links here follow the same pattern.
-const PitchCard = ({ pitch, index = 0 }) => (
-  <a
-    href={`/pitchin/${pitch.id}`}
+// route) for the full watch/like/comment/invest experience -- clicking a card
+// opens PitchDetailModal (below) in place, same as Jobs/Notices on this page,
+// rather than hard-navigating away immediately; the modal's own "Invest Now"
+// is what hands off to /pitchin/:id (see PitchDetailModal).
+//
+// Funding progress/price come from `offer` (one live getLiveShareOffer result
+// per business, fetched once in the parent -- see the `liveOffer` effect
+// above) rather than the legacy static share_price/total_shares columns on
+// the pitch row itself, which PITCHIN_LIVE_SHARE_AVAILABILITY.sql documents
+// as seeded once and no longer live.
+const PitchCard = ({ pitch, offer, index = 0, onSelect }) => (
+  <button
+    type="button"
+    onClick={() => onSelect(pitch)}
     style={{ animationDelay: `${Math.min(index, 8) * 60}ms`, animationFillMode: 'backwards' }}
-    className="group block nb-card rounded-2xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 animate-fadeInUp"
+    className="group block w-full text-left nb-card rounded-2xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 animate-fadeInUp"
   >
     <div className="relative aspect-video w-full overflow-hidden nb-surface-alt">
       {pitch.video_url ? (
@@ -1454,20 +1498,56 @@ const PitchCard = ({ pitch, index = 0 }) => (
           <Play className="w-5 h-5 text-black ml-0.5" fill="currentColor" />
         </span>
       </div>
+      {pitch.pitch_type && (
+        <span className="absolute top-2 left-2 text-[11px] font-bold px-2 py-0.5 rounded-full nb-chip-green">
+          {pitch.pitch_type}
+        </span>
+      )}
     </div>
     <div className="p-4">
       <h3 className="font-bold nb-text line-clamp-2">{pitch.title}</h3>
       {pitch.category && <p className="text-xs nb-text-faint mt-1">{pitch.category}</p>}
       {pitch.description && <p className="text-sm nb-text-muted mt-1.5 line-clamp-2">{pitch.description}</p>}
+      <PitchFundingBar offer={offer} compact />
       <div className="flex items-center gap-3 mt-3 text-xs nb-text-faint">
         <span className="inline-flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> {pitch.views_count || 0}</span>
         <span className="inline-flex items-center gap-1"><Heart className="w-3.5 h-3.5" /> {pitch.likes_count || 0}</span>
+        <span className="inline-flex items-center gap-1"><MessageCircle className="w-3.5 h-3.5" /> {pitch.comments_count || 0}</span>
       </div>
     </div>
-  </a>
+  </button>
 );
 
-const PitchinSection = ({ pitches, loading }) => {
+// Shared by the card (compact) and the detail modal (full-size) so the price/
+// progress reading is identical everywhere it shows up. `offer` is the same
+// shape getLiveShareOffer returns; `null` means still loading, `available:
+// false` means the business's valuation is currently blocked (see
+// LIVE_OFFER_BLOCKED_MESSAGE in Pitchin.jsx) -- both render a neutral state
+// rather than a broken/misleading bar.
+const PitchFundingBar = ({ offer, compact = false }) => {
+  const gap = compact ? 'mt-2' : 'mt-3';
+  if (!offer) {
+    return <div className={`h-1.5 rounded-full nb-surface-alt animate-pulse ${gap}`} />;
+  }
+  if (!offer.available || !offer.totalShares) {
+    return <p className={`text-xs nb-text-faint ${gap}`}>Share price isn't available right now.</p>;
+  }
+  const soldOut = offer.sharesAvailable <= 0;
+  const percentFunded = Math.min(100, Math.round((offer.sharesIssued / offer.totalShares) * 100));
+  return (
+    <div className={gap}>
+      <div className="h-1.5 rounded-full nb-surface-alt overflow-hidden">
+        <div className="h-full nb-btn-primary" style={{ width: `${percentFunded}%` }} />
+      </div>
+      <div className={`flex items-center justify-between mt-1.5 ${compact ? 'text-[11px]' : 'text-xs'} nb-text-faint`}>
+        <span className="font-semibold nb-text">{formatUGX(offer.sharePriceUgx)} / share</span>
+        <span>{soldOut ? 'Fully subscribed' : `${offer.sharesAvailable.toLocaleString()} of ${offer.totalShares.toLocaleString()} shares left`}</span>
+      </div>
+    </div>
+  );
+};
+
+const PitchinSection = ({ pitches, loading, liveOffer, onSelect }) => {
   if (loading && pitches.length === 0) {
     return (
       <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
@@ -1488,7 +1568,9 @@ const PitchinSection = ({ pitches, loading }) => {
   }
   return (
     <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
-      {pitches.map((pitch, i) => <PitchCard key={pitch.id} pitch={pitch} index={i} />)}
+      {pitches.map((pitch, i) => (
+        <PitchCard key={pitch.id} pitch={pitch} offer={liveOffer} index={i} onSelect={onSelect} />
+      ))}
     </div>
   );
 };
@@ -2082,6 +2164,73 @@ const JobDetailModal = ({ job, onClose, onShare, viewerUser, onWantAccount }) =>
       ) : (
         <ApplyForm job={job} onBack={() => setShowApply(false)} onClose={onClose} viewerUser={viewerUser} onWantAccount={onWantAccount} />
       )}
+    </Modal>
+  );
+};
+
+// The investor pitch presentation opened from the board's Pitches tab.
+// Everything shown here is read-only (video, ask, live funding progress,
+// traction) -- "Invest Now" hands off to /pitchin/:id?invest=1, the real
+// public pitch page, which auto-fires the exact same handleInvest a manual
+// click there would (auth prompt if signed out, ShareSigningFlow if signed
+// in). No signing/escrow logic is duplicated here.
+const PitchDetailModal = ({ pitch, offer, onClose, onShare }) => {
+  const [copied, setCopied] = useState(false);
+  const bizName = pitch.business_profiles?.business_name;
+  const soldOut = offer?.available && offer.totalShares && offer.sharesAvailable <= 0;
+  const investDisabled = offer && (!offer.available || soldOut);
+
+  const investFooter = investDisabled ? (
+    <p className="nb-closed-banner rounded-lg px-4 py-2.5 text-sm font-semibold text-center">
+      {soldOut ? 'This business is fully subscribed -- no shares left to buy.' : "This business's share price isn't available right now."}
+    </p>
+  ) : (
+    <button
+      onClick={() => { window.location.href = `/pitchin/${pitch.id}?invest=1`; }}
+      className="w-full py-3 rounded-xl nb-btn-primary font-semibold transition-all hover:scale-[1.01] active:scale-[0.99] shadow-sm flex items-center justify-center gap-2"
+    >
+      <TrendingUp className="w-4 h-4" /> Invest Now
+    </button>
+  );
+
+  return (
+    <Modal onClose={onClose} footer={investFooter}>
+      {pitch.video_url ? (
+        <video
+          src={pitch.video_url}
+          poster={pitch.thumbnail_url || undefined}
+          controls
+          playsInline
+          className="w-full max-h-64 object-cover rounded-xl mb-4 bg-black"
+        />
+      ) : null}
+      <div className="flex items-start justify-between gap-3 mb-1">
+        <h2 className="text-xl font-bold nb-text">{pitch.title}</h2>
+        <ShareButton
+          copied={copied}
+          onClick={() => onShare({ ...pitch, summary: pitch.description }, () => { setCopied(true); setTimeout(() => setCopied(false), 2000); })}
+        />
+      </div>
+      {bizName && <p className="text-sm nb-text-faint mb-2">{bizName}</p>}
+      <div className="flex flex-wrap gap-2 mb-4 mt-2">
+        {pitch.pitch_type && <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full nb-chip-green">{pitch.pitch_type}</span>}
+        {pitch.category && <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full nb-chip-neutral">{pitch.category}</span>}
+      </div>
+      {pitch.description && <p className="nb-text-muted whitespace-pre-wrap leading-relaxed">{pitch.description}</p>}
+
+      <div className="mt-5 p-3.5 rounded-xl nb-surface-alt border nb-border">
+        <p className="font-semibold nb-text mb-1 text-sm">The offer</p>
+        <PitchFundingBar offer={offer} />
+        {offer?.available && offer.businessValueUgx ? (
+          <p className="text-xs nb-text-faint mt-2">Business valued at {formatUGX(offer.businessValueUgx)}</p>
+        ) : null}
+      </div>
+
+      <div className="flex items-center gap-4 mt-4 text-xs nb-text-faint">
+        <span className="inline-flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> {pitch.views_count || 0} views</span>
+        <span className="inline-flex items-center gap-1"><Heart className="w-3.5 h-3.5" /> {pitch.likes_count || 0} likes</span>
+        <span className="inline-flex items-center gap-1"><MessageCircle className="w-3.5 h-3.5" /> {pitch.comments_count || 0} comments</span>
+      </div>
     </Modal>
   );
 };

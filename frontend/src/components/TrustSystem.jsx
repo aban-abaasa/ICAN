@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Users,
   Plus,
@@ -1736,7 +1737,7 @@ const TrustSystem = ({
 
       </div>
       {/* GROUP DETAILS MODAL - Only for My Groups (members viewing their own groups) */}
-      {selectedGroup && selectedGroupTab === 'mygroups' && !showGroupModal && !showContributeModal && !showManageModal && (
+      {selectedGroup && selectedGroupTab === 'mygroups' && !showGroupModal && !showContributeModal && !showManageModal && createPortal(
         <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-[100]">
           <div className="bg-slate-800 rounded-t-lg sm:rounded-lg max-w-2xl w-full max-h-[85vh] sm:max-h-[90vh] overflow-hidden sm:my-8 flex flex-col border border-slate-700">
             <div className="sticky top-0 bg-slate-800 border-b border-slate-700 p-4 sm:p-6 flex justify-between items-start gap-2 z-10">
@@ -1930,11 +1931,20 @@ const TrustSystem = ({
                   <div className="space-y-2">
                     {selectedGroup.members.slice(0, 5).map((member, idx) => (
                       <div key={member.id} className="flex justify-between items-center p-3 bg-slate-900/30 rounded border border-slate-700 text-xs sm:text-sm">
-                        <div>
-                          <p className="text-white font-medium">Member #{member.member_number}</p>
-                          <p className="text-slate-400 text-xs sm:text-sm">{member.role}</p>
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {member.avatar_url ? (
+                            <img src={member.avatar_url} alt={member.full_name || `Member #${member.member_number}`} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-600 to-slate-700 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                              {(member.full_name || 'M').charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="text-white font-medium truncate">{member.full_name || `Member #${member.member_number}`}</p>
+                            <p className="text-slate-400 text-xs sm:text-sm">{member.role}</p>
+                          </div>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right flex-shrink-0">
                           <p className="text-emerald-400 text-xs sm:text-sm font-medium">₿{member.total_contributed || 0} IcanEra</p>
                           <p className="text-slate-400 text-xs">contributed</p>
                         </div>
@@ -1965,11 +1975,12 @@ const TrustSystem = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* GROUP MANAGEMENT MODAL - Mobile Optimized with Tabs */}
-      {showManageModal && selectedGroup && (
+      {showManageModal && selectedGroup && createPortal(
         <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-[100]">
           <div className="bg-slate-800 rounded-t-lg sm:rounded-lg max-w-3xl w-full max-h-[90vh] sm:max-h-screen overflow-hidden sm:my-8 flex flex-col border border-slate-700">
             <div className="sticky top-0 bg-slate-800 border-b border-slate-700 p-4 sm:p-6 flex justify-between items-center gap-2 z-10">
@@ -2202,8 +2213,17 @@ const TrustSystem = ({
                           const amountUGX = amountICAN * 5000;
                           return (
                             <div key={member.id} className="flex justify-between items-center p-2.5 bg-slate-800/30 rounded border border-slate-600/50">
-                              <span className="text-slate-300 text-xs sm:text-sm">Member #{member.member_number}</span>
-                              <div className="text-right">
+                              <span className="flex items-center gap-2 min-w-0 text-slate-300 text-xs sm:text-sm">
+                                {member.avatar_url ? (
+                                  <img src={member.avatar_url} alt={member.full_name || `Member #${member.member_number}`} className="w-6 h-6 rounded-full object-cover flex-shrink-0" />
+                                ) : (
+                                  <span className="w-6 h-6 rounded-full bg-gradient-to-br from-amber-600 to-slate-700 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+                                    {(member.full_name || 'M').charAt(0).toUpperCase()}
+                                  </span>
+                                )}
+                                <span className="truncate">{member.full_name || `Member #${member.member_number}`}</span>
+                              </span>
+                              <div className="text-right flex-shrink-0">
                                 <p className="text-amber-400 font-semibold text-sm">₿{amountICAN.toFixed(8)}</p>
                                 <p className="text-emerald-300 text-xs">UGX {amountUGX.toLocaleString()}</p>
                               </div>
@@ -2283,8 +2303,17 @@ const TrustSystem = ({
                           const amountUGX = amountICAM * 5000;
                           return (
                             <div key={member.id} className="flex justify-between items-center p-2.5 bg-slate-800/30 rounded border border-slate-600/50">
-                              <span className="text-slate-300 text-xs sm:text-sm">Member #{member.member_number}</span>
-                              <div className="text-right">
+                              <span className="flex items-center gap-2 min-w-0 text-slate-300 text-xs sm:text-sm">
+                                {member.avatar_url ? (
+                                  <img src={member.avatar_url} alt={member.full_name || `Member #${member.member_number}`} className="w-6 h-6 rounded-full object-cover flex-shrink-0" />
+                                ) : (
+                                  <span className="w-6 h-6 rounded-full bg-gradient-to-br from-amber-600 to-slate-700 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+                                    {(member.full_name || 'M').charAt(0).toUpperCase()}
+                                  </span>
+                                )}
+                                <span className="truncate">{member.full_name || `Member #${member.member_number}`}</span>
+                              </span>
+                              <div className="text-right flex-shrink-0">
                                 <p className="text-amber-400 font-semibold text-sm">₿{amountICAM.toFixed(8)}</p>
                                 <p className="text-emerald-300 text-xs">UGX {amountUGX.toLocaleString()}</p>
                               </div>
@@ -2309,14 +2338,23 @@ const TrustSystem = ({
                     {Array.isArray(selectedGroup?.members) && selectedGroup.members.length > 0 ? (
                       selectedGroup.members.map((member) => (
                         <div key={member.id} className="p-3 sm:p-4 bg-slate-900/50 border border-slate-700 rounded-lg flex justify-between items-start gap-2">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-white text-sm sm:text-base font-medium">
-                              Member #{member.member_number}
-                              <span className="ml-2 text-xs px-2 py-1 bg-blue-500/20 text-blue-300 rounded inline-block">
-                                {member.role}
-                              </span>
-                            </p>
-                            <p className="text-slate-400 text-xs sm:text-sm">₿{member.total_contributed || 0} IcanEra contributed</p>
+                          <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                            {member.avatar_url ? (
+                              <img src={member.avatar_url} alt={member.full_name || `Member #${member.member_number}`} className="w-9 h-9 rounded-full object-cover flex-shrink-0 mt-0.5" />
+                            ) : (
+                              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-600 to-slate-700 flex items-center justify-center text-white text-sm font-bold flex-shrink-0 mt-0.5">
+                                {(member.full_name || 'M').charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white text-sm sm:text-base font-medium truncate">
+                                {member.full_name || `Member #${member.member_number}`}
+                                <span className="ml-2 text-xs px-2 py-1 bg-blue-500/20 text-blue-300 rounded inline-block">
+                                  {member.role}
+                                </span>
+                              </p>
+                              <p className="text-slate-400 text-xs sm:text-sm">₿{member.total_contributed || 0} IcanEra contributed</p>
+                            </div>
                           </div>
                           <div className="flex gap-1.5 flex-shrink-0">
                             {member.role !== 'creator' && (
@@ -2456,11 +2494,12 @@ const TrustSystem = ({
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* JOIN APPLICATION MODAL */}
-      {showJoinApplicationModal && groupForJoinApplication && (
+      {showJoinApplicationModal && groupForJoinApplication && createPortal(
         <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-[100] pb-24 sm:pb-0">
           <div className="bg-slate-800 rounded-t-lg sm:rounded-lg max-w-2xl w-full max-h-[85vh] sm:max-h-[90vh] overflow-hidden sm:my-8 flex flex-col border border-slate-700">
             {/* Header - Sticky */}
@@ -2564,11 +2603,12 @@ const TrustSystem = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* CONTRIBUTE MODAL - Enhanced with ICAN Coin Functionality */}
-      {showContributeModal && selectedGroup && (
+      {showContributeModal && selectedGroup && createPortal(
         <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-[100] pb-24 sm:pb-0">
           <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-black rounded-t-lg sm:rounded-lg max-w-md w-full max-h-[85vh] sm:max-h-[90vh] overflow-hidden flex flex-col border border-slate-700 sm:border-amber-500/20 shadow-2xl">
             {/* Top Gradient Bar */}
@@ -2765,12 +2805,13 @@ const TrustSystem = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* GLOBAL INCOMING CALL OVERLAY — shown even when boardroom is closed */}
-      {incomingCallData && !boardroomGroupId && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+      {incomingCallData && !boardroomGroupId && createPortal(
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-700/60 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl">
             {/* Pulsing phone icon */}
             <div className="w-20 h-20 bg-gradient-to-br from-red-500 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-5 shadow-2xl animate-pulse">
@@ -2797,12 +2838,13 @@ const TrustSystem = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* LIVE BOARDROOM MODAL — z-[80] so the call takes over the whole
-          viewport instead of sitting behind the app's fixed z-[70] header */}
-      {boardroomGroupId && (
+      {/* LIVE BOARDROOM MODAL — portaled to document.body so it truly escapes
+          this panel's stacking context and sits above the app's fixed header */}
+      {boardroomGroupId && createPortal(
         <div className="fixed inset-0 bg-black z-[80]">
           <LiveBoardroom
             groupId={boardroomGroupId}
@@ -2811,7 +2853,8 @@ const TrustSystem = ({
             creatorId={activeBoardroomGroup?.creator_id || selectedGroup?.creator_id || null}
             onClose={handleCloseBoardroom}
           />
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* 🔐 GROUP WALLET PIN MODAL */}
@@ -2835,8 +2878,8 @@ const TrustSystem = ({
       )}
 
       {/* 💰 LOAN APPLICATION MODAL */}
-      {showLoanForm && selectedGroupForLoan && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4">
+      {showLoanForm && selectedGroupForLoan && createPortal(
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-3 sm:p-4">
           <div className="bg-slate-900 rounded-lg p-4 sm:p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-slate-700">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl sm:text-2xl font-bold text-white">💰 Apply for Loan</h2>
@@ -2862,7 +2905,8 @@ const TrustSystem = ({
               }}
             />
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
