@@ -773,7 +773,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const { actualTheme } = useTheme();
   const { isOfflineMode, queueAction, user: authContextUser, getAvatarUrl, getDisplayName } = useAuth();
   const { country: userSignupCountry } = useCountry();
-  const { hasCmmsAccess, cmmsCompanyId, cmmsIsAdmin } = useCmmsAccess();
+  const { hasCmmsAccess, cmmsMemberships } = useCmmsAccess();
   const [authUser, setAuthUser] = useState(null);
   
   // Get the actual Supabase auth user
@@ -5476,8 +5476,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* ====== CMMS / SUPERMARKETA ACTIVITY WIDGET ====== */}
       <CmmsActivityWidget
         hasCmmsAccess={hasCmmsAccess}
-        cmmsCompanyId={cmmsCompanyId}
-        cmmsIsAdmin={cmmsIsAdmin}
+        cmmsMemberships={cmmsMemberships}
         onOpenCmms={(innerTab) => {
           openFeaturePanel('cmms');
           if (innerTab) {

@@ -6,6 +6,8 @@ import {
   Wallet, UserCheck, DoorOpen, Briefcase, CheckSquare, FileText, ArrowLeftRight
 } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
+import { useAuth } from '../context/AuthContext';
+import { persistActiveCompanyId } from '../hooks/useCmmsAccess';
 
 // Abbreviates any count or amount (K/M/B/T) so the real number always
 // fits on the card without CSS truncation ever having to hide a digit --
@@ -62,19 +64,299 @@ const SectionLabel = ({ icon: Icon, children }) => (
   </div>
 );
 
+// Builds one CMMS company's slide set from its own fn_get_cmms_dashboard_summary
+// result. Payroll and cash-transaction slides are only included when the RPC
+// actually returned those fields -- it comes back NULL for a caller whose role
+// has no payroll view access (CMMS_DASHBOARD_SUMMARY_PAYROLL_ACCESS_SCOPED.sql),
+// so a member without that access never sees them here either, same as they
+// wouldn't inside CMMS itself.
+const buildCompanySlides = (summary, membership, handleOpenCmms) => {
+  if (!summary) return [];
+  const { companyId, companyName, isAdmin } = membership;
+  const keyPrefix = `cmms-${companyId}`;
+  const out = [];
+
+  out.push({
+    key: `${keyPrefix}-snapshot`,
+    companyId,
+    companyName,
+    render: () => (
+      <div>
+        {/* Departments/Team are short plain counts, safe side by side.
+            Inventory value gets its own full-width line below -- a
+            currency string needs more room than a 3-way grid column
+            could reliably give it, which was letting "UGX ..." spill
+            past the card on narrower phones. */}
+        <div className="grid grid-cols-2 divide-x divide-slate-800">
+          <div className="flex flex-col gap-0.5 pr-3">
+            <span className="text-2xl font-bold text-white leading-none tabular-nums whitespace-nowrap">{fmtShort(summary.total_departments)}</span>
+            <span className="text-[11px] text-slate-400">Departments</span>
+          </div>
+          <div className="flex flex-col gap-0.5 pl-3">
+            <span className="text-2xl font-bold text-white leading-none tabular-nums whitespace-nowrap">{fmtShort(summary.total_users)}</span>
+            <span className="text-[11px] text-slate-400">Team</span>
+          </div>
+        </div>
+        <div className="mt-3 pt-3 border-t border-slate-800">
+          <span className="text-xl font-bold text-white leading-none tabular-nums whitespace-nowrap">UGX {fmtShort(summary.total_inventory_value)}</span>
+          <span className="block text-[11px] text-slate-400 mt-0.5">Inventory value</span>
+        </div>
+      </div>
+    )
+  });
+
+  out.push({
+    key: `${keyPrefix}-inventory-health`,
+    companyId,
+    companyName,
+    render: () => (
+      <div>
+        <SectionLabel icon={AlertTriangle}>Inventory needs attention</SectionLabel>
+        <div className="flex gap-6">
+          <div className="min-w-0">
+            <span className="block text-2xl font-bold text-amber-400 leading-none tabular-nums whitespace-nowrap">{fmtShort(summary.low_stock_items)}</span>
+            <p className="text-[11px] text-slate-400 mt-1 truncate">Low stock</p>
+          </div>
+          <div className="min-w-0">
+            <span className="block text-2xl font-bold text-red-400 leading-none tabular-nums whitespace-nowrap">{fmtShort(summary.out_of_stock_items)}</span>
+            <p className="text-[11px] text-slate-400 mt-1 truncate">Out of stock</p>
+          </div>
+        </div>
+      </div>
+    )
+  });
+
+  out.push({
+    key: `${keyPrefix}-requisitions`,
+    companyId,
+    companyName,
+    render: () => (
+      <div>
+        <SectionLabel icon={ClipboardList}>Requisitions awaiting approval</SectionLabel>
+        <div className="flex items-baseline gap-2 min-w-0">
+          <span className="text-3xl font-bold text-white leading-none tabular-nums flex-shrink-0">{fmtShort(summary.pending_requisitions)}</span>
+          {summary.urgent_requisitions > 0 && (
+            <span className="text-[11px] font-semibold text-red-400 border border-red-500/30 rounded px-1.5 py-0.5 truncate">{fmtShort(summary.urgent_requisitions)} urgent</span>
+          )}
+        </div>
+        {isAdmin && summary.pending_requisitions > 0 && (
+          <button
+            onClick={() => handleOpenCmms(companyId, 'approvals')}
+            className="mt-3 flex items-center gap-1 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-500 active:scale-95 rounded-md px-3.5 py-1.5 transition"
+          >
+            Approve now <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+    )
+  });
+
+  // Only present when the caller has payroll view access -- see
+  // CMMS_DASHBOARD_SUMMARY_PAYROLL_ACCESS_SCOPED.sql.
+  if (summary.salary_paid_today_ugx != null || summary.salary_owed_ugx != null) {
+    out.push({
+      key: `${keyPrefix}-payroll`,
+      companyId,
+      companyName,
+      render: () => (
+        <div>
+          <SectionLabel icon={Wallet}>Payroll</SectionLabel>
+          <div className="flex gap-6">
+            <div className="min-w-0">
+              <span className="block text-xl font-bold text-emerald-400 leading-none tabular-nums whitespace-nowrap">UGX {fmtShort(summary.salary_paid_today_ugx)}</span>
+              <p className="text-[11px] text-slate-400 mt-1 truncate">Paid today</p>
+            </div>
+            <div className="min-w-0">
+              <span className="block text-xl font-bold text-amber-400 leading-none tabular-nums whitespace-nowrap">UGX {fmtShort(summary.salary_owed_ugx)}</span>
+              <p className="text-[11px] text-slate-400 mt-1 truncate">
+                Still owed{summary.salary_owed_count > 0 ? ` (${fmtShort(summary.salary_owed_count)})` : ''}
+              </p>
+            </div>
+          </div>
+        </div>
+      )
+    });
+  }
+
+  out.push({
+    key: `${keyPrefix}-staff-attendance`,
+    companyId,
+    companyName,
+    render: () => (
+      <div>
+        <SectionLabel icon={UserCheck}>Staff attendance today</SectionLabel>
+        <div className="flex gap-6">
+          <div className="min-w-0">
+            <span className="block text-2xl font-bold text-white leading-none tabular-nums whitespace-nowrap">{fmtShort(summary.staff_checked_in_today)}</span>
+            <p className="text-[11px] text-slate-400 mt-1 truncate">Checked in</p>
+          </div>
+          <div className="min-w-0">
+            <span className="block text-2xl font-bold text-white leading-none tabular-nums whitespace-nowrap">{fmtShort(summary.staff_checked_out_today)}</span>
+            <p className="text-[11px] text-slate-400 mt-1 truncate">Checked out</p>
+          </div>
+          <div className="min-w-0">
+            <span className="block text-2xl font-bold text-emerald-400 leading-none tabular-nums whitespace-nowrap">{fmtShort(summary.staff_currently_on_site)}</span>
+            <p className="text-[11px] text-slate-400 mt-1 truncate">On site now</p>
+          </div>
+        </div>
+      </div>
+    )
+  });
+
+  out.push({
+    key: `${keyPrefix}-visitors`,
+    companyId,
+    companyName,
+    render: () => (
+      <div>
+        <SectionLabel icon={DoorOpen}>Visitors today</SectionLabel>
+        <span className="block text-3xl font-bold text-white leading-none tabular-nums">{fmtShort(summary.visitors_checked_in_today)}</span>
+        <p className="text-[11px] text-slate-400 mt-1">Checked in at the front desk</p>
+      </div>
+    )
+  });
+
+  out.push({
+    key: `${keyPrefix}-jobs`,
+    companyId,
+    companyName,
+    render: () => (
+      <div>
+        <SectionLabel icon={Briefcase}>
+          {fmtShort(summary.open_job_postings)} open job posting{summary.open_job_postings === 1 ? '' : 's'}
+        </SectionLabel>
+        <div className="flex gap-6">
+          <div className="min-w-0">
+            <span className="block text-2xl font-bold text-white leading-none tabular-nums whitespace-nowrap">{fmtShort(summary.job_posting_views)}</span>
+            <p className="text-[11px] text-slate-400 mt-1 truncate">Views</p>
+          </div>
+          <div className="min-w-0">
+            <span className="block text-2xl font-bold text-white leading-none tabular-nums whitespace-nowrap">{fmtShort(summary.job_applications_total)}</span>
+            <p className="text-[11px] text-slate-400 mt-1 truncate">Applicants</p>
+          </div>
+          {summary.job_applications_today > 0 && (
+            <div className="min-w-0">
+              <span className="block text-2xl font-bold text-emerald-400 leading-none tabular-nums whitespace-nowrap">{fmtShort(summary.job_applications_today)}</span>
+              <p className="text-[11px] text-slate-400 mt-1 truncate">New today</p>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  });
+
+  out.push({
+    key: `${keyPrefix}-tasks`,
+    companyId,
+    companyName,
+    render: () => (
+      <div>
+        <SectionLabel icon={CheckSquare}>Tasks</SectionLabel>
+        <div className="flex gap-6">
+          <div className="min-w-0">
+            <span className="block text-2xl font-bold text-white leading-none tabular-nums whitespace-nowrap">{fmtShort(summary.tasks_assigned_today)}</span>
+            <p className="text-[11px] text-slate-400 mt-1 truncate">Assigned today</p>
+          </div>
+          <div className="min-w-0">
+            <span className="block text-2xl font-bold text-emerald-400 leading-none tabular-nums whitespace-nowrap">{fmtShort(summary.tasks_completed_today)}</span>
+            <p className="text-[11px] text-slate-400 mt-1 truncate">Completed today</p>
+          </div>
+          <div className="min-w-0">
+            <span className="block text-2xl font-bold text-slate-300 leading-none tabular-nums whitespace-nowrap">{fmtShort(summary.tasks_open)}</span>
+            <p className="text-[11px] text-slate-400 mt-1 truncate">Still open</p>
+          </div>
+        </div>
+      </div>
+    )
+  });
+
+  out.push({
+    key: `${keyPrefix}-reports`,
+    companyId,
+    companyName,
+    render: () => (
+      <div>
+        <SectionLabel icon={FileText}>Reports submitted today</SectionLabel>
+        <div className="flex gap-6">
+          <div className="min-w-0">
+            <span className="block text-3xl font-bold text-white leading-none tabular-nums">{fmtShort(summary.reports_submitted_today)}</span>
+            <p className="text-[11px] text-slate-400 mt-1 truncate">Submitted today</p>
+          </div>
+          <div className="min-w-0">
+            <span className="block text-3xl font-bold text-amber-400 leading-none tabular-nums">{fmtShort(summary.reports_open)}</span>
+            <p className="text-[11px] text-slate-400 mt-1 truncate">Still open</p>
+          </div>
+        </div>
+      </div>
+    )
+  });
+
+  // Only present when the caller has payroll view access -- this is
+  // payroll-adjacent cash-ledger data (payouts, advances), same gate as
+  // the Payroll slide above.
+  if (summary.transactions_today_ugx != null) {
+    out.push({
+      key: `${keyPrefix}-transactions`,
+      companyId,
+      companyName,
+      render: () => (
+        <div>
+          <SectionLabel icon={ArrowLeftRight}>Transactions today</SectionLabel>
+          <div className="flex items-baseline gap-2 min-w-0">
+            <span className="text-2xl font-bold text-white leading-none tabular-nums whitespace-nowrap">UGX {fmtShort(summary.transactions_today_ugx)}</span>
+            <span className="text-[11px] text-slate-400 truncate flex-shrink">{fmtShort(summary.transactions_today_count)} transaction{summary.transactions_today_count === 1 ? '' : 's'}</span>
+          </div>
+        </div>
+      )
+    });
+  }
+
+  out.push({
+    key: `${keyPrefix}-recent-activity`,
+    companyId,
+    companyName,
+    render: () => (
+      <div>
+        <SectionLabel icon={Activity}>Recent CMMS activity</SectionLabel>
+        {summary.recent_activity?.length > 0 ? (
+          <ul className="space-y-2.5">
+            {summary.recent_activity.slice(0, 4).map((a, i) => (
+              <li key={i} className="flex items-start gap-2.5 text-xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 flex-shrink-0 mt-1.5" />
+                <span className="text-slate-200 flex-1 truncate">{a.description}</span>
+                <span className="text-[11px] text-slate-500 flex-shrink-0 tabular-nums">{relTime(a.created_at)}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-slate-500">No recent activity yet</p>
+        )}
+      </div>
+    )
+  });
+
+  return out;
+};
+
 /**
  * Real, auto-sliding "what's happening right now" card for the home
  * screen -- the spot directly above "Record Every Transaction". Shows
- * CMMS company activity (when the viewer has CMMS access) and/or their
+ * every CMMS company the viewer actually belongs to (each with its own
+ * real numbers, scoped by that company's own role/permission rules --
+ * see CMMS_DASHBOARD_SUMMARY_PAYROLL_ACCESS_SCOPED.sql) and/or their
  * Supermarketa store's sales/approvals (resolved independently via
  * fn_get_supermarketa_dashboard_summary, same shared-DB pattern as the
  * CMMS RPC). Renders nothing until it actually has real data to show.
  */
-const CmmsActivityWidget = ({ hasCmmsAccess, cmmsCompanyId, cmmsIsAdmin, onOpenCmms }) => {
-  const [cmmsSummary, setCmmsSummary] = useState(null);
+const CmmsActivityWidget = ({ hasCmmsAccess, cmmsMemberships, onOpenCmms }) => {
+  const { user } = useAuth();
+  const [cmmsSummaries, setCmmsSummaries] = useState({});
   const [smSummary, setSmSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [slideIndex, setSlideIndex] = useState(0);
+
+  const memberships = useMemo(() => (Array.isArray(cmmsMemberships) ? cmmsMemberships : []), [cmmsMemberships]);
+  const membershipKey = memberships.map((m) => m.companyId).join(',');
 
   useEffect(() => {
     let cancelled = false;
@@ -82,14 +364,18 @@ const CmmsActivityWidget = ({ hasCmmsAccess, cmmsCompanyId, cmmsIsAdmin, onOpenC
     const load = async () => {
       const jobs = [];
 
-      if (hasCmmsAccess && cmmsCompanyId) {
+      if (hasCmmsAccess && memberships.length > 0) {
         jobs.push(
-          supabase.rpc('fn_get_cmms_dashboard_summary', { p_company_id: cmmsCompanyId })
-            .then(({ data }) => { if (!cancelled) setCmmsSummary(data || null); })
-            .catch(() => { if (!cancelled) setCmmsSummary(null); })
+          Promise.all(memberships.map((m) =>
+            supabase.rpc('fn_get_cmms_dashboard_summary', { p_company_id: m.companyId })
+              .then(({ data }) => [m.companyId, data || null])
+              .catch(() => [m.companyId, null])
+          )).then((entries) => {
+            if (!cancelled) setCmmsSummaries(Object.fromEntries(entries));
+          })
         );
       } else if (!cancelled) {
-        setCmmsSummary(null);
+        setCmmsSummaries({});
       }
 
       jobs.push(
@@ -105,240 +391,24 @@ const CmmsActivityWidget = ({ hasCmmsAccess, cmmsCompanyId, cmmsIsAdmin, onOpenC
     load();
     const poll = setInterval(load, 60000);
     return () => { cancelled = true; clearInterval(poll); };
-  }, [hasCmmsAccess, cmmsCompanyId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasCmmsAccess, membershipKey]);
+
+  // Persists which company this slide belongs to as the CMMS module's own
+  // "active company" before opening it, so tapping through from a second
+  // (or third) business's slide actually opens CMMS on that same business
+  // instead of silently reopening whichever one was active before.
+  const handleOpenCmms = (companyId, innerTab) => {
+    if (companyId) persistActiveCompanyId(user?.email, companyId);
+    onOpenCmms?.(innerTab);
+  };
 
   const slides = useMemo(() => {
     const out = [];
 
-    if (cmmsSummary) {
-      out.push({
-        key: 'cmms-snapshot',
-        render: () => (
-          <div>
-            {/* Departments/Team are short plain counts, safe side by side.
-                Inventory value gets its own full-width line below -- a
-                currency string needs more room than a 3-way grid column
-                could reliably give it, which was letting "UGX ..." spill
-                past the card on narrower phones. */}
-            <div className="grid grid-cols-2 divide-x divide-slate-800">
-              <div className="flex flex-col gap-0.5 pr-3">
-                <span className="text-2xl font-bold text-white leading-none tabular-nums whitespace-nowrap">{fmtShort(cmmsSummary.total_departments)}</span>
-                <span className="text-[11px] text-slate-400">Departments</span>
-              </div>
-              <div className="flex flex-col gap-0.5 pl-3">
-                <span className="text-2xl font-bold text-white leading-none tabular-nums whitespace-nowrap">{fmtShort(cmmsSummary.total_users)}</span>
-                <span className="text-[11px] text-slate-400">Team</span>
-              </div>
-            </div>
-            <div className="mt-3 pt-3 border-t border-slate-800">
-              <span className="text-xl font-bold text-white leading-none tabular-nums whitespace-nowrap">UGX {fmtShort(cmmsSummary.total_inventory_value)}</span>
-              <span className="block text-[11px] text-slate-400 mt-0.5">Inventory value</span>
-            </div>
-          </div>
-        )
-      });
-
-      out.push({
-        key: 'cmms-inventory-health',
-        render: () => (
-          <div>
-            <SectionLabel icon={AlertTriangle}>Inventory needs attention</SectionLabel>
-            <div className="flex gap-6">
-              <div className="min-w-0">
-                <span className="block text-2xl font-bold text-amber-400 leading-none tabular-nums whitespace-nowrap">{fmtShort(cmmsSummary.low_stock_items)}</span>
-                <p className="text-[11px] text-slate-400 mt-1 truncate">Low stock</p>
-              </div>
-              <div className="min-w-0">
-                <span className="block text-2xl font-bold text-red-400 leading-none tabular-nums whitespace-nowrap">{fmtShort(cmmsSummary.out_of_stock_items)}</span>
-                <p className="text-[11px] text-slate-400 mt-1 truncate">Out of stock</p>
-              </div>
-            </div>
-          </div>
-        )
-      });
-
-      out.push({
-        key: 'cmms-requisitions',
-        render: () => (
-          <div>
-            <SectionLabel icon={ClipboardList}>Requisitions awaiting approval</SectionLabel>
-            <div className="flex items-baseline gap-2 min-w-0">
-              <span className="text-3xl font-bold text-white leading-none tabular-nums flex-shrink-0">{fmtShort(cmmsSummary.pending_requisitions)}</span>
-              {cmmsSummary.urgent_requisitions > 0 && (
-                <span className="text-[11px] font-semibold text-red-400 border border-red-500/30 rounded px-1.5 py-0.5 truncate">{fmtShort(cmmsSummary.urgent_requisitions)} urgent</span>
-              )}
-            </div>
-            {cmmsIsAdmin && cmmsSummary.pending_requisitions > 0 && (
-              <button
-                onClick={() => onOpenCmms?.('approvals')}
-                className="mt-3 flex items-center gap-1 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-500 active:scale-95 rounded-md px-3.5 py-1.5 transition"
-              >
-                Approve now <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-        )
-      });
-
-      out.push({
-        key: 'cmms-payroll',
-        render: () => (
-          <div>
-            <SectionLabel icon={Wallet}>Payroll</SectionLabel>
-            <div className="flex gap-6">
-              <div className="min-w-0">
-                <span className="block text-xl font-bold text-emerald-400 leading-none tabular-nums whitespace-nowrap">UGX {fmtShort(cmmsSummary.salary_paid_today_ugx)}</span>
-                <p className="text-[11px] text-slate-400 mt-1 truncate">Paid today</p>
-              </div>
-              <div className="min-w-0">
-                <span className="block text-xl font-bold text-amber-400 leading-none tabular-nums whitespace-nowrap">UGX {fmtShort(cmmsSummary.salary_owed_ugx)}</span>
-                <p className="text-[11px] text-slate-400 mt-1 truncate">
-                  Still owed{cmmsSummary.salary_owed_count > 0 ? ` (${fmtShort(cmmsSummary.salary_owed_count)})` : ''}
-                </p>
-              </div>
-            </div>
-          </div>
-        )
-      });
-
-      out.push({
-        key: 'cmms-staff-attendance',
-        render: () => (
-          <div>
-            <SectionLabel icon={UserCheck}>Staff attendance today</SectionLabel>
-            <div className="flex gap-6">
-              <div className="min-w-0">
-                <span className="block text-2xl font-bold text-white leading-none tabular-nums whitespace-nowrap">{fmtShort(cmmsSummary.staff_checked_in_today)}</span>
-                <p className="text-[11px] text-slate-400 mt-1 truncate">Checked in</p>
-              </div>
-              <div className="min-w-0">
-                <span className="block text-2xl font-bold text-white leading-none tabular-nums whitespace-nowrap">{fmtShort(cmmsSummary.staff_checked_out_today)}</span>
-                <p className="text-[11px] text-slate-400 mt-1 truncate">Checked out</p>
-              </div>
-              <div className="min-w-0">
-                <span className="block text-2xl font-bold text-emerald-400 leading-none tabular-nums whitespace-nowrap">{fmtShort(cmmsSummary.staff_currently_on_site)}</span>
-                <p className="text-[11px] text-slate-400 mt-1 truncate">On site now</p>
-              </div>
-            </div>
-          </div>
-        )
-      });
-
-      out.push({
-        key: 'cmms-visitors',
-        render: () => (
-          <div>
-            <SectionLabel icon={DoorOpen}>Visitors today</SectionLabel>
-            <span className="block text-3xl font-bold text-white leading-none tabular-nums">{fmtShort(cmmsSummary.visitors_checked_in_today)}</span>
-            <p className="text-[11px] text-slate-400 mt-1">Checked in at the front desk</p>
-          </div>
-        )
-      });
-
-      out.push({
-        key: 'cmms-jobs',
-        render: () => (
-          <div>
-            <SectionLabel icon={Briefcase}>
-              {fmtShort(cmmsSummary.open_job_postings)} open job posting{cmmsSummary.open_job_postings === 1 ? '' : 's'}
-            </SectionLabel>
-            <div className="flex gap-6">
-              <div className="min-w-0">
-                <span className="block text-2xl font-bold text-white leading-none tabular-nums whitespace-nowrap">{fmtShort(cmmsSummary.job_posting_views)}</span>
-                <p className="text-[11px] text-slate-400 mt-1 truncate">Views</p>
-              </div>
-              <div className="min-w-0">
-                <span className="block text-2xl font-bold text-white leading-none tabular-nums whitespace-nowrap">{fmtShort(cmmsSummary.job_applications_total)}</span>
-                <p className="text-[11px] text-slate-400 mt-1 truncate">Applicants</p>
-              </div>
-              {cmmsSummary.job_applications_today > 0 && (
-                <div className="min-w-0">
-                  <span className="block text-2xl font-bold text-emerald-400 leading-none tabular-nums whitespace-nowrap">{fmtShort(cmmsSummary.job_applications_today)}</span>
-                  <p className="text-[11px] text-slate-400 mt-1 truncate">New today</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )
-      });
-
-      out.push({
-        key: 'cmms-tasks',
-        render: () => (
-          <div>
-            <SectionLabel icon={CheckSquare}>Tasks</SectionLabel>
-            <div className="flex gap-6">
-              <div className="min-w-0">
-                <span className="block text-2xl font-bold text-white leading-none tabular-nums whitespace-nowrap">{fmtShort(cmmsSummary.tasks_assigned_today)}</span>
-                <p className="text-[11px] text-slate-400 mt-1 truncate">Assigned today</p>
-              </div>
-              <div className="min-w-0">
-                <span className="block text-2xl font-bold text-emerald-400 leading-none tabular-nums whitespace-nowrap">{fmtShort(cmmsSummary.tasks_completed_today)}</span>
-                <p className="text-[11px] text-slate-400 mt-1 truncate">Completed today</p>
-              </div>
-              <div className="min-w-0">
-                <span className="block text-2xl font-bold text-slate-300 leading-none tabular-nums whitespace-nowrap">{fmtShort(cmmsSummary.tasks_open)}</span>
-                <p className="text-[11px] text-slate-400 mt-1 truncate">Still open</p>
-              </div>
-            </div>
-          </div>
-        )
-      });
-
-      out.push({
-        key: 'cmms-reports',
-        render: () => (
-          <div>
-            <SectionLabel icon={FileText}>Reports submitted today</SectionLabel>
-            <div className="flex gap-6">
-              <div className="min-w-0">
-                <span className="block text-3xl font-bold text-white leading-none tabular-nums">{fmtShort(cmmsSummary.reports_submitted_today)}</span>
-                <p className="text-[11px] text-slate-400 mt-1 truncate">Submitted today</p>
-              </div>
-              <div className="min-w-0">
-                <span className="block text-3xl font-bold text-amber-400 leading-none tabular-nums">{fmtShort(cmmsSummary.reports_open)}</span>
-                <p className="text-[11px] text-slate-400 mt-1 truncate">Still open</p>
-              </div>
-            </div>
-          </div>
-        )
-      });
-
-      out.push({
-        key: 'cmms-transactions',
-        render: () => (
-          <div>
-            <SectionLabel icon={ArrowLeftRight}>Transactions today</SectionLabel>
-            <div className="flex items-baseline gap-2 min-w-0">
-              <span className="text-2xl font-bold text-white leading-none tabular-nums whitespace-nowrap">UGX {fmtShort(cmmsSummary.transactions_today_ugx)}</span>
-              <span className="text-[11px] text-slate-400 truncate flex-shrink">{fmtShort(cmmsSummary.transactions_today_count)} transaction{cmmsSummary.transactions_today_count === 1 ? '' : 's'}</span>
-            </div>
-          </div>
-        )
-      });
-
-      out.push({
-        key: 'cmms-recent-activity',
-        render: () => (
-          <div>
-            <SectionLabel icon={Activity}>Recent CMMS activity</SectionLabel>
-            {cmmsSummary.recent_activity?.length > 0 ? (
-              <ul className="space-y-2.5">
-                {cmmsSummary.recent_activity.slice(0, 4).map((a, i) => (
-                  <li key={i} className="flex items-start gap-2.5 text-xs">
-                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 flex-shrink-0 mt-1.5" />
-                    <span className="text-slate-200 flex-1 truncate">{a.description}</span>
-                    <span className="text-[11px] text-slate-500 flex-shrink-0 tabular-nums">{relTime(a.created_at)}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-xs text-slate-500">No recent activity yet</p>
-            )}
-          </div>
-        )
-      });
-    }
+    memberships.forEach((membership) => {
+      out.push(...buildCompanySlides(cmmsSummaries[membership.companyId], membership, handleOpenCmms));
+    });
 
     if (smSummary) {
       const changePct = smSummary.yesterday_sales_ugx > 0
@@ -407,7 +477,8 @@ const CmmsActivityWidget = ({ hasCmmsAccess, cmmsCompanyId, cmmsIsAdmin, onOpenC
     }
 
     return out;
-  }, [cmmsSummary, smSummary, cmmsIsAdmin, onOpenCmms]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cmmsSummaries, smSummary, membershipKey]);
 
   const intervalRef = useRef(null);
   const touchStartRef = useRef(null);
@@ -449,10 +520,18 @@ const CmmsActivityWidget = ({ hasCmmsAccess, cmmsCompanyId, cmmsIsAdmin, onOpenC
 
   if (loading || slides.length === 0) return null;
 
-  const urgentCount =
-    (cmmsIsAdmin ? (cmmsSummary?.urgent_requisitions || 0) : 0) +
-    (smSummary?.pending_purchase_orders || 0) +
-    (smSummary?.pending_supplier_applications || 0);
+  const currentSlide = slides[slideIndex % slides.length];
+  // Only label the card with a business name once there's more than one real
+  // business to tell apart -- a single-company viewer doesn't need it.
+  const showBusinessLabel = memberships.length > 1 && currentSlide.companyName;
+  const currentCompanyId = currentSlide.companyId || memberships[0]?.companyId || null;
+
+  const urgentCount = memberships.reduce((sum, m) => {
+    const s = cmmsSummaries[m.companyId];
+    return sum + (m.isAdmin ? (s?.urgent_requisitions || 0) : 0);
+  }, 0)
+    + (smSummary?.pending_purchase_orders || 0)
+    + (smSummary?.pending_supplier_applications || 0);
   const urgent = urgentCount > 0;
 
   return (
@@ -472,7 +551,9 @@ const CmmsActivityWidget = ({ hasCmmsAccess, cmmsCompanyId, cmmsIsAdmin, onOpenC
       <div className="flex items-center justify-between gap-2 px-4 pt-3.5 pb-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
         <div className="flex items-center gap-2 min-w-0">
           <Activity className="w-4 h-4 flex-shrink-0" style={{ color: '#3b82f6' }} />
-          <h3 className="text-[11px] font-semibold uppercase tracking-wide truncate" style={{ color: 'var(--color-textSecondary)' }}>Business Activity</h3>
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide truncate" style={{ color: 'var(--color-textSecondary)' }}>
+            Business Activity{showBusinessLabel ? ` — ${currentSlide.companyName}` : ''}
+          </h3>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
           {urgent && (
@@ -482,7 +563,7 @@ const CmmsActivityWidget = ({ hasCmmsAccess, cmmsCompanyId, cmmsIsAdmin, onOpenC
           )}
           {hasCmmsAccess && (
             <button
-              onClick={() => onOpenCmms?.()}
+              onClick={() => handleOpenCmms(currentCompanyId)}
               className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-0.5"
             >
               Open CMMS <ChevronRight className="w-3.5 h-3.5" />
@@ -509,8 +590,8 @@ const CmmsActivityWidget = ({ hasCmmsAccess, cmmsCompanyId, cmmsIsAdmin, onOpenC
           </button>
         )}
 
-        <div key={slides[slideIndex % slides.length].key} className="animate-[fadein_0.4s_ease-out] min-h-[92px]">
-          {slides[slideIndex % slides.length].render()}
+        <div key={currentSlide.key} className="animate-[fadein_0.4s_ease-out] min-h-[92px]">
+          {currentSlide.render()}
         </div>
 
         {slides.length > 1 && (

@@ -1027,6 +1027,83 @@ export const deletePitch = async (pitchId, userId = null) => {
   }
 };
 
+// The three functions below are the CMMS "Investor pitch" tab's counterparts
+// to createPitch/updatePitch/deletePitch above (CMMS_PITCH_PUBLICITY_TAB.sql).
+// pitches RLS only allows the exact business_profiles.user_id (or, per
+// fix_pitches_rls_v2.sql, a business_co_owners row) to write -- a CMMS
+// company admin who manages the business only via business_member_roles
+// (the table fn_set_cmms_company_business_profile already trusts) would be
+// silently blocked by a plain .insert()/.update()/.delete() the way
+// createPitch/updatePitch/deletePitch above do it. These go through
+// SECURITY DEFINER RPCs that check both co-ownership tables instead, so
+// CMMSInvestorPitchPanel.jsx works the same for a shareholder-run company as
+// it does for the literal owner.
+
+// Create a pitch on behalf of a business the caller owns OR manages.
+export const createManagedPitch = async (pitchData) => {
+  try {
+    const sb = getSupabase();
+    if (!sb) return { success: false, error: 'Supabase not configured' };
+
+    const { data, error } = await sb.rpc('fn_cmms_create_managed_pitch', {
+      p_business_profile_id: pitchData.business_profile_id,
+      p_title: pitchData.title,
+      p_description: pitchData.description,
+      p_category: pitchData.category,
+      p_pitch_type: pitchData.pitch_type,
+      p_target_funding: pitchData.target_funding,
+      p_equity_offering: pitchData.equity_offering,
+      p_has_ip: pitchData.has_ip,
+      p_ip_details: pitchData.ip_details || null,
+    });
+
+    if (error) throw error;
+    return { success: true, data: data?.[0] };
+  } catch (error) {
+    console.error('Error creating managed pitch:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Attach the uploaded video (and thumbnail/status) to a pitch created via
+// createManagedPitch -- the RPC counterpart to updatePitch's video_url step.
+export const updateManagedPitch = async (pitchId, updates) => {
+  try {
+    const sb = getSupabase();
+    if (!sb) return { success: false, error: 'Supabase not configured' };
+
+    const { data, error } = await sb.rpc('fn_cmms_update_managed_pitch', {
+      p_pitch_id: pitchId,
+      p_video_url: updates.video_url || null,
+      p_video_duration_seconds: updates.video_duration_seconds ?? null,
+      p_thumbnail_url: updates.thumbnail_url || null,
+      p_status: updates.status || null,
+    });
+
+    if (error) throw error;
+    return { success: true, data: data?.[0] };
+  } catch (error) {
+    console.error('Error updating managed pitch:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Rollback-only: deletes a just-created managed pitch when its video upload
+// failed (mirrors Pitchin.jsx's own "Video is required" deletePitch() call).
+export const deleteManagedPitch = async (pitchId) => {
+  try {
+    const sb = getSupabase();
+    if (!sb) return { success: false, error: 'Supabase not configured' };
+
+    const { data, error } = await sb.rpc('fn_cmms_delete_managed_pitch', { p_pitch_id: pitchId });
+    if (error) throw error;
+    return { success: Boolean(data) };
+  } catch (error) {
+    console.error('Error deleting managed pitch:', error);
+    return { success: false, error: error.message };
+  }
+};
+
 // Increment likes
 export const likePitch = async (pitchId) => {
   try {

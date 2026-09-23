@@ -15,6 +15,7 @@ import CMMSWrittenTestBuilder from './CMMSWrittenTestBuilder';
 import CMMSEmploymentDocumentsPanel from './CMMSEmploymentDocumentsPanel';
 import CMMSBusinessOpportunitiesPanel from './CMMSBusinessOpportunitiesPanel';
 import LiveBoardroom from './LiveBoardroom';
+import CMMSInvestorPitchPanel from './CMMSInvestorPitchPanel';
 
 const MAX_POSTER_BYTES = 6 * 1024 * 1024;
 const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
@@ -810,6 +811,11 @@ const CMMSAnnouncementsPanel = ({
               Board profile
             </button>
           )}
+          {canEdit && (
+            <button onClick={() => setSubTab('pitch')} className={`flex-shrink-0 whitespace-nowrap px-4 py-2 text-sm font-semibold border-b-2 transition ${subTab === 'pitch' ? 'cap-tab-active' : 'cap-tab'}`}>
+              Investor pitch
+            </button>
+          )}
           {/* Browsing/bidding needs no special permission -- posting an
               opportunity or seeing bids on it does (checked inside the
               panel via canManageOpportunities/canViewOpportunityBids). */}
@@ -985,6 +991,10 @@ const CMMSAnnouncementsPanel = ({
             )}
           </div>
         </div>
+      )}
+
+      {subTab === 'pitch' && canEdit && (
+        <CMMSInvestorPitchPanel businessProfileId={savedBusinessProfileId} />
       )}
 
       {subTab === 'posts' && (
