@@ -5,7 +5,7 @@ import {
   Check, ChevronRight, Clock, ShoppingBag, ShoppingCart, Plus, Minus,
   Trash2, Truck, Store, Award, Phone, Mail, Navigation, MessageCircle,
   Facebook, Instagram, Twitter, Linkedin, Music2, BadgeCheck, Globe,
-  Video, Play, Eye, Heart, Bike, Star, Sun, Moon, TrendingUp
+  Video, Play, Eye, Heart, Bike, Star, Sun, Moon, TrendingUp, MoreVertical, Home
 } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 import cmmsAnnouncementsService from '../services/cmmsAnnouncementsService';
@@ -623,6 +623,14 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   // "small brand anchor while scrolling" the comment below always intended,
   // just never actually wired to scroll position before).
   const [scrollState, setScrollState] = useState({ scrolled: false, heroPassed: false });
+
+  // Mobile-only "more" menu (the header's kebab/3-dot button) -- on a phone,
+  // the header has room for the logo/name and the theme toggle only, so
+  // Share/Call/WhatsApp/Website (all shown inline on desktop's wider header
+  // and via ContactStrip/BusinessHero further down the page) need a single
+  // always-reachable spot that doesn't require scrolling first.
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [moreMenuCopied, setMoreMenuCopied] = useState(false);
   useEffect(() => {
     const HERO_PASSED_Y = 220; // just past BusinessHero's cover + avatar overlap
     const onScroll = () => {
@@ -735,6 +743,31 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, notFound]);
 
+  // Shares the board's own front-page link (not the currently open tab/item)
+  // -- same share-or-copy pattern as BusinessHero's shareBoard, duplicated
+  // here rather than lifted up because that one also drives its own
+  // "Link copied" toast tied to BusinessHero's local state.
+  const shareThisBoard = async () => {
+    const link = window.location.href.split('?')[0];
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: company.company_name, text: company.tagline || company.about || company.company_name, url: link });
+        setShowMoreMenu(false);
+        return;
+      }
+    } catch (err) {
+      if (err?.name === 'AbortError') return;
+    }
+    try {
+      await navigator.clipboard.writeText(link);
+      setMoreMenuCopied(true);
+      setTimeout(() => { setMoreMenuCopied(false); setShowMoreMenu(false); }, 1200);
+    } catch {
+      window.prompt('Copy this link:', link);
+      setShowMoreMenu(false);
+    }
+  };
+
   const goToApp = () => {
     window.history.replaceState({}, '', '/');
     window.location.href = '/';
@@ -846,7 +879,13 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   const tabs = [
     { id: 'notices', label: 'Notices', mobileLabel: 'Notices', icon: Megaphone },
     ...(products.length > 0 ? [{ id: 'shop', label: 'Products & Services', mobileLabel: 'Shop', icon: ShoppingBag }] : []),
-    ...(pitches.length > 0 ? [{ id: 'pitchin', label: 'Pitches', mobileLabel: 'Pitches', icon: Video }] : []),
+    // Shown whenever this business has PitchIn enabled at all (a linked
+    // business_profile_id -- the same condition that triggers the pitches
+    // fetch below), not just once it already has a published pitch --
+    // otherwise the investor-facing tab we built disappears entirely for
+    // any business that hasn't uploaded a video yet, on both mobile and
+    // desktop. PitchinSection's own empty state covers the zero-pitches case.
+    ...(company.business_profile_id ? [{ id: 'pitchin', label: 'Pitches', mobileLabel: 'Pitches', icon: Video }] : []),
     { id: 'careers', label: 'Careers', mobileLabel: 'Careers', icon: Briefcase },
     ...(opportunities.length > 0 ? [{ id: 'opportunities', label: 'Opportunities', mobileLabel: 'Deals', icon: Award }] : []),
     { id: 'track', label: 'Track my application', mobileLabel: 'Track', icon: Search },
@@ -921,6 +960,48 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
             ))}
           </nav>
           <ThemeToggleButton theme={theme} onToggle={toggleTheme} className="ml-auto sm:ml-0 my-1.5" />
+
+          {/* Mobile-only kebab -- Share/Call/WhatsApp/Website/Open-in-app in
+              one always-reachable spot, since the header itself only has
+              room for the logo/name and the theme toggle on a phone. */}
+          <div className="relative sm:hidden">
+            <button
+              onClick={() => setShowMoreMenu((v) => !v)}
+              aria-label="More options"
+              className="p-2 rounded-lg nb-icon-muted hover:opacity-80 transition"
+            >
+              <MoreVertical className="w-5 h-5" />
+            </button>
+            {showMoreMenu && (
+              <>
+                <button aria-hidden="true" tabIndex={-1} onClick={() => setShowMoreMenu(false)} className="fixed inset-0 z-40 cursor-default" />
+                <div className="absolute right-0 top-full mt-1 w-56 nb-card rounded-xl shadow-lg border nb-border z-50 py-1.5 overflow-hidden animate-fadeInDown" style={{ animationDuration: '0.15s' }}>
+                  <button onClick={shareThisBoard} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium nb-text hover:opacity-80 transition-colors text-left">
+                    <Share2 className="w-4 h-4 nb-icon-muted" /> {moreMenuCopied ? 'Link copied!' : 'Share this board'}
+                  </button>
+                  {company.whatsapp && buildWhatsAppLink(company.whatsapp) && (
+                    <a href={buildWhatsAppLink(company.whatsapp)} target="_blank" rel="noreferrer" onClick={() => setShowMoreMenu(false)} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium nb-text hover:opacity-80 transition-colors">
+                      <MessageCircle className="w-4 h-4 nb-icon-muted" /> WhatsApp
+                    </a>
+                  )}
+                  {company.phone && buildTelLink(company.phone) && (
+                    <a href={buildTelLink(company.phone)} onClick={() => setShowMoreMenu(false)} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium nb-text hover:opacity-80 transition-colors">
+                      <Phone className="w-4 h-4 nb-icon-muted" /> Call
+                    </a>
+                  )}
+                  {company.website && normalizeExternalUrl(company.website) && (
+                    <a href={normalizeExternalUrl(company.website)} target="_blank" rel="noreferrer" onClick={() => setShowMoreMenu(false)} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium nb-text hover:opacity-80 transition-colors">
+                      <Globe className="w-4 h-4 nb-icon-muted" /> Visit website
+                    </a>
+                  )}
+                  <div className="my-1 border-t nb-border" />
+                  <button onClick={() => { setShowMoreMenu(false); goToApp(); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium nb-text hover:opacity-80 transition-colors text-left">
+                    <Home className="w-4 h-4 nb-icon-muted" /> Open in IcanEra
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </header>
 
@@ -1564,7 +1645,7 @@ const PitchinSection = ({ pitches, loading, liveOffer, onSelect }) => {
     );
   }
   if (pitches.length === 0) {
-    return <EmptyState icon={Video} text="No pitch videos yet." />;
+    return <EmptyState icon={Video} text="No investment pitches published yet. Check back soon." />;
   }
   return (
     <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">

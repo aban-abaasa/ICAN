@@ -201,6 +201,15 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
   const videoRefs = useRef({}); // refs to video elements for controlling sound
   const videoScrollRef = useRef(null);
   const metricsUnsubscribeRef = useRef(null); // ref to store real-time unsubscribe function
+  const desktopSidebarRef = useRef(null); // scroll container for the "More Pitches" sidebar — IntersectionObserver root
+  const sideVideoObservers = useRef({}); // pitchId -> IntersectionObserver, so sidebar thumbnails only autoplay while actually scrolled into view
+  const sideVideoRefCallbacks = useRef({}); // pitchId -> stable ref callback, so re-renders (e.g. live like counts) don't thrash the observer
+
+  useEffect(() => {
+    return () => {
+      Object.values(sideVideoObservers.current).forEach(observer => observer.disconnect());
+    };
+  }, []);
 
   useEffect(() => {
     if (openBusinessProfile) {
@@ -1086,6 +1095,42 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
     }
   };
 
+  // "More Pitches" sidebar thumbnails autoplay (muted) only while actually
+  // scrolled into view within the sidebar itself — not the whole page — so a
+  // long list doesn't try to stream every video at once. One IntersectionObserver
+  // per thumbnail, torn down when the element unmounts (ref called with null).
+  // The returned callback is cached per pitchId so unrelated re-renders (live
+  // like counts, etc.) don't tear down and recreate the observer each time.
+  const attachSidebarVideoObserver = (pitchId) => {
+    if (sideVideoRefCallbacks.current[pitchId]) return sideVideoRefCallbacks.current[pitchId];
+    const key = `side-${pitchId}`;
+    const callback = (el) => {
+      if (el) {
+        videoRefs.current[key] = el;
+        if (!sideVideoObservers.current[key]) {
+          const observer = new IntersectionObserver(
+            ([entry]) => {
+              if (entry.isIntersecting) {
+                el.play().catch(() => {});
+              } else {
+                el.pause();
+              }
+            },
+            { root: desktopSidebarRef.current, threshold: 0.6 }
+          );
+          observer.observe(el);
+          sideVideoObservers.current[key] = observer;
+        }
+      } else if (sideVideoObservers.current[key]) {
+        sideVideoObservers.current[key].disconnect();
+        delete sideVideoObservers.current[key];
+        delete videoRefs.current[key];
+      }
+    };
+    sideVideoRefCallbacks.current[pitchId] = callback;
+    return callback;
+  };
+
   // A video entering a stall (start of load, seek, or a mid-playback rebuffer)
   // shows the diamond loader over it; leaving one clears it. Used as the
   // onLoadStart/onWaiting vs onCanPlay/onPlaying pair on every pitch <video>.
@@ -1754,12 +1799,17 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
                 </div>
             </div>
 
-            {/* "More Pitches" sidebar — click to switch the theater player */}
-            <div className="hidden xl:flex flex-col w-[340px] flex-shrink-0 h-full overflow-y-auto">
+            {/* "More Pitches" sidebar — click to switch the theater player.
+                Thumbnails autoplay muted, but only the ones actually scrolled
+                into view (see attachSidebarVideoObserver), so a long list
+                doesn't try to stream every pitch's video at once. */}
+            <div ref={desktopSidebarRef} className="hidden xl:flex flex-col w-[340px] flex-shrink-0 h-full overflow-y-auto">
               <p className="text-white/50 text-xs font-semibold tracking-widest uppercase mb-3 px-1">More Pitches</p>
               <div className="flex flex-col gap-1.5">
                 {filteredPitches.map((pitch) => {
                   const isActive = pitch.id === activePitch.id;
+                  const sideKey = `side-${pitch.id}`;
+                  const canPreview = !isActive && pitch.video_url && !videoErrors[sideKey];
                   return (
                     <button
                       key={pitch.id}
@@ -1769,9 +1819,22 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
                       }`}
                     >
                       <div className="relative w-16 h-24 flex-shrink-0 rounded-lg overflow-hidden bg-gradient-to-br from-purple-600 to-pink-600">
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <Play className="w-5 h-5 text-white/70" />
-                        </div>
+                        {canPreview ? (
+                          <video
+                            ref={attachSidebarVideoObserver(pitch.id)}
+                            src={pitch.video_url}
+                            className="absolute inset-0 w-full h-full object-cover"
+                            muted
+                            loop
+                            playsInline
+                            preload="metadata"
+                            onError={(event) => handleVideoError(sideKey, event)}
+                          />
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <Play className="w-5 h-5 text-white/70" />
+                          </div>
+                        )}
                         {isActive && (
                           <div className="absolute inset-0 flex items-center justify-center bg-black/50">
                             <span className="text-[9px] text-pink-300 font-bold uppercase tracking-wide">Now Playing</span>
