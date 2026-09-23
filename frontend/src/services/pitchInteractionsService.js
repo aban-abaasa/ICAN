@@ -659,6 +659,56 @@ export const subscribeToAllPitchesMetrics = (onUpdate) => {
 };
 
 /**
+ * Get real likes/comments/shares/invests counts for many pitches at once —
+ * one query per interaction table (tallied client-side), instead of the
+ * cached counter columns on the pitches row itself, which nothing keeps in
+ * sync and which otherwise only ever get corrected by a live subscription
+ * event or the viewer's own first click. Called right after a pitch list
+ * loads so the true numbers are already on screen, not waiting on either.
+ */
+export const getBulkPitchMetrics = async (pitchIds) => {
+  const empty = {};
+  try {
+    const sb = getSupabase();
+    if (!sb || !pitchIds || pitchIds.length === 0) return empty;
+
+    const tally = (rows) => {
+      const counts = {};
+      (rows || []).forEach(row => {
+        counts[row.pitch_id] = (counts[row.pitch_id] || 0) + 1;
+      });
+      return counts;
+    };
+
+    const [likesRes, commentsRes, sharesRes, investsRes] = await Promise.all([
+      sb.from('pitch_likes').select('pitch_id').in('pitch_id', pitchIds),
+      sb.from('pitch_comments').select('pitch_id').in('pitch_id', pitchIds),
+      sb.from('pitch_shares').select('pitch_id').in('pitch_id', pitchIds),
+      sb.from('pitch_investments').select('pitch_id').in('pitch_id', pitchIds),
+    ]);
+
+    const likes = tally(likesRes.data);
+    const comments = tally(commentsRes.data);
+    const shares = tally(sharesRes.data);
+    const invests = tally(investsRes.data);
+
+    const result = {};
+    pitchIds.forEach(id => {
+      result[id] = {
+        likes_count: likes[id] || 0,
+        comments_count: comments[id] || 0,
+        shares_count: shares[id] || 0,
+        invests_count: invests[id] || 0,
+      };
+    });
+    return result;
+  } catch (error) {
+    console.error('Error getting bulk pitch metrics:', error);
+    return empty;
+  }
+};
+
+/**
  * Get all metrics for a pitch
  */
 export const getPitchMetrics = async (pitchId) => {

@@ -11,7 +11,7 @@ import { supabase } from '../lib/supabase/client';
 import cmmsAnnouncementsService from '../services/cmmsAnnouncementsService';
 import cmmsBusinessOpportunitiesService from '../services/cmmsBusinessOpportunitiesService';
 import { getDropshipStorefront, dropshipCheckout, findDeliveryRiders } from '../services/dropshipService';
-import { getPitchesByBusinessProfileId, getPitchById } from '../services/pitchingService';
+import { getPitchesByBusinessProfileId, getPitchById, getBusinessProfileIdByName } from '../services/pitchingService';
 import { getLiveShareOffer } from '../services/pitchinValuationService';
 import { useAuth } from '../context/AuthContext';
 import { AuthPage } from './auth';
@@ -605,6 +605,12 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   const [pitchesLoading, setPitchesLoading] = useState(false);
   const [selectedPitch, setSelectedPitch] = useState(null);
 
+  // The business_profile_id actually used to fetch pitches -- company's own
+  // link when the manual "Board profile" step has been done, otherwise a
+  // name-match fallback (getBusinessProfileIdByName) so a business's pitches
+  // still show up on its own public page without that extra manual step.
+  const [pitchesBusinessProfileId, setPitchesBusinessProfileId] = useState(null);
+
   // One live share offer per business (not per pitch -- every pitch video
   // this business has posted sells the SAME underlying shares, see
   // pitchinValuationService.getLiveShareOffer), so this is fetched once per
@@ -685,26 +691,41 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
 
   useEffect(() => {
     let cancelled = false;
-    if (!company?.business_profile_id) { setPitches([]); return; }
+    const resolve = async () => {
+      if (company?.business_profile_id) {
+        if (!cancelled) setPitchesBusinessProfileId(company.business_profile_id);
+        return;
+      }
+      if (!company?.company_name) { if (!cancelled) setPitchesBusinessProfileId(null); return; }
+      const foundId = await getBusinessProfileIdByName(company.company_name);
+      if (!cancelled) setPitchesBusinessProfileId(foundId || null);
+    };
+    if (company) resolve();
+    return () => { cancelled = true; };
+  }, [company?.business_profile_id, company?.company_name]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!pitchesBusinessProfileId) { setPitches([]); return undefined; }
     setPitchesLoading(true);
-    getPitchesByBusinessProfileId(company.business_profile_id).then((data) => {
+    getPitchesByBusinessProfileId(pitchesBusinessProfileId).then((data) => {
       if (cancelled) return;
       setPitches(data || []);
       setPitchesLoading(false);
     });
     return () => { cancelled = true; };
-  }, [company?.business_profile_id]);
+  }, [pitchesBusinessProfileId]);
 
   useEffect(() => {
     let cancelled = false;
-    if (!company?.business_profile_id || pitches.length === 0) { setLiveOffer(null); return undefined; }
+    if (!pitchesBusinessProfileId || pitches.length === 0) { setLiveOffer(null); return undefined; }
     const businessOwnerUserId = pitches[0]?.business_profiles?.user_id;
-    getLiveShareOffer(company.business_profile_id, businessOwnerUserId)
+    getLiveShareOffer(pitchesBusinessProfileId, businessOwnerUserId)
       .then((offer) => { if (!cancelled) setLiveOffer(offer); })
       .catch(() => { if (!cancelled) setLiveOffer(null); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [company?.business_profile_id, pitches.length]);
+  }, [pitchesBusinessProfileId, pitches.length]);
 
   // A shared post link (?post=<id>) should open straight to that specific
   // announcement/job, not just the board's front page -- the whole point
@@ -879,13 +900,13 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   const tabs = [
     { id: 'notices', label: 'Notices', mobileLabel: 'Notices', icon: Megaphone },
     ...(products.length > 0 ? [{ id: 'shop', label: 'Products & Services', mobileLabel: 'Shop', icon: ShoppingBag }] : []),
-    // Shown whenever this business has PitchIn enabled at all (a linked
-    // business_profile_id -- the same condition that triggers the pitches
-    // fetch below), not just once it already has a published pitch --
-    // otherwise the investor-facing tab we built disappears entirely for
-    // any business that hasn't uploaded a video yet, on both mobile and
-    // desktop. PitchinSection's own empty state covers the zero-pitches case.
-    ...(company.business_profile_id ? [{ id: 'pitchin', label: 'Pitches', mobileLabel: 'Pitches', icon: Video }] : []),
+    // Shown whenever this business has PitchIn enabled at all (a linked or
+    // name-matched business_profile_id, see pitchesBusinessProfileId above)
+    // not just once it already has a published pitch -- otherwise the
+    // investor-facing tab we built disappears entirely for any business that
+    // hasn't uploaded a video yet, on both mobile and desktop.
+    // PitchinSection's own empty state covers the zero-pitches case.
+    ...(pitchesBusinessProfileId ? [{ id: 'pitchin', label: 'Pitches', mobileLabel: 'Pitches', icon: Video }] : []),
     { id: 'careers', label: 'Careers', mobileLabel: 'Careers', icon: Briefcase },
     ...(opportunities.length > 0 ? [{ id: 'opportunities', label: 'Opportunities', mobileLabel: 'Deals', icon: Award }] : []),
     { id: 'track', label: 'Track my application', mobileLabel: 'Track', icon: Search },

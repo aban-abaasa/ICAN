@@ -530,6 +530,32 @@ export const getPitchesByBusinessProfileId = async (businessProfileId, limit = 1
   }
 };
 
+/**
+ * Fallback for the public notice board (PublicCompanyNoticeBoard.jsx): finds
+ * a business_profile_id purely by matching business_profiles.business_name,
+ * for when a CMMS company hasn't been through the manual "Board profile"
+ * linking step yet. business_profiles has no public SELECT policy (owner/
+ * co-owner only), so this goes through fn_find_business_profile_id_by_name
+ * (backend/PITCHIN_BUSINESS_LOOKUP_BY_NAME.sql), a SECURITY DEFINER function
+ * that returns nothing but the bare id. Returns null on no match, same as
+ * an unlinked company today.
+ */
+export const getBusinessProfileIdByName = async (businessName) => {
+  try {
+    const sb = getSupabase();
+    if (!sb || !businessName?.trim()) return null;
+
+    const { data, error } = await sb.rpc('fn_find_business_profile_id_by_name', {
+      p_business_name: businessName.trim(),
+    });
+    if (error) throw error;
+    return data || null;
+  } catch (error) {
+    console.error('Error finding business profile id by name:', error);
+    return null;
+  }
+};
+
 // Fetch all published pitches
 export const getAllPitches = async (limit = 20, offset = 0) => {
   try {
@@ -773,6 +799,36 @@ export const updatePitch = async (pitchId, updates) => {
     return { success: true, data: data[0] };
   } catch (error) {
     console.error('Error updating pitch:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Increment a pitch's view count. Best-effort and fire-and-forget from the
+// UI — the caller dedupes per pitch per session (see Pitchin.jsx's
+// viewedPitchIdsRef) so scrolling past or re-selecting the same pitch
+// doesn't inflate the count, and a failed increment never blocks playback.
+export const incrementPitchView = async (pitchId) => {
+  try {
+    const sb = getSupabase();
+    if (!sb || !pitchId) return { success: false };
+
+    const { data: currentData, error: fetchError } = await sb
+      .from('pitches')
+      .select('views_count')
+      .eq('id', pitchId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    const { error: updateError } = await sb
+      .from('pitches')
+      .update({ views_count: (currentData?.views_count || 0) + 1 })
+      .eq('id', pitchId);
+
+    if (updateError) throw updateError;
+    return { success: true };
+  } catch (error) {
+    console.error('Error incrementing pitch view:', error);
     return { success: false, error: error.message };
   }
 };

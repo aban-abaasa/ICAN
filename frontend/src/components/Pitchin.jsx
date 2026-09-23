@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { ThumbsUp, MessageCircle, Share2, Clock, Users, FileText, Zap, AlertCircle, Building2, Loader, Plus, Trash2, Lock, Unlock, X, Send, Copy, Check, Play, Home, BookMarked, Heart, Briefcase, Bell, Search, ShoppingBag, Download, Gem } from 'lucide-react';
+import { ThumbsUp, MessageCircle, Share2, Clock, Users, FileText, Zap, AlertCircle, Building2, Loader, Plus, Trash2, Lock, Unlock, X, Send, Copy, Check, Play, Home, BookMarked, Heart, Briefcase, Bell, Search, ShoppingBag, Download, Gem, Eye } from 'lucide-react';
 import DiamondLoader from './DiamondLoader';
 import PitchVideoRecorder from './PitchVideoRecorder';
 import SmartContractGenerator from './SmartContractGenerator';
@@ -28,6 +28,7 @@ import {
   uploadVideo,
   deleteBusinessProfile as deleteProfileService,
   createNotification,
+  incrementPitchView,
   getSupabase
 } from '../services/pitchingService';
 import {
@@ -43,7 +44,8 @@ import {
   recordInvestmentInterest,
   hasUserInvestedInterest,
   subscribeToAllPitchesMetrics,
-  getPitchMetrics
+  getPitchMetrics,
+  getBulkPitchMetrics
 } from '../services/pitchInteractionsService';
 import { getUserNotifications } from '../services/investmentNotificationsService';
 import { getLiveShareOffer } from '../services/pitchinValuationService';
@@ -114,6 +116,22 @@ const injectPitchinStageStyles = () => {
     }
   `;
   document.head.appendChild(style);
+};
+
+// The pitches table's own likes_count/comments_count/shares_count/invests_count
+// columns are a cache nothing keeps in sync — they only ever get corrected by
+// a live-subscription event or the current viewer's own first like/comment/
+// invest click, which is why counts sat at 0 until someone interacted. This
+// fetches the real counts (one batched query per interaction table) right
+// after a pitch list loads, so the true numbers are on screen immediately.
+const hydratePitchesWithLiveMetrics = async (pitchList) => {
+  if (!pitchList || pitchList.length === 0) return pitchList;
+  const ids = pitchList.map(p => p.id).filter(Boolean);
+  const metrics = await getBulkPitchMetrics(ids);
+  return pitchList.map(pitch => ({
+    ...pitch,
+    ...(metrics[pitch.id] || {}),
+  }));
 };
 
 const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusinessProfile = false, onBusinessProfileRequestConsumed = null, navRef = null, onTabChange = null }) => {
@@ -204,6 +222,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
   const desktopSidebarRef = useRef(null); // scroll container for the "More Pitches" sidebar — IntersectionObserver root
   const sideVideoObservers = useRef({}); // pitchId -> IntersectionObserver, so sidebar thumbnails only autoplay while actually scrolled into view
   const sideVideoRefCallbacks = useRef({}); // pitchId -> stable ref callback, so re-renders (e.g. live like counts) don't thrash the observer
+  const viewedPitchIdsRef = useRef(new Set()); // pitch ids already counted as viewed this session, so switching back and forth doesn't inflate views_count
 
   useEffect(() => {
     return () => {
@@ -404,6 +423,11 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
         const allPitches = await getAllPitches();
         setPitches(allPitches);
         setFilteredPitches(allPitches);
+        // Real like/comment/share/invest counts, fetched right after so they're
+        // correct immediately instead of waiting on a live event or a click.
+        hydratePitchesWithLiveMetrics(allPitches)
+          .then(setPitches)
+          .catch(err => console.warn('Could not hydrate live pitch metrics:', err));
       } catch (error) {
         console.error('Error initializing Pitchin:', error);
         // Still show demo content even if there's an error
@@ -664,6 +688,11 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
     }
   }, [filteredPitches, currentVisiblePitch]);
 
+  // Count a view once a pitch actually lands as the one playing on mobile.
+  useEffect(() => {
+    if (currentVisiblePitch?.id) recordPitchView(currentVisiblePitch.id);
+  }, [currentVisiblePitch]);
+
   // Keep the desktop theater player pointed at a pitch that's still in the
   // current (possibly filtered/searched) list, defaulting to the first one.
   useEffect(() => {
@@ -675,6 +704,11 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
       setDesktopActivePitchId(filteredPitches[0].id);
     }
   }, [filteredPitches, desktopActivePitchId]);
+
+  // Count a view once a pitch becomes the one playing in the desktop theater.
+  useEffect(() => {
+    if (desktopActivePitchId) recordPitchView(desktopActivePitchId);
+  }, [desktopActivePitchId]);
 
   const handleCreatePitch = async (pitchData) => {
     try {
@@ -871,6 +905,9 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
       const allPitches = await getAllPitches();
       setPitches(allPitches);
       setFilteredPitches(allPitches);
+      hydratePitchesWithLiveMetrics(allPitches)
+        .then(setPitches)
+        .catch(err => console.warn('Could not hydrate live pitch metrics:', err));
       setShowRecorder(false);
 
       // Automatically open SmartContractGenerator for the creator to set up agreement
@@ -887,6 +924,17 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
       console.error('Error creating pitch:', error);
       alert('Failed to create pitch: ' + error.message);
     }
+  };
+
+  // Counts a view the first time a pitch actually becomes the one playing
+  // (desktop theater select, or mobile snap-scroll landing on it) — not on
+  // every render, and only once per pitch per session. Updates the on-screen
+  // count immediately; the backend increment is fire-and-forget.
+  const recordPitchView = (pitchId) => {
+    if (!pitchId || viewedPitchIdsRef.current.has(pitchId)) return;
+    viewedPitchIdsRef.current.add(pitchId);
+    setPitches(prev => prev.map(p => p.id === pitchId ? { ...p, views_count: (p.views_count || 0) + 1 } : p));
+    incrementPitchView(pitchId).catch(err => console.warn('Could not record pitch view:', err));
   };
 
   const handleLike = async (pitchId) => {
@@ -1690,8 +1738,11 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
 
                 <div className="mt-4">
                   <h2 className="text-white text-xl font-bold leading-snug">{activePitch.title}</h2>
-                  <p className="text-slate-500 text-xs mt-1">
-                    {activePitch.category || 'Pitch'} · {formatDate(activePitch.created_at)}
+                  <p className="text-slate-500 text-xs mt-1 flex items-center gap-1.5">
+                    <span>{activePitch.category || 'Pitch'} · {formatDate(activePitch.created_at)}</span>
+                    <span className="inline-flex items-center gap-1">
+                      · <Eye className="w-3.5 h-3.5" /> {(activePitch.views_count || 0).toLocaleString()} views
+                    </span>
                   </p>
 
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
@@ -1844,7 +1895,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
                       <div className="min-w-0 flex-1">
                         <p className="text-white text-sm font-medium line-clamp-2">{pitch.title}</p>
                         <p className="text-slate-500 text-xs mt-0.5 truncate">{pitch.business_profiles?.business_name || 'Business'}</p>
-                        <p className="text-slate-600 text-[11px] mt-0.5">{pitch.likes_count || 0} likes</p>
+                        <p className="text-slate-600 text-[11px] mt-0.5">{pitch.likes_count || 0} likes · {(pitch.views_count || 0).toLocaleString()} views</p>
                       </div>
                     </button>
                   );
@@ -2439,8 +2490,11 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
                   <h3 className="text-white font-semibold text-sm truncate">
                     {(currentVisiblePitch || filteredPitches[0]).title}
                   </h3>
-                  <p className="text-gray-400 text-xs truncate">
-                    {(currentVisiblePitch || filteredPitches[0]).business_profiles?.business_name || 'Business'}
+                  <p className="text-gray-400 text-xs truncate flex items-center gap-1">
+                    <span>{(currentVisiblePitch || filteredPitches[0]).business_profiles?.business_name || 'Business'}</span>
+                    <span className="inline-flex items-center gap-0.5 flex-shrink-0">
+                      · <Eye className="w-3 h-3" /> {((currentVisiblePitch || filteredPitches[0]).views_count || 0).toLocaleString()}
+                    </span>
                   </p>
                 </div>
               </div>
