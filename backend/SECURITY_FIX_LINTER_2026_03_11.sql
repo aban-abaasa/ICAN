@@ -358,6 +358,7 @@ EXCEPTION WHEN OTHERS THEN
   RAISE NOTICE 'group_wallet_settings: %, using fallback', SQLERRM;
   DROP POLICY IF EXISTS "group_wallet_settings_select" ON public.group_wallet_settings;
   DROP POLICY IF EXISTS "group_wallet_settings_update" ON public.group_wallet_settings;
+  DROP POLICY IF EXISTS "group_wallet_settings_auth_select" ON public.group_wallet_settings;
   CREATE POLICY "group_wallet_settings_auth_select" ON public.group_wallet_settings
     FOR SELECT USING (auth.uid() IS NOT NULL);
 END $$;
@@ -403,6 +404,7 @@ EXCEPTION WHEN OTHERS THEN
   DROP POLICY IF EXISTS "group_accounts_select" ON public.group_accounts;
   DROP POLICY IF EXISTS "group_accounts_insert" ON public.group_accounts;
   DROP POLICY IF EXISTS "group_accounts_update" ON public.group_accounts;
+  DROP POLICY IF EXISTS "group_accounts_auth_select" ON public.group_accounts;
   CREATE POLICY "group_accounts_auth_select" ON public.group_accounts
     FOR SELECT USING (auth.uid() IS NOT NULL);
 END $$;
@@ -429,6 +431,7 @@ EXCEPTION WHEN OTHERS THEN
   RAISE NOTICE 'group_wallet_transactions: %, using fallback', SQLERRM;
   DROP POLICY IF EXISTS "group_wallet_txn_select" ON public.group_wallet_transactions;
   DROP POLICY IF EXISTS "group_wallet_txn_insert" ON public.group_wallet_transactions;
+  DROP POLICY IF EXISTS "group_wallet_txn_auth_select" ON public.group_wallet_transactions;
   CREATE POLICY "group_wallet_txn_auth_select" ON public.group_wallet_transactions
     FOR SELECT USING (auth.uid() IS NOT NULL);
 END $$;
@@ -461,6 +464,7 @@ EXCEPTION WHEN OTHERS THEN
   DROP POLICY IF EXISTS "group_wallet_approvals_select" ON public.group_wallet_approvals;
   DROP POLICY IF EXISTS "group_wallet_approvals_insert" ON public.group_wallet_approvals;
   DROP POLICY IF EXISTS "group_wallet_approvals_update" ON public.group_wallet_approvals;
+  DROP POLICY IF EXISTS "group_wallet_approvals_auth_select" ON public.group_wallet_approvals;
   CREATE POLICY "group_wallet_approvals_auth_select" ON public.group_wallet_approvals
     FOR SELECT USING (auth.uid() IS NOT NULL);
 END $$;
@@ -489,6 +493,7 @@ EXCEPTION WHEN OTHERS THEN
   RAISE NOTICE 'group_wallet_audit: %, using fallback', SQLERRM;
   DROP POLICY IF EXISTS "group_wallet_audit_select" ON public.group_wallet_audit;
   DROP POLICY IF EXISTS "group_wallet_audit_insert" ON public.group_wallet_audit;
+  DROP POLICY IF EXISTS "group_wallet_audit_auth_select" ON public.group_wallet_audit;
   CREATE POLICY "group_wallet_audit_auth_select" ON public.group_wallet_audit
     FOR SELECT USING (auth.uid() IS NOT NULL);
 END $$;
@@ -508,6 +513,8 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   DROP POLICY IF EXISTS "cmms_audit_select" ON public.cmms_user_audit_log;
   DROP POLICY IF EXISTS "cmms_audit_insert" ON public.cmms_user_audit_log;
+  DROP POLICY IF EXISTS "cmms_audit_auth_select" ON public.cmms_user_audit_log;
+  DROP POLICY IF EXISTS "cmms_audit_auth_insert" ON public.cmms_user_audit_log;
   CREATE POLICY "cmms_audit_auth_select" ON public.cmms_user_audit_log
     FOR SELECT USING (auth.uid() IS NOT NULL);
   CREATE POLICY "cmms_audit_auth_insert" ON public.cmms_user_audit_log
@@ -543,6 +550,7 @@ EXCEPTION WHEN OTHERS THEN
   DROP POLICY IF EXISTS "trust_loan_apps_select" ON public.trust_loan_applications;
   DROP POLICY IF EXISTS "trust_loan_apps_insert" ON public.trust_loan_applications;
   DROP POLICY IF EXISTS "trust_loan_apps_update" ON public.trust_loan_applications;
+  DROP POLICY IF EXISTS "trust_loan_apps_auth_select" ON public.trust_loan_applications;
   CREATE POLICY "trust_loan_apps_auth_select" ON public.trust_loan_applications
     FOR SELECT USING (auth.uid() IS NOT NULL);
 END $$;
@@ -575,6 +583,7 @@ EXCEPTION WHEN OTHERS THEN
   DROP POLICY IF EXISTS "trust_loan_votes_select" ON public.trust_loan_votes;
   DROP POLICY IF EXISTS "trust_loan_votes_insert" ON public.trust_loan_votes;
   DROP POLICY IF EXISTS "trust_loan_votes_update" ON public.trust_loan_votes;
+  DROP POLICY IF EXISTS "trust_loan_votes_auth_select" ON public.trust_loan_votes;
   CREATE POLICY "trust_loan_votes_auth_select" ON public.trust_loan_votes
     FOR SELECT USING (auth.uid() IS NOT NULL);
 END $$;
@@ -601,6 +610,7 @@ EXCEPTION WHEN OTHERS THEN
   RAISE NOTICE 'trust_loan_repayments: %, using fallback', SQLERRM;
   DROP POLICY IF EXISTS "trust_loan_repayments_select" ON public.trust_loan_repayments;
   DROP POLICY IF EXISTS "trust_loan_repayments_insert" ON public.trust_loan_repayments;
+  DROP POLICY IF EXISTS "trust_loan_repayments_auth_select" ON public.trust_loan_repayments;
   CREATE POLICY "trust_loan_repayments_auth_select" ON public.trust_loan_repayments
     FOR SELECT USING (auth.uid() IS NOT NULL);
 END $$;
@@ -631,6 +641,8 @@ EXCEPTION WHEN OTHERS THEN
   DROP POLICY IF EXISTS "business_docs_insert" ON public.business_documents;
   DROP POLICY IF EXISTS "business_docs_update" ON public.business_documents;
   DROP POLICY IF EXISTS "business_docs_delete" ON public.business_documents;
+  DROP POLICY IF EXISTS "business_docs_auth_select" ON public.business_documents;
+  DROP POLICY IF EXISTS "business_docs_auth_insert" ON public.business_documents;
   CREATE POLICY "business_docs_auth_select" ON public.business_documents
     FOR SELECT USING (auth.uid() IS NOT NULL);
   CREATE POLICY "business_docs_auth_insert" ON public.business_documents

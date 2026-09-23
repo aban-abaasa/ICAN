@@ -210,7 +210,7 @@ export default function DailyTrackingChart({
           </div>
         ) : (
           <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 320, height: 192 }}>
               <LineChart
                 data={data}
                 margin={{ top: 4, right: 4, left: -16, bottom: 0 }}

@@ -685,7 +685,7 @@ const CandlestickChart = React.memo(({
               </div>
             );
           })()}
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 320, height: 240 }}>
           <ComposedChart
             data={zoomedDisplayData}
             margin={

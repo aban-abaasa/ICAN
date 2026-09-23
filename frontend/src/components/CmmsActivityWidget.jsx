@@ -366,7 +366,7 @@ const CmmsActivityWidget = ({ hasCmmsAccess, cmmsCompanyId, cmmsIsAdmin, onOpenC
             </div>
             {smSummary.last7days_sales?.length > 0 && (
               <div className="h-16">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 320, height: 64 }}>
                   <BarChart data={smSummary.last7days_sales} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
                     <XAxis dataKey="day" tickFormatter={DAY_LABEL} tick={{ fill: '#64748b', fontSize: 9 }} axisLine={false} tickLine={false} />
                     <Tooltip content={<SmChartTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />

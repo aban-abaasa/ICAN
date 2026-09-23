@@ -51,6 +51,25 @@ const openPrintWindow = (title, bodyHtml) => {
   printWindow.document.close();
 };
 
+// Collapsible section wrapper — used to keep heavy blocks (share link/QR
+// details, the field-building tools) out of the way by default so the page
+// isn't a wall of content on first load, especially on mobile where the
+// forms list and selected-form detail stack into one long column.
+const Disclosure = ({ title, icon: Icon, defaultOpen = false, children }) => {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/5">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between gap-3 p-3 text-left">
+        <span className="flex items-center gap-1.5 text-sm font-semibold text-white">
+          {Icon && <Icon className="h-4 w-4 text-cyan-300" />} {title}
+        </span>
+        {open ? <ChevronUp className="h-4 w-4 flex-shrink-0 text-slate-400" /> : <ChevronDown className="h-4 w-4 flex-shrink-0 text-slate-400" />}
+      </button>
+      {open && <div className="space-y-3 px-3 pb-3">{children}</div>}
+    </div>
+  );
+};
+
 // Renders one editable input for a field definition — shared by the
 // staff "record a walk-in submission" form below.
 const FieldInput = ({ field, value, onChange }) => {
@@ -567,31 +586,33 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
                   </button>
                 </div>
                 {selectedForm.share_enabled && (
-                  <>
-                    <div className="mt-3 flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2">
-                      <code className="min-w-0 flex-1 truncate text-xs text-cyan-300">{shareUrl(selectedForm.share_token)}</code>
-                      <button type="button" onClick={copyShareLink} className="flex items-center gap-1 rounded-lg bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/20">
-                        {copyState === 'copied' ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : <Copy className="h-3.5 w-3.5" />}
-                        {copyState === 'copied' ? 'Copied' : 'Copy'}
-                      </button>
-                      <button type="button" onClick={shareLink} className="flex items-center gap-1 rounded-lg bg-cyan-600 px-2 py-1 text-xs text-white hover:bg-cyan-500">
-                        <Share2 className="h-3.5 w-3.5" /> Share
-                      </button>
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-4 rounded-lg border border-white/10 bg-slate-900/60 p-3">
-                      <div className="rounded-lg bg-white p-2">
-                        <QRCodeSVG value={shareUrl(selectedForm.share_token)} size={104} />
-                      </div>
-                      <div className="min-w-0 flex-1 space-y-2">
-                        <p className="text-xs text-slate-400">
-                          Patients can scan this to open and fill out the form on their own phone — no link needed. Print it at reception or put it on a sign.
-                        </p>
-                        <button type="button" onClick={downloadShareQr} className="flex items-center gap-1.5 rounded-lg border border-white/15 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/5">
-                          <Download className="h-3.5 w-3.5" /> Download QR (PDF)
+                  <div className="mt-3">
+                    <Disclosure key={selectedForm.id} title="Show link & QR code" icon={Share2}>
+                      <div className="flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2">
+                        <code className="min-w-0 flex-1 truncate text-xs text-cyan-300">{shareUrl(selectedForm.share_token)}</code>
+                        <button type="button" onClick={copyShareLink} className="flex items-center gap-1 rounded-lg bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/20">
+                          {copyState === 'copied' ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : <Copy className="h-3.5 w-3.5" />}
+                          {copyState === 'copied' ? 'Copied' : 'Copy'}
+                        </button>
+                        <button type="button" onClick={shareLink} className="flex items-center gap-1 rounded-lg bg-cyan-600 px-2 py-1 text-xs text-white hover:bg-cyan-500">
+                          <Share2 className="h-3.5 w-3.5" /> Share
                         </button>
                       </div>
-                    </div>
-                  </>
+                      <div className="flex flex-wrap items-center gap-4 rounded-lg border border-white/10 bg-slate-900/60 p-3">
+                        <div className="rounded-lg bg-white p-2">
+                          <QRCodeSVG value={shareUrl(selectedForm.share_token)} size={104} />
+                        </div>
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <p className="text-xs text-slate-400">
+                            Patients can scan this to open and fill out the form on their own phone — no link needed. Print it at reception or put it on a sign.
+                          </p>
+                          <button type="button" onClick={downloadShareQr} className="flex items-center gap-1.5 rounded-lg border border-white/15 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/5">
+                            <Download className="h-3.5 w-3.5" /> Download QR (PDF)
+                          </button>
+                        </div>
+                      </div>
+                    </Disclosure>
+                  </div>
                 )}
               </div>
 
@@ -617,28 +638,30 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
                     <UserPlus className="h-3.5 w-3.5" /> Manually enter a client's answers on this form
                   </button>
 
-                  <div className="flex flex-wrap gap-2">
-                    <button type="button" onClick={addPresetFields} className="flex items-center gap-1.5 rounded-lg border border-cyan-400/30 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 hover:bg-cyan-400/20">
-                      <Sparkles className="h-3.5 w-3.5" /> Add common clinical fields (bio, medical history, allergies, next of kin…)
-                    </button>
-                    <button type="button" onClick={addPhysiotherapyPreset} className="flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-400/20">
-                      <Sparkles className="h-3.5 w-3.5" /> Add physiotherapy initial consultation form
-                    </button>
-                    <button type="button" onClick={addPatientAssessmentPreset} className="flex items-center gap-1.5 rounded-lg border border-violet-400/30 bg-violet-400/10 px-3 py-1.5 text-xs font-semibold text-violet-200 hover:bg-violet-400/20">
-                      <Sparkles className="h-3.5 w-3.5" /> Add patient assessment information form
-                    </button>
-                  </div>
+                  <Disclosure key={selectedForm.id} title="Presets & add fields" icon={Sparkles} defaultOpen={fields.length === 0}>
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" onClick={addPresetFields} className="flex items-center gap-1.5 rounded-lg border border-cyan-400/30 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 hover:bg-cyan-400/20">
+                        <Sparkles className="h-3.5 w-3.5" /> Add common clinical fields (bio, medical history, allergies, next of kin…)
+                      </button>
+                      <button type="button" onClick={addPhysiotherapyPreset} className="flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-400/20">
+                        <Sparkles className="h-3.5 w-3.5" /> Add physiotherapy initial consultation form
+                      </button>
+                      <button type="button" onClick={addPatientAssessmentPreset} className="flex items-center gap-1.5 rounded-lg border border-violet-400/30 bg-violet-400/10 px-3 py-1.5 text-xs font-semibold text-violet-200 hover:bg-violet-400/20">
+                        <Sparkles className="h-3.5 w-3.5" /> Add patient assessment information form
+                      </button>
+                    </div>
 
-                  <form onSubmit={submitSection} className="flex gap-2 rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-3">
-                    <input
-                      value={sectionLabel} onChange={(e) => setSectionLabel(e.target.value)}
-                      placeholder="Add a section heading, e.g. Medical History"
-                      className="min-w-0 flex-1 rounded-lg bg-slate-900 px-3 py-2 text-sm text-white"
-                    />
-                    <button disabled={savingSection || !sectionLabel.trim()} className="flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50 hover:bg-emerald-500">
-                      {savingSection ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Add section
-                    </button>
-                  </form>
+                    <form onSubmit={submitSection} className="flex gap-2 rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-3">
+                      <input
+                        value={sectionLabel} onChange={(e) => setSectionLabel(e.target.value)}
+                        placeholder="Add a section heading, e.g. Medical History"
+                        className="min-w-0 flex-1 rounded-lg bg-slate-900 px-3 py-2 text-sm text-white"
+                      />
+                      <button disabled={savingSection || !sectionLabel.trim()} className="flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50 hover:bg-emerald-500">
+                        {savingSection ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Add section
+                      </button>
+                    </form>
+                  </Disclosure>
 
                   <div className="space-y-1.5">
                     {fields.length === 0 && (
@@ -715,34 +738,35 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
                     })}
                   </div>
 
-                  <form onSubmit={submitField} className="space-y-2 rounded-xl border border-white/10 bg-white/5 p-4">
-                    <p className="flex items-center gap-1.5 text-sm font-semibold text-white"><Plus className="h-4 w-4 text-cyan-300" /> Add a custom field</p>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <input
-                        required value={fieldForm.label} onChange={(e) => setFieldForm((f) => ({ ...f, label: e.target.value }))}
-                        placeholder={fieldForm.fieldType === 'section' ? 'Section heading, e.g. Medical History' : 'Field label, e.g. Blood pressure'}
-                        className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-white"
-                      />
-                      <select value={fieldForm.fieldType} onChange={(e) => setFieldForm((f) => ({ ...f, fieldType: e.target.value }))} className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-white">
-                        {FIELD_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                      </select>
-                    </div>
-                    {NEEDS_OPTIONS.has(fieldForm.fieldType) && (
-                      <input
-                        value={fieldForm.optionsText} onChange={(e) => setFieldForm((f) => ({ ...f, optionsText: e.target.value }))}
-                        placeholder="Choices, comma-separated (e.g. Mild, Moderate, Severe)" className="w-full rounded-lg bg-slate-900 px-3 py-2 text-sm text-white"
-                      />
-                    )}
-                    {fieldForm.fieldType !== 'section' && (
-                      <label className="flex items-center gap-2 text-xs text-slate-300">
-                        <input type="checkbox" checked={fieldForm.isRequired} onChange={(e) => setFieldForm((f) => ({ ...f, isRequired: e.target.checked }))} />
-                        Required
-                      </label>
-                    )}
-                    <button disabled={savingField || !fieldForm.label.trim()} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-                      {savingField ? 'Adding…' : fieldForm.fieldType === 'section' ? 'Add section' : 'Add field'}
-                    </button>
-                  </form>
+                  <Disclosure key={selectedForm.id} title="Add a custom field" icon={Plus} defaultOpen={fields.length === 0}>
+                    <form onSubmit={submitField} className="space-y-2">
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <input
+                          required value={fieldForm.label} onChange={(e) => setFieldForm((f) => ({ ...f, label: e.target.value }))}
+                          placeholder={fieldForm.fieldType === 'section' ? 'Section heading, e.g. Medical History' : 'Field label, e.g. Blood pressure'}
+                          className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-white"
+                        />
+                        <select value={fieldForm.fieldType} onChange={(e) => setFieldForm((f) => ({ ...f, fieldType: e.target.value }))} className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-white">
+                          {FIELD_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                        </select>
+                      </div>
+                      {NEEDS_OPTIONS.has(fieldForm.fieldType) && (
+                        <input
+                          value={fieldForm.optionsText} onChange={(e) => setFieldForm((f) => ({ ...f, optionsText: e.target.value }))}
+                          placeholder="Choices, comma-separated (e.g. Mild, Moderate, Severe)" className="w-full rounded-lg bg-slate-900 px-3 py-2 text-sm text-white"
+                        />
+                      )}
+                      {fieldForm.fieldType !== 'section' && (
+                        <label className="flex items-center gap-2 text-xs text-slate-300">
+                          <input type="checkbox" checked={fieldForm.isRequired} onChange={(e) => setFieldForm((f) => ({ ...f, isRequired: e.target.checked }))} />
+                          Required
+                        </label>
+                      )}
+                      <button disabled={savingField || !fieldForm.label.trim()} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                        {savingField ? 'Adding…' : fieldForm.fieldType === 'section' ? 'Add section' : 'Add field'}
+                      </button>
+                    </form>
+                  </Disclosure>
                 </div>
               )}
 
