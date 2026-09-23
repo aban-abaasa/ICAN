@@ -176,15 +176,21 @@ const DashboardUpdatesCard = ({ userId, sectionBorder, cardBackground, onOpenVie
     return () => clearInterval(interval);
   }, [loadStatuses, refreshToken]);
 
-  const borderColor = sectionBorder || 'rgba(148,163,184,0.3)';
-  const background = cardBackground || 'linear-gradient(135deg, rgba(17,24,39,0.9) 0%, rgba(30,58,138,0.28) 100%)';
+  // dash-card-pink (see index.css) instead of the passed sectionBorder/
+  // cardBackground props -- those come from MobileView's creativePalette,
+  // which in the light theme resolves to a near-white gradient. This
+  // card's own labels are hardcoded text-white (independent of that
+  // background), so on that near-white surface they used to render as
+  // near-invisible white-on-white text. dash-card-pink tints the theme's
+  // real bg/bgSecondary vars, so var(--color-text) always has real
+  // contrast against it in every theme.
 
   if (loading) {
     return (
-      <div className="relative rounded-2xl overflow-hidden border-2 p-8" style={{ borderColor, background }}>
-        <h2 className="absolute top-3 left-4 text-lg font-bold z-10 text-white">Updates</h2>
+      <div className="dash-card dash-card-pink relative overflow-hidden p-8">
+        <h2 className="absolute top-3 left-4 text-lg font-bold z-10" style={{ color: 'var(--color-text)' }}>Updates</h2>
         <div className="flex items-center justify-center py-4">
-          <Loader2 className="w-6 h-6 text-white/50 animate-spin" />
+          <Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--color-textSecondary)' }} />
         </div>
       </div>
     );
@@ -194,18 +200,17 @@ const DashboardUpdatesCard = ({ userId, sectionBorder, cardBackground, onOpenVie
     return (
       <button
         onClick={onOpenComposer}
-        className="relative w-full border-2 rounded-2xl p-6 flex flex-col items-center gap-4 transition-all group"
-        style={{ borderColor, background }}
+        className="dash-card dash-card-pink relative w-full p-6 flex flex-col items-center gap-4 transition-all group"
       >
-        <span className="absolute top-3 left-4 text-lg font-bold drop-shadow-lg text-white">Updates</span>
-        <div className="w-16 h-16 rounded-full flex items-center justify-center transition mt-4 bg-white/10">
-          <Plus className="w-8 h-8 text-white/80" />
+        <span className="absolute top-3 left-4 text-lg font-bold" style={{ color: 'var(--color-text)' }}>Updates</span>
+        <div className="w-16 h-16 rounded-full flex items-center justify-center transition mt-4" style={{ backgroundColor: 'rgba(236,72,153,0.18)' }}>
+          <Plus className="w-8 h-8" style={{ color: '#ec4899' }} />
         </div>
         <div className="text-center">
-          <h3 className="text-lg font-bold text-white">Any Updates</h3>
-          <p className="text-sm text-white/60 mt-1">Share a moment with your community</p>
+          <h3 className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>Any Updates</h3>
+          <p className="text-sm mt-1" style={{ color: 'var(--color-textSecondary)' }}>Share a moment with your community</p>
         </div>
-        <div className="flex items-center gap-2 text-white/80">
+        <div className="flex items-center gap-2" style={{ color: '#ec4899' }}>
           <span className="text-sm font-medium">Start Now</span>
           <ChevronRight className="w-4 h-4" />
         </div>
@@ -227,11 +232,10 @@ const DashboardUpdatesCard = ({ userId, sectionBorder, cardBackground, onOpenVie
 
       <button
         onClick={() => onOpenViewer?.()}
-        className="w-full border-2 rounded-2xl py-3 flex items-center justify-center gap-2 transition-all group mt-2 hover:scale-[1.01]"
-        style={{ borderColor, background }}
+        className="dash-card dash-card-pink w-full py-3 flex items-center justify-center gap-2 transition-all group mt-2"
       >
-        <span className="text-sm font-medium text-white">View All Updates ({statuses.length})</span>
-        <ChevronRight className="w-4 h-4 text-white/80" />
+        <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>View All Updates ({statuses.length})</span>
+        <ChevronRight className="w-4 h-4" style={{ color: '#ec4899' }} />
       </button>
     </div>
   );

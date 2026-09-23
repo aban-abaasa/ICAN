@@ -1388,53 +1388,60 @@ const TrustSystem = ({
               Trust Network Dashboard
             </h2>
 
-            {/* Summary Cards */}
+            {/* Summary Cards -- each on its own accent (dash-card-*, see
+                index.css) instead of the identical flat slate-800
+                gradient every card shared before. That shared gradient
+                also got flattened further by ThemeContext's dynamic
+                override stylesheet (it matches `[class*="bg-gradient"]`),
+                so all four used to render as one indistinguishable gray
+                box; dash-card tints the theme's own CSS vars instead of
+                fighting that override. */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-              <div className="bg-gradient-to-br from-slate-800 to-slate-800/50 border border-slate-700 rounded-lg p-6">
+              <div className="dash-card dash-card-orange p-6">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-slate-400 text-sm font-semibold">Total Trusts</p>
-                  <Users className="w-5 h-5 text-amber-500" />
+                  <p className="text-sm font-semibold" style={{ color: 'var(--color-textSecondary)' }}>Total Trusts</p>
+                  <Users className="w-5 h-5" style={{ color: '#f97316' }} />
                 </div>
-                <p className="text-3xl font-bold text-white">{groups.length}</p>
-                <p className="text-slate-500 text-xs mt-2">Active trust groups</p>
+                <p className="text-3xl font-bold" style={{ color: 'var(--color-text)' }}>{groups.length}</p>
+                <p className="text-xs mt-2" style={{ color: 'var(--color-textSecondary)' }}>Active trust groups</p>
               </div>
 
-              <div className="bg-gradient-to-br from-slate-800 to-slate-800/50 border border-slate-700 rounded-lg p-6">
+              <div className="dash-card dash-card-blue p-6">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-slate-400 text-sm font-semibold">Total Members</p>
-                  <Users className="w-5 h-5 text-blue-500" />
+                  <p className="text-sm font-semibold" style={{ color: 'var(--color-textSecondary)' }}>Total Members</p>
+                  <Users className="w-5 h-5" style={{ color: '#3b82f6' }} />
                 </div>
-                <p className="text-3xl font-bold text-white">
+                <p className="text-3xl font-bold" style={{ color: 'var(--color-text)' }}>
                   {groups.reduce((sum, g) => sum + (g.member_count || 0), 0)}
                 </p>
-                <p className="text-slate-500 text-xs mt-2">Across all trusts</p>
+                <p className="text-xs mt-2" style={{ color: 'var(--color-textSecondary)' }}>Across all trusts</p>
               </div>
 
-              <div className="bg-gradient-to-br from-slate-800 to-slate-800/50 border border-slate-700 rounded-lg p-6">
+              <div className="dash-card dash-card-purple p-6">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-slate-400 text-sm font-semibold">Total Contributed</p>
+                  <p className="text-sm font-semibold" style={{ color: 'var(--color-textSecondary)' }}>Total Contributed</p>
                   <DollarSign className="w-5 h-5 text-emerald-500" />
                 </div>
                 <p className="text-3xl font-bold text-emerald-400">
                   {currencySymbol}{groups.reduce((sum, g) => sum + (g.total_contributed || 0), 0).toFixed(2)}
                 </p>
-                <p className="text-slate-500 text-xs mt-2">Network total</p>
+                <p className="text-xs mt-2" style={{ color: 'var(--color-textSecondary)' }}>Network total</p>
               </div>
 
-              <div className="bg-gradient-to-br from-slate-800 to-slate-800/50 border border-slate-700 rounded-lg p-6">
+              <div className="dash-card dash-card-pink p-6">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-slate-400 text-sm font-semibold">Verified Transactions</p>
-                  <CheckCircle className="w-5 h-5 text-amber-500" />
+                  <p className="text-sm font-semibold" style={{ color: 'var(--color-textSecondary)' }}>Verified Transactions</p>
+                  <CheckCircle className="w-5 h-5" style={{ color: '#ec4899' }} />
                 </div>
-                <p className="text-3xl font-bold text-amber-400">
+                <p className="text-3xl font-bold" style={{ color: '#ec4899' }}>
                   {groups.reduce((sum, g) => sum + (g.verified_transactions || 0), 0)}
                 </p>
-                <p className="text-slate-500 text-xs mt-2">Blockchain verified</p>
+                <p className="text-xs mt-2" style={{ color: 'var(--color-textSecondary)' }}>Blockchain verified</p>
               </div>
             </div>
 
             {/* Recent Activity */}
-            <div className="bg-gradient-to-br from-slate-800 to-slate-800/50 border border-slate-700 rounded-lg p-6">
+            <div className="dash-card dash-card-blue p-6">
               <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
                 <TrendingUp className="text-amber-500" />
                 Recent Trust Groups

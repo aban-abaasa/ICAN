@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Megaphone, Briefcase, MapPin, Calendar, Users, FileText, X, Loader,
   AlertCircle, CheckCircle2, Search, Building2, ArrowLeft, Upload, Share2,
   Check, ChevronRight, Clock, ShoppingBag, ShoppingCart, Plus, Minus,
   Trash2, Truck, Store, Award, Phone, Mail, Navigation, MessageCircle,
   Facebook, Instagram, Twitter, Linkedin, Music2, BadgeCheck, Globe,
-  Video, Play, Eye, Heart, Bike, Star
+  Video, Play, Eye, Heart, Bike, Star, Sun, Moon
 } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 import cmmsAnnouncementsService from '../services/cmmsAnnouncementsService';
@@ -104,6 +104,15 @@ const normalizeExternalUrl = (url) => {
   if (!trimmed) return null;
   return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
 };
+
+// Carries the visitor's chosen light/dark mode down to Modal, which renders
+// its own separate .icanera-nb-classed backdrop outside the page's own DOM
+// subtree conceptually (a sibling overlay, not something CSS inheritance
+// alone would reach the same way it reaches ordinary nested content) -- so a
+// job/notice opened in a sheet always matches whatever mode the board itself
+// is in, without threading a `theme` prop through every modal component.
+const NoticeBoardThemeCtx = createContext('light');
+const THEME_STORAGE_KEY = 'ican_notice_board_theme';
 
 const SOCIAL_LINKS = [
   { key: 'facebook_url', label: 'Facebook', icon: Facebook },
@@ -235,6 +244,47 @@ const EMPLOYMENT_LABELS = {
   volunteer: 'Volunteer',
 };
 
+// application_deadline comes back from Postgres as a plain DATE ("YYYY-MM-DD"),
+// so this is always a whole-day count -- never fractional/negative-zero from
+// time-of-day drift -- which is what lets "0" mean "closes today" reliably.
+const daysUntilDeadline = (dateStr) => {
+  if (!dateStr) return null;
+  const deadline = new Date(`${dateStr}T00:00:00`);
+  if (Number.isNaN(deadline.getTime())) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((deadline - today) / 86400000);
+};
+
+// A phone screen has no room to spare on a scan-past chip row, so a deadline
+// that's actually close earns a louder, pulsing treatment (nb-chip-urgent)
+// instead of blending into the same amber every other "just a date" chip
+// uses -- the 3-day cutoff mirrors how job boards elsewhere flag "closing
+// soon". Renders nothing once the deadline (and the chip's reason to exist)
+// is in the past -- JobList/JobDetailModal already only surface open jobs.
+const DeadlineChip = ({ deadline }) => {
+  if (!deadline) return null;
+  const days = daysUntilDeadline(deadline);
+  if (days === null || days < 0) return null;
+  const urgent = days <= 3;
+  const label = days === 0 ? 'Closes today' : days === 1 ? '1 day left' : urgent ? `${days} days left` : `Apply by ${deadline}`;
+  return (
+    <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${urgent ? 'nb-chip-urgent' : 'nb-chip-amber'}`}>
+      <Calendar className="w-3 h-3" /> {label}
+    </span>
+  );
+};
+
+// Flags a notice/job published within the last 3 days -- a fresh post is
+// worth calling out on a board a repeat visitor might otherwise just skim
+// past, the same "new since you last looked" signal a real feed gives.
+const isRecentlyPublished = (dateStr) => {
+  if (!dateStr) return false;
+  const published = new Date(dateStr);
+  if (Number.isNaN(published.getTime())) return false;
+  return (Date.now() - published.getTime()) < 3 * 86400000;
+};
+
 // Status chips read off the "how far along" scale rather than fixed colors
 // per status, so the palette stays inside the green/maroon/neutral brand
 // instead of the old ad-hoc slate/amber/blue/violet/red mix.
@@ -255,13 +305,15 @@ const STATUS_STYLES = {
   withdrawn: 'nb-chip-neutral nb-chip-faded',
 };
 
-// Scoped CSS variables (light by default, swapped under prefers-color-scheme)
-// so this page renders identically whether an applicant's device is in light
-// or dark mode -- and, crucially, so it never gets caught by the app-wide
-// dynamic theme override in ThemeContext.jsx, which repaints any element
-// using stock Tailwind slate/indigo/violet classes. None of the classnames
-// below are stock Tailwind color utilities, so that override can't touch
-// them; this file owns its own light/dark palette instead.
+// Scoped CSS variables (light by default, swapped via [data-theme="dark"] --
+// see NoticeBoardThemeCtx/ThemeToggleButton below) so this page renders
+// exactly the mode the visitor picked with the header's Sun/Moon toggle
+// (defaulting to their OS preference on first visit, then remembered) --
+// and, crucially, so it never gets caught by the app-wide dynamic theme
+// override in ThemeContext.jsx, which repaints any element using stock
+// Tailwind slate/indigo/violet classes. None of the classnames below are
+// stock Tailwind color utilities, so that override can't touch them; this
+// file owns its own light/dark palette instead.
 const NB_STYLES = `
 .icanera-nb {
   --nb-bg: #f6f9f7;
@@ -288,8 +340,11 @@ const NB_STYLES = `
   --nb-amber-soft-text: #8a5a12;
   --nb-backdrop: rgba(15, 23, 18, 0.55);
 }
-@media (prefers-color-scheme: dark) {
-  .icanera-nb {
+/* Applied directly (never inherited) so every element carrying .icanera-nb --
+   the page root AND each Modal's own separate backdrop -- picks up the same
+   choice, in sync with the header's Sun/Moon toggle (see ThemeToggleButton
+   and NoticeBoardThemeCtx) rather than just following the OS. */
+.icanera-nb[data-theme="dark"] {
     --nb-bg: #0f1613;
     --nb-surface: #17211c;
     --nb-surface-alt: #202b24;
@@ -313,7 +368,6 @@ const NB_STYLES = `
     --nb-amber-soft-bg: #3a2f13;
     --nb-amber-soft-text: #f4c86a;
     --nb-backdrop: rgba(0, 0, 0, 0.65);
-  }
 }
 .icanera-nb { background: var(--nb-bg); color: var(--nb-text); }
 .nb-surface { background: var(--nb-surface); }
@@ -355,6 +409,18 @@ const NB_STYLES = `
 .nb-chip-teal { background: var(--nb-teal-soft-bg); color: var(--nb-teal-soft-text); }
 .nb-chip-maroon { background: var(--nb-maroon-soft-bg); color: var(--nb-maroon-soft-text); }
 .nb-chip-amber { background: var(--nb-amber-soft-bg); color: var(--nb-amber-soft-text); }
+/* A deadline inside the "act now" window (see daysLeft below) trades the
+   passive amber date chip for a solid, gently pulsing one -- the same
+   "running out" signal a flash-sale countdown gives, scaled down to a chip
+   instead of a whole banner since it has to survive sitting next to three
+   other chips in a JobList row on a phone. */
+.nb-chip-urgent { background: var(--nb-maroon); color: #ffffff; animation: nb-pulse 2.2s ease-in-out infinite; }
+@keyframes nb-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.72; } }
+/* The corner ribbon flagging a just-published notice -- kept off the theme's
+   green/maroon pair (which already mean "open"/"urgent" elsewhere on this
+   board) so it reads as its own, unambiguous "new" signal. */
+.nb-badge-new { background: #2563eb; color: #ffffff; }
+@media (prefers-color-scheme: dark) { .nb-badge-new { background: #3b82f6; } }
 .nb-accent-top { background: linear-gradient(90deg, var(--nb-green), var(--nb-maroon)); }
 .nb-wordmark-a { color: var(--nb-text-muted); }
 .nb-wordmark-b { color: var(--nb-green); }
@@ -408,15 +474,38 @@ const NB_STYLES = `
  * The company's public notice board -- no ICAN account required. Rendered
  * from main.jsx for /notices/:companyId, same "share link needs no login"
  * pattern as PublicPitchViewer/PublicDropshipStorefront. It uses its own
- * scoped light/dark palette (see NB_STYLES above, keyed to the visitor's OS
- * color scheme) rather than the app's ThemeContext -- a careers/notice board
- * needs to read as a trustworthy business page in whatever mode the visitor
- * already has set, not swap between ICAN's in-app theme choices. Job
- * applications are submitted here directly (not gated behind a sign-in
- * prompt) since the whole point is that applicants never need an account.
+ * scoped light/dark palette (see NB_STYLES above), defaulting to the
+ * visitor's OS color scheme but switchable with the header's Sun/Moon
+ * toggle and remembered from then on -- independent of the app's own
+ * ThemeContext, since a careers/notice board needs to read as a trustworthy
+ * business page in whichever mode the visitor picks, not swap between
+ * ICAN's in-app theme choices. Job applications are submitted here directly
+ * (not gated behind a sign-in prompt) since the whole point is that
+ * applicants never need an account.
  */
 const PublicCompanyNoticeBoard = ({ companyId }) => {
   const { user, loading: authLoading } = useAuth();
+
+  // Light/dark: defaults to whatever the visitor's OS is already set to on
+  // first visit, then remembers an explicit choice from the header toggle
+  // (localStorage, scoped to this browser -- there's no visitor account to
+  // hang a real preference off of). Resolved once at mount rather than kept
+  // "auto" so [data-theme] can just be this value everywhere, no separate
+  // CSS fallback path to keep in sync with it.
+  const [theme, setTheme] = useState(() => {
+    try {
+      const saved = localStorage.getItem(THEME_STORAGE_KEY);
+      if (saved === 'light' || saved === 'dark') return saved;
+    } catch { /* localStorage unavailable (e.g. private browsing) -- falls through to OS preference */ }
+    return (typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  });
+  const toggleTheme = () => {
+    setTheme((current) => {
+      const next = current === 'dark' ? 'light' : 'dark';
+      try { localStorage.setItem(THEME_STORAGE_KEY, next); } catch { /* ignore */ }
+      return next;
+    });
+  };
 
   // Set from ApplyForm's / TrackApplication's post-submit "create a free
   // account" recommendation -- { referenceCode, contact, prefill } while
@@ -483,13 +572,19 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   // previous tab happened to be scrolled to), and -- since the tab bar
   // itself scrolls horizontally on a phone -- bringing the tab you just
   // tapped into view instead of leaving it hidden off to the side while its
-  // content changes underneath.
+  // content changes underneath. Two refs (not one) because desktop and
+  // mobile now render two different tab bars -- see tabNavRef's top strip
+  // vs bottomNavRef's fixed classic bottom bar below -- only one of which is
+  // ever actually visible at a given width, but both get kept in sync.
   const tabNavRef = useRef(null);
+  const bottomNavRef = useRef(null);
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    tabNavRef.current
-      ?.querySelector(`[data-tab-id="${section}"]`)
-      ?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    [tabNavRef, bottomNavRef].forEach((ref) => {
+      ref.current
+        ?.querySelector(`[data-tab-id="${section}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    });
   }, [section]);
 
   // The company's Dropship storefront, when it has linked one (see "Board
@@ -665,7 +760,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
 
   if (loading) {
     return (
-      <div className="icanera-nb min-h-screen flex items-center justify-center">
+      <div className="icanera-nb min-h-screen flex items-center justify-center" data-theme={theme}>
         <style>{NB_STYLES}</style>
         <Loader className="w-8 h-8 nb-link animate-spin" />
       </div>
@@ -674,7 +769,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
 
   if (notFound) {
     return (
-      <div className="icanera-nb min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center animate-fadeIn">
+      <div className="icanera-nb min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center animate-fadeIn" data-theme={theme}>
         <style>{NB_STYLES}</style>
         <div className="w-16 h-16 rounded-2xl nb-icon-box flex items-center justify-center">
           <AlertCircle className="w-8 h-8 nb-icon-muted" />
@@ -700,7 +795,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
 
   if (accountPrompt?.done) {
     return (
-      <div className="icanera-nb min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
+      <div className="icanera-nb min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center" data-theme={theme}>
         <style>{NB_STYLES}</style>
         <div className="w-16 h-16 rounded-2xl nb-chip-green flex items-center justify-center">
           <CheckCircle2 className="w-8 h-8" />
@@ -713,8 +808,25 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
     );
   }
 
+  // Shared by the desktop top strip and the mobile bottom bar (BottomNav)
+  // below -- one source of truth for which sections exist so the two chrome
+  // styles can never drift out of sync with each other. mobileLabel keeps
+  // the two longest labels ("Track my application"/"Track my bid") from
+  // wrapping or getting clipped under an icon in the bottom bar's much
+  // narrower per-tab width.
+  const tabs = [
+    { id: 'notices', label: 'Notices', mobileLabel: 'Notices', icon: Megaphone },
+    ...(products.length > 0 ? [{ id: 'shop', label: 'Products & Services', mobileLabel: 'Shop', icon: ShoppingBag }] : []),
+    ...(pitches.length > 0 ? [{ id: 'pitchin', label: 'Pitches', mobileLabel: 'Pitches', icon: Video }] : []),
+    { id: 'careers', label: 'Careers', mobileLabel: 'Careers', icon: Briefcase },
+    ...(opportunities.length > 0 ? [{ id: 'opportunities', label: 'Opportunities', mobileLabel: 'Deals', icon: Award }] : []),
+    { id: 'track', label: 'Track my application', mobileLabel: 'Track', icon: Search },
+    ...(opportunities.length > 0 ? [{ id: 'track-bid', label: 'Track my bid', mobileLabel: 'My bid', icon: Search }] : []),
+  ];
+
   return (
-    <div className="icanera-nb min-h-screen">
+    <NoticeBoardThemeCtx.Provider value={theme}>
+    <div className="icanera-nb min-h-screen" data-theme={theme}>
       <style>{NB_STYLES}</style>
       <header className={`border-b nb-header backdrop-blur sticky top-0 z-20 animate-fadeInDown transition-shadow duration-300 ${scrollState.scrolled ? 'nb-header-elevated' : ''}`}>
         <div className="h-1 nb-accent-top" />
@@ -761,29 +873,29 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
             </span>
           </div>
         )}
-        <nav ref={tabNavRef} role="tablist" className="nb-tab-nav max-w-5xl mx-auto px-4 sm:px-6 flex flex-nowrap gap-1 overflow-x-auto">
-          {[
-            { id: 'notices', label: 'Notices', icon: Megaphone },
-            ...(products.length > 0 ? [{ id: 'shop', label: 'Products & Services', icon: ShoppingBag }] : []),
-            ...(pitches.length > 0 ? [{ id: 'pitchin', label: 'Pitches', icon: Video }] : []),
-            { id: 'careers', label: 'Careers', icon: Briefcase },
-            ...(opportunities.length > 0 ? [{ id: 'opportunities', label: 'Opportunities', icon: Award }] : []),
-            { id: 'track', label: 'Track my application', icon: Search },
-            ...(opportunities.length > 0 ? [{ id: 'track-bid', label: 'Track my bid', icon: Search }] : []),
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              data-tab-id={tab.id}
-              role="tab"
-              aria-selected={section === tab.id}
-              onClick={() => setSection(tab.id)}
-              className={`flex-shrink-0 px-3.5 sm:px-4 py-2.5 text-sm font-semibold flex items-center gap-1.5 border-b-2 whitespace-nowrap transition-colors ${section === tab.id ? 'nb-tab-active' : 'nb-tab'}`}
-            >
-              <tab.icon className="w-4 h-4" /> {tab.label}
-            </button>
-          ))}
-        </nav>
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 flex items-center gap-2">
+          {/* Desktop/tablet only below this width -- BottomNav (rendered
+              after </header>) is the classic fixed icon bar that replaces
+              this on a phone, so the two never show at once. */}
+          <nav ref={tabNavRef} role="tablist" className="nb-tab-nav hidden sm:flex flex-1 min-w-0 flex-nowrap gap-1 overflow-x-auto">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                data-tab-id={tab.id}
+                role="tab"
+                aria-selected={section === tab.id}
+                onClick={() => setSection(tab.id)}
+                className={`flex-shrink-0 px-3.5 sm:px-4 py-2.5 text-sm font-semibold flex items-center gap-1.5 border-b-2 whitespace-nowrap transition-colors ${section === tab.id ? 'nb-tab-active' : 'nb-tab'}`}
+              >
+                <tab.icon className="w-4 h-4" /> {tab.label}
+              </button>
+            ))}
+          </nav>
+          <ThemeToggleButton theme={theme} onToggle={toggleTheme} className="ml-auto sm:ml-0 my-1.5" />
+        </div>
       </header>
+
+      <BottomNav tabs={tabs} section={section} setSection={setSection} navRef={bottomNavRef} />
 
       {/* jobs/notices here are the list RPC's rows, which (unlike the
           single-notice detail fetch) don't compute is_open -- fine for a
@@ -793,7 +905,10 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
         ? <BusinessHero company={company} noticeCount={notices.length} jobCount={jobs.length} pitchCount={pitches.length} />
         : <ContactStrip company={company} />}
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-7">
+      {/* pb clears the fixed BottomNav on mobile (its own height plus the
+          safe-area inset it already pads itself with) -- sm:pb-7 drops that
+          reservation the moment the bar itself disappears. */}
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 pt-7 pb-24 sm:pb-7">
         <div key={section} className="animate-fadeInUp" style={{ animationDuration: '0.35s' }}>
           {section === 'notices' && (
             // A wide screen leaves a single centered column mostly empty on
@@ -835,7 +950,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
         </div>
       </main>
 
-      <footer className="text-center text-xs nb-text-faint pb-8 pt-6">
+      <footer className="text-center text-xs nb-text-faint pb-24 sm:pb-8 pt-6">
         <SocialRow company={company} className="justify-center mb-4" />
         <p>
           {company.company_name} · Powered by{' '}
@@ -857,6 +972,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
         />
       )}
     </div>
+    </NoticeBoardThemeCtx.Provider>
   );
 };
 
@@ -868,6 +984,55 @@ const IcanEraWordmark = () => (
   <span className="font-bold tracking-tight">
     <span className="nb-wordmark-a">Ican</span><span className="nb-wordmark-b">Era</span>
   </span>
+);
+
+// The one control that lets a visitor override the OS-detected default --
+// Sun shown while in dark mode (tap it to go light), Moon while in light
+// (tap it to go dark), the same "icon shows the mode you'd switch TO" idiom
+// most apps' theme toggles use, kept as a plain circular icon button so it
+// reads as one more piece of header chrome rather than a settings control.
+const ThemeToggleButton = ({ theme, onToggle, className = '' }) => (
+  <button
+    onClick={onToggle}
+    aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+    title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+    className={`flex-shrink-0 w-9 h-9 rounded-full nb-share-btn flex items-center justify-center transition-all hover:scale-[1.05] active:scale-[0.95] ${className}`}
+  >
+    {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+  </button>
+);
+
+// A fixed, icon-over-label bottom bar -- the "classic" native-app mobile nav
+// pattern (Instagram/YouTube-style), swapped in below sm for the top
+// horizontal tab strip (which stays for desktop, where a browser-style tab
+// row is the more familiar idiom). Every section stays reachable with one
+// thumb, no horizontal scrolling required to discover what's there, and
+// tabs.length is always small enough (2 fixed + up to 3 conditional) to fit
+// evenly without its own scroll in the overwhelming majority of cases; the
+// rare business with every optional section enabled still scrolls cleanly
+// via the same fade-masked overflow the top strip uses.
+const BottomNav = ({ tabs, section, setSection, navRef }) => (
+  <nav
+    ref={navRef}
+    role="tablist"
+    aria-label="Sections"
+    className="nb-tab-nav sm:hidden fixed bottom-0 inset-x-0 z-30 nb-header border-t nb-border backdrop-blur flex overflow-x-auto"
+    style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+  >
+    {tabs.map((tab) => (
+      <button
+        key={tab.id}
+        data-tab-id={tab.id}
+        role="tab"
+        aria-selected={section === tab.id}
+        onClick={() => setSection(tab.id)}
+        className={`flex-1 min-w-[64px] flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-semibold whitespace-nowrap transition-colors ${section === tab.id ? 'nb-tab-active' : 'nb-tab'}`}
+      >
+        <tab.icon className="w-5 h-5" />
+        <span className="truncate max-w-[68px]">{tab.mobileLabel || tab.label}</span>
+      </button>
+    ))}
+  </nav>
 );
 
 // One row of circular icon links out to whichever social profiles this
@@ -1227,13 +1392,16 @@ const NoticeList = ({ notices, onSelect }) => {
           style={{ animationDelay: `${Math.min(i, 8) * 60}ms`, animationFillMode: 'backwards' }}
           className="group text-left nb-card rounded-2xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 animate-fadeInUp"
         >
-          <div className="aspect-video w-full overflow-hidden nb-surface-alt">
+          <div className="relative aspect-video w-full overflow-hidden nb-surface-alt">
             {notice.poster_url ? (
               <img src={notice.poster_url} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
                 <Megaphone className="w-8 h-8 nb-icon-muted" />
               </div>
+            )}
+            {isRecentlyPublished(notice.published_at) && (
+              <span className="absolute top-2.5 left-2.5 nb-badge-new text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full shadow-sm">New</span>
             )}
           </div>
           <div className="p-4">
@@ -1359,11 +1527,7 @@ const JobList = ({ jobs, onSelect }) => {
                   <MapPin className="w-3 h-3" /> {job.location}
                 </span>
               )}
-              {job.application_deadline && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full nb-chip-amber">
-                  <Calendar className="w-3 h-3" /> Apply by {job.application_deadline}
-                </span>
-              )}
+              <DeadlineChip deadline={job.application_deadline} />
             </div>
           </div>
           <ChevronRight className="w-5 h-5 nb-icon-muted flex-shrink-0 transition-transform duration-300 group-hover:translate-x-1" />
@@ -1854,8 +2018,24 @@ const ShareButton = ({ copied, onClick }) => (
 const JobDetailModal = ({ job, onClose, onShare, viewerUser, onWantAccount }) => {
   const [showApply, setShowApply] = useState(false);
   const [copied, setCopied] = useState(false);
+  // Pinned to the sheet's own footer (see Modal) instead of sitting at the
+  // end of the scrollable body -- on a phone, the whole point of reading a
+  // job posting is to hit this button, so it stays one thumb-reach away the
+  // entire time instead of requiring a scroll past the full description.
+  const applyFooter = !showApply && (
+    job.is_open === false ? (
+      <p className="nb-closed-banner rounded-lg px-4 py-2.5 text-sm font-semibold text-center">Applications are closed for this posting.</p>
+    ) : (
+      <button
+        onClick={() => setShowApply(true)}
+        className="w-full py-3 rounded-xl nb-btn-primary font-semibold transition-all hover:scale-[1.01] active:scale-[0.99] shadow-sm"
+      >
+        Apply now — no account needed
+      </button>
+    )
+  );
   return (
-    <Modal onClose={onClose}>
+    <Modal onClose={onClose} footer={applyFooter}>
       {!showApply ? (
         <>
           {job.poster_url && <img src={job.poster_url} alt="" className="w-full max-h-64 object-cover rounded-xl mb-4" />}
@@ -1884,11 +2064,7 @@ const JobDetailModal = ({ job, onClose, onShare, viewerUser, onWantAccount }) =>
                 {job.salary_range}
               </span>
             )}
-            {job.application_deadline && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full nb-chip-amber">
-                <Calendar className="w-3 h-3" /> Apply by {job.application_deadline}
-              </span>
-            )}
+            <DeadlineChip deadline={job.application_deadline} />
           </div>
           <p className="nb-text-muted whitespace-pre-wrap leading-relaxed">{job.body}</p>
           {job.application_instructions && (
@@ -1901,16 +2077,6 @@ const JobDetailModal = ({ job, onClose, onShare, viewerUser, onWantAccount }) =>
             <a href={job.document_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 mt-4 nb-link text-sm font-semibold">
               <FileText className="w-4 h-4" /> Full job description (PDF)
             </a>
-          )}
-          {job.is_open === false ? (
-            <p className="mt-6 nb-closed-banner rounded-lg px-4 py-2.5 text-sm font-semibold text-center">Applications are closed for this posting.</p>
-          ) : (
-            <button
-              onClick={() => setShowApply(true)}
-              className="mt-6 w-full py-3 rounded-xl nb-btn-primary font-semibold transition-all hover:scale-[1.01] active:scale-[0.99] shadow-sm"
-            >
-              Apply now — no account needed
-            </button>
           )}
         </>
       ) : (
@@ -2596,7 +2762,23 @@ const TrackOpportunityBid = ({ viewerUser, onWantAccount }) => {
 // Fades the backdrop in immediately but scales+fades the panel itself in a
 // beat later via a mount-triggered class flip -- purely CSS transitions, no
 // animation library, matching the rest of this component.
-const Modal = ({ onClose, children }) => {
+// On a phone this renders as a real bottom sheet -- anchored to the bottom
+// edge, rounded only at the top, a draggable grip so it can be flicked away
+// with a thumb, and its OWN internal scroll (capped at 90vh) so the header
+// grip and close button stay put and reachable while a long job description
+// scrolls underneath them, instead of the whole page having to be scrolled
+// to find the X. From sm upward it reverts to a conventional centered,
+// scale-in dialog -- the grip hides itself (sm:hidden) and the drag handlers
+// below only ever fire from real touch input, so desktop is untouched.
+// `footer`, when given, is pinned below that scroll area (safe-area aware)
+// so the one action a visitor actually came for -- Apply, Bid -- is always
+// one thumb-reach away rather than something to scroll down and hunt for.
+const Modal = ({ onClose, children, footer }) => {
+  // This backdrop is its own separate .icanera-nb-classed element (see the
+  // comment on NoticeBoardThemeCtx) -- without reading the mode from context
+  // here, a job opened from a page the visitor just switched to dark would
+  // pop up in light instead.
+  const theme = useContext(NoticeBoardThemeCtx);
   const [visible, setVisible] = useState(false);
   useEffect(() => {
     const id = requestAnimationFrame(() => setVisible(true));
@@ -2619,26 +2801,67 @@ const Modal = ({ onClose, children }) => {
     };
   }, [onClose]);
 
+  // Swipe-to-dismiss, grip-only (not the whole sheet) so a drag that starts
+  // over the scrollable body still scrolls text instead of fighting it for
+  // the gesture. Past a third of the way down it snaps closed like a real
+  // sheet; short of that it springs back -- the same threshold feel as iOS/
+  // Android system sheets.
+  const [dragY, setDragY] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const dragStartY = useRef(null);
+  const handleGripTouchStart = (e) => {
+    dragStartY.current = e.touches[0].clientY;
+    setDragging(true);
+  };
+  const handleGripTouchMove = (e) => {
+    if (dragStartY.current == null) return;
+    const delta = e.touches[0].clientY - dragStartY.current;
+    if (delta > 0) setDragY(delta);
+  };
+  const handleGripTouchEnd = () => {
+    if (dragY > 120) { onClose(); return; }
+    setDragging(false);
+    setDragY(0);
+    dragStartY.current = null;
+  };
+
   return (
     <div
       role="presentation"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      className={`icanera-nb fixed inset-0 nb-modal-backdrop backdrop-blur-sm z-50 overflow-y-auto transition-opacity duration-200 ${visible ? 'opacity-100' : 'opacity-0'}`}
+      data-theme={theme}
+      className={`icanera-nb fixed inset-0 nb-modal-backdrop backdrop-blur-sm z-50 transition-opacity duration-200 ${visible ? 'opacity-100' : 'opacity-0'}`}
     >
       <div
-        className="min-h-screen flex items-start justify-center p-4"
-        style={{ paddingBottom: 'max(4rem, calc(env(safe-area-inset-bottom) + 2rem))' }}
+        className="h-full flex items-end sm:items-center justify-center sm:p-4"
         onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       >
         <div
           role="dialog"
           aria-modal="true"
-          className={`nb-surface w-full max-w-lg p-6 my-8 rounded-2xl shadow-2xl border nb-border relative transition-all duration-200 ${visible ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-2'}`}
+          className={`nb-surface w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl border nb-border relative flex flex-col max-h-[90vh] sm:max-h-[85vh] ${dragging ? '' : 'transition-transform duration-300 ease-out'} ${visible ? 'translate-y-0 sm:scale-100' : 'translate-y-full sm:translate-y-2 sm:scale-95'}`}
+          style={dragging ? { transform: `translateY(${dragY}px)` } : undefined}
         >
-          <button onClick={onClose} aria-label="Close" className="absolute top-4 right-4 nb-text-faint hover:opacity-80 transition-colors p-1 rounded-full nb-share-btn">
+          {/* Grip -- mobile only, this is the one draggable surface. */}
+          <div
+            className="sm:hidden flex-shrink-0 flex justify-center pt-2.5 pb-1 touch-none cursor-grab active:cursor-grabbing"
+            onTouchStart={handleGripTouchStart}
+            onTouchMove={handleGripTouchMove}
+            onTouchEnd={handleGripTouchEnd}
+          >
+            <span className="w-10 h-1.5 rounded-full" style={{ background: 'var(--nb-border-strong)' }} />
+          </div>
+          <button onClick={onClose} aria-label="Close" className="absolute top-3 right-3 sm:top-4 sm:right-4 z-10 nb-text-faint hover:opacity-80 transition-colors p-1.5 rounded-full nb-share-btn">
             <X className="w-5 h-5" />
           </button>
-          {children}
+          <div className="overflow-y-auto overscroll-contain px-6 pb-6 pt-2 sm:pt-6 flex-1 min-h-0">
+            {children}
+          </div>
+          {footer && (
+            <div className="flex-shrink-0 border-t nb-border px-6 pt-4" style={{ paddingBottom: 'max(1rem, calc(env(safe-area-inset-bottom) + 0.5rem))' }}>
+              {footer}
+            </div>
+          )}
         </div>
       </div>
     </div>

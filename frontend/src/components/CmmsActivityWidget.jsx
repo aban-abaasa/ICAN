@@ -477,17 +477,23 @@ const CmmsActivityWidget = ({ hasCmmsAccess, cmmsCompanyId, cmmsIsAdmin, onOpenC
   const urgent = urgentCount > 0;
 
   return (
-    // A flat, bordered panel with its own fixed dark surface (not the
-    // page's theme colors) rather than a bright gradient card -- reads as
-    // a real data panel, not a promo tile, and stays fully legible in
-    // either the app's light or dark theme.
-    <div className={`mx-4 mt-4 rounded-lg border bg-slate-900 shadow-sm ${
-      urgent ? 'border-slate-800 border-l-[3px] border-l-amber-500' : 'border-slate-800'
-    }`}>
-      <div className="flex items-center justify-between gap-2 px-4 pt-3.5 pb-3 border-b border-slate-800">
+    // A theme-aware colored panel (dash-card-blue, see index.css) instead
+    // of a flat bg-slate-900 surface -- plain Tailwind slate/gray classes
+    // get force-flattened to a single color by ThemeContext's dynamic
+    // override stylesheet, which is why this used to render as a colorless
+    // white/gray box in every theme. dash-card-blue tints the theme's own
+    // bg/bgSecondary CSS vars instead of fighting that override, so it
+    // stays legible and on-brand in light, dark, and every custom theme.
+    <div
+      className="dash-card dash-card-blue mx-4 mt-4"
+      style={urgent
+        ? { paddingTop: 0, borderLeftColor: '#f59e0b', borderLeftWidth: '3px' }
+        : { paddingTop: 0 }}
+    >
+      <div className="flex items-center justify-between gap-2 px-4 pt-3.5 pb-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
         <div className="flex items-center gap-2 min-w-0">
-          <Activity className="w-4 h-4 text-slate-400 flex-shrink-0" />
-          <h3 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide truncate">Business Activity</h3>
+          <Activity className="w-4 h-4 flex-shrink-0" style={{ color: '#3b82f6' }} />
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide truncate" style={{ color: 'var(--color-textSecondary)' }}>Business Activity</h3>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
           {urgent && (

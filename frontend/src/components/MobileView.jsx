@@ -5465,13 +5465,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             the boxed-header pattern used for Dropship / the cash-flow
             chart — theme-aware surface (not the fixed dark cards) so it
             still reacts to the dark/light/purple/green/ocean picker. */}
-        <div
-          className="mb-3 px-4 py-3 rounded-xl border"
-          style={{
-            background: 'var(--color-bgSecondary)',
-            borderColor: 'var(--color-border)'
-          }}
-        >
+        <div className="dash-card dash-card-pink mb-3 px-4 py-3">
           <h2
             className="text-lg font-extrabold tracking-tight"
             style={{
@@ -5632,8 +5626,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         {/* View Transactions button */}
         <button
           onClick={() => setShowExpenseIncomePanel(true)}
-          className="mt-3 w-full flex items-center justify-between px-4 py-2.5 rounded-xl border transition-all active:scale-95 hover:border-green-500/30"
-          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bgSecondary)' }}
+          className="dash-card dash-card-orange mt-3 w-full flex items-center justify-between px-4 py-2.5 transition-all active:scale-95"
         >
           <div className="flex items-center gap-2">
             <span className="text-sm">📋</span>
@@ -7150,46 +7143,52 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               )}
             </div>
 
-            {/* Smart indicators */}
+            {/* Smart indicators -- each tile carries its own accent color
+                (dash-card-*, see index.css) instead of a Tailwind
+                bg-gradient-to-br class. ThemeContext's dynamic override
+                stylesheet force-flattens every `[class*="bg-gradient"]`
+                element to a single flat color, which is why these used to
+                render as plain white/gray boxes with only their opacity-
+                suffixed border surviving. */}
             <div className="grid grid-cols-4 gap-1.5 mb-4">
-              <div className={`rounded-lg p-1.5 bg-gradient-to-br ${style.cardBg} border ${style.cardBorder}`}>
+              <div className="dash-card dash-card-blue p-1.5" style={{ paddingTop: 'calc(0.375rem + 3px)' }}>
                 <div className="flex items-center gap-0.5 mb-0.5">
-                  <StageIcon className={`w-2.5 h-2.5 shrink-0 ${style.badgeText}`} />
-                  <p className={`text-[7px] font-semibold uppercase tracking-wide truncate ${style.titleText}`}>Net Worth</p>
+                  <StageIcon className="w-2.5 h-2.5 shrink-0" style={{ color: '#3b82f6' }} />
+                  <p className="text-[7px] font-semibold uppercase tracking-wide truncate" style={{ color: 'var(--color-textSecondary)' }}>Net Worth</p>
                 </div>
-                <p className="text-white font-bold text-[11px] leading-tight truncate">{formatCurrency(dashboardNetWorth)}</p>
-                <p className={`text-[7px] truncate ${style.badgeText}`}>{stageInfo.name}</p>
+                <p className="font-bold text-[11px] leading-tight truncate" style={{ color: 'var(--color-text)' }}>{formatCurrency(dashboardNetWorth)}</p>
+                <p className="text-[7px] truncate" style={{ color: '#3b82f6' }}>{stageInfo.name}</p>
               </div>
 
-              <div className="rounded-lg p-1.5 bg-white/5 border border-white/10">
+              <div className="dash-card dash-card-orange p-1.5" style={{ paddingTop: 'calc(0.375rem + 3px)' }}>
                 <div className="flex items-center gap-0.5 mb-0.5">
                   {netProfitMonthly >= 0 ? <TrendingUp className="w-2.5 h-2.5 shrink-0 text-emerald-400" /> : <TrendingDown className="w-2.5 h-2.5 shrink-0 text-red-400" />}
-                  <p className="text-[7px] font-semibold uppercase tracking-wide truncate text-gray-400">Net Profit</p>
+                  <p className="text-[7px] font-semibold uppercase tracking-wide truncate" style={{ color: 'var(--color-textSecondary)' }}>Net Profit</p>
                 </div>
                 <p className={`font-bold text-[11px] leading-tight truncate ${netProfitMonthly >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{formatCurrency(netProfitMonthly)}</p>
-                <p className="text-[7px] text-gray-500 truncate">This month</p>
+                <p className="text-[7px] truncate" style={{ color: 'var(--color-textSecondary)' }}>This month</p>
               </div>
 
-              <div className="rounded-lg p-1.5 bg-white/5 border border-white/10">
+              <div className="dash-card dash-card-purple p-1.5" style={{ paddingTop: 'calc(0.375rem + 3px)' }}>
                 <div className="flex items-center gap-0.5 mb-0.5">
-                  <Percent className="w-2.5 h-2.5 shrink-0 text-purple-400" />
-                  <p className="text-[7px] font-semibold uppercase tracking-wide truncate text-gray-400">Savings Rate</p>
+                  <Percent className="w-2.5 h-2.5 shrink-0" style={{ color: '#a855f7' }} />
+                  <p className="text-[7px] font-semibold uppercase tracking-wide truncate" style={{ color: 'var(--color-textSecondary)' }}>Savings Rate</p>
                 </div>
-                <p className="font-bold text-[11px] leading-tight truncate text-purple-300">
+                <p className="font-bold text-[11px] leading-tight truncate" style={{ color: '#a855f7' }}>
                   {typeof savingsRateMonthly === 'string' ? savingsRateMonthly : `${(savingsRateMonthly || 0).toFixed(1)}%`}
                 </p>
-                <p className="text-[7px] text-gray-500 truncate">This month</p>
+                <p className="text-[7px] truncate" style={{ color: 'var(--color-textSecondary)' }}>This month</p>
               </div>
 
-              <div className="rounded-lg p-1.5 bg-white/5 border border-white/10">
+              <div className="dash-card dash-card-pink p-1.5" style={{ paddingTop: 'calc(0.375rem + 3px)' }}>
                 <div className="flex items-center gap-0.5 mb-0.5">
-                  <Target className="w-2.5 h-2.5 shrink-0 text-yellow-400" />
-                  <p className="text-[7px] font-semibold uppercase tracking-wide truncate text-gray-400">ROI</p>
+                  <Target className="w-2.5 h-2.5 shrink-0" style={{ color: '#ec4899' }} />
+                  <p className="text-[7px] font-semibold uppercase tracking-wide truncate" style={{ color: 'var(--color-textSecondary)' }}>ROI</p>
                 </div>
-                <p className="font-bold text-[11px] leading-tight truncate text-yellow-300">
+                <p className="font-bold text-[11px] leading-tight truncate" style={{ color: '#ec4899' }}>
                   {typeof roiMonthly === 'string' ? roiMonthly : `${(roiMonthly || 0).toFixed(1)}%`}
                 </p>
-                <p className="text-[7px] text-gray-500 truncate">This month</p>
+                <p className="text-[7px] truncate" style={{ color: 'var(--color-textSecondary)' }}>This month</p>
               </div>
             </div>
 

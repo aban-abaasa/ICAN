@@ -192,39 +192,58 @@ const CMMSRoleConfiguration = ({ companyId, isAdmin, onRolesChanged }) => {
 
   return (
     <div className="space-y-6">
-      <div className="glass-card p-5 border border-purple-400/30">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
-          <div><h2 className="text-xl font-bold text-white">Role and tool configuration</h2><p className="text-sm text-gray-400">Create any role your company needs and choose exactly which CMMS tools it can access.</p></div>
-          {editingId && <button type="button" onClick={reset} className="text-gray-300 hover:text-white"><X className="w-5 h-5" /></button>}
+      <div className="glass-card p-4 sm:p-5 border border-purple-400/30">
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
+          <div className="min-w-0"><h2 className="text-lg sm:text-xl font-bold text-white">Role and tool configuration</h2><p className="text-sm text-gray-400">Create any role your company needs and choose exactly which CMMS tools it can access.</p></div>
+          {editingId && <button type="button" onClick={reset} className="p-1.5 -m-1.5 text-gray-300 active:text-white shrink-0"><X className="w-5 h-5" /></button>}
         </div>
         <form onSubmit={saveRole} className="space-y-4 mt-5">
-          <div className="grid md:grid-cols-2 gap-3">
-            <input required value={draft.display_name || ''} onChange={(e) => setDraft({ ...draft, display_name: e.target.value })} placeholder="Role name (for example: Fleet Planner)" className="w-full px-3 py-2 rounded bg-white/10 text-white border border-white/20" />
-            <input type="number" min="1" max="10" value={draft.permission_level || 1} onChange={(e) => setDraft({ ...draft, permission_level: e.target.value })} placeholder="Permission level" className="w-full px-3 py-2 rounded bg-white/10 text-white border border-white/20" />
+          <div className="grid sm:grid-cols-2 gap-3">
+            <label className="block">
+              <span className="block text-xs font-semibold text-gray-400 mb-1">Role name</span>
+              <input required value={draft.display_name || ''} onChange={(e) => setDraft({ ...draft, display_name: e.target.value })} placeholder="For example: Fleet Planner" className="w-full px-3 py-2.5 rounded bg-white/10 text-white border border-white/20 text-base" />
+            </label>
+            <label className="block">
+              <span className="block text-xs font-semibold text-gray-400 mb-1">Permission level <span className="text-gray-500 font-normal">(1-10)</span></span>
+              <input type="number" min="1" max="10" value={draft.permission_level || 1} onChange={(e) => setDraft({ ...draft, permission_level: e.target.value })} placeholder="Permission level" className="w-full px-3 py-2.5 rounded bg-white/10 text-white border border-white/20 text-base" />
+            </label>
           </div>
-          <textarea value={draft.description || ''} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="Describe what this role is responsible for" rows={2} className="w-full px-3 py-2 rounded bg-white/10 text-white border border-white/20" />
+          <label className="block">
+            <span className="block text-xs font-semibold text-gray-400 mb-1">Description</span>
+            <textarea value={draft.description || ''} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="Describe what this role is responsible for" rows={2} className="w-full px-3 py-2.5 rounded bg-white/10 text-white border border-white/20 text-base" />
+          </label>
           <div>
             <p className="text-white font-semibold mb-2">Tools this role may access</p>
-            <div className="grid md:grid-cols-2 gap-3">
+            <div className="grid sm:grid-cols-2 gap-3">
               {CMMS_TOOL_OPTIONS.map((tool) => {
                 const enabled = Boolean(selectedTools[tool.id]);
-                return <div key={tool.id} className={`rounded border p-3 ${enabled ? 'bg-green-500/10 border-green-400/50' : 'bg-white/5 border-white/10'}`}>
-                  <button type="button" onClick={() => toggleTool(tool)} className={`text-left font-semibold ${enabled ? 'text-green-200' : 'text-gray-400'}`}>
-                    <Check className={`inline w-4 h-4 mr-2 ${enabled ? 'opacity-100' : 'opacity-20'}`} />{tool.label}
+                return <div key={tool.id} className={`rounded-lg border p-3 ${enabled ? 'bg-green-500/10 border-green-400/50' : 'bg-white/5 border-white/10'}`}>
+                  <button type="button" onClick={() => toggleTool(tool)} className={`w-full flex items-center gap-2 text-left font-semibold py-1.5 -m-1.5 px-1.5 rounded ${enabled ? 'text-green-200' : 'text-gray-300 active:bg-white/5'}`}>
+                    <Check className={`shrink-0 w-5 h-5 ${enabled ? 'opacity-100' : 'opacity-20'}`} />
+                    <span className="flex-1 min-w-0 break-words">{tool.label}</span>
                   </button>
-                  {enabled && <div className="flex flex-wrap gap-2 mt-3 pl-6">
-                    {tool.actions.map((action) => <label key={action} className="inline-flex items-center gap-1 text-xs text-gray-300 capitalize">
-                      <input type="checkbox" checked={hasAction(tool, action)} onChange={() => toggleAction(tool, action)} />
-                      {action}
-                    </label>)}
-                    {tool.scopes && <label className="flex items-center gap-2 basis-full text-xs text-gray-300 mt-1">Data scope <span className="text-gray-500">(own, department, cross-department, or company-wide)</span>
-                      <select value={getScope(tool)} onChange={(event) => setScope(tool, event.target.value)} className="rounded bg-slate-900 border border-white/20 px-2 py-1 text-white">
+                  {enabled && <div className="flex flex-wrap gap-1.5 mt-3 pl-1">
+                    {tool.actions.map((action) => {
+                      const active = hasAction(tool, action);
+                      return <button
+                        key={action}
+                        type="button"
+                        onClick={() => toggleAction(tool, action)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold capitalize border transition-colors ${active ? 'bg-green-500 border-green-400 text-white shadow-sm shadow-green-900/40' : 'bg-white/5 border-white/15 text-gray-500 active:bg-white/10'}`}
+                      >
+                        {active && <Check className="w-3.5 h-3.5" />}
+                        {action}
+                      </button>;
+                    })}
+                    {tool.scopes && <div className="basis-full mt-2">
+                      <span className="block text-xs text-gray-400 mb-1">Data scope <span className="text-gray-500">(own, department, cross-department, or company-wide)</span></span>
+                      <select value={getScope(tool)} onChange={(event) => setScope(tool, event.target.value)} className="w-full rounded bg-slate-900 border border-white/20 px-3 py-2 text-white text-sm">
                         <option value="own">Own records only</option>
                         <option value="department">Department only</option>
                         <option value="cross_department">Cross-department</option>
                         <option value="company">Company-wide</option>
                       </select>
-                    </label>}
+                    </div>}
                   </div>}
                 </div>;
               })}
@@ -233,25 +252,25 @@ const CMMSRoleConfiguration = ({ companyId, isAdmin, onRolesChanged }) => {
           <div className="border-t border-white/10 pt-4">
             <p className="text-white font-semibold mb-1">Position details <span className="text-xs font-normal text-gray-500">(optional)</span></p>
             <p className="text-xs text-gray-400 mb-3">Fill this in once and a job posting created "from this role" auto-fills these fields instead of retyping them — see Announcements &amp; job postings.</p>
-            <div className="grid md:grid-cols-2 gap-3">
-              <input value={draft.job_title || ''} onChange={(e) => setDraft({ ...draft, job_title: e.target.value })} placeholder="Job title (e.g. Warehouse Supervisor)" className="px-3 py-2 rounded bg-white/10 text-white border border-white/20" />
-              <input value={draft.department || ''} onChange={(e) => setDraft({ ...draft, department: e.target.value })} placeholder="Department" className="px-3 py-2 rounded bg-white/10 text-white border border-white/20" />
-              <select value={draft.employment_type || ''} onChange={(e) => setDraft({ ...draft, employment_type: e.target.value })} className="px-3 py-2 rounded bg-slate-900 text-white border border-white/20">
+            <div className="grid sm:grid-cols-2 gap-3">
+              <input value={draft.job_title || ''} onChange={(e) => setDraft({ ...draft, job_title: e.target.value })} placeholder="Job title (e.g. Warehouse Supervisor)" className="px-3 py-2.5 rounded bg-white/10 text-white border border-white/20 text-base" />
+              <input value={draft.department || ''} onChange={(e) => setDraft({ ...draft, department: e.target.value })} placeholder="Department" className="px-3 py-2.5 rounded bg-white/10 text-white border border-white/20 text-base" />
+              <select value={draft.employment_type || ''} onChange={(e) => setDraft({ ...draft, employment_type: e.target.value })} className="px-3 py-2.5 rounded bg-slate-900 text-white border border-white/20 text-base">
                 <option value="">Employment type</option>
                 {EMPLOYMENT_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
               </select>
-              <input type="number" min="1" value={draft.positions_available || ''} onChange={(e) => setDraft({ ...draft, positions_available: e.target.value })} placeholder="Positions available" className="px-3 py-2 rounded bg-white/10 text-white border border-white/20" />
-              <input value={draft.salary_range || ''} onChange={(e) => setDraft({ ...draft, salary_range: e.target.value })} placeholder="Salary range (e.g. UGX 800,000 - 1,200,000)" className="px-3 py-2 rounded bg-white/10 text-white border border-white/20 md:col-span-2" />
-              <textarea value={draft.job_description || ''} onChange={(e) => setDraft({ ...draft, job_description: e.target.value })} placeholder="Job description" rows={2} className="px-3 py-2 rounded bg-white/10 text-white border border-white/20 md:col-span-2" />
-              <textarea value={draft.responsibilities || ''} onChange={(e) => setDraft({ ...draft, responsibilities: e.target.value })} placeholder="Key responsibilities" rows={2} className="px-3 py-2 rounded bg-white/10 text-white border border-white/20 md:col-span-2" />
-              <textarea value={draft.required_skills || ''} onChange={(e) => setDraft({ ...draft, required_skills: e.target.value })} placeholder="Required skills / qualifications" rows={2} className="px-3 py-2 rounded bg-white/10 text-white border border-white/20 md:col-span-2" />
+              <input type="number" min="1" value={draft.positions_available || ''} onChange={(e) => setDraft({ ...draft, positions_available: e.target.value })} placeholder="Positions available" className="px-3 py-2.5 rounded bg-white/10 text-white border border-white/20 text-base" />
+              <input value={draft.salary_range || ''} onChange={(e) => setDraft({ ...draft, salary_range: e.target.value })} placeholder="Salary range (e.g. UGX 800,000 - 1,200,000)" className="px-3 py-2.5 rounded bg-white/10 text-white border border-white/20 text-base sm:col-span-2" />
+              <textarea value={draft.job_description || ''} onChange={(e) => setDraft({ ...draft, job_description: e.target.value })} placeholder="Job description" rows={2} className="px-3 py-2.5 rounded bg-white/10 text-white border border-white/20 text-base sm:col-span-2" />
+              <textarea value={draft.responsibilities || ''} onChange={(e) => setDraft({ ...draft, responsibilities: e.target.value })} placeholder="Key responsibilities" rows={2} className="px-3 py-2.5 rounded bg-white/10 text-white border border-white/20 text-base sm:col-span-2" />
+              <textarea value={draft.required_skills || ''} onChange={(e) => setDraft({ ...draft, required_skills: e.target.value })} placeholder="Required skills / qualifications" rows={2} className="px-3 py-2.5 rounded bg-white/10 text-white border border-white/20 text-base sm:col-span-2" />
             </div>
           </div>
           {error && <p className="text-red-300 text-sm">{error}</p>}
-          <button disabled={saving} className="px-4 py-2 rounded bg-purple-600 hover:bg-purple-500 text-white font-semibold flex items-center gap-2"><Save className="w-4 h-4" />{saving ? 'Saving…' : editingId ? 'Update role' : 'Create role'}</button>
+          <button disabled={saving} className="w-full sm:w-auto px-4 py-3 sm:py-2 rounded bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white font-semibold flex items-center justify-center gap-2"><Save className="w-4 h-4" />{saving ? 'Saving…' : editingId ? 'Update role' : 'Create role'}</button>
         </form>
       </div>
-      <div className="glass-card p-5"><h3 className="text-lg font-bold text-white mb-4">Company roles ({roles.length})</h3>{loading ? <p className="text-gray-400">Loading roles…</p> : <div className="space-y-2">{roles.map((role) => <div key={role.id} className="flex flex-wrap items-center justify-between gap-3 p-3 rounded bg-white/5 border border-white/10"><div><p className="text-white font-semibold">{role.display_name || role.role_name}</p><p className="text-xs text-gray-400">{role.description || 'No description'} · {Object.values(role.tool_access || {}).filter(Boolean).length} tools</p></div><div className="flex gap-2">{!role.is_system_role && role.cmms_company_id === companyId && <><button onClick={() => { setDraft({ ...role, tool_access: role.tool_access || {} }); setEditingId(role.id); }} className="p-2 text-blue-300 hover:text-white" title="Edit role"><Edit2 className="w-4 h-4" /></button><button onClick={() => deleteRole(role)} className="p-2 text-red-300 hover:text-white" title="Deactivate role"><Trash2 className="w-4 h-4" /></button></>}</div></div>)}</div>}</div>
+      <div className="glass-card p-4 sm:p-5"><h3 className="text-lg font-bold text-white mb-4">Company roles ({roles.length})</h3>{loading ? <p className="text-gray-400">Loading roles…</p> : <div className="space-y-2">{roles.map((role) => <div key={role.id} className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg bg-white/5 border border-white/10"><div className="min-w-0 flex-1"><p className="text-white font-semibold break-words">{role.display_name || role.role_name}</p><p className="text-xs text-gray-400 break-words">{role.description || 'No description'} · {Object.values(role.tool_access || {}).filter(Boolean).length} tools</p></div><div className="flex gap-1 shrink-0">{!role.is_system_role && role.cmms_company_id === companyId && <><button onClick={() => { setDraft({ ...role, tool_access: role.tool_access || {} }); setEditingId(role.id); }} className="p-2.5 text-blue-300 active:text-white active:bg-white/10 rounded-lg" title="Edit role"><Edit2 className="w-5 h-5" /></button><button onClick={() => deleteRole(role)} className="p-2.5 text-red-300 active:text-white active:bg-white/10 rounded-lg" title="Deactivate role"><Trash2 className="w-5 h-5" /></button></>}</div></div>)}</div>}</div>
       <div className="text-xs text-gray-400 flex items-center gap-2"><Plus className="w-4 h-4" />Roles are company-specific. Existing fixed roles can be deactivated and replaced with your company’s own names and tool combinations.</div>
     </div>
   );

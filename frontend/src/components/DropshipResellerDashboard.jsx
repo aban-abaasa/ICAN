@@ -116,9 +116,9 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
   };
 
   const tabs = [
-    { id: 'browse', label: 'Browse products', icon: Package },
-    { id: 'listings', label: 'My listings', icon: ClipboardList },
-    { id: 'sales', label: 'Your sales', icon: TrendingUp },
+    { id: 'browse', label: 'Browse products', icon: Package, accent: '#3b82f6' },
+    { id: 'listings', label: 'My listings', icon: ClipboardList, accent: '#a855f7' },
+    { id: 'sales', label: 'Your sales', icon: TrendingUp, accent: '#ec4899' },
   ];
 
   return (
@@ -141,19 +141,22 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
 
       {/* Three independent tab containers -- each its own bordered card,
           not a shared underline bar, so they read (and behave) as
-          separate, self-contained buttons. */}
+          separate, self-contained buttons. Each carries its own accent
+          color (set via inline style, not a plain Tailwind color class,
+          since those get force-flattened to one color by ThemeContext's
+          dynamic override stylesheet) instead of every tab sharing the
+          same teal. */}
       <div className="grid grid-cols-3 gap-2">
-        {tabs.map(({ id, label, icon: Icon }) => (
+        {tabs.map(({ id, label, icon: Icon, accent }) => (
           <button
             key={id}
             onClick={() => setTab(id)}
-            className={`flex flex-col items-center gap-1 rounded-xl border px-2 py-2.5 text-center transition min-w-0 ${
-              tab === id
-                ? 'border-teal-400/50 bg-teal-500/15 text-white'
-                : 'border-slate-800 bg-slate-900/60 text-slate-400 hover:text-slate-200 hover:border-slate-700'
-            }`}
+            className="flex flex-col items-center gap-1 rounded-xl border px-2 py-2.5 text-center transition min-w-0"
+            style={tab === id
+              ? { borderColor: accent, backgroundColor: `${accent}26`, color: 'var(--color-text)' }
+              : { borderColor: `${accent}40`, backgroundColor: `${accent}14`, color: 'var(--color-textSecondary)' }}
           >
-            <Icon className={`w-4 h-4 ${tab === id ? 'text-teal-400' : ''}`} />
+            <Icon className="w-4 h-4" style={{ color: tab === id ? accent : `${accent}b0` }} />
             <span className="text-[11px] font-semibold truncate w-full">{label}</span>
           </button>
         ))}
@@ -186,13 +189,13 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
                   // the listing controls. Keeps the list itself simple and
                   // guarantees nothing can overflow a narrow phone, since
                   // only one row's controls are ever on screen at once.
-                  <div key={product.product_id} className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden">
+                  <div key={product.product_id} className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', borderLeft: '3px solid #3b82f6', backgroundColor: 'var(--color-bgSecondary)' }}>
                     <button
                       type="button"
                       onClick={() => setExpandedBrowseId(isOpen ? null : product.product_id)}
                       className="w-full flex items-center gap-3 p-3 text-left"
                     >
-                      <div className={`rounded-lg bg-slate-800 flex items-center justify-center overflow-hidden shrink-0 transition-all duration-200 ${isOpen ? 'w-16 h-16' : 'w-10 h-10'}`}>
+                      <div className={`rounded-lg flex items-center justify-center overflow-hidden shrink-0 transition-all duration-200 ${isOpen ? 'w-16 h-16' : 'w-10 h-10'}`} style={{ backgroundColor: 'rgba(59,130,246,0.14)' }}>
                         {product.images?.[0] ? <img src={product.images[0]} alt="" className="w-full h-full object-cover" /> : <Store className={`text-slate-600 ${isOpen ? 'w-6 h-6' : 'w-4 h-4'}`} />}
                       </div>
                       <div className="min-w-0 flex-1">
@@ -268,13 +271,13 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
                 const isOpen = expandedListingId === item.listing_id;
                 return (
                   // Same collapsed-list-row pattern as Browse products.
-                  <div key={item.listing_id} className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden">
+                  <div key={item.listing_id} className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', borderLeft: '3px solid #a855f7', backgroundColor: 'var(--color-bgSecondary)' }}>
                     <button
                       type="button"
                       onClick={() => setExpandedListingId(isOpen ? null : item.listing_id)}
                       className="w-full flex items-center gap-3 p-3 text-left"
                     >
-                      <div className={`rounded-lg bg-slate-800 flex items-center justify-center overflow-hidden shrink-0 transition-all duration-200 ${isOpen ? 'w-16 h-16' : 'w-10 h-10'}`}>
+                      <div className={`rounded-lg flex items-center justify-center overflow-hidden shrink-0 transition-all duration-200 ${isOpen ? 'w-16 h-16' : 'w-10 h-10'}`} style={{ backgroundColor: 'rgba(168,85,247,0.14)' }}>
                         {item.images?.[0] ? <img src={item.images[0]} alt="" className="w-full h-full object-cover" /> : <Store className={`text-slate-600 ${isOpen ? 'w-6 h-6' : 'w-4 h-4'}`} />}
                       </div>
                       <div className="min-w-0 flex-1">
@@ -336,10 +339,10 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
           ) : (
             <div className="space-y-2">
               {sales.map((order) => (
-                <div key={order.id} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                <div key={order.id} className="flex items-center justify-between rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', borderLeft: '3px solid #ec4899', backgroundColor: 'var(--color-bgSecondary)' }}>
                   <div>
-                    <p className="text-sm text-white">{order.customer_receipt_number}</p>
-                    <p className="text-xs text-slate-500">{new Date(order.created_at).toLocaleString()} · delivery {order.transport_status}</p>
+                    <p className="text-sm" style={{ color: 'var(--color-text)' }}>{order.customer_receipt_number}</p>
+                    <p className="text-xs" style={{ color: 'var(--color-textSecondary)' }}>{new Date(order.created_at).toLocaleString()} · delivery {order.transport_status}</p>
                   </div>
                   <p className="text-emerald-400 font-semibold">+{formatUGX(order.reseller_margin_amount)}</p>
                 </div>

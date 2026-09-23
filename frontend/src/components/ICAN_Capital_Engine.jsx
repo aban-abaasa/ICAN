@@ -8514,7 +8514,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
     return (
       <div className="space-y-6">
         {/* Header with IOR */}
-        <div className="glass-card p-4 md:p-6">
+        <div className="dash-card dash-card-blue p-4 md:p-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 md:gap-0 mb-4">
             <div className="text-center md:text-left flex-1">
               <h1 className="text-xl md:text-2xl font-bold text-white">IcanEra Opportunity Rating</h1>
@@ -8662,7 +8662,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
         <div className="space-y-4">
           {/* Journey Details Panel */}
           {showJourneyDetails && (
-            <div className="glass-card p-6 border-l-4 border-blue-500">
+            <div className="dash-card dash-card-blue p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                   <Building className="w-5 h-5 text-blue-400" />
@@ -8682,7 +8682,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
 
           {/* Financial Analytics Panel */}
           {showFinancialAnalytics && (
-            <div className="glass-card p-6 border-l-4 border-orange-500">
+            <div className="dash-card dash-card-orange p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                   <BarChart3 className="w-5 h-5 text-orange-400" />
@@ -8715,7 +8715,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
 
           {/* Loan & Tithe Tools Panel */}
           {showBusinessLoanCalculator && (
-            <div className="glass-card p-6 border-l-4 border-purple-500">
+            <div className="dash-card dash-card-purple p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                   <Briefcase className="w-5 h-5 text-purple-400" />
@@ -8759,9 +8759,11 @@ Data Freshness: ${reportData.metadata.dataFreshness}
 
         {/* Net Worth Velocity & Tithing Status */}
         <div className="grid md:grid-cols-3 gap-4">
-          <div className="glass-card p-4">
+          <div className="dash-card dash-card-blue p-4">
             <div className="flex items-center gap-2 mb-2">
-              <TrendingUp className="w-5 h-5 text-green-400" />
+              <span className="dash-card-icon" style={{ backgroundColor: 'rgba(59,130,246,0.18)' }}>
+                <TrendingUp className="w-4 h-4" style={{ color: '#3b82f6' }} />
+              </span>
               <span className="text-white font-medium">Net Worth</span>
             </div>
             <div className="text-2xl font-bold text-white">
@@ -8772,9 +8774,11 @@ Data Freshness: ${reportData.metadata.dataFreshness}
             </div>
           </div>
 
-          <div className="glass-card p-4">
+          <div className="dash-card dash-card-orange p-4">
             <div className="flex items-center gap-2 mb-2">
-              <Activity className="w-5 h-5 text-blue-400" />
+              <span className="dash-card-icon" style={{ backgroundColor: 'rgba(249,115,22,0.18)' }}>
+                <Activity className="w-4 h-4" style={{ color: '#f97316' }} />
+              </span>
               <span className="text-white font-medium">30-Day Velocity</span>
             </div>
             <div className={`text-2xl font-bold ${netWorthVelocity >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -8784,9 +8788,11 @@ Data Freshness: ${reportData.metadata.dataFreshness}
           </div>
 
           {/* Tithing Status Card */}
-          <div className="glass-card p-4 cursor-pointer hover:bg-opacity-20 transition-all" onClick={() => setShowTithingCalculator(true)}>
+          <div className="dash-card dash-card-purple p-4 cursor-pointer transition-all" onClick={() => setShowTithingCalculator(true)}>
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-lg">🙏</span>
+              <span className="dash-card-icon" style={{ backgroundColor: 'rgba(168,85,247,0.18)' }}>
+                <span className="text-lg">🙏</span>
+              </span>
               <span className="text-white font-medium">Faithfulness</span>
             </div>
             {(() => {
@@ -8824,9 +8830,11 @@ Data Freshness: ${reportData.metadata.dataFreshness}
 
         {/* Smart Spending Insights */}
         {transactions.length >= 3 && (
-          <div className="glass-card p-4">
+          <div className="dash-card dash-card-pink p-4">
             <div className="flex items-center gap-2 mb-4">
-              <Brain className="w-5 h-5 text-purple-400" />
+              <span className="dash-card-icon" style={{ backgroundColor: 'rgba(236,72,153,0.18)' }}>
+                <Brain className="w-4 h-4" style={{ color: '#ec4899' }} />
+              </span>
               <span className="text-white font-medium">AI Spending Intelligence</span>
             </div>
             <SmartSpendingInsights transactions={transactions} />
@@ -8836,16 +8844,18 @@ Data Freshness: ${reportData.metadata.dataFreshness}
         {/* AI Wealth Advisor & Multimedia Manager - Same Row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Proactive AI Suggestions */}
-          <div className="glass-card p-4">
+          <div className="dash-card dash-card-pink p-4">
             <div className="flex items-center gap-2 mb-4">
-              <Sparkles className="w-5 h-5 text-yellow-400" />
+              <span className="dash-card-icon" style={{ backgroundColor: 'rgba(236,72,153,0.18)' }}>
+                <Sparkles className="w-4 h-4" style={{ color: '#ec4899' }} />
+              </span>
               <span className="text-white font-medium">AI Wealth Advisor</span>
               <div className="ml-auto flex items-center gap-1">
                 <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
                 <span className="text-xs text-green-400">Active</span>
               </div>
             </div>
-            <ProactiveAISuggestions 
+            <ProactiveAISuggestions
               transactions={transactions}
               netWorth={netWorth}
               currentJourneyStage={currentJourneyStage}
@@ -8855,7 +8865,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
           </div>
 
           {/* AI Multimedia Manager */}
-          <div className="glass-card p-4">
+          <div className="dash-card dash-card-purple p-4">
             <AIMultimediaManager
               transactions={transactions}
               netWorth={netWorth}

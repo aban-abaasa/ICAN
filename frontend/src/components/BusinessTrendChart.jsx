@@ -56,11 +56,15 @@ export default function BusinessTrendChart({ data = [], loading = false, busines
   );
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-lg shadow-sm">
-      <div className="flex items-center justify-between gap-2 px-4 pt-3.5 pb-3 border-b border-slate-800">
+    // dash-card-pink (see index.css) instead of a flat bg-slate-900 --
+    // plain slate classes get force-flattened to one color by
+    // ThemeContext's dynamic override stylesheet, which is why this used
+    // to render as a colorless white/gray box in every theme.
+    <div className="dash-card dash-card-pink" style={{ paddingTop: 0 }}>
+      <div className="flex items-center justify-between gap-2 px-4 pt-3.5 pb-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
         <div className="flex items-center gap-2 min-w-0">
-          <LineChartIcon className="w-4 h-4 text-rose-400 flex-shrink-0" />
-          <h3 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide truncate">{businessName} — Share Trend</h3>
+          <LineChartIcon className="w-4 h-4 flex-shrink-0" style={{ color: '#ec4899' }} />
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide truncate" style={{ color: 'var(--color-textSecondary)' }}>{businessName} — Share Trend</h3>
         </div>
         {hasData && (
           <span className={`flex items-center gap-1 text-[11px] font-semibold px-1.5 py-0.5 rounded border flex-shrink-0 ${

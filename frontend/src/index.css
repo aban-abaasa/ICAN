@@ -176,6 +176,85 @@ html {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 
+/* ==================== Colorful Dashboard Cards ====================
+   Distinct-hue card variants for the main dashboard so its containers
+   don't all read as one flat "glass" tone. Built on the same CSS
+   variables as .glass-card (so they still shift with the active
+   theme/light-dark mode), then tinted with color-mix so each keeps its
+   own identity in every theme instead of being flattened by the
+   ThemeContext dynamic override (which only rewrites known Tailwind
+   color utility classes, not these custom ones). */
+.dash-card {
+  position: relative;
+  border-radius: 16px;
+  padding-top: calc(1rem + 3px);
+  border: 1px solid var(--color-border);
+  background: linear-gradient(135deg, var(--color-bgSecondary) 0%, var(--color-bg) 100%);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.16);
+  overflow: hidden;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.dash-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--dash-accent-grad);
+}
+
+.dash-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+}
+
+.dash-card-blue {
+  --dash-accent: #3b82f6;
+  --dash-accent-grad: linear-gradient(90deg, #3b82f6, #60a5fa);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--dash-accent) 16%, var(--color-bgSecondary)) 0%, var(--color-bg) 100%);
+  border-color: color-mix(in srgb, var(--dash-accent) 38%, var(--color-border));
+  box-shadow: 0 4px 20px color-mix(in srgb, var(--dash-accent) 20%, transparent);
+}
+
+.dash-card-orange {
+  --dash-accent: #f97316;
+  --dash-accent-grad: linear-gradient(90deg, #f97316, #fb923c);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--dash-accent) 16%, var(--color-bgSecondary)) 0%, var(--color-bg) 100%);
+  border-color: color-mix(in srgb, var(--dash-accent) 38%, var(--color-border));
+  box-shadow: 0 4px 20px color-mix(in srgb, var(--dash-accent) 20%, transparent);
+}
+
+.dash-card-purple {
+  --dash-accent: #a855f7;
+  --dash-accent-grad: linear-gradient(90deg, #a855f7, #c084fc);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--dash-accent) 16%, var(--color-bgSecondary)) 0%, var(--color-bg) 100%);
+  border-color: color-mix(in srgb, var(--dash-accent) 38%, var(--color-border));
+  box-shadow: 0 4px 20px color-mix(in srgb, var(--dash-accent) 20%, transparent);
+}
+
+.dash-card-pink {
+  --dash-accent: #ec4899;
+  --dash-accent-grad: linear-gradient(90deg, #ec4899, #f472b6);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--dash-accent) 16%, var(--color-bgSecondary)) 0%, var(--color-bg) 100%);
+  border-color: color-mix(in srgb, var(--dash-accent) 38%, var(--color-border));
+  box-shadow: 0 4px 20px color-mix(in srgb, var(--dash-accent) 20%, transparent);
+}
+
+/* Small round icon chip used inside .dash-card headers, tinted to match
+   the card's accent via inline style (see dashCardIconStyle in
+   ICAN_Capital_Engine.jsx) so it survives the theme override too. */
+.dash-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
 /* Solid card for wallet and dashboard - opaque background */
 .solid-card {
   background: linear-gradient(135deg, var(--color-bgSecondary) 0%, var(--color-bg) 100%);

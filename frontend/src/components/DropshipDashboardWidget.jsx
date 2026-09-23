@@ -61,24 +61,26 @@ const DropshipDashboardWidget = ({ userId, userEmail }) => {
   }
 
   return (
-    // Classic teal -- trade & commerce, distinct from CMMS's indigo, the
-    // share-trend card's burgundy, and the ledger's navy. Same flat
-    // dark-panel system as the rest of the dashboard's stat cards.
-    //
     // Every section here is its OWN independent bordered container --
     // header, storefront/tab picker, and (inside DropshipResellerDashboard)
     // the storefront card / tabs / listing rows -- siblings stacked with
     // spacing, not nested inside one shared outer box. That's what let the
     // "My listings" row overflow before: everything crammed inside a
     // single wrapper instead of standing on its own.
+    //
+    // Each container carries its own accent color (dash-card-*, see
+    // index.css) rather than the flat bg-slate-900 every card here used
+    // to share -- that plain class gets force-flattened to one color by
+    // ThemeContext's dynamic override stylesheet, which is why this used
+    // to render as identical colorless white/gray boxes in every theme.
     <div className="space-y-3">
-      <div className="flex items-center gap-2 px-4 py-3 rounded-lg border border-slate-800 bg-slate-900 shadow-sm">
-        <ShoppingBag className="w-4 h-4 text-teal-400" />
-        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Dropship</p>
+      <div className="dash-card dash-card-orange flex items-center gap-2 px-4 py-3">
+        <ShoppingBag className="w-4 h-4" style={{ color: '#f97316' }} />
+        <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-textSecondary)' }}>Dropship</p>
       </div>
 
       {profiles.length === 0 ? (
-        <div className="rounded-lg border border-slate-800 bg-slate-900 shadow-sm p-4 space-y-3">
+        <div className="dash-card dash-card-purple p-4 space-y-3">
           <DropshipBrowse />
 
           <div className="border-t border-slate-800 pt-3">

@@ -98,6 +98,63 @@ export const cancelInterview = async (scheduleId) => {
   return { success: true };
 };
 
+/** The interview-stage equivalent of grading a written test -- an
+ * interviewer marks whether they were satisfied with the candidate (kept in
+ * cmms_interview_feedback, a separate staff-only table -- see
+ * CMMS_INTERVIEW_FEEDBACK.sql for why this never lives as columns on the
+ * candidate-readable schedule row). Upserts so re-opening "Mark outcome"
+ * after the fact edits the same record instead of creating a second one,
+ * and -- since marking an outcome only makes sense once the call actually
+ * happened -- also flips a still-'scheduled' row to 'completed', the same
+ * "the action IS the status change" shortcut written-test assignment/
+ * grading already uses. Mirrors the outcome onto the application's
+ * status_note so it reads at a glance in the Applications list, same as a
+ * written test's score. */
+export const markInterviewOutcome = async (schedule, applicationId, { outcome, feedback }, markedByCmmsUserId) => {
+  const { data, error } = await supabase
+    .from('cmms_interview_feedback')
+    .upsert({
+      interview_schedule_id: schedule.id,
+      cmms_company_id: schedule.cmms_company_id,
+      outcome,
+      feedback: feedback?.trim() || null,
+      marked_by: markedByCmmsUserId || null,
+      marked_at: new Date().toISOString(),
+    }, { onConflict: 'interview_schedule_id' })
+    .select()
+    .single();
+  if (error) return { success: false, error: error.message };
+
+  if (schedule.status === 'scheduled') {
+    await supabase.from('cmms_interview_schedules').update({ status: 'completed' }).eq('id', schedule.id);
+  }
+
+  if (applicationId) {
+    await supabase
+      .from('cmms_job_applications')
+      .update({
+        status_note: outcome === 'satisfied' ? 'Interview outcome: Satisfied ✓' : 'Interview outcome: Not satisfied',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', applicationId);
+  }
+
+  return { success: true, data };
+};
+
+/** Every recorded outcome for a set of schedules at once (one query, not
+ * one per interview row) -- keyed lookups happen client-side via
+ * interview_schedule_id. */
+export const getFeedbackForInterviews = async (scheduleIds) => {
+  if (!scheduleIds?.length) return { success: true, data: [] };
+  const { data, error } = await supabase
+    .from('cmms_interview_feedback')
+    .select('*')
+    .in('interview_schedule_id', scheduleIds);
+  if (error) return { success: false, error: error.message, data: [] };
+  return { success: true, data: data || [] };
+};
+
 // Always the real production domain (icanera.space), not
 // window.location.origin -- an admin scheduling from a dev/staging build
 // would otherwise hand the candidate/interviewer a link nobody but them
@@ -135,6 +192,8 @@ export default {
   scheduleInterviewForBid,
   getInterviewsForBid,
   cancelInterview,
+  markInterviewOutcome,
+  getFeedbackForInterviews,
   buildCandidateInterviewLink,
   canJoinInterview,
   getInterviewPrefillContact,

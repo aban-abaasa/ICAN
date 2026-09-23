@@ -124,16 +124,19 @@ export default function DailyTrackingChart({
   };
 
   return (
-    // Classic navy ledger, on the same flat dark-panel system as the rest
-    // of the dashboard -- distinct from CMMS's indigo and the share-trend
-    // card's burgundy. Income/expense/net keep their existing semantic
-    // colors (green/gold/icy-blue) since those are meaningful, not decor.
-    //
     // Four independent containers -- header, presets, chart, totals --
-    // stacked as siblings rather than nested inside one shared card, same
-    // pattern used for the Dropship section.
+    // stacked as siblings, each carrying its own accent color
+    // (blue/purple/orange/pink, see .dash-card-* in index.css) instead of
+    // a single flat bg-slate-900 surface. Plain slate/gray Tailwind
+    // classes get force-flattened to one color by ThemeContext's dynamic
+    // override stylesheet, which is why this used to render as identical
+    // colorless white/gray boxes in every theme -- dash-card tints the
+    // theme's own CSS vars instead of fighting that override, so each
+    // panel keeps its identity in light, dark, and every custom theme.
+    // Income/expense/net keep their existing semantic colors
+    // (green/gold/icy-blue) since those are meaningful, not decor.
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2 px-4 py-3 rounded-lg border border-slate-800 bg-slate-900 shadow-sm">
+      <div className="dash-card dash-card-blue flex items-center justify-between gap-2 px-4 py-3">
         <div className="flex items-center gap-2 min-w-0">
           {canGoBack && (
             <button
@@ -145,8 +148,8 @@ export default function DailyTrackingChart({
               <ChevronLeft className="w-4 h-4" />
             </button>
           )}
-          <Activity className="w-4 h-4 text-blue-400 shrink-0" />
-          <h3 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide truncate">{title}</h3>
+          <Activity className="w-4 h-4 shrink-0" style={{ color: '#3b82f6' }} />
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide truncate" style={{ color: 'var(--color-textSecondary)' }}>{title}</h3>
         </div>
         {hasActivity && (
           <span className={`flex items-center gap-1 text-[11px] font-semibold px-1.5 py-0.5 rounded border shrink-0 ${
@@ -160,7 +163,7 @@ export default function DailyTrackingChart({
 
       {/* Range presets — years of history, one tap away */}
       {onPresetChange && (
-        <div className="rounded-lg border border-slate-800 bg-slate-900 shadow-sm p-3">
+        <div className="dash-card dash-card-purple p-3">
           <div className="flex items-center gap-1.5">
             <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-lg p-0.5 flex-1">
               {PRESETS.map((p) => (
@@ -197,7 +200,7 @@ export default function DailyTrackingChart({
         </div>
       )}
 
-      <div className="rounded-lg border border-slate-800 bg-slate-900 shadow-sm p-4">
+      <div className="dash-card dash-card-orange p-4">
         {loading ? (
           <div className="h-48 flex items-center justify-center text-slate-500 text-xs">Loading activity…</div>
         ) : !hasActivity ? (
@@ -239,7 +242,7 @@ export default function DailyTrackingChart({
       </div>
 
       {hasActivity && !loading && (
-        <div className="grid grid-cols-3 gap-2 rounded-lg border border-slate-800 bg-slate-900 shadow-sm p-3">
+        <div className="dash-card dash-card-pink grid grid-cols-3 gap-2 p-3">
           <div className="text-center min-w-0">
             <p className="font-bold text-sm tabular-nums whitespace-nowrap" style={{ color: CHART_COLORS.income }}>{fmtShort(totalIncome)}</p>
             <p className="text-[10px] text-slate-500">Income</p>

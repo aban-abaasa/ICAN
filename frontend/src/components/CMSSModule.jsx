@@ -70,6 +70,33 @@ import CMMSEmployeeSelfService from './CMMSEmployeeSelfService.jsx';
 import CMMSAnnouncementsPanel from './CMMSAnnouncementsPanel.jsx';
 import CMMSServiceProviderContractPanel from './CMMSServiceProviderContractPanel.jsx';
 
+// Plain-text labels for the collapsed header strip (see isHeaderCollapsed) --
+// a separate, deliberately duplicated list rather than reusing CMSTabsWithMenu's
+// own emoji-prefixed `allTabs` (defined deep inside that sub-component, not
+// reachable from here) since the compact strip just needs one short word or
+// two, not the full tab-bar label.
+const CMMS_TAB_TITLES = {
+  company: 'Company',
+  departments: 'Departments',
+  users: 'Users & Roles',
+  'role-config': 'Role Configuration',
+  inventory: 'Inventory',
+  attendance: 'Staff Attendance',
+  'visitor-mgmt': 'Visitor Management',
+  announcements: 'Announcements & Jobs',
+  fees: 'School Fees',
+  production: 'Production / WIP',
+  quality: 'Quality Control',
+  pharmacy: 'Pharmacy & Supplies',
+  clinical: 'Clinical Operations',
+  payroll: 'Payroll',
+  transport: 'Transport',
+  requisitions: 'Requisitions',
+  reports: 'Reports',
+  tasks: 'Tasks',
+  approvals: 'Approvals',
+};
+
 const CMMSModule = ({
   onDataUpdate,
   netWorth,
@@ -1013,7 +1040,17 @@ const CMMSModule = ({
 
   const [activeTab, _setActiveTab] = useState('company');
   const [, setSyncingPichin] = useState(false);
-  const setActiveTab = (newTab) => { if (newTab !== activeTab) { onTabChange?.(activeTab); } _setActiveTab(newTab); };
+  // The company/business/role switcher (cmms-top-header below) only earns
+  // its space on the 'company' landing tab -- once a visitor has actually
+  // drilled into a tool (Announcements, Attendance, Payroll, ...) that block
+  // is dead weight above content that's fighting for room on a phone, so it
+  // collapses to a single compact strip. headerExpanded is a manual escape
+  // hatch (the strip's own chevron) for switching business/role without
+  // first backing out to 'company', and resets on every tab change so a
+  // fresh tool always opens with the full page to itself.
+  const [headerExpanded, setHeaderExpanded] = useState(false);
+  const setActiveTab = (newTab) => { if (newTab !== activeTab) { onTabChange?.(activeTab); } setHeaderExpanded(false); _setActiveTab(newTab); };
+  const isHeaderCollapsed = activeTab !== 'company' && !headerExpanded;
   // Set by a notification's "View Task" click so TasksManager can jump straight to that task.
   const [pendingTaskId, setPendingTaskId] = useState(null);
   const handleNotificationAction = (tab, relatedTaskId) => {
@@ -6630,15 +6667,15 @@ const CMMSModule = ({
       <div className="space-y-6">
         {/* Department Overview Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="glass-card p-4 bg-blue-500 bg-opacity-10 border-l-4 border-blue-500">
+          <div className="dash-card dash-card-blue p-4">
             <div className="text-xs text-gray-400 font-semibold">TOTAL DEPARTMENTS</div>
             <div className="text-2xl font-bold text-blue-300 mt-1">{managedDepts.length}</div>
           </div>
-          <div className="glass-card p-4 bg-green-500 bg-opacity-10 border-l-4 border-green-500">
+          <div className="dash-card dash-card-orange p-4">
             <div className="text-xs text-gray-400 font-semibold">ACTIVE STAFF</div>
-            <div className="text-2xl font-bold text-green-300 mt-1">{cmmsData.users?.length || 0}</div>
+            <div className="text-2xl font-bold text-orange-300 mt-1">{cmmsData.users?.length || 0}</div>
           </div>
-          <div className="glass-card p-4 bg-purple-500 bg-opacity-10 border-l-4 border-purple-500">
+          <div className="dash-card dash-card-purple p-4">
             <div className="text-xs text-gray-400 font-semibold">AVG STAFF/DEPT</div>
             <div className="text-2xl font-bold text-purple-300 mt-1">
               {managedDepts.length > 0 ? Math.ceil((cmmsData.users?.length || 0) / managedDepts.length) : 0}
@@ -8116,7 +8153,7 @@ const CMMSModule = ({
     };
 
     return (
-      <div className="glass-card p-8">
+      <div className="dash-card dash-card-pink p-8">
         {/* Welcome Header with Icons */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-8 pb-6 border-b border-white border-opacity-20">
@@ -8147,7 +8184,7 @@ const CMMSModule = ({
           <div className="flex gap-6 items-start flex-wrap">
             {/* Company Profile Icon */}
             <div className="flex flex-col items-center">
-              <button 
+              <button
                 onClick={() => {
                   if (showCompanyForm) {
                     setShowCompanyForm(false);
@@ -8156,14 +8193,8 @@ const CMMSModule = ({
                   setSelectedBusinessCategory(null);
                   setShowBusinessCategorySelector(true);
                 }}
-                className={`
-                  flex flex-col items-center justify-center w-24 h-24 rounded-lg 
-                  transition-all transform hover:scale-110 shadow-lg
-                  ${showCompanyForm 
-                    ? 'bg-gradient-to-br from-blue-600 to-blue-800 ring-2 ring-blue-400 scale-105' 
-                    : 'bg-gradient-to-br from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800'
-                  }
-                `} 
+                className={`flex flex-col items-center justify-center w-24 h-24 rounded-lg transition-all transform hover:scale-110 shadow-lg ${showCompanyForm ? 'ring-2 ring-blue-400 scale-105' : ''}`}
+                style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)' }}
                 title="Create Company Profile"
               >
                 <Building className="w-10 h-10 text-white mb-2" />
@@ -8176,14 +8207,8 @@ const CMMSModule = ({
             <div className="flex flex-col items-center relative">
               <button
                 onClick={() => setShowNewUsersList(!showNewUsersList)}
-                className={`
-                  flex flex-col items-center justify-center w-24 h-24 rounded-lg 
-                  transition-all transform hover:scale-110 shadow-lg
-                  ${showNewUsersList
-                    ? 'bg-gradient-to-br from-green-600 to-green-800 ring-2 ring-green-400 scale-105'
-                    : 'bg-gradient-to-br from-green-500 to-green-700 hover:from-green-600 hover:to-green-800'
-                  }
-                `}
+                className={`flex flex-col items-center justify-center w-24 h-24 rounded-lg transition-all transform hover:scale-110 shadow-lg ${showNewUsersList ? 'ring-2 ring-green-400 scale-105' : ''}`}
+                style={{ background: 'linear-gradient(135deg, #22c55e 0%, #15803d 100%)' }}
                 title="View Newly Added Users"
               >
                 <User className="w-10 h-10 text-white mb-2" />
@@ -8199,7 +8224,7 @@ const CMMSModule = ({
 
             {/* Admin Controls Icon */}
             <div className="flex flex-col items-center">
-              <button className="flex flex-col items-center justify-center w-24 h-24 rounded-lg bg-gradient-to-br from-purple-500 to-purple-700 hover:from-purple-600 hover:to-purple-800 transition-all transform hover:scale-110 shadow-lg" title="Manage Team">
+              <button className="flex flex-col items-center justify-center w-24 h-24 rounded-lg transition-all transform hover:scale-110 shadow-lg" style={{ background: 'linear-gradient(135deg, #a855f7 0%, #7e22ce 100%)' }} title="Manage Team">
                 <Users className="w-10 h-10 text-white mb-2" />
                 <span className="text-xs text-white font-bold text-center">Team</span>
               </button>
@@ -8434,8 +8459,44 @@ const CMMSModule = ({
           }
         }
       `}</style>
+      {/* Collapsed state: once a tool tab is open, the full switcher below
+          is replaced by this one-line strip -- current tool + a chevron that
+          reopens the switcher on demand -- so the tool gets the whole page
+          instead of sharing it with chrome most visits don't need again
+          after the first business/role pick. */}
+      {isHeaderCollapsed && (
+        <button
+          type="button"
+          onClick={() => setHeaderExpanded(true)}
+          className="w-full flex items-center justify-between gap-2 mb-3 px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-left hover:bg-white/10 active:bg-white/15 transition-colors"
+        >
+          <span className="flex items-center gap-2 min-w-0">
+            <Building className="w-4 h-4 text-indigo-300 flex-shrink-0" />
+            <span className="text-sm font-bold text-white truncate">
+              {CMMS_TAB_TITLES[activeTab] || 'CMMS'}
+            </span>
+            <span className="text-xs text-slate-400 truncate min-w-0 hidden sm:inline">
+              {cmmsData.companyProfile?.company_name}{cmmsData.companyProfile?.company_name ? ' · ' : ''}{activeRoleDefinition?.display_name || userRole}
+            </span>
+          </span>
+          <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />
+        </button>
+      )}
+
       {/* Responsive Header with Icon */}
-      <div className="cmms-top-header flex flex-col md:flex-row items-start md:items-center justify-between mb-6 md:mb-8 pb-4 md:pb-6 border-b border-white border-opacity-20 gap-3 md:gap-4">
+      <div className={`cmms-top-header flex flex-col md:flex-row items-start md:items-center justify-between mb-6 md:mb-8 pb-4 md:pb-6 border-b border-white border-opacity-20 gap-3 md:gap-4 ${isHeaderCollapsed ? 'hidden' : ''}`}>
+        {activeTab !== 'company' && (
+          // Only reachable once headerExpanded has been toggled on from the
+          // strip above -- lets a visitor collapse back down again without
+          // first navigating away from the tool they opened it from.
+          <button
+            type="button"
+            onClick={() => setHeaderExpanded(false)}
+            className="md:hidden w-full flex items-center justify-center gap-1.5 -mt-1 mb-1 py-1.5 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
+          >
+            <ChevronDown className="w-3.5 h-3.5 rotate-180" /> Collapse
+          </button>
+        )}
         <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
           <button
             onClick={() => setShowCompanyDetails(!showCompanyDetails)}

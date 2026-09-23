@@ -86,11 +86,18 @@ export const saveQuestions = async (testId, questions) => {
   if (deleteError) return { success: false, error: deleteError.message };
   if (!questions.length) return { success: true };
 
+  // Only multiple_choice/yes_no carry options/a correct answer -- short_text/
+  // long_text send options: null, correct_option_id: null (columns are
+  // nullable as of CMMS_WRITTEN_TESTS_QUESTION_TYPES.sql) since there's
+  // nothing to auto-grade against for free text.
+  const isChoiceType = (type) => type === 'multiple_choice' || type === 'yes_no';
   const rows = questions.map((q, index) => ({
     test_id: testId,
     question_text: q.questionText.trim(),
-    options: q.options.map((o) => ({ id: o.id, text: o.text.trim() })),
-    correct_option_id: q.correctOptionId,
+    question_type: q.questionType || 'multiple_choice',
+    options: isChoiceType(q.questionType) ? q.options.map((o) => ({ id: o.id, text: o.text.trim() })) : null,
+    correct_option_id: isChoiceType(q.questionType) ? q.correctOptionId : null,
+    sample_answer: !isChoiceType(q.questionType) && q.sampleAnswer?.trim() ? q.sampleAnswer.trim() : null,
     points: Number(q.points) || 1,
     order_index: index,
   }));
@@ -135,6 +142,30 @@ export const getAssignmentsForApplication = async (applicationId) => {
   return { success: true, data: data || [] };
 };
 
+/** Every answer on one assignment, each carrying its question's text/type/
+ * points/sample_answer -- what the grading panel needs to show a free-text
+ * answer alongside enough context to score it (see fn_grade_test_answer). */
+export const getAnswersForAssignment = async (assignmentId) => {
+  const { data, error } = await supabase
+    .from('cmms_test_answers')
+    .select('*, question:cmms_test_questions(question_text, question_type, points, sample_answer, order_index)')
+    .eq('assignment_id', assignmentId)
+    .order('order_index', { foreignTable: 'question', ascending: true });
+  if (error) return { success: false, error: error.message, data: [] };
+  return { success: true, data: data || [] };
+};
+
+/** Staff-only -- awards 0..question.points to one free-text answer and
+ * recomputes the assignment's total score server-side. */
+export const gradeTestAnswer = async (answerId, pointsAwarded) => {
+  const { data, error } = await supabase.rpc('fn_grade_test_answer', {
+    p_answer_id: answerId,
+    p_points_awarded: pointsAwarded,
+  });
+  if (error) return { success: false, error: error.message };
+  return { success: true, data: data?.[0] || null };
+};
+
 // Always the real production domain -- see buildCandidateInterviewLink.
 export const buildCandidateTestLink = (accessToken) => getPublicAppUrl(`/candidate-test?token=${accessToken}`);
 
@@ -157,7 +188,7 @@ export const getTestAssignmentByToken = async (accessToken) => {
   const [first] = data;
   const questions = data
     .filter((row) => row.question_id)
-    .map((row) => ({ id: row.question_id, text: row.question_text, options: row.options, orderIndex: row.order_index }));
+    .map((row) => ({ id: row.question_id, text: row.question_text, type: row.question_type || 'multiple_choice', options: row.options, orderIndex: row.order_index }));
   return {
     success: true,
     data: {
@@ -209,6 +240,8 @@ export default {
   saveQuestions,
   assignTestToApplication,
   getAssignmentsForApplication,
+  getAnswersForAssignment,
+  gradeTestAnswer,
   buildCandidateTestLink,
   getTestPrefillContact,
   linkIcanAccountViaTestToken,

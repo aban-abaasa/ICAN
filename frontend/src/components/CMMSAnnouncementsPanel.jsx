@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   Megaphone, Briefcase, Plus, Edit2, Trash2, X, Save, Image as ImageIcon,
   FileText, Check, Users, Globe, Lock, Loader, Share2, Radio, ClipboardList,
-  Video, Copy, Award, QrCode, Sparkles, Clock, MessageCircle
+  Video, Copy, Award, QrCode, Sparkles, Clock, MessageCircle, ChevronDown
 } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 import { uploadToR2, resolveMediaValue } from '../services/r2StorageService';
@@ -46,11 +46,71 @@ const emptyDraft = {
 };
 
 const statusBadge = {
-  draft: 'bg-slate-500/25 text-slate-300',
-  published: 'bg-emerald-500/20 text-emerald-300',
-  closed: 'bg-amber-500/20 text-amber-300',
-  archived: 'bg-slate-700/40 text-slate-400',
+  draft: 'cap-badge-draft',
+  published: 'cap-badge-published',
+  closed: 'cap-badge-closed',
+  archived: 'cap-badge-archived',
 };
+
+// A deliberate, self-contained color palette instead of plain Tailwind
+// color utilities (bg-purple-600, text-emerald-300, ...) -- the app's
+// ThemeContext.jsx repaints every one of those (with !important) to a
+// single mapped "primary" color based on whatever theme is active
+// elsewhere in the app, which is exactly why "New announcement" (originally
+// purple) and "New job posting" (originally emerald) were rendering as the
+// same flat color, and the announcement/job icons weren't reading as
+// distinct hues either. None of the cap- classnames below are stock
+// Tailwind utilities, so that override can't touch them -- same fix
+// CMMSWrittenTestBuilder's WTB_STYLES and the public notice board's
+// NB_STYLES already use.
+const CAP_STYLES = `
+.cap-scope {
+  --cap-purple: #a855f7;
+  --cap-purple-hover: #9333ea;
+  --cap-purple-text: #d8b4fe;
+  --cap-emerald: #10b981;
+  --cap-emerald-hover: #059669;
+  --cap-emerald-text: #6ee7b7;
+  --cap-sky-text: #7dd3fc;
+  --cap-blue-text: #93c5fd;
+  --cap-indigo-text: #a5b4fc;
+  --cap-red-text: #fca5a5;
+  --cap-amber-text: #fcd34d;
+  --cap-text: #f8fafc;
+  --cap-text-muted: #94a3b8;
+  --cap-border: rgba(255, 255, 255, 0.12);
+  --cap-surface: rgba(255, 255, 255, 0.05);
+  --cap-surface-hover: rgba(255, 255, 255, 0.1);
+}
+.cap-title { color: var(--cap-text); }
+.cap-text { color: var(--cap-text); }
+.cap-text-muted { color: var(--cap-text-muted); }
+.cap-icon-purple { color: var(--cap-purple); }
+.cap-icon-emerald { color: var(--cap-emerald); }
+.cap-btn-purple { background: var(--cap-purple); color: #ffffff; }
+.cap-btn-purple:hover { background: var(--cap-purple-hover); }
+.cap-btn-emerald { background: var(--cap-emerald); color: #ffffff; }
+.cap-btn-emerald:hover { background: var(--cap-emerald-hover); }
+.cap-tab-active { color: var(--cap-purple) !important; border-color: var(--cap-purple) !important; }
+.cap-tab { color: var(--cap-text-muted); border-color: transparent; }
+.cap-tab:hover { color: var(--cap-text); }
+.cap-card { background: linear-gradient(160deg, rgba(168, 85, 247, 0.08), rgba(255, 255, 255, 0.02)); border-color: rgba(168, 85, 247, 0.28) !important; }
+.cap-post-card { background: var(--cap-surface); border-color: var(--cap-border) !important; }
+.cap-badge-draft { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; }
+.cap-badge-published { background: rgba(16, 185, 129, 0.2); color: var(--cap-emerald-text); }
+.cap-badge-closed { background: rgba(245, 158, 11, 0.2); color: var(--cap-amber-text); }
+.cap-badge-archived { background: rgba(100, 116, 139, 0.22); color: #94a3b8; }
+.cap-badge-public { background: rgba(56, 189, 248, 0.18); color: var(--cap-sky-text); }
+.cap-badge-internal { background: rgba(148, 163, 184, 0.18); color: #cbd5e1; }
+.cap-toolbar-btn { background: var(--cap-surface); }
+.cap-toolbar-btn:hover { background: var(--cap-surface-hover); }
+.cap-icon-blue { color: var(--cap-blue-text); }
+.cap-icon-red { color: var(--cap-red-text); }
+.cap-icon-indigo { color: var(--cap-indigo-text); }
+.cap-icon-purple-text { color: var(--cap-purple-text); }
+.cap-icon-emerald-text { color: var(--cap-emerald-text); }
+.cap-select { background: #150f28; border-color: rgba(255, 255, 255, 0.2) !important; color: var(--cap-text); }
+`;
 
 const applicationStatusOptions = [
   { id: 'submitted', label: 'Submitted' },
@@ -95,6 +155,15 @@ const CMMSAnnouncementsPanel = ({
   const [existingDocumentUrl, setExistingDocumentUrl] = useState('');
   const [saving, setSaving] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
+  // Which post cards have their full description expanded -- collapsed by
+  // default so scanning a long Posts list means reading titles and status
+  // chips, not scrolling past every job's full paragraph-length summary.
+  const [expandedPostIds, setExpandedPostIds] = useState(() => new Set());
+  const togglePostExpanded = (id) => setExpandedPostIds((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
   const [sharingUpdateId, setSharingUpdateId] = useState(null);
 
   const [applications, setApplications] = useState([]);
@@ -147,6 +216,10 @@ const CMMSAnnouncementsPanel = ({
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [boardQrDownloading, setBoardQrDownloading] = useState(false);
   const [boardLinkCopied, setBoardLinkCopied] = useState(false);
+  // The "you have a public page" intro is a one-time thing to learn, not
+  // something worth re-reading (and pushing the actual post list further
+  // down) on every single visit -- collapsed by default, one tap away.
+  const [boardInfoExpanded, setBoardInfoExpanded] = useState(false);
 
   useEffect(() => {
     if (!companyId) return;
@@ -653,59 +726,94 @@ const CMMSAnnouncementsPanel = ({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="glass-card p-5 border border-purple-400/30">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-              <Megaphone className="w-5 h-5 text-purple-300" /> Announcements &amp; Job Postings
-            </h2>
-            <p className="text-sm text-gray-400 mt-1">
+    <div className="cap-scope space-y-6">
+      <style>{CAP_STYLES}</style>
+      <div className="cap-card p-5 border rounded-2xl">
+        {/* Stacked, not side-by-side, below sm -- the title button and the
+            two "New..." buttons used to share one flex row and fight for
+            width, which is exactly what was pushing "New job posting" past
+            the card's edge and clipping the chevron. Full-width rows can't
+            overflow the card, and grid-cols-2 on the actions row guarantees
+            the two buttons split the width evenly instead of shrinking
+            unevenly (or not at all) the way plain flex did. */}
+        <div className="flex flex-col gap-3">
+          {/* The title bar is always visible and doubles as the collapse
+              toggle -- everything below it (the public-page explainer, the
+              link, and Copy link/QR/Preview) is a one-time "here's what this
+              is" that shouldn't have to be scrolled past again on every
+              return visit, especially on a phone where it used to push the
+              actual post list halfway off the first screen. */}
+          <button
+            type="button"
+            onClick={() => setBoardInfoExpanded((v) => !v)}
+            className="w-full flex items-center justify-between gap-2 text-left"
+            aria-expanded={boardInfoExpanded}
+          >
+            <span className="flex items-center gap-2 min-w-0">
+              <Megaphone className="cap-icon-purple w-5 h-5 flex-shrink-0" />
+              <h2 className="cap-title text-lg sm:text-xl font-bold">Announcements &amp; Job Postings</h2>
+            </span>
+            <ChevronDown className={`cap-text-muted w-4 h-4 flex-shrink-0 transition-transform ${boardInfoExpanded ? 'rotate-180' : ''}`} />
+          </button>
+          {canCreate && (
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:w-auto">
+              <button onClick={() => openCreate('announcement')} className="cap-btn-purple px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 transition-colors">
+                <Plus className="w-4 h-4 flex-shrink-0" /> <span>New announcement</span>
+              </button>
+              <button onClick={() => openCreate('job')} className="cap-btn-emerald px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 transition-colors">
+                <Briefcase className="w-4 h-4 flex-shrink-0" /> <span>New job posting</span>
+              </button>
+            </div>
+          )}
+        </div>
+        {boardInfoExpanded && (
+          <div className="mt-2 animate-fadeIn">
+            <p className="cap-text-muted text-sm">
               Your business now has a real public page, live with no login at{' '}
-              <span className="text-purple-300 font-mono text-xs break-all">{boardLink(companyId)}</span> -- announcements, jobs, products, contact details, all in one place customers can find and search.
+              <span className="cap-icon-purple-text font-mono text-xs break-all">{boardLink(companyId)}</span> -- announcements, jobs, products, contact details, all in one place customers can find and search.
             </p>
             {canEdit && (
               <div className="flex flex-wrap gap-2 mt-2.5">
-                <button onClick={copyBoardLink} className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-gray-200 text-xs font-semibold flex items-center gap-1.5">
-                  {boardLinkCopied ? <><Check className="w-3.5 h-3.5 text-emerald-400" /> Copied</> : <><Copy className="w-3.5 h-3.5" /> Copy link</>}
+                <button onClick={copyBoardLink} className="cap-toolbar-btn cap-text px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors">
+                  {boardLinkCopied ? <><Check className="cap-icon-emerald-text w-3.5 h-3.5" /> Copied</> : <><Copy className="w-3.5 h-3.5" /> Copy link</>}
                 </button>
-                <button onClick={downloadBoardQr} disabled={boardQrDownloading} className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 disabled:opacity-50 text-gray-200 text-xs font-semibold flex items-center gap-1.5">
+                <button onClick={downloadBoardQr} disabled={boardQrDownloading} className="cap-toolbar-btn cap-text px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50 transition-colors">
                   {boardQrDownloading ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <QrCode className="w-3.5 h-3.5" />} Download QR flyer
                 </button>
-                <a href={boardLink(companyId)} target="_blank" rel="noreferrer" className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-gray-200 text-xs font-semibold flex items-center gap-1.5">
+                <a href={boardLink(companyId)} target="_blank" rel="noreferrer" className="cap-toolbar-btn cap-text px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors">
                   <Globe className="w-3.5 h-3.5" /> Preview page
                 </a>
               </div>
             )}
           </div>
-          {canCreate && (
-            <div className="flex gap-2">
-              <button onClick={() => openCreate('announcement')} className="px-3 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold flex items-center gap-2">
-                <Plus className="w-4 h-4" /> New announcement
-              </button>
-              <button onClick={() => openCreate('job')} className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold flex items-center gap-2">
-                <Briefcase className="w-4 h-4" /> New job posting
-              </button>
-            </div>
-          )}
-        </div>
+        )}
 
-        <div className="flex gap-2 mt-5 border-b border-white/10">
-          <button onClick={() => setSubTab('posts')} className={`px-4 py-2 text-sm font-semibold border-b-2 transition ${subTab === 'posts' ? 'border-purple-400 text-white' : 'border-transparent text-gray-400 hover:text-white'}`}>Posts</button>
+        {/* overflow-x-auto + flex-shrink-0/whitespace-nowrap on every button
+            -- without them, flex's default shrink-to-fit squeezed "Board
+            profile" into two wrapped lines and clipped "Applications"/
+            "Opportunities" on a narrow phone. Now the row scrolls instead of
+            the words ever breaking or getting cut off; the trailing fade is
+            the same "there's more, swipe" affordance as the public board's
+            own tab strip (see PublicCompanyNoticeBoard.jsx's .nb-tab-nav). */}
+        <div
+          className="flex gap-1 mt-5 border-b overflow-x-auto"
+          style={{ borderColor: 'var(--cap-border)', WebkitMaskImage: 'linear-gradient(90deg, #000 0, #000 calc(100% - 20px), transparent 100%)', maskImage: 'linear-gradient(90deg, #000 0, #000 calc(100% - 20px), transparent 100%)' }}
+        >
+          <button onClick={() => setSubTab('posts')} className={`flex-shrink-0 whitespace-nowrap px-4 py-2 text-sm font-semibold border-b-2 transition ${subTab === 'posts' ? 'cap-tab-active' : 'cap-tab'}`}>Posts</button>
           {canManageApplications && (
-            <button onClick={() => setSubTab('applications')} className={`px-4 py-2 text-sm font-semibold border-b-2 transition ${subTab === 'applications' ? 'border-purple-400 text-white' : 'border-transparent text-gray-400 hover:text-white'}`}>
-              Applications {applications.length > 0 && <span className="ml-1 text-xs text-gray-500">({applications.length})</span>}
+            <button onClick={() => setSubTab('applications')} className={`flex-shrink-0 whitespace-nowrap px-4 py-2 text-sm font-semibold border-b-2 transition ${subTab === 'applications' ? 'cap-tab-active' : 'cap-tab'}`}>
+              Applications {applications.length > 0 && <span className="cap-text-muted ml-1 text-xs">({applications.length})</span>}
             </button>
           )}
           {canEdit && (
-            <button onClick={() => setSubTab('profile')} className={`px-4 py-2 text-sm font-semibold border-b-2 transition ${subTab === 'profile' ? 'border-purple-400 text-white' : 'border-transparent text-gray-400 hover:text-white'}`}>
+            <button onClick={() => setSubTab('profile')} className={`flex-shrink-0 whitespace-nowrap px-4 py-2 text-sm font-semibold border-b-2 transition ${subTab === 'profile' ? 'cap-tab-active' : 'cap-tab'}`}>
               Board profile
             </button>
           )}
           {/* Browsing/bidding needs no special permission -- posting an
               opportunity or seeing bids on it does (checked inside the
               panel via canManageOpportunities/canViewOpportunityBids). */}
-          <button onClick={() => setSubTab('opportunities')} className={`px-4 py-2 text-sm font-semibold border-b-2 transition ${subTab === 'opportunities' ? 'border-purple-400 text-white' : 'border-transparent text-gray-400 hover:text-white'}`}>
+          <button onClick={() => setSubTab('opportunities')} className={`flex-shrink-0 whitespace-nowrap px-4 py-2 text-sm font-semibold border-b-2 transition ${subTab === 'opportunities' ? 'cap-tab-active' : 'cap-tab'}`}>
             Opportunities
           </button>
         </div>
@@ -883,83 +991,123 @@ const CMMSAnnouncementsPanel = ({
         <div className="space-y-4">
           {error && <p className="text-red-300 text-sm">{error}</p>}
           {loading ? (
-            <div className="flex justify-center py-10"><Loader className="w-6 h-6 text-purple-400 animate-spin" /></div>
+            <div className="flex justify-center py-10"><Loader className="w-6 h-6 animate-spin" style={{ color: 'var(--cap-purple)' }} /></div>
           ) : posts.length === 0 ? (
-            <div className="glass-card p-8 text-center text-gray-400">
-              <Megaphone className="w-10 h-10 mx-auto mb-3 text-gray-600" />
+            <div className="cap-post-card cap-text-muted p-8 text-center rounded-2xl border">
+              <Megaphone className="cap-text-muted w-10 h-10 mx-auto mb-3 opacity-60" />
               No announcements or job postings yet. {canCreate ? 'Create your first one above.' : ''}
             </div>
           ) : (
-            posts.map((post) => (
-              <div key={post.id} className="glass-card p-4 border border-white/10">
-                <div className="flex flex-wrap gap-4">
+            posts.map((post) => {
+              const isExpanded = expandedPostIds.has(post.id);
+              return (
+              <div key={post.id} className="cap-post-card p-4 border rounded-2xl">
+                {/* Title/badges/quick facts stay visible for scanning the
+                    list; the free-text summary + body (the part that turns
+                    into several wrapped lines for anything but the shortest
+                    post) is collapsed behind this same row acting as the
+                    toggle, so ten posts read as ten scannable rows instead
+                    of ten full essays stacked on top of each other. */}
+                <button
+                  type="button"
+                  onClick={() => togglePostExpanded(post.id)}
+                  className="w-full flex flex-wrap items-start gap-4 text-left"
+                  aria-expanded={isExpanded}
+                >
                   {post.poster_url && (
-                    <img src={post.poster_url} alt="" className="w-24 h-24 object-cover rounded-lg border border-white/10 flex-shrink-0" />
+                    <img src={post.poster_url} alt="" className="w-16 h-16 object-cover rounded-lg border flex-shrink-0" style={{ borderColor: 'var(--cap-border)' }} />
                   )}
-                  <div className="flex-1 min-w-[240px]">
+                  <div className="flex-1 min-w-[200px]">
                     <div className="flex flex-wrap items-center gap-2 mb-1">
-                      {post.post_type === 'job' ? <Briefcase className="w-4 h-4 text-emerald-300" /> : <Megaphone className="w-4 h-4 text-purple-300" />}
-                      <h3 className="text-white font-semibold">{post.title}</h3>
+                      {post.post_type === 'job' ? <Briefcase className="cap-icon-emerald w-4 h-4 flex-shrink-0" /> : <Megaphone className="cap-icon-purple w-4 h-4 flex-shrink-0" />}
+                      <h3 className="cap-title font-semibold">{post.title}</h3>
                       <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${statusBadge[post.status] || statusBadge.draft}`}>{post.status}</span>
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-gray-300 flex items-center gap-1">
+                      <span className={`text-xs px-2 py-0.5 rounded-full flex items-center gap-1 ${post.visibility === 'public' ? 'cap-badge-public' : 'cap-badge-internal'}`}>
                         {post.visibility === 'public' ? <Globe className="w-3 h-3" /> : <Lock className="w-3 h-3" />} {post.visibility}
                       </span>
                     </div>
-                    {post.summary && <p className="text-sm text-gray-300 mb-1">{post.summary}</p>}
-                    <p className="text-xs text-gray-500 line-clamp-2">{post.body}</p>
                     {post.post_type === 'job' && (
-                      <div className="flex flex-wrap gap-3 mt-2 text-xs text-gray-400">
+                      <div className="cap-text-muted flex flex-wrap gap-3 text-xs">
                         {post.location && <span>📍 {post.location}</span>}
                         {post.employment_type && <span>{EMPLOYMENT_TYPES.find((t) => t.id === post.employment_type)?.label || post.employment_type}</span>}
                         {post.application_deadline && <span>Deadline: {post.application_deadline}</span>}
                         <span>{post.applications_count || 0} application{post.applications_count === 1 ? '' : 's'}</span>
                       </div>
                     )}
+                  </div>
+                  <ChevronDown className={`cap-text-muted w-4 h-4 flex-shrink-0 mt-1 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                </button>
+
+                {isExpanded && (
+                  <div className="mt-3 pt-3 border-t animate-fadeIn" style={{ borderColor: 'var(--cap-border)' }}>
+                    {post.summary && <p className="cap-text text-sm mb-1">{post.summary}</p>}
+                    <p className="cap-text-muted text-sm whitespace-pre-wrap">{post.body}</p>
                     {post.document_url && (
-                      <a href={post.document_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-300 hover:text-blue-200 mt-2">
+                      <a href={post.document_url} target="_blank" rel="noreferrer" className="cap-icon-blue inline-flex items-center gap-1 text-xs hover:opacity-80 mt-2">
                         <FileText className="w-3.5 h-3.5" /> View attached document
                       </a>
                     )}
                   </div>
-                  <div className="flex flex-col gap-2 items-end">
+                )}
+
+                {/* A single horizontal toolbar, not a right-aligned vertical
+                    stack -- the stacked version left every control hugging
+                    the right edge with the rest of the card's width empty
+                    beside it, and on a phone (where this row already drops
+                    below the content) that meant one narrow button per line.
+                    flex-wrap here lets buttons flow left-to-right and wrap as
+                    a group instead, using the full row width either way. */}
+                {(canEdit || (post.visibility === 'public' && post.status === 'published')) && (
+                  <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t" style={{ borderColor: 'var(--cap-border)' }}>
                     {canEdit && (
-                      <div className="flex gap-1">
-                        <button onClick={() => openEdit(post)} className="p-2 text-blue-300 hover:text-white" title="Edit"><Edit2 className="w-4 h-4" /></button>
-                        {canDelete && <button onClick={() => removePost(post)} className="p-2 text-red-300 hover:text-white" title="Delete"><Trash2 className="w-4 h-4" /></button>}
-                      </div>
+                      <button onClick={() => openEdit(post)} className="cap-toolbar-btn cap-icon-blue p-2 rounded-lg transition-colors" title="Edit"><Edit2 className="w-4 h-4" /></button>
                     )}
-                    {canEdit && post.post_type === 'job' && (
-                      <button onClick={() => setTestBuilderJob(post)} className="text-xs text-indigo-300 hover:text-indigo-200 flex items-center gap-1">
-                        <ClipboardList className="w-3.5 h-3.5" /> Written test
-                      </button>
+                    {canEdit && canDelete && (
+                      <button onClick={() => removePost(post)} className="cap-toolbar-btn cap-icon-red p-2 rounded-lg transition-colors" title="Delete"><Trash2 className="w-4 h-4" /></button>
                     )}
                     {canEdit && (
-                      <select value={post.status} onChange={(e) => setPostStatus(post, e.target.value)} className="text-xs rounded bg-slate-900 border border-white/20 px-2 py-1 text-white">
+                      <select value={post.status} onChange={(e) => setPostStatus(post, e.target.value)} className="cap-select text-xs rounded-lg border px-2.5 py-2">
                         <option value="draft">Draft</option>
                         <option value="published">Published</option>
                         <option value="closed">Closed</option>
                         <option value="archived">Archived</option>
                       </select>
                     )}
+                    {/* Gated on canManageApplications, not canEdit -- the
+                        cmms_written_tests/cmms_test_questions RLS policies
+                        (CMMS_WRITTEN_TESTS.sql) only ever check
+                        cmms_has_tool_action(..., 'manage_applications'), the
+                        same permission every other hiring-pipeline action
+                        (assigning the test, scheduling interviews, hiring)
+                        already requires. Gating this button on canEdit
+                        instead let a role with edit-but-not-manage_applications
+                        open the builder, write a whole test, and have every
+                        save silently rejected by RLS -- this was that bug. */}
+                    {canManageApplications && post.post_type === 'job' && (
+                      <button onClick={() => setTestBuilderJob(post)} className="cap-toolbar-btn cap-icon-indigo text-xs px-2.5 py-2 rounded-lg flex items-center gap-1.5 transition-colors">
+                        <ClipboardList className="w-3.5 h-3.5" /> Written test
+                      </button>
+                    )}
                     {post.visibility === 'public' && post.status === 'published' && (
-                      <div className="flex flex-col gap-1.5 items-end">
-                        <button onClick={() => sharePost(post)} className="text-xs text-purple-300 hover:text-purple-200 flex items-center gap-1">
+                      <>
+                        <button onClick={() => sharePost(post)} className="cap-toolbar-btn cap-icon-purple-text text-xs px-2.5 py-2 rounded-lg flex items-center gap-1.5 transition-colors">
                           {copiedId === post.id ? <><Check className="w-3.5 h-3.5" /> Link copied</> : <><Share2 className="w-3.5 h-3.5" /> Share</>}
                         </button>
                         <button
                           onClick={() => shareToUpdates(post)}
                           disabled={sharingUpdateId === post.id}
-                          className="text-xs text-emerald-300 hover:text-emerald-200 flex items-center gap-1 disabled:opacity-50"
+                          className="cap-toolbar-btn cap-icon-emerald-text text-xs px-2.5 py-2 rounded-lg flex items-center gap-1.5 disabled:opacity-50 transition-colors"
                           title="Post this to the ICAN Updates feed"
                         >
                           <Radio className="w-3.5 h-3.5" /> {sharingUpdateId === post.id ? 'Sharing…' : 'Share to Updates'}
                         </button>
-                      </div>
+                      </>
                     )}
                   </div>
-                </div>
+                )}
               </div>
-            ))
+              );
+            })
           )}
         </div>
       )}
@@ -1235,6 +1383,14 @@ const ApplicationPipelineControls = ({ application, companyId, companyStaff, cur
   const [scheduling, setScheduling] = useState(false);
   const [joiningInterviewId, setJoiningInterviewId] = useState(null);
   const [boardroomAccess, setBoardroomAccess] = useState(null);
+  // Which completed assignment's free-text answers are currently open for
+  // grading -- at most one at a time, toggled by tapping its chip below.
+  const [gradingAssignmentId, setGradingAssignmentId] = useState(null);
+  // Recorded interview outcomes, keyed by schedule id -- the interview-stage
+  // equivalent of a test's score, so a completed interview shows "😊
+  // Satisfied"/"😕 Not satisfied" at a glance instead of just "completed".
+  const [feedbackBySchedule, setFeedbackBySchedule] = useState({});
+  const [markingScheduleId, setMarkingScheduleId] = useState(null);
 
   // Picking "Written test" or "Interview" from the status dropdown above
   // opens the matching panel directly, instead of leaving the admin to find
@@ -1256,7 +1412,13 @@ const ApplicationPipelineControls = ({ application, companyId, companyStaff, cur
       cmmsInterviewService.getInterviewsForApplication(application.id),
     ]);
     if (assignmentsResult.success) setAssignments(assignmentsResult.data);
-    if (interviewsResult.success) setInterviews(interviewsResult.data);
+    if (interviewsResult.success) {
+      setInterviews(interviewsResult.data);
+      const feedbackResult = await cmmsInterviewService.getFeedbackForInterviews(interviewsResult.data.map((i) => i.id));
+      if (feedbackResult.success) {
+        setFeedbackBySchedule(Object.fromEntries(feedbackResult.data.map((f) => [f.interview_schedule_id, f])));
+      }
+    }
   };
 
   useEffect(() => { loadPipeline(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [application.id]);
@@ -1300,6 +1462,13 @@ const ApplicationPipelineControls = ({ application, companyId, companyStaff, cur
     await loadPipeline();
   };
 
+  const saveOutcome = async (schedule, outcome, feedback) => {
+    const result = await cmmsInterviewService.markInterviewOutcome(schedule, application.id, { outcome, feedback }, currentCmmsUserId);
+    if (!result.success) { alert(`❌ ${result.error}`); return; }
+    setMarkingScheduleId(null);
+    await loadPipeline();
+  };
+
   // Lets an interviewer (or the admin, if they're one of the named
   // interviewers) join the live call without ever leaving the CMMS panel --
   // same fn_can_join_interview gate and LiveBoardroom the standalone
@@ -1337,24 +1506,82 @@ const ApplicationPipelineControls = ({ application, companyId, companyStaff, cur
       {assignments.length > 0 && (
         <div className="w-full flex flex-wrap gap-2 text-xs text-gray-400">
           {assignments.map((a) => (
-            <span key={a.id} className="px-2 py-1 rounded bg-white/5 border border-white/10">
-              {a.test?.title || 'Test'}: {a.status === 'completed' ? `${a.score}/${a.max_score}` : a.status.replace('_', ' ')}
-            </span>
+            // Completed ones are clickable -- opens the free-text grading
+            // panel for that attempt (a no-op tap if every question on it
+            // was auto-gradable, TestGradingPanel just says so).
+            a.status === 'completed' ? (
+              <button
+                key={a.id}
+                onClick={() => setGradingAssignmentId((current) => (current === a.id ? null : a.id))}
+                className={`px-2 py-1 rounded border transition-colors ${gradingAssignmentId === a.id ? 'bg-purple-500/20 border-purple-400/50 text-purple-200' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
+              >
+                {a.test?.title || 'Test'}: {a.score}/{a.max_score}
+              </button>
+            ) : (
+              <span key={a.id} className="px-2 py-1 rounded bg-white/5 border border-white/10">
+                {a.test?.title || 'Test'}: {a.status.replace('_', ' ')}
+              </span>
+            )
           ))}
         </div>
       )}
 
-      {interviews.filter((i) => i.status === 'scheduled').map((interview) => (
-        <div key={interview.id} className="w-full flex items-center gap-2 text-xs text-gray-400">
-          <Video className="w-3.5 h-3.5 text-sky-300" />
-          Interview scheduled: {new Date(interview.scheduled_at).toLocaleString()} ({interview.duration_minutes} min)
-          <button onClick={() => joinInterview(interview)} disabled={joiningInterviewId === interview.id} className="text-emerald-300 hover:text-emerald-200 disabled:opacity-50">
-            {joiningInterviewId === interview.id ? 'Checking…' : 'Join call'}
-          </button>
-          <button onClick={() => copyLink(cmmsInterviewService.buildCandidateInterviewLink(interview.id))} className="text-blue-300 hover:text-blue-200">Copy link</button>
-          <button onClick={() => cancelInterview(interview)} className="text-red-300 hover:text-red-200">Cancel</button>
-        </div>
-      ))}
+      {gradingAssignmentId && (
+        <TestGradingPanel
+          assignment={assignments.find((a) => a.id === gradingAssignmentId)}
+          onClose={() => setGradingAssignmentId(null)}
+          onGraded={loadPipeline}
+        />
+      )}
+
+      {/* Every interview shows here now, not just 'scheduled' ones -- a
+          completed interview with no recorded outcome yet still needs a
+          "Mark outcome" action, and one that's already been marked should
+          keep showing that outcome (the interview-stage equivalent of a
+          test's score) rather than disappearing from the list. */}
+      {interviews.filter((i) => i.status !== 'cancelled').map((interview) => {
+        const outcome = feedbackBySchedule[interview.id];
+        return (
+          <div key={interview.id} className="w-full flex flex-col gap-1.5 text-xs text-gray-400">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Video className="w-3.5 h-3.5 text-sky-300 flex-shrink-0" />
+              {interview.status === 'scheduled' ? 'Interview scheduled' : interview.status === 'no_show' ? 'Interview — no show' : 'Interview held'}: {new Date(interview.scheduled_at).toLocaleString()} ({interview.duration_minutes} min)
+              {interview.status === 'scheduled' && (
+                <>
+                  <button onClick={() => joinInterview(interview)} disabled={joiningInterviewId === interview.id} className="text-emerald-300 hover:text-emerald-200 disabled:opacity-50">
+                    {joiningInterviewId === interview.id ? 'Checking…' : 'Join call'}
+                  </button>
+                  <button onClick={() => copyLink(cmmsInterviewService.buildCandidateInterviewLink(interview.id))} className="text-blue-300 hover:text-blue-200">Copy link</button>
+                  <button onClick={() => cancelInterview(interview)} className="text-red-300 hover:text-red-200">Cancel</button>
+                </>
+              )}
+            </div>
+
+            {outcome ? (
+              <div className="flex items-center gap-2 flex-wrap pl-5">
+                <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full ${outcome.outcome === 'satisfied' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-red-500/15 text-red-300'}`}>
+                  {outcome.outcome === 'satisfied' ? '😊 Satisfied' : '😕 Not satisfied'}
+                </span>
+                {outcome.feedback && <span className="text-gray-400 italic">"{outcome.feedback}"</span>}
+                <button onClick={() => setMarkingScheduleId(interview.id)} className="text-purple-300 hover:text-purple-200">Edit</button>
+              </div>
+            ) : (
+              <button onClick={() => setMarkingScheduleId(interview.id)} className="self-start ml-5 px-2 py-1 rounded bg-white/5 border border-white/10 hover:bg-white/10 text-gray-300">
+                Mark outcome
+              </button>
+            )}
+
+            {markingScheduleId === interview.id && (
+              <InterviewOutcomeForm
+                interview={interview}
+                existing={outcome}
+                onCancel={() => setMarkingScheduleId(null)}
+                onSave={(o, fb) => saveOutcome(interview, o, fb)}
+              />
+            )}
+          </div>
+        );
+      })}
 
       {boardroomAccess && (
         <div className="fixed inset-0 z-[90] bg-black">
@@ -1422,6 +1649,152 @@ const ApplicationPipelineControls = ({ application, companyId, companyStaff, cur
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+// short_text/long_text questions have no correct answer to check
+// automatically (see CMMS_WRITTEN_TESTS_QUESTION_TYPES.sql) -- this is
+// where a human reads what the candidate actually wrote and awards the
+// points multiple_choice/yes_no questions got instantly. Only ever shows
+// the questions that genuinely need a human (an all-MCQ test says so and
+// stops there) rather than repeating the whole test.
+const TestGradingPanel = ({ assignment, onClose, onGraded }) => {
+  const [answers, setAnswers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    setLoading(true);
+    const result = await cmmsWrittenTestService.getAnswersForAssignment(assignment.id);
+    if (result.success) setAnswers(result.data);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [assignment.id]);
+
+  const handleGraded = async (updatedAnswer, gradeResult) => {
+    setAnswers((prev) => prev.map((a) => (a.id === updatedAnswer.id ? updatedAnswer : a)));
+    onGraded?.(gradeResult);
+  };
+
+  const textAnswers = answers.filter((a) => a.question?.question_type === 'short_text' || a.question?.question_type === 'long_text');
+
+  return (
+    <div className="w-full mt-2 p-3 rounded bg-white/5 border border-white/10 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-white">Grade written answers — {assignment.test?.title || 'Test'}</p>
+        <button onClick={onClose} className="text-gray-400 hover:text-white text-xs">Close</button>
+      </div>
+      {loading ? (
+        <div className="flex justify-center py-4"><Loader className="w-4 h-4 text-purple-400 animate-spin" /></div>
+      ) : textAnswers.length === 0 ? (
+        <p className="text-xs text-gray-400">Every question on this test is multiple-choice/yes-no, already auto-graded -- nothing here needs manual review.</p>
+      ) : (
+        textAnswers.map((a) => (
+          <div key={a.id} className="rounded border border-white/10 bg-white/5 p-3 space-y-2">
+            <p className="text-sm text-white font-medium">{a.question?.question_text}</p>
+            <p className="text-sm text-gray-300 whitespace-pre-wrap rounded bg-black/20 p-2">{a.answer_text || '(left blank)'}</p>
+            {a.question?.sample_answer && (
+              <p className="text-xs text-gray-500">Your reference answer: {a.question.sample_answer}</p>
+            )}
+            <PointsAwardInput
+              answer={a}
+              maxPoints={a.question?.points || 1}
+              onGraded={handleGraded}
+            />
+          </div>
+        ))
+      )}
+    </div>
+  );
+};
+
+const PointsAwardInput = ({ answer, maxPoints, onGraded }) => {
+  const [points, setPoints] = useState(answer.points_awarded ?? '');
+  const [saving, setSaving] = useState(false);
+  const alreadyGraded = answer.points_awarded !== null && answer.points_awarded !== undefined;
+
+  const save = async () => {
+    const clamped = Math.max(0, Math.min(maxPoints, Number(points)));
+    setSaving(true);
+    const result = await cmmsWrittenTestService.gradeTestAnswer(answer.id, clamped);
+    setSaving(false);
+    if (!result.success) { alert(`❌ ${result.error}`); return; }
+    onGraded?.({ ...answer, points_awarded: clamped, is_correct: clamped >= maxPoints }, result.data);
+  };
+
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      {alreadyGraded && <span className="text-emerald-400 flex items-center gap-1"><Check className="w-3 h-3" /> Graded</span>}
+      <input
+        type="number" min="0" max={maxPoints} value={points}
+        onChange={(e) => setPoints(e.target.value)}
+        placeholder={`0–${maxPoints}`}
+        className="w-16 px-2 py-1 rounded bg-white/10 text-white border border-white/20"
+      />
+      <span className="text-gray-500">/ {maxPoints} pts</span>
+      <button
+        disabled={saving || points === ''}
+        onClick={save}
+        className="px-2.5 py-1 rounded bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-semibold"
+      >
+        {saving ? 'Saving…' : alreadyGraded ? 'Update' : 'Award points'}
+      </button>
+    </div>
+  );
+};
+
+// Two big, unambiguous choices rather than a star rating or a dropdown --
+// "was I satisfied with this candidate" is a yes/no call an interviewer
+// makes in the moment right after the call, not something worth a scale.
+// Feedback text is optional context for whoever reads it later (another
+// interviewer, the hiring admin), never shown to the candidate.
+const InterviewOutcomeForm = ({ interview, existing, onCancel, onSave }) => {
+  const [outcome, setOutcome] = useState(existing?.outcome || '');
+  const [feedback, setFeedback] = useState(existing?.feedback || '');
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    if (!outcome) return;
+    setSaving(true);
+    await onSave(outcome, feedback);
+    setSaving(false);
+  };
+
+  return (
+    <div className="w-full ml-5 mt-1 p-3 rounded bg-white/5 border border-white/10 space-y-2 max-w-md">
+      <p className="text-xs font-semibold text-white">Were you satisfied with this candidate's interview?</p>
+      <div className="flex gap-2">
+        <button
+          onClick={() => setOutcome('satisfied')}
+          className={`flex-1 py-2 rounded text-sm font-semibold border transition-colors ${outcome === 'satisfied' ? 'bg-emerald-500/20 border-emerald-400/60 text-emerald-200' : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10'}`}
+        >
+          😊 Satisfied
+        </button>
+        <button
+          onClick={() => setOutcome('not_satisfied')}
+          className={`flex-1 py-2 rounded text-sm font-semibold border transition-colors ${outcome === 'not_satisfied' ? 'bg-red-500/20 border-red-400/60 text-red-200' : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10'}`}
+        >
+          😕 Not satisfied
+        </button>
+      </div>
+      <textarea
+        value={feedback}
+        onChange={(e) => setFeedback(e.target.value)}
+        placeholder="Notes for the hiring team (optional -- never shown to the candidate)"
+        rows={2}
+        className="w-full px-2.5 py-2 rounded bg-white/10 text-white border border-white/20 text-xs"
+      />
+      <div className="flex justify-end gap-2">
+        <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-300 hover:text-white">Cancel</button>
+        <button
+          disabled={!outcome || saving}
+          onClick={save}
+          className="px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-semibold"
+        >
+          {saving ? 'Saving…' : existing ? 'Update outcome' : 'Save outcome'}
+        </button>
+      </div>
     </div>
   );
 };

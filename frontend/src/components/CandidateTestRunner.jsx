@@ -81,11 +81,22 @@ const CandidateTestRunner = () => {
   const submit = async () => {
     if (submitting) return;
     setSubmitting(true);
-    const payload = Object.entries(answers).map(([questionId, selectedOptionId]) => ({ question_id: questionId, selected_option_id: selectedOptionId }));
+    // answers[q.id] holds a selected option id for multiple_choice/yes_no or
+    // the raw typed text for short_text/long_text -- same state shape either
+    // way, just which field the value lands in on the wire differs, since
+    // fn_submit_test_assignment branches on the question's own type to know
+    // which one to read.
+    const payload = assignment.questions
+      .filter((q) => answers[q.id] !== undefined && answers[q.id] !== '')
+      .map((q) => (
+        q.type === 'short_text' || q.type === 'long_text'
+          ? { question_id: q.id, answer_text: answers[q.id] }
+          : { question_id: q.id, selected_option_id: answers[q.id] }
+      ));
     const submitResult = await cmmsWrittenTestService.submitTestAssignment(token, payload);
     setSubmitting(false);
     if (!submitResult.success) { setError(submitResult.error); setPhase('error'); return; }
-    setResult({ score: submitResult.data.score, maxScore: submitResult.data.max_score });
+    setResult({ score: submitResult.data.score, maxScore: submitResult.data.max_score, pendingReview: submitResult.data.pending_review || 0 });
     setPhase('submitted');
   };
 
@@ -147,7 +158,10 @@ const CandidateTestRunner = () => {
           </button>
           <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto mb-3" />
           <h1 className="text-xl font-bold mb-1">Test submitted</h1>
-          <p className="text-slate-300 mb-4">Your score: <span className="font-bold">{result?.score} / {result?.maxScore}</span> ({passed.toFixed(0)}%)</p>
+          <p className="text-slate-300 mb-2">Your score: <span className="font-bold">{result?.score} / {result?.maxScore}</span> ({passed.toFixed(0)}%)</p>
+          {result?.pendingReview > 0 && (
+            <p className="text-xs text-amber-300 mb-2">{result.pendingReview} point{result.pendingReview === 1 ? '' : 's'} from written-answer questions still need to be reviewed by the hiring team -- your score may still go up.</p>
+          )}
           <p className="text-sm text-slate-500 mb-5">The hiring team has been notified. You can close this page now.</p>
           <button onClick={closePage} className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 font-semibold text-sm">Close</button>
         </div>
@@ -189,14 +203,31 @@ const CandidateTestRunner = () => {
           {assignment.questions.map((q, index) => (
             <div key={q.id} className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
               <p className="font-semibold mb-3">{index + 1}. {q.text}</p>
-              <div className="space-y-2">
-                {q.options.map((option) => (
-                  <label key={option.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer ${answers[q.id] === option.id ? 'border-indigo-400 bg-indigo-500/10' : 'border-white/10 hover:border-white/20'}`}>
-                    <input type="radio" name={`q_${q.id}`} checked={answers[q.id] === option.id} onChange={() => setAnswers((prev) => ({ ...prev, [q.id]: option.id }))} />
-                    <span className="text-sm">{option.text}</span>
-                  </label>
-                ))}
-              </div>
+              {q.type === 'short_text' ? (
+                <input
+                  value={answers[q.id] || ''}
+                  onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                  placeholder="Your answer"
+                  className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-white/10 text-sm text-white focus:border-indigo-400"
+                />
+              ) : q.type === 'long_text' ? (
+                <textarea
+                  value={answers[q.id] || ''}
+                  onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                  placeholder="Your answer"
+                  rows={5}
+                  className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-white/10 text-sm text-white focus:border-indigo-400"
+                />
+              ) : (
+                <div className="space-y-2">
+                  {q.options.map((option) => (
+                    <label key={option.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer ${answers[q.id] === option.id ? 'border-indigo-400 bg-indigo-500/10' : 'border-white/10 hover:border-white/20'}`}>
+                      <input type="radio" name={`q_${q.id}`} checked={answers[q.id] === option.id} onChange={() => setAnswers((prev) => ({ ...prev, [q.id]: option.id }))} />
+                      <span className="text-sm">{option.text}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>

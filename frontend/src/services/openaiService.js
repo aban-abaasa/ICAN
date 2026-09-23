@@ -325,15 +325,48 @@ Rules:
 - Plausible, non-obvious distractors -- no "all of the above" or "none of the above".
 - Vary which option id is correct across questions instead of always "a".`;
 
-    try {
-      const response = await this.chat(prompt, '', {
-        temperature: 0.6,
-        maxTokens: 2000,
-        model: this.model,
-      });
+    // Gemini, not OpenAI -- this is the one feature in the app that runs
+    // through Google's Gemini API (VITE_GEMINI_API_KEY/VITE_GEMINI_API_URL,
+    // the same pair GlobalNavigator's compliance analysis already uses)
+    // instead of this.chat()'s OpenAI call, since that's the AI key this
+    // deployment actually has configured. If OpenAI support is ever wired up
+    // too, this is the one call site to point back at this.chat().
+    const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    const geminiApiUrl = import.meta.env.VITE_GEMINI_API_URL;
+    if (!geminiApiKey || !geminiApiUrl) {
+      return { success: false, error: 'Gemini API key not configured (VITE_GEMINI_API_KEY / VITE_GEMINI_API_URL)' };
+    }
 
-      const jsonMatch = response.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) throw new Error('Invalid JSON response from OpenAI');
+    // Gemini's flash-tier models occasionally return 503 ("model overloaded")
+    // under load -- a transient, retry-worthy condition, unlike a 400 (bad
+    // key/request) or 404 (bad model name), which retrying can't fix. Up to
+    // 2 retries with a short backoff covers a momentary hiccup without
+    // making the admin manually re-click "Generate with AI".
+    const callGemini = async (attempt = 0) => {
+      const response = await fetch(`${geminiApiUrl}?key=${geminiApiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.6, maxOutputTokens: 2000 },
+        }),
+      });
+      if (response.status === 503 && attempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+        return callGemini(attempt + 1);
+      }
+      if (!response.ok) throw new Error(`Gemini API error: ${response.status}`);
+      return response;
+    };
+
+    try {
+      const response = await callGemini();
+      const data = await response.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) throw new Error('Invalid response from Gemini API');
+
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) throw new Error('Invalid JSON response from Gemini');
       const questions = JSON.parse(jsonMatch[0]);
       if (!Array.isArray(questions) || questions.length === 0) {
         throw new Error('No questions were generated');

@@ -103,22 +103,24 @@ const IcanPriceChartWidget = () => {
   const changePct = latestClose != null && firstOpen ? ((latestClose - firstOpen) / firstOpen) * 100 : null;
 
   return (
-    // Classic gold -- currency & coin, distinct from CMMS's indigo, the
-    // share-trend card's burgundy, the ledger's navy, and Dropship's teal.
+    // dash-card-orange (see index.css) instead of a flat bg-slate-900 --
+    // plain slate classes get force-flattened to one color by
+    // ThemeContext's dynamic override stylesheet, which is why this used
+    // to render as a colorless white/gray box in every theme.
     // CandlestickChart itself is left untouched -- its gesture math and
     // trading colors are functional, not decorative.
-    <div className="bg-slate-900 border border-slate-800 rounded-lg shadow-sm">
+    <div className="dash-card dash-card-orange" style={{ paddingTop: 0 }}>
       <button
         type="button"
         onClick={() => setIsExpanded(prev => !prev)}
         className="w-full flex items-center gap-2 px-4 py-3 hover:bg-white/[0.03] transition-colors"
       >
-        <LineChartIcon className="w-4 h-4 text-amber-400 shrink-0" />
-        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">ICANera price</p>
-        <span className="text-[10px] font-semibold text-amber-400 border border-amber-500/30 rounded px-1.5 py-0.5">Live</span>
+        <LineChartIcon className="w-4 h-4 shrink-0" style={{ color: '#f97316' }} />
+        <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-textSecondary)' }}>ICANera price</p>
+        <span className="text-[10px] font-semibold border rounded px-1.5 py-0.5" style={{ color: '#f97316', borderColor: 'rgba(249,115,22,0.4)' }}>Live</span>
         <span className="ml-auto flex items-center gap-2">
           {latestClose != null && (
-            <span className="text-xs font-semibold text-white tabular-nums whitespace-nowrap">
+            <span className="text-xs font-semibold tabular-nums whitespace-nowrap" style={{ color: 'var(--color-text)' }}>
               {fmtShort(latestClose)}
               {changePct != null && (
                 <span className={`ml-1 ${changePct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -127,7 +129,7 @@ const IcanPriceChartWidget = () => {
               )}
             </span>
           )}
-          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+          <ChevronDown className="w-4 h-4 transition-transform" style={{ color: 'var(--color-textSecondary)', transform: isExpanded ? 'rotate(180deg)' : undefined }} />
         </span>
       </button>
       {isExpanded && (
