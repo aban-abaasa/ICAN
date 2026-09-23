@@ -620,31 +620,19 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   // progress) instead of gating an action.
   const [liveOffer, setLiveOffer] = useState(null);
 
-  // Drives two scroll-linked header touches: `scrolled` lifts the sticky
-  // header off the page with a faint shadow once there's actually content
-  // behind it (rather than always/never), and `heroPassed` is what fixes the
-  // "two logos on screen at once" bug -- on the Notices tab BusinessHero's
-  // big avatar already covers the identity, so the header's compact
-  // logo+name only fades in once that hero has scrolled out of view (the
-  // "small brand anchor while scrolling" the comment below always intended,
-  // just never actually wired to scroll position before).
-  const [scrollState, setScrollState] = useState({ scrolled: false, heroPassed: false });
+  // Lifts the sticky header off the page with a faint shadow once there's
+  // actually content behind it (rather than always/never).
+  const [scrolled, setScrolled] = useState(false);
 
   // Mobile-only "more" menu (the header's kebab/3-dot button) -- on a phone,
-  // the header has room for the logo/name and the theme toggle only, so
-  // Share/Call/WhatsApp/Website (all shown inline on desktop's wider header
-  // and via ContactStrip/BusinessHero further down the page) need a single
-  // always-reachable spot that doesn't require scrolling first.
+  // the header row only has room for the logo/name and two icon buttons
+  // (theme toggle + kebab), so Share/Call/WhatsApp/Website AND the section
+  // tabs themselves (the top tab strip is desktop/tablet-only, see `nav`
+  // below) all live in this one always-reachable menu instead.
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [moreMenuCopied, setMoreMenuCopied] = useState(false);
   useEffect(() => {
-    const HERO_PASSED_Y = 220; // just past BusinessHero's cover + avatar overlap
-    const onScroll = () => {
-      const y = window.scrollY;
-      setScrollState((prev) => (prev.scrolled === y > 4 && prev.heroPassed === y > HERO_PASSED_Y)
-        ? prev
-        : { scrolled: y > 4, heroPassed: y > HERO_PASSED_Y });
-    };
+    const onScroll = () => setScrolled((prev) => (prev === window.scrollY > 4 ? prev : window.scrollY > 4));
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
@@ -917,55 +905,31 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
     <NoticeBoardThemeCtx.Provider value={theme}>
     <div className="icanera-nb min-h-screen" data-theme={theme}>
       <style>{NB_STYLES}</style>
-      <header className={`border-b nb-header backdrop-blur sticky top-0 z-20 animate-fadeInDown transition-shadow duration-300 ${scrollState.scrolled ? 'nb-header-elevated' : ''}`}>
+      <header className={`border-b nb-header backdrop-blur sticky top-0 z-20 animate-fadeInDown transition-shadow duration-300 ${scrolled ? 'nb-header-elevated' : ''}`}>
         <div className="h-1 nb-accent-top" />
-        {/* On the front page (Notices), BusinessHero right below already
-            shows the logo/name/tagline in full -- showing this compact row
-            too, always, used to put two logos on screen at once. It now
-            only fades in once heroPassed is true, i.e. once that big avatar
-            has actually scrolled out of view, so it reads as one identity
-            handing off to the other rather than a duplicate. Every other
-            tab has no hero, so it expands to the full version unconditionally. */}
-        {section === 'notices' ? (
-          scrollState.heroPassed && (
-            <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-2.5 pb-1.5 flex items-center gap-2 animate-fadeInDown" style={{ animationDuration: '0.25s' }}>
-              {company.logo_url ? (
-                <img src={company.logo_url} alt="" className="w-6 h-6 rounded-md object-cover flex-shrink-0" />
-              ) : (
-                <div className="w-6 h-6 rounded-md nb-btn-primary flex items-center justify-center font-bold text-[11px] flex-shrink-0">
-                  {company.company_name?.charAt(0)?.toUpperCase() || <Building2 className="w-3.5 h-3.5" />}
-                </div>
-              )}
-              <span className="text-sm font-bold nb-text truncate">{company.company_name}</span>
-              <span className="text-[11px] nb-text-faint ml-auto hidden sm:block flex-shrink-0">
-                via <IcanEraWordmark />
-              </span>
+        {/* One row, every width: logo + name always lead, the tab strip
+            (desktop/tablet -- BottomNav below is the fixed icon bar that
+            replaces it on a phone) fills the middle, and the theme toggle +
+            kebab trail. Previously the logo/name lived in a separate row
+            above this one and, on the Notices tab, didn't render at all
+            until the visitor scrolled past BusinessHero -- which left the
+            toggle/kebab pair floating with no business identity next to
+            them at all. */}
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-2 sm:py-2.5 flex items-center gap-2 sm:gap-3">
+          {company.logo_url ? (
+            <img src={company.logo_url} alt={company.company_name} className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl object-cover border nb-border shadow-sm flex-shrink-0" />
+          ) : (
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl nb-btn-primary flex items-center justify-center font-bold text-sm sm:text-lg shadow-sm flex-shrink-0">
+              {company.company_name?.charAt(0)?.toUpperCase() || <Building2 className="w-4 h-4 sm:w-6 sm:h-6" />}
             </div>
-          )
-        ) : (
-          <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-4 pb-2 flex items-center gap-3.5">
-            {company.logo_url ? (
-              <img src={company.logo_url} alt={company.company_name} className="w-12 h-12 rounded-xl object-cover border nb-border shadow-sm flex-shrink-0" />
-            ) : (
-              <div className="w-12 h-12 rounded-xl nb-btn-primary flex items-center justify-center font-bold text-lg shadow-sm flex-shrink-0">
-                {company.company_name?.charAt(0)?.toUpperCase() || <Building2 className="w-6 h-6" />}
-              </div>
-            )}
-            <div className="flex-1 min-w-0">
-              <h1 className="text-lg font-extrabold tracking-tight nb-text truncate">{company.company_name}</h1>
-              <p className="text-xs nb-text-faint truncate">
-                {[company.industry, company.location].filter(Boolean).join(' · ') || 'Notice board'}
-              </p>
-            </div>
-            <span className="text-[11px] nb-text-faint nb-surface-alt px-2.5 py-1 rounded-full hidden sm:block flex-shrink-0">
-              via <IcanEraWordmark />
-            </span>
+          )}
+          <div className="min-w-0 max-w-[45%] sm:max-w-none flex-shrink sm:flex-shrink-0">
+            <h1 className="text-sm sm:text-lg font-extrabold tracking-tight nb-text truncate leading-tight">{company.company_name}</h1>
+            <p className="text-[11px] nb-text-faint truncate hidden sm:block">
+              {[company.industry, company.location].filter(Boolean).join(' · ') || 'Notice board'}
+            </p>
           </div>
-        )}
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 flex items-center gap-2">
-          {/* Desktop/tablet only below this width -- BottomNav (rendered
-              after </header>) is the classic fixed icon bar that replaces
-              this on a phone, so the two never show at once. */}
+
           <nav ref={tabNavRef} role="tablist" className="nb-tab-nav hidden sm:flex flex-1 min-w-0 flex-nowrap gap-1 overflow-x-auto">
             {tabs.map((tab) => (
               <button
@@ -980,48 +944,71 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
               </button>
             ))}
           </nav>
-          <ThemeToggleButton theme={theme} onToggle={toggleTheme} className="ml-auto sm:ml-0 my-1.5" />
 
-          {/* Mobile-only kebab -- Share/Call/WhatsApp/Website/Open-in-app in
-              one always-reachable spot, since the header itself only has
-              room for the logo/name and the theme toggle on a phone. */}
-          <div className="relative sm:hidden">
-            <button
-              onClick={() => setShowMoreMenu((v) => !v)}
-              aria-label="More options"
-              className="p-2 rounded-lg nb-icon-muted hover:opacity-80 transition"
-            >
-              <MoreVertical className="w-5 h-5" />
-            </button>
-            {showMoreMenu && (
-              <>
-                <button aria-hidden="true" tabIndex={-1} onClick={() => setShowMoreMenu(false)} className="fixed inset-0 z-40 cursor-default" />
-                <div className="absolute right-0 top-full mt-1 w-56 nb-card rounded-xl shadow-lg border nb-border z-50 py-1.5 overflow-hidden animate-fadeInDown" style={{ animationDuration: '0.15s' }}>
-                  <button onClick={shareThisBoard} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium nb-text hover:opacity-80 transition-colors text-left">
-                    <Share2 className="w-4 h-4 nb-icon-muted" /> {moreMenuCopied ? 'Link copied!' : 'Share this board'}
-                  </button>
-                  {company.whatsapp && buildWhatsAppLink(company.whatsapp) && (
-                    <a href={buildWhatsAppLink(company.whatsapp)} target="_blank" rel="noreferrer" onClick={() => setShowMoreMenu(false)} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium nb-text hover:opacity-80 transition-colors">
-                      <MessageCircle className="w-4 h-4 nb-icon-muted" /> WhatsApp
-                    </a>
-                  )}
-                  {company.phone && buildTelLink(company.phone) && (
-                    <a href={buildTelLink(company.phone)} onClick={() => setShowMoreMenu(false)} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium nb-text hover:opacity-80 transition-colors">
-                      <Phone className="w-4 h-4 nb-icon-muted" /> Call
-                    </a>
-                  )}
-                  {company.website && normalizeExternalUrl(company.website) && (
-                    <a href={normalizeExternalUrl(company.website)} target="_blank" rel="noreferrer" onClick={() => setShowMoreMenu(false)} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium nb-text hover:opacity-80 transition-colors">
-                      <Globe className="w-4 h-4 nb-icon-muted" /> Visit website
-                    </a>
-                  )}
-                  <div className="my-1 border-t nb-border" />
-                  <button onClick={() => { setShowMoreMenu(false); goToApp(); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium nb-text hover:opacity-80 transition-colors text-left">
-                    <Home className="w-4 h-4 nb-icon-muted" /> Open in IcanEra
-                  </button>
-                </div>
-              </>
-            )}
+          <span className="text-[11px] nb-text-faint nb-surface-alt px-2.5 py-1 rounded-full hidden lg:block flex-shrink-0">
+            via <IcanEraWordmark />
+          </span>
+
+          <div className="flex items-center gap-1.5 ml-auto sm:ml-2 flex-shrink-0">
+            <ThemeToggleButton theme={theme} onToggle={toggleTheme} />
+
+            {/* Mobile-only kebab. Doubles as the section switcher -- the tab
+                strip above is hidden below sm, so this is the only way to
+                reach Shop/Pitches/Careers/etc. on a phone besides the fixed
+                BottomNav -- and the Share/Call/WhatsApp/Website/Open-in-app
+                menu, all in one always-reachable spot. */}
+            <div className="relative sm:hidden">
+              <button
+                onClick={() => setShowMoreMenu((v) => !v)}
+                aria-label="More options"
+                aria-expanded={showMoreMenu}
+                className="w-9 h-9 rounded-full nb-share-btn flex items-center justify-center transition-all hover:scale-[1.05] active:scale-[0.95]"
+              >
+                <MoreVertical className="w-4 h-4" />
+              </button>
+              {showMoreMenu && (
+                <>
+                  <button aria-hidden="true" tabIndex={-1} onClick={() => setShowMoreMenu(false)} className="fixed inset-0 z-40 cursor-default" />
+                  <div className="absolute right-0 top-full mt-1 w-64 max-h-[calc(100vh-5rem)] overflow-y-auto nb-card rounded-xl shadow-lg border nb-border z-50 py-1.5 animate-fadeInDown" style={{ animationDuration: '0.15s' }}>
+                    <p className="px-4 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-wide nb-text-faint">Sections</p>
+                    {tabs.map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => { setSection(tab.id); setShowMoreMenu(false); }}
+                        className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium transition-colors text-left ${section === tab.id ? 'nb-tab-active' : 'nb-text hover:opacity-80'}`}
+                      >
+                        <tab.icon className={`w-4 h-4 flex-shrink-0 ${section === tab.id ? '' : 'nb-icon-muted'}`} />
+                        <span className="truncate">{tab.label}</span>
+                        {section === tab.id && <Check className="w-3.5 h-3.5 ml-auto flex-shrink-0" />}
+                      </button>
+                    ))}
+                    <div className="my-1 border-t nb-border" />
+                    <button onClick={shareThisBoard} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium nb-text hover:opacity-80 transition-colors text-left">
+                      <Share2 className="w-4 h-4 nb-icon-muted" /> {moreMenuCopied ? 'Link copied!' : 'Share this board'}
+                    </button>
+                    {company.whatsapp && buildWhatsAppLink(company.whatsapp) && (
+                      <a href={buildWhatsAppLink(company.whatsapp)} target="_blank" rel="noreferrer" onClick={() => setShowMoreMenu(false)} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium nb-text hover:opacity-80 transition-colors">
+                        <MessageCircle className="w-4 h-4 nb-icon-muted" /> WhatsApp
+                      </a>
+                    )}
+                    {company.phone && buildTelLink(company.phone) && (
+                      <a href={buildTelLink(company.phone)} onClick={() => setShowMoreMenu(false)} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium nb-text hover:opacity-80 transition-colors">
+                        <Phone className="w-4 h-4 nb-icon-muted" /> Call
+                      </a>
+                    )}
+                    {company.website && normalizeExternalUrl(company.website) && (
+                      <a href={normalizeExternalUrl(company.website)} target="_blank" rel="noreferrer" onClick={() => setShowMoreMenu(false)} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium nb-text hover:opacity-80 transition-colors">
+                        <Globe className="w-4 h-4 nb-icon-muted" /> Visit website
+                      </a>
+                    )}
+                    <div className="my-1 border-t nb-border" />
+                    <button onClick={() => { setShowMoreMenu(false); goToApp(); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium nb-text hover:opacity-80 transition-colors text-left">
+                      <Home className="w-4 h-4 nb-icon-muted" /> Open in IcanEra
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </header>
