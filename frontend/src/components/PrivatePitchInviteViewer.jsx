@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Lock, X, AlertCircle, Loader, ShieldOff, Clock as ClockIcon, TrendingUp } from 'lucide-react';
+import { Lock, X, AlertCircle, Loader, ShieldOff, Clock as ClockIcon, TrendingUp, FileText, ExternalLink } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { AuthPage } from './auth';
 import { supabase } from '../lib/supabase/client';
@@ -263,6 +263,24 @@ const PrivatePitchInviteViewer = ({ token }) => {
 
         {content.videoUrl && (
           <video src={content.videoUrl} poster={content.thumbnailUrl || undefined} controls playsInline className="w-full rounded-xl mb-5 bg-black" />
+        )}
+
+        {!content.videoUrl && content.deckUrl && (
+          <div className="mb-5">
+            <iframe
+              title="Pitch deck"
+              src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(content.deckUrl)}`}
+              className="w-full aspect-video rounded-xl border border-white/10 bg-white"
+            />
+            <a
+              href={content.deckUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-amber-300 hover:text-amber-200"
+            >
+              <FileText className="w-3.5 h-3.5" /> Open the deck in a new tab <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
         )}
 
         <div className="flex flex-wrap gap-2 mb-4">

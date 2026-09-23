@@ -35,6 +35,8 @@ export const createPrivatePitchInvite = async ({
   thumbnailUrl = null,
   pitchType = null,
   category = null,
+  deckUrl = null,
+  deckPath = null,
 }) => {
   try {
     const { data, error } = await supabase.rpc('fn_create_private_pitch_invite', {
@@ -50,6 +52,8 @@ export const createPrivatePitchInvite = async ({
       p_thumbnail_url: thumbnailUrl,
       p_pitch_type: pitchType,
       p_category: category,
+      p_deck_url: deckUrl,
+      p_deck_path: deckPath,
     });
     if (error) throw error;
     const row = Array.isArray(data) ? data[0] : data;
@@ -128,6 +132,7 @@ export const openPrivatePitchInvite = async (token, pin) => {
       thumbnailUrl: data.thumbnail_url,
       pitchType: data.pitch_type,
       category: data.category,
+      deckUrl: data.deck_url,
       expiresAt: data.expires_at,
     };
   } catch (error) {

@@ -133,16 +133,30 @@ REVOKE ALL ON FUNCTION public.fn_cmms_create_managed_pitch(UUID, TEXT, TEXT, TEX
 GRANT EXECUTE ON FUNCTION public.fn_cmms_create_managed_pitch(UUID, TEXT, TEXT, TEXT, TEXT, NUMERIC, NUMERIC, BOOLEAN, TEXT) TO authenticated;
 
 -- ------------------------------------------------------------
+-- 2b. Imported-deck support -- a pitch can be published from a video, an
+--     imported/branded .pptx deck, or both (confirmed: "either or any").
+--     Same _url/_path pairing convention cmms_announcements.poster_url/
+--     poster_path already uses.
+-- ------------------------------------------------------------
+ALTER TABLE public.pitches
+  ADD COLUMN IF NOT EXISTS deck_url TEXT,
+  ADD COLUMN IF NOT EXISTS deck_path TEXT;
+
+-- ------------------------------------------------------------
 -- 3. Update -- attaches the uploaded video (Pitchin.jsx:862-877's
---    updatePitch(newPitchData.id, { video_url }) step).
+--    updatePitch(newPitchData.id, { video_url }) step) and/or an imported
+--    pitch deck.
 -- ------------------------------------------------------------
 DROP FUNCTION IF EXISTS public.fn_cmms_update_managed_pitch(UUID, TEXT, INTEGER, TEXT, TEXT);
+DROP FUNCTION IF EXISTS public.fn_cmms_update_managed_pitch(UUID, TEXT, INTEGER, TEXT, TEXT, TEXT, TEXT);
 CREATE OR REPLACE FUNCTION public.fn_cmms_update_managed_pitch(
   p_pitch_id UUID,
   p_video_url TEXT,
   p_video_duration_seconds INTEGER,
   p_thumbnail_url TEXT,
-  p_status TEXT
+  p_status TEXT,
+  p_deck_url TEXT DEFAULT NULL,
+  p_deck_path TEXT DEFAULT NULL
 )
 RETURNS SETOF public.pitches
 LANGUAGE plpgsql
@@ -173,14 +187,16 @@ BEGIN
     video_duration_seconds = COALESCE(p_video_duration_seconds, video_duration_seconds),
     thumbnail_url = COALESCE(p_thumbnail_url, thumbnail_url),
     status = COALESCE(p_status, status),
+    deck_url = COALESCE(p_deck_url, deck_url),
+    deck_path = COALESCE(p_deck_path, deck_path),
     updated_at = NOW()
   WHERE id = p_pitch_id
   RETURNING *;
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.fn_cmms_update_managed_pitch(UUID, TEXT, INTEGER, TEXT, TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.fn_cmms_update_managed_pitch(UUID, TEXT, INTEGER, TEXT, TEXT) TO authenticated;
+REVOKE ALL ON FUNCTION public.fn_cmms_update_managed_pitch(UUID, TEXT, INTEGER, TEXT, TEXT, TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.fn_cmms_update_managed_pitch(UUID, TEXT, INTEGER, TEXT, TEXT, TEXT, TEXT) TO authenticated;
 
 -- ------------------------------------------------------------
 -- 4. Delete -- rollback when the video upload fails right after create

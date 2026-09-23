@@ -378,6 +378,8 @@ const PITCH_WITH_BUSINESS_SELECT = `
   category,
   video_url,
   thumbnail_url,
+  deck_url,
+  deck_path,
   target_funding,
   raised_amount,
   equity_offering,
@@ -486,7 +488,7 @@ export const getPitchById = async (pitchId) => {
     if (error) throw error;
     if (!data) return null;
 
-    const [resolved] = await resolveMediaValues([data], ['video_url', 'thumbnail_url']);
+    const [resolved] = await resolveMediaValues([data], ['video_url', 'thumbnail_url', 'deck_url']);
     await enrichPitchesWithProfilePhotos(sb, [resolved]);
     return resolved;
   } catch (error) {
@@ -502,7 +504,9 @@ export const getPitchById = async (pitchId) => {
  * just scoped to one business_profile_id instead of the whole feed or one
  * pitch id. Mirrors getAllPitches' own choice not to filter by `status`
  * (that column tracks the pitch's funding workflow, not visibility -- the
- * main feed shows every pitch with a real video regardless of status).
+ * main feed shows every pitch with real content regardless of status). A
+ * pitch counts as "real content" with either a video or an imported/branded
+ * deck (CMMS_PITCH_PUBLICITY_TAB.sql) -- either alone, or both, is enough.
  */
 export const getPitchesByBusinessProfileId = async (businessProfileId, limit = 12) => {
   try {
@@ -513,15 +517,15 @@ export const getPitchesByBusinessProfileId = async (businessProfileId, limit = 1
       .from('pitches')
       .select(PITCH_WITH_BUSINESS_SELECT)
       .eq('business_profile_id', businessProfileId)
-      .not('video_url', 'is', null)
+      .or('video_url.not.is.null,deck_url.not.is.null')
       .order('created_at', { ascending: false })
       .limit(limit);
 
     if (error) throw error;
     if (!data || data.length === 0) return [];
 
-    const resolved = (await resolveMediaValues(data, ['video_url', 'thumbnail_url']))
-      .filter((pitch) => pitch.video_url && !pitch.video_url.startsWith('blob:'));
+    const resolved = (await resolveMediaValues(data, ['video_url', 'thumbnail_url', 'deck_url']))
+      .filter((pitch) => (pitch.video_url && !pitch.video_url.startsWith('blob:')) || pitch.deck_url);
     await enrichPitchesWithProfilePhotos(sb, resolved);
     return resolved;
   } catch (error) {
@@ -1078,6 +1082,8 @@ export const updateManagedPitch = async (pitchId, updates) => {
       p_video_duration_seconds: updates.video_duration_seconds ?? null,
       p_thumbnail_url: updates.thumbnail_url || null,
       p_status: updates.status || null,
+      p_deck_url: updates.deck_url || null,
+      p_deck_path: updates.deck_path || null,
     });
 
     if (error) throw error;

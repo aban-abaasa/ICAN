@@ -5,7 +5,8 @@ import {
   Check, ChevronRight, Clock, ShoppingBag, ShoppingCart, Plus, Minus,
   Trash2, Truck, Store, Award, Phone, Mail, Navigation, MessageCircle,
   Facebook, Instagram, Twitter, Linkedin, Music2, BadgeCheck, Globe,
-  Video, Play, Eye, Heart, Bike, Star, Sun, Moon, TrendingUp, MoreVertical, Home
+  Video, Play, Eye, Heart, Bike, Star, Sun, Moon, TrendingUp, MoreVertical, Home,
+  Download
 } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 import cmmsAnnouncementsService from '../services/cmmsAnnouncementsService';
@@ -1577,16 +1578,23 @@ const PitchCard = ({ pitch, offer, index = 0, onSelect }) => (
           onMouseEnter={(e) => e.currentTarget.play().catch(() => {})}
           onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0; }}
         />
+      ) : pitch.deck_url ? (
+        <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 nb-surface-alt">
+          <FileText className="w-8 h-8 nb-icon-muted" />
+          <span className="text-[11px] font-semibold nb-text-faint">Pitch deck</span>
+        </div>
       ) : (
         <div className="w-full h-full flex items-center justify-center">
           <Video className="w-8 h-8 nb-icon-muted" />
         </div>
       )}
-      <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/10 transition-colors">
-        <span className="w-11 h-11 rounded-full bg-white/90 flex items-center justify-center shadow-md scale-90 group-hover:scale-100 transition-transform">
-          <Play className="w-5 h-5 text-black ml-0.5" fill="currentColor" />
-        </span>
-      </div>
+      {pitch.video_url && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/10 transition-colors">
+          <span className="w-11 h-11 rounded-full bg-white/90 flex items-center justify-center shadow-md scale-90 group-hover:scale-100 transition-transform">
+            <Play className="w-5 h-5 text-black ml-0.5" fill="currentColor" />
+          </span>
+        </div>
+      )}
       {pitch.pitch_type && (
         <span className="absolute top-2 left-2 text-[11px] font-bold px-2 py-0.5 rounded-full nb-chip-green">
           {pitch.pitch_type}
@@ -2292,6 +2300,22 @@ const PitchDetailModal = ({ pitch, offer, onClose, onShare }) => {
           playsInline
           className="w-full max-h-64 object-cover rounded-xl mb-4 bg-black"
         />
+      ) : pitch.deck_url ? (
+        <div className="mb-4">
+          <iframe
+            title="Pitch deck"
+            src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(pitch.deck_url)}`}
+            className="w-full aspect-video rounded-xl border nb-border bg-white"
+          />
+          <a
+            href={pitch.deck_url}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold nb-link"
+          >
+            <Download className="w-3.5 h-3.5" /> Download the deck
+          </a>
+        </div>
       ) : null}
       <div className="flex items-start justify-between gap-3 mb-1">
         <h2 className="text-xl font-bold nb-text">{pitch.title}</h2>

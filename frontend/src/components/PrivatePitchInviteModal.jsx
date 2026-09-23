@@ -76,6 +76,7 @@ const PrivatePitchInviteModal = ({ pitch, onClose }) => {
   const [title, setTitle] = useState(pitch?.title || '');
   const [description, setDescription] = useState(pitch?.description || '');
   const [includeVideo, setIncludeVideo] = useState(Boolean(pitch?.video_url));
+  const [includeDeck, setIncludeDeck] = useState(Boolean(pitch?.deck_url));
   const [expiryChoice, setExpiryChoice] = useState('3d');
   const [pin, setPin] = useState(generateRandomPin());
   const [pinMode, setPinMode] = useState('auto');
@@ -121,6 +122,8 @@ const PrivatePitchInviteModal = ({ pitch, onClose }) => {
       thumbnailUrl: includeVideo ? (pitch?.thumbnail_url || null) : null,
       pitchType: pitch?.pitch_type || null,
       category: pitch?.category || null,
+      deckUrl: includeDeck ? (pitch?.deck_url || null) : null,
+      deckPath: includeDeck ? (pitch?.deck_path || null) : null,
     });
     setSubmitting(false);
     if (!result.success) {
@@ -140,6 +143,8 @@ const PrivatePitchInviteModal = ({ pitch, onClose }) => {
     setInvestorName('');
     setInvestorContact('');
     setCustomMessage('');
+    setIncludeVideo(Boolean(pitch?.video_url));
+    setIncludeDeck(Boolean(pitch?.deck_url));
     setPin(generateRandomPin());
     setPinMode('auto');
     setCreated(null);
@@ -227,6 +232,13 @@ const PrivatePitchInviteModal = ({ pitch, onClose }) => {
                 <label className="flex items-center gap-2 text-sm text-slate-300">
                   <input type="checkbox" checked={includeVideo} onChange={(e) => setIncludeVideo(e.target.checked)} className="rounded" />
                   Include this pitch's video
+                </label>
+              )}
+
+              {pitch?.deck_url && (
+                <label className="flex items-center gap-2 text-sm text-slate-300">
+                  <input type="checkbox" checked={includeDeck} onChange={(e) => setIncludeDeck(e.target.checked)} className="rounded" />
+                  Include this pitch's deck
                 </label>
               )}
 
