@@ -10,6 +10,24 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase/client';
 
+// Mirrors CMSSModule.jsx's own getCmmsMembershipStorageKey/getStoredActiveCompanyId
+// exactly -- that's where a user's actively-selected company (via its company
+// switcher) is persisted. Without reading the same key, this hook had no way
+// to know which company the user last switched to and always fell back to
+// their OLDEST membership instead -- so anyone belonging to more than one
+// CMMS company (a second business, an old test company, etc.) saw the home
+// screen's activity card show a completely different company's real numbers
+// than the one they were actually looking at in CMMS itself.
+const getStoredActiveCompanyId = (userEmail) => {
+  try {
+    const normalizedEmail = String(userEmail || '').trim().toLowerCase();
+    const scopedKey = normalizedEmail ? `cmms_active_company::${normalizedEmail}` : 'cmms_company_id';
+    return localStorage.getItem(scopedKey) || localStorage.getItem('cmms_company_id');
+  } catch {
+    return null;
+  }
+};
+
 export const useCmmsAccess = () => {
   const { user } = useAuth();
   const [hasCmmsAccess, setHasCmmsAccess] = useState(false);
@@ -32,8 +50,7 @@ export const useCmmsAccess = () => {
           .select('cmms_company_id, effective_role, is_creator, created_at')
           .ilike('email', user.email)
           .eq('is_active', true)
-          .order('created_at', { ascending: true })
-          .limit(1);
+          .order('created_at', { ascending: true });
 
         if (cancelled) return;
 
@@ -44,7 +61,8 @@ export const useCmmsAccess = () => {
           return;
         }
 
-        const membership = data[0];
+        const storedCompanyId = getStoredActiveCompanyId(user.email);
+        const membership = (storedCompanyId && data.find((m) => m.cmms_company_id === storedCompanyId)) || data[0];
         setHasCmmsAccess(true);
         setCmmsCompanyId(membership.cmms_company_id);
         setCmmsIsAdmin(membership.effective_role === 'admin' || membership.is_creator === true);
